@@ -41,7 +41,6 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
-import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
@@ -60,6 +59,7 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
@@ -123,6 +123,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
+    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
     private @Nullable Runnable structureDiagnosticCallbackForTesting;
@@ -236,7 +237,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 : activeState
                 ? redstonePaused ? CraftingStatus.paused() : CraftingStatus.working()
                 : lastFailureUnloc == null ? CraftingStatus.IDLE : CraftingStatus.failure(lastFailureUnloc);
-        runtime.publishCraftingState(recipeId, status, craftingFailureStatus());
+        CraftingRuntime craftingRuntime = runtime.craftingRuntime();
+        runtime.publishCraftingState(recipeId, status, craftingFailureStatus(), craftingRuntime.tickCount(),
+                craftingRuntime.totalTick(), craftingRuntime.parallelism(), craftingRuntime.maxParallelism());
     }
 
     private @Nullable ExecutionStatus craftingFailureStatus() {
@@ -489,7 +492,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                  boolean recipeLocked, String lockedRecipeId, @Nullable Identifier machineId,
                                  int controllerRole, int installedModuleCount, boolean moduleConnected,
                                  @Nullable Identifier connectedHostId, CraftingStatus craftingStatus,
-                                 @Nullable ExecutionStatus failure, boolean structureAreaLoaded) {
+                                 @Nullable ExecutionStatus failure, boolean structureAreaLoaded,
+                                 int tick, int totalTick, int parallelism, int maxParallelism) {
         if (level == null || !level.isClientSide()) return;
         if (physicalFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -515,7 +519,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishClientComponentState(levels, moduleStatus, installedModuleCount);
         this.clientRecipeLocked = recipeLocked;
         this.clientLockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
-        runtime.publishCraftingState(clientRecipeId, craftingStatus, failure);
+        runtime.publishCraftingState(clientRecipeId, craftingStatus, failure,
+                tick, totalTick, parallelism, maxParallelism);
     }
 
     public boolean hasClientActiveRecipe() { return clientActive; }
@@ -615,7 +620,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void sendRecipeLockState(ServerPlayer player) {
         if (player == null) return;
-        player.connection.send(new ClientboundCustomPayloadPacket(machineStatePayload(isRuntimeActive())));
+        runtime.publishSnapshot();
+        player.connection.send(new ClientboundCustomPayloadPacket(PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot())));
     }
 
     public boolean hasFactoryController() {
@@ -664,22 +670,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 : List.of(FactoryRuntime.ThreadSnapshot.idleBase());
     }
 
-    public FactoryControllerSnapshot factoryControllerSnapshot() {
-        ControllerRuntimeSnapshot state = runtimeSnapshot();
-        if (!isFactoryController(state)) return FactoryControllerSnapshot.empty(getBlockPos());
-        FactorySnapshot factory = state.factory();
-        StructureSnapshot structure = state.structure();
-        int parallelSlots = (int) state.components().stream()
-                .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
-                .count();
-        String factoryFailure = failureUnloc(factory.failure());
-        if (factoryFailure.isEmpty()) factoryFailure = failureUnloc(state.crafting().failure());
-        return new FactoryControllerSnapshot(getBlockPos(), structure.formed(), factory.paused(),
-                factory.activeLaneCount(), factory.laneLimit(), factory.activeParallelism(), factory.maxParallelism(),
-                structure.machine() == null ? "" : structure.machine().displayNameKey(), parallelSlots,
-                factoryFailure, factory.presentationLanes());
-    }
-
     private static String failureUnloc(@Nullable ExecutionStatus failure) {
         if (failure == null) return "";
         return switch (failure.details().getOrDefault("reason", "")) {
@@ -692,10 +682,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         };
     }
 
-    public void sendFactoryControllerSnapshot(@Nullable ServerPlayer player) {
+    public void sendFactoryControllerState(@Nullable ServerPlayer player) {
         if (player != null) {
+            ControllerRuntimeSnapshot state = runtimeSnapshot();
             player.connection.send(new ClientboundCustomPayloadPacket(
-                    new PktFactoryControllerStatePayload(factoryControllerSnapshot())));
+                    new PktFactoryControllerStatePayload(getBlockPos(), SYNC_RUNTIME.factoryState(state))));
         }
     }
 
@@ -751,7 +742,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         ControllerRuntimeSnapshot tickState = runtimeSnapshot();
-        boolean activeBefore = isRuntimeActive(tickState);
         try {
         if (advanceBuildTask()) return;
 
@@ -777,7 +767,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         } finally {
             publishRuntimeState();
             if (hasFactoryController()) syncOpenFactoryControllerMenus();
-            broadcastStateIfChanged(activeBefore);
+            broadcastStateIfChanged();
         }
     }
 
@@ -2201,36 +2191,23 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void syncOpenFactoryControllerMenus() {
         if (!(level instanceof ServerLevel serverLevel)) return;
-        FactoryControllerSnapshot next = factoryControllerSnapshot();
+        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
+        if (!SYNC_RUNTIME.factoryControllerPresent(runtimeState)) return;
+        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState);
         for (ServerPlayer player : serverLevel.players()) {
             if (player.containerMenu instanceof FactoryControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos())) {
                 menu.applySnapshot(next);
                 menu.markSnapshotSent(next);
                 player.connection.send(new ClientboundCustomPayloadPacket(
-                        new PktFactoryControllerStatePayload(next)));
+                        new PktFactoryControllerStatePayload(getBlockPos(), next)));
             }
         }
     }
 
-    private void broadcastStateIfChanged(boolean activeBeforeTick) {
-        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
-        boolean formed = runtimeState.structure().formed();
-        boolean activeNow = isRuntimeActive(runtimeState);
-        var thread = hasFactoryController() ? factoryThreadSnapshots().getFirst() : null;
-        boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
-        String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
-        Identifier machineId = machineId();
-        String machineIdValue = machineId == null ? "" : machineId.toString();
-        int controllerRole = MachineControllerMenu.controllerRoleSyncValue(this);
-        ModuleConnectionStatus moduleStatus = runtimeState.moduleConnectionStatus();
-        int installedModuleCount = runtimeState.installedModuleCount();
-        boolean moduleConnected = moduleStatus.connected();
-        String connectedHostIdValue = moduleConnected ? moduleStatus.connectedHostId().toString() : "";
-        var packet = machineStatePayload(activeNow, formed, recipeLocked, lockedRecipe, machineIdValue, controllerRole,
-                installedModuleCount, moduleConnected, connectedHostIdValue);
-        if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)
-                && activeBeforeTick == activeNow) {
+    private void broadcastStateIfChanged() {
+        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot());
+        if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)) {
             return;
         }
         lastBroadcastState = packet;
@@ -2238,40 +2215,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(packet));
         }
-    }
-
-    private PktMachineStatePayload machineStatePayload(boolean activeNow) {
-        var thread = hasFactoryController() ? factoryThreadSnapshots().getFirst() : null;
-        boolean recipeLocked = thread == null ? lockedRecipeId != null : thread.locked();
-        String lockedRecipe = thread == null ? lockedRecipeId == null ? "" : lockedRecipeId.toString() : thread.lockedRecipeId();
-        Identifier machineId = machineId();
-        String machineIdValue = machineId == null ? "" : machineId.toString();
-        int controllerRole = MachineControllerMenu.controllerRoleSyncValue(this);
-        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
-        int installedModuleCount = runtimeState.installedModuleCount();
-        ModuleConnectionStatus moduleStatus = runtimeState.moduleConnectionStatus();
-        boolean moduleConnected = moduleStatus.connected();
-        String connectedHostIdValue = moduleConnected ? moduleStatus.connectedHostId().toString() : "";
-        return machineStatePayload(activeNow, runtimeState.structure().formed(), recipeLocked, lockedRecipe, machineIdValue, controllerRole,
-                installedModuleCount, moduleConnected, connectedHostIdValue);
-    }
-
-    private PktMachineStatePayload machineStatePayload(boolean activeNow, boolean formed, boolean recipeLocked, String lockedRecipe,
-                                                       String machineId, int controllerRole, int installedModuleCount,
-                                                       boolean moduleConnected, String connectedHostId) {
-        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
-        var crafting = runtimeState.crafting();
-        var factoryThread = isFactoryController(runtimeState)
-                ? runtimeState.factory().presentationLanes().stream().findFirst().orElse(null) : null;
-        String name = factoryThread != null && !factoryThread.recipeId().isEmpty()
-                ? factoryThread.recipeId()
-                : crafting.recipeId() == null ? "" : crafting.recipeId().toString();
-        return new PktMachineStatePayload(getBlockPos(), name, formed, activeNow,
-                runtimeState.foundLevels().values().stream().map(foundLevel -> foundLevel.id().toString()).toList(),
-                recipeLocked, lockedRecipe,
-                machineId, controllerRole, installedModuleCount, moduleConnected, connectedHostId,
-                crafting.status().getStatus(), crafting.status().getUnlocMessage(), crafting.failure(),
-                runtimeState.structure().structureAreaLoaded());
     }
 
     private boolean tryStartNewRecipe() {

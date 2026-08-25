@@ -8,7 +8,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 
@@ -72,9 +71,7 @@ public class FluidHatchMenu extends AbstractMachineMenu {
     }
 
     private FluidHatchBlockEntity resolvedOwner() {
-        if (owner != null) return owner;
-        BlockEntity be = level.getBlockEntity(pos);
-        return be instanceof FluidHatchBlockEntity hatch ? hatch : null;
+        return owner;
     }
 
     @Override

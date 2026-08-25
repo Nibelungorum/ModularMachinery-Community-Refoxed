@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
 import com.mojang.serialization.Codec;
-import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
@@ -103,16 +102,6 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         return inventoryEmpty;
     }
 
-    @Override
-    protected boolean hasAutoIOTransferWork() {
-        if (ioType() == IOType.OUTPUT) return !isInventoryEmpty();
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (stack.isEmpty() || stack.getCount() < Math.min(handler.getSlotLimit(slot), stack.getMaxStackSize())) return true;
-        }
-        return false;
-    }
-
     private void notifyControllerOfInputChange() {
         if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
         if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
@@ -125,11 +114,6 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
-
-    @Override
-    public AutoIOCapabilityType autoIOCapabilityType() {
-        return AutoIOCapabilityType.ITEM;
-    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {

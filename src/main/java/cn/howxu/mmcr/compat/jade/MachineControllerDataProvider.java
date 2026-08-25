@@ -1,9 +1,10 @@
 package cn.howxu.mmcr.compat.jade;
 
-import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
-import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -16,6 +17,8 @@ import snownee.jade.api.IServerDataProvider;
 public enum MachineControllerDataProvider implements IServerDataProvider<BlockAccessor> {
     INSTANCE;
 
+    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
+
     @Override
     public Identifier getUid() {
         return MachineControllerComponentProvider.UID;
@@ -25,34 +28,24 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
     public void appendServerData(CompoundTag data, BlockAccessor accessor) {
         if (!(accessor.getTarget() instanceof MachineControllerBlockEntity controller)) return;
 
-        var runtime = controller.runtimeSnapshot();
-        var foundMachine = runtime.structure().machine();
-        var boundMachine = runtime.structure().configuredMachine();
-        var machine = foundMachine != null ? foundMachine : boundMachine;
-        FactoryRuntime.ThreadSnapshot factoryThread = runtime.factory().presentationLanes().stream()
-                .filter(FactoryRuntime.ThreadSnapshot::active).findFirst().orElse(null);
-        ActiveMachineRecipe active = factoryThread == null ? controller.getActive() : null;
-
-        data.putBoolean("formed", runtime.structure().formed());
-        data.putBoolean("active", controller.isRuntimeActive());
-        data.putInt("parallelism", controller.currentParallelism());
-        data.putInt("maxParallelism", controller.hasFactoryController()
-                ? runtime.factory().maxParallelism() : active == null ? controller.getMaxParallelism() : active.getMaxParallelism());
-        data.putInt("parallelSlots", controller.parallelControllerCount());
-        data.putInt("maxParallelSlots", controller.maxParallelControllerCount());
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        var machineState = SYNC_RUNTIME.machineState(runtime);
+        FactorySnapshot factory = SYNC_RUNTIME.factoryState(runtime);
+        var machine = SYNC_RUNTIME.machine(runtime);
+        data.putBoolean("formed", machineState.structure().formed());
+        data.putBoolean("active", SYNC_RUNTIME.active(runtime));
+        data.putInt("parallelism", SYNC_RUNTIME.currentParallelism(runtime));
+        data.putInt("maxParallelism", SYNC_RUNTIME.maxParallelism(runtime));
+        data.putInt("parallelSlots", factory.parallelSlots());
+        data.putInt("maxParallelSlots", SYNC_RUNTIME.maxParallelControllerCount(runtime));
         data.putBoolean("factorySupported", machine != null && machine.hasFactory());
-        data.putBoolean("factoryPresent", controller.hasFactoryController());
-        data.putInt("factoryLanes", runtime.factory().activeLaneCount());
-        data.putInt("factoryThreadLimit", runtime.factory().laneLimit());
-        if (factoryThread != null) {
-            data.putString("activeRecipe", factoryThread.recipeId());
-            data.putInt("tick", factoryThread.tick());
-            data.putInt("totalTick", factoryThread.totalTick());
-        } else if (active != null && active.getRecipe() != null) {
-            data.putString("activeRecipe", active.getRecipe().id().toString());
-            data.putInt("tick", active.getTick());
-            data.putInt("totalTick", active.getTotalTick());
-        }
+        data.putBoolean("factoryPresent", SYNC_RUNTIME.factoryControllerPresent(runtime));
+        data.putInt("factoryLanes", factory.activeLaneCount());
+        data.putInt("factoryThreadLimit", factory.laneLimit());
+        String activeRecipe = SYNC_RUNTIME.activeRecipe(runtime);
+        if (!activeRecipe.isEmpty()) data.putString("activeRecipe", activeRecipe);
+        data.putInt("tick", SYNC_RUNTIME.tick(runtime));
+        data.putInt("totalTick", SYNC_RUNTIME.totalTick(runtime));
 
         int itemInputs = 0;
         int itemOutputs = 0;

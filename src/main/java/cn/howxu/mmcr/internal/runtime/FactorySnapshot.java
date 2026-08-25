@@ -11,6 +11,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record FactorySnapshot(
+        boolean formed,
         boolean active,
         List<CraftingStateSnapshot> lanes,
         int activeParallelism,
@@ -19,18 +20,23 @@ public record FactorySnapshot(
         int maxParallelism,
         boolean paused,
         List<FactoryRuntime.ThreadSnapshot> presentationLanes,
+        String machineName,
+        int parallelSlots,
         @Nullable ExecutionStatus failure) {
 
     public FactorySnapshot {
+        machineName = machineName == null ? "" : machineName;
         lanes = List.copyOf(lanes == null ? List.of() : lanes);
         if (activeParallelism < 0) throw new IllegalArgumentException("activeParallelism must not be negative");
         if (laneLimit < 1) throw new IllegalArgumentException("laneLimit must be positive");
         if (activeLaneCount < 0) throw new IllegalArgumentException("activeLaneCount must not be negative");
         if (maxParallelism < 1) throw new IllegalArgumentException("maxParallelism must be positive");
         presentationLanes = List.copyOf(presentationLanes == null ? List.of() : presentationLanes);
+        if (parallelSlots < 0) throw new IllegalArgumentException("parallelSlots must not be negative");
     }
 
     public static FactorySnapshot empty() {
-        return new FactorySnapshot(false, List.of(), 0, 1, 0, 1, false, List.of(), null);
+        return new FactorySnapshot(false, false, List.of(), 0, 1, 0, 1,
+                false, List.of(), "", 0, null);
     }
 }

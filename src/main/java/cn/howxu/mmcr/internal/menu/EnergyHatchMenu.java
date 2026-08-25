@@ -8,7 +8,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 
 public class EnergyHatchMenu extends AbstractMachineMenu {
@@ -71,9 +70,7 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
     }
 
     private EnergyHatchBlockEntity resolvedOwner() {
-        if (owner != null) return owner;
-        BlockEntity be = level.getBlockEntity(pos);
-        return be instanceof EnergyHatchBlockEntity hatch ? hatch : null;
+        return owner;
     }
 
     @Override

@@ -212,9 +212,15 @@ public final class MachineControllerRuntime {
     }
 
     void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
-                              @Nullable ExecutionStatus failure) {
+                              @Nullable ExecutionStatus failure, int tick, int totalTick,
+                              int parallelism, int maxParallelism) {
+        boolean client = controller.getLevel() != null && controller.getLevel().isClientSide();
+        boolean recipeLocked = client ? controller.hasClientRecipeLock() : controller.lockedRecipeId() != null;
+        String lockedRecipeId = client ? controller.clientLockedRecipeId()
+                : controller.lockedRecipeId() == null ? "" : controller.lockedRecipeId().toString();
         craftingState = new CraftingStateSnapshot(recipeId, status, failure,
-                structure.version(), components.capabilityVersion(), components.modifierVersion());
+                structure.version(), components.capabilityVersion(), components.modifierVersion(),
+                tick, totalTick, parallelism, maxParallelism, recipeLocked, lockedRecipeId);
         publishSnapshot();
     }
 }

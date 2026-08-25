@@ -16,15 +16,28 @@ public record CraftingStateSnapshot(
         @Nullable ExecutionStatus failure,
         long structureVersion,
         long capabilityVersion,
-        long modifierVersion) {
+        long modifierVersion,
+        int tick,
+        int totalTick,
+        int parallelism,
+        int maxParallelism,
+        boolean recipeLocked,
+        String lockedRecipeId) {
 
     public CraftingStateSnapshot {
         status = copyStatus(status);
+        if (tick < 0 || totalTick < 0 || tick > totalTick) {
+            throw new IllegalArgumentException("Invalid crafting progress: " + tick + "/" + totalTick);
+        }
+        if (parallelism < 0 || maxParallelism < 1) {
+            throw new IllegalArgumentException("Invalid crafting parallelism");
+        }
+        lockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
     }
 
     public static CraftingStateSnapshot empty(long structureVersion, long capabilityVersion, long modifierVersion) {
         return new CraftingStateSnapshot(null, CraftingStatus.IDLE, null,
-                structureVersion, capabilityVersion, modifierVersion);
+                structureVersion, capabilityVersion, modifierVersion, 0, 0, 0, 1, false, "");
     }
 
     @Override

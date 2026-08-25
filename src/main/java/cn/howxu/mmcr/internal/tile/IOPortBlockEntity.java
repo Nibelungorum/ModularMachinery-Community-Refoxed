@@ -1,14 +1,13 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
-import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
-import cn.howxu.mmcr.internal.autoio.AutoIOTransferHandler;
-import cn.howxu.mmcr.internal.autoio.AutoIOTransferHandlers;
+import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
+import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -31,6 +30,7 @@ import java.util.TreeMap;
 import java.util.EnumSet;
 import java.util.ArrayList;
 import java.util.List;
+import org.jetbrains.annotations.Nullable;
 
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost {
     private static final String AUTO_IO_KEY = "auto_io";
@@ -80,12 +80,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         return autoIOConfig;
     }
 
-    public abstract AutoIOCapabilityType autoIOCapabilityType();
-
-    public int autoIoTransferLimit() {
-        return 64;
-    }
-
     public int autoIOCandidateCount() {
         return autoIOCandidateSides.size();
     }
@@ -99,7 +93,9 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     protected boolean hasAutoIOTransferWork() {
-        return true;
+        MachineCapability capability = autoIOCapability();
+        TransferPolicy policy = capability == null ? null : CapabilityTransferPolicies.policyFor(capability).orElse(null);
+        return capability != null && policy != null && policy.hasWork(capability);
     }
 
     public record AdjacentSide(Direction side, BlockState state, ItemStack icon, Component name) {
@@ -183,10 +179,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     protected void runAutoIOCycle() {
         if (autoIOConfig == null || level == null || level.isClientSide() || !autoIOConfig.enabled() || autoIOConfig.enabledSides().isEmpty()) return;
-        AutoIOTransferHandler handler = autoIOTransferHandler();
-        if (handler == null) return;
+        MachineCapability capability = autoIOCapability();
+        TransferPolicy policy = capability == null ? null : CapabilityTransferPolicies.policyFor(capability).orElse(null);
+        if (capability == null || policy == null) return;
         boolean rebuiltCandidates = consumeAutoIOCacheDirty();
-        if (rebuiltCandidates) rebuildAutoIOCandidates(handler);
+        if (rebuiltCandidates) rebuildAutoIOCandidates(capability, policy);
         if (autoIOCandidateSides.isEmpty()) {
             if (rebuiltCandidates) {
                 autoIOTicksUntilTransfer = AUTO_IO_MIN_DELAY - 1;
@@ -196,7 +193,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 autoIOTicksUntilTransfer--;
                 return;
             }
-            rebuildAutoIOCandidates(handler);
+            rebuildAutoIOCandidates(capability, policy);
             if (autoIOCandidateSides.isEmpty()) return;
         }
         if (!hasAutoIOTransferWork()) return;
@@ -207,28 +204,32 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
         boolean moved = false;
         for (Direction side : autoIOCandidateSides) {
-            moved |= handler.transfer(this, side);
+            moved |= policy.transfer(capability, side).successful();
         }
         if (moved) incrementAutoIOSuccess();
         else decrementAutoIOSuccess();
         autoIOTicksUntilTransfer = autoIODelay - 1;
     }
 
-    private void rebuildAutoIOCandidates(AutoIOTransferHandler handler) {
+    private void rebuildAutoIOCandidates(MachineCapability capability, TransferPolicy policy) {
         autoIOCandidateSides.clear();
         for (Direction side : autoIOConfig.enabledSides()) {
-            if (handler.hasAdjacentTarget(this, side)) autoIOCandidateSides.add(side);
+            if (policy.hasAdjacentTarget(capability, side)) autoIOCandidateSides.add(side);
         }
     }
 
-    protected AutoIOTransferHandler autoIOTransferHandler() {
-        return AutoIOTransferHandlers.handlerFor(this).orElse(null);
+    private @Nullable MachineCapability autoIOCapability() {
+        for (MachineCapability capability : capabilitySnapshot().capabilities()) {
+            if (CapabilityTransferPolicies.policyFor(capability).isPresent()) return capability;
+        }
+        return null;
     }
 
     public boolean ejectContents() {
         if (level == null || level.isClientSide() || ioType() != IOType.INPUT || isUsedByActiveRecipe()) return false;
-        AutoIOTransferHandler handler = autoIOTransferHandler();
-        if (handler == null || !handler.hasTransferableContents(this)) return false;
+        MachineCapability capability = autoIOCapability();
+        TransferPolicy policy = capability == null ? null : CapabilityTransferPolicies.policyFor(capability).orElse(null);
+        if (capability == null || policy == null) return false;
         List<Direction> sides = new ArrayList<>(List.of(Direction.values()));
         for (int index = sides.size() - 1; index > 0; index--) {
             int swapIndex = level.getRandom().nextInt(index + 1);
@@ -238,8 +239,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         }
         boolean moved = false;
         for (Direction side : sides) {
-            moved |= handler.eject(this, side);
-            if (!handler.hasTransferableContents(this)) break;
+            moved |= policy.eject(capability, side).successful();
         }
         return moved;
     }

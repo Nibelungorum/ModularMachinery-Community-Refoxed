@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.util.IOType;
@@ -50,17 +49,6 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
-    public int autoIoTransferLimit() {
-        return Integer.MAX_VALUE;
-    }
-
-    @Override
-    protected boolean hasAutoIOTransferWork() {
-        if (ioType() == IOType.OUTPUT) return !isTankEmpty();
-        return storage.getAmountAsLong() < storage.getCapacityAsLong();
-    }
-
-    @Override
     public void setChanged() {
         super.setChanged();
         if (level != null && !level.isClientSide()) {
@@ -78,11 +66,6 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
-
-    @Override
-    public AutoIOCapabilityType autoIOCapabilityType() {
-        return AutoIOCapabilityType.FLUID;
-    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {

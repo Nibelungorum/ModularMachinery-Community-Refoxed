@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
@@ -9,6 +10,7 @@ import java.util.function.ToIntFunction;
 
 /** Shared synchronized controller fields and player inventory placement. */
 final class ControllerMenuState {
+    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     static final int PLAYER_INVENTORY_Y = 131;
     static final int HOTBAR_Y = 189;
 
@@ -22,16 +24,15 @@ final class ControllerMenuState {
 
     ControllerMenuState(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         formed = add(menu, owner, controller -> controller.runtimeSnapshot().structure().formed() ? 1 : 0);
-        active = add(menu, owner, controller -> controller.isRuntimeActive() ? 1 : 0);
-        lastFailure = add(menu, owner, controller -> failureCode(controller.getLastFailureUnloc()));
+        active = add(menu, owner, controller -> SYNC_RUNTIME.active(controller.runtimeSnapshot()) ? 1 : 0);
+        lastFailure = add(menu, owner, controller -> failureCode(SYNC_RUNTIME.failureMessage(controller.runtimeSnapshot())));
         redstonePaused = add(menu, owner, controller -> {
             var state = controller.runtimeSnapshot();
             return state.crafting().status().isPaused() || state.factory().paused() ? 1 : 0;
         });
-        parallelControllerCount = add(menu, owner, MachineControllerBlockEntity::parallelControllerCount);
-        currentParallelism = add(menu, owner, MachineControllerBlockEntity::currentParallelism);
-        maxParallelism = add(menu, owner, controller -> controller.hasFactoryController()
-                ? controller.runtimeSnapshot().factory().maxParallelism() : controller.getMaxParallelism());
+        parallelControllerCount = add(menu, owner, controller -> SYNC_RUNTIME.parallelControllerCount(controller.runtimeSnapshot()));
+        currentParallelism = add(menu, owner, controller -> SYNC_RUNTIME.currentParallelism(controller.runtimeSnapshot()));
+        maxParallelism = add(menu, owner, controller -> SYNC_RUNTIME.maxParallelism(controller.runtimeSnapshot()));
     }
 
     private static DataSlot add(AbstractMachineMenu menu, MachineControllerBlockEntity owner,
@@ -49,9 +50,7 @@ final class ControllerMenuState {
     static DataSlot addRecipeLockSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                if (!owner.hasFactoryController()) return owner.recipeLocked() ? 1 : 0;
-                return owner.factoryThreadSnapshots().stream().findFirst()
-                        .map(thread -> thread.locked() ? 1 : 0).orElse(0);
+                return SYNC_RUNTIME.recipeLocked(owner.runtimeSnapshot()) ? 1 : 0;
             }
 
             @Override public void set(int value) { }

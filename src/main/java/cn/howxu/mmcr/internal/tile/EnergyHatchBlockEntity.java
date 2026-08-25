@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.internal.autoio.AutoIOCapabilityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
@@ -45,18 +44,6 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
-    public int autoIoTransferLimit() {
-        long transfer = kind().energyHatchSize().orElseThrow().transfer();
-        return (int) Math.min(transfer, Integer.MAX_VALUE);
-    }
-
-    @Override
-    protected boolean hasAutoIOTransferWork() {
-        if (ioType() == IOType.OUTPUT) return storage.getAmountAsLong() > 0;
-        return storage.getAmountAsLong() < storage.getCapacityAsLong();
-    }
-
-    @Override
     public void setChanged() {
         super.setChanged();
         if (level != null && !level.isClientSide()) {
@@ -74,11 +61,6 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     public abstract IOPortKind kind();
-
-    @Override
-    public AutoIOCapabilityType autoIOCapabilityType() {
-        return AutoIOCapabilityType.ENERGY;
-    }
 
     @Override
     protected void saveAdditional(ValueOutput output) {

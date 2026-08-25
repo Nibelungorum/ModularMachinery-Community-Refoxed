@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.menu;
 
-import cn.howxu.mmcr.internal.network.FactoryControllerSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -23,14 +25,15 @@ import java.util.List;
  */
 public final class FactoryControllerMenu extends AbstractMachineMenu {
     private static final int FACTORY_PLAYER_INVENTORY_X = 112;
+    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final BlockPos controllerPos;
     private final ControllerMenuState state;
     private final MachineControllerBlockEntity owner;
     private final ServerPlayer player;
     private final Level level;
-    private FactoryControllerSnapshot snapshot;
-    private FactoryControllerSnapshot lastSentSnapshot;
+    private FactorySnapshot snapshot;
+    private FactorySnapshot lastSentSnapshot;
     private int selectedThreadIndex;
 
     public FactoryControllerMenu(int containerId, Inventory inventory, MachineControllerBlockEntity owner, ServerPlayer player) {
@@ -41,11 +44,12 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         controllerPos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         state = new ControllerMenuState(this, owner);
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
-        snapshot = FactoryControllerSnapshot.empty(controllerPos);
+        snapshot = FactorySnapshot.empty();
         if (owner != null) {
-            if (owner.hasFactoryController()) {
-                snapshot = owner.factoryControllerSnapshot();
-                owner.sendFactoryControllerSnapshot(player);
+            ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
+            if (SYNC_RUNTIME.factoryControllerPresent(runtime)) {
+                snapshot = SYNC_RUNTIME.factoryState(runtime);
+                owner.sendFactoryControllerState(player);
             }
         }
     }
@@ -62,7 +66,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         this.controllerPos = controllerPos;
         state = new ControllerMenuState(this, null);
         ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
-        snapshot = FactoryControllerSnapshot.empty(controllerPos);
+        snapshot = FactorySnapshot.empty();
     }
 
     public static FactoryControllerMenu clientOpen(int containerId, Inventory inventory, FriendlyByteBuf buffer) {
@@ -81,9 +85,9 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         return blockEntity instanceof MachineControllerBlockEntity controller ? controller : null;
     }
     public boolean isFormed() { return snapshot.formed() || state.formed.get() != 0; }
-    public boolean isRedstonePaused() { return snapshot.redstonePaused() || state.redstonePaused.get() != 0; }
-    public int activeThreadCount() { return snapshot.activeThreadCount(); }
-    public int threadCount() { return snapshot.threadCount(); }
+    public boolean isRedstonePaused() { return snapshot.paused() || state.redstonePaused.get() != 0; }
+    public int activeThreadCount() { return snapshot.activeLaneCount(); }
+    public int threadCount() { return snapshot.laneLimit(); }
     public int currentParallelism() {
         FactoryRuntime.ThreadSnapshot thread = selectedThread();
         return thread.active() ? thread.parallelism() : 0;
@@ -92,26 +96,26 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public String machineName() { return snapshot.machineName(); }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public String lastFailureUnloc() {
-        if (!snapshot.lastFailureUnloc().isEmpty()) return snapshot.lastFailureUnloc();
-        String failure = ControllerMenuState.failureKey(state.lastFailure.get());
-        return failure == null ? "" : failure;
+        String failure = SYNC_RUNTIME.failureMessage(snapshot);
+        if (!failure.isEmpty()) return failure;
+        String fallback = ControllerMenuState.failureKey(state.lastFailure.get());
+        return fallback == null ? "" : fallback;
     }
-    public List<FactoryRuntime.ThreadSnapshot> threads() { return snapshot.threads(); }
+    public List<FactoryRuntime.ThreadSnapshot> threads() { return snapshot.presentationLanes(); }
 
-    public void applySnapshot(FactoryControllerSnapshot snapshot) {
-        if (!controllerPos.equals(snapshot.controllerPos())) return;
+    public void applySnapshot(FactorySnapshot snapshot) {
         this.snapshot = snapshot;
-        if (snapshot.threads().stream().noneMatch(thread -> thread.index() == selectedThreadIndex)) selectedThreadIndex = 0;
+        if (snapshot.presentationLanes().stream().noneMatch(thread -> thread.index() == selectedThreadIndex)) selectedThreadIndex = 0;
     }
 
-    public void markSnapshotSent(FactoryControllerSnapshot snapshot) {
-        if (controllerPos.equals(snapshot.controllerPos())) lastSentSnapshot = snapshot;
+    public void markSnapshotSent(FactorySnapshot snapshot) {
+        lastSentSnapshot = snapshot;
     }
 
     public FactoryRuntime.ThreadSnapshot selectedThread() {
-        return snapshot.threads().stream().filter(thread -> thread.index() == selectedThreadIndex).findFirst()
-                .orElseGet(() -> snapshot.threads().isEmpty()
-                        ? FactoryRuntime.ThreadSnapshot.idleBase() : snapshot.threads().getFirst());
+        return snapshot.presentationLanes().stream().filter(thread -> thread.index() == selectedThreadIndex).findFirst()
+                .orElseGet(() -> snapshot.presentationLanes().isEmpty()
+                        ? FactoryRuntime.ThreadSnapshot.idleBase() : snapshot.presentationLanes().getFirst());
     }
 
     public boolean selectedRecipeLocked() { return selectedThread().locked(); }
@@ -120,18 +124,19 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public int selectedThreadIndex() { return selectedThread().index(); }
 
     public void selectThread(int index) {
-        if (snapshot.threads().stream().anyMatch(thread -> thread.index() == index)) selectedThreadIndex = index;
+        if (snapshot.presentationLanes().stream().anyMatch(thread -> thread.index() == index)) selectedThreadIndex = index;
     }
 
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
         if (owner == null) return;
-        if (!owner.hasFactoryController()) return;
-        FactoryControllerSnapshot next = owner.factoryControllerSnapshot();
+        ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
+        if (!SYNC_RUNTIME.factoryControllerPresent(runtime)) return;
+        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtime);
         applySnapshot(next);
         if (player != null && !next.equals(lastSentSnapshot)) {
-            owner.sendFactoryControllerSnapshot(player);
+            owner.sendFactoryControllerState(player);
             lastSentSnapshot = next;
         }
     }

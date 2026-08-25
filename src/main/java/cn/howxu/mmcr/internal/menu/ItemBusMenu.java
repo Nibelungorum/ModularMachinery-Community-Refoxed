@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -54,7 +56,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
         this.owner = null;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = pos;
-        ItemBusBlockEntity resolved = resolvedOwner();
+        IOPortBlockEntity resolved = resolvedPort();
         this.busSize = size(resolved);
         this.busSlotCount = slotCount(resolved);
         this.busRows = rowsForSize(busSize);
@@ -148,18 +150,23 @@ public class ItemBusMenu extends AbstractMachineMenu {
         }
     }
 
-    private ItemBusBlockEntity resolvedOwner() {
+    private IOPortBlockEntity resolvedPort() {
         if (owner != null) return owner;
         if (level == null) return null;
         BlockEntity be = level.getBlockEntity(pos);
-        return be instanceof ItemBusBlockEntity bus ? bus : null;
+        return be instanceof IOPortBlockEntity port ? port : null;
     }
 
-    private static int slotCount(ItemBusBlockEntity owner) {
-        return owner == null ? DEFAULT_BUS_SLOT_COUNT : owner.getItemStackHandler(null).getSlots();
+    private static int slotCount(IOPortBlockEntity owner) {
+        if (owner == null) return DEFAULT_BUS_SLOT_COUNT;
+        return owner.capabilitySnapshot().capabilities().stream()
+                .filter(ItemBusCapability.class::isInstance)
+                .map(ItemBusCapability.class::cast)
+                .mapToInt(capability -> capability.storage().size())
+                .findFirst().orElse(DEFAULT_BUS_SLOT_COUNT);
     }
 
-    private static ItemBusSize size(ItemBusBlockEntity owner) {
+    private static ItemBusSize size(IOPortBlockEntity owner) {
         return owner == null ? ItemBusSize.NORMAL : owner.kind().itemBusSize().orElse(ItemBusSize.NORMAL);
     }
 

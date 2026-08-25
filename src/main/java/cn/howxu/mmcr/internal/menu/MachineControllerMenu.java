@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -21,6 +23,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Optional;
 
 public class MachineControllerMenu extends AbstractMachineMenu {
+    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final MachineControllerBlockEntity owner;
     private final Level level;
@@ -57,7 +60,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.active = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.isRuntimeActive() ? 1 : 0; }
+            @Override public int get() { return SYNC_RUNTIME.active(owner.runtimeSnapshot()) ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.activeTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -69,7 +72,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.lastFailure = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return failureCode(owner.getLastFailureUnloc()); }
+            @Override public int get() { return failureCode(SYNC_RUNTIME.failureMessage(owner.runtimeSnapshot())); }
             @Override public void set(int value) {}
         });
         this.redstonePaused = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -80,34 +83,30 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public void set(int value) {}
         });
         this.parallelControllerCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.parallelControllerCount(); }
+            @Override public int get() { return SYNC_RUNTIME.parallelControllerCount(owner.runtimeSnapshot()); }
             @Override public void set(int value) {}
         });
         this.currentParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.currentParallelism(); }
+            @Override public int get() { return SYNC_RUNTIME.currentParallelism(owner.runtimeSnapshot()); }
             @Override public void set(int value) {}
         });
         this.maxParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() {
-                return owner.hasFactoryController()
-                        ? owner.runtimeSnapshot().factory().maxParallelism() : owner.getMaxParallelism();
-            }
+            @Override public int get() { return SYNC_RUNTIME.maxParallelism(owner.runtimeSnapshot()); }
             @Override public void set(int value) {}
         });
         this.factoryControllerPresent = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return owner.hasFactoryController() ? 1 : 0; }
+            @Override public int get() { return SYNC_RUNTIME.factoryControllerPresent(owner.runtimeSnapshot()) ? 1 : 0; }
             @Override public void set(int value) {}
         });
         this.factoryThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() {
-                return owner.hasFactoryController() ? owner.runtimeSnapshot().factory().laneLimit() : 0;
+                ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
+                return SYNC_RUNTIME.factoryControllerPresent(runtime) ? runtime.factory().laneLimit() : 0;
             }
             @Override public void set(int value) {}
         });
         this.factoryActiveThreadCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() {
-                return owner.activeFactoryThreadCount();
-            }
+            @Override public int get() { return SYNC_RUNTIME.activeFactoryThreadCount(owner.runtimeSnapshot()); }
             @Override public void set(int value) {}
         });
         this.recipeLocked = ControllerMenuState.addRecipeLockSlot(this, owner);
@@ -227,43 +226,38 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public boolean hasActiveRecipe() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? active.get() != 0 : controller.isRuntimeActive() || controller.hasClientActiveRecipe()
+        return controller == null ? active.get() != 0 : SYNC_RUNTIME.active(controller.runtimeSnapshot())
                 || activeFactoryThread(controller) != null || active.get() != 0;
     }
 
     public int activeRecipeTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return owner == null ? activeTick.get() : activeRecipeTick(controller);
+        return controller == null ? activeTick.get() : activeRecipeTick(controller);
     }
 
     public int activeRecipeTotalTick() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        return owner == null ? activeTotalTick.get() : activeRecipeTotalTick(controller);
+        return controller == null ? activeTotalTick.get() : activeRecipeTotalTick(controller);
     }
 
     private static int activeRecipeTick(@Nullable MachineControllerBlockEntity controller) {
         if (controller == null) return 0;
-        if (controller.hasFactoryController()) {
-            FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
-            return thread == null ? 0 : thread.tick();
-        }
-        if (controller.getActiveRecipe() != null) return controller.getTickCounter();
-        return 0;
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
+        return thread == null ? runtime.crafting().tick() : thread.tick();
     }
 
     private static int activeRecipeTotalTick(@Nullable MachineControllerBlockEntity controller) {
         if (controller == null) return 0;
-        if (controller.hasFactoryController()) {
-            FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
-            return thread == null ? 0 : thread.totalTick();
-        }
-        if (controller.getActive() != null) return controller.getActive().getTotalTick();
-        return 0;
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(controller);
+        return thread == null ? runtime.crafting().totalTick() : thread.totalTick();
     }
 
     private static @Nullable FactoryRuntime.ThreadSnapshot activeFactoryThread(MachineControllerBlockEntity controller) {
-        if (!controller.hasFactoryController()) return null;
-        return controller.factoryThreadSnapshots().stream()
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        if (!SYNC_RUNTIME.factoryControllerPresent(runtime)) return null;
+        return runtime.factory().presentationLanes().stream()
                 .filter(FactoryRuntime.ThreadSnapshot::active)
                 .findFirst()
                 .orElse(null);
@@ -271,7 +265,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public @Nullable String lastFailureMessage() {
         MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller != null && controller.getLastFailureUnloc() != null) return controller.getLastFailureUnloc();
+        if (controller != null) return SYNC_RUNTIME.failureMessage(controller.runtimeSnapshot());
         return failureKey(lastFailure.get());
     }
 
@@ -283,61 +277,55 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public int parallelControllerCount() {
-        if (owner == null) return parallelControllerCount.get();
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? parallelControllerCount.get() : controller.parallelControllerCount();
+        return controller == null ? parallelControllerCount.get()
+                : SYNC_RUNTIME.parallelControllerCount(controller.runtimeSnapshot());
     }
 
     public int currentParallelism() {
-        if (owner == null) return currentParallelism.get();
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? currentParallelism.get() : controller.currentParallelism();
+        return controller == null ? currentParallelism.get()
+                : SYNC_RUNTIME.currentParallelism(controller.runtimeSnapshot());
     }
 
     public int maxParallelism() {
-        if (owner == null) return Math.max(1, maxParallelism.get());
         MachineControllerBlockEntity controller = resolvedOwner();
         if (controller == null) return Math.max(1, maxParallelism.get());
-        return controller.hasFactoryController()
-                ? controller.runtimeSnapshot().factory().maxParallelism() : controller.getMaxParallelism();
+        return SYNC_RUNTIME.maxParallelism(controller.runtimeSnapshot());
     }
 
     public boolean hasFactoryController() {
-        if (owner == null) return factoryControllerPresent.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
-        return controller == null ? factoryControllerPresent.get() != 0 : controller.hasFactoryController();
+        return controller == null ? factoryControllerPresent.get() != 0
+                : SYNC_RUNTIME.factoryControllerPresent(controller.runtimeSnapshot());
     }
 
     public int factoryThreadCount() {
-        if (owner == null) return factoryThreadCount.get();
-        return owner.hasFactoryController() ? owner.runtimeSnapshot().factory().laneLimit() : 0;
+        MachineControllerBlockEntity controller = resolvedOwner();
+        if (controller == null) return factoryThreadCount.get();
+        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        return SYNC_RUNTIME.factoryControllerPresent(runtime) ? runtime.factory().laneLimit() : 0;
     }
 
     public int factoryActiveThreadCount() {
-        if (owner == null) return factoryActiveThreadCount.get();
-        return owner.activeFactoryThreadCount();
+        MachineControllerBlockEntity controller = resolvedOwner();
+        return controller == null ? factoryActiveThreadCount.get()
+                : SYNC_RUNTIME.activeFactoryThreadCount(controller.runtimeSnapshot());
     }
 
     public boolean recipeLocked() {
-        if (owner == null && level != null && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller
-                && controller.hasClientRecipeLock()) return true;
-        if (owner == null) return recipeLocked.get() != 0;
         MachineControllerBlockEntity controller = resolvedOwner();
-        if (!controller.hasFactoryController()) return controller.recipeLocked();
-        return controller.factoryThreadSnapshots().stream().findFirst()
-                .map(FactoryRuntime.ThreadSnapshot::locked).orElse(false);
+        return controller == null ? recipeLocked.get() != 0 : SYNC_RUNTIME.recipeLocked(controller.runtimeSnapshot());
     }
 
     public int installedModuleCount() {
-        if (owner == null) return installedModuleCount.get();
         MachineControllerBlockEntity controller = resolvedOwner();
         return controller == null ? installedModuleCount.get() : controller.runtimeSnapshot().installedModuleCount();
     }
 
     public Optional<Identifier> connectedHostId() {
-        if (owner == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
         MachineControllerBlockEntity controller = resolvedOwner();
-        if (controller == null) return Optional.ofNullable(clientConnectedHostId);
+        if (controller == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
         var status = controller.runtimeSnapshot().moduleConnectionStatus();
         return status.connected() ? Optional.of(status.connectedHostId()) : Optional.empty();
     }
@@ -375,10 +363,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public @Nullable String lockedRecipeId() {
         MachineControllerBlockEntity controller = resolvedOwner();
         if (controller == null) return null;
-        if (owner == null && controller.hasClientRecipeLock()) return controller.clientLockedRecipeId();
-        if (!controller.hasFactoryController()) return controller.lockedRecipeId() == null ? null : controller.lockedRecipeId().toString();
-        return controller.factoryThreadSnapshots().stream().findFirst()
-                .map(FactoryRuntime.ThreadSnapshot::lockedRecipeId).filter(id -> !id.isEmpty()).orElse(null);
+        String lockedRecipe = SYNC_RUNTIME.lockedRecipeId(controller.runtimeSnapshot());
+        return lockedRecipe.isEmpty() ? null : lockedRecipe;
     }
 
     public BlockPos controllerPos() { return pos; }
