@@ -45,7 +45,6 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
     private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
     private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
     private Button recipeLockButton;
-    private String lastParallelDebugState;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -96,12 +95,6 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
         int parallelSlots = menu.parallelControllerCount();
         int parallelism = menu.currentParallelism();
         int maxParallelism = menu.maxParallelism();
-        String parallelDebugState = formed + ":" + parallelSlots + ":" + parallelism + ":" + maxParallelism;
-        if (!parallelDebugState.equals(lastParallelDebugState)) {
-            MMCR.LOG.info("[ParallelDebug][UI] pos={} formed={} parallelSlots={} parallelism={} maxParallelism={}",
-                    menu.controllerPos(), formed, parallelSlots, parallelism, maxParallelism);
-            lastParallelDebugState = parallelDebugState;
-        }
         Component label = Component.translatable("gui.mmcr.controller.status_label");
         graphics.text(font, label, x, y, STATUS_LABEL_COLOR, true);
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), active)), x + font.width(label) + 4, y,

@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jade;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
@@ -37,9 +36,6 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putInt("maxParallelism", machineState.maxParallelism());
         data.putInt("parallelSlots", factory.parallelSlots());
         data.putInt("maxParallelSlots", machineState.maxParallelControllerCount());
-        MMCR.LOG.info("[ParallelDebug][Jade] pos={} machine={} levels={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
-                controller.getBlockPos(), machineState.machineId(), machineState.foundLevelIds(), machineState.parallelism(),
-                machineState.maxParallelism(), factory.parallelSlots(), machineState.maxParallelControllerCount());
         data.putBoolean("factorySupported", runtime.factorySupported());
         data.putBoolean("factoryPresent", machineState.factoryControllerPresent());
         data.putInt("factoryLanes", factory.activeLaneCount());

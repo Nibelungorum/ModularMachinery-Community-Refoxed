@@ -233,10 +233,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             var blockEntity = player.level().getBlockEntity(pos);
             boolean menuMatches = player.containerMenu instanceof MachineControllerMenu menu
                     && menu.controllerPos().equals(pos);
-            MMCR.LOG.info("[ParallelDebug][ClientPacketReceive] thread={} pos={} machine={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={} blockEntity={} menu={} menuMatches={}",
-                    Thread.currentThread().getName(), pos, machineId, parallelism, maxParallelism,
-                    parallelControllerCount, maxParallelControllerCount, blockEntity == null ? "<null>" : blockEntity.getClass().getSimpleName(),
-                    player.containerMenu == null ? "<null>" : player.containerMenu.getClass().getSimpleName(), menuMatches);
             if (blockEntity instanceof MachineControllerBlockEntity controller) {
                 controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId,
                         machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole, installedModuleCount,

@@ -69,7 +69,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -330,9 +329,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void requestImmediateStructureCheck(@Nullable ServerPlayer diagnosticPlayer) {
         runtime.requestStructureCheck();
         if (diagnosticPlayer != null) {
-            LOG.info("[StructureDiagnostic][Request] pos={} player={} uuid={} dimension={}", getBlockPos(),
-                    diagnosticPlayer.getName().getString(), diagnosticPlayer.getUUID(),
-                    level instanceof ServerLevel serverLevel ? serverLevel.dimension() : "<none>");
             publishStructureWork(state -> state.withDiagnostic(true, diagnosticPlayer.getUUID(),
                     level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null));
         }
@@ -1118,8 +1114,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void sendStructureMismatchDiagnostic(ServerPlayer player, StructureMatcher.Mismatch mismatch) {
         BlockPos pos = mismatch.worldPos();
-        MMCR.LOG.debug("Structure mismatch at world position {} (relative {}): expected={}, actual={}",
-                pos, mismatch.relativePos(), describeExpectedForLog(mismatch.expected()), describeActualForLog(mismatch.actualState()));
         player.sendSystemMessage(Component.translatable(
                 "message.mmcr.multiblock_mismatch",
                 styledPosition(pos),
@@ -1128,29 +1122,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         PacketDistributor.sendToPlayer(player, new PktMultiblockMismatchHighlightPayload(level.dimension(), pos));
     }
 
-    private static String describeExpectedForLog(BlockPredicate expected) {
-        return switch (expected) {
-            case BlockPredicate.OfBlock ofBlock -> "block=" + BuiltInRegistries.BLOCK.getKey(ofBlock.block());
-            case BlockPredicate.DeferredBlock deferredBlock ->
-                    "block=" + BuiltInRegistries.BLOCK.getKey(deferredBlock.supplier().get());
-            case BlockPredicate.OfBlockState ofState -> "state=" + describeActualForLog(ofState.state());
-            case BlockPredicate.OfTag ofTag -> "tag=#" + ofTag.tag().location();
-            case BlockPredicate.AnyOf anyOf -> "any_of=" + anyOf.children().stream()
-                    .map(MachineControllerBlockEntity::describeExpectedForLog).toList();
-            case BlockPredicate.Air ignored -> "air";
-            case BlockPredicate.Any ignored -> "any block";
-            case BlockPredicate.MachineCoupler ignored -> "machine coupler";
-        };
-    }
-
-    private static String describeActualForLog(BlockState state) {
-        return "block=" + BuiltInRegistries.BLOCK.getKey(state.getBlock()) + ", state=" + state;
-    }
-
     private void sendFormationFailureDiagnostic(ServerPlayer player, PortRequirementSpec.Failure failure) {
-        LOG.info("[StructureDiagnostic][Chat] pos={} player={} key={} portId={}", getBlockPos(), player.getName().getString(),
-                failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)
-                        ? "message.mmcr.multiblock_shared_component_conflict" : "formation_failure", failure.portId());
         if (failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)) {
             BlockPos componentPos = sharedConflictComponentPosition(failure.portId());
             Component componentName = componentPos == null || level == null
@@ -1469,9 +1441,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     .claim(getBlockPos(), componentClaims(rotatedPattern, stageCompiled, facing));
             if (!result.accepted()) {
                 StructureClaimRegistry.Conflict conflict = result.conflict();
-                LOG.info("[StructureDiagnostic][SharedConflict] pos={} component={} owner={} diagnosticRequested={} diagnosticPlayer={}",
-                        getBlockPos(), conflict.componentPos(), conflict.ownerPos(), structureWorkSnapshot().diagnosticRequested(),
-                        structureWorkSnapshot().diagnosticPlayerId());
                 publishStructureWork(state -> state.withFormationFailure(new PortRequirementSpec.Failure(
                         SHARED_COMPONENT_CONFLICT + " component=" + conflict.componentPos()
                                 + " owner=" + conflict.ownerPos(),
@@ -1500,8 +1469,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         UUID playerId = work.diagnosticPlayerId();
         ResourceKey<Level> dimension = work.diagnosticDimension();
         PortRequirementSpec.Failure formationFailure = work.formationFailure();
-        LOG.info("[StructureDiagnostic][Dispatch] pos={} mismatch={} playerId={} dimension={} failure={}", getBlockPos(),
-                mismatch != null, playerId, dimension, formationFailure);
         clearStructureDiagnosticRequest();
         if (mismatch != null) {
             if (structureDiagnosticCallbackForTesting != null) {
@@ -1509,9 +1476,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             } else if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
-                LOG.info("[StructureDiagnostic][DispatchPlayer] pos={} found={} playerLevel={} dimensionMatches={}", getBlockPos(),
-                        player != null, player == null ? "<none>" : player.level().dimension(),
-                        player != null && player.level().dimension().equals(dimension));
                 if (player != null && player.level().dimension().equals(dimension)) {
                     sendStructureMismatchDiagnostic(player, mismatch);
                 }
@@ -1520,9 +1484,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
-                LOG.info("[StructureDiagnostic][DispatchFailurePlayer] pos={} found={} playerLevel={} dimensionMatches={} failure={}",
-                        getBlockPos(), player != null, player == null ? "<none>" : player.level().dimension(),
-                        player != null && player.level().dimension().equals(dimension), formationFailure);
                 if (player != null && player.level().dimension().equals(dimension)) {
                     sendFormationFailureDiagnostic(player, formationFailure);
                 }
@@ -2265,24 +2226,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)) {
             return;
         }
-        if (lastBroadcastState == null
-                || packet.parallelism() != lastBroadcastState.parallelism()
-                || packet.maxParallelism() != lastBroadcastState.maxParallelism()
-                || packet.parallelControllerCount() != lastBroadcastState.parallelControllerCount()
-                || packet.maxParallelControllerCount() != lastBroadcastState.maxParallelControllerCount()) {
-            LOG.info("[ParallelDebug][ServerPacket] pos={} machine={} levels={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
-                    getBlockPos(), packet.machineId(), packet.foundLevelIds(), packet.parallelism(), packet.maxParallelism(),
-                    packet.parallelControllerCount(), packet.maxParallelControllerCount());
-        }
         lastBroadcastState = packet;
         if (!(level instanceof ServerLevel sl)) return;
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
                 || (p.containerMenu instanceof MachineControllerMenu menu
                 && menu.controllerPos().equals(getBlockPos())))) {
-            LOG.info("[ParallelDebug][ServerPacketDispatch] pos={} player={} menu={} menuPos={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
-                    getBlockPos(), player.getName().getString(), player.containerMenu == null ? "<null>" : player.containerMenu.getClass().getSimpleName(),
-                    player.containerMenu instanceof MachineControllerMenu menu ? menu.controllerPos() : "<none>", packet.parallelism(),
-                    packet.maxParallelism(), packet.parallelControllerCount(), packet.maxParallelControllerCount());
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(packet));
         }
     }

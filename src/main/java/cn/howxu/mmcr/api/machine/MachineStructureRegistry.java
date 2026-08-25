@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 
@@ -25,8 +24,6 @@ public final class MachineStructureRegistry {
             Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
             MachineRegistry.installStructures(effective(replacement, DYNAMIC_STRUCTURES));
             STARTUP_STRUCTURES = replacement;
-            MMCR.LOG.debug("Installed {} startup and {} dynamic machine structures", STARTUP_STRUCTURES.size(),
-                    DYNAMIC_STRUCTURES.size());
             RuntimeContentVersion.advance();
         }
     }
@@ -37,8 +34,6 @@ public final class MachineStructureRegistry {
             validateDynamicRoles(replacement);
             MachineRegistry.installStructures(effective(STARTUP_STRUCTURES, replacement));
             DYNAMIC_STRUCTURES = replacement;
-            MMCR.LOG.debug("Installed {} startup and {} dynamic machine structures", STARTUP_STRUCTURES.size(),
-                    DYNAMIC_STRUCTURES.size());
             RuntimeContentVersion.advance();
         }
     }
@@ -88,7 +83,6 @@ public final class MachineStructureRegistry {
             MachineRegistry.installStructures(replacement);
             STARTUP_STRUCTURES = replacement;
             DYNAMIC_STRUCTURES = Map.of();
-            MMCR.LOG.debug("Installed client snapshot with {} machine structures", STARTUP_STRUCTURES.size());
         }
     }
 
