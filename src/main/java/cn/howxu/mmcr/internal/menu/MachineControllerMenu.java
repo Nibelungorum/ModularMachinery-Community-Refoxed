@@ -254,7 +254,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public int parallelControllerCount() {
-        if (clientSnapshot != null) return parallelControllerCount.get();
+        if (clientSnapshot != null) return clientSnapshot.parallelControllerCount();
         MachineStateSnapshot state = localState();
         return state == null ? parallelControllerCount.get() : state.parallelControllerCount();
     }

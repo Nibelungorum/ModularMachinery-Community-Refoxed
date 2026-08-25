@@ -60,6 +60,20 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void client_menu_keeps_parallel_controller_count_from_payload_after_data_slot_update() {
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "mmcr:recipe", true, true,
+                List.of(), false, "", "mmcr:test_cube", 0, 0, false, "",
+                CraftingStatus.Status.CRAFTING, "", null, true, false,
+                1, 20, 4, 4, false, 0, 0, 1, 4, 0, 0,
+                FluidStack.EMPTY, FluidStack.EMPTY));
+
+        menu.setData(6, 0);
+
+        assertThat(menu.parallelControllerCount()).isEqualTo(1);
+    }
+
+    @Test
     void client_open_round_trips_role_and_machine_identity() {
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
                 RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
