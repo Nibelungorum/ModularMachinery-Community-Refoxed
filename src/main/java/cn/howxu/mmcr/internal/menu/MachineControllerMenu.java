@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
@@ -321,6 +322,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public void applyClientSnapshot(PktMachineStatePayload snapshot) {
+        PktMachineStatePayload previous = this.clientSnapshot;
         this.clientSnapshot = snapshot;
         this.clientMachineId = identifierOrNull(snapshot.machineId());
         this.clientControllerRole = snapshot.controllerRole();
@@ -341,6 +343,15 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.installedModuleCount.set(Math.max(0, snapshot.installedModuleCount()));
         this.moduleConnected.set(snapshot.moduleConnected() && this.clientConnectedHostId != null ? 1 : 0);
         this.controllerRole.set(snapshot.controllerRole());
+        if (previous == null
+                || snapshot.parallelism() != previous.parallelism()
+                || snapshot.maxParallelism() != previous.maxParallelism()
+                || snapshot.parallelControllerCount() != previous.parallelControllerCount()
+                || snapshot.maxParallelControllerCount() != previous.maxParallelControllerCount()) {
+            MMCR.LOG.info("[ParallelDebug][ClientMenu] pos={} machine={} levels={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
+                    pos, snapshot.machineId(), snapshot.foundLevelIds(), snapshot.parallelism(), snapshot.maxParallelism(),
+                    snapshot.parallelControllerCount(), snapshot.maxParallelControllerCount());
+        }
     }
 
     public @Nullable String lockedRecipeId() {

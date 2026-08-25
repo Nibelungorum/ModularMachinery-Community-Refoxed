@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
@@ -46,6 +47,7 @@ public final class ComponentRuntime {
     private Set<BlockPos> linkedPortPositions = Set.of();
     private ModuleConnectionStatus moduleConnectionStatus = ModuleConnectionStatus.disconnected();
     private int installedModuleCount;
+    private String lastParallelDebugState;
 
     public void replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
@@ -198,11 +200,17 @@ public final class ComponentRuntime {
     }
 
     public int maxParallelism(Machine machine) {
-        if (machine == null || !machine.parallelizable()) return 1;
+        if (machine == null || !machine.parallelizable()) {
+            logParallelCalculation(machine, List.of(), 0L, 0L, 1L, 1);
+            return 1;
+        }
         long max = 0L;
+        List<String> parallelControllers = new ArrayList<>();
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
-                max += parallel.currentParallelism();
+                int current = parallel.currentParallelism();
+                max += current;
+                parallelControllers.add(parallel.getBlockPos() + "=" + parallel.tier().name() + ":" + current);
             }
         }
         long levelBonus = foundLevels.entrySet().stream()
@@ -212,7 +220,22 @@ public final class ComponentRuntime {
                 .sum();
         long effective = Math.max(1L, max) + levelBonus;
         long bounded = Math.min(Integer.MAX_VALUE, Math.max(1L, effective));
-        return (int) Math.min(Math.max(1, machine.maxParallelism()), bounded);
+        int result = (int) Math.min(Math.max(1, machine.maxParallelism()), bounded);
+        logParallelCalculation(machine, parallelControllers, max, levelBonus, effective, result);
+        return result;
+    }
+
+    private void logParallelCalculation(Machine machine, List<String> parallelControllers, long controllerParallelism,
+                                        long levelBonus, long effective, int result) {
+        String machineId = machine == null ? "<null>" : machine.registryName().toString();
+        int machineLimit = machine == null ? 1 : machine.maxParallelism();
+        String debugState = machineId + '|' + machineLimit + '|' + parallelControllers + '|'
+                + levelBonus + '|' + effective + '|' + result;
+        if (debugState.equals(lastParallelDebugState)) return;
+        lastParallelDebugState = debugState;
+        MMCR.LOG.info("[ParallelDebug][Calculation] machine={} parallelizable={} controllers={} controllerParallelism={} levelBonus={} effective={} machineLimit={} result={}",
+                machineId, machine != null && machine.parallelizable(), parallelControllers, controllerParallelism,
+                levelBonus, effective, machineLimit, result);
     }
 
     public void clear() {

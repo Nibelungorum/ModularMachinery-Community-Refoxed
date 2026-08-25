@@ -45,6 +45,7 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
     private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
     private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
     private Button recipeLockButton;
+    private String lastParallelDebugState;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -91,10 +92,20 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
 
     private void renderControllerStatus(GuiGraphicsExtractor graphics, int x, int y) {
         boolean active = menu.hasActiveRecipe();
+        boolean formed = menu.isFormed();
+        int parallelSlots = menu.parallelControllerCount();
+        int parallelism = menu.currentParallelism();
+        int maxParallelism = menu.maxParallelism();
+        String parallelDebugState = formed + ":" + parallelSlots + ":" + parallelism + ":" + maxParallelism;
+        if (!parallelDebugState.equals(lastParallelDebugState)) {
+            MMCR.LOG.info("[ParallelDebug][UI] pos={} formed={} parallelSlots={} parallelism={} maxParallelism={}",
+                    menu.controllerPos(), formed, parallelSlots, parallelism, maxParallelism);
+            lastParallelDebugState = parallelDebugState;
+        }
         Component label = Component.translatable("gui.mmcr.controller.status_label");
         graphics.text(font, label, x, y, STATUS_LABEL_COLOR, true);
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), active)), x + font.width(label) + 4, y,
-                controllerStatusColor(menu.isFormed(), active), true);
+                controllerStatusColor(formed, active), true);
         int lineY = y + DETAIL_LINE_SPACING;
         for (String levelId : menu.foundLevelIds()) {
             MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
@@ -111,12 +122,12 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
             graphics.text(font, line.text(), x, lineY, line.color(), true);
             lineY += DETAIL_LINE_SPACING;
         }
-        if (menu.isFormed()) {
-            if (menu.parallelControllerCount() > 0) {
-                graphics.text(font, parallelSlotLine(menu.parallelControllerCount()), x, lineY, STATUS_LABEL_COLOR, true);
+        if (formed) {
+            if (parallelSlots > 0) {
+                graphics.text(font, parallelSlotLine(parallelSlots), x, lineY, STATUS_LABEL_COLOR, true);
                 lineY += DETAIL_LINE_SPACING;
             }
-            graphics.text(font, parallelLine(menu.currentParallelism(), menu.maxParallelism()), x, lineY, STATUS_LABEL_COLOR, true);
+            graphics.text(font, parallelLine(parallelism, maxParallelism), x, lineY, STATUS_LABEL_COLOR, true);
             lineY += DETAIL_LINE_SPACING;
         }
         int totalTick = menu.activeRecipeTotalTick();

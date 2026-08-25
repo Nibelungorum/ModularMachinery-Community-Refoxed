@@ -2224,6 +2224,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)) {
             return;
         }
+        if (lastBroadcastState == null
+                || packet.parallelism() != lastBroadcastState.parallelism()
+                || packet.maxParallelism() != lastBroadcastState.maxParallelism()
+                || packet.parallelControllerCount() != lastBroadcastState.parallelControllerCount()
+                || packet.maxParallelControllerCount() != lastBroadcastState.maxParallelControllerCount()) {
+            LOG.info("[ParallelDebug][ServerPacket] pos={} machine={} levels={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
+                    getBlockPos(), packet.machineId(), packet.foundLevelIds(), packet.parallelism(), packet.maxParallelism(),
+                    packet.parallelControllerCount(), packet.maxParallelControllerCount());
+        }
         lastBroadcastState = packet;
         if (!(level instanceof ServerLevel sl)) return;
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
