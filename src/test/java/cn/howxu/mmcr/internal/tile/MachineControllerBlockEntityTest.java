@@ -14,6 +14,10 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -96,6 +101,38 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.structureSnapshot().structureAreaLoaded()).isFalse();
         assertThat(controller.structureSnapshot().version()).isGreaterThan(formedVersion);
+    }
+
+    @Test
+    void structure_runtime_version_round_trips_before_the_load_recheck() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.setFormed(true);
+        long savedVersion = controller.structureSnapshot().version();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        controller.saveAdditional(output);
+
+        MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        assertThat(restored.structureSnapshot().version()).isEqualTo(savedVersion);
+        assertThat(restored.structureSnapshot().dirty()).isTrue();
+    }
+
+    @Test
+    void negative_structure_runtime_version_loads_as_zero() {
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        output.putLong("structure_runtime_version", -1L);
+
+        MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        assertThat(restored.structureSnapshot().version()).isZero();
+        assertThat(restored.structureSnapshot().dirty()).isTrue();
     }
 
     @Test

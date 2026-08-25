@@ -134,6 +134,10 @@ public final class StructureRuntime {
         return version;
     }
 
+    void restoreVersion(long version) {
+        this.version = Math.max(0L, version);
+    }
+
     public StructureSnapshot snapshot() {
         return new StructureSnapshot(machine, foundMachine, foundPattern, foundCompiledPattern, controllerFacing,
                 matchedRollFacing, matchedStructureStage, formed, version, lastStructureError,

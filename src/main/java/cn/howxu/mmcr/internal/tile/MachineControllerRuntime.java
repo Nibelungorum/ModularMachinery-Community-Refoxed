@@ -142,6 +142,10 @@ public final class MachineControllerRuntime {
         structure.requestCheck();
     }
 
+    void restoreStructureVersion(long version) {
+        structure.restoreVersion(version);
+    }
+
     void onStructureBlockChanged(BlockPos changedPos) {
         structure.onBlockChanged(changedPos);
     }

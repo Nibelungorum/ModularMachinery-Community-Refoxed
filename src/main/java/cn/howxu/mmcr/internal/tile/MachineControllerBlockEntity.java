@@ -2679,6 +2679,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ensureFactoryRuntimeLoaded();
         super.saveAdditional(output);
         output.putInt("matched_structure_stage", runtimeSnapshot().structure().matchedStage());
+        output.putLong("structure_runtime_version", runtimeSnapshot().structure().version());
         ValueOutput.TypedOutputList<String> levels = output.list("found_levels", Codec.STRING);
         for (MachineLevel foundLevel : runtimeSnapshot().foundLevels().values()) {
             levels.add(foundLevel.id().toString());
@@ -2723,6 +2724,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             runtime.craftingRuntime().load(input.childOrEmpty("crafting_runtime"), resourceDomain());
             runtime.requestStructureCheck();
+            runtime.restoreStructureVersion(input.getLongOr("structure_runtime_version", 0L));
             setChanged();
         } finally {
             publishRuntimeState();
