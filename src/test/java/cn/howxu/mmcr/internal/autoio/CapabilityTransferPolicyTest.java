@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -25,6 +27,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -225,6 +228,31 @@ class CapabilityTransferPolicyTest {
         assertThat(result.successful()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(2L);
         assertThat(storage.resource(0)).isNotNull();
+    }
+
+    @Test
+    void fluid_policy_scans_all_slots_for_work_and_ejects_slot_one() {
+        LongFluidStorage inputStorage = new LongFluidStorage(2, 100L, () -> {});
+        inputStorage.setContents(0, FluidResource.of(Fluids.WATER), 100L);
+        inputStorage.setContents(1, FluidResource.of(Fluids.LAVA), 20L);
+        FluidHatchCapability input = new FluidHatchCapability(inputStorage, IOType.INPUT);
+        var inputPolicy = CapabilityTransferPolicies.policyFor(input).orElseThrow();
+
+        assertThat(inputPolicy.hasWork(input)).isTrue();
+
+        Ports ports = connectedPorts();
+        LongFluidStorage outputStorage = new LongFluidStorage(2, 100L, () -> {});
+        outputStorage.setContents(1, FluidResource.of(Fluids.WATER), 40L);
+        FluidHatchCapability output = new FluidHatchCapability(ports.fluidOutput, outputStorage, IOType.OUTPUT);
+        LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidInput.getBlockPos(),
+                ports.fluidInput.getResourceHandler(null));
+
+        TransferResult result = CapabilityTransferPolicies.policyFor(output).orElseThrow()
+                .eject(output, Direction.WEST);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.amount()).isEqualTo(40L);
+        assertThat(outputStorage.amount(1)).isZero();
     }
 
     private static Ports connectedPorts() {

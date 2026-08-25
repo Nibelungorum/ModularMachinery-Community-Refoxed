@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -17,6 +18,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -24,6 +26,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -130,6 +133,27 @@ class ComponentRuntimeTest {
         runtime.replaceComponents(List.of(component));
 
         assertThat(runtime.capabilityVersion()).isEqualTo(version);
+    }
+
+    @Test
+    void empty_resource_storage_presentation_keeps_capacity_without_null_resource_names() {
+        ResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(
+                new TestCapabilityHost(List.of(new TestCapability("empty", storage))), "empty")));
+
+        ControllerRuntimeSnapshot.CapabilityPresentation presentation =
+                runtime.capabilityPresentations().getFirst();
+
+        assertThat(presentation.amount()).isZero();
+        assertThat(presentation.capacity()).isEqualTo(200L);
+        assertThat(presentation.slots()).hasSize(2);
+        assertThat(presentation.slots()).allSatisfy(slot -> {
+            assertThat(slot.resourceId()).isEmpty();
+            assertThat(slot.amount()).isZero();
+            assertThat(slot.capacity()).isEqualTo(100L);
+        });
     }
 
     @Test

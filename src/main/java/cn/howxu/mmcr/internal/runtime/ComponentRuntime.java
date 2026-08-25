@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.resource.Resource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -257,7 +258,9 @@ public final class ComponentRuntime {
             Object resource = storage.resource(slot);
             long slotAmount = storage.amount(slot);
             long slotCapacity = storage.capacityResource(slot, resource);
-            slots.add(new ControllerRuntimeSnapshot.StorageSlot(String.valueOf(resource), slotAmount, slotCapacity));
+            String resourceId = resource == null || (resource instanceof Resource empty && empty.isEmpty())
+                    ? "" : String.valueOf(resource);
+            slots.add(new ControllerRuntimeSnapshot.StorageSlot(resourceId, slotAmount, slotCapacity));
             amount += slotAmount;
             capacity += slotCapacity;
         }

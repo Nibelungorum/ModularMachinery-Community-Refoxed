@@ -215,4 +215,27 @@ class LongResourceStorageTest {
         assertThat(storage.amount(0)).isZero();
         assertThat(storage.resource(0)).isNull();
     }
+
+    @Test
+    void empty_slot_reports_capacity_through_the_resource_storage_protocol() {
+        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
+                FluidResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+
+        assertThat(storage.resource(0)).isNull();
+        assertThat(storage.amount(0)).isZero();
+        assertThat(storage.capacityResource(0, null)).isEqualTo(100L);
+    }
+
+    @Test
+    void multi_slot_fluid_handler_reads_slot_one_and_projects_empty_slot_zero() {
+        LongFluidStorage storage = new LongFluidStorage(2, 100L, () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        storage.setContents(1, water, 40L);
+
+        assertThat(storage.getResource(0)).isEqualTo(FluidResource.EMPTY);
+        assertThat(storage.getAmountAsLong(0)).isZero();
+        assertThat(storage.getResource(1)).isEqualTo(water);
+        assertThat(storage.getAmountAsLong(1)).isEqualTo(40L);
+        assertThat(storage.getCapacityAsLong(1, water)).isEqualTo(100L);
+    }
 }

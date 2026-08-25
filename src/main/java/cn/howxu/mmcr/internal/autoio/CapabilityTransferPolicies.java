@@ -136,11 +136,12 @@ public final class CapabilityTransferPolicies {
         public boolean hasWork(MachineCapability capability) {
             if (!(capability instanceof FluidHatchCapability fluid)) return false;
             ResourceStorage<FluidResource> storage = fluid.storage();
-            long amount = storage.amount(0);
-            FluidResource resource = storage.resource(0);
-            return fluid.ioType() == IOType.OUTPUT
-                    ? amount > 0L
-                    : amount < storage.capacity(0, isEmpty(resource) ? null : resource);
+            if (fluid.ioType() == IOType.OUTPUT) return hasStoredContents(storage);
+            for (int slot = 0; slot < storage.size(); slot++) {
+                FluidResource resource = storage.resource(slot);
+                if (storage.amount(slot) < storage.capacity(slot, isEmpty(resource) ? null : resource)) return true;
+            }
+            return false;
         }
 
         @Override
@@ -165,13 +166,20 @@ public final class CapabilityTransferPolicies {
         @Override
         public TransferResult eject(MachineCapability capability, Direction side) {
             if (!(capability instanceof FluidHatchCapability fluid)) return blocked("unsupported_capability");
-            if (fluid.storage().amount(0) <= 0L) return blocked("no_work");
+            if (!hasStoredContents(fluid.storage())) return blocked("no_work");
             ResourceHandler<FluidResource> adjacent = adjacentFluid(fluid, side);
             if (adjacent == null) return blocked("no_target");
             int limit = fluid.transferLimit();
             long moved = ResourceHandlerUtil.move(resourceHandler(fluid.storage()), adjacent,
                     resource -> true, limit, null);
             return moved(moved);
+        }
+
+        private static boolean hasStoredContents(ResourceStorage<FluidResource> storage) {
+            for (int slot = 0; slot < storage.size(); slot++) {
+                if (storage.amount(slot) > 0L) return true;
+            }
+            return false;
         }
 
         private static ResourceHandler<FluidResource> adjacentFluid(MachineCapability capability, Direction side) {

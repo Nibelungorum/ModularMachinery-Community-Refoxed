@@ -33,7 +33,9 @@ public interface ResourceStorage<R> extends CapabilityStorage {
     long extract(int slot, R resource, long amount, TransactionContext transaction);
 
     default long capacityResource(int slot, Object resource) {
-        return resourceType().isInstance(resource) ? capacity(slot, resourceType().cast(resource)) : 0;
+        return resource == null
+                ? capacity(slot, null)
+                : resourceType().isInstance(resource) ? capacity(slot, resourceType().cast(resource)) : 0;
     }
 
     @Override
