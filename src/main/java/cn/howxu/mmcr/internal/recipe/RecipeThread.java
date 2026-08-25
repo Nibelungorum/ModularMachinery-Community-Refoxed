@@ -249,12 +249,17 @@ public abstract class RecipeThread {
             clearPendingTick();
             return false;
         }
-        if (!runtime.active() || domain == null || !domain.equals(controller.resourceDomain())) {
+        if (!runtime.active()) {
             clearPendingTick();
             return false;
         }
         if (!runtime.versionsCurrent()) {
             runtime.tick();
+            clearPendingTick();
+            controller.syncRecipeRuntimeFailure(runtime);
+            return false;
+        }
+        if (domain == null || !domain.equals(controller.resourceDomain())) {
             clearPendingTick();
             return false;
         }

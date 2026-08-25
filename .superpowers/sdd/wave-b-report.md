@@ -156,3 +156,14 @@
 - A successful factory lane shared start now synchronizes the lane runtime failure boundary and publishes the current runtime/factory snapshot after clearing the pending request and applying the lane start transition.
 - Factory failure recomputation tracks whether the current or previous aggregate was owned by a factory lane. An initial snapshot without factory failure no longer clears an unrelated single-recipe search fallback; factory-owned failures still synchronize and clear when their lane contribution disappears.
 - Static verification: CodeGraph/source review, targeted `rg`, and `git diff --check` only; tests and Gradle commands were not run.
+
+## Wave B Current Important Fixes
+
+- Shared tick and finish requests now publish the `CraftingRuntime` `version_invalidated` structured failure immediately when their version validator discards the pending request. The runtime failure synchronization covers the controller failure boundary and the published factory lane aggregate before the request exits the invalidation path.
+- `FactoryRuntime.snapshot()` is now the final no-argument API. Its published maximum parallelism comes from the runtime-owned lane parallelism state; `MachineControllerRuntime.publishSnapshot()` no longer supplies the removed legacy argument.
+
+## Current Important Static Verification
+
+- Targeted CodeGraph/source review and `rg` confirmed shared validator coverage, no `snapshot(int)` declaration or call, and no test/docs changes other than this report.
+- `git diff --check`: passed with no whitespace errors.
+- Test and Gradle commands: intentionally not run, per explicit constraints.

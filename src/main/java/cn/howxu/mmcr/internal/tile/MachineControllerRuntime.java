@@ -73,8 +73,7 @@ public final class MachineControllerRuntime {
     void publishSnapshot() {
         controller.ensureFactoryRuntimeLoaded();
         StructureSnapshot structureSnapshot = structure.snapshot();
-        FactorySnapshot factorySnapshot = factoryRuntime.snapshot(
-                components.maxParallelism(structureSnapshot.configuredMachine()));
+        FactorySnapshot factorySnapshot = factoryRuntime.snapshot();
         CraftingStateSnapshot nextCrafting = controller.getLevel() != null && controller.getLevel().isClientSide()
                 ? craftingState : craftingRuntime.snapshot();
         publishedSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.components(),
