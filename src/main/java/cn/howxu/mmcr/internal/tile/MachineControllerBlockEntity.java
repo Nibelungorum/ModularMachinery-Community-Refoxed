@@ -1474,11 +1474,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void sendRequestedStructureDiagnostic(@Nullable StructureMatcher.Mismatch mismatch) {
         StructureWorkSnapshot work = structureWorkSnapshot();
         if (!work.diagnosticRequested()) return;
-        StructureSnapshot structure = runtimeSnapshot().structure();
         UUID playerId = work.diagnosticPlayerId();
         ResourceKey<Level> dimension = work.diagnosticDimension();
+        PortRequirementSpec.Failure formationFailure = work.formationFailure();
         LOG.info("[StructureDiagnostic][Dispatch] pos={} mismatch={} playerId={} dimension={} failure={}", getBlockPos(),
-                mismatch != null, playerId, dimension, structure.lastFormationFailure());
+                mismatch != null, playerId, dimension, formationFailure);
         clearStructureDiagnosticRequest();
         if (mismatch != null) {
             if (structureDiagnosticCallbackForTesting != null) {
@@ -1493,15 +1493,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     sendStructureMismatchDiagnostic(player, mismatch);
                 }
             }
-        } else if (structure.lastFormationFailure() != null) {
+        } else if (formationFailure != null) {
             if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
                 LOG.info("[StructureDiagnostic][DispatchFailurePlayer] pos={} found={} playerLevel={} dimensionMatches={} failure={}",
                         getBlockPos(), player != null, player == null ? "<none>" : player.level().dimension(),
-                        player != null && player.level().dimension().equals(dimension), structure.lastFormationFailure());
+                        player != null && player.level().dimension().equals(dimension), formationFailure);
                 if (player != null && player.level().dimension().equals(dimension)) {
-                    sendFormationFailureDiagnostic(player, structure.lastFormationFailure());
+                    sendFormationFailureDiagnostic(player, formationFailure);
                 }
             }
         }
