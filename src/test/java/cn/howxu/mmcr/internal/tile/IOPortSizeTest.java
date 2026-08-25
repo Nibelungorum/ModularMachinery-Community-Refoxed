@@ -73,7 +73,7 @@ class IOPortSizeTest {
 
     @Test
     void extendedItemBusUsesLongResourceSlotsAndRejectsAResourceAfterAllTypesAreOccupied() {
-        ExtendedItemBusBlockEntity bus = extendedItemBus("extended_item_input_bus");
+        ExtendedItemBusBlockEntity bus = extendedItemBus("extended_item_input_bus_basic");
         ResourceStorage<ItemResource> storage = bus.itemStorage();
         ItemResource iron = itemResource(Items.IRON_INGOT);
         ItemResource gold = itemResource(Items.GOLD_INGOT);
@@ -94,7 +94,7 @@ class IOPortSizeTest {
 
     @Test
     void extendedFluidHatchUsesLongResourceTanksAndRejectsAResourceAfterAllTypesAreOccupied() {
-        ExtendedFluidHatchBlockEntity hatch = extendedFluidHatch("extended_fluid_input_hatch");
+        ExtendedFluidHatchBlockEntity hatch = extendedFluidHatch("extended_fluid_input_hatch_basic");
         ResourceStorage<FluidResource> storage = hatch.fluidStorage();
         FluidResource water = FluidResource.of(Fluids.WATER);
         FluidResource lava = FluidResource.of(Fluids.LAVA);
@@ -115,7 +115,7 @@ class IOPortSizeTest {
 
     @Test
     void extendedEnergyUsesLongStorageWithoutIntegerNarrowing() {
-        ExtendedEnergyHatchBlockEntity reinforced = extendedEnergyHatch("extended_energy_input_hatch");
+        ExtendedEnergyHatchBlockEntity reinforced = extendedEnergyHatch("extended_energy_input_hatch_reinforced");
         ExtendedEnergyHatchBlockEntity ultimate = extendedEnergyHatch("extended_energy_input_hatch_ultimate");
 
         assertThat(reinforced.capabilitySnapshot().capabilities()).hasSize(1)
@@ -128,11 +128,11 @@ class IOPortSizeTest {
 
     @Test
     void extendedPortsUseTheHighestExistingFamilyDetectionTier() {
-        assertThat(extendedItemBus("extended_item_output_bus").kind().families())
+        assertThat(extendedItemBus("extended_item_output_bus_basic").kind().families())
                 .singleElement()
                 .satisfies(family -> assertThat(family.detectionTier())
                         .isGreaterThanOrEqualTo(ItemBusSize.LUDICROUS.ordinal()));
-        assertThat(extendedFluidHatch("extended_fluid_output_hatch").kind().families())
+        assertThat(extendedFluidHatch("extended_fluid_output_hatch_basic").kind().families())
                 .singleElement()
                 .satisfies(family -> assertThat(family.detectionTier())
                         .isGreaterThanOrEqualTo(FluidHatchSize.VACUUM.ordinal()));

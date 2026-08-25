@@ -5,6 +5,11 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
+import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
+import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
@@ -197,6 +202,8 @@ public final class ModRecipeProvider extends RecipeProvider {
             previous = result;
         }
 
+        generatedPortRecipes();
+
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
                 .pattern("DBD")
                 .pattern("FAC")
@@ -276,6 +283,95 @@ public final class ModRecipeProvider extends RecipeProvider {
                     .save(output);
             previous = result;
         }
+    }
+
+    private void generatedPortRecipes() {
+        ItemLike previous = ModItems.ITEMS.get(itemInputBusId(ItemBusSize.LUDICROUS)).get();
+        for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_item_input_bus_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get(itemOutputBusId(ItemBusSize.LUDICROUS)).get();
+        for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_item_output_bus_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get(fluidInputHatchId(FluidHatchSize.VACUUM)).get();
+        for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_fluid_input_hatch_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get(fluidOutputHatchId(FluidHatchSize.VACUUM)).get();
+        for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_fluid_output_hatch_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get(energyInputHatchId(EnergyHatchSize.ULTIMATE)).get();
+        for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_energy_input_hatch_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get(energyOutputHatchId(EnergyHatchSize.ULTIMATE)).get();
+        for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_energy_output_hatch_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = combinedRecipe("combined_input_basic", "item_input_bus", "fluid_input_hatch");
+        for (int index = 1; index < CombinedPortSize.values().length; index++) {
+            ItemLike result = ModItems.ITEMS.get("combined_input_" + CombinedPortSize.values()[index].id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = combinedRecipe("combined_output_basic", "item_output_bus", "fluid_output_hatch");
+        for (int index = 1; index < CombinedPortSize.values().length; index++) {
+            ItemLike result = ModItems.ITEMS.get("combined_output_" + CombinedPortSize.values()[index].id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get("combined_input_ultimate").get();
+        for (ExtendedCombinedPortSize size : ExtendedCombinedPortSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_combined_input_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+
+        previous = ModItems.ITEMS.get("combined_output_ultimate").get();
+        for (ExtendedCombinedPortSize size : ExtendedCombinedPortSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("extended_combined_output_" + size.id()).get();
+            upgradeRecipe(result, previous);
+            previous = result;
+        }
+    }
+
+    private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {
+        ItemLike result = ModItems.ITEMS.get(resultId).get();
+        shapeless(result, 1)
+                .requires(ModItems.ITEMS.get(itemId).get())
+                .requires(ModItems.ITEMS.get(fluidId).get())
+                .requires(ModItems.MODULARIUM.get())
+                .save(output);
+        return result;
+    }
+
+    private void upgradeRecipe(ItemLike result, ItemLike previous) {
+        shapeless(result, 1)
+                .requires(previous)
+                .requires(ModItems.MODULARIUM.get())
+                .save(output);
     }
 
     private static String itemInputBusId(ItemBusSize size) {

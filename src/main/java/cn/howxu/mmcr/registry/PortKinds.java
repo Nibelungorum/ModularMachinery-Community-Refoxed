@@ -290,16 +290,16 @@ public final class PortKinds {
     public static final IOPortKind FLUID_OUTPUT = byId("fluid_output_hatch");
     public static final IOPortKind ENERGY_INPUT = byId("energy_input_hatch");
     public static final IOPortKind ENERGY_OUTPUT = byId("energy_output_hatch");
-    public static final IOPortKind EXTENDED_ITEM_INPUT = byId("extended_item_input_bus");
-    public static final IOPortKind EXTENDED_ITEM_OUTPUT = byId("extended_item_output_bus");
-    public static final IOPortKind EXTENDED_FLUID_INPUT = byId("extended_fluid_input_hatch");
-    public static final IOPortKind EXTENDED_FLUID_OUTPUT = byId("extended_fluid_output_hatch");
-    public static final IOPortKind EXTENDED_ENERGY_INPUT = byId("extended_energy_input_hatch");
-    public static final IOPortKind EXTENDED_ENERGY_OUTPUT = byId("extended_energy_output_hatch");
-    public static final IOPortKind COMBINED_INPUT = byId("combined_input_port");
-    public static final IOPortKind COMBINED_OUTPUT = byId("combined_output_port");
-    public static final IOPortKind EXTENDED_COMBINED_INPUT = byId("extended_combined_input_port");
-    public static final IOPortKind EXTENDED_COMBINED_OUTPUT = byId("extended_combined_output_port");
+    public static final IOPortKind EXTENDED_ITEM_INPUT = byId("extended_item_input_bus_basic");
+    public static final IOPortKind EXTENDED_ITEM_OUTPUT = byId("extended_item_output_bus_basic");
+    public static final IOPortKind EXTENDED_FLUID_INPUT = byId("extended_fluid_input_hatch_basic");
+    public static final IOPortKind EXTENDED_FLUID_OUTPUT = byId("extended_fluid_output_hatch_basic");
+    public static final IOPortKind EXTENDED_ENERGY_INPUT = byId("extended_energy_input_hatch_reinforced");
+    public static final IOPortKind EXTENDED_ENERGY_OUTPUT = byId("extended_energy_output_hatch_reinforced");
+    public static final IOPortKind COMBINED_INPUT = byId("combined_input_basic");
+    public static final IOPortKind COMBINED_OUTPUT = byId("combined_output_basic");
+    public static final IOPortKind EXTENDED_COMBINED_INPUT = byId("extended_combined_input_advanced");
+    public static final IOPortKind EXTENDED_COMBINED_OUTPUT = byId("extended_combined_output_advanced");
 
     public static void register(IOPortKind kind) { REGISTRY.add(kind); }
 
@@ -332,43 +332,43 @@ public final class PortKinds {
             defaults.add(new EnergyHatchKind(energyId("energy_output_hatch", size), IOType.OUTPUT, size, EnergyOutputHatchBlockEntity::new));
         }
         for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
-            defaults.add(new ExtendedItemBusKind(extendedId("extended_item_input_bus", size.id(), ExtendedItemBusSize.BASIC.id()),
+            defaults.add(new ExtendedItemBusKind(tieredId("extended_item_input_bus", size.id()),
                     IOType.INPUT, size, ExtendedItemBusBlockEntity::new));
         }
         for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
-            defaults.add(new ExtendedItemBusKind(extendedId("extended_item_output_bus", size.id(), ExtendedItemBusSize.BASIC.id()),
+            defaults.add(new ExtendedItemBusKind(tieredId("extended_item_output_bus", size.id()),
                     IOType.OUTPUT, size, ExtendedItemBusBlockEntity::new));
         }
         for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
-            defaults.add(new ExtendedFluidHatchKind(extendedId("extended_fluid_input_hatch", size.id(), ExtendedFluidHatchSize.BASIC.id()),
+            defaults.add(new ExtendedFluidHatchKind(tieredId("extended_fluid_input_hatch", size.id()),
                     IOType.INPUT, size, ExtendedFluidHatchBlockEntity::new));
         }
         for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
-            defaults.add(new ExtendedFluidHatchKind(extendedId("extended_fluid_output_hatch", size.id(), ExtendedFluidHatchSize.BASIC.id()),
+            defaults.add(new ExtendedFluidHatchKind(tieredId("extended_fluid_output_hatch", size.id()),
                     IOType.OUTPUT, size, ExtendedFluidHatchBlockEntity::new));
         }
         for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
-            defaults.add(new ExtendedEnergyHatchKind(extendedId("extended_energy_input_hatch", size.id(), ExtendedEnergyHatchSize.REINFORCED.id()),
+            defaults.add(new ExtendedEnergyHatchKind(tieredId("extended_energy_input_hatch", size.id()),
                     IOType.INPUT, size, ExtendedEnergyHatchBlockEntity::new));
         }
         for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
-            defaults.add(new ExtendedEnergyHatchKind(extendedId("extended_energy_output_hatch", size.id(), ExtendedEnergyHatchSize.REINFORCED.id()),
+            defaults.add(new ExtendedEnergyHatchKind(tieredId("extended_energy_output_hatch", size.id()),
                     IOType.OUTPUT, size, ExtendedEnergyHatchBlockEntity::new));
         }
         for (CombinedPortSize size : CombinedPortSize.values()) {
-            defaults.add(new CombinedPortKind(extendedId("combined_input_port", size.id(), CombinedPortSize.BASIC.id()),
+            defaults.add(new CombinedPortKind(tieredId("combined_input", size.id()),
                     IOType.INPUT, size, CombinedPortBlockEntity::new));
         }
         for (CombinedPortSize size : CombinedPortSize.values()) {
-            defaults.add(new CombinedPortKind(extendedId("combined_output_port", size.id(), CombinedPortSize.BASIC.id()),
+            defaults.add(new CombinedPortKind(tieredId("combined_output", size.id()),
                     IOType.OUTPUT, size, CombinedPortBlockEntity::new));
         }
         for (ExtendedCombinedPortSize size : ExtendedCombinedPortSize.values()) {
-            defaults.add(new ExtendedCombinedPortKind(extendedId("extended_combined_input_port", size.id(), ExtendedCombinedPortSize.ADVANCED.id()),
+            defaults.add(new ExtendedCombinedPortKind(tieredId("extended_combined_input", size.id()),
                     IOType.INPUT, size, ExtendedCombinedPortBlockEntity::new));
         }
         for (ExtendedCombinedPortSize size : ExtendedCombinedPortSize.values()) {
-            defaults.add(new ExtendedCombinedPortKind(extendedId("extended_combined_output_port", size.id(), ExtendedCombinedPortSize.ADVANCED.id()),
+            defaults.add(new ExtendedCombinedPortKind(tieredId("extended_combined_output", size.id()),
                     IOType.OUTPUT, size, ExtendedCombinedPortBlockEntity::new));
         }
         return List.copyOf(defaults);
@@ -395,8 +395,8 @@ public final class PortKinds {
         return ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch";
     }
 
-    private static String extendedId(String base, String size, String defaultSize) {
-        return size.equals(defaultSize) ? base : base + "_" + size;
+    private static String tieredId(String base, String size) {
+        return base + "_" + size;
     }
 
     private static String itemId(String base, ItemBusSize size) {

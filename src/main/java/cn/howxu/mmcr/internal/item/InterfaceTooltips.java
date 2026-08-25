@@ -7,6 +7,9 @@ import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.util.ReadableNumber;
@@ -27,9 +30,15 @@ public final class InterfaceTooltips {
 
     public static List<Component> tooltipLines(Block block) {
         if (block instanceof IOPortBlock port) {
-            return port.kind().itemBusSize().map(InterfaceTooltips::itemTooltip)
-                    .or(() -> port.kind().fluidHatchSize().map(InterfaceTooltips::fluidTooltip))
-                    .or(() -> port.kind().energyHatchSize().map(InterfaceTooltips::energyTooltip))
+            var kind = port.kind();
+            return kind.itemBusSize().map(InterfaceTooltips::itemTooltip)
+                    .or(() -> kind.extendedItemBusSize().map(InterfaceTooltips::itemTooltip))
+                    .or(() -> kind.fluidHatchSize().map(InterfaceTooltips::fluidTooltip))
+                    .or(() -> kind.extendedFluidHatchSize().map(InterfaceTooltips::fluidTooltip))
+                    .or(() -> kind.energyHatchSize().map(InterfaceTooltips::energyTooltip))
+                    .or(() -> kind.extendedEnergyHatchSize().map(InterfaceTooltips::energyTooltip))
+                    .or(() -> kind.combinedPortSize().map(size -> combinedTooltip(size.itemTypes(), size.fluidTypes())))
+                    .or(() -> kind.extendedCombinedPortSize().map(size -> combinedTooltip(size.itemTypes(), size.fluidTypes())))
                     .orElse(List.of());
         }
         if (block instanceof MachineControllerBlock controller) {
@@ -50,21 +59,51 @@ public final class InterfaceTooltips {
     }
 
     public static List<Component> itemTooltip(ItemBusSize size) {
-        return List.of(capacityLine(size.slots(), Component.translatable("tooltip.mmcr.interface.unit.slots")));
+        return itemTooltip(size.slots());
+    }
+
+    public static List<Component> itemTooltip(ExtendedItemBusSize size) {
+        return itemTooltip(size.slots());
+    }
+
+    private static List<Component> itemTooltip(int slots) {
+        return List.of(capacityLine(slots, Component.translatable("tooltip.mmcr.interface.unit.slots")));
     }
 
     public static List<Component> fluidTooltip(FluidHatchSize size) {
+        return fluidTooltip(size.capacity(), size.capacity());
+    }
+
+    public static List<Component> fluidTooltip(ExtendedFluidHatchSize size) {
+        return List.of(capacityLine(size.slots(), Component.translatable("tooltip.mmcr.interface.unit.tanks")));
+    }
+
+    private static List<Component> fluidTooltip(long capacity, long transfer) {
         List<Component> lines = new ArrayList<>(2);
-        lines.add(capacityLine(formatAmount(size.capacity(), "mB")));
-        lines.add(rateLine(formatAmount(size.capacity(), "mB/t")));
+        lines.add(capacityLine(formatAmount(capacity, "mB")));
+        lines.add(rateLine(formatAmount(transfer, "mB/t")));
         return lines;
     }
 
     public static List<Component> energyTooltip(EnergyHatchSize size) {
+        return energyTooltip(size.capacity(), size.transfer());
+    }
+
+    public static List<Component> energyTooltip(ExtendedEnergyHatchSize size) {
+        return energyTooltip(size.capacity(), size.transfer());
+    }
+
+    private static List<Component> energyTooltip(long capacity, long transfer) {
         List<Component> lines = new ArrayList<>(2);
-        lines.add(capacityLine(formatAmount(size.capacity(), "FE")));
-        lines.add(rateLine(formatAmount(size.transfer(), "FE/t")));
+        lines.add(capacityLine(formatAmount(capacity, "FE")));
+        lines.add(rateLine(formatAmount(transfer, "FE/t")));
         return lines;
+    }
+
+    private static List<Component> combinedTooltip(int itemTypes, int fluidTypes) {
+        return List.of(
+                capacityLine(itemTypes, Component.translatable("tooltip.mmcr.interface.unit.slots")),
+                capacityLine(fluidTypes, Component.translatable("tooltip.mmcr.interface.unit.tanks")));
     }
 
     private static Component capacityLine(Object value) {

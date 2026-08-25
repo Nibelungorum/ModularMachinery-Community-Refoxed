@@ -24,6 +24,16 @@ class IOPortBlockTest {
     }
 
     @Test
+    void extended_port_ids_route_to_existing_menus() {
+        assertThat(IOPortBlock.menuKindFor("extended_item_input_bus_basic"))
+                .isEqualTo(IOPortBlock.PortMenuKind.ITEM);
+        assertThat(IOPortBlock.menuKindFor("extended_fluid_output_hatch_ultimate"))
+                .isEqualTo(IOPortBlock.PortMenuKind.FLUID);
+        assertThat(IOPortBlock.menuKindFor("extended_energy_input_hatch_reinforced"))
+                .isEqualTo(IOPortBlock.PortMenuKind.ENERGY);
+    }
+
+    @Test
     void near_prefix_port_ids_do_not_route_to_menus() {
         assertThat(IOPortBlock.menuKindFor("item_input_busbar")).isEqualTo(IOPortBlock.PortMenuKind.NONE);
         assertThat(IOPortBlock.menuKindFor("fluid_output_hatchery")).isEqualTo(IOPortBlock.PortMenuKind.NONE);

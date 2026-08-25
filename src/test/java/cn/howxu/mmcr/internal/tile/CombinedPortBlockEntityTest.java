@@ -41,7 +41,7 @@ class CombinedPortBlockEntityTest {
 
     @Test
     void ordinaryCombinedHostExposesItemAndFluidCapabilities() {
-        CombinedPortBlockEntity port = combined("combined_input_port_reinforced");
+        CombinedPortBlockEntity port = combined("combined_input_reinforced");
 
         assertThat(port.capabilitySnapshot().capabilities()).hasSize(2)
                 .extracting(MachineCapability::type)
@@ -56,7 +56,7 @@ class CombinedPortBlockEntityTest {
 
     @Test
     void ordinaryCombinedItemAndFluidStorageAreIndependent() {
-        CombinedPortBlockEntity port = combined("combined_input_port_reinforced");
+        CombinedPortBlockEntity port = combined("combined_input_reinforced");
         ResourceStorage<ItemResource> items = port.itemStorage();
         ResourceStorage<FluidResource> fluids = port.fluidStorage();
         ItemResource iron = itemResource(Items.IRON_INGOT);
@@ -76,27 +76,27 @@ class CombinedPortBlockEntityTest {
 
     @Test
     void extendedCombinedUsesThreeSixNineItemTypesAndOneTwoThreeFluidTypes() {
-        assertExtendedCombined("extended_combined_input_port", 3, 1);
-        assertExtendedCombined("extended_combined_input_port_reinforced", 6, 2);
-        assertExtendedCombined("extended_combined_input_port_ultimate", 9, 3);
+        assertExtendedCombined("extended_combined_input_advanced", 3, 1);
+        assertExtendedCombined("extended_combined_input_reinforced", 6, 2);
+        assertExtendedCombined("extended_combined_input_ultimate", 9, 3);
     }
 
     @Test
     void combinedFamiliesUseDirectionSpecificAliases() {
-        assertThat(combined("combined_input_port").kind().families())
+        assertThat(combined("combined_input_basic").kind().families())
                 .extracting(PortFamilyDescriptor::countAliases)
                 .containsExactlyInAnyOrder(List.of("item_input_bus"), List.of("fluid_input_hatch"));
-        assertThat(combined("combined_output_port").kind().families())
+        assertThat(combined("combined_output_basic").kind().families())
                 .extracting(PortFamilyDescriptor::countAliases)
                 .containsExactlyInAnyOrder(List.of("item_output_bus"), List.of("fluid_output_hatch"));
     }
 
     @Test
     void extendedCombinedExposesBothHighestLevelFamilyDescriptors() {
-        assertThat(port("extended_combined_output_port").kind().families())
+        assertThat(port("extended_combined_output_advanced").kind().families())
                 .extracting(PortFamilyDescriptor::familyId)
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
-        assertThat(port("extended_combined_output_port").kind().families())
+        assertThat(port("extended_combined_output_advanced").kind().families())
                 .allSatisfy(family -> assertThat(family.detectionTier()).isGreaterThan(0));
     }
 

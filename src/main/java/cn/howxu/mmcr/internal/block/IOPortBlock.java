@@ -130,9 +130,18 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     static PortMenuKind menuKindFor(String id) {
-        if (matchesPortId(id, "item_input_bus") || matchesPortId(id, "item_output_bus")) return PortMenuKind.ITEM;
-        if (matchesPortId(id, "fluid_input_hatch") || matchesPortId(id, "fluid_output_hatch")) return PortMenuKind.FLUID;
-        if (matchesPortId(id, "energy_input_hatch") || matchesPortId(id, "energy_output_hatch")) return PortMenuKind.ENERGY;
+        if (matchesPortId(id, "item_input_bus") || matchesPortId(id, "item_output_bus")
+                || matchesPortId(id, "extended_item_input_bus") || matchesPortId(id, "extended_item_output_bus")) {
+            return PortMenuKind.ITEM;
+        }
+        if (matchesPortId(id, "fluid_input_hatch") || matchesPortId(id, "fluid_output_hatch")
+                || matchesPortId(id, "extended_fluid_input_hatch") || matchesPortId(id, "extended_fluid_output_hatch")) {
+            return PortMenuKind.FLUID;
+        }
+        if (matchesPortId(id, "energy_input_hatch") || matchesPortId(id, "energy_output_hatch")
+                || matchesPortId(id, "extended_energy_input_hatch") || matchesPortId(id, "extended_energy_output_hatch")) {
+            return PortMenuKind.ENERGY;
+        }
         return PortMenuKind.NONE;
     }
 

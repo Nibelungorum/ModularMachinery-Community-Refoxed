@@ -1,9 +1,18 @@
 package cn.howxu.mmcr.internal.item;
 
+import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
+import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
+import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
@@ -71,6 +80,45 @@ class InterfaceBlockItemTest {
         List<Component> tooltip = InterfaceTooltips.tooltipLines(ModBlocks.BLOCKS.get("factory_controller").get());
 
         assertThat(tooltip).containsExactly(Component.translatable("tooltip.mmcr.factory_controller.multithreading"));
+    }
+
+    @Test
+    void generated_port_items_have_size_tooltips() {
+        for (IOPortKind kind : PortKinds.all().stream()
+                .filter(candidate -> candidate.extendedItemBusSize().isPresent()
+                        || candidate.extendedFluidHatchSize().isPresent()
+                        || candidate.extendedEnergyHatchSize().isPresent()
+                        || candidate.combinedPortSize().isPresent()
+                        || candidate.extendedCombinedPortSize().isPresent())
+                .toList()) {
+            assertThat(InterfaceTooltips.tooltipLines(ModBlocks.BLOCKS.get(kind.id()).get()))
+                    .as(kind.id())
+                    .isNotEmpty();
+        }
+    }
+
+    @Test
+    void extended_and_combined_ports_use_linked_controller_model_data() {
+        for (IOPortKind kind : PortKinds.all().stream()
+                .filter(candidate -> candidate.extendedItemBusSize().isPresent()
+                        || candidate.extendedFluidHatchSize().isPresent()
+                        || candidate.extendedEnergyHatchSize().isPresent()
+                        || candidate.combinedPortSize().isPresent()
+                        || candidate.extendedCombinedPortSize().isPresent())
+                .toList()) {
+            String id = kind.id();
+            IOPortBlockEntity port = (IOPortBlockEntity) ModBlockEntities.BES.get(id).get().create(
+                    BlockPos.ZERO, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+            var linkedTexture = net.minecraft.resources.Identifier.parse("kubejs:block/steel_casing");
+            port.setAppearanceBaseTexture(linkedTexture);
+
+            DynamicOverlayItemModel.Description description = DynamicOverlayItemModel.describeItem(
+                    ModItems.ITEMS.get(id).get());
+            DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(
+                    null, port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE), description.overlayTexture());
+
+            assertThat(textures.base()).as(id).isEqualTo(linkedTexture);
+        }
     }
 
 }

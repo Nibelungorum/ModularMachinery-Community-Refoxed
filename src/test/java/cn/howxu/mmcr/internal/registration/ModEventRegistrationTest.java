@@ -1,5 +1,14 @@
 package cn.howxu.mmcr.internal.registration;
 
+import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
+import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandBuildContext;
@@ -9,6 +18,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Block;
 import net.neoforged.bus.api.Event;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
@@ -41,6 +52,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class ModEventRegistrationTest {
+    private static final List<String> GENERATED_PORT_IDS = List.of(
+            "extended_item_input_bus_basic", "extended_item_input_bus_advanced",
+            "extended_item_input_bus_reinforced", "extended_item_input_bus_ultimate",
+            "extended_item_output_bus_basic", "extended_item_output_bus_advanced",
+            "extended_item_output_bus_reinforced", "extended_item_output_bus_ultimate",
+            "extended_fluid_input_hatch_basic", "extended_fluid_input_hatch_advanced",
+            "extended_fluid_input_hatch_reinforced", "extended_fluid_input_hatch_ultimate",
+            "extended_fluid_output_hatch_basic", "extended_fluid_output_hatch_advanced",
+            "extended_fluid_output_hatch_reinforced", "extended_fluid_output_hatch_ultimate",
+            "extended_energy_input_hatch_reinforced", "extended_energy_input_hatch_ultimate",
+            "extended_energy_output_hatch_reinforced", "extended_energy_output_hatch_ultimate",
+            "combined_input_basic", "combined_input_advanced", "combined_input_reinforced", "combined_input_ultimate",
+            "combined_output_basic", "combined_output_advanced", "combined_output_reinforced", "combined_output_ultimate",
+            "extended_combined_input_advanced", "extended_combined_input_reinforced", "extended_combined_input_ultimate",
+            "extended_combined_output_advanced", "extended_combined_output_reinforced", "extended_combined_output_ultimate");
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
@@ -131,6 +158,31 @@ class ModEventRegistrationTest {
         assertThat(dispatcher.getRoot().getChild("mmcr").getChildren())
                 .extracting(command -> command.getName())
                 .contains("reload", "build", "export");
+    }
+
+    @Test
+    void every_generated_port_kind_has_registered_content_and_dynamic_model_description() {
+        assertThat(PortKinds.all().stream().map(IOPortKind::id).filter(GENERATED_PORT_IDS::contains).toList())
+                .containsExactlyElementsOf(GENERATED_PORT_IDS);
+
+        for (String id : GENERATED_PORT_IDS) {
+            IOPortKind kind = PortKinds.all().stream()
+                    .filter(candidate -> candidate.id().equals(id))
+                    .findFirst().orElseThrow();
+            Block block = ModBlocks.BLOCKS.get(id).get();
+            assertThat(block).isInstanceOf(IOPortBlock.class);
+            assertThat(((IOPortBlock) block).kind().id()).isEqualTo(id);
+
+            IOPortBlockEntity entity = kind.entityFactory().create(BlockPos.ZERO, block.defaultBlockState());
+            assertThat(entity.kind().id()).isEqualTo(id);
+            assertThat(ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, block.defaultBlockState()))
+                    .isInstanceOf(IOPortBlockEntity.class);
+
+            DynamicOverlayItemModel.Description description = DynamicOverlayItemModel.describeItem(
+                    ModItems.ITEMS.get(id).get());
+            assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+            assertThat(description.portKind().id()).isEqualTo(id);
+        }
     }
 
     private static ModEventRegistration.EventHandlers handlers(List<Class<?>> invoked) {
