@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -79,7 +79,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void distant_player_is_rejected_without_ejecting() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), new BlockPos(100, 2, 3));
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), new BlockPos(100, 2, 3));
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
@@ -89,7 +89,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void output_port_is_rejected_without_ejecting() throws Exception {
         ProbePort port = outputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
@@ -99,7 +99,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void matching_input_menu_ejects_port_contents() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isTrue();
@@ -109,10 +109,37 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void ejectPacketTargetsOnly_the_requested_capability() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), PORT_POS), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, MMCR.id("fluid")))).isFalse();
+        assertThat(port.ejectCalls).isZero();
+    }
+
+    @Test
+    void stale_menu_owner_is_rejected_without_ejecting() throws Exception {
+        ProbePort port = inputPort();
+        ProbePort replacement = inputPort();
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), replacement), PORT_POS);
+
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+        assertThat(port.ejectCalls).isZero();
+    }
+
+    @Test
+    void menu_still_valid_is_required_before_ejecting() throws Exception {
+        ProbePort port = inputPort();
+        ItemBusMenu invalidMenu = new ItemBusMenu(1, new Inventory(null, null), port) {
+            @Override
+            public boolean stillValid(net.minecraft.world.entity.player.Player ignored) {
+                return false;
+            }
+        };
+        ServerPlayer player = playerWith(port, invalidMenu, PORT_POS);
+
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -193,13 +220,13 @@ class PktEjectPortContentsPayloadTest {
         field.set(target, value);
     }
 
-    private static final class ProbePort extends IOPortBlockEntity {
+    private static final class ProbePort extends ItemBusBlockEntity {
         private final IOType ioType;
         private final IOPortKind kind;
         private int ejectCalls;
 
         private ProbePort(BlockPos pos, BlockState state, IOType ioType, IOPortKind kind) {
-            super(ModBlockEntities.BES.get(kind.id()).get(), pos, state);
+            super(ModBlockEntities.BES.get(kind.id()).get(), pos, state, kind);
             this.ioType = ioType;
             this.kind = kind;
         }

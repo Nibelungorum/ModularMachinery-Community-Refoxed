@@ -26,6 +26,7 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import sun.misc.Unsafe;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -110,6 +111,18 @@ class MenuScreenTest {
     }
 
     @Test
+    void selected_capability_state_can_choose_a_non_first_capability() throws Exception {
+        CapabilitySelectionScreen screen = (CapabilitySelectionScreen) unsafe().allocateInstance(
+                CapabilitySelectionScreen.class);
+        Identifier item = MMCR.id("item");
+        Identifier fluid = MMCR.id("fluid");
+
+        screen.choose(fluid);
+
+        assertThat(screen.resolve(List.of(item, fluid))).isEqualTo(fluid);
+    }
+
+    @Test
     void controller_recipe_lock_state_uses_full_locked_recipe_id_from_menu() {
         MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.setData(12, 1);
@@ -150,5 +163,30 @@ class MenuScreenTest {
         Language.inject(constructor.newInstance(Map.of(
                 "gui.mmcr.fluid", "Fluid: %s",
                 "block.minecraft.water", "Water"), false));
+    }
+
+    private static Unsafe unsafe() throws Exception {
+        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (Unsafe) field.get(null);
+    }
+
+    private static final class CapabilitySelectionScreen extends AbstractPortScreen<ItemBusMenu> {
+        private CapabilitySelectionScreen() {
+            super(null, null, Component.empty(), 166);
+        }
+
+        private void choose(Identifier capabilityId) {
+            selectCapability(capabilityId);
+        }
+
+        private Identifier resolve(List<Identifier> capabilityIds) {
+            return selectedCapabilityId(capabilityIds);
+        }
+
+        @Override protected net.minecraft.core.BlockPos portPos() { return net.minecraft.core.BlockPos.ZERO; }
+        @Override protected IOType ownerIOType() { return IOType.INPUT; }
+        @Override protected int portSlotCount() { return 0; }
+        @Override protected Identifier texture(boolean autoIOPage) { return MMCR.id("textures/gui/test.png"); }
     }
 }

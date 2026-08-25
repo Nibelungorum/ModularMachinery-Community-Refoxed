@@ -54,6 +54,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
 
     protected boolean autoIOPage;
+    private Identifier selectedCapabilityId;
     private Button autoIOPageButton;
     private Button autoIOToggleButton;
     private Button ejectButton;
@@ -97,6 +98,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     static boolean isOutputPort(IOType resolvedIOType, IOType ownerIOType) {
         return (resolvedIOType == null ? ownerIOType : resolvedIOType) == IOType.OUTPUT;
+    }
+
+    protected final void selectCapability(Identifier capabilityId) {
+        selectedCapabilityId = capabilityId;
     }
 
     private void initAutoIOButtons() {
@@ -235,13 +240,19 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private Identifier selectedCapabilityId() {
         IOPortBlockEntity port = portEntity();
         if (port != null) {
-            return port.capabilitySnapshot().capabilities().stream()
+            List<Identifier> capabilityIds = port.capabilitySnapshot().capabilities().stream()
                     .map(capability -> capability.type().id())
-                    .findFirst().orElse(MMCR.id("item"));
+                    .toList();
+            return selectedCapabilityId(capabilityIds);
         }
         if (menu instanceof FluidHatchMenu) return MMCR.id("fluid");
         if (menu instanceof EnergyHatchMenu) return MMCR.id("energy");
         return MMCR.id("item");
+    }
+
+    protected final Identifier selectedCapabilityId(List<Identifier> capabilityIds) {
+        if (selectedCapabilityId != null && capabilityIds.contains(selectedCapabilityId)) return selectedCapabilityId;
+        return capabilityIds.stream().findFirst().orElse(MMCR.id("item"));
     }
 
     private static Direction autoIODirectionAt(int x, int y) {

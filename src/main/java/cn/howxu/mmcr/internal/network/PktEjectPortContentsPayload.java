@@ -14,7 +14,6 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -43,17 +42,19 @@ public record PktEjectPortContentsPayload(BlockPos pos, Identifier capabilityId)
 
     public static boolean ejectOnServer(ServerPlayer player, PktEjectPortContentsPayload payload) {
         if (player == null || payload == null || payload.pos == null) return false;
-        if (!hasPortMenuAt(player.containerMenu, payload.pos) || !MenuSupport.stillValidWithin(player, payload.pos)) return false;
-        if (!(((Player) player).level().getBlockEntity(payload.pos) instanceof IOPortBlockEntity port)
+        if (!(player.level().getBlockEntity(payload.pos) instanceof IOPortBlockEntity port)
                 || port.ioType() != IOType.INPUT || payload.capabilityId == null) return false;
+        if (!hasPortMenuAt(player.containerMenu, payload.pos, port)
+                || !player.containerMenu.stillValid(player)
+                || !MenuSupport.stillValidWithin(player, payload.pos)) return false;
         CapabilityType type = new CapabilityType(payload.capabilityId);
         var capability = port.capability(type);
         return capability != null && capability.ioType() == IOType.INPUT && port.ejectContents(type);
     }
 
-    private static boolean hasPortMenuAt(AbstractContainerMenu menu, BlockPos pos) {
-        return menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos)
-                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos)
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos);
+    private static boolean hasPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
+        return menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos) && itemBus.owner() == port
+                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos) && fluidHatch.owner() == port
+                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos) && energyHatch.owner() == port;
     }
 }

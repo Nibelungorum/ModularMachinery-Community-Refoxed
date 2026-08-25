@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -402,7 +403,7 @@ class MachineControllerBlockEntityTest {
                         List.of(ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus")),
                 new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, 2,
                         List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch"))),
-                CombinedPort::new, List.of());
+                CombinedPort::new, List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH));
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

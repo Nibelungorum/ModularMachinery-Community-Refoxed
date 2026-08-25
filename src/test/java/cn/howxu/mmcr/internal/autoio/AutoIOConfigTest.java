@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.autoio;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -141,6 +143,18 @@ class AutoIOConfigTest {
         assertThat(restored.isAutoIOSideExposed(fluid, Direction.SOUTH)).isFalse();
     }
 
+    @Test
+    void no_arg_auto_io_methods_select_a_unique_unrecognized_capability_profile() {
+        UniqueCustomHost host = new UniqueCustomHost();
+
+        host.setAutoIOEnabled(true);
+        host.setAutoIOSide(Direction.NORTH, false);
+
+        assertThat(host.autoIOConfig().enabled()).isTrue();
+        assertThat(host.autoIOConfig().isSideEnabled(Direction.NORTH)).isFalse();
+        assertThat(host.ejectContents()).isFalse();
+    }
+
     private static final class ProfileHost extends IOPortBlockEntity {
         private final IOPortKind kind = PortKinds.ITEM_INPUT;
 
@@ -174,6 +188,43 @@ class AutoIOConfigTest {
 
         private void loadFrom(ValueInput input) {
             loadAdditional(input);
+        }
+    }
+
+    private static final class UniqueCustomHost extends IOPortBlockEntity {
+        private static final CapabilityType TYPE = new CapabilityType(MMCR.id("custom"));
+        private final IOPortKind kind = PortKinds.ITEM_INPUT;
+
+        private UniqueCustomHost() {
+            super(ModBlockEntities.BES.get(PortKinds.ITEM_INPUT.id()).get(), BlockPos.ZERO,
+                    ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return kind;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            MachineCapability capability = new MachineCapability() {
+                @Override public CapabilityType type() { return TYPE; }
+                @Override public IOType ioType() { return IOType.INPUT; }
+                @Override public CapabilityView view() {
+                    return new CapabilityView() {
+                        @Override public CapabilityType type() { return TYPE; }
+                        @Override public IOType ioType() { return IOType.INPUT; }
+                    };
+                }
+                @Override public cn.howxu.mmcr.api.capability.plan.CapabilityOperation prepare(
+                        cn.howxu.mmcr.api.capability.CapabilityRequest request) { return null; }
+            };
+            return new CapabilitySnapshot(List.of(capability));
         }
     }
 }

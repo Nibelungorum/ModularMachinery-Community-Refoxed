@@ -138,6 +138,11 @@ public final class PortKinds {
                 }
             }
             if (!item || !fluid) throw new IllegalArgumentException("combined kind must include item and fluid families");
+            if (capabilityFactories == null || capabilityFactories.size() != 2
+                    || !capabilityFactories.contains(CapabilityFactories.ITEM_BUS)
+                    || !capabilityFactories.contains(CapabilityFactories.FLUID_HATCH)) {
+                throw new IllegalArgumentException("combined kind must expose item and fluid capabilities only");
+            }
             capabilityFactories = List.copyOf(capabilityFactories);
         }
     }

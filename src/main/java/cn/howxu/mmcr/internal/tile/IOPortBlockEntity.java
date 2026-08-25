@@ -282,10 +282,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     private @Nullable MachineCapability autoIOCapability() {
-        for (MachineCapability capability : capabilitySnapshot().capabilities()) {
+        List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
+        for (MachineCapability capability : capabilities) {
             if (CapabilityTransferPolicies.policyFor(capability).isPresent()) return capability;
         }
-        return null;
+        return capabilities.size() == 1 ? capabilities.getFirst() : null;
     }
 
     private @Nullable CapabilityType autoIOCapabilityType() {
