@@ -4,8 +4,10 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -15,7 +17,9 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -30,6 +34,11 @@ class SmartInterfaceBindingCoordinatorTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void clearMachineRegistry() {
+        MachineRegistry.clearForTesting();
     }
 
     @Test
@@ -152,12 +161,13 @@ class SmartInterfaceBindingCoordinatorTest {
     private static MachineControllerBlockEntity controller(BlockPos pos, Identifier machineId,
                                                            Identifier texture) {
         Machine machine = new cn.howxu.mmcr.api.machine.DynamicMachine(machineId, "Binding Test",
-                new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(machineId),
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
+                MachineControllerSpec.defaultsFor(machineId),
                 new MachineAppearanceSpec(MMCR.id("block/basic_casing"), MMCR.id("block/basic_casing"), texture),
                 PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of());
+        if (MachineRegistry.getMachine(machineId) == null) MachineRegistry.register(machine);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), pos);
-        RuntimeTestFixtures.publishStructure(controller, machine, true, 1, net.minecraft.core.Direction.SOUTH,
-                net.minecraft.core.Direction.SOUTH);
+        RuntimeTestFixtures.formStructure(controller, machine);
         return controller;
     }
 }

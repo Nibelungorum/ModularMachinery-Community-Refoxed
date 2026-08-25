@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -53,6 +55,11 @@ class ModuleConnectionCoordinatorTest {
         TestBootstrap.bootstrap();
     }
 
+    @BeforeEach
+    void clearMachineRegistry() {
+        MachineRegistry.clearForTesting();
+    }
+
     @Test
     void validate_rejects_connection_decision_table_failures() throws Exception {
         FormationFixture valid = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
@@ -76,6 +83,8 @@ class ModuleConnectionCoordinatorTest {
     @Test
     void refresh_connects_valid_formed_host_and_module_with_overlapping_normal_blocks() throws Exception {
         FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        assertThat(fixture.host().structureSnapshot().compiledPattern()).isNotNull();
+        assertThat(fixture.module().structureSnapshot().compiledPattern()).isNotNull();
 
         ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
 
@@ -158,6 +167,8 @@ class ModuleConnectionCoordinatorTest {
         fixture.level().blocks.put(unrelatedNormal, Blocks.STONE.defaultBlockState());
         fixture.level().blockEntities.put(unrelatedHostPos, unrelatedHost);
         StructureClaimRegistry.get(fixture.level()).claim(unrelatedHostPos, List.of());
+        for (int tick = 0; tick < 32 && !unrelatedHost.structureSnapshot().formed(); tick++)
+            unrelatedHost.tickStructure(fixture.level(), unrelatedHostPos);
 
         ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
 
@@ -212,6 +223,7 @@ class ModuleConnectionCoordinatorTest {
     private static FormationFixture formedFixture(Identifier hostId, Identifier moduleId, boolean hostFormed,
                                                   boolean moduleFormed, boolean sharedInterface,
                                                   BlockPos moduleCouplerOverride, boolean chunksLoaded) throws Exception {
+        MachineRegistry.clearForTesting();
         BlockPos couplerPos = new BlockPos(10, 64, 10);
         BlockPos hostPos = new BlockPos(10, 64, 8);
         BlockPos modulePos = new BlockPos(10, 64, 12);
@@ -237,8 +249,21 @@ class ModuleConnectionCoordinatorTest {
         RuntimeTestFixtures.attachLevel(host, level);
         RuntimeTestFixtures.attachLevel(module, level);
         coupler.setLevel(level);
+        if (hostFormed) host.assemblyPattern(hostMachine, 1).pattern().forEach((relative, predicate) ->
+                assertThat(predicate.matches(level.getBlockState(hostPos.offset(relative))))
+                        .as("host pattern at " + relative).isTrue());
         if (hostFormed) StructureClaimRegistry.get(level).claim(hostPos, List.of());
         if (moduleFormed) StructureClaimRegistry.get(level).claim(modulePos, List.of());
+        if (hostFormed) {
+            for (int tick = 0; tick < 32 && !host.structureSnapshot().formed(); tick++)
+                host.tickStructure(level, hostPos);
+            assertThat(host.structureSnapshot().formed()).as("host " + host.structureSnapshot()).isTrue();
+        }
+        if (moduleFormed) {
+            for (int tick = 0; tick < 32 && !module.structureSnapshot().formed(); tick++)
+                module.tickStructure(level, modulePos);
+            assertThat(module.structureSnapshot().formed()).as("module " + module.structureSnapshot()).isTrue();
+        }
         return new FormationFixture(level, host, module, coupler, hostPos, modulePos, couplerPos);
     }
 
@@ -253,8 +278,13 @@ class ModuleConnectionCoordinatorTest {
     }
 
     private static MachineControllerBlockEntity controller(BlockPos pos, Machine machine, boolean formed) throws Exception {
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(cn.howxu.mmcr.MMCR.id("test_cube"), pos);
-        RuntimeTestFixtures.publishStructure(controller, machine, formed, 1, Direction.SOUTH, Direction.NORTH);
+        if (MachineRegistry.getMachine(machine.registryName()) == null) MachineRegistry.register(machine);
+        BlockState state = ModBlocks.controllerFor(cn.howxu.mmcr.MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
+                cn.howxu.mmcr.MMCR.id("test_cube"), pos, state);
+        RuntimeTestFixtures.publishStructure(controller, machine, false);
         return controller;
     }
 
@@ -283,6 +313,7 @@ class ModuleConnectionCoordinatorTest {
         setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
                 .collect(Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
         setField(TestServerLevel.class, level, "chunksLoaded", chunksLoaded);
+        setField(ServerLevel.class, level, "players", List.of());
         setField(Level.class, level, "dimension", Level.OVERWORLD);
         return level;
     }

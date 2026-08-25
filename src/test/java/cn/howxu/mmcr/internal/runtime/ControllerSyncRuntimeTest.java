@@ -75,8 +75,7 @@ class ControllerSyncRuntimeTest {
     void sync_runtime_consumes_a_published_controller_snapshot() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         var machine = controller.runtimeSnapshot().structure().configuredMachine();
-        RuntimeTestFixtures.publishStructure(controller, machine, true, 1, net.minecraft.core.Direction.NORTH,
-                net.minecraft.core.Direction.SOUTH);
+        RuntimeTestFixtures.publishStructure(controller, machine, true);
 
         MachineStateSnapshot state = new ControllerSyncRuntime().machineState(controller.runtimeSnapshot());
 

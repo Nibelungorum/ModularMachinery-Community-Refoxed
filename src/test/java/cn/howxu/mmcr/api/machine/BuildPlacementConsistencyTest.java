@@ -20,9 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -132,7 +130,7 @@ class BuildPlacementConsistencyTest {
         assertThatThrownBy(() -> controller.assemblyPattern(machine, 0))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        RuntimeTestFixtures.publishStructure(controller, machine, true, 2, Direction.SOUTH, Direction.NORTH);
+        RuntimeTestFixtures.formStructure(controller, machine, 2);
 
         assertThat(controller.assemblyPattern(machine).pattern().keySet())
                 .containsExactlyInAnyOrderElementsOf(stage2.pattern().keySet());
@@ -212,18 +210,11 @@ class BuildPlacementConsistencyTest {
 
     private static MachineControllerBlockEntity controllerFor(Machine machine) throws Exception {
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
-        BlockState state = controller.getBlockState()
+        BlockState state = ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
-        setField(BlockEntity.class, controller, "blockState", state);
-        RuntimeTestFixtures.publishStructure(controller, machine, false, 1, Direction.SOUTH, Direction.NORTH);
+        var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos, state);
+        RuntimeTestFixtures.publishStructure(controller, machine, false);
         return controller;
-    }
-
-    private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {
-        Field field = declaringClass.getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

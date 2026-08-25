@@ -292,8 +292,7 @@ class MachineControllerLevelTest {
     }
 
     private static void resetFormed(MachineControllerBlockEntity controller) throws Exception {
-        RuntimeTestFixtures.publishStructure(controller, MachineRegistry.getMachine(MACHINE_ID), false, 1,
-                controller.getBlockState().getValue(MachineControllerBlock.FACING), Direction.SOUTH);
+        RuntimeTestFixtures.publishStructure(controller, MachineRegistry.getMachine(MACHINE_ID), false);
     }
 
     private static MachineControllerSpec controllerSpec(boolean allowVerticalFacing, boolean requireVerticalFacing,

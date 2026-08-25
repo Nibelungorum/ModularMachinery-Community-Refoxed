@@ -194,8 +194,7 @@ class MachinePortAppearanceTest {
     private static MachineControllerBlockEntity controller(BlockPos pos, boolean formed, Set<BlockPos> linkedPorts) throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), pos);
         DynamicMachine machine = new DynamicMachine(MMCR.id("test_cube"), "test cube", new BlockArray(Map.of()));
-        RuntimeTestFixtures.publishStructure(controller, machine, formed, 1,
-                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.SOUTH);
+        RuntimeTestFixtures.publishStructure(controller, machine, formed);
         controller.componentRuntime().replaceLinkedPortPositions(linkedPorts);
         RuntimeTestFixtures.republish(controller);
         return controller;

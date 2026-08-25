@@ -136,8 +136,7 @@ class FactorySchedulerBlockEntityTest {
         DynamicMachine machine = new DynamicMachine(machineId, "Factory Capacity Notification Test",
                 new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(),
                 List.of(), Map.of(), 1, false, true, 4);
-        RuntimeTestFixtures.publishStructure(controller, machine, true, 1,
-                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.SOUTH);
+        RuntimeTestFixtures.publishStructure(controller, machine, true);
         return controller;
     }
 
@@ -147,8 +146,7 @@ class FactorySchedulerBlockEntityTest {
         List<ProcessingComponent> components = new java.util.ArrayList<>(controller.componentRuntime().components());
         components.add(new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of(), null));
         controller.componentRuntime().replaceComponents(components);
-        RuntimeTestFixtures.publishStructure(controller, controller.structureSnapshot().configuredMachine(), true, 1,
-                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.SOUTH);
+        RuntimeTestFixtures.publishStructure(controller, controller.structureSnapshot().configuredMachine(), true);
     }
 
     private static void bindItemComponents(Item item) {

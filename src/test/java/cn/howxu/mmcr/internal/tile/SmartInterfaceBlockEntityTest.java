@@ -2,15 +2,19 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +53,16 @@ class SmartInterfaceBlockEntityTest {
         assertThat(restored.value("mode")).contains(7F);
         assertThat(restored.value("temperature")).contains(20F);
         assertThat(restored.setValue("mode", Float.NaN)).isFalse();
+
+        MachineCapability capability = restored.capabilitySnapshot().capabilities().stream()
+                .filter(candidate -> candidate.ioType() == IOType.OUTPUT)
+                .findFirst().orElseThrow();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(capability.prepare(new CapabilityRequests.SmartValueRequest(
+                    capability.type(), IOType.OUTPUT, 1, "mode", 9F)).commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(restored.value("mode")).contains(9F);
     }
 
     @Test
@@ -78,6 +92,26 @@ class SmartInterfaceBlockEntityTest {
         ), false)).isTrue();
 
         assertThat(owner.value("temperature")).contains(400F);
+    }
+
+    @Test
+    void capability_root_commit_publishes_the_value_to_the_interface_owner() {
+        var owner = createSmartInterface();
+        assertThat(owner.claimController(BlockPos.ZERO, MMCR.id("test"), Map.of(
+                "temperature", new SmartInterfaceType("temperature", 20F, 0)
+        ), false)).isTrue();
+        MachineCapability output = owner.capabilitySnapshot().capabilities().stream()
+                .filter(capability -> capability.ioType() == IOType.OUTPUT)
+                .findFirst().orElseThrow();
+        var request = new CapabilityRequests.SmartValueRequest(
+                output.type(), IOType.OUTPUT, 1, "temperature", 80F);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(output.prepare(request).commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+
+        assertThat(owner.value("temperature")).contains(80F);
     }
 
     @Test

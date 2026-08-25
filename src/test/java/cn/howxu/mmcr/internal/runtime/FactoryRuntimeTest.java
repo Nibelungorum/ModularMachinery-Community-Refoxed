@@ -92,6 +92,26 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void recipe_lock_persists_with_the_lane_runtime_state() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("factory_lock_persisted", 20);
+        RecipeRegistry.register(recipe);
+        FactoryRuntime saved = new FactoryRuntime();
+        saved.ensureBaseLane(controller);
+        saved.tick(List.of(recipe), 1);
+        assertThat(saved.toggleRecipeLock(0)).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        FactoryRuntime restored = new FactoryRuntime();
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+
+        FactoryRuntime.ThreadSnapshot lane = restored.snapshot().presentationLanes().getFirst();
+        assertThat(lane.locked()).isTrue();
+        assertThat(lane.lockedRecipeId()).isEqualTo(recipe.id().toString());
+    }
+
+    @Test
     void removingAQueuedLaneInvalidatesOnlyThatLane() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();

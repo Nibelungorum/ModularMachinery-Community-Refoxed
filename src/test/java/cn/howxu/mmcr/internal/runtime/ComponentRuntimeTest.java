@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -116,6 +118,21 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void changing_a_capability_storage_value_does_not_change_capability_identity() {
+        LongValueStorage storage = new LongValueStorage(100, 100, () -> {});
+        MachineCapability capability = new TestCapability("stored", storage);
+        ProcessingComponent component = component(new TestCapabilityHost(List.of(capability)), "stored");
+        ComponentRuntime runtime = new ComponentRuntime();
+
+        runtime.replaceComponents(List.of(component));
+        long version = runtime.capabilityVersion();
+        storage.setAmount(40);
+        runtime.replaceComponents(List.of(component));
+
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+    }
+
+    @Test
     void modifier_version_changes_only_for_effective_modifier_changes_and_preserves_order() {
         RecipeModifier first = new RecipeModifier("first", RecipeModifier.IOType.INPUT, 1F,
                 RecipeModifier.Operation.ADD, false);
@@ -188,7 +205,11 @@ class ComponentRuntimeTest {
         }
     }
 
-    private record TestCapability(String id) implements MachineCapability {
+    private record TestCapability(String id, CapabilityStorage storage) implements MachineCapability {
+        private TestCapability(String id) {
+            this(id, null);
+        }
+
         @Override
         public CapabilityType type() {
             return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", id));
@@ -197,6 +218,11 @@ class ComponentRuntimeTest {
         @Override
         public IOType ioType() {
             return IOType.INPUT;
+        }
+
+        @Override
+        public CapabilityStorage storage() {
+            return storage;
         }
 
         @Override
