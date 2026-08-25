@@ -12,6 +12,8 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -183,6 +185,64 @@ class MachineControllerBlockEntityTest {
         assertThat(restored.runtimeSnapshot().factory().active()).isTrue();
         assertThat(restored.runtimeSnapshot().factory().presentationLanes().getFirst().recipeId())
                 .isEqualTo(recipe.id().toString());
+    }
+
+    @Test
+    void restored_factory_runtime_is_cleared_when_the_factory_component_is_removed_before_recheck() {
+        Identifier machineId = MMCR.id("controller_factory_removed_after_load");
+        BlockPos controllerPos = BlockPos.ZERO;
+        BlockPos schedulerPos = controllerPos.offset(-1, 0, 0);
+        DynamicMachine machine = new DynamicMachine(machineId, "Factory Removed After Load",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, schedulerPos, BlockPos.ZERO, (String) null)));
+        controller.setFormed(true);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_factory_removed_after_load_recipe"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+        controller.serverTick();
+        resolveSharedRequests(controller);
+        assertThat(controller.runtimeSnapshot().factory().active()).isTrue();
+        RuntimeTestFixtures.setDirectSignal(controller.getLevel(), controllerPos, 15);
+        controller.serverTick();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        controller.saveAdditional(output);
+
+        MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        FactorySchedulerBlockEntity restoredScheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(restored, machine, restoredScheduler);
+        restored.invalidateFormedStructure();
+        restored.setMachine(null);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        restored.setMachine(machine);
+        assertThat(restored.runtimeSnapshot().factory().presentationLanes())
+                .anyMatch(thread -> thread.recipeId().equals(recipe.id().toString()));
+        RuntimeTestFixtures.setDirectSignal(restored.getLevel(), controllerPos, 15);
+        ItemInputBusBlockEntity replacement = RuntimeTestFixtures.itemInput(schedulerPos);
+        RuntimeTestFixtures.replaceBlockEntity(restored, replacement);
+        restored.onStructureBlockChanged(schedulerPos);
+        for (int tick = 0; tick < 32 && !restored.structureSnapshot().formed(); tick++) {
+            RuntimeTestFixtures.advanceGameTime(restored.getLevel());
+            restored.tickStructure((ServerLevel) restored.getLevel(), controllerPos);
+        }
+
+        assertThat(restored.structureSnapshot().formed()).isTrue();
+        assertThat(restored.runtimeSnapshot().factory().presentationLanes())
+                .noneMatch(thread -> thread.recipeId().equals(recipe.id().toString()));
+        MachineStateSnapshot state = new ControllerSyncRuntime().machineState(restored.runtimeSnapshot());
+        assertThat(state.factoryControllerPresent()).isFalse();
+        assertThat(state.active()).isFalse();
+        assertThat(state.activeFactoryThreadCount()).isZero();
     }
 
     @Test

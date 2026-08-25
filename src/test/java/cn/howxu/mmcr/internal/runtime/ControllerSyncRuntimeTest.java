@@ -217,6 +217,37 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
+    void machine_projection_reports_live_parallel_capacity_while_active_recipe_keeps_its_parallelism() {
+        ControllerRuntimeSnapshot base = runtimeSnapshot();
+        CraftingStateSnapshot crafting = new CraftingStateSnapshot(MMCR.id("sync_live_parallel_recipe"),
+                CraftingStatus.working(), null, 1L, 20L, 1L, 4, 20, 7, 7, false, "");
+        ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(base.structure(), base.capabilityVersion(),
+                base.modifierVersion(), base.stateVersion(), base.foundModifiers(), base.foundLevels(),
+                base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
+                base.capabilityAggregate(), crafting, FactorySnapshot.empty(), base.componentPresentations(),
+                base.capabilityPresentations(), base.foundLevelIds(), base.machineId(), base.machineName(),
+                base.controllerRole(), false, false, 0, 32, 32);
+
+        MachineStateSnapshot state = new ControllerSyncRuntime().machineState(runtime);
+        assertThat(state.parallelism()).isEqualTo(7);
+        assertThat(state.maxParallelism()).isEqualTo(32);
+    }
+
+    @Test
+    void factory_projection_reports_live_parallel_capacity_when_factory_runtime_is_stale() {
+        ControllerRuntimeSnapshot base = runtimeSnapshot();
+        ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(base.structure(), base.capabilityVersion(),
+                base.modifierVersion(), base.stateVersion(), base.foundModifiers(), base.foundLevels(),
+                base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
+                base.capabilityAggregate(), base.crafting(), base.factory(), base.componentPresentations(),
+                base.capabilityPresentations(), base.foundLevelIds(), base.machineId(), base.machineName(),
+                base.controllerRole(), true, true, base.parallelControllerCount(), base.maxParallelControllerCount(), 32);
+
+        assertThat(new ControllerSyncRuntime().machineState(runtime).maxParallelism()).isEqualTo(32);
+        assertThat(new ControllerSyncRuntime().factoryState(runtime).maxParallelism()).isEqualTo(32);
+    }
+
+    @Test
     void factory_starts_all_allowed_threads_on_the_first_tick() {
         Identifier machineId = MMCR.id("sync_factory_initial_threads");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);

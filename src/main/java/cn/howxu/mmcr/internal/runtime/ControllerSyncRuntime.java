@@ -54,7 +54,7 @@ public final class ControllerSyncRuntime {
         ExecutionStatus failure = factory.failure() == null ? runtime.crafting().failure() : factory.failure();
         return new FactorySnapshot(runtime.structure().formed(), factory.active(), factory.lanes(),
                 factory.activeParallelism(), factory.laneLimit(), factory.activeLaneCount(),
-                factory.maxParallelism(), factory.paused(), factory.presentationLanes(), runtime.machineName(),
+                runtime.maxParallelism(), factory.paused(), factory.presentationLanes(), runtime.machineName(),
                 runtime.parallelControllerCount(), failure, runtime.foundLevelIds());
     }
 
@@ -77,8 +77,6 @@ public final class ControllerSyncRuntime {
 
     public int maxParallelism(ControllerRuntimeSnapshot runtime) {
         require(runtime);
-        if (factoryControllerPresent(runtime)) return runtime.factory().maxParallelism();
-        if (runtime.crafting().recipeId() != null) return runtime.crafting().maxParallelism();
         return runtime.maxParallelism();
     }
 

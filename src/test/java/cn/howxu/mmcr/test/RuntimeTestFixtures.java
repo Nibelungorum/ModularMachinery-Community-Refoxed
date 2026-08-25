@@ -138,6 +138,11 @@ public final class RuntimeTestFixtures {
         testLevel.gameTime = Math.max(1L, testLevel.gameTime) + 1L;
     }
 
+    public static void setDirectSignal(Level level, BlockPos pos, int signal) {
+        if (!(level instanceof TestServerLevel testLevel)) throw new IllegalArgumentException("Unexpected test level");
+        testLevel.directSignals.put(pos, signal);
+    }
+
     private static TestServerLevel newTestServerLevel(MachineControllerBlockEntity controller, Machine machine,
                                                        int stageNumber, List<BlockEntity> components) {
         try {
@@ -147,6 +152,7 @@ public final class RuntimeTestFixtures {
             for (BlockEntity component : components) blockEntities.put(component.getBlockPos(), component);
             setField(TestServerLevel.class, level, "blockEntities", blockEntities);
             Map<BlockPos, BlockState> blocks = new HashMap<>();
+            setField(TestServerLevel.class, level, "directSignals", new HashMap<>());
             blocks.put(controller.getBlockPos(), controller.getBlockState());
             controller.assemblyPattern(machine, stageNumber).pattern().forEach((relative, predicate) ->
                     predicate.preferredState().ifPresent(state -> blocks.put(controller.getBlockPos().offset(relative), state)));
@@ -206,6 +212,7 @@ public final class RuntimeTestFixtures {
         private static final RecipeManager RECIPE_MANAGER = new RecipeManager(RegistryAccess.EMPTY);
         private Map<BlockPos, BlockEntity> blockEntities;
         private Map<BlockPos, BlockState> blocks;
+        private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
         private long gameTime;
 
@@ -219,6 +226,10 @@ public final class RuntimeTestFixtures {
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return blockEntities.get(pos);
+        }
+
+        @Override public int getDirectSignalTo(BlockPos pos) {
+            return directSignals.getOrDefault(pos, 0);
         }
 
         @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {

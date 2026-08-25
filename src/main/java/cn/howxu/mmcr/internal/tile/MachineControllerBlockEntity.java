@@ -1695,7 +1695,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         boolean componentsChanged = componentsNeedRefresh();
         if (((previousMachine != null && previousMachine != matchedMachine) || structureChanged || componentsChanged)
-                && !preserveRestoredFactory) {
+                && (!preserveRestoredFactory || componentsChanged)) {
             stopFactoryController();
         }
         publishStructureWork(state -> state.withDirty(false));
