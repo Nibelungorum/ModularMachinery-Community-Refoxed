@@ -72,6 +72,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -1151,11 +1152,33 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)
                         ? "message.mmcr.multiblock_shared_component_conflict" : "formation_failure", failure.portId());
         if (failure.portId().startsWith(SHARED_COMPONENT_CONFLICT)) {
-            player.sendSystemMessage(Component.translatable(
-                    "message.mmcr.multiblock_shared_component_conflict", failure.portId()));
+            BlockPos componentPos = sharedConflictComponentPosition(failure.portId());
+            Component componentName = componentPos == null || level == null
+                    ? Component.literal("?").withStyle(ChatFormatting.RED)
+                    : level.getBlockState(componentPos).getBlock().getName().copy().withStyle(ChatFormatting.RED);
+            MutableComponent message = Component.empty();
+            if (componentPos != null) message.append(styledPosition(componentPos)).append(" ");
+            message.append(Component.translatable("message.mmcr.multiblock_shared_component_conflict", componentName));
+            player.sendSystemMessage(message);
             return;
         }
         player.sendSystemMessage(describeFormationFailure(failure));
+    }
+
+    private static @Nullable BlockPos sharedConflictComponentPosition(String failureId) {
+        String prefix = SHARED_COMPONENT_CONFLICT + " component=BlockPos{x=";
+        if (!failureId.startsWith(prefix)) return null;
+        int xEnd = failureId.indexOf(", y=", prefix.length());
+        int yEnd = failureId.indexOf(", z=", xEnd + 4);
+        int zEnd = failureId.indexOf('}', yEnd + 4);
+        if (xEnd < 0 || yEnd < 0 || zEnd < 0) return null;
+        try {
+            return new BlockPos(Integer.parseInt(failureId.substring(prefix.length(), xEnd)),
+                    Integer.parseInt(failureId.substring(xEnd + 4, yEnd)),
+                    Integer.parseInt(failureId.substring(yEnd + 4, zEnd)));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private static Component describeFormationFailure(PortRequirementSpec.Failure failure) {
