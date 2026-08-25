@@ -76,6 +76,7 @@ jobs:
         id: notes
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           DEEPSEEK_TOKEN: ${{ secrets.DEEPSEEK_TOKEN }}
         run: |
           set -euo pipefail
