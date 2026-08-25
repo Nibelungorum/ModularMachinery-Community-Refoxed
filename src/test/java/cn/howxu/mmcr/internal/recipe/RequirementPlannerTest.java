@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -48,6 +49,7 @@ import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -711,6 +713,85 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void oneCombinedInputPlansBothItemAndFluidRequirements() {
+        IOPortBlockEntity port = port("combined_input_reinforced");
+        insertCombinedContents(port, 2, 1_000L);
+        ComponentRuntime runtime = runtimeFor(port);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 2, ItemStack.EMPTY),
+                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY)),
+                runtime.capabilities(), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(port.itemStorage().amount(0)).isZero();
+        assertThat(port.fluidStorage().amount(0)).isZero();
+    }
+
+    @Test
+    void oneCombinedOutputPlansBothItemAndFluidOutputs() {
+        IOPortBlockEntity port = port("combined_output_reinforced");
+        ComponentRuntime runtime = runtimeFor(port);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2)),
+                        new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                                new FluidStack(Fluids.WATER, 1_000))),
+                runtime.capabilities(), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(port.itemStorage().amount(0)).isEqualTo(2L);
+        assertThat(port.fluidStorage().amount(0)).isEqualTo(1_000L);
+    }
+
+    @Test
+    void itemAndFluidReservationsDoNotCollide() {
+        IOPortBlockEntity port = port("combined_input_reinforced");
+        insertCombinedContents(port, 2, 2_000L);
+        ComponentRuntime runtime = runtimeFor(port);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY)),
+                runtime.capabilities(), new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(2);
+        assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(port.itemStorage().amount(0)).isZero();
+        assertThat(port.fluidStorage().amount(0)).isZero();
+    }
+
+    @Test
+    void repeatedItemRequirementsShareTheSameItemStorageReservation() {
+        IOPortBlockEntity port = port("combined_input_reinforced");
+        insertCombinedContents(port, 2, 0L);
+        ComponentRuntime runtime = runtimeFor(port);
+
+        var result = new RequirementPlanner().plan(
+                List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY)),
+                runtime.capabilities(), new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(port.itemStorage().amount(0)).isZero();
+    }
+
+    @Test
     void built_in_smart_interface_handler_checks_and_commits_a_transactional_value() {
         FloatValueStorage storage = new FloatValueStorage();
         storage.set("mode", 1F);
@@ -895,6 +976,24 @@ class RequirementPlannerTest {
 
     private static ItemResource ironResource() {
         return ItemResource.of(ironStack(1));
+    }
+
+    private static void insertCombinedContents(IOPortBlockEntity port, long itemAmount, long fluidAmount) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(port.itemStorage().insert(0, ironResource(), itemAmount, transaction)).isEqualTo(itemAmount);
+            if (fluidAmount > 0L) {
+                assertThat(port.fluidStorage().insert(0, FluidResource.of(Fluids.WATER), fluidAmount, transaction))
+                        .isEqualTo(fluidAmount);
+            }
+            transaction.commit();
+        }
+    }
+
+    private static ComponentRuntime runtimeFor(IOPortBlockEntity port) {
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(new ProcessingComponent(null, port, BlockPos.ZERO, BlockPos.ZERO,
+                List.of(), null)));
+        return runtime;
     }
 
     private static Ingredient ironIngredient() {

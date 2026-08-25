@@ -233,7 +233,7 @@ public final class ComponentRuntime {
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof CapabilityHost host) {
                 try {
-                    for (MachineCapability capability : host.capabilitySnapshot().capabilities()) {
+                    for (MachineCapability capability : host.capabilities()) {
                         identities.add(CapabilityIdentity.of(component.getPos(), capability));
                         result.add(capability);
                     }

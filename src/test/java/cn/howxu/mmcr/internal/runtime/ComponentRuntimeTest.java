@@ -90,6 +90,18 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void runtime_collects_every_capability_from_the_host_capabilities_view() {
+        MachineCapability item = new TestCapability("item");
+        MachineCapability fluid = new TestCapability("fluid");
+        TestCapabilityHost host = new TestCapabilityHost(new CapabilitySnapshot(List.of(item)), List.of(item, fluid));
+        ComponentRuntime runtime = new ComponentRuntime();
+
+        runtime.replaceComponents(List.of(component(host, "combined")));
+
+        assertThat(runtime.capabilities()).containsExactly(item, fluid);
+    }
+
+    @Test
     void replacing_component_wrappers_with_the_same_effective_capabilities_does_not_increment_version() {
         MachineCapability capability = new TestCapability("item");
         TestCapabilityHost host = new TestCapabilityHost(List.of(capability));
@@ -216,16 +228,27 @@ class ComponentRuntimeTest {
 
     private static final class TestCapabilityHost extends BlockEntity implements CapabilityHost {
         private final CapabilitySnapshot snapshot;
+        private final List<MachineCapability> capabilities;
 
         private TestCapabilityHost(List<MachineCapability> capabilities) {
+            this(new CapabilitySnapshot(capabilities), capabilities);
+        }
+
+        private TestCapabilityHost(CapabilitySnapshot snapshot, List<MachineCapability> capabilities) {
             super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
                     ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-            snapshot = new CapabilitySnapshot(capabilities);
+            this.snapshot = snapshot;
+            this.capabilities = List.copyOf(capabilities);
         }
 
         @Override
         public CapabilitySnapshot capabilitySnapshot() {
             return snapshot;
+        }
+
+        @Override
+        public List<MachineCapability> capabilities() {
+            return capabilities;
         }
     }
 
