@@ -607,7 +607,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .map(Map.Entry::getValue)
                 .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
                 .sum();
-        long effective = Math.max(1, aggregatedThreads) + levelBonus;
+        long extraThreads = Math.max(0L, (long) aggregatedThreads - 1L);
+        long effective = Math.max(1, configuredMachine.factoryThreadLimit()) + extraThreads + levelBonus;
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
     }
 
@@ -814,7 +815,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void tickFactoryRecipes() {
-        int maxParallelism = getMaxParallelism();
+        int maxParallelism = runtime.maxParallelism(runtimeSnapshot().structure().machine());
         List<MachineRecipe> candidates = recipesForMachine();
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());

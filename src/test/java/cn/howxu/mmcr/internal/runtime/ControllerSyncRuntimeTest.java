@@ -21,6 +21,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -148,6 +149,72 @@ class ControllerSyncRuntimeTest {
         assertThat(started.activeFactoryThreadCount()).isEqualTo(1);
         assertThat(progressed.active()).isTrue();
         assertThat(progressed.tick()).isGreaterThan(started.tick());
+    }
+
+    @Test
+    void factory_uses_machine_level_parallelism_bonus() {
+        Identifier machineId = MMCR.id("sync_factory_level_parallelism");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Level Parallelism", pattern,
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                8, true, true, 1);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
+        controller.componentRuntime().replaceLevels(Map.of(MMCR.id("sync_level"), new MachineLevel(
+                MMCR.id("sync_level"), MMCR.id("sync_level_type"), 1, new BlockPredicate.Any(),
+                ItemStack.EMPTY, new LevelModifier(1D, 1D, 1D, 2, 0))));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_level_recipe"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        resolveSharedRequests(controller);
+
+        FactorySnapshot snapshot = controller.runtimeSnapshot().factory();
+        assertThat(snapshot.maxParallelism()).isEqualTo(3);
+        assertThat(snapshot.presentationLanes().getFirst().parallelism()).isEqualTo(3);
+    }
+
+    @Test
+    void factory_starts_all_allowed_threads_on_the_first_tick() {
+        Identifier machineId = MMCR.id("sync_factory_initial_threads");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        ItemStack inputStack = new ItemStack(Items.IRON_INGOT, 4);
+        inputStack.set(net.minecraft.core.component.DataComponents.MAX_STACK_SIZE, 64);
+        input.getItemStackHandler(null).setStackInSlot(0, inputStack);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Initial Threads", pattern,
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 4);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, input);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null),
+                new ProcessingComponent(null, input, input.getBlockPos(), BlockPos.ZERO, (String) null)));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_initial_recipe"), machineId, 20,
+                List.of(), List.of(), List.of(), 0, 4, false, List.of(), List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                                ItemStack.EMPTY)));
+        RecipeRegistry.register(recipe);
+
+        controller.serverTick();
+        resolveSharedRequests(controller);
+
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(4);
     }
 
     @Test

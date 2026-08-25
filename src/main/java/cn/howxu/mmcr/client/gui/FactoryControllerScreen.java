@@ -154,8 +154,10 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     static String selectedFailureUnloc(FactoryControllerMenu menu) {
-        String threadFailure = menu.selectedThread().lastFailureUnloc();
-        return threadFailure.isEmpty() ? menu.lastFailureUnloc() : threadFailure;
+        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
+        String threadFailure = selected.lastFailureUnloc();
+        if (!threadFailure.isEmpty()) return threadFailure;
+        return selected.active() ? "" : menu.lastFailureUnloc();
     }
 
     static Rect recipeLockButtonRect(int left, int top, int width, int height) {
