@@ -116,7 +116,28 @@ public final class PortKinds {
             List<CapabilityFactory> capabilityFactories)
             implements IOPortKind {
         public CombinedKind {
+            if (ioType == null) throw new IllegalArgumentException("ioType null");
+            if (families == null || families.size() != 2) {
+                throw new IllegalArgumentException("combined kind must have exactly two families");
+            }
             families = List.copyOf(families);
+            boolean item = false;
+            boolean fluid = false;
+            for (PortFamilyDescriptor family : families) {
+                if (family == null || family.ioType() != ioType) {
+                    throw new IllegalArgumentException("combined family direction mismatch");
+                }
+                if (family.familyId().equals(PortFamilyIds.ITEM)) {
+                    if (item) throw new IllegalArgumentException("duplicate item family");
+                    item = true;
+                } else if (family.familyId().equals(PortFamilyIds.FLUID)) {
+                    if (fluid) throw new IllegalArgumentException("duplicate fluid family");
+                    fluid = true;
+                } else {
+                    throw new IllegalArgumentException("combined kind family must be item or fluid");
+                }
+            }
+            if (!item || !fluid) throw new IllegalArgumentException("combined kind must include item and fluid families");
             capabilityFactories = List.copyOf(capabilityFactories);
         }
     }

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class PortTierRequirementSpecTest {
 
@@ -92,10 +93,47 @@ class PortTierRequirementSpecTest {
     }
 
     @Test
+    void combined_kind_accepts_item_and_fluid_for_both_directions() {
+        assertThat(ordinaryCombinedKind(IOType.INPUT).families())
+                .extracting(PortFamilyDescriptor::familyId)
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(ordinaryCombinedKind(IOType.OUTPUT).families())
+                .extracting(PortFamilyDescriptor::familyId)
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+    }
+
+    @Test
+    void combined_kind_rejects_a_single_family() {
+        assertInvalidCombined(List.of(itemFamily(IOType.INPUT)));
+    }
+
+    @Test
+    void combined_kind_rejects_an_energy_family() {
+        assertInvalidCombined(List.of(itemFamily(IOType.INPUT), energyFamily(IOType.INPUT)));
+    }
+
+    @Test
+    void combined_kind_rejects_duplicate_families() {
+        assertInvalidCombined(List.of(itemFamily(IOType.INPUT), itemFamily(IOType.INPUT)));
+    }
+
+    @Test
+    void combined_kind_rejects_a_third_family() {
+        assertInvalidCombined(List.of(itemFamily(IOType.INPUT), fluidFamily(IOType.INPUT),
+                energyFamily(IOType.INPUT)));
+    }
+
+    @Test
+    void combined_kind_rejects_mixed_directions() {
+        assertInvalidCombined(List.of(itemFamily(IOType.INPUT), fluidFamily(IOType.OUTPUT)));
+    }
+
+    @Test
     void extended_item_kind_matches_the_highest_item_requirement() {
         IOPortKind kind = combinedKind(List.of(
                 new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, ItemBusSize.LUDICROUS.ordinal() + 1,
-                        List.of("item_input_bus"))));
+                        List.of("item_input_bus")),
+                fluidFamily(IOType.INPUT)));
         var spec = PortTierRequirementSpec.builder()
                 .minItemInput(ItemBusSize.LUDICROUS)
                 .build();
@@ -122,7 +160,34 @@ class PortTierRequirementSpecTest {
     }
 
     private static IOPortKind combinedKind(List<PortFamilyDescriptor> families) {
-        return new PortKinds.CombinedKind("combined_input_test", IOType.INPUT, families,
+        return combinedKind(IOType.INPUT, families);
+    }
+
+    private static IOPortKind ordinaryCombinedKind(IOType ioType) {
+        return combinedKind(ioType, List.of(itemFamily(ioType), fluidFamily(ioType)));
+    }
+
+    private static IOPortKind combinedKind(IOType ioType, List<PortFamilyDescriptor> families) {
+        return new PortKinds.CombinedKind("combined_" + ioType.getSerializedName() + "_test", ioType, families,
                 PortKinds.ITEM_INPUT.entityFactory(), List.of());
+    }
+
+    private static void assertInvalidCombined(List<PortFamilyDescriptor> families) {
+        assertThatIllegalArgumentException().isThrownBy(() -> combinedKind(IOType.INPUT, families));
+    }
+
+    private static PortFamilyDescriptor itemFamily(IOType ioType) {
+        return new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, 2,
+                List.of(ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus"));
+    }
+
+    private static PortFamilyDescriptor fluidFamily(IOType ioType) {
+        return new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, 2,
+                List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch"));
+    }
+
+    private static PortFamilyDescriptor energyFamily(IOType ioType) {
+        return new PortFamilyDescriptor(PortFamilyIds.ENERGY, ioType, 2,
+                List.of(ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch"));
     }
 }
