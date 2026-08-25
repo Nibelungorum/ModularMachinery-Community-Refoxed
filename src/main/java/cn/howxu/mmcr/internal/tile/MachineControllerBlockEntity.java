@@ -1444,6 +1444,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         SHARED_COMPONENT_CONFLICT + " component=" + conflict.componentPos()
                                 + " owner=" + conflict.ownerPos(),
                         0, 1, OptionalInt.empty(), PortRequirementSpec.FailureReason.MISSING)));
+                sendRequestedStructureDiagnostic(null);
                 return false;
             }
             if (ModuleConnectionCoordinator.blocksHostFormation(serverLevel, candidate, stageCompiled, facing, getBlockPos())) {
