@@ -8,6 +8,7 @@ MMCREvents.startup(event => {
         .displayNameKey("machine.mmcr_kubejs.kubejs_thermal_smelting_furnace")
         .recipeFamily("mmcr_kubejs:kubejs_thermal_smelting_furnace")
         .allowParallelism()
+        .allowMultithreading() // Allow use multi threading process
         .maxParallelAmount(32)
         .appearance("minecraft:smooth_basalt")
 

@@ -11,7 +11,8 @@ MMCREvents.server(event => {
             api.anyOfItemInput(),
             api.anyOfItemOutput(),
             api.anyOfEnergyInput(),
-            api.parallelControllers(),
+            api.parallelControllers(), // this is all parallel controller
+            api.factoryController(), // this is factory controller block
             api.block('minecraft:smooth_basalt')
         ))
         .set('D',api.block('minecraft:reinforced_deepslate'))
