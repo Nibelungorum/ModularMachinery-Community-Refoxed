@@ -8,10 +8,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
 
@@ -29,25 +33,53 @@ class PktAutoIOConfigPayloadTest {
     }
 
     @Test
-    void enabled_set_accepts_port_menu_without_side() {
+    void enabled_set_accepts_port_menu_without_side() throws Exception {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ServerPlayer player = playerWith(menu);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
     }
 
     @Test
-    void side_set_requires_side() {
+    void side_set_requires_side() throws Exception {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ServerPlayer player = playerWith(menu);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.SET_SIDE, null)).isFalse();
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, BlockPos.ZERO, AutoIOAction.SET_SIDE, Direction.EAST)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_SIDE, null)).isFalse();
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_SIDE, Direction.EAST)).isTrue();
     }
 
     @Test
-    void wrong_position_is_rejected_for_set_action() {
+    void wrong_position_is_rejected_for_set_action() throws Exception {
         ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ServerPlayer player = playerWith(menu);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(menu, new BlockPos(1, 0, 0), AutoIOAction.SET_ENABLED, null)).isFalse();
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, new BlockPos(1, 0, 0), AutoIOAction.SET_ENABLED, null)).isFalse();
+    }
+
+    @Test
+    void still_invalid_menu_is_rejected_before_update() throws Exception {
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO) {
+            @Override
+            public boolean stillValid(Player player) {
+                return false;
+            }
+        };
+
+        assertThat(PktAutoIOConfigPayload.canUpdate(playerWith(menu), BlockPos.ZERO,
+                AutoIOAction.SET_ENABLED, null)).isFalse();
+    }
+
+    private static ServerPlayer playerWith(AbstractContainerMenu menu) throws Exception {
+        ServerPlayer player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
+        player.containerMenu = menu;
+        return player;
+    }
+
+    private static Unsafe unsafe() throws Exception {
+        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (Unsafe) field.get(null);
     }
 
     private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {

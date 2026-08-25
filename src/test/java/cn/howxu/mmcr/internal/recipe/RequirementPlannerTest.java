@@ -646,6 +646,47 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void planning_reservations_reject_resource_virtual_amount_overflow() {
+        LongFluidStorage storage = new LongFluidStorage(Long.MAX_VALUE, null);
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        storage.setContents(water, Long.MAX_VALUE);
+        PlanningReservations reservations = new PlanningReservations();
+
+        assertThat(reservations.reserveExtract(storage, 0, water, Long.MAX_VALUE)).isTrue();
+        assertThat(reservations.reserveInsert(storage, 0, water, Long.MAX_VALUE)).isTrue();
+        assertThat(reservations.reserveInsert(storage, 0, water, 1L)).isFalse();
+        assertThat(reservations.amount(storage, 0)).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
+    void planning_reservations_reject_value_virtual_amount_overflow() {
+        LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, null);
+        PlanningReservations reservations = new PlanningReservations();
+
+        assertThat(reservations.reserveValue(storage, Long.MAX_VALUE, true)).isTrue();
+        assertThat(reservations.valueAvailable(storage, true)).isZero();
+        assertThat(reservations.reserveValue(storage, 1L, true)).isFalse();
+
+        storage.setAmount(Long.MAX_VALUE);
+        assertThat(reservations.valueAvailable(storage, false)).isZero();
+        assertThat(reservations.reserveValue(storage, 1L, false)).isFalse();
+    }
+
+    @Test
+    void planning_reservations_reject_minimum_amounts_without_changing_state() {
+        LongValueStorage valueStorage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, null);
+        LongFluidStorage resourceStorage = new LongFluidStorage(Long.MAX_VALUE, null);
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        PlanningReservations reservations = new PlanningReservations();
+
+        assertThat(reservations.reserveValue(valueStorage, Long.MIN_VALUE, true)).isFalse();
+        assertThat(reservations.reserveInsert(resourceStorage, 0, water, Long.MIN_VALUE)).isFalse();
+        assertThat(reservations.reserveExtract(resourceStorage, 0, water, Long.MIN_VALUE)).isFalse();
+        assertThat(reservations.valueAvailable(valueStorage, true)).isEqualTo(Long.MAX_VALUE);
+        assertThat(reservations.amount(resourceStorage, 0)).isZero();
+    }
+
+    @Test
     void built_in_item_and_fluid_handlers_commit_real_resource_storage_operations_in_order() {
         BulkItemStorage itemStorage = new BulkItemStorage(64, null);
         itemStorage.insert(ironResource(), 2, false);

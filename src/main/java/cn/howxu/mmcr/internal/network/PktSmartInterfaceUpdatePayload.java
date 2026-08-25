@@ -37,7 +37,7 @@ public record PktSmartInterfaceUpdatePayload(BlockPos pos, String interfaceType,
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            if (!canUpdate(player.containerMenu, pos, interfaceType, value)) return;
+            if (!canUpdate(player, pos, interfaceType, value)) return;
             if (!(player.level().getBlockEntity(pos) instanceof SmartInterfaceBlockEntity smartInterface)) return;
             var machineId = smartInterface.machineId().orElse(null);
             if (machineId == null) return;
@@ -48,9 +48,11 @@ public record PktSmartInterfaceUpdatePayload(BlockPos pos, String interfaceType,
         });
     }
 
-    static boolean canUpdate(AbstractContainerMenu menu, BlockPos pos, String interfaceType, float value) {
+    static boolean canUpdate(ServerPlayer player, BlockPos pos, String interfaceType, float value) {
+        AbstractContainerMenu menu = player.containerMenu;
         return menu instanceof SmartInterfaceMenu smartInterface
                 && smartInterface.pos().equals(pos)
+                && menu.stillValid(player)
                 && interfaceType != null
                 && !interfaceType.isBlank()
                 && Float.isFinite(value);

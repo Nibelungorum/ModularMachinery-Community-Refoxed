@@ -43,7 +43,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            if (!canUpdate(player.containerMenu, pos, action, side)) return;
+            if (!canUpdate(player, pos, action, side)) return;
             if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
             if (action == AutoIOAction.SET_ENABLED) port.setAutoIOEnabled(enabled);
             else if (action == AutoIOAction.SET_SIDE) port.setAutoIOSide(side, enabled);
@@ -51,12 +51,13 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
         });
     }
 
-    public static boolean canUpdate(AbstractContainerMenu menu, BlockPos pos, AutoIOAction action, @Nullable Direction side) {
+    public static boolean canUpdate(ServerPlayer player, BlockPos pos, AutoIOAction action, @Nullable Direction side) {
         if (pos == null || action == null) return false;
+        AbstractContainerMenu menu = player.containerMenu;
         boolean portMenu = menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos)
                 || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos)
                 || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos);
         if (!portMenu) return false;
-        return action != AutoIOAction.SET_SIDE || side != null;
+        return menu.stillValid(player) && (action != AutoIOAction.SET_SIDE || side != null);
     }
 }

@@ -22,45 +22,85 @@ public final class PlanningReservations {
     }
 
     public long amount(ResourceStorage<?> storage, int slot) {
-        ResourceReservation reservation = reservation(storage, slot, false);
-        return storage.amount(slot) - (reservation == null ? 0L : reservation.extracted)
-                + (reservation == null ? 0L : reservation.inserted);
+        Long amount = virtualAmount(storage, slot);
+        return amount == null ? 0L : amount;
     }
 
     public boolean reserveExtract(ResourceStorage<?> storage, int slot, Object resource, long amount) {
         if (amount <= 0L || !storage.resourceType().isInstance(resource)) return false;
-        ResourceReservation reservation = reservation(storage, slot, true);
         Object current = resource(storage, slot);
+        Long currentAmount = virtualAmount(storage, slot);
         if (!storage.resourceType().isInstance(current) || !current.equals(resource)
-                || this.amount(storage, slot) < amount) return false;
-        reservation.extracted += amount;
+                || currentAmount == null || currentAmount < amount) return false;
+        ResourceReservation reservation = reservation(storage, slot, false);
+        long extracted;
+        try {
+            extracted = Math.addExact(reservation == null ? 0L : reservation.extracted, amount);
+        } catch (ArithmeticException ignored) {
+            return false;
+        }
+        if (reservation == null) reservation = reservation(storage, slot, true);
+        reservation.extracted = extracted;
         return true;
     }
 
     public boolean reserveInsert(ResourceStorage<?> storage, int slot, Object resource, long amount) {
         if (amount <= 0L || !storage.resourceType().isInstance(resource)
                 || !storage.isValidResource(slot, resource)) return false;
-        ResourceReservation reservation = reservation(storage, slot, true);
+        ResourceReservation reservation = reservation(storage, slot, false);
         Object current = resource(storage, slot);
-        long currentAmount = this.amount(storage, slot);
-        if (currentAmount > 0L && !current.equals(resource)) return false;
-        if (currentAmount + amount > storage.capacityResource(slot, resource)) return false;
+        Long currentAmount = virtualAmount(storage, slot);
+        long capacity = storage.capacityResource(slot, resource);
+        if (currentAmount == null || currentAmount < 0L || capacity < 0L || currentAmount > capacity
+                || (currentAmount > 0L && !current.equals(resource))
+                || amount > capacity - currentAmount) return false;
+        if (reservation == null) reservation = reservation(storage, slot, true);
         if (reservation.insertedResource != null && !reservation.insertedResource.equals(resource)) return false;
+        long inserted;
+        try {
+            inserted = Math.addExact(reservation.inserted, amount);
+        } catch (ArithmeticException ignored) {
+            return false;
+        }
         reservation.insertedResource = resource;
-        reservation.inserted += amount;
+        reservation.inserted = inserted;
         return true;
     }
 
     public long valueAvailable(LongValueStorage storage, boolean insert) {
         long reserved = values.getOrDefault(storage, 0L);
-        return insert ? Math.max(0L, storage.capacity() - storage.amount() - reserved)
-                : Math.max(0L, storage.amount() + reserved);
+        long available;
+        try {
+            available = insert
+                    ? Math.subtractExact(Math.subtractExact(storage.capacity(), storage.amount()), reserved)
+                    : Math.addExact(storage.amount(), reserved);
+        } catch (ArithmeticException ignored) {
+            return 0L;
+        }
+        return Math.max(0L, available);
     }
 
     public boolean reserveValue(LongValueStorage storage, long amount, boolean insert) {
         if (amount <= 0L || amount > storage.transferLimit() || valueAvailable(storage, insert) < amount) return false;
-        values.merge(storage, insert ? amount : -amount, Long::sum);
+        long reserved = values.getOrDefault(storage, 0L);
+        long next;
+        try {
+            next = Math.addExact(reserved, insert ? amount : -amount);
+        } catch (ArithmeticException ignored) {
+            return false;
+        }
+        values.put(storage, next);
         return true;
+    }
+
+    private Long virtualAmount(ResourceStorage<?> storage, int slot) {
+        ResourceReservation reservation = reservation(storage, slot, false);
+        try {
+            long amount = Math.subtractExact(storage.amount(slot), reservation == null ? 0L : reservation.extracted);
+            return Math.addExact(amount, reservation == null ? 0L : reservation.inserted);
+        } catch (ArithmeticException ignored) {
+            return null;
+        }
     }
 
     public PlanningReservations copy() {
