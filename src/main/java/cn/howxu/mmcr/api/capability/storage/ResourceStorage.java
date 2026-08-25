@@ -16,6 +16,10 @@ public interface ResourceStorage<R> extends CapabilityStorage {
     Class<R> resourceType();
     int size();
 
+    /**
+     * Returns the resource in a slot, or {@code null} for an empty slot.
+     */
+    @Nullable
     R resource(int slot);
 
     long amount(int slot);

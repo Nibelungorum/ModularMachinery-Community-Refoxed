@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
@@ -37,6 +39,7 @@ import java.lang.reflect.Constructor;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Capability identity and automatic transfer policy tests.
@@ -202,6 +205,26 @@ class CapabilityTransferPolicyTest {
 
         assertThat(storage.amount()).isZero();
         assertThat(new TransferResult(true, amount, null).amount()).isEqualTo(amount);
+    }
+
+    @Test
+    void empty_long_resource_storage_is_safe_for_auto_io_and_handler_projection() {
+        Ports ports = connectedPorts();
+        ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(2));
+        LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
+                itemHandler(ports.itemOutput, false, true));
+
+        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        ItemBusCapability capability = new ItemBusCapability(ports.itemInput, storage, IOType.INPUT);
+        var policy = CapabilityTransferPolicies.policyFor(capability).orElseThrow();
+
+        assertThatCode(() -> policy.hasWork(capability)).doesNotThrowAnyException();
+        TransferResult result = policy.transfer(capability, Direction.EAST);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(2L);
+        assertThat(storage.resource(0)).isNotNull();
     }
 
     private static Ports connectedPorts() {

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LongResourceStorageTest {
     @BeforeAll
@@ -161,5 +162,57 @@ class LongResourceStorageTest {
 
         assertThat(storage.amount(0)).isEqualTo(largeAmount);
         assertThat(storage.resource(0)).isEqualTo(water);
+    }
+
+    @Test
+    void rejects_negative_amounts_and_invalid_slots() {
+        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
+                FluidResource.class, 1, 100L, resource -> resource.isEmpty(), () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThatThrownBy(() -> storage.insert(0, water, -1L, transaction))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> storage.extract(0, water, -1L, transaction))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        assertThatThrownBy(() -> storage.resource(-1)).isInstanceOf(IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> storage.amount(storage.size())).isInstanceOf(IndexOutOfBoundsException.class);
+    }
+
+    @Test
+    void stores_exact_long_max_value_and_clears_identity_after_full_extract() {
+        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
+                FluidResource.class, 1, Long.MAX_VALUE, resource -> resource.isEmpty(), () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, water, Long.MAX_VALUE, transaction)).isEqualTo(Long.MAX_VALUE);
+            transaction.commit();
+        }
+
+        assertThat(storage.amount(0)).isEqualTo(Long.MAX_VALUE);
+        assertThat(storage.resource(0)).isEqualTo(water);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.extract(0, water, Long.MAX_VALUE, transaction)).isEqualTo(Long.MAX_VALUE);
+            transaction.commit();
+        }
+
+        assertThat(storage.amount(0)).isZero();
+        assertThat(storage.resource(0)).isNull();
+    }
+
+    @Test
+    void zero_capacity_does_not_retain_resource_identity() {
+        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
+                FluidResource.class, 1, 0L, resource -> resource.isEmpty(), () -> {});
+        FluidResource water = FluidResource.of(Fluids.WATER);
+
+        storage.setContents(0, water, 1L);
+
+        assertThat(storage.amount(0)).isZero();
+        assertThat(storage.resource(0)).isNull();
     }
 }

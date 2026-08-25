@@ -51,6 +51,7 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
     }
 
     @Override
+    @Nullable
     public R resource(int slot) {
         checkSlot(slot);
         return resources.get(slot);
@@ -112,13 +113,14 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
      */
     public void setContents(int slot, @Nullable R resource, long amount) {
         checkSlot(slot);
-        if (amount <= 0L || isEmptyResource(resource)) {
+        long storedAmount = Math.min(amount, capacity);
+        if (storedAmount <= 0L || isEmptyResource(resource)) {
             resources.set(slot, null);
             amounts[slot] = 0L;
         } else {
             checkResource(resource);
             resources.set(slot, resource);
-            amounts[slot] = Math.min(amount, capacity);
+            amounts[slot] = storedAmount;
         }
         onChange.run();
     }

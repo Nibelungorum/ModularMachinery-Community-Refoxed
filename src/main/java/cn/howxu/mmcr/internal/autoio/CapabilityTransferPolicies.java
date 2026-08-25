@@ -81,7 +81,7 @@ public final class CapabilityTransferPolicies {
             }
             for (int slot = 0; slot < storage.size(); slot++) {
                 ItemResource resource = storage.resource(slot);
-                if (storage.amount(slot) < storage.capacity(slot, resource.isEmpty() ? null : resource)) return true;
+                if (storage.amount(slot) < storage.capacity(slot, isEmpty(resource) ? null : resource)) return true;
             }
             return false;
         }
@@ -137,9 +137,10 @@ public final class CapabilityTransferPolicies {
             if (!(capability instanceof FluidHatchCapability fluid)) return false;
             ResourceStorage<FluidResource> storage = fluid.storage();
             long amount = storage.amount(0);
+            FluidResource resource = storage.resource(0);
             return fluid.ioType() == IOType.OUTPUT
                     ? amount > 0L
-                    : amount < storage.capacity(0, storage.resource(0));
+                    : amount < storage.capacity(0, isEmpty(resource) ? null : resource);
         }
 
         @Override
@@ -228,7 +229,7 @@ public final class CapabilityTransferPolicies {
     private static <R extends Resource> ResourceHandler<R> resourceHandler(ResourceStorage<R> storage) {
         return new ResourceHandler<>() {
             @Override public int size() { return storage.size(); }
-            @Override public R getResource(int slot) { return storage.resource(slot); }
+            @Override public R getResource(int slot) { return resourceOrEmpty(storage, slot); }
             @Override public long getAmountAsLong(int slot) { return storage.amount(slot); }
             @Override public long getCapacityAsLong(int slot, R resource) { return storage.capacity(slot, resource); }
             @Override public boolean isValid(int slot, R resource) { return storage.isValid(slot, resource); }
@@ -239,6 +240,23 @@ public final class CapabilityTransferPolicies {
                 return (int) storage.extract(slot, resource, amount, transaction);
             }
         };
+    }
+
+    private static boolean isEmpty(Resource resource) {
+        return resource == null || resource.isEmpty();
+    }
+
+    private static <R extends Resource> R resourceOrEmpty(ResourceStorage<R> storage, int slot) {
+        R resource = storage.resource(slot);
+        return resource == null ? emptyResource(storage.resourceType()) : resource;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R extends Resource> R emptyResource(Class<R> resourceType) {
+        // NeoForge ResourceHandler requires a concrete empty resource, unlike ResourceStorage.
+        if (resourceType == ItemResource.class) return (R) ItemResource.EMPTY;
+        if (resourceType == FluidResource.class) return (R) FluidResource.EMPTY;
+        throw new IllegalArgumentException("Missing empty resource for " + resourceType.getName());
     }
 
     private static EnergyHandler energyHandler(LongValueStorage storage) {
