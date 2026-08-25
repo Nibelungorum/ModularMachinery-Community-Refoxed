@@ -556,7 +556,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public boolean isPortUsedByActiveRecipe(BlockPos pos) {
-        return runtime.craftingRuntime().active()
+        return (runtime.craftingRuntime().active() || !runtime.factoryRuntime().activeRuntimes().isEmpty())
                 && runtime.components().stream().anyMatch(component -> component.getPos().equals(pos));
     }
 

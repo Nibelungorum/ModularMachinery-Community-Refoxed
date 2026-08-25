@@ -37,20 +37,30 @@ public final class ModuleConnectionCoordinator {
 
         List<MachineControllerBlockEntity> hosts = controllersFor(level, couplerPos, true);
         List<MachineControllerBlockEntity> modules = controllersFor(level, couplerPos, false);
+        Set<MachineControllerBlockEntity> affectedControllers = new LinkedHashSet<>();
+        existing.ifPresent(connection -> {
+            affectedControllers.add(connection.host());
+            affectedControllers.add(connection.module());
+        });
+        affectedControllers.addAll(hosts);
+        affectedControllers.addAll(modules);
         coupler.clearConnection();
         if (existing.isPresent()) {
             MachineConnection connection = existing.get();
-            refreshRuntimeConnectionState(connection);
             if (interfacesOverlap(connection.host(), connection.module())) {
                 invalidateHost(level, connection.host());
                 return;
             }
             if (canConnect(level, couplerPos, connection.host(), connection.module())) {
                 restoreConnection(level, coupler, connection);
+                refreshAffectedControllers(affectedControllers);
                 return;
             }
         }
-        if (hosts.size() != 1 || modules.size() != 1) return;
+        if (hosts.size() != 1 || modules.size() != 1) {
+            refreshAffectedControllers(affectedControllers);
+            return;
+        }
 
         MachineControllerBlockEntity host = hosts.getFirst();
         MachineControllerBlockEntity module = modules.getFirst();
@@ -58,8 +68,12 @@ public final class ModuleConnectionCoordinator {
             invalidateHost(level, host);
             return;
         }
-        if (!canConnect(level, couplerPos, host, module)) return;
+        if (!canConnect(level, couplerPos, host, module)) {
+            refreshAffectedControllers(affectedControllers);
+            return;
+        }
         restoreConnection(level, coupler, new MachineConnection(host, module));
+        refreshAffectedControllers(affectedControllers);
     }
 
     public static boolean validate(ModuleCouplerBlockEntity coupler) {
@@ -98,7 +112,7 @@ public final class ModuleConnectionCoordinator {
             controllersFor(level, couplerPos, false).forEach(affectedControllers::add);
             coupler.clearConnection();
         }
-        affectedControllers.forEach(MachineControllerBlockEntity::refreshModuleConnectionState);
+        refreshAffectedControllers(affectedControllers);
     }
 
     public static void enqueueCouplers(ServerLevel level, MachineControllerBlockEntity controller) {
@@ -227,12 +241,10 @@ public final class ModuleConnectionCoordinator {
     private static void restoreConnection(ServerLevel level, ModuleCouplerBlockEntity coupler, MachineConnection connection) {
         coupler.setConnection(GlobalPos.of(level.dimension(), connection.host().getBlockPos()),
                 GlobalPos.of(level.dimension(), connection.module().getBlockPos()));
-        refreshRuntimeConnectionState(connection);
     }
 
-    private static void refreshRuntimeConnectionState(MachineConnection connection) {
-        connection.host().refreshModuleConnectionState();
-        connection.module().refreshModuleConnectionState();
+    private static void refreshAffectedControllers(Set<MachineControllerBlockEntity> affectedControllers) {
+        affectedControllers.forEach(MachineControllerBlockEntity::refreshModuleConnectionState);
     }
 
     private static void invalidateHost(ServerLevel level, MachineControllerBlockEntity host) {

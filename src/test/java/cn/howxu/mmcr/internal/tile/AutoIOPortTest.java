@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -101,10 +105,40 @@ class AutoIOPortTest {
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
     }
 
+    @Test
+    void auto_io_does_not_eject_a_port_used_by_an_active_factory_lane() throws Exception {
+        ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(new BlockPos(0, 0, 1));
+        ItemOutputBusBlockEntity target = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 1));
+        source.getItemStackHandler(null).setStackInSlot(0, stack(3));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), source);
+        Level level = controller.getLevel();
+        LevelStub.putBlockEntity(level, target);
+        target.setLevel(level);
+        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+                itemHandler(target, true, false));
+        source.linkControllerAppearance(controller.getBlockPos(), MMCR.id("test_factory_port"));
+
+        FactoryRuntime factory = factoryRuntime(controller);
+        factory.ensureBaseLane(controller);
+        factory.tick(List.of(new MachineRecipe(MMCR.id("factory_port_ownership"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 1)), 1);
+
+        assertThat(controller.isPortUsedByActiveRecipe(source.getBlockPos())).isTrue();
+        assertThat(source.ejectContents()).isFalse();
+        assertThat(source.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+    }
+
     private static ItemStack stack(int count) {
         ItemStack stack = new ItemStack(Items.IRON_INGOT, count);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return stack;
+    }
+
+    private static FactoryRuntime factoryRuntime(MachineControllerBlockEntity controller) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        field.setAccessible(true);
+        MachineControllerRuntime runtime = (MachineControllerRuntime) field.get(controller);
+        return runtime.factoryRuntime();
     }
 
     @SuppressWarnings("unchecked")

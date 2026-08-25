@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -145,6 +147,41 @@ class ModuleConnectionCoordinatorTest {
 
         assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()));
         assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+    }
+
+    @Test
+    void refresh_clears_stale_state_from_ambiguous_candidates_after_connection_recovery() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        BlockPos extraModulePos = new BlockPos(10, 64, 16);
+        BlockPos extraNormal = new BlockPos(11, 64, 14);
+        BlockPos extraInterface = new BlockPos(12, 64, 14);
+        DynamicMachine extraMachine = machine(MODULE_ID, MachineRole.MODULE, Set.of(), extraModulePos,
+                fixture.couplerPos(), extraNormal, extraInterface);
+        MachineControllerBlockEntity extraModule = controller(extraModulePos, extraMachine, true);
+        publishFormed(extraModule, extraMachine);
+        RuntimeTestFixtures.attachLevel(extraModule, fixture.level());
+        fixture.level().blocks.put(extraModulePos, controllerBlock(extraMachine.registryName()).defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH)
+                .setValue(MachineControllerBlock.FORMED, true)
+                .setValue(MachineControllerBlock.ACTIVE, false));
+        fixture.level().blocks.put(extraNormal, Blocks.STONE.defaultBlockState());
+        fixture.level().blocks.put(extraInterface, ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+        fixture.level().blockEntities.put(extraModulePos, extraModule);
+        StructureClaimRegistry.get(fixture.level()).claim(extraModulePos, List.of());
+        assertThat(extraModule.structureSnapshot().formed()).isTrue();
+
+        fixture.coupler().setConnection(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()),
+                GlobalPos.of(Level.OVERWORLD, extraModulePos));
+        extraModule.refreshModuleConnectionState();
+        assertThat(extraModule.runtimeSnapshot().moduleConnectionStatus().connected()).isTrue();
+
+        fixture.coupler().setConnection(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()),
+                GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+
+        assertThat(extraModule.runtimeSnapshot().moduleConnectionStatus().connected()).isFalse();
+        assertThat(fixture.module().runtimeSnapshot().moduleConnectionStatus().connected()).isTrue();
     }
 
     @Test
@@ -286,6 +323,18 @@ class ModuleConnectionCoordinatorTest {
                 cn.howxu.mmcr.MMCR.id("test_cube"), pos, state);
         RuntimeTestFixtures.publishStructure(controller, machine, false);
         return controller;
+    }
+
+    private static void publishFormed(MachineControllerBlockEntity controller, Machine machine) throws Exception {
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
+        Method publishFormationState = MachineControllerRuntime.class.getDeclaredMethod("publishFormationState",
+                Machine.class, BlockArray.class, cn.howxu.mmcr.api.machine.CompiledMachinePattern.class,
+                Direction.class, Direction.class, int.class);
+        publishFormationState.setAccessible(true);
+        publishFormationState.invoke(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),
+                Direction.SOUTH, Direction.NORTH, 1);
     }
 
     private static MachineControllerBlock controllerBlock(Identifier machineId) throws Exception {
