@@ -2235,7 +2235,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         lastBroadcastState = packet;
         if (!(level instanceof ServerLevel sl)) return;
-        for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64)) {
+        for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
+                || (p.containerMenu instanceof MachineControllerMenu menu
+                && menu.controllerPos().equals(getBlockPos())))) {
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(packet));
         }
     }
