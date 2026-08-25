@@ -230,14 +230,22 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         ctx.enqueueWork(() -> {
             var player = ctx.player();
             if (player == null) return;
-            if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
+            var blockEntity = player.level().getBlockEntity(pos);
+            boolean menuMatches = player.containerMenu instanceof MachineControllerMenu menu
+                    && menu.controllerPos().equals(pos);
+            MMCR.LOG.info("[ParallelDebug][ClientPacketReceive] thread={} pos={} machine={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={} blockEntity={} menu={} menuMatches={}",
+                    Thread.currentThread().getName(), pos, machineId, parallelism, maxParallelism,
+                    parallelControllerCount, maxParallelControllerCount, blockEntity == null ? "<null>" : blockEntity.getClass().getSimpleName(),
+                    player.containerMenu == null ? "<null>" : player.containerMenu.getClass().getSimpleName(), menuMatches);
+            if (blockEntity instanceof MachineControllerBlockEntity controller) {
                 controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId,
                         machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole, installedModuleCount,
                         moduleConnected, connectedHostId.isEmpty() ? null : Identifier.parse(connectedHostId),
                         new CraftingStatus(craftingStatus, craftingMessage), failure, structureAreaLoaded,
                         tick, totalTick, parallelism, maxParallelism);
             }
-            if (player.containerMenu instanceof MachineControllerMenu menu && menu.controllerPos().equals(pos)) {
+            if (menuMatches) {
+                MachineControllerMenu menu = (MachineControllerMenu) player.containerMenu;
                 menu.applyClientSnapshot(this);
             }
         });

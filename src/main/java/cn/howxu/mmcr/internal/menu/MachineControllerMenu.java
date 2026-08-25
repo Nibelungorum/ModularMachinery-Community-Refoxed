@@ -9,7 +9,9 @@ import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.entity.player.Player;
@@ -27,6 +29,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final MachineControllerBlockEntity owner;
+    private final @Nullable ServerPlayer serverPlayer;
     private final Level level;
     private boolean wasFormedDuringSession;
     private final BlockPos pos;
@@ -50,10 +53,12 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private @Nullable Identifier clientMachineId;
     private @Nullable Identifier clientConnectedHostId;
     private @Nullable PktMachineStatePayload clientSnapshot;
+    private @Nullable PktMachineStatePayload lastSentSnapshot;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = owner;
+        this.serverPlayer = playerInv.player instanceof ServerPlayer player ? player : null;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         wasFormedDuringSession = owner != null && machineState(owner).formed();
@@ -120,6 +125,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
                                  @Nullable Identifier connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = null;
+        this.serverPlayer = null;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = pos;
         this.formed = addDataSlot(DataSlot.standalone());
@@ -319,6 +325,19 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     static int resolvedControllerRole(int localRole, int syncedRole, int initialRole) {
         return localRole != 0 ? localRole : syncedRole != 0 ? syncedRole : initialRole;
+    }
+
+    @Override
+    public void broadcastChanges() {
+        super.broadcastChanges();
+        if (owner == null || serverPlayer == null) return;
+        PktMachineStatePayload next = PktMachineStatePayload.from(pos, owner.runtimeSnapshot());
+        if (lastSentSnapshot != null && !PktMachineStatePayload.stateChanged(next, lastSentSnapshot)) return;
+        MMCR.LOG.info("[ParallelDebug][ServerMenuPacketDispatch] pos={} player={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
+                pos, serverPlayer.getName().getString(), next.parallelism(), next.maxParallelism(),
+                next.parallelControllerCount(), next.maxParallelControllerCount());
+        serverPlayer.connection.send(new ClientboundCustomPayloadPacket(next));
+        lastSentSnapshot = next;
     }
 
     public void applyClientSnapshot(PktMachineStatePayload snapshot) {

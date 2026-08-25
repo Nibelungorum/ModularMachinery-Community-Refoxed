@@ -172,11 +172,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                     player instanceof ServerPlayer serverPlayer ? serverPlayer : null);
         }
         if (controller != null && player instanceof ServerPlayer serverPlayer) controller.sendRecipeLockState(serverPlayer);
-        MachineControllerMenu menu = new MachineControllerMenu(containerId, playerInventory, controller);
-        if (controller != null && player instanceof ServerPlayer serverPlayer) {
-            controller.sendMachineControllerState(serverPlayer);
-        }
-        return menu;
+        return new MachineControllerMenu(containerId, playerInventory, controller);
     }
 
     static Component titleFor(Identifier machineId) {

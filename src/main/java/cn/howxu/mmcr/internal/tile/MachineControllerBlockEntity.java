@@ -663,12 +663,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
-    public void sendMachineControllerState(ServerPlayer player) {
-        if (player == null) return;
-        player.connection.send(new ClientboundCustomPayloadPacket(
-                PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot())));
-    }
-
     public int factorySchedulerThreadCount() {
         long total = 0;
         for (ProcessingComponent component : runtime.components()) {
@@ -2244,6 +2238,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
                 || (p.containerMenu instanceof MachineControllerMenu menu
                 && menu.controllerPos().equals(getBlockPos())))) {
+            LOG.info("[ParallelDebug][ServerPacketDispatch] pos={} player={} menu={} menuPos={} parallelism={} maxParallelism={} parallelSlots={} maxParallelSlots={}",
+                    getBlockPos(), player.getName().getString(), player.containerMenu == null ? "<null>" : player.containerMenu.getClass().getSimpleName(),
+                    player.containerMenu instanceof MachineControllerMenu menu ? menu.controllerPos() : "<none>", packet.parallelism(),
+                    packet.maxParallelism(), packet.parallelControllerCount(), packet.maxParallelControllerCount());
             ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(packet));
         }
     }
