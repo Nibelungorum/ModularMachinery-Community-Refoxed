@@ -61,18 +61,21 @@ public class ControllerTickGameTest {
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("controller_tick")));
         controller.serverTick();
         controller.serverTick();
-        int progressBeforePause = controller.getActive().getTick();
+        int progressBeforePause = controller.runtimeSnapshot().crafting().tick();
         helper.assertTrue(progressBeforePause > 0, "Recipe started before redstone pause");
 
         helper.setBlock(controllerPos.above(), Blocks.REDSTONE_BLOCK.defaultBlockState());
         for (int tick = 0; tick < 4; tick++) controller.serverTick();
         helper.assertTrue(controller.isRedstonePaused(), "Direct redstone signal pauses controller");
-        helper.assertTrue(controller.getActive() == null, "Paused recipe leaves the active slot");
+        helper.assertTrue(controller.runtimeSnapshot().crafting().status().isPaused(),
+                "Powered controller publishes paused crafting state");
 
         helper.setBlock(controllerPos.above(), Blocks.AIR.defaultBlockState());
         controller.serverTick();
-        helper.assertTrue(controller.getActive() != null, "Removing redstone resumes the paused recipe");
-        helper.assertTrue(controller.getActive().getTick() > progressBeforePause, "Recipe resumes from paused progress");
+        helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() != null,
+                "Removing redstone resumes the paused recipe");
+        helper.assertTrue(controller.runtimeSnapshot().crafting().tick() > progressBeforePause,
+                "Recipe resumes from paused progress");
         helper.succeed();
     }
 }

@@ -20,10 +20,8 @@ import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
-import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.LevelInsufficientFailure;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
@@ -139,7 +137,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable PktMachineStatePayload lastBroadcastState;
     private @Nullable Identifier lockedRecipeId;
     private @Nullable String lastFailureUnloc;
-    private @Nullable LevelInsufficientFailure recipeFailure;
     private boolean redstonePaused;
     private @Nullable FactoryRecipeScheduler factoryScheduler;
     private int recipeSearchRetryCounter;
@@ -255,12 +252,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishSnapshot();
         ExecutionStatus runtimeFailure = runtime.snapshot().crafting().failure();
         lastFailureUnloc = runtimeFailure == null ? null : failureUnloc(runtimeFailure);
-        recipeFailure = null;
     }
 
     public void syncFactoryFailure(@Nullable ExecutionStatus factoryFailure) {
         lastFailureUnloc = factoryFailure == null ? null : failureUnloc(factoryFailure);
-        recipeFailure = null;
     }
 
     public void syncRecipeRuntimeFailure(CraftingRuntime recipeRuntime) {
@@ -399,22 +394,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             level.setBlock(getBlockPos(), state.setValue(MachineControllerBlock.FORMED, formed), 3);
         }
     }
-
-    public MachineRecipe getActiveRecipe() { return runtime.craftingRuntime().recipe(); }
-
-    public int getTickCounter() { return runtime.craftingRuntime().tickCount(); }
-
-    public ActiveMachineRecipe getActive() { return runtime.craftingRuntime().activeRecipe(); }
-
-    public @Nullable String getLastFailureUnloc() {
-        ControllerRuntimeSnapshot state = runtimeSnapshot();
-        String factoryFailure = failureUnloc(state.factory().failure());
-        if (!factoryFailure.isEmpty()) return factoryFailure;
-        String craftingFailure = failureUnloc(state.crafting().failure());
-        return craftingFailure.isEmpty() ? lastFailureUnloc : craftingFailure;
-    }
-
-    public @Nullable LevelInsufficientFailure getRecipeFailure() { return recipeFailure; }
 
     public @Nullable PortRequirementSpec.Failure getLastFormationFailure() {
         return structureSnapshot().lastFormationFailure();
@@ -846,7 +825,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         setActiveState(activeLaneCount > 0);
         if (activeLaneCount > 0) {
             lastFailureUnloc = null;
-            recipeFailure = null;
         }
     }
 
@@ -2162,7 +2140,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         clearSharedTickPending();
         clearPendingConflictStart();
         lastFailureUnloc = null;
-        recipeFailure = null;
         redstonePaused = false;
         clearCandidateCache();
         if (wasFormed && updateBlockState) updatePhysicalFormedState(false);
@@ -2237,7 +2214,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             clearPendingConflictStart();
             recipeSearchRetryCounter++;
             lastFailureUnloc = "gui.mmcr.controller.failure.recipe_search_exception";
-            recipeFailure = null;
             return false;
         }
         if (result.success()) {
@@ -2247,8 +2223,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         recipeSearchRetryCounter++;
         runtime.craftingRuntime().recordSearchFailure(result.failure());
         lastFailureUnloc = result.failureUnloc();
-        recipeFailure = result.levelFailure();
-        if (recipeFailure != null) {
+        if (result.levelFailure() != null) {
             lastFailureUnloc = "gui.mmcr.controller.failure.level_insufficient";
         }
         return false;
@@ -2297,7 +2272,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         syncRuntimeStateIfChanged();
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
-        recipeFailure = null;
         setChanged();
         return true;
     }
@@ -2355,7 +2329,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             boolean finished = runtime.craftingRuntime().failure() == null;
             lastFailureUnloc = finished ? null : runtime.craftingRuntime().failureUnloc();
             if (finished) {
-                recipeFailure = null;
                 playFinishSound();
             }
             setActiveState(false);

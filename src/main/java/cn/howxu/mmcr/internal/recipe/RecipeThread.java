@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
@@ -305,12 +304,10 @@ public abstract class RecipeThread {
     protected void onStartFailed() { }
     protected String laneId() { return "base"; }
 
-    public @Nullable ActiveMachineRecipe getActiveRecipe() { return runtime.activeRecipe(); }
     public Status getStatus() {
         if (runtime.active()) return runtime.finishPending() ? Status.WAITING : Status.WORKING;
         return runtime.failure() == null ? Status.IDLE : Status.FAILED;
     }
-    public @Nullable String getLastFailureUnloc() { return runtime.failureUnloc(); }
     public boolean isIdle() { return !startPending && !runtime.active(); }
     public boolean isStartPending() { return startPending; }
     public @Nullable MachineRecipe getPendingStartRecipe() { return pendingStartRecipe; }

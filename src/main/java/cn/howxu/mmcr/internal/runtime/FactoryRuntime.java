@@ -184,7 +184,7 @@ public final class FactoryRuntime {
             snapshots.add(new ThreadSnapshot(index, lane.isBaseThread(), lane.isCoreThread(), lane.runtime().active(),
                     state.recipeId() == null ? "" : state.recipeId().toString(), lane.runtime().tickCount(),
                     lane.runtime().totalTick(), lane.runtime().active() ? lane.runtime().parallelism() : 1,
-                    lane.getLastFailureUnloc(), lockedRecipe != null,
+                    lane.runtime().failureUnloc(), lockedRecipe != null,
                     lockedRecipe == null ? "" : lockedRecipe.toString()));
         }
         while (snapshots.size() < laneLimit) {

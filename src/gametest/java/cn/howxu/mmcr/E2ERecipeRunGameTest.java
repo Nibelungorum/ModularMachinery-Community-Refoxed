@@ -63,8 +63,8 @@ public class E2ERecipeRunGameTest {
             ItemStack input1 = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(1);
             ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
             helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed input0=" + input + " input1=" + input1
-                    + " crafting=" + controller.runtimeSnapshot().crafting() + " failure=" + controller.getLastFailureUnloc()
-                    + " recipeFailure=" + controller.getRecipeFailure());
+                    + " crafting=" + controller.runtimeSnapshot().crafting()
+                    + " failure=" + controller.runtimeSnapshot().crafting().failure());
             helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
             helper.succeed();
         });
@@ -170,7 +170,7 @@ public class E2ERecipeRunGameTest {
 
     private static void assertDistillationBatchComplete(GameTestHelper helper,
                                                          MachineControllerBlockEntity controller, BlockPos inputPos) {
-        helper.assertTrue(controller.getActiveRecipe() == null, "Distillation recipe completed");
+        helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null, "Distillation recipe completed");
         ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
         helper.assertTrue(input.isEmpty(), "Distillation recipe consumed input");
     }

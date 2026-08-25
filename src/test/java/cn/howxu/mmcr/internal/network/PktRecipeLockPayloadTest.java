@@ -161,7 +161,7 @@ class PktRecipeLockPayloadTest {
         RecipeRegistry.register(recipe);
         controller.tickRuntimeWork(level, controllerPos);
 
-        assertThat(controller.getActiveRecipe()).isEqualTo(recipe);
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
 
         ServerPlayer player = player(level, controllerPos);
         player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
