@@ -190,11 +190,18 @@ public class AutoIOGameTest {
                 "Item-specific ejection leaves fluid contents untouched");
         helper.assertTrue(fluidTarget.fluidStorage().isEmpty(), "Item-specific ejection does not fill fluid handlers");
 
+        int itemTargetBeforeFluidEjection = itemTarget.getItem(0).getCount();
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
+        long fluidBeforeFluidEjection = input.fluidStorage().getAmountAsLong();
         helper.assertTrue(input.ejectContents(fluidType), "Fluid-specific ejection moves fluid contents");
         helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > 0L,
                 "Fluid ejection reaches the fluid handler");
-        helper.assertTrue(input.getItemStackHandler(null).getStackInSlot(0).isEmpty(),
-                "Fluid-specific ejection does not restore item contents");
+        helper.assertTrue(input.fluidStorage().getAmountAsLong() < fluidBeforeFluidEjection,
+                "Fluid-specific ejection drains fluid contents");
+        helper.assertTrue(input.getItemStackHandler(null).getStackInSlot(0).getCount() == 3,
+                "Fluid-specific ejection leaves item source contents untouched");
+        helper.assertTrue(itemTarget.getItem(0).getCount() == itemTargetBeforeFluidEjection,
+                "Fluid-specific ejection leaves item target contents untouched");
         helper.succeed();
     }
 

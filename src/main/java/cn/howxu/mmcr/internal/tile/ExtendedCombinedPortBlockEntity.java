@@ -122,8 +122,9 @@ public class ExtendedCombinedPortBlockEntity extends IOPortBlockEntity {
         for (int slot = 0; slot < fluidStorage.size(); slot++) {
             String suffix = "_" + slot;
             FluidResource resource = fluidStorage.resource(slot);
-            output.putBoolean("tankHasFluid" + suffix, !resource.isEmpty());
-            if (!resource.isEmpty()) {
+            boolean hasFluid = resource != null && !resource.isEmpty();
+            output.putBoolean("tankHasFluid" + suffix, hasFluid);
+            if (hasFluid) {
                 output.store("tankFluid" + suffix, FluidResource.OPTIONAL_CODEC, resource);
                 output.putLong("tankAmount" + suffix, fluidStorage.amount(slot));
             }

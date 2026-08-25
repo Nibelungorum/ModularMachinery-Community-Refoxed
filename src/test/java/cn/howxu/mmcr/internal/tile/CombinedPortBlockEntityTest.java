@@ -14,10 +14,14 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -100,6 +105,32 @@ class CombinedPortBlockEntityTest {
                 .allSatisfy(family -> assertThat(family.detectionTier()).isGreaterThan(0));
     }
 
+    @Test
+    void extendedCombinedFluidStorageSavesEmptySlotsAndRoundTripsPopulatedSlots() {
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
+        ExtendedCombinedPortBlockEntity empty = extendedCombined("extended_combined_input_ultimate");
+        TagValueOutput emptyOutput = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+
+        empty.saveAdditional(emptyOutput);
+
+        ExtendedCombinedPortBlockEntity source = extendedCombined("extended_combined_input_ultimate");
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(source.fluidStorage().insert(1, water, 1_234L, transaction)).isEqualTo(1_234L);
+            transaction.commit();
+        }
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+        source.saveAdditional(output);
+
+        ExtendedCombinedPortBlockEntity restored = extendedCombined("extended_combined_input_ultimate");
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, lookup, output.buildResult()));
+
+        assertThat(restored.fluidStorage().resource(0)).isNull();
+        assertThat(restored.fluidStorage().resource(1)).isEqualTo(water);
+        assertThat(restored.fluidStorage().amount(1)).isEqualTo(1_234L);
+        assertThat(restored.fluidStorage().resource(2)).isNull();
+    }
+
     private static void assertExtendedCombined(String id, int itemTypes, int fluidTypes) {
         IOPortBlockEntity port = port(id);
         ResourceStorage<ItemResource> items = port.itemStorage();
@@ -132,6 +163,10 @@ class CombinedPortBlockEntityTest {
 
     private static CombinedPortBlockEntity combined(String id) {
         return (CombinedPortBlockEntity) port(id);
+    }
+
+    private static ExtendedCombinedPortBlockEntity extendedCombined(String id) {
+        return (ExtendedCombinedPortBlockEntity) port(id);
     }
 
     private static IOPortBlockEntity port(String id) {
