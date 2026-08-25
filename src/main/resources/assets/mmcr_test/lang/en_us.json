@@ -35,8 +35,8 @@
 
     "level.mmcr.thermal_smelting_coil": "Coil",
 
-    "mmcr.smart_interface.type.conversion": "Conversion",
-    "mmcr.smart_interface.type.conversion.description": "[0.0,1.0] something magic",
+    "mmcr.smart_interface.type.conversation": "Conversion",
+    "mmcr.smart_interface.type.conversation.description": "[0.0,1.0] something magic",
     "mmcr.smart_interface.type.mode": "Mode",
     "mmcr.smart_interface.type.mode.description": "[1,2,3] control output"
 }

@@ -34,8 +34,8 @@
 
     "level.mmcr.thermal_smelting_coil": "线圈",
 
-    "mmcr.smart_interface.type.conversion": "转化率",
-    "mmcr.smart_interface.type.conversion.description": "[0.0,1.0] something magic",
+    "mmcr.smart_interface.type.conversation": "转化率",
+    "mmcr.smart_interface.type.conversation.description": "[0.0,1.0] something magic",
     "mmcr.smart_interface.type.mode": "模式",
     "mmcr.smart_interface.type.mode.description": "[1,2,3] 控制输出"
 }
