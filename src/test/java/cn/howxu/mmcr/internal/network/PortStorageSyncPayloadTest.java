@@ -46,11 +46,10 @@ class PortStorageSyncPayloadTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FluidResource water = FluidResource.of(Fluids.WATER);
         PktPortStorageSyncPayload payload = new PktPortStorageSyncPayload(
-                new BlockPos(1, 2, 3), PortKinds.EXTENDED_COMBINED_INPUT.id(),
+                new BlockPos(1, 2, 3), PortKinds.COMBINED_INPUT.id(),
                 List.of(new ItemStorageEntry(0, iron, Long.MAX_VALUE - 1L, Long.MAX_VALUE),
                         new ItemStorageEntry(1, ItemResource.EMPTY, 0L, Long.MAX_VALUE)),
-                List.of(new FluidStorageEntry(0, water, 9_000_000_000L, Long.MAX_VALUE),
-                        new FluidStorageEntry(1, FluidResource.EMPTY, 0L, Long.MAX_VALUE)));
+                List.of(new FluidStorageEntry(0, water, 9_000_000_000L, Long.MAX_VALUE)));
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktPortStorageSyncPayload.STREAM_CODEC.encode(buffer, payload);
@@ -89,6 +88,34 @@ class PortStorageSyncPayloadTest {
                 PortKinds.EXTENDED_ITEM_INPUT.id(),
                 List.of(new ItemStorageEntry(1, ItemResource.EMPTY, 0L, 1L),
                         new ItemStorageEntry(0, ItemResource.EMPTY, 0L, 1L)), List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void payload_rejects_item_slots_outside_the_kind_storage() {
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
+                PortKinds.EXTENDED_ITEM_INPUT.id(),
+                List.of(new ItemStorageEntry(2, ItemResource.EMPTY, 0L, 1L)), List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
+                PortKinds.EXTENDED_FLUID_INPUT.id(), List.of(),
+                List.of(new FluidStorageEntry(2, FluidResource.EMPTY, 0L, 1L))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void payload_rejects_resource_lists_for_kinds_without_that_capability() {
+        ItemStorageEntry item = new ItemStorageEntry(0, ItemResource.EMPTY, 0L, 1L);
+        FluidStorageEntry fluid = new FluidStorageEntry(0, FluidResource.EMPTY, 0L, 1L);
+
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
+                PortKinds.EXTENDED_ITEM_INPUT.id(), List.of(), List.of(fluid)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
+                PortKinds.EXTENDED_FLUID_INPUT.id(), List.of(item), List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
+                PortKinds.ENERGY_INPUT.id(), List.of(item), List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

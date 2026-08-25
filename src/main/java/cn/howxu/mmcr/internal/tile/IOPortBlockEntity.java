@@ -89,9 +89,15 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     @Override
     public void setChanged() {
         super.setChanged();
-        if (level != null && !level.isClientSide()) {
-            PktPortStorageSyncPayload.sendToViewers(this);
-        }
+    }
+
+    protected final void notifyStorageChanged() {
+        setChanged();
+        sendStorageSnapshot();
+    }
+
+    protected void sendStorageSnapshot() {
+        if (level != null && !level.isClientSide()) PktPortStorageSyncPayload.sendToViewers(this);
     }
 
     @Override

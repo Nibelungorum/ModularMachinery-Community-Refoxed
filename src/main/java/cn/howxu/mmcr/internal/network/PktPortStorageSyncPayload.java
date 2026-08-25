@@ -62,9 +62,10 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
 
     public PktPortStorageSyncPayload {
         pos = pos == null ? BlockPos.ZERO : pos.immutable();
-        kind = requireKind(kind).id();
-        itemEntries = validateEntries(itemEntries, "item");
-        fluidEntries = validateEntries(fluidEntries, "fluid");
+        IOPortKindView kindView = requireKind(kind);
+        kind = kindView.id();
+        itemEntries = validateEntries(itemEntries, "item", kindView.itemSlotCount(), kindView.allowsItems());
+        fluidEntries = validateEntries(fluidEntries, "fluid", kindView.fluidTankCount(), kindView.allowsFluids());
     }
 
     public record ItemStorageEntry(int slot, ItemResource resource, long amount, long capacity) {
@@ -232,17 +233,21 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
         return entries;
     }
 
-    private static <T> List<T> validateEntries(List<T> entries, String name) {
+    private static <T> List<T> validateEntries(List<T> entries, String name, int slotLimit, boolean allowed) {
         if (entries == null || entries.size() > MAX_ENTRIES) {
             throw new IllegalArgumentException("Invalid " + name + " entry count");
         }
         List<T> copy = List.copyOf(entries);
+        if (!allowed && !copy.isEmpty()) {
+            throw new IllegalArgumentException("Port kind does not expose " + name + " storage");
+        }
         int previousSlot = -1;
         for (T value : copy) {
             Object entry = value;
             int slot = entry instanceof ItemStorageEntry item ? item.slot()
                     : ((FluidStorageEntry) entry).slot();
             if (slot <= previousSlot) throw new IllegalArgumentException("Invalid " + name + " entry order");
+            if (slot >= slotLimit) throw new IllegalArgumentException("Invalid " + name + " entry slot");
             previousSlot = slot;
         }
         return copy;
@@ -269,15 +274,25 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
         }
 
         public int itemSlotCount() {
-            return kind.extendedItemBusSize().map(size -> size.slots())
-                    .orElseGet(() -> kind.combinedPortSize().map(size -> size.itemTypes())
-                            .orElseGet(() -> kind.extendedCombinedPortSize().map(size -> size.itemTypes()).orElse(0)));
+            return kind.itemBusSize().map(size -> size.slots())
+                    .orElseGet(() -> kind.extendedItemBusSize().map(size -> size.slots())
+                            .orElseGet(() -> kind.combinedPortSize().map(size -> size.itemTypes())
+                                    .orElseGet(() -> kind.extendedCombinedPortSize().map(size -> size.itemTypes()).orElse(0))));
         }
 
         public int fluidTankCount() {
-            return kind.extendedFluidHatchSize().map(size -> size.slots())
-                    .orElseGet(() -> kind.combinedPortSize().map(size -> size.fluidTypes())
-                            .orElseGet(() -> kind.extendedCombinedPortSize().map(size -> size.fluidTypes()).orElse(0)));
+            return kind.fluidHatchSize().map(size -> 1)
+                    .orElseGet(() -> kind.extendedFluidHatchSize().map(size -> size.slots())
+                            .orElseGet(() -> kind.combinedPortSize().map(size -> size.fluidTypes())
+                                    .orElseGet(() -> kind.extendedCombinedPortSize().map(size -> size.fluidTypes()).orElse(0))));
+        }
+
+        public boolean allowsItems() {
+            return itemSlotCount() > 0;
+        }
+
+        public boolean allowsFluids() {
+            return fluidTankCount() > 0;
         }
 
         public boolean isExtendedItem() {

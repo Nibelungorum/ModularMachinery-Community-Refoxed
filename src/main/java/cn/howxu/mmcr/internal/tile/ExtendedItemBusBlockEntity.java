@@ -94,7 +94,7 @@ public class ExtendedItemBusBlockEntity extends IOPortBlockEntity {
 
     private void markItemChanged() {
         markAutoIOCacheDirty();
-        setChanged();
+        notifyStorageChanged();
     }
 
     private static IOPortKind fallback(BlockState state) {

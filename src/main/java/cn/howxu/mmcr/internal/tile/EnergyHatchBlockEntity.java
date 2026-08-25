@@ -65,7 +65,7 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     private void markEnergyChanged() {
         markAutoIOCacheDirty();
-        setChanged();
+        notifyStorageChanged();
     }
 
     @Override

@@ -40,7 +40,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     private void onContentsChanged(int slot) {
         inventoryEmpty = null;
         markAutoIOCacheDirty();
-        setChanged();
+        notifyStorageChanged();
         notifyControllerOfInputChange();
     }
 
