@@ -30,6 +30,16 @@ public interface IOPortKind {
 
     default Optional<EnergyHatchSize> energyHatchSize() { return Optional.empty(); }
 
+    default Optional<ExtendedItemBusSize> extendedItemBusSize() { return Optional.empty(); }
+
+    default Optional<ExtendedFluidHatchSize> extendedFluidHatchSize() { return Optional.empty(); }
+
+    default Optional<ExtendedEnergyHatchSize> extendedEnergyHatchSize() { return Optional.empty(); }
+
+    default Optional<CombinedPortSize> combinedPortSize() { return Optional.empty(); }
+
+    default Optional<ExtendedCombinedPortSize> extendedCombinedPortSize() { return Optional.empty(); }
+
     default List<PortFamilyDescriptor> families() { return List.of(); }
 
     /** 该 kind 的服务端 tick 钩子,用于 MEK 气体管道分发等。默认无。 */

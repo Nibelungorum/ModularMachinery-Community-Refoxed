@@ -1,17 +1,27 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
+import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories.CapabilityFactory;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedEnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedFluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
@@ -108,6 +118,130 @@ public final class PortKinds {
         }
     }
 
+    public record ExtendedItemBusKind(
+            String id,
+            IOType ioType,
+            ExtendedItemBusSize size,
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
+            implements IOPortKind {
+
+        @Override
+        public Optional<ExtendedItemBusSize> extendedItemBusSize() {
+            return Optional.of(size);
+        }
+
+        @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType,
+                    ItemBusSize.LUDICROUS.ordinal() + 1, List.of(itemAlias(ioType))));
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.ITEM_BUS);
+        }
+    }
+
+    public record ExtendedFluidHatchKind(
+            String id,
+            IOType ioType,
+            ExtendedFluidHatchSize size,
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
+            implements IOPortKind {
+
+        @Override
+        public Optional<ExtendedFluidHatchSize> extendedFluidHatchSize() {
+            return Optional.of(size);
+        }
+
+        @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType,
+                    FluidHatchSize.VACUUM.ordinal() + 1, List.of(fluidAlias(ioType))));
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.FLUID_HATCH);
+        }
+    }
+
+    public record ExtendedEnergyHatchKind(
+            String id,
+            IOType ioType,
+            ExtendedEnergyHatchSize size,
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
+            implements IOPortKind {
+
+        @Override
+        public Optional<ExtendedEnergyHatchSize> extendedEnergyHatchSize() {
+            return Optional.of(size);
+        }
+
+        @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(PortFamilyIds.ENERGY, ioType,
+                    EnergyHatchSize.ULTIMATE.ordinal() + 1, List.of(energyAlias(ioType))));
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.ENERGY_HATCH);
+        }
+    }
+
+    public record CombinedPortKind(
+            String id,
+            IOType ioType,
+            CombinedPortSize size,
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
+            implements IOPortKind {
+
+        @Override
+        public Optional<CombinedPortSize> combinedPortSize() {
+            return Optional.of(size);
+        }
+
+        @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(
+                    new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, itemTier(size), List.of(itemAlias(ioType))),
+                    new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, FluidHatchSize.VACUUM.ordinal(), List.of(fluidAlias(ioType))));
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH);
+        }
+    }
+
+    public record ExtendedCombinedPortKind(
+            String id,
+            IOType ioType,
+            ExtendedCombinedPortSize size,
+            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
+            implements IOPortKind {
+
+        @Override
+        public Optional<ExtendedCombinedPortSize> extendedCombinedPortSize() {
+            return Optional.of(size);
+        }
+
+        @Override
+        public List<PortFamilyDescriptor> families() {
+            return List.of(
+                    new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType,
+                            ItemBusSize.LUDICROUS.ordinal() + 1, List.of(itemAlias(ioType))),
+                    new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType,
+                            FluidHatchSize.VACUUM.ordinal() + 1, List.of(fluidAlias(ioType))));
+        }
+
+        @Override
+        public List<CapabilityFactory> capabilityFactories() {
+            return List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH);
+        }
+    }
+
     public record CombinedKind(
             String id,
             IOType ioType,
@@ -156,6 +290,16 @@ public final class PortKinds {
     public static final IOPortKind FLUID_OUTPUT = byId("fluid_output_hatch");
     public static final IOPortKind ENERGY_INPUT = byId("energy_input_hatch");
     public static final IOPortKind ENERGY_OUTPUT = byId("energy_output_hatch");
+    public static final IOPortKind EXTENDED_ITEM_INPUT = byId("extended_item_input_bus");
+    public static final IOPortKind EXTENDED_ITEM_OUTPUT = byId("extended_item_output_bus");
+    public static final IOPortKind EXTENDED_FLUID_INPUT = byId("extended_fluid_input_hatch");
+    public static final IOPortKind EXTENDED_FLUID_OUTPUT = byId("extended_fluid_output_hatch");
+    public static final IOPortKind EXTENDED_ENERGY_INPUT = byId("extended_energy_input_hatch");
+    public static final IOPortKind EXTENDED_ENERGY_OUTPUT = byId("extended_energy_output_hatch");
+    public static final IOPortKind COMBINED_INPUT = byId("combined_input_port");
+    public static final IOPortKind COMBINED_OUTPUT = byId("combined_output_port");
+    public static final IOPortKind EXTENDED_COMBINED_INPUT = byId("extended_combined_input_port");
+    public static final IOPortKind EXTENDED_COMBINED_OUTPUT = byId("extended_combined_output_port");
 
     public static void register(IOPortKind kind) { REGISTRY.add(kind); }
 
@@ -187,7 +331,72 @@ public final class PortKinds {
         for (EnergyHatchSize size : EnergyHatchSize.values()) {
             defaults.add(new EnergyHatchKind(energyId("energy_output_hatch", size), IOType.OUTPUT, size, EnergyOutputHatchBlockEntity::new));
         }
+        for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
+            defaults.add(new ExtendedItemBusKind(extendedId("extended_item_input_bus", size.id(), ExtendedItemBusSize.BASIC.id()),
+                    IOType.INPUT, size, ExtendedItemBusBlockEntity::new));
+        }
+        for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
+            defaults.add(new ExtendedItemBusKind(extendedId("extended_item_output_bus", size.id(), ExtendedItemBusSize.BASIC.id()),
+                    IOType.OUTPUT, size, ExtendedItemBusBlockEntity::new));
+        }
+        for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
+            defaults.add(new ExtendedFluidHatchKind(extendedId("extended_fluid_input_hatch", size.id(), ExtendedFluidHatchSize.BASIC.id()),
+                    IOType.INPUT, size, ExtendedFluidHatchBlockEntity::new));
+        }
+        for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
+            defaults.add(new ExtendedFluidHatchKind(extendedId("extended_fluid_output_hatch", size.id(), ExtendedFluidHatchSize.BASIC.id()),
+                    IOType.OUTPUT, size, ExtendedFluidHatchBlockEntity::new));
+        }
+        for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
+            defaults.add(new ExtendedEnergyHatchKind(extendedId("extended_energy_input_hatch", size.id(), ExtendedEnergyHatchSize.REINFORCED.id()),
+                    IOType.INPUT, size, ExtendedEnergyHatchBlockEntity::new));
+        }
+        for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
+            defaults.add(new ExtendedEnergyHatchKind(extendedId("extended_energy_output_hatch", size.id(), ExtendedEnergyHatchSize.REINFORCED.id()),
+                    IOType.OUTPUT, size, ExtendedEnergyHatchBlockEntity::new));
+        }
+        for (CombinedPortSize size : CombinedPortSize.values()) {
+            defaults.add(new CombinedPortKind(extendedId("combined_input_port", size.id(), CombinedPortSize.BASIC.id()),
+                    IOType.INPUT, size, CombinedPortBlockEntity::new));
+        }
+        for (CombinedPortSize size : CombinedPortSize.values()) {
+            defaults.add(new CombinedPortKind(extendedId("combined_output_port", size.id(), CombinedPortSize.BASIC.id()),
+                    IOType.OUTPUT, size, CombinedPortBlockEntity::new));
+        }
+        for (ExtendedCombinedPortSize size : ExtendedCombinedPortSize.values()) {
+            defaults.add(new ExtendedCombinedPortKind(extendedId("extended_combined_input_port", size.id(), ExtendedCombinedPortSize.ADVANCED.id()),
+                    IOType.INPUT, size, ExtendedCombinedPortBlockEntity::new));
+        }
+        for (ExtendedCombinedPortSize size : ExtendedCombinedPortSize.values()) {
+            defaults.add(new ExtendedCombinedPortKind(extendedId("extended_combined_output_port", size.id(), ExtendedCombinedPortSize.ADVANCED.id()),
+                    IOType.OUTPUT, size, ExtendedCombinedPortBlockEntity::new));
+        }
         return List.copyOf(defaults);
+    }
+
+    private static int itemTier(CombinedPortSize size) {
+        return switch (size) {
+            case BASIC -> ItemBusSize.NORMAL.ordinal();
+            case ADVANCED -> ItemBusSize.REINFORCED.ordinal();
+            case REINFORCED -> ItemBusSize.BIG.ordinal();
+            case ULTIMATE -> ItemBusSize.HUGE.ordinal();
+        };
+    }
+
+    private static String itemAlias(IOType ioType) {
+        return ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus";
+    }
+
+    private static String fluidAlias(IOType ioType) {
+        return ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch";
+    }
+
+    private static String energyAlias(IOType ioType) {
+        return ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch";
+    }
+
+    private static String extendedId(String base, String size, String defaultSize) {
+        return size.equals(defaultSize) ? base : base + "_" + size;
     }
 
     private static String itemId(String base, ItemBusSize size) {

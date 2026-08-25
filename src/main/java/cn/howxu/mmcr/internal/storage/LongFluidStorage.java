@@ -55,6 +55,10 @@ public final class LongFluidStorage extends LongResourceStorage<FluidResource>
         super.setContents(0, resource, amount);
     }
 
+    public void setContents(int slot, FluidResource resource, long amount) {
+        super.setContents(slot, resource, amount);
+    }
+
     public void clearContent() {
         setContents(FluidResource.EMPTY, 0L);
     }

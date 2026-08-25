@@ -62,7 +62,12 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (kind.ioType() != fallback.ioType()
                 || kind.itemBusSize().isPresent() != fallback.itemBusSize().isPresent()
                 || kind.fluidHatchSize().isPresent() != fallback.fluidHatchSize().isPresent()
-                || kind.energyHatchSize().isPresent() != fallback.energyHatchSize().isPresent()) {
+                || kind.energyHatchSize().isPresent() != fallback.energyHatchSize().isPresent()
+                || kind.extendedItemBusSize().isPresent() != fallback.extendedItemBusSize().isPresent()
+                || kind.extendedFluidHatchSize().isPresent() != fallback.extendedFluidHatchSize().isPresent()
+                || kind.extendedEnergyHatchSize().isPresent() != fallback.extendedEnergyHatchSize().isPresent()
+                || kind.combinedPortSize().isPresent() != fallback.combinedPortSize().isPresent()
+                || kind.extendedCombinedPortSize().isPresent() != fallback.extendedCombinedPortSize().isPresent()) {
             return fallback;
         }
         return kind;

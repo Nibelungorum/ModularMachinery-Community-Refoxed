@@ -54,12 +54,15 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     }
 
     public ResourceStorage<ItemResource> getResourceStorage() {
+        return asResourceStorage(handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    static ResourceStorage<ItemResource> asResourceStorage(ItemStackHandler handler) {
         if (!(handler instanceof ResourceStorage<?> storage)) {
             throw new IllegalStateException("Item bus handler does not expose resource storage");
         }
-        @SuppressWarnings("unchecked")
-        ResourceStorage<ItemResource> itemStorage = (ResourceStorage<ItemResource>) storage;
-        return itemStorage;
+        return (ResourceStorage<ItemResource>) storage;
     }
 
     @Override
@@ -149,12 +152,12 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
      *
      * @author howxu <dev@howxu.cn>
      */
-    private static final class StorageItemHandler extends ItemStackHandler implements ResourceStorage<ItemResource> {
+    static final class StorageItemHandler extends ItemStackHandler implements ResourceStorage<ItemResource> {
         private final BulkItemStorage[] storages;
         private final IntConsumer onChange;
         private boolean suppressChanges;
 
-        private StorageItemHandler(int slots, IntConsumer onChange) {
+        StorageItemHandler(int slots, IntConsumer onChange) {
             super(slots);
             this.onChange = onChange;
             this.storages = new BulkItemStorage[slots];

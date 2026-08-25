@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
@@ -21,9 +22,14 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     protected EnergyHatchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
         super(type, pos, state);
-        EnergyHatchSize size = kind.energyHatchSize()
-                .orElseThrow(() -> new IllegalStateException("Energy hatch missing energy size: " + kind.id()));
-        this.storage = new LongEnergyStorage(size.capacity(), size.transfer(), this::markEnergyChanged);
+        if (kind.energyHatchSize().isPresent()) {
+            EnergyHatchSize size = kind.energyHatchSize().get();
+            this.storage = new LongEnergyStorage(size.capacity(), size.transfer(), this::markEnergyChanged);
+        } else {
+            ExtendedEnergyHatchSize size = kind.extendedEnergyHatchSize()
+                    .orElseThrow(() -> new IllegalStateException("Energy hatch missing energy size: " + kind.id()));
+            this.storage = new LongEnergyStorage(size.capacity(), size.transfer(), this::markEnergyChanged);
+        }
     }
 
     public EnergyHandler getEnergyHandler(Direction side) {
