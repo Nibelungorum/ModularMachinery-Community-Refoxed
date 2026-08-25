@@ -28,7 +28,7 @@ public final class FluidHatchCapability implements MachineCapability {
     public FluidHatchCapability(FluidHatchBlockEntity port) {
         this.port = port;
         this.ioType = port.ioType();
-        this.storage = port.getMutableFluidStorage();
+        this.storage = port.fluidStorage();
         this.view = CapabilityFactories.view(type(), ioType);
     }
 

@@ -262,7 +262,7 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(requirement instanceof ItemRequirement || requirement instanceof FluidRequirement)
+            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
@@ -366,7 +366,7 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(requirement instanceof ItemRequirement || requirement instanceof FluidRequirement)
+            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (plan.hasOperations(index)) consumed.add(index);
             else retained.add(index);

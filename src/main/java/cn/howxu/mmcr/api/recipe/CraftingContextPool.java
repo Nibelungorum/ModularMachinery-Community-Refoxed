@@ -16,8 +16,7 @@ public final class CraftingContextPool {
 
     private static final CraftingContextPool GLOBAL = new CraftingContextPool();
 
-    private final Map<Identifier, ArrayDeque<PlanningContext>> planningContexts = new HashMap<>();
-    private long reloadCounter;
+    private final Map<Identifier, ArrayDeque<CraftingContext>> planningContexts = new HashMap<>();
 
     public static CraftingContextPool global() {
         return GLOBAL;
@@ -29,13 +28,11 @@ public final class CraftingContextPool {
 
     public CraftingContext borrow(Identifier recipeId, CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
         if (recipeId == null || snapshot == null) throw new IllegalArgumentException("recipeId and snapshot are required");
-        ArrayDeque<PlanningContext> bucket = planningContexts.get(recipeId);
+        ArrayDeque<CraftingContext> bucket = planningContexts.get(recipeId);
         while (bucket != null && !bucket.isEmpty()) {
-            PlanningContext pooled = bucket.removeFirst();
-            if (pooled.reloadCounter == reloadCounter) {
-                pooled.context.resetFor(snapshot, modifiers);
-                return pooled.context;
-            }
+            CraftingContext context = bucket.removeFirst();
+            context.resetFor(snapshot, modifiers);
+            return context;
         }
         return new CraftingContext(snapshot, modifiers);
     }
@@ -43,13 +40,10 @@ public final class CraftingContextPool {
     public void returnContext(Identifier recipeId, CraftingContext context) {
         if (recipeId == null || context == null) return;
         planningContexts.computeIfAbsent(recipeId, ignored -> new ArrayDeque<>())
-                .addFirst(new PlanningContext(context, reloadCounter));
+                .addFirst(context);
     }
 
     public void onReload() {
         planningContexts.clear();
-        reloadCounter++;
     }
-
-    private record PlanningContext(CraftingContext context, long reloadCounter) { }
 }

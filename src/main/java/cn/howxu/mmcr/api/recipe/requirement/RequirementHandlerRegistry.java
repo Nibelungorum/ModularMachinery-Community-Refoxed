@@ -72,12 +72,12 @@ public final class RequirementHandlerRegistry {
         return new RequirementPlan(context.requirementIndex(), 0, List.of(), blocked(requirement, reason));
     }
 
-    private static RequirementPlan deferredPlan(MachineRequirement requirement, PlanningContext context,
+    private static RequirementPlan deferredPlan(PlanningContext context,
                                                 int maxParallelism, RequirementPlan.OperationFactory factory) {
         return new RequirementPlan(context.requirementIndex(), maxParallelism, List.of(), null, factory);
     }
 
-    private static RequirementPlan deferredPlan(MachineRequirement requirement, PlanningContext context,
+    private static RequirementPlan deferredPlan(PlanningContext context,
                                                 int maxParallelism, RequirementPlan.OperationFactory factory,
                                                 RequirementPlan.ReservationFactory reservationFactory) {
         return new RequirementPlan(context.requirementIndex(), maxParallelism, List.of(), null,
@@ -109,7 +109,7 @@ public final class RequirementHandlerRegistry {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         int maximum = energyMaximum(requirement.fePerTick(), insert, capabilities, context.requestedParallelism());
         if (maximum <= 0) return blockedPlan(requirement, context, "insufficient_energy");
-        return deferredPlan(requirement, context, maximum,
+        return deferredPlan(context, maximum,
                 (parallelism, reservations) -> {
                     return planEnergyOperations(requirement, capabilities, parallelism, reservations, insert, true);
                 },
@@ -141,7 +141,7 @@ public final class RequirementHandlerRegistry {
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && requirement.stack(null).isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
-        return deferredPlan(requirement, context, maximum,
+        return deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planItemOperations(
                         requirement, capabilities, finalParallelism, consumed, reservations,
                         context.allowPartialOutputs(), true),
@@ -166,7 +166,7 @@ public final class RequirementHandlerRegistry {
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && requirement.stack().isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
-        return deferredPlan(requirement, context, maximum,
+        return deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planFluidOperations(
                         requirement, capabilities, finalParallelism, reservations,
                         context.allowPartialOutputs(), true),
@@ -188,7 +188,7 @@ public final class RequirementHandlerRegistry {
                 continue;
             }
             if (storage.value(requirement.interfaceType()).isPresent()) {
-                return deferredPlan(requirement, context, context.requestedParallelism(),
+                return deferredPlan(context, context.requestedParallelism(),
                         (parallelism, reservations) -> new RequirementPlan.OperationPlan(List.of(
                                 capability.prepare(new CapabilityRequests.SmartValueRequest(
                                         capability.view().type(), capability.view().ioType(), parallelism,

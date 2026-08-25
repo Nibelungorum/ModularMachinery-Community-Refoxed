@@ -30,7 +30,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         return storage;
     }
 
-    public LongFluidStorage getMutableFluidStorage() {
+    public LongFluidStorage fluidStorage() {
         return storage;
     }
 

@@ -47,9 +47,9 @@ public final class RecipeSearchTask {
     public RecipeSearchResult compute() {
         @Nullable String bestFailureUnloc = null;
         @Nullable ExecutionStatus bestFailure = null;
+        @Nullable PlanningResult bestPlanningResult = null;
         float bestValidity = 0.0F;
         List<MachineRecipe> ordered = orderedCandidates(searchCandidates());
-        CraftingContext context = context();
 
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
             MachineRecipe recipe = ordered.get(recipeIndex);
@@ -69,26 +69,37 @@ public final class RecipeSearchTask {
                 return RecipeSearchResult.levelFailure(machineId, structureVersion,
                         snapshot.capabilityVersion(), snapshot.modifierVersion(), levelFailure);
             }
-            PlanningResult result = context.planStartResult(recipe, maxParallelism);
+            PlanningResult result = planStart(recipe);
             if (result.successful()) {
                 boolean conflictProne = lockedRecipeId == null
                         && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
                 return RecipeSearchResult.success(recipe, machineId, structureVersion,
-                        snapshot.capabilityVersion(), snapshot.modifierVersion(), conflictProne);
+                        snapshot.capabilityVersion(), snapshot.modifierVersion(), result, conflictProne);
             }
             float validity = validity(result.failure());
             if (validity > bestValidity) {
                 bestValidity = validity;
                 bestFailure = result.failure();
                 bestFailureUnloc = failureUnloc(result.failure());
+                bestPlanningResult = result;
             }
         }
         return RecipeSearchResult.failure(machineId, structureVersion,
-                snapshot.capabilityVersion(), snapshot.modifierVersion(), bestFailureUnloc, bestFailure, bestValidity);
+                snapshot.capabilityVersion(), snapshot.modifierVersion(), bestPlanningResult,
+                bestFailureUnloc, bestFailure, bestValidity);
     }
 
-    private CraftingContext context() {
-        return new CraftingContext(new CapabilitySnapshot(capabilities), modifiers());
+    private PlanningResult planStart(MachineRecipe recipe) {
+        CraftingContext context = borrowContext(recipe);
+        try {
+            return context.planStartResult(recipe, maxParallelism);
+        } finally {
+            CraftingContextPool.global().returnContext(recipe.id(), context);
+        }
+    }
+
+    private CraftingContext borrowContext(MachineRecipe recipe) {
+        return CraftingContextPool.global().borrow(recipe.id(), new CapabilitySnapshot(capabilities), modifiers());
     }
 
     private List<RecipeModifier> modifiers() {
@@ -129,9 +140,15 @@ public final class RecipeSearchTask {
                     || earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()
                     || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
             if (!snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
-            CraftingContext context = context();
-            PlanningResult inputs = context.planInputs(earlier, maxParallelism);
-            PlanningResult outputs = context.planOutputs(earlier, maxParallelism);
+            CraftingContext context = borrowContext(earlier);
+            PlanningResult inputs;
+            PlanningResult outputs;
+            try {
+                inputs = context.planInputs(earlier, maxParallelism);
+                outputs = context.planOutputs(earlier, maxParallelism);
+            } finally {
+                CraftingContextPool.global().returnContext(earlier.id(), context);
+            }
             if (!inputs.successful() && outputs.successful()) return true;
         }
         return false;

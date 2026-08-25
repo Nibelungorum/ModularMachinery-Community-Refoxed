@@ -9,10 +9,9 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.List;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ActiveMachineRecipe {
@@ -48,15 +47,6 @@ public final class ActiveMachineRecipe {
         }
 
         public static InputConsumptionPlan deserialize(CompoundTag tag) {
-            if (tag.contains("consumedInputRequirementIndices")) {
-                int maxIndex = Arrays.stream(tag.getIntArray("consumedInputRequirementIndices")
-                        .orElseGet(() -> new int[0])).max().orElse(-1);
-                int[] batches = new int[maxIndex + 1];
-                for (int index : tag.getIntArray("consumedInputRequirementIndices").orElseGet(() -> new int[0])) {
-                    batches[index] = 1;
-                }
-                return new InputConsumptionPlan(Arrays.stream(batches).boxed().toList());
-            }
             return new InputConsumptionPlan(Arrays.stream(tag.getIntArray("consumedInputBatches")
                     .orElseGet(() -> new int[0])).boxed().toList());
         }
@@ -75,21 +65,6 @@ public final class ActiveMachineRecipe {
         if (recipe == null) {
             LOG.warn("ActiveMachineRecipe#{} created with null recipe", instanceId);
         }
-    }
-
-    public ActiveMachineRecipe(CompoundTag serialized) {
-        Identifier recipeId = Identifier.parse(serialized.getStringOr("recipeName", ""));
-        this.recipe = RecipeRegistry.getRecipe(recipeId);
-        this.tick = serialized.getIntOr("tick", 0);
-        this.totalTick = serialized.getIntOr("totalTick", 0);
-        this.data = serialized.contains("data") ? serialized.getCompoundOrEmpty("data") : new CompoundTag();
-        this.nextFinishRetryTick = serialized.getIntOr("nextFinishRetryTick", 0);
-        this.finishPending = serialized.getBooleanOr("finishPending", false);
-        if (serialized.contains("inputConsumptionPlan")) {
-            this.inputConsumptionPlan = InputConsumptionPlan.deserialize(serialized.getCompoundOrEmpty("inputConsumptionPlan"));
-        }
-        setMaxParallelism(serialized.getIntOr("maxParallelism", 1));
-        setParallelism(serialized.getIntOr("parallelism", 1));
     }
 
     public MachineRecipe getRecipe() {
@@ -145,14 +120,12 @@ public final class ActiveMachineRecipe {
     }
 
     public void reset() {
-        int before = this.tick;
         this.tick = 0;
         this.parallelism = 1;
         this.maxParallelism = 1;
         this.data = new CompoundTag();
         this.inputConsumptionPlan = null;
         this.finishPending = false;
-        this.inputConsumptionPlan = null;
     }
 
     public boolean isCompleted() {
@@ -161,30 +134,11 @@ public final class ActiveMachineRecipe {
 
     public void doFailureAction(RecipeFailureActions action) {
         if (action == null) action = RecipeFailureActions.getDefaultAction();
-        int before = this.tick;
         switch (action) {
             case RESET -> this.tick = 0;
             case DECREASE -> { if (this.tick > 0) this.tick--; }
             case STILL -> { /* no-op */ }
         }
-    }
-
-    public CompoundTag serialize() {
-        CompoundTag tag = new CompoundTag();
-        tag.putString("recipeName", recipe == null ? "" : recipe.id().toString());
-        tag.putInt("tick", this.tick);
-        tag.putInt("totalTick", this.totalTick);
-        tag.putInt("maxParallelism", this.maxParallelism);
-        tag.putInt("parallelism", this.parallelism);
-        tag.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
-        tag.putBoolean("finishPending", this.finishPending);
-        if (inputConsumptionPlan != null) {
-            tag.put("inputConsumptionPlan", inputConsumptionPlan.serialize());
-        }
-        if (!data.isEmpty()) {
-            tag.put("data", data);
-        }
-        return tag;
     }
 
     public void serialize(ValueOutput output) {
@@ -255,7 +209,6 @@ public final class ActiveMachineRecipe {
     }
 
     public TickStatus applyTickGrant(boolean resourcesGranted, boolean outputsCommitted, int gameTime) {
-        int beforeTick = tick;
         if (!resourcesGranted) {
             doFailureAction(RecipeFailureActions.STILL);
             return TickStatus.WAITING;

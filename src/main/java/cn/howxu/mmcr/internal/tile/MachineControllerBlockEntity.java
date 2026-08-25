@@ -150,11 +150,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Identifier cachedCandidatesMachineId;
     private List<MachineRecipe> cachedCandidates = List.of();
     private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
-    private @Nullable MachineRecipe lastRecipe;
-    private long lastRecipeStructureVersion = Long.MIN_VALUE;
-    private long lastRecipeCapabilityVersion = Long.MIN_VALUE;
-    private long lastRecipeModifierSnapshotVersion = Long.MIN_VALUE;
-    private boolean recipeDirty = true;
     private boolean sharedStartPending;
     private @Nullable MachineRecipe pendingSharedStartRecipe;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
@@ -313,7 +308,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 current.structure().matchedStage());
         runtime.publishComponentState(runtime.components(), current.foundModifiers(), Map.of(),
                 current.linkedPortPositions());
-        markRecipeDirty();
         setChanged();
         publishRuntimeState();
     }
@@ -459,7 +453,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.requestStructureCheck();
         if (structureWorkSnapshot().scan() != null) publishStructureWork(state -> state.withPendingInvalidation(true));
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
-        markRecipeDirty();
         setChanged();
         publishRuntimeState();
     }
@@ -563,10 +556,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public boolean isPortUsedByActiveRecipe(BlockPos pos) {
         return runtime.craftingRuntime().active()
                 && runtime.components().stream().anyMatch(component -> component.getPos().equals(pos));
-    }
-
-    public void markRecipeDirty() {
-        recipeDirty = true;
     }
 
     public void resetLinkedPortAppearances() {
@@ -1687,11 +1676,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                 facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
         ControllerRuntimeSnapshot current = runtimeSnapshot();
-        List<RecipeModifier> beforeModifiers = current.foundModifiers().values().stream().flatMap(List::stream).toList();
         Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
         runtime.publishComponentState(runtime.components(), foundModifiers, levels, current.linkedPortPositions());
-        List<RecipeModifier> afterModifiers = foundModifiers.values().stream().flatMap(List::stream).toList();
-        if (!beforeModifiers.equals(afterModifiers)) markRecipeDirty();
         refreshCriticalStructureChunks();
         FORMED_CONTROLLERS.add(this);
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
@@ -1754,7 +1740,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (current.foundModifiers().isEmpty()) return;
         runtime.publishComponentState(runtime.components(), Map.of(), current.foundLevels(),
                 current.linkedPortPositions());
-        markRecipeDirty();
     }
 
     private void updateComponents() {
@@ -2153,7 +2138,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         lastFailureUnloc = null;
         recipeFailure = null;
         redstonePaused = false;
-        markRecipeDirty();
         clearCandidateCache();
         if (wasFormed && updateBlockState) updatePhysicalFormedState(false);
         setChanged();
@@ -2216,7 +2200,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine matchedMachine = runtimeSnapshot().structure().machine();
         Identifier machineId = matchedMachine == null ? null : matchedMachine.registryName();
         if (machineId == null) return false;
-        if (tryRestartLastRecipe(machineId)) return true;
         List<MachineRecipe> candidates = recipesForMachine();
         int maxParallelism = getMaxParallelism();
         RecipeSearchResult result;
@@ -2232,7 +2215,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         if (result.success()) {
-            return applySearchResult(result, candidates.size());
+            return applySearchResult(result);
         }
         clearPendingConflictStart();
         recipeSearchRetryCounter++;
@@ -2264,7 +2247,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         recipeSearchRetryCounter = 0;
     }
 
-    private boolean applySearchResult(RecipeSearchResult result, int candidateCount) {
+    private boolean applySearchResult(RecipeSearchResult result) {
         if (!isSearchResultCurrent(result)) {
             return false;
         }
@@ -2285,7 +2268,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         setActiveState(true);
         syncRuntimeStateIfChanged();
-        rememberLastRecipe(next);
         recipeSearchRetryCounter = 0;
         lastFailureUnloc = null;
         recipeFailure = null;
@@ -2330,53 +2312,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 && runtimeState.capabilityVersion() == result.capabilityVersion()
                 && runtimeState.modifierVersion() == result.modifierVersion()
                 && !runtime.craftingRuntime().active();
-    }
-
-    private boolean tryRestartLastRecipe(Identifier machineId) {
-        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
-        if (recipeDirty || lastRecipe == null || runtime.craftingRuntime().active() || runtimeState.structure().machine() == null) return false;
-        if (!machineId.equals(lastRecipe.machineId())) return false;
-        if (lockedRecipeId != null && !lockedRecipeId.equals(lastRecipe.id())) return false;
-        if (lastRecipeStructureVersion != runtimeState.structure().version()
-                || lastRecipeCapabilityVersion != runtimeState.capabilityVersion()
-                || lastRecipeModifierSnapshotVersion != runtimeState.modifierVersion()) return false;
-        if (usesSharedIoCoordinator()) {
-            requestSharedStart(lastRecipe);
-            return true;
-        }
-        CraftingStatus state = runtime.craftingRuntime().start(lastRecipe, getMaxParallelism());
-        if (!state.isCrafting()) {
-            recipeDirty = true;
-            lastFailureUnloc = runtime.craftingRuntime().failureUnloc();
-            return false;
-        }
-        setActiveState(true);
-        syncRuntimeStateIfChanged();
-        recipeSearchRetryCounter = 0;
-        lastFailureUnloc = null;
-        recipeFailure = null;
-        setChanged();
-        return true;
-    }
-
-    private void rememberLastRecipe(MachineRecipe recipe) {
-        lastRecipe = recipe;
-        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
-        lastRecipeStructureVersion = runtimeState.structure().version();
-        lastRecipeCapabilityVersion = runtimeState.capabilityVersion();
-        lastRecipeModifierSnapshotVersion = runtimeState.modifierVersion();
-        recipeDirty = false;
-    }
-
-    private boolean isSearchResultCurrentForFactory(RecipeSearchResult result) {
-        ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
-        Machine matchedMachine = runtimeState.structure().machine();
-        return runtimeState.structure().formed()
-                && matchedMachine != null
-                && matchedMachine.registryName().equals(result.machineId())
-                && runtimeState.structure().version() == result.structureVersion()
-                && runtimeState.capabilityVersion() == result.capabilityVersion()
-                && runtimeState.modifierVersion() == result.modifierVersion();
     }
 
     private boolean tickActiveRecipe() {
@@ -2445,7 +2380,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     clearPendingSharedStart();
                     setActiveState(true);
                     syncRuntimeStateIfChanged();
-                    rememberLastRecipe(next);
                     recipeSearchRetryCounter = 0;
                     syncCraftingFailure();
                     setChanged();
@@ -2711,7 +2645,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedCandidatesReloadVersion = Long.MIN_VALUE;
         cachedDatapackRecipeCount = -1;
         cachedCandidates = List.of();
-        markRecipeDirty();
     }
 
     @Override
@@ -2723,11 +2656,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (MachineLevel foundLevel : runtimeSnapshot().foundLevels().values()) {
             levels.add(foundLevel.id().toString());
         }
-        if (runtime.craftingRuntime().active()) {
-            output.putString("recipe_state", "active");
-            output.putBoolean("has_active_runtime", true);
-            runtime.craftingRuntime().save(output.child("crafting_runtime"));
-        }
+        runtime.craftingRuntime().save(output.child("crafting_runtime"));
         if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
         if (hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
             runtime.factoryRuntime().save(output.child("factory_runtime"));
@@ -2765,9 +2694,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 pendingFactoryRuntimeInput = factoryRuntimeInput;
                 ensureFactoryRuntimeLoaded();
             }
-            if (input.getBooleanOr("has_active_runtime", false)) {
-                runtime.craftingRuntime().load(input.childOrEmpty("crafting_runtime"), resourceDomain());
-            }
+            runtime.craftingRuntime().load(input.childOrEmpty("crafting_runtime"), resourceDomain());
             runtime.requestStructureCheck();
             setChanged();
         } finally {

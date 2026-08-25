@@ -29,7 +29,7 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
         return storage;
     }
 
-    public LongEnergyStorage getMutableEnergyStorage() {
+    public LongEnergyStorage energyStorage() {
         return storage;
     }
 

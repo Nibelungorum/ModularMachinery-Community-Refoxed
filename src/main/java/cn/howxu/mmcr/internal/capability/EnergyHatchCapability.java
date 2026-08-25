@@ -26,7 +26,7 @@ public final class EnergyHatchCapability implements MachineCapability {
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
         this.port = port;
         this.ioType = port.ioType();
-        this.storage = port.getMutableEnergyStorage().storage();
+        this.storage = port.energyStorage().storage();
         this.view = CapabilityFactories.view(type(), ioType);
     }
 
