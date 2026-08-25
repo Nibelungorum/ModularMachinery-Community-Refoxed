@@ -182,6 +182,15 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void output_port_ejection_is_rejected_before_transfer_policy_runs() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
+        output.getItemStackHandler(null).setStackInSlot(0, stack(2));
+
+        assertThat(output.ejectContents()).isFalse();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
     void longValueStorageKeepsLongAmountsAndHonorsTransactionRollback() {
         LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
         long amount = (long) Integer.MAX_VALUE + 17L;

@@ -64,4 +64,35 @@ class SmartInterfaceCapabilityTest {
         assertThatThrownBy(() -> storage.set("mode", Float.NaN)).isInstanceOf(IllegalArgumentException.class);
         assertThat(storage.values()).isEqualTo(Map.of("mode", 1F));
     }
+
+    @Test
+    void output_capability_rejects_input_request_at_root_commit() {
+        FloatValueStorage storage = new FloatValueStorage();
+        storage.set("mode", 1F);
+        SmartInterfaceCapability capability = new SmartInterfaceCapability(storage, IOType.OUTPUT);
+        CapabilityRequests.SmartValueRequest request = new CapabilityRequests.SmartValueRequest(
+                capability.type(), IOType.INPUT, 1, "mode", 2F);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(capability.prepare(request).commit(transaction).success()).isFalse();
+            transaction.commit();
+        }
+
+        assertThat(storage.value("mode")).contains(1F);
+    }
+
+    @Test
+    void input_capability_rejects_output_request_on_rollback() {
+        FloatValueStorage storage = new FloatValueStorage();
+        storage.set("mode", 1F);
+        SmartInterfaceCapability capability = new SmartInterfaceCapability(storage, IOType.INPUT);
+        CapabilityRequests.SmartValueRequest request = new CapabilityRequests.SmartValueRequest(
+                capability.type(), IOType.OUTPUT, 1, "mode", 2F);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(capability.prepare(request).commit(transaction).success()).isFalse();
+        }
+
+        assertThat(storage.value("mode")).contains(1F);
+    }
 }

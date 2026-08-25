@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -14,17 +15,24 @@ import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.LevelStub;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,9 +42,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class CraftingRuntimeTest {
+    private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @AfterEach
+    void cleanup() {
+        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -211,6 +226,56 @@ class CraftingRuntimeTest {
         runtime.finish();
 
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(64);
+    }
+
+    @Test
+    void blocked_finish_stays_pending_until_the_output_retry_window_opens() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        var level = LevelStub.createWithBlockEntities(List.of(controller, output));
+        controller.setLevel(level);
+        output.setLevel(level);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_finish_retry", 1, List.of(output(Items.IRON_NUGGET, 1)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, stack(Items.COBBLESTONE, 64));
+        }
+        runtime.tick();
+
+        assertThat(runtime.finishPending()).isTrue();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.NO_RECIPE);
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+
+        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        LevelStub.setGameTime(level, 10);
+
+        assertThat(runtime.shouldRetryFinish()).isTrue();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
+    }
+
+    @Test
+    void active_runtime_persists_finish_state_and_input_plan() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_persisted", 1, List.of());
+        RecipeRegistry.register(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        runtime.start(recipe, 1);
+        runtime.tick();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.finishPending()).isTrue();
+        assertThat(restored.recipe()).isEqualTo(recipe);
+        assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(0)).isZero();
     }
 
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {

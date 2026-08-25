@@ -57,7 +57,8 @@ public final class SmartInterfaceCapability implements MachineCapability {
     @Override
     public CapabilityOperation prepare(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.SmartValueRequest smart)
-                || !TYPE.equals(request.type())) {
+                || !TYPE.equals(request.type())
+                || smart.ioType() != ioType) {
             return ignored -> CapabilityResult.failure(new ExecutionStatus(TYPE.id(), StatusSeverity.BLOCKED,
                     TYPE.id(), Map.of("reason", "unsupported_request")));
         }
