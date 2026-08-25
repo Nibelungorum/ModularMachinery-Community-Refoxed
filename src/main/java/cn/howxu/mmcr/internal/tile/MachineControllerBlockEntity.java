@@ -663,6 +663,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
+    public void sendMachineControllerState(ServerPlayer player) {
+        if (player == null) return;
+        player.connection.send(new ClientboundCustomPayloadPacket(
+                PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot())));
+    }
+
     public int factorySchedulerThreadCount() {
         long total = 0;
         for (ProcessingComponent component : runtime.components()) {
