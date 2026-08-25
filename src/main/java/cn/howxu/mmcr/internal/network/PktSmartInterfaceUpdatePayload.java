@@ -39,6 +39,7 @@ public record PktSmartInterfaceUpdatePayload(BlockPos pos, String interfaceType,
             if (!(context.player() instanceof ServerPlayer player)) return;
             if (!canUpdate(player, pos, interfaceType, value)) return;
             if (!(player.level().getBlockEntity(pos) instanceof SmartInterfaceBlockEntity smartInterface)) return;
+            if (!ownsMenu(player.containerMenu, smartInterface)) return;
             var machineId = smartInterface.machineId().orElse(null);
             if (machineId == null) return;
             var registration = MachineDefinitions.getRegistration(machineId);
@@ -56,6 +57,10 @@ public record PktSmartInterfaceUpdatePayload(BlockPos pos, String interfaceType,
                 && interfaceType != null
                 && !interfaceType.isBlank()
                 && Float.isFinite(value);
+    }
+
+    static boolean ownsMenu(AbstractContainerMenu menu, SmartInterfaceBlockEntity owner) {
+        return menu instanceof SmartInterfaceMenu smartInterface && smartInterface.owner() == owner;
     }
 
     static boolean typeAccepts(SmartInterfaceType type, float value) {

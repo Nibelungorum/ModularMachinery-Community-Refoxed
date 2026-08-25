@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.internal.menu.SmartInterfaceMenu;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -73,6 +75,18 @@ class PktSmartInterfaceUpdatePayloadTest {
         ServerPlayer player = playerWith(SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), requestedPos.above()));
 
         assertThat(PktSmartInterfaceUpdatePayload.canUpdate(player, requestedPos, "temperature", 12F)).isFalse();
+    }
+
+    @Test
+    void update_requires_the_menu_owner_to_be_the_target_interface() {
+        SmartInterfaceBlockEntity owner = new SmartInterfaceBlockEntity(BlockPos.ZERO,
+                ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+        SmartInterfaceMenu menu = new SmartInterfaceMenu(1, new Inventory(null, null), owner);
+        SmartInterfaceBlockEntity replacement = new SmartInterfaceBlockEntity(BlockPos.ZERO,
+                ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+
+        assertThat(PktSmartInterfaceUpdatePayload.ownsMenu(menu, owner)).isTrue();
+        assertThat(PktSmartInterfaceUpdatePayload.ownsMenu(menu, replacement)).isFalse();
     }
 
     private static ServerPlayer playerWith(AbstractContainerMenu menu) throws Exception {

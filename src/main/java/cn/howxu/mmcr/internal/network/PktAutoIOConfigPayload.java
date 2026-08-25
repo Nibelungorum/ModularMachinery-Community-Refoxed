@@ -29,8 +29,8 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
     public static final Type<PktAutoIOConfigPayload> TYPE = new Type<>(MMCR.id("auto_io_config"));
     public static final StreamCodec<ByteBuf, PktAutoIOConfigPayload> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, PktAutoIOConfigPayload::pos,
-            ByteBufCodecs.idMapper(index -> AutoIOAction.values()[index], AutoIOAction::ordinal), PktAutoIOConfigPayload::action,
-            ByteBufCodecs.optional(ByteBufCodecs.idMapper(index -> Direction.values()[index], Direction::ordinal)),
+            ByteBufCodecs.idMapper(index -> readEnum(AutoIOAction.values(), index), AutoIOAction::ordinal), PktAutoIOConfigPayload::action,
+            ByteBufCodecs.optional(ByteBufCodecs.idMapper(index -> readEnum(Direction.values(), index), Direction::ordinal)),
             payload -> Optional.ofNullable(payload.side),
             ByteBufCodecs.BOOL, PktAutoIOConfigPayload::enabled,
             (pos, action, side, enabled) -> new PktAutoIOConfigPayload(pos, action, side.orElse(null), enabled));
@@ -45,6 +45,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
             if (!(context.player() instanceof ServerPlayer player)) return;
             if (!canUpdate(player, pos, action, side)) return;
             if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
+            if (!ownsMenu(player.containerMenu, port)) return;
             if (action == AutoIOAction.SET_ENABLED) port.setAutoIOEnabled(enabled);
             else if (action == AutoIOAction.SET_SIDE) port.setAutoIOSide(side, enabled);
             else if (action == AutoIOAction.SET_ALL_SIDES) port.setAllAutoIOSides(enabled);
@@ -59,5 +60,16 @@ public record PktAutoIOConfigPayload(BlockPos pos, AutoIOAction action, @Nullabl
                 || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos);
         if (!portMenu) return false;
         return menu.stillValid(player) && (action != AutoIOAction.SET_SIDE || side != null);
+    }
+
+    static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {
+        return menu instanceof ItemBusMenu itemBus && itemBus.owner() == port
+                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() == port
+                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() == port;
+    }
+
+    private static <T> T readEnum(T[] values, int index) {
+        if (index < 0 || index >= values.length) throw new IllegalArgumentException("Invalid enum ordinal: " + index);
+        return values[index];
     }
 }

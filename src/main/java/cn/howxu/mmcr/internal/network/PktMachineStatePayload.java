@@ -43,6 +43,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         implements CustomPacketPayload {
     public static final int MAX_LEVEL_SNAPSHOTS = 1024;
     public static final int MAX_FAILURE_DETAIL_ENTRIES = 1024;
+    public static final int MAX_INSTALLED_MODULES = 1024;
     private static final int MAX_STRING_LENGTH = 256;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
@@ -56,7 +57,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         craftingMessage = craftingMessage == null ? "" : craftingMessage;
         primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
         primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
-        if (tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
+        if (installedModuleCount < 0 || installedModuleCount > MAX_INSTALLED_MODULES
+                || tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
                 || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
                 || maxParallelControllerCount < 0 || totalStoredEnergy < 0L || totalCapacityEnergy < 0L) {
             throw new IllegalArgumentException("Invalid machine presentation progress");
@@ -140,7 +142,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeUtf(payload.lockedRecipeId, MAX_STRING_LENGTH);
         buf.writeUtf(payload.machineId, MAX_STRING_LENGTH);
         buf.writeVarInt(payload.controllerRole);
-        buf.writeVarInt(Math.max(0, payload.installedModuleCount));
+        buf.writeVarInt(payload.installedModuleCount);
         buf.writeBoolean(payload.moduleConnected);
         buf.writeUtf(payload.connectedHostId, MAX_STRING_LENGTH);
         buf.writeVarInt(payload.craftingStatus.ordinal());
@@ -177,6 +179,9 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         String machineId = buf.readUtf(MAX_STRING_LENGTH);
         int controllerRole = buf.readVarInt();
         int installedModuleCount = buf.readVarInt();
+        if (installedModuleCount < 0 || installedModuleCount > MAX_INSTALLED_MODULES) {
+            throw new IllegalArgumentException("Invalid installed module count");
+        }
         boolean moduleConnected = buf.readBoolean();
         String connectedHostId = buf.readUtf(MAX_STRING_LENGTH);
         CraftingStatus.Status status = readEnum(CraftingStatus.Status.values(), buf.readVarInt(), "crafting status");

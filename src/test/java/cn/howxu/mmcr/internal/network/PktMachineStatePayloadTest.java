@@ -66,6 +66,18 @@ class PktMachineStatePayloadTest {
         buffer.release();
     }
 
+    @Test
+    void machine_state_rejects_negative_or_oversized_installed_module_count() {
+        assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
+                "", 0, -1, false, "", CraftingStatus.Status.IDLE, "", null, true, false,
+                0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L, FluidStack.EMPTY, FluidStack.EMPTY))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
+                "", 0, PktMachineStatePayload.MAX_INSTALLED_MODULES + 1, false, "", CraftingStatus.Status.IDLE,
+                "", null, true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L,
+                FluidStack.EMPTY, FluidStack.EMPTY)).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static PktMachineStatePayload payload(List<String> levels, ExecutionStatus failure) {
         return new PktMachineStatePayload(BlockPos.ZERO, "mmcr:recipe", true, true, levels, false, "",
                 "mmcr:machine", 0, 0, false, "", CraftingStatus.Status.IDLE,

@@ -2,8 +2,10 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -68,6 +70,16 @@ class PktAutoIOConfigPayloadTest {
 
         assertThat(PktAutoIOConfigPayload.canUpdate(playerWith(menu), BlockPos.ZERO,
                 AutoIOAction.SET_ENABLED, null)).isFalse();
+    }
+
+    @Test
+    void port_update_requires_the_menu_owner_to_be_the_target_port() {
+        ItemInputBusBlockEntity owner = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), owner);
+        ItemInputBusBlockEntity replacement = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+
+        assertThat(PktAutoIOConfigPayload.ownsMenu(menu, owner)).isTrue();
+        assertThat(PktAutoIOConfigPayload.ownsMenu(menu, replacement)).isFalse();
     }
 
     private static ServerPlayer playerWith(AbstractContainerMenu menu) throws Exception {

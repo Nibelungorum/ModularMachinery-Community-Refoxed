@@ -63,7 +63,7 @@ public final class StructureRuntime {
     }
 
     public void requestCheck() {
-        if (!dirty || nextCheckTick >= 0L) version++;
+        if (!dirty || nextCheckTick >= 0L) version = nextVersion(version);
         dirty = true;
         nextCheckTick = -1L;
     }
@@ -94,7 +94,7 @@ public final class StructureRuntime {
         boolean hadState = foundMachine != null || foundPattern != null || foundCompiledPattern != null
                 || controllerFacing != null || matchedStructureStage != 0 || formed || scan != null
                 || !Objects.equals(machine, configuredMachine);
-        long nextVersion = hadState || forceVersion ? version + 1L : version;
+        long nextVersion = hadState || forceVersion ? nextVersion(version) : version;
         machine = configuredMachine;
         foundMachine = null;
         foundPattern = null;
@@ -136,6 +136,10 @@ public final class StructureRuntime {
 
     void restoreVersion(long version) {
         this.version = Math.max(0L, version);
+    }
+
+    private static long nextVersion(long version) {
+        return version == Long.MAX_VALUE ? Long.MAX_VALUE : version + 1L;
     }
 
     public StructureSnapshot snapshot() {

@@ -43,6 +43,10 @@ public final class SmartInterfaceMenu extends AbstractMachineMenu {
         return pos;
     }
 
+    public SmartInterfaceBlockEntity owner() {
+        return owner;
+    }
+
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
         return MenuSupport.noopQuickMove();
@@ -50,6 +54,8 @@ public final class SmartInterfaceMenu extends AbstractMachineMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return owner == null || MenuSupport.stillValidWithin(player, pos);
+        return owner == null || owner.getLevel() != null
+                && owner.getLevel().getBlockEntity(pos) == owner
+                && MenuSupport.stillValidWithin(player, pos);
     }
 }
