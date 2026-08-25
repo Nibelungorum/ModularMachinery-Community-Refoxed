@@ -32,6 +32,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
     public static final int MAX_THREAD_SNAPSHOTS = 1024;
     public static final int MAX_LANE_SNAPSHOTS = 1024;
     public static final int MAX_LEVEL_SNAPSHOTS = 1024;
+    public static final int MAX_FAILURE_DETAIL_ENTRIES = 1024;
     public static final int MAX_STRING_LENGTH = 256;
     public static final Type<PktFactoryControllerStatePayload> TYPE = new Type<>(MMCR.id("factory_controller_state"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktFactoryControllerStatePayload> STREAM_CODEC =
@@ -173,7 +174,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         Identifier id = Identifier.parse(buf.readUtf(MAX_STRING_LENGTH));
         StatusSeverity severity = readEnum(StatusSeverity.values(), buf.readVarInt(), "failure severity");
         Identifier source = Identifier.parse(buf.readUtf(MAX_STRING_LENGTH));
-        int detailCount = readCount(buf, MAX_LANE_SNAPSHOTS, "failure detail");
+        int detailCount = readCount(buf, MAX_FAILURE_DETAIL_ENTRIES, "failure detail");
         Map<String, String> details = new LinkedHashMap<>();
         for (int i = 0; i < detailCount; i++) {
             details.put(buf.readUtf(MAX_STRING_LENGTH), buf.readUtf(MAX_STRING_LENGTH));
@@ -197,12 +198,20 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
                 || state.foundLevelIds().size() > MAX_LEVEL_SNAPSHOTS) {
             throw new IllegalArgumentException("Invalid factory snapshot values");
         }
+        validateFailure(state.failure());
+        for (CraftingStateSnapshot lane : state.lanes()) validateFailure(lane.failure());
         Set<Integer> indexes = new HashSet<>();
         for (FactoryRuntime.ThreadSnapshot thread : state.presentationLanes()) {
             if (thread == null || thread.index() < 0 || thread.index() >= state.laneLimit() || !indexes.add(thread.index())) {
                 throw new IllegalArgumentException("Invalid factory thread snapshot index");
             }
             validateThread(thread.active(), thread.tick(), thread.totalTick(), thread.parallelism());
+        }
+    }
+
+    private static void validateFailure(ExecutionStatus failure) {
+        if (failure != null && failure.details().size() > MAX_FAILURE_DETAIL_ENTRIES) {
+            throw new IllegalArgumentException("Invalid failure detail count: " + failure.details().size());
         }
     }
 

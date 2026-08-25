@@ -41,6 +41,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                       long totalCapacityEnergy, FluidStack primaryFluid,
                                       FluidStack primaryOutputFluid)
         implements CustomPacketPayload {
+    public static final int MAX_LEVEL_SNAPSHOTS = 1024;
+    public static final int MAX_FAILURE_DETAIL_ENTRIES = 1024;
     private static final int MAX_STRING_LENGTH = 256;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
@@ -122,6 +124,12 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             StreamCodec.of(PktMachineStatePayload::write, PktMachineStatePayload::read);
 
     private static void write(RegistryFriendlyByteBuf buf, PktMachineStatePayload payload) {
+        if (payload.foundLevelIds.size() > MAX_LEVEL_SNAPSHOTS) {
+            throw new IllegalArgumentException("Invalid machine level count: " + payload.foundLevelIds.size());
+        }
+        if (payload.failure != null && payload.failure.details().size() > MAX_FAILURE_DETAIL_ENTRIES) {
+            throw new IllegalArgumentException("Invalid failure detail count: " + payload.failure.details().size());
+        }
         buf.writeBlockPos(payload.pos);
         buf.writeUtf(payload.recipeName, MAX_STRING_LENGTH);
         buf.writeBoolean(payload.formed);
@@ -161,7 +169,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         boolean formed = buf.readBoolean();
         boolean active = buf.readBoolean();
         int levelCount = buf.readVarInt();
-        if (levelCount < 0 || levelCount > 1024) throw new IllegalArgumentException("Invalid machine level count");
+        if (levelCount < 0 || levelCount > MAX_LEVEL_SNAPSHOTS) throw new IllegalArgumentException("Invalid machine level count");
         List<String> foundLevelIds = new ArrayList<>(levelCount);
         for (int i = 0; i < levelCount; i++) foundLevelIds.add(buf.readUtf(MAX_STRING_LENGTH));
         boolean recipeLocked = buf.readBoolean();
@@ -205,7 +213,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         StatusSeverity severity = readEnum(StatusSeverity.values(), buf.readVarInt(), "failure severity");
         Identifier source = Identifier.parse(buf.readUtf(MAX_STRING_LENGTH));
         int detailCount = buf.readVarInt();
-        if (detailCount < 0 || detailCount > 1024) throw new IllegalArgumentException("Invalid failure detail count");
+        if (detailCount < 0 || detailCount > MAX_FAILURE_DETAIL_ENTRIES) throw new IllegalArgumentException("Invalid failure detail count");
         Map<String, String> details = new LinkedHashMap<>();
         for (int i = 0; i < detailCount; i++) details.put(buf.readUtf(MAX_STRING_LENGTH), buf.readUtf(MAX_STRING_LENGTH));
         return new ExecutionStatus(id, severity, source, details);
