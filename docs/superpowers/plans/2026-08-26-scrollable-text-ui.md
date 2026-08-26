@@ -76,6 +76,12 @@ void max_scroll_offset_is_zero_when_content_fits() {
 }
 
 @Test
+void content_that_fits_does_not_consume_wheel_scrolling() {
+    assertThat(AbstractScrollableTextScreen.hasScrollableOverflow(5, 6)).isFalse();
+    assertThat(AbstractScrollableTextScreen.hasScrollableOverflow(7, 6)).isTrue();
+}
+
+@Test
 void scroll_offset_is_clamped_to_content_range() {
     assertThat(AbstractScrollableTextScreen.clampScrollOffset(-1, 12, 5)).isZero();
     assertThat(AbstractScrollableTextScreen.clampScrollOffset(99, 12, 5)).isEqualTo(7);
@@ -102,6 +108,7 @@ The exact helper signatures used by the tests are:
 ```java
 static int visibleLineCount(int viewportHeight, float scale, int lineSpacing, int fontLineHeight)
 static int maxScrollOffset(int lineCount, int visibleLineCount)
+static boolean hasScrollableOverflow(int lineCount, int visibleLineCount)
 static int clampScrollOffset(int offset, int lineCount, int visibleLineCount)
 static int scrollOffsetAfter(int offset, int lineCount, int visibleLineCount, double deltaY)
 static boolean containsViewport(TextViewport viewport, int left, int top, double mouseX, double mouseY)
@@ -171,7 +178,7 @@ public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double
     int visibleLines = visibleLineCount(viewport.height(), viewport.scale(),
             viewport.lineSpacing(), font.lineHeight);
     if (containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) {
-        if (lineCount <= visibleLines) return false;
+        if (!hasScrollableOverflow(lineCount, visibleLines)) return false;
         textScrollOffset = scrollOffsetAfter(textScrollOffset, lineCount, visibleLines, deltaY);
         return true;
     }
