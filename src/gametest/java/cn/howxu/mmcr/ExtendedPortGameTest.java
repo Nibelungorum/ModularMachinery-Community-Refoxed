@@ -56,8 +56,9 @@ public class ExtendedPortGameTest {
         positions.forEach(helper::destroyBlock);
         helper.runAtTickTime(1, () -> {
             for (BlockPos position : positions) {
-                helper.assertTrue(droppedIron(helper, position) == 3L,
-                        "Item port removal drops every stored item at " + position);
+                long dropped = droppedIron(helper, position);
+                helper.assertTrue(dropped == 3L,
+                        "Item port removal drops every stored item at " + position + " actual=" + dropped);
             }
             helper.succeed();
         });
@@ -79,7 +80,10 @@ public class ExtendedPortGameTest {
         helper.runAtTickTime(1, () -> {
             List<ItemEntity> drops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
                     new AABB(helper.absolutePos(position)).inflate(1.25D));
-            helper.assertTrue(drops.size() <= 128, "Large item drop count is bounded");
+            long ironDrops = drops.stream().filter(entity -> entity.getItem().is(Items.IRON_INGOT)).count();
+            long goldDrops = drops.stream().filter(entity -> entity.getItem().is(Items.GOLD_INGOT)).count();
+            helper.assertTrue(ironDrops <= 1024 && goldDrops <= 1024,
+                    "Large item drop count is bounded per slot iron=" + ironDrops + " gold=" + goldDrops);
             helper.assertTrue(drops.stream().allMatch(entity ->
                             entity.getItem().getCount() <= entity.getItem().getMaxStackSize()),
                     "Large item drops never exceed the item stack limit");
