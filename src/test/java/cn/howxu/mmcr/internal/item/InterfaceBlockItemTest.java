@@ -61,17 +61,17 @@ class InterfaceBlockItemTest {
     }
 
     @Test
-    void long_interface_quantities_use_exact_comma_separated_formatting() {
+    void long_interface_quantities_use_readable_si_formatting() {
         assertThat(InterfaceTooltips.energyTooltip(ExtendedEnergyHatchSize.ULTIMATE))
                 .extracting(Component::getString)
                 .containsExactly(
-                        "tooltip.mmcr.interface.capacity_label9,223,372,036,854,775,807 FE",
-                        "tooltip.mmcr.interface.rate_label9,223,372,036,854,775,807 FE/t");
+                        "tooltip.mmcr.interface.capacity_label9.22E FE",
+                        "tooltip.mmcr.interface.rate_label9.22E FE/t");
         assertThat(InterfaceTooltips.fluidTooltip(Long.MAX_VALUE, Long.MAX_VALUE))
                 .extracting(Component::getString)
                 .containsExactly(
-                        "tooltip.mmcr.interface.capacity_label9,223,372,036,854,775,807 mB",
-                        "tooltip.mmcr.interface.rate_label9,223,372,036,854,775,807 mB/t");
+                        "tooltip.mmcr.interface.capacity_label9.22E mB",
+                        "tooltip.mmcr.interface.rate_label9.22E mB/t");
     }
 
     @Test

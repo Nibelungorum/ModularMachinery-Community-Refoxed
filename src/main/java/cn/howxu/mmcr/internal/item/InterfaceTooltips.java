@@ -139,7 +139,7 @@ public final class InterfaceTooltips {
     }
 
     private static String formatAmount(long amount, String unit) {
-        return ReadableNumber.formatExact(amount) + " " + unit;
+        return ReadableNumber.format(amount) + " " + unit;
     }
 
     private InterfaceTooltips() {}
