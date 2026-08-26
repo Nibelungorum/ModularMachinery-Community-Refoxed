@@ -22,7 +22,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -45,7 +44,7 @@ import java.util.function.Supplier;
  *
  * @author howxu <dev@howxu.cn>
  */
-abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends AbstractContainerScreen<M> {
+abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends AbstractScrollableTextScreen<M> {
     private static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
     private static final int HIDDEN_SLOT_X = -1000;
     private static final int HIDDEN_SLOT_Y = -1000;
@@ -62,6 +61,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private static final int AUTO_IO_PAGE_BUTTON_STEP = 14;
     protected static final float TEXT_DETAIL_SCALE = 0.85F;
     protected static final int TEXT_DETAIL_LINE_SPACING = 10;
+    protected static final int TEXT_VIEW_X = 9;
+    protected static final int TEXT_VIEW_Y = 24;
+    protected static final int TEXT_VIEW_RIGHT = 168;
+    protected static final int TEXT_VIEW_BOTTOM = 123;
 
     protected boolean autoIOPage;
     private Identifier selectedCapabilityId;
@@ -77,6 +80,19 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected AbstractPortScreen(M menu, Inventory inventory, Component title, int imageHeight) {
         super(menu, inventory, title, 176, imageHeight);
         inventoryLabelY = HIDDEN_INVENTORY_LABEL_Y;
+    }
+
+    @Override
+    protected final TextViewport scrollableTextViewport() {
+        return new TextViewport(TEXT_VIEW_X, TEXT_VIEW_Y,
+                TEXT_VIEW_RIGHT - TEXT_VIEW_X + 1,
+                Math.min(TEXT_VIEW_BOTTOM, imageHeight) - TEXT_VIEW_Y + 1,
+                TEXT_DETAIL_SCALE, TEXT_DETAIL_LINE_SPACING);
+    }
+
+    @Override
+    protected int scrollableTextLineCount() {
+        return 0;
     }
 
     protected abstract BlockPos portPos();

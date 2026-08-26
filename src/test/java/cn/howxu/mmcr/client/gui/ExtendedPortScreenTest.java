@@ -34,6 +34,33 @@ class ExtendedPortScreenTest {
     }
 
     @Test
+    void empty_extended_item_and_fluid_storage_have_one_logical_line() {
+        assertThat(ExtendedItemScreen.displayLines(List.of())).hasSize(1);
+        assertThat(ExtendedFluidScreen.displayLines(List.of())).hasSize(1);
+    }
+
+    @Test
+    void combined_storage_has_one_logical_line_per_section_and_entry() {
+        ItemStorageEntry firstItem = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT), 12L, 64L);
+        ItemStorageEntry secondItem = new ItemStorageEntry(1, ItemResource.of(Items.GOLD_INGOT), 34L, 64L);
+        FluidStorageEntry fluid = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 56L, 78L);
+
+        assertThat(ExtendedCombinedScreen.displayLines(List.of(firstItem, secondItem), List.of(fluid)))
+                .hasSize(5)
+                .extracting(Component::getString)
+                .containsExactly("gui.mmcr.port.items", "12 " + firstItem.resource().getHoverName().getString(),
+                        "34 " + secondItem.resource().getHoverName().getString(), "gui.mmcr.port.fluids",
+                        "56 " + fluid.resource().getHoverName().getString());
+    }
+
+    @Test
+    void extended_text_pages_use_the_shared_scrollable_text_base() {
+        assertThat(AbstractScrollableTextScreen.class).isAssignableFrom(ExtendedItemScreen.class);
+        assertThat(AbstractScrollableTextScreen.class).isAssignableFrom(ExtendedFluidScreen.class);
+        assertThat(AbstractScrollableTextScreen.class).isAssignableFrom(ExtendedCombinedScreen.class);
+    }
+
+    @Test
     void empty_extended_item_storage_renders_a_light_green_empty_state() {
         assertThat(ExtendedItemScreen.displayLines(List.of(
                 new ItemStorageEntry(0, ItemResource.EMPTY, 0L, 64L))))

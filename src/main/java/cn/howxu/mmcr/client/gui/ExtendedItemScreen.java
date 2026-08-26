@@ -30,8 +30,6 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     private static final int TITLE_X = 12;
     private static final int TITLE_Y = 12;
     private static final int ROW_X = 12;
-    private static final int FIRST_ROW_Y = 24;
-    private static final int ROW_STEP = 10;
     private static final int TEXT_COLOR = 0xFFE0E0E0;
 
     public ExtendedItemScreen(ExtendedItemMenu menu, Inventory inventory, Component title) {
@@ -59,6 +57,11 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     }
 
     @Override
+    protected int scrollableTextLineCount() {
+        return 1 + nonEmptyEntries(menu.entries()).size();
+    }
+
+    @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
@@ -73,20 +76,31 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
         graphics.pose().pushMatrix();
         graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE);
         List<ItemStorageEntry> entries = nonEmptyEntries(menu.entries());
+        clampTextScrollOffset();
         int row = 0;
         if (entries.isEmpty()) {
             Component empty = emptyLine();
-            graphics.text(font, empty, (int) (ROW_X / TEXT_DETAIL_SCALE),
-                    (int) (FIRST_ROW_Y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
+            if (isTextLineVisible(row)) {
+                int y = textLineY(visibleTextRow(row));
+                graphics.text(font, empty, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                        (int) (y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
+            }
         } else {
             Component stored = Component.translatable("gui.mmcr.port.stored");
-            graphics.text(font, stored, (int) (ROW_X / TEXT_DETAIL_SCALE),
-                    (int) (FIRST_ROW_Y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
+            if (isTextLineVisible(row)) {
+                int y = textLineY(visibleTextRow(row));
+                graphics.text(font, stored, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                        (int) (y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
+            }
             row = 1;
         }
         for (ItemStorageEntry entry : entries) {
+            if (!isTextLineVisible(row)) {
+                row++;
+                continue;
+            }
             Component line = displayLine(entry);
-            int y = FIRST_ROW_Y + row++ * ROW_STEP;
+            int y = textLineY(visibleTextRow(row++));
             graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
             addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
                     TEXT_DETAIL_LINE_SPACING, tooltipLines(entry));

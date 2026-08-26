@@ -32,8 +32,6 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
     private static final int TITLE_X = 12;
     private static final int TITLE_Y = 12;
     private static final int ROW_X = 12;
-    private static final int FIRST_ROW_Y = 24;
-    private static final int ROW_STEP = 10;
     private static final int TEXT_COLOR = 0xFFE0E0E0;
 
     public ExtendedCombinedScreen(ExtendedCombinedMenu menu, Inventory inventory, Component title) {
@@ -61,6 +59,12 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
     }
 
     @Override
+    protected int scrollableTextLineCount() {
+        return 1 + nonEmptyItems(menu.itemEntries()).size()
+                + 1 + nonEmptyFluids(menu.fluidEntries()).size();
+    }
+
+    @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
@@ -75,8 +79,11 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
 
         graphics.pose().pushMatrix();
         graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE);
-        int y = drawItems(graphics, menu.itemEntries(), FIRST_ROW_Y);
-        drawFluids(graphics, menu.fluidEntries(), y);
+        List<ItemStorageEntry> itemEntries = nonEmptyItems(menu.itemEntries());
+        List<FluidStorageEntry> fluidEntries = nonEmptyFluids(menu.fluidEntries());
+        clampTextScrollOffset();
+        int lineIndex = drawItems(graphics, itemEntries, 0);
+        drawFluids(graphics, fluidEntries, lineIndex);
         graphics.pose().popMatrix();
     }
 
@@ -99,52 +106,72 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         return List.copyOf(lines);
     }
 
-    private int drawItems(GuiGraphicsExtractor graphics, List<ItemStorageEntry> entries, int y) {
-        List<ItemStorageEntry> nonEmpty = nonEmptyItems(entries);
-        if (nonEmpty.isEmpty()) {
-            graphics.text(font, emptySectionLine("gui.mmcr.port.items"),
+    private int drawItems(GuiGraphicsExtractor graphics, List<ItemStorageEntry> entries, int lineIndex) {
+        if (entries.isEmpty()) {
+            if (isTextLineVisible(lineIndex)) {
+                int y = textLineY(visibleTextRow(lineIndex));
+                graphics.text(font, emptySectionLine("gui.mmcr.port.items"),
+                        (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
+                        0xFF55FF55, false);
+            }
+            return lineIndex + 1;
+        }
+        if (isTextLineVisible(lineIndex)) {
+            int y = textLineY(visibleTextRow(lineIndex));
+            graphics.text(font, sectionLabel("gui.mmcr.port.items"),
                     (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
                     0xFF55FF55, false);
-            return y + ROW_STEP;
         }
-        graphics.text(font, sectionLabel("gui.mmcr.port.items"),
-                (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
-                0xFF55FF55, false);
-        y += ROW_STEP;
-        for (ItemStorageEntry entry : nonEmpty) {
+        lineIndex++;
+        for (ItemStorageEntry entry : entries) {
+            if (!isTextLineVisible(lineIndex)) {
+                lineIndex++;
+                continue;
+            }
             Component line = itemLine(entry);
+            int y = textLineY(visibleTextRow(lineIndex));
             graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
                     (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
             addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
                     TEXT_DETAIL_LINE_SPACING,
                     ExtendedItemScreen.tooltipLines(entry));
-            y += TEXT_DETAIL_LINE_SPACING;
+            lineIndex++;
         }
-        return y;
+        return lineIndex;
     }
 
-    private int drawFluids(GuiGraphicsExtractor graphics, List<FluidStorageEntry> entries, int y) {
-        List<FluidStorageEntry> nonEmpty = nonEmptyFluids(entries);
-        if (nonEmpty.isEmpty()) {
-            graphics.text(font, emptySectionLine("gui.mmcr.port.fluids"),
+    private int drawFluids(GuiGraphicsExtractor graphics, List<FluidStorageEntry> entries, int lineIndex) {
+        if (entries.isEmpty()) {
+            if (isTextLineVisible(lineIndex)) {
+                int y = textLineY(visibleTextRow(lineIndex));
+                graphics.text(font, emptySectionLine("gui.mmcr.port.fluids"),
+                        (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
+                        0xFF55FF55, false);
+            }
+            return lineIndex + 1;
+        }
+        if (isTextLineVisible(lineIndex)) {
+            int y = textLineY(visibleTextRow(lineIndex));
+            graphics.text(font, sectionLabel("gui.mmcr.port.fluids"),
                     (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
                     0xFF55FF55, false);
-            return y + ROW_STEP;
         }
-        graphics.text(font, sectionLabel("gui.mmcr.port.fluids"),
-                (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
-                0xFF55FF55, false);
-        y += ROW_STEP;
-        for (FluidStorageEntry entry : nonEmpty) {
+        lineIndex++;
+        for (FluidStorageEntry entry : entries) {
+            if (!isTextLineVisible(lineIndex)) {
+                lineIndex++;
+                continue;
+            }
             Component line = fluidLine(entry);
+            int y = textLineY(visibleTextRow(lineIndex));
             graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
                     (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
             addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
                     TEXT_DETAIL_LINE_SPACING,
                     ExtendedFluidScreen.tooltipLines(entry));
-            y += TEXT_DETAIL_LINE_SPACING;
+            lineIndex++;
         }
-        return y;
+        return lineIndex;
     }
 
     private static MutableComponent sectionLabel(String key) {
