@@ -2159,6 +2159,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
         StructureSnapshot structure = runtimeSnapshot().structure();
+        StructureWorkSnapshot work = structureWorkSnapshot();
         invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);
         Machine configuredMachine = structure.configuredMachine();
         PortRequirementSpec.Failure previousFormationFailure = structure.lastFormationFailure();
@@ -2175,6 +2176,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!clearFormationFailure) {
             publishStructureWork(state -> state.withFormationFailure(previousFormationFailure)
                     .withLastStructureError(previousStructureError));
+        }
+        if (!wasFormed || !invalidateScheduledCheck) {
+            publishStructureWork(state -> state.withNextCheckTick(work.nextCheckTick()));
         }
         FORMED_CONTROLLERS.remove(this);
         runtime.publishComponentState(List.of(), Map.of(), Map.of(), Set.of());

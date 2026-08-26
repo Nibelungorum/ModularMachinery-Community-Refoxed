@@ -115,6 +115,30 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void unformed_structure_mismatch_waits_for_the_next_check_interval() {
+        BlockPos controllerPos = BlockPos.ZERO;
+        Identifier machineId = MMCR.id("controller_mismatch_interval");
+        DynamicMachine machine = new DynamicMachine(machineId, "Controller Mismatch Interval",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
+                MachineControllerSpec.defaultsFor(machineId));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        BlockPos structurePos = controller.getBlockPos().offset(controller.assemblyPattern(machine).pattern().keySet().iterator().next());
+        controller.getLevel().setBlock(structurePos, Blocks.AIR.defaultBlockState(), 3);
+        controller.setStructureCheckIntervalForTesting(40);
+        controller.invalidateFormedStructure();
+
+        controller.tickStructure((ServerLevel) controller.getLevel(), controllerPos);
+        int invocationsAfterFirstCheck = controller.matcherInvocationCountForTesting();
+
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        controller.tickStructure((ServerLevel) controller.getLevel(), controllerPos);
+
+        assertThat(invocationsAfterFirstCheck).isGreaterThan(0);
+        assertThat(controller.matcherInvocationCountForTesting()).isEqualTo(invocationsAfterFirstCheck);
+    }
+
+    @Test
     void unloading_a_critical_component_chunk_marks_the_formed_structure_unloaded() {
         BlockPos controllerPos = new BlockPos(0, 1, 1);
         BlockPos inputPos = controllerPos.offset(-1, 0, 0);
