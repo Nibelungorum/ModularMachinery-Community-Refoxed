@@ -10,7 +10,6 @@ import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -29,7 +28,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class MachineControllerScreen extends AbstractContainerScreen<MachineControllerMenu> {
+public final class MachineControllerScreen extends AbstractScrollableTextScreen<MachineControllerMenu> {
     private static final int IMAGE_WIDTH = 176;
     private static final int IMAGE_HEIGHT = 213;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guicontroller_large.png");
@@ -51,6 +50,18 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
         titleLabelX += 2;
         titleLabelY += 4;
         inventoryLabelY = -1000;
+    }
+
+    @Override
+    protected TextViewport scrollableTextViewport() {
+        int bodyY = titleLabelY + DETAIL_LINE_SPACING * 2;
+        return new TextViewport(9, bodyY, 160, 123 - bodyY + 1,
+                DETAIL_SCALE, DETAIL_LINE_SPACING);
+    }
+
+    @Override
+    protected int scrollableTextLineCount() {
+        return detailLines(menu).size();
     }
 
     @Override
@@ -92,46 +103,54 @@ public final class MachineControllerScreen extends AbstractContainerScreen<Machi
     private void renderControllerStatus(GuiGraphicsExtractor graphics, int x, int y) {
         boolean active = menu.hasActiveRecipe();
         boolean formed = menu.isFormed();
-        int parallelSlots = menu.parallelControllerCount();
-        int parallelism = menu.currentParallelism();
-        int maxParallelism = menu.maxParallelism();
         Component label = Component.translatable("gui.mmcr.controller.status_label");
         graphics.text(font, label, x, y, STATUS_LABEL_COLOR, true);
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), active)), x + font.width(label) + 4, y,
                 controllerStatusColor(formed, active), true);
-        int lineY = y + DETAIL_LINE_SPACING;
+
+        List<ControllerStatusLine> lines = detailLines(menu);
+        clampTextScrollOffset();
+        int first = firstVisibleTextLine();
+        int last = lastVisibleTextLineExclusive();
+        for (int index = first; index < last; index++) {
+            ControllerStatusLine line = lines.get(index);
+            int textY = textLineY(visibleTextRow(index));
+            graphics.text(font, line.text(), x, textY, line.color(), true);
+        }
+    }
+
+    static List<ControllerStatusLine> detailLines(MachineControllerMenu menu) {
+        List<ControllerStatusLine> lines = new ArrayList<>();
         for (String levelId : menu.foundLevelIds()) {
             MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
             if (level == null) continue;
-            graphics.text(font, levelLine(level), x, lineY, STATUS_LABEL_COLOR, true);
-            lineY += DETAIL_LINE_SPACING;
+            lines.add(new ControllerStatusLine(levelLine(level), STATUS_LABEL_COLOR));
         }
         String failure = menu.lastFailureMessage();
         if (failure != null) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)), x, lineY, STATUS_LABEL_COLOR, true);
-            lineY += DETAIL_LINE_SPACING;
+            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.last_failure",
+                    Component.translatable(failure)), STATUS_LABEL_COLOR));
         }
-        for (ControllerStatusLine line : moduleStatusLines(menu.isHostController(), menu.isModuleController(), menu.installedModuleCount(), menu.connectedHostId())) {
-            graphics.text(font, line.text(), x, lineY, line.color(), true);
-            lineY += DETAIL_LINE_SPACING;
-        }
-        if (formed) {
+        lines.addAll(moduleStatusLines(menu.isHostController(), menu.isModuleController(),
+                menu.installedModuleCount(), menu.connectedHostId()));
+        if (menu.isFormed()) {
+            int parallelSlots = menu.parallelControllerCount();
             if (parallelSlots > 0) {
-                graphics.text(font, parallelSlotLine(parallelSlots), x, lineY, STATUS_LABEL_COLOR, true);
-                lineY += DETAIL_LINE_SPACING;
+                lines.add(new ControllerStatusLine(parallelSlotLine(parallelSlots), STATUS_LABEL_COLOR));
             }
-            graphics.text(font, parallelLine(parallelism, maxParallelism), x, lineY, STATUS_LABEL_COLOR, true);
-            lineY += DETAIL_LINE_SPACING;
+            lines.add(new ControllerStatusLine(parallelLine(menu.currentParallelism(), menu.maxParallelism()),
+                    STATUS_LABEL_COLOR));
         }
         int totalTick = menu.activeRecipeTotalTick();
         if (menu.hasActiveRecipe() && totalTick > 0) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.progress",
-                    progressPercent(menu.activeRecipeTick(), totalTick) + "%"), x, lineY, PROGRESS_STATUS_COLOR, true);
-            lineY += DETAIL_LINE_SPACING;
+            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.progress",
+                    progressPercent(menu.activeRecipeTick(), totalTick) + "%"), PROGRESS_STATUS_COLOR));
         }
         if (menu.isRedstonePaused()) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, STATUS_LABEL_COLOR, true);
+            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
+                    STATUS_LABEL_COLOR));
         }
+        return lines;
     }
 
     static Component levelLine(MachineLevel level) {

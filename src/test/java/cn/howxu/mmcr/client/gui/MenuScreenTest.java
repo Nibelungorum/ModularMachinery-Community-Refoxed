@@ -1,11 +1,20 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.components.Button;
@@ -16,7 +25,10 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForgeMod;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.FluidType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -147,6 +159,47 @@ class MenuScreenTest {
     void controller_progress_percent_uses_active_recipe_ticks() {
         assertThat(MachineControllerScreen.progressPercent(25, 100)).isEqualTo(25);
         assertThat(MachineControllerScreen.progressPercent(0, 0)).isEqualTo(0);
+    }
+
+    @Test
+    void controller_detail_lines_preserve_snapshot_order() {
+        Identifier levelTypeId = MMCR.id("menu_test_level_type");
+        Identifier levelId = MMCR.id("menu_test_level");
+        LevelType levelType = new LevelType(levelTypeId, Component.literal("Menu Test Level"));
+        MachineLevel level = new MachineLevel(levelId, levelTypeId, 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY);
+        TestBootstrap.registerType(levelType);
+        TestBootstrap.registerLevel(level);
+
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        ExecutionStatus failure = new ExecutionStatus(MMCR.id("menu_test_failure"), StatusSeverity.BLOCKED,
+                MMCR.id("menu_test_source"), Map.of("reason", "missing_input"));
+        menu.applyClientSnapshot(new PktMachineStatePayload(
+                BlockPos.ZERO, "mmcr:recipe", true, true,
+                List.of(levelId.toString()), false, "", "mmcr:test_cube", 2, 3, true,
+                "mmcr:host", CraftingStatus.Status.CRAFTING, "", failure, true, true,
+                4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
+                FluidStack.EMPTY, FluidStack.EMPTY));
+
+        assertThat(MachineControllerScreen.detailLines(menu)).containsExactly(
+                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.levelLine(level),
+                        MachineControllerScreen.STATUS_LABEL_COLOR),
+                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                        "gui.mmcr.controller.last_failure",
+                        Component.translatable("gui.mmcr.controller.failure.missing_input")),
+                        MachineControllerScreen.STATUS_LABEL_COLOR),
+                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                        "gui.mmcr.controller.module_connected", Component.literal("mmcr:host")),
+                        MachineControllerScreen.STATUS_LABEL_COLOR),
+                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.parallelSlotLine(2),
+                        MachineControllerScreen.STATUS_LABEL_COLOR),
+                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.parallelLine(6, 8),
+                        MachineControllerScreen.STATUS_LABEL_COLOR),
+                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                        "gui.mmcr.controller.progress", "20%"), -1),
+                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                        "gui.mmcr.controller.redstone_stopped"), MachineControllerScreen.STATUS_LABEL_COLOR));
     }
 
     private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
