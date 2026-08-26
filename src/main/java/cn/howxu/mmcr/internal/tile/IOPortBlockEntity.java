@@ -96,6 +96,15 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         sendStorageSnapshot();
     }
 
+    public void dropContents() {
+    }
+
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        super.preRemoveSideEffects(pos, state);
+        dropContents();
+    }
+
     protected void notifyControllerOfInputChange() {
         if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
         if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {

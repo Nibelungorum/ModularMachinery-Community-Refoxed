@@ -16,8 +16,6 @@ import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
-import cn.howxu.mmcr.util.IOType;
-
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -28,10 +26,6 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.server.level.ServerLevel;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.TransferPreconditions;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
@@ -89,12 +83,9 @@ public class IOPortBlock extends Block implements EntityBlock {
     @Override
     protected @NonNull InteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
                                                    BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch) {
+        if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
-            ResourceHandler<FluidResource> handler = new PortFluidTransferHandler(
-                    hatch.getResourceHandler(hit.getDirection()), hatch.ioType() == IOType.INPUT, hatch.ioType() == IOType.OUTPUT);
-            if (FluidUtil.interactWithFluidHandler(
-                    player, hand, pos, handler, null)) {
+            if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection(), null)) {
                 return InteractionResult.SUCCESS;
             }
         }
@@ -146,8 +137,8 @@ public class IOPortBlock extends Block implements EntityBlock {
 
     @Override
     public void onBlockExploded(BlockState state, ServerLevel level, BlockPos pos, Explosion explosion) {
-        if (level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus) {
-            bus.clearContents();
+        if (level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
+            port.dropContents();
         }
         super.onBlockExploded(state, level, pos, explosion);
     }
@@ -221,50 +212,4 @@ public class IOPortBlock extends Block implements EntityBlock {
         return Component.translatable("container.mmcr." + kind);
     }
 
-    private static final class PortFluidTransferHandler implements ResourceHandler<FluidResource> {
-        private final ResourceHandler<FluidResource> handler;
-        private final boolean canInsert;
-        private final boolean canExtract;
-
-        private PortFluidTransferHandler(ResourceHandler<FluidResource> handler, boolean canInsert, boolean canExtract) {
-            this.handler = handler;
-            this.canInsert = canInsert;
-            this.canExtract = canExtract;
-        }
-
-        @Override public int size() { return handler.size(); }
-        @Override public FluidResource getResource(int slot) {
-            checkSlot(slot);
-            return handler.getResource(slot);
-        }
-        @Override public long getAmountAsLong(int slot) {
-            checkSlot(slot);
-            return handler.getAmountAsLong(slot);
-        }
-        @Override public long getCapacityAsLong(int slot, FluidResource resource) {
-            checkSlot(slot);
-            return handler.getCapacityAsLong(slot, resource);
-        }
-        @Override public boolean isValid(int slot, FluidResource resource) {
-            checkSlot(slot);
-            TransferPreconditions.checkNonEmpty(resource);
-            return handler.isValid(slot, resource);
-        }
-        @Override public int insert(int slot, FluidResource resource, int amount, TransactionContext tx) {
-            checkSlot(slot);
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            if (!canInsert) return 0;
-            return handler.insert(slot, resource, amount, tx);
-        }
-        @Override public int extract(int slot, FluidResource resource, int amount, TransactionContext tx) {
-            checkSlot(slot);
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            if (!canExtract) return 0;
-            return handler.extract(slot, resource, amount, tx);
-        }
-
-        private void checkSlot(int slot) {
-            if (slot < 0 || slot >= handler.size()) throw new IndexOutOfBoundsException(slot);
-        }
-    }
 }

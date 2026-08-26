@@ -53,6 +53,11 @@ public class ExtendedItemBusBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
+    public void dropContents() {
+        ItemBusBlockEntity.dropItemResources(level, worldPosition, storage);
+    }
+
+    @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind.capabilityFactories().stream()

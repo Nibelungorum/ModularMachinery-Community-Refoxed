@@ -12,6 +12,7 @@ import net.minecraft.world.ItemStackWithSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.function.IntConsumer;
 import org.jetbrains.annotations.Nullable;
@@ -76,25 +78,36 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     }
 
     public void dropContents() {
+        dropItemStacks(level, worldPosition, handler);
+    }
+
+    static void dropItemStacks(Level level, BlockPos pos, ItemStackHandler handler) {
         if (level == null || level.isClientSide()) return;
         for (int slot = 0; slot < handler.getSlots(); slot++) {
             ItemStack stack = handler.getStackInSlot(slot);
             if (stack.isEmpty()) continue;
-            Block.popResource(level, worldPosition, stack);
+            Block.popResource(level, pos, stack);
             handler.setStackInSlot(slot, ItemStack.EMPTY);
         }
     }
 
-    public void clearContents() {
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            handler.setStackInSlot(slot, ItemStack.EMPTY);
+    static void dropItemResources(Level level, BlockPos pos, ResourceStorage<ItemResource> storage) {
+        if (level == null || level.isClientSide()) return;
+        for (int slot = 0; slot < storage.size(); slot++) {
+            ItemResource resource = storage.resource(slot);
+            long remaining = storage.amount(slot);
+            if (resource == null || resource.isEmpty() || remaining <= 0L) continue;
+            long amount = remaining;
+            while (remaining > 0L) {
+                int count = (int) Math.min(remaining, Integer.MAX_VALUE);
+                Block.popResource(level, pos, resource.toStack(count));
+                remaining -= count;
+            }
+            try (Transaction transaction = Transaction.openRoot()) {
+                storage.extract(slot, resource, amount, transaction);
+                transaction.commit();
+            }
         }
-    }
-
-    @Override
-    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
-        super.preRemoveSideEffects(pos, state);
-        dropContents();
     }
 
     public boolean isInventoryEmpty() {

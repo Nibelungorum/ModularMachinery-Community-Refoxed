@@ -64,8 +64,12 @@ public final class GameTestRegistry {
                 helper -> new AutoIOGameTest().combinedInputEjectionIsCapabilitySpecific(helper));
         register(event, "combined_port_appearance", 100,
                 helper -> new CombinedPortGameTest().combinedPortPublishesFormedAppearance(helper));
+        register(event, "combined_port_fluid_container", 100,
+                helper -> new CombinedPortGameTest().combinedPortSupportsFluidContainerInteraction(helper));
         register(event, "extended_combined_long_transfer", 100,
                 helper -> new ExtendedPortGameTest().extendedCombinedPortTransfersBeyondIntegerRange(helper));
+        register(event, "item_port_removal_drops_contents", 100,
+                helper -> new ExtendedPortGameTest().itemPortsDropStoredItemsWhenRemoved(helper));
         register(event, "extended_standalone_capabilities", 100,
                 helper -> new ExtendedPortGameTest().standaloneExtendedPortsExposeItemFluidAndEnergyCapabilities(helper));
         register(event, "extended_combined_port_appearance", 100,

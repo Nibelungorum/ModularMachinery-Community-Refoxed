@@ -79,6 +79,11 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
+    public void dropContents() {
+        ItemBusBlockEntity.dropItemStacks(level, worldPosition, itemHandler);
+    }
+
+    @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind.capabilityFactories().stream()

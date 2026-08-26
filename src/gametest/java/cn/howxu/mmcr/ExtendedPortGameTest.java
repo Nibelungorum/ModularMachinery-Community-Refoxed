@@ -11,15 +11,18 @@ import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -34,6 +37,31 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public class ExtendedPortGameTest {
+
+    public void itemPortsDropStoredItemsWhenRemoved(GameTestHelper helper) {
+        List<BlockPos> positions = List.of(
+                new BlockPos(0, 1, 0), new BlockPos(3, 1, 0), new BlockPos(0, 1, 3));
+        List<String> ids = List.of(
+                "extended_item_input_bus_basic", "combined_input_basic", "extended_combined_input_advanced");
+        for (int index = 0; index < positions.size(); index++) {
+            BlockPos position = positions.get(index);
+            helper.setBlock(position, ModBlocks.BLOCKS.get(ids.get(index)).get().defaultBlockState());
+            IOPortBlockEntity port = helper.getBlockEntity(position, IOPortBlockEntity.class);
+            try (Transaction transaction = Transaction.openRoot()) {
+                port.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
+                transaction.commit();
+            }
+        }
+
+        positions.forEach(helper::destroyBlock);
+        helper.runAtTickTime(1, () -> {
+            for (BlockPos position : positions) {
+                helper.assertTrue(droppedIron(helper, position) == 3L,
+                        "Item port removal drops every stored item at " + position);
+            }
+            helper.succeed();
+        });
+    }
 
     public void standaloneExtendedPortsExposeItemFluidAndEnergyCapabilities(GameTestHelper helper) {
         BlockPos itemPos = new BlockPos(0, 1, 0);
@@ -99,6 +127,14 @@ public class ExtendedPortGameTest {
         BlockEntity blockEntity = helper.getLevel().getBlockEntity(worldPos);
         return capability.getCapability(helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos),
                 blockEntity, Direction.UP);
+    }
+
+    private static long droppedIron(GameTestHelper helper, BlockPos position) {
+        return helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                        new AABB(helper.absolutePos(position)).inflate(1.25D)).stream()
+                .filter(entity -> entity.getItem().is(Items.IRON_INGOT))
+                .mapToLong(entity -> entity.getItem().getCount())
+                .sum();
     }
 
     public void extendedCombinedPortPublishesFormedAppearance(GameTestHelper helper) {
