@@ -23,11 +23,10 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/guitank.png");
+    private static final String COMBINED_TEXTURE_PATH = "textures/gui/combined/";
     private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int IMAGE_HEIGHT = 166;
-    private static final int TEXT_COLOR = 0xFFE0E0E0;
     private static final int TANK_WIDTH = 20;
     private static final int TANK_HEIGHT = 61;
     private static final int TANK_FRAME_X = 176;
@@ -51,6 +50,10 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         return LAYOUT;
     }
 
+    static Identifier textureForKind(String kind) {
+        return MMCR.id(COMBINED_TEXTURE_PATH + kind.substring(kind.lastIndexOf('_') + 1) + ".png");
+    }
+
     @Override
     protected BlockPos portPos() {
         return menu.pos();
@@ -68,7 +71,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
 
     @Override
     protected Identifier texture(boolean autoIOPage) {
-        return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE;
+        return autoIOPage ? AUTO_IO_TEXTURE : textureForKind(menu.kind());
     }
 
     @Override
@@ -78,7 +81,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage) return;
 
-        for (TankRenderOperation operation : tankRenderOperations(menu.fluidTankLayouts(), menu.fluidEntries())) {
+        for (TankRenderOperation operation : tankRenderOperations(menu.fluidTankLayouts(), menu.fluidEntries(), texture(false))) {
             if (operation.kind() == TankRenderOperation.Kind.FILL) {
                 FluidStorageEntry entry = operation.entry();
                 FluidGuiRenderer.drawFluid(graphics, entry.resource().toStack((int) Math.min(entry.amount(), Integer.MAX_VALUE)),
@@ -92,7 +95,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     static List<TankRenderOperation> tankRenderOperations(List<CombinedPortMenu.FluidTankLayout> layouts,
-                                                           List<FluidStorageEntry> entries) {
+                                                           List<FluidStorageEntry> entries, Identifier texture) {
         List<TankRenderOperation> operations = new ArrayList<>();
         for (CombinedPortMenu.FluidTankLayout layout : layouts) {
             FluidStorageEntry entry = entries.stream()
@@ -105,7 +108,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
                 }
             }
             operations.add(new TankRenderOperation(TankRenderOperation.Kind.FRAME, layout.x(), layout.y(),
-                    TANK_WIDTH, TANK_HEIGHT, TANK_FRAME_X, TANK_FRAME_Y, TEXTURE, null));
+                    TANK_WIDTH, TANK_HEIGHT, TANK_FRAME_X, TANK_FRAME_Y, texture, null));
         }
         return operations;
     }
@@ -114,7 +117,6 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
-        graphics.text(font, title, 8, 6, TEXT_COLOR, false);
         for (ItemStorageEntry entry : menu.itemEntries()) {
             if (entry.amount() <= 0 || entry.resource().isEmpty() || entry.slot() >= menu.itemSlotCount()) continue;
             var slot = menu.getSlot(entry.slot());
@@ -124,9 +126,10 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         for (CombinedPortMenu.FluidTankLayout layout : menu.fluidTankLayouts()) {
             FluidStorageEntry entry = menu.fluidEntries().stream()
                     .filter(candidate -> candidate.slot() == layout.slot()).findFirst().orElse(null);
-            if (entry == null || entry.amount() <= 0 || entry.resource().isEmpty()) continue;
-            addTooltip(leftPos + layout.x(), topPos + layout.y(), TANK_WIDTH, TANK_HEIGHT,
-                    ExtendedFluidScreen.tooltipLines(entry));
+            List<Component> tooltip = entry == null || entry.amount() <= 0 || entry.resource().isEmpty()
+                    ? List.of(Component.literal("无"))
+                    : ExtendedFluidScreen.tooltipLines(entry);
+            addTooltip(leftPos + layout.x(), topPos + layout.y(), TANK_WIDTH, TANK_HEIGHT, tooltip);
         }
     }
 

@@ -6,7 +6,6 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntr
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -27,7 +26,7 @@ import java.util.List;
 public final class CombinedPortMenu extends AbstractMachineMenu {
     public static final int FIRST_TANK_X = 15;
     public static final int FIRST_TANK_Y = 10;
-    public static final int SECOND_TANK_X = 43;
+    public static final int SECOND_TANK_X = 42;
     public static final int SECOND_TANK_Y = 10;
     private static final int SLOT_SIZE = 18;
 
@@ -148,7 +147,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
 
     private void addItemSlots(CombinedPortBlockEntity owner) {
         SimpleContainer clientContainer = owner == null ? new SimpleContainer(itemSlotCount) : null;
-        ItemBusMenu.SlotLayout layout = ItemBusMenu.slotLayoutForSize(itemSize(itemSlotCount));
+        ItemBusMenu.SlotLayout layout = slotLayout(itemSlotCount);
         int columns = layout.columns();
         for (int index = 0; index < itemSlotCount; index++) {
             int row = index / columns;
@@ -160,12 +159,12 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         }
     }
 
-    private static ItemBusSize itemSize(int itemSlots) {
+    private static ItemBusMenu.SlotLayout slotLayout(int itemSlots) {
         return switch (itemSlots) {
-            case 6 -> ItemBusSize.NORMAL;
-            case 9 -> ItemBusSize.REINFORCED;
-            case 12 -> ItemBusSize.BIG;
-            case 16 -> ItemBusSize.HUGE;
+            case 6 -> new ItemBusMenu.SlotLayout(62, 22, 2, 3);
+            case 9 -> new ItemBusMenu.SlotLayout(62, 14, 3, 3);
+            case 12 -> new ItemBusMenu.SlotLayout(81, 14, 3, 4);
+            case 16 -> new ItemBusMenu.SlotLayout(80, 7, 4, 4);
             default -> throw new IllegalArgumentException("Unsupported combined item slot count: " + itemSlots);
         };
     }

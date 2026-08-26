@@ -44,7 +44,7 @@ class CombinedPortMenuTest {
     }
 
     @Test
-    void ordinary_combined_menu_binds_item_slots_and_preserves_existing_positions() {
+    void ordinary_combined_menu_binds_item_slots_and_uses_calibrated_tank_positions() {
         CombinedPortBlockEntity owner = new CombinedPortBlockEntity(
                 POS, ModBlocks.BLOCKS.get("combined_input_reinforced").get().defaultBlockState());
         CombinedPortMenu serverMenu = new CombinedPortMenu(1, emptyInventory(), owner);
@@ -55,7 +55,15 @@ class CombinedPortMenuTest {
         assertThat(serverMenu.playerInventorySlotStart()).isEqualTo(12);
         assertThat(serverMenu.slots).hasSize(12 + 36);
         assertThat(serverMenu.fluidTankLayouts().getFirst()).isEqualTo(
-                new CombinedPortMenu.FluidTankLayout(0, 15, 10));
+                new CombinedPortMenu.FluidTankLayout(0, 15, 11));
+    }
+
+    @Test
+    void combined_item_slots_use_calibrated_origins_and_grid_sizes() {
+        assertItemLayout("combined_input_basic", 6, 1, 2, 3, 51, 22, 87, 22, 51, 40);
+        assertItemLayout("combined_input_advanced", 9, 1, 2, 3, 62, 14, 98, 14, 62, 32);
+        assertItemLayout("combined_input_reinforced", 12, 2, 3, 4, 80, 13, 134, 13, 80, 31);
+        assertItemLayout("combined_input_ultimate", 16, 2, 3, 4, 80, 7, 134, 7, 80, 25);
     }
 
     @Test
@@ -91,6 +99,20 @@ class CombinedPortMenuTest {
 
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
+    }
+
+    private static void assertItemLayout(String kind, int itemSlots, int fluidTanks,
+                                         int lastColumnSlot, int nextRowSlot,
+                                         int firstX, int firstY, int lastColumnX, int lastColumnY,
+                                         int nextRowX, int nextRowY) {
+        CombinedPortMenu menu = new CombinedPortMenu(1, emptyInventory(), POS, kind, itemSlots, fluidTanks);
+
+        assertThat(menu.getSlot(0).x).isEqualTo(firstX);
+        assertThat(menu.getSlot(0).y).isEqualTo(firstY);
+        assertThat(menu.getSlot(lastColumnSlot).x).isEqualTo(lastColumnX);
+        assertThat(menu.getSlot(lastColumnSlot).y).isEqualTo(lastColumnY);
+        assertThat(menu.getSlot(nextRowSlot).x).isEqualTo(nextRowX);
+        assertThat(menu.getSlot(nextRowSlot).y).isEqualTo(nextRowY);
     }
 
     private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {

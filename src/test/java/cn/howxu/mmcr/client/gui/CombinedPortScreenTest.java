@@ -40,6 +40,17 @@ class CombinedPortScreenTest {
     }
 
     @Test
+    void combined_tiers_use_the_matching_background_texture() {
+        assertThat(List.of("basic", "advanced", "reinforced", "ultimate").stream()
+                .map(tier -> CombinedPortScreen.textureForKind("combined_input_" + tier)))
+                .containsExactly(
+                        MMCR.id("textures/gui/combined/basic.png"),
+                        MMCR.id("textures/gui/combined/advanced.png"),
+                        MMCR.id("textures/gui/combined/reinforced.png"),
+                        MMCR.id("textures/gui/combined/ultimate.png"));
+    }
+
+    @Test
     void extended_combined_lines_keep_item_section_before_fluid_section() {
         ItemStorageEntry item = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT), 12L, 64L);
         FluidStorageEntry fluid = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 34L, 56L);
@@ -52,26 +63,30 @@ class CombinedPortScreenTest {
     }
 
     @Test
-    void ordinary_combined_layout_keeps_existing_tank_coordinates_and_declares_reserved_slots() {
+    void ordinary_combined_layout_uses_calibrated_tank_coordinates_and_declares_reserved_slots() {
         CombinedPortScreen.Layout layout = CombinedPortScreen.layout();
 
         assertThat(layout.firstTankX()).isEqualTo(15);
-        assertThat(layout.firstTankY()).isEqualTo(10);
+        assertThat(layout.firstTankY()).isEqualTo(11);
+        assertThat(layout.secondTankX()).isEqualTo(42);
+        assertThat(layout.secondTankY()).isEqualTo(10);
         assertThat(layout.reservedCoordinates()).containsExactly("second_tank", "capability_selector");
     }
 
     @Test
-    void known_one_and_two_tank_layouts_fill_then_draw_the_guitank_frame() {
+    void known_one_and_two_tank_layouts_fill_then_draw_the_current_combined_frame() {
         FluidStorageEntry first = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 30L, 60L);
         FluidStorageEntry second = new FluidStorageEntry(1, FluidResource.of(Fluids.WATER), 10L, 60L);
-        CombinedPortMenu.FluidTankLayout firstLayout = new CombinedPortMenu.FluidTankLayout(0, 15, 10);
-        CombinedPortMenu.FluidTankLayout secondLayout = new CombinedPortMenu.FluidTankLayout(1, 43, 10);
+        CombinedPortMenu.FluidTankLayout firstLayout = new CombinedPortMenu.FluidTankLayout(0, 15, 11);
+        CombinedPortMenu.FluidTankLayout secondLayout = new CombinedPortMenu.FluidTankLayout(1, 42, 10);
+        var texture = CombinedPortScreen.textureForKind("combined_input_reinforced");
 
-        assertThat(CombinedPortScreen.tankRenderOperations(List.of(firstLayout), List.of(first)))
+        assertThat(CombinedPortScreen.tankRenderOperations(List.of(firstLayout), List.of(first), texture))
                 .extracting(operation -> operation.kind())
                 .containsExactly(CombinedPortScreen.TankRenderOperation.Kind.FILL,
                         CombinedPortScreen.TankRenderOperation.Kind.FRAME);
-        assertThat(CombinedPortScreen.tankRenderOperations(List.of(firstLayout, secondLayout), List.of(first, second)))
+        assertThat(CombinedPortScreen.tankRenderOperations(
+                List.of(firstLayout, secondLayout), List.of(first, second), texture))
                 .extracting(operation -> operation.kind())
                 .containsExactly(CombinedPortScreen.TankRenderOperation.Kind.FILL,
                         CombinedPortScreen.TankRenderOperation.Kind.FRAME,
@@ -79,18 +94,18 @@ class CombinedPortScreenTest {
                         CombinedPortScreen.TankRenderOperation.Kind.FRAME);
 
         CombinedPortScreen.TankRenderOperation frame = CombinedPortScreen.tankRenderOperations(
-                List.of(firstLayout), List.of(first)).get(1);
+                List.of(firstLayout), List.of(first), texture).get(1);
         assertThat(frame.x()).isEqualTo(15);
-        assertThat(frame.y()).isEqualTo(10);
-        assertThat(frame.texture()).isEqualTo(MMCR.id("textures/gui/guitank.png"));
+        assertThat(frame.y()).isEqualTo(11);
+        assertThat(frame.texture()).isEqualTo(texture);
         assertThat(frame.sourceX()).isEqualTo(176);
         assertThat(frame.sourceY()).isZero();
         assertThat(frame.width()).isEqualTo(20);
         assertThat(frame.height()).isEqualTo(61);
 
         CombinedPortScreen.TankRenderOperation secondFrame = CombinedPortScreen.tankRenderOperations(
-                List.of(firstLayout, secondLayout), List.of(first, second)).get(3);
-        assertThat(secondFrame.x()).isEqualTo(43);
+                List.of(firstLayout, secondLayout), List.of(first, second), texture).get(3);
+        assertThat(secondFrame.x()).isEqualTo(42);
         assertThat(secondFrame.y()).isEqualTo(10);
     }
 
