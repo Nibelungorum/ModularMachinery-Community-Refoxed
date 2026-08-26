@@ -116,6 +116,12 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
+        if (autoIOPage) return false;
+        return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
+    }
+
+    @Override
     protected final void slotClicked(Slot slot, int slotIndex, int mouseButton, ContainerInput clickType) {
         if (menu instanceof ItemBusMenu itemBus && hidesSlotOnAutoIOPage(itemBus, autoIOPage, slot, slotIndex)
                 || menu instanceof CombinedPortMenu combined && hidesSlotOnAutoIOPage(combined, autoIOPage, slot, slotIndex)) return;
@@ -222,6 +228,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 selectCapability(capabilityId);
                 autoIOPage = true;
             }
+            resetTextScrollOffset();
             updateAutoIOWidgets();
             button.setFocused(false);
         }).bounds(x, y, 12, 12).build());

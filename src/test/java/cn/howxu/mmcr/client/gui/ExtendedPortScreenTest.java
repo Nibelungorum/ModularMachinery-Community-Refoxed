@@ -1,9 +1,18 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
+import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.Holder;
@@ -11,12 +20,16 @@ import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
-import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+
+import sun.misc.Unsafe;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,6 +71,32 @@ class ExtendedPortScreenTest {
         assertThat(AbstractScrollableTextScreen.class).isAssignableFrom(ExtendedItemScreen.class);
         assertThat(AbstractScrollableTextScreen.class).isAssignableFrom(ExtendedFluidScreen.class);
         assertThat(AbstractScrollableTextScreen.class).isAssignableFrom(ExtendedCombinedScreen.class);
+    }
+
+    @Test
+    void auto_io_page_does_not_consume_text_scroll_and_resets_offset_when_toggled() throws Exception {
+        ScrollProbeScreen screen = ScrollProbeScreen.create();
+        Button pageButton = screen.createPageButton();
+
+        boolean textScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
+        int offsetAfterTextScroll = screen.firstLine();
+        pageButton.onPress(null);
+        int offsetAfterOpeningAutoIO = screen.firstLine();
+        boolean autoIOScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
+        int offsetAfterAutoIOScroll = screen.firstLine();
+        pageButton.onPress(null);
+        int offsetAfterReturningToText = screen.firstLine();
+        boolean reopenedTextScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
+        int reopenedTextOffset = screen.firstLine();
+
+        assertThat(textScrollConsumed).isTrue();
+        assertThat(offsetAfterTextScroll).isEqualTo(1);
+        assertThat(offsetAfterOpeningAutoIO).isZero();
+        assertThat(autoIOScrollConsumed).isFalse();
+        assertThat(offsetAfterAutoIOScroll).isZero();
+        assertThat(offsetAfterReturningToText).isZero();
+        assertThat(reopenedTextScrollConsumed).isTrue();
+        assertThat(reopenedTextOffset).isEqualTo(1);
     }
 
     @Test
@@ -136,5 +175,86 @@ class ExtendedPortScreenTest {
         if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(value));
+    }
+
+    private static Unsafe unsafe() throws Exception {
+        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (Unsafe) field.get(null);
+    }
+
+    private static void setField(Object target, String name, Object value) throws Exception {
+        Class<?> type = target.getClass();
+        Field field = null;
+        while (type != null && field == null) {
+            try {
+                field = type.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (field == null) throw new NoSuchFieldException(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    /**
+     * Minimal screen fixture for exercising the shared text viewport and Auto IO page transition.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ScrollProbeScreen extends AbstractPortScreen<ItemBusMenu> {
+        private ScrollProbeScreen() {
+            super(null, null, Component.empty(), 213);
+        }
+
+        private static ScrollProbeScreen create() throws Exception {
+            ScrollProbeScreen screen = (ScrollProbeScreen) unsafe().allocateInstance(ScrollProbeScreen.class);
+            setField(screen, "font", unsafe().allocateInstance(Font.class));
+            setField(screen, "imageHeight", 213);
+            setField(screen, "leftPos", 0);
+            setField(screen, "topPos", 0);
+            setField(screen, "renderables", new ArrayList<>());
+            setField(screen, "children", new ArrayList<>());
+            setField(screen, "narratables", new ArrayList<>());
+            setField(screen, "autoIOSideButtons", new EnumMap<>(Direction.class));
+            return screen;
+        }
+
+        private Button createPageButton() throws Exception {
+            Method method = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton",
+                    int.class, int.class, Identifier.class);
+            method.setAccessible(true);
+            return (Button) method.invoke(this, 0, 0, MMCR.id("item"));
+        }
+
+        private int firstLine() {
+            return firstVisibleTextLine();
+        }
+
+        @Override
+        protected BlockPos portPos() {
+            return BlockPos.ZERO;
+        }
+
+        @Override
+        protected IOType ownerIOType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        protected int portSlotCount() {
+            return 0;
+        }
+
+        @Override
+        protected Identifier texture(boolean autoIOPage) {
+            return MMCR.id("textures/gui/test.png");
+        }
+
+        @Override
+        protected int scrollableTextLineCount() {
+            return 30;
+        }
     }
 }
