@@ -23,11 +23,12 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
-    private static final int MAX_DROPPED_STACKS_PER_SLOT = 64;
+    private static final int MAX_DROPPED_STACKS_PER_SLOT = 1024;
 
     private final ItemStackHandler handler;
     private Boolean inventoryEmpty;
@@ -89,6 +90,11 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
 
     static void dropItemResources(Level level, BlockPos pos, ResourceStorage<ItemResource> storage) {
         if (level == null || level.isClientSide()) return;
+        dropItemResources(storage, stack -> Block.popResource(level, pos, stack));
+    }
+
+    static void dropItemResources(ResourceStorage<ItemResource> storage, Consumer<ItemStack> drop) {
+        if (storage == null || drop == null) throw new IllegalArgumentException("Storage and drop action are required");
         for (int slot = 0; slot < storage.size(); slot++) {
             ItemResource resource = storage.resource(slot);
             long amount = storage.amount(slot);
@@ -101,12 +107,12 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
                 long remaining = droppedAmount;
                 while (remaining > 0L) {
                     int count = (int) Math.min(remaining, stackLimit);
-                    Block.popResource(level, pos, resource.toStack(count));
+                    drop.accept(resource.toStack(count));
                     remaining -= count;
                 }
                 if (amount > droppedAmount) {
-                    MMCR.LOG.warn("Discarding {} item(s) from {} at {} after bounded drop", amount - droppedAmount,
-                            resource, pos);
+                    MMCR.LOG.warn("Discarding {} item(s) from {} after bounded drop", amount - droppedAmount,
+                            resource);
                 }
             } finally {
                 try (Transaction transaction = Transaction.openRoot()) {

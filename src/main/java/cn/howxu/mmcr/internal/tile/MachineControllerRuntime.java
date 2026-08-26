@@ -138,6 +138,26 @@ public final class MachineControllerRuntime {
         publishSnapshot();
     }
 
+    void publishRuntimeState(boolean structureAreaLoaded, boolean formed,
+                             @Nullable Machine configuredMachine, int matchedStage,
+                             @Nullable Identifier recipeId, CraftingStatus status,
+                             @Nullable ExecutionStatus failure, int tick, int totalTick,
+                             int parallelism, int maxParallelism) {
+        structure.setStructureAreaLoaded(structureAreaLoaded);
+        structure.setFormed(formed);
+        structure.setMachine(configuredMachine);
+        structure.setMatchedStructureStage(matchedStage);
+
+        boolean client = controller.getLevel() != null && controller.getLevel().isClientSide();
+        boolean recipeLocked = client ? controller.hasClientRecipeLock() : controller.lockedRecipeId() != null;
+        String lockedRecipeId = client ? controller.clientLockedRecipeId()
+                : controller.lockedRecipeId() == null ? "" : controller.lockedRecipeId().toString();
+        craftingState = new CraftingStateSnapshot(recipeId, status, failure,
+                structure.version(), components.capabilityVersion(), components.modifierVersion(),
+                tick, totalTick, parallelism, maxParallelism, recipeLocked, lockedRecipeId);
+        publishSnapshot();
+    }
+
     void requestStructureCheck() {
         structure.requestCheck();
     }

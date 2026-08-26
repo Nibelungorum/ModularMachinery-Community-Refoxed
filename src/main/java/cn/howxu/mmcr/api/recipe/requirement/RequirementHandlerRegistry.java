@@ -217,7 +217,8 @@ public final class RequirementHandlerRegistry {
                 Object current = storage.resource(slot);
                 if (storage.amount(slot) > 0L && current instanceof ItemResource existing && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
-                long room = Math.max(0L, storage.capacityResource(slot, resource) - storage.amount(slot));
+                long slotCapacity = Math.min(storage.capacityResource(slot, resource), stack.getMaxStackSize());
+                long room = Math.max(0L, slotCapacity - storage.amount(slot));
                 capacity = saturatingAdd(capacity, room);
             }
         }
@@ -278,6 +279,8 @@ public final class RequirementHandlerRegistry {
         if (amount <= 0L) return new RequirementPlan.OperationPlan(List.of(), null);
         ItemResource requested = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? ItemResource.of(requirement.stack(null)) : null;
+        int stackLimit = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? requirement.stack(null).getMaxStackSize() : 0;
         Map<MachineCapability, List<CapabilityRequests.ResourceAction<ItemResource>>> actionMap = new LinkedHashMap<>();
         long remaining = amount;
         for (MachineCapability capability : capabilities) {
@@ -298,7 +301,7 @@ public final class RequirementHandlerRegistry {
                 } else {
                     if (currentAmount > 0L && (! (current instanceof ItemResource resource) || !resource.equals(requested))) continue;
                     if (!storage.isValidResource(slot, requested)) continue;
-                    long capacity = storage.capacityResource(slot, requested);
+                    long capacity = Math.min(storage.capacityResource(slot, requested), stackLimit);
                     long moved = Math.min(remaining, Math.max(0L, capacity - currentAmount));
                     if (moved > 0L && reservations.reserveInsert(storage, slot, requested, moved)) {
                         actions.add(new CapabilityRequests.ResourceAction<>(slot, requested, moved, true));

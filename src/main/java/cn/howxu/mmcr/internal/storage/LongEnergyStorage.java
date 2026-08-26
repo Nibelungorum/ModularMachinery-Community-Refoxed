@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.storage;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import net.neoforged.neoforge.transfer.TransferPreconditions;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
@@ -11,7 +10,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class LongEnergyStorage extends SnapshotJournal<Long> implements EnergyHandler {
+public final class LongEnergyStorage extends SnapshotJournal<Long> implements LongEnergyHandler {
     private final LongValueStorage storage;
     private final long transferLimit;
     private final Runnable onChange;
@@ -26,6 +25,7 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements En
         return storage.capacity();
     }
 
+    @Override
     public long getTransferLimit() {
         return transferLimit;
     }
@@ -70,6 +70,22 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements En
         if (amount == 0) return 0;
         updateSnapshots(tx);
         return (int) storage.extract(amount, false);
+    }
+
+    @Override
+    public long insertLong(long amount, TransactionContext tx) {
+        if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+        if (amount == 0) return 0L;
+        updateSnapshots(tx);
+        return storage.insert(amount, false);
+    }
+
+    @Override
+    public long extractLong(long amount, TransactionContext tx) {
+        if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+        if (amount == 0) return 0L;
+        updateSnapshots(tx);
+        return storage.extract(amount, false);
     }
 
     @Override

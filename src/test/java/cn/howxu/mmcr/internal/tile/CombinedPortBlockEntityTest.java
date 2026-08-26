@@ -15,6 +15,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
@@ -59,6 +60,24 @@ class CombinedPortBlockEntityTest {
         assertThat(port.itemStorage().size()).isEqualTo(12);
         assertThat(port.fluidStorage().size()).isEqualTo(2);
         assertThat(port.kind().ioType()).isEqualTo(IOType.INPUT);
+    }
+
+    @Test
+    void noArgumentAutoIoToggleReadsAndWritesTheSamePrimaryCapabilityProfile() {
+        CombinedPortBlockEntity port = combined("combined_input_basic");
+        CapabilityType primary = port.capabilitySnapshot().capabilities().getFirst().type();
+
+        port.toggleAutoIOEnabled();
+        assertThat(port.autoIOConfig().enabled()).isTrue();
+        assertThat(port.autoIOConfig(primary).enabled()).isTrue();
+
+        port.toggleAutoIOEnabled();
+        assertThat(port.autoIOConfig().enabled()).isFalse();
+        assertThat(port.autoIOConfig(primary).enabled()).isFalse();
+
+        port.toggleAutoIOSide(Direction.NORTH);
+        assertThat(port.autoIOConfig().isSideEnabled(Direction.NORTH)).isFalse();
+        assertThat(port.autoIOConfig(primary).isSideEnabled(Direction.NORTH)).isFalse();
     }
 
     @Test

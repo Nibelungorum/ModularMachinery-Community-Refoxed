@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
@@ -144,12 +145,12 @@ public final class ModCapabilities {
         return new ResourceStorageHandler<>(storage, canInsert, canExtract);
     }
 
-    private static final class DirectionalEnergyHandler implements EnergyHandler {
-        private final EnergyHandler handler;
+    private static final class DirectionalEnergyHandler implements LongEnergyHandler {
+        private final LongEnergyHandler handler;
         private final boolean canInsert;
         private final boolean canExtract;
 
-        DirectionalEnergyHandler(EnergyHandler handler, boolean canInsert, boolean canExtract) {
+        DirectionalEnergyHandler(LongEnergyHandler handler, boolean canInsert, boolean canExtract) {
             this.handler = handler;
             this.canInsert = canInsert;
             this.canExtract = canExtract;
@@ -166,6 +167,11 @@ public final class ModCapabilities {
         }
 
         @Override
+        public long getTransferLimit() {
+            return handler.getTransferLimit();
+        }
+
+        @Override
         public int insert(int amount, TransactionContext tx) {
             TransferPreconditions.checkNonNegative(amount);
             if (!canInsert) return 0;
@@ -178,9 +184,23 @@ public final class ModCapabilities {
             if (!canExtract) return 0;
             return handler.extract(amount, tx);
         }
+
+        @Override
+        public long insertLong(long amount, TransactionContext tx) {
+            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+            if (!canInsert) return 0L;
+            return handler.insertLong(amount, tx);
+        }
+
+        @Override
+        public long extractLong(long amount, TransactionContext tx) {
+            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+            if (!canExtract) return 0L;
+            return handler.extractLong(amount, tx);
+        }
     }
 
-    private static final class EnergyHandlerAdapter implements EnergyHandler {
+    private static final class EnergyHandlerAdapter implements LongEnergyHandler {
         private final LongValueStorage storage;
 
         private EnergyHandlerAdapter(LongValueStorage storage) {
@@ -189,6 +209,7 @@ public final class ModCapabilities {
 
         @Override public long getAmountAsLong() { return storage.amount(); }
         @Override public long getCapacityAsLong() { return storage.capacity(); }
+        @Override public long getTransferLimit() { return storage.transferLimit(); }
         @Override public int insert(int amount, TransactionContext tx) {
             storage.updateSnapshots(tx);
             return (int) storage.insert(amount, false);
@@ -196,6 +217,16 @@ public final class ModCapabilities {
         @Override public int extract(int amount, TransactionContext tx) {
             storage.updateSnapshots(tx);
             return (int) storage.extract(amount, false);
+        }
+        @Override public long insertLong(long amount, TransactionContext tx) {
+            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+            storage.updateSnapshots(tx);
+            return storage.insert(amount, false);
+        }
+        @Override public long extractLong(long amount, TransactionContext tx) {
+            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+            storage.updateSnapshots(tx);
+            return storage.extract(amount, false);
         }
     }
 
@@ -282,7 +313,8 @@ public final class ModCapabilities {
             if (!canInsert) return 0;
             updateSnapshots(tx);
             ItemStack remainder = handler.insertItem(slot, resource.toStack(amount), false);
-            return amount - remainder.getCount();
+            int inserted = amount - remainder.getCount();
+            return inserted;
         }
 
         @Override

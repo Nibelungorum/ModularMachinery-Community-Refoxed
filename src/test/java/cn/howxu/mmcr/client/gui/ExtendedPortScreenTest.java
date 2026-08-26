@@ -45,10 +45,24 @@ class ExtendedPortScreenTest {
     }
 
     @Test
-    void empty_extended_combined_storage_uses_the_localized_empty_state() {
-        assertThat(ExtendedCombinedScreen.displayLines(List.of(), List.of()))
+    void empty_extended_combined_storage_uses_grouped_empty_states() {
+        List<Component> lines = ExtendedCombinedScreen.displayLines(List.of(), List.of());
+        assertThat(lines)
                 .extracting(Component::getString)
-                .containsExactly("gui.mmcr.port.empty", "gui.mmcr.port.empty");
+                .containsExactly("gui.mmcr.port.items gui.mmcr.port.empty", "gui.mmcr.port.fluids gui.mmcr.port.empty");
+        assertThat(lines.getFirst().getSiblings().getLast().getStyle().getColor().getValue())
+                .isEqualTo(ChatFormatting.GREEN.getColor());
+    }
+
+    @Test
+    void combined_storage_groups_content_and_marks_empty_group() {
+        ItemStorageEntry item = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT),
+                1_200_123_543_243L, Long.MAX_VALUE);
+
+        assertThat(ExtendedCombinedScreen.displayLines(List.of(item), List.of()))
+                .extracting(Component::getString)
+                .containsExactly("gui.mmcr.port.items", "1.20T " + item.resource().getHoverName().getString(),
+                        "gui.mmcr.port.fluids gui.mmcr.port.empty");
     }
 
     @Test

@@ -5,10 +5,13 @@ import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.util.ReadableNumber;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 
@@ -31,7 +34,6 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
     private static final int ROW_X = 12;
     private static final int FIRST_ROW_Y = 24;
     private static final int ROW_STEP = 10;
-    private static final int SECTION_GAP = 6;
     private static final int TEXT_COLOR = 0xFFE0E0E0;
 
     public ExtendedCombinedScreen(ExtendedCombinedMenu menu, Inventory inventory, Component title) {
@@ -71,51 +73,104 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         if (autoIOPage) return;
         graphics.text(font, title, TITLE_X, TITLE_Y, TEXT_COLOR, false);
 
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE);
         int y = drawItems(graphics, menu.itemEntries(), FIRST_ROW_Y);
-        drawFluids(graphics, menu.fluidEntries(), y + SECTION_GAP);
+        drawFluids(graphics, menu.fluidEntries(), y);
+        graphics.pose().popMatrix();
     }
 
     static List<Component> displayLines(List<ItemStorageEntry> itemEntries, List<FluidStorageEntry> fluidEntries) {
         List<Component> lines = new ArrayList<>();
-        lines.addAll(ExtendedItemScreen.displayLines(itemEntries));
-        lines.addAll(ExtendedFluidScreen.displayLines(fluidEntries));
+        List<ItemStorageEntry> nonEmptyItems = nonEmptyItems(itemEntries);
+        if (nonEmptyItems.isEmpty()) {
+            lines.add(emptySectionLine("gui.mmcr.port.items"));
+        } else {
+            lines.add(sectionLabel("gui.mmcr.port.items"));
+            for (ItemStorageEntry entry : nonEmptyItems) lines.add(itemLine(entry));
+        }
+        List<FluidStorageEntry> nonEmptyFluids = nonEmptyFluids(fluidEntries);
+        if (nonEmptyFluids.isEmpty()) {
+            lines.add(emptySectionLine("gui.mmcr.port.fluids"));
+        } else {
+            lines.add(sectionLabel("gui.mmcr.port.fluids"));
+            for (FluidStorageEntry entry : nonEmptyFluids) lines.add(fluidLine(entry));
+        }
         return List.copyOf(lines);
     }
 
     private int drawItems(GuiGraphicsExtractor graphics, List<ItemStorageEntry> entries, int y) {
-        List<ItemStorageEntry> nonEmpty = entries.stream()
-                .filter(entry -> entry.amount() > 0 && !entry.resource().isEmpty()).toList();
+        List<ItemStorageEntry> nonEmpty = nonEmptyItems(entries);
         if (nonEmpty.isEmpty()) {
-            graphics.text(font, Component.translatable("gui.mmcr.port.empty").withStyle(net.minecraft.ChatFormatting.GREEN),
-                    ROW_X, y, net.minecraft.ChatFormatting.GREEN.getColor(), false);
+            graphics.text(font, emptySectionLine("gui.mmcr.port.items"),
+                    (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
+                    0xFF55FF55, false);
             return y + ROW_STEP;
         }
+        graphics.text(font, sectionLabel("gui.mmcr.port.items"),
+                (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
+                0xFF55FF55, false);
+        y += ROW_STEP;
         for (ItemStorageEntry entry : nonEmpty) {
-            Component line = Component.literal(cn.howxu.mmcr.util.ReadableNumber.format(entry.amount()) + " ")
-                    .append(entry.resource().getHoverName());
-            graphics.text(font, line, ROW_X, y, TEXT_COLOR, false);
-            addTooltip(leftPos + ROW_X, topPos + y, font.width(line), 10,
+            Component line = itemLine(entry);
+            graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
+            addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
+                    TEXT_DETAIL_LINE_SPACING,
                     ExtendedItemScreen.tooltipLines(entry));
-            y += ROW_STEP;
+            y += TEXT_DETAIL_LINE_SPACING;
         }
         return y;
     }
 
-    private void drawFluids(GuiGraphicsExtractor graphics, List<FluidStorageEntry> entries, int y) {
-        List<FluidStorageEntry> nonEmpty = entries.stream()
-                .filter(entry -> entry.amount() > 0 && !entry.resource().isEmpty()).toList();
+    private int drawFluids(GuiGraphicsExtractor graphics, List<FluidStorageEntry> entries, int y) {
+        List<FluidStorageEntry> nonEmpty = nonEmptyFluids(entries);
         if (nonEmpty.isEmpty()) {
-            graphics.text(font, Component.translatable("gui.mmcr.port.empty").withStyle(net.minecraft.ChatFormatting.GREEN),
-                    ROW_X, y, net.minecraft.ChatFormatting.GREEN.getColor(), false);
-            return;
+            graphics.text(font, emptySectionLine("gui.mmcr.port.fluids"),
+                    (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
+                    0xFF55FF55, false);
+            return y + ROW_STEP;
         }
+        graphics.text(font, sectionLabel("gui.mmcr.port.fluids"),
+                (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
+                0xFF55FF55, false);
+        y += ROW_STEP;
         for (FluidStorageEntry entry : nonEmpty) {
-            Component line = Component.literal(cn.howxu.mmcr.util.ReadableNumber.format(entry.amount()) + " ")
-                    .append(entry.resource().getHoverName());
-            graphics.text(font, line, ROW_X, y, TEXT_COLOR, false);
-            addTooltip(leftPos + ROW_X, topPos + y, font.width(line), 10,
+            Component line = fluidLine(entry);
+            graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
+            addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
+                    TEXT_DETAIL_LINE_SPACING,
                     ExtendedFluidScreen.tooltipLines(entry));
-            y += ROW_STEP;
+            y += TEXT_DETAIL_LINE_SPACING;
         }
+        return y;
+    }
+
+    private static MutableComponent sectionLabel(String key) {
+        return Component.translatable(key).withStyle(ChatFormatting.GREEN);
+    }
+
+    private static Component emptySectionLine(String key) {
+        return sectionLabel(key).append(Component.literal(" "))
+                .append(Component.translatable("gui.mmcr.port.empty").withStyle(ChatFormatting.GREEN));
+    }
+
+    private static Component itemLine(ItemStorageEntry entry) {
+        return Component.literal(ReadableNumber.format(entry.amount()) + " ")
+                .append(entry.resource().getHoverName());
+    }
+
+    private static Component fluidLine(FluidStorageEntry entry) {
+        return Component.literal(ReadableNumber.format(entry.amount()) + " ")
+                .append(entry.resource().getHoverName());
+    }
+
+    private static List<ItemStorageEntry> nonEmptyItems(List<ItemStorageEntry> entries) {
+        return entries.stream().filter(entry -> entry.amount() > 0 && !entry.resource().isEmpty()).toList();
+    }
+
+    private static List<FluidStorageEntry> nonEmptyFluids(List<FluidStorageEntry> entries) {
+        return entries.stream().filter(entry -> entry.amount() > 0 && !entry.resource().isEmpty()).toList();
     }
 }

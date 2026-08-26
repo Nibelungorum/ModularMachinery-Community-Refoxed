@@ -15,9 +15,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,6 +86,28 @@ class ItemBusBlockEntityTest {
 
         assertThat(handler.getStackInSlot(0).getItem()).isEqualTo(existing.getItem());
         assertThat(handler.getStackInSlot(0).getCount()).isEqualTo(existing.getCount());
+    }
+
+    @Test
+    void long_item_drop_is_bounded_at_1024_legal_stacks_per_slot() {
+        ExtendedItemBusBlockEntity bus = (ExtendedItemBusBlockEntity) ModBlockEntities.BES
+                .get("extended_item_input_bus_basic").get().create(
+                        BlockPos.ZERO, ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
+        ItemResource resource = ItemResource.of(Items.IRON_INGOT);
+        long stackLimit = resource.getMaxStackSize();
+        long amount = stackLimit * 1025L;
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(bus.itemStorage().insert(0, resource, amount, transaction)).isEqualTo(amount);
+            transaction.commit();
+        }
+
+        List<ItemStack> dropped = new ArrayList<>();
+        ItemBusBlockEntity.dropItemResources(bus.itemStorage(), dropped::add);
+
+        assertThat(dropped).hasSize(1024);
+        assertThat(dropped).allSatisfy(stack -> assertThat(stack.getCount()).isLessThanOrEqualTo((int) stackLimit));
+        assertThat(dropped.stream().mapToLong(ItemStack::getCount).sum()).isEqualTo(stackLimit * 1024L);
+        assertThat(bus.itemStorage().amount(0)).isZero();
     }
 
     private static ItemInputBusBlockEntity itemInputBus() {

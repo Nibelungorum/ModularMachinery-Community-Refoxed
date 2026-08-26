@@ -123,6 +123,8 @@
 
   "gui.mmcr.controller.energy": "Energy: %s / %s FE",
   "gui.mmcr.port.empty": "Empty",
+  "gui.mmcr.port.items": "Items:",
+  "gui.mmcr.port.fluids": "Fluids:",
   "gui.mmcr.port.stored": "Stored:",
   "gui.mmcr.controller.failure.level_insufficient": "Insufficient Level",
   "gui.mmcr.controller.failure.missing_energy": "Missing Energy",

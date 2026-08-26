@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -268,9 +269,10 @@ public final class CapabilityTransferPolicies {
     }
 
     private static EnergyHandler energyHandler(LongValueStorage storage) {
-        return new EnergyHandler() {
+        return new LongEnergyHandler() {
             @Override public long getAmountAsLong() { return storage.amount(); }
             @Override public long getCapacityAsLong() { return storage.capacity(); }
+            @Override public long getTransferLimit() { return storage.transferLimit(); }
             @Override public int insert(int amount, TransactionContext transaction) {
                 storage.updateSnapshots(transaction);
                 return (int) storage.insert(amount, false);
@@ -279,15 +281,30 @@ public final class CapabilityTransferPolicies {
                 storage.updateSnapshots(transaction);
                 return (int) storage.extract(amount, false);
             }
+            @Override public long insertLong(long amount, TransactionContext transaction) {
+                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+                storage.updateSnapshots(transaction);
+                return storage.insert(amount, false);
+            }
+            @Override public long extractLong(long amount, TransactionContext transaction) {
+                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+                storage.updateSnapshots(transaction);
+                return storage.extract(amount, false);
+            }
         };
     }
 
     private static long moveEnergy(EnergyHandler from, EnergyHandler to, long requested) {
         if (requested <= 0L) return 0L;
+        if (from instanceof LongEnergyHandler longFrom && to instanceof LongEnergyHandler longTo) {
+            return moveLongEnergy(longFrom, longTo, requested);
+        }
+        // EnergyHandler exposes int-sized transfers; continue long-backed transfers on later ticks.
+        long boundedRequest = Math.min(requested, Integer.MAX_VALUE);
         long moved = 0L;
         try (Transaction transaction = Transaction.openRoot()) {
-            while (moved < requested) {
-                int chunk = (int) Math.min(requested - moved, Integer.MAX_VALUE);
+            while (moved < boundedRequest) {
+                int chunk = (int) (boundedRequest - moved);
                 int chunkMoved = EnergyHandlerUtil.move(from, to, chunk, transaction);
                 if (chunkMoved <= 0) break;
                 moved += chunkMoved;
@@ -296,5 +313,23 @@ public final class CapabilityTransferPolicies {
             transaction.commit();
         }
         return moved;
+    }
+
+    private static long moveLongEnergy(LongEnergyHandler from, LongEnergyHandler to, long requested) {
+        long targetSpace = to.getAmountAsLong() >= to.getCapacityAsLong()
+                ? 0L
+                : to.getCapacityAsLong() - to.getAmountAsLong();
+        long amount = Math.min(requested, Math.min(from.getAmountAsLong(), targetSpace));
+        amount = Math.min(amount, Math.min(from.getTransferLimit(), to.getTransferLimit()));
+        if (amount <= 0L) return 0L;
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            long extracted = from.extractLong(amount, transaction);
+            if (extracted != amount) return 0L;
+            long inserted = to.insertLong(extracted, transaction);
+            if (inserted != extracted) return 0L;
+            transaction.commit();
+            return inserted;
+        }
     }
 }

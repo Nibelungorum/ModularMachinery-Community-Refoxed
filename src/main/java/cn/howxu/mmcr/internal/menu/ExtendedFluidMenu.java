@@ -34,6 +34,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         this.tankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
                 : owner.fluidStorage().size();
         this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.from(owner).fluidEntries();
+        addPlayerSlots(playerInv, 47);
     }
 
     public ExtendedFluidMenu(int containerId, Inventory playerInv, BlockPos pos, String kind, int tankCount) {
@@ -47,6 +48,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         this.kind = view.id();
         this.tankCount = tankCount;
         this.entries = List.of();
+        addPlayerSlots(playerInv, 47);
     }
 
     public static ExtendedFluidMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

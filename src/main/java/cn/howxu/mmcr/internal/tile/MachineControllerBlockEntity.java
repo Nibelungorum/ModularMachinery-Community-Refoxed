@@ -113,6 +113,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.Comparator;
 import java.util.OptionalInt;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
@@ -219,28 +220,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void publishRuntimeState() {
         if (level != null && level.isClientSide()) return;
-        runtime.publishSnapshot();
         ControllerRuntimeSnapshot current = runtimeSnapshot();
-        runtime.publishStructureState(isStructureAreaLoaded(current.structure()), current.structure().formed(),
-                current.structure().configuredMachine(), current.structure().matchedStage());
-        runtime.publishComponentState(runtime.components(), current.foundModifiers(),
-                current.foundLevels(), current.linkedPortPositions());
-        ControllerRuntimeSnapshot published = runtimeSnapshot();
-        if (published.crafting().recipeId() != null || published.crafting().failure() != null) {
-            syncCraftingFailure();
+        StructureSnapshot structure = current.structure();
+        CraftingRuntime craftingRuntime = runtime.craftingRuntime();
+        if (current.crafting().recipeId() != null || current.crafting().failure() != null
+                || craftingRuntime.active() || craftingRuntime.failure() != null) {
+            ExecutionStatus runtimeFailure = craftingRuntime.failure();
+            lastFailureUnloc = runtimeFailure == null ? null : failureUnloc(runtimeFailure);
         }
-        StructureSnapshot structure = published.structure();
-        boolean activeState = published.crafting().recipeId() != null || published.factory().active();
-        Identifier recipeId = published.crafting().recipeId();
+        boolean activeState = craftingRuntime.active() || runtime.factoryRuntime().activeLaneCount() > 0;
+        Identifier recipeId = craftingRuntime.recipe() == null ? null : craftingRuntime.recipe().id();
         CraftingStatus status = !structure.formed()
                 ? CraftingStatus.MISSING_STRUCTURE
                 : !structure.structureAreaLoaded() ? CraftingStatus.CHUNK_UNLOADED
                 : activeState
                 ? redstonePaused ? CraftingStatus.paused() : CraftingStatus.working()
                 : lastFailureUnloc == null ? CraftingStatus.IDLE : CraftingStatus.failure(lastFailureUnloc);
-        CraftingRuntime craftingRuntime = runtime.craftingRuntime();
-        runtime.publishCraftingState(recipeId, status, craftingFailureStatus(), craftingRuntime.tickCount(),
+        runtime.publishRuntimeState(isStructureAreaLoaded(structure), structure.formed(),
+                structure.configuredMachine(), structure.matchedStage(), recipeId, status,
+                craftingFailureStatus(), craftingRuntime.tickCount(),
                 craftingRuntime.totalTick(), craftingRuntime.parallelism(), craftingRuntime.maxParallelism());
+        broadcastStateIfChanged();
     }
 
     private @Nullable ExecutionStatus craftingFailureStatus() {
@@ -716,6 +716,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         ControllerRuntimeSnapshot tickState = runtimeSnapshot();
+        boolean hadActiveWork = hasActiveRuntimeWork();
+        boolean wasRedstonePaused = redstonePaused;
+        String previousFailureUnloc = lastFailureUnloc;
+        ExecutionStatus previousCraftingFailure = runtime.craftingRuntime().failure();
         try {
         if (advanceBuildTask()) return;
 
@@ -739,14 +743,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         } finally {
-            publishRuntimeState();
-            if (hasFactoryController()) syncOpenFactoryControllerMenus();
-            broadcastStateIfChanged();
+            boolean publish = hadActiveWork || hasActiveRuntimeWork() || wasRedstonePaused != redstonePaused
+                    || !Objects.equals(previousFailureUnloc, lastFailureUnloc)
+                    || previousCraftingFailure != runtime.craftingRuntime().failure();
+            if (publish) {
+                publishRuntimeState();
+                if (hasFactoryController()) syncOpenFactoryControllerMenus();
+            }
         }
     }
 
     public boolean hasActiveBuildTask() {
-        return buildTaskRegistry().hasActiveTask(getBlockPos());
+        return buildTasks != null && buildTasks.hasActiveTask(getBlockPos());
+    }
+
+    private boolean hasActiveRuntimeWork() {
+        return hasActiveBuildTask()
+                || runtime.craftingRuntime().active()
+                || runtime.factoryRuntime().activeLaneCount() > 0;
     }
 
     public boolean startBuildTask(MultiblockAssemblyService.BuildTask task, ServerPlayer owner) {

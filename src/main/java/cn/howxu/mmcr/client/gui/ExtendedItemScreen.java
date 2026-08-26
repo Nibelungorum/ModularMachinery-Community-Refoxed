@@ -70,17 +70,28 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
         clearTooltipEntries();
         if (autoIOPage) return;
         graphics.text(font, title, TITLE_X, TITLE_Y, TEXT_COLOR, false);
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE);
+        List<ItemStorageEntry> entries = nonEmptyEntries(menu.entries());
         int row = 0;
-        for (ItemStorageEntry entry : nonEmptyEntries(menu.entries())) {
+        if (entries.isEmpty()) {
+            Component empty = emptyLine();
+            graphics.text(font, empty, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (FIRST_ROW_Y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
+        } else {
+            Component stored = Component.translatable("gui.mmcr.port.stored");
+            graphics.text(font, stored, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (FIRST_ROW_Y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
+            row = 1;
+        }
+        for (ItemStorageEntry entry : entries) {
             Component line = displayLine(entry);
             int y = FIRST_ROW_Y + row++ * ROW_STEP;
-            graphics.text(font, line, ROW_X, y, TEXT_COLOR, false);
-            addTooltip(leftPos + ROW_X, topPos + y, font.width(line), 10, tooltipLines(entry));
+            graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
+            addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
+                    TEXT_DETAIL_LINE_SPACING, tooltipLines(entry));
         }
-        if (row == 0) {
-            Component empty = emptyLine();
-            graphics.text(font, empty, ROW_X, FIRST_ROW_Y, ChatFormatting.GREEN.getColor(), false);
-        }
+        graphics.pose().popMatrix();
     }
 
     static List<Component> displayLines(List<ItemStorageEntry> entries) {

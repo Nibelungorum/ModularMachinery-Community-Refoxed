@@ -133,7 +133,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public AutoIOConfig autoIOConfig() {
         List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
-        return capabilities.size() == 1 ? autoIOConfig(capabilities.getFirst().type()) : legacyAutoIOConfig;
+        return capabilities.isEmpty() ? legacyAutoIOConfig : autoIOConfig(capabilities.getFirst().type());
     }
 
     public AutoIOConfig autoIOConfig(CapabilityType type) {

@@ -80,6 +80,23 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void idle_runtime_work_reuses_the_published_snapshot() {
+        Identifier machineId = MMCR.id("idle_runtime_snapshot");
+        DynamicMachine machine = new DynamicMachine(machineId, "Idle Runtime Snapshot",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
+                MachineControllerSpec.defaultsFor(machineId));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        var published = controller.runtimeSnapshot();
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+
+        assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @Test
     void structure_version_changes_only_for_a_block_inside_the_formed_bounds() {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         DynamicMachine machine = new DynamicMachine(MMCR.id("controller_version"), "Controller Version",

@@ -34,6 +34,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
         this.slotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
                 : owner.itemStorage().size();
         this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.from(owner).itemEntries();
+        addPlayerSlots(playerInv, 47);
     }
 
     public ExtendedItemMenu(int containerId, Inventory playerInv, BlockPos pos, String kind, int slotCount) {
@@ -47,6 +48,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
         this.kind = view.id();
         this.slotCount = slotCount;
         this.entries = List.of();
+        addPlayerSlots(playerInv, 47);
     }
 
     public static ExtendedItemMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

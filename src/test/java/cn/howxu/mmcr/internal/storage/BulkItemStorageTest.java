@@ -40,13 +40,13 @@ class BulkItemStorageTest {
     }
 
     @Test
-    void caps_requests_at_the_item_stack_limit() {
+    void supports_requests_above_integer_maximum() {
         long requested = (long) Integer.MAX_VALUE + 10L;
         BulkItemStorage storage = new BulkItemStorage(requested + 1L, () -> {});
         ItemResource iron = resource(Items.IRON_INGOT);
 
-        assertThat(storage.insert(iron, requested, false)).isEqualTo(iron.getMaxStackSize());
-        assertThat(storage.extract(iron, requested, false)).isEqualTo(iron.getMaxStackSize());
+        assertThat(storage.insert(iron, requested, false)).isEqualTo(requested);
+        assertThat(storage.extract(iron, requested, false)).isEqualTo(requested);
         assertThat(storage.amount(0)).isZero();
     }
 
@@ -91,20 +91,20 @@ class BulkItemStorageTest {
     }
 
     @Test
-    void capacity_and_transaction_insert_respect_the_resource_stack_limit() {
+    void capacity_and_transaction_insert_use_storage_capacity() {
         ItemStack stack = Items.IRON_INGOT.getDefaultInstance();
         stack.set(DataComponents.MAX_STACK_SIZE, 16);
         ItemResource resource = ItemResource.of(stack);
         BulkItemStorage storage = new BulkItemStorage(100L, () -> {});
 
-        assertThat(storage.capacity(0, resource)).isEqualTo(16L);
-        assertThat(storage.insert(resource, 32L, true)).isEqualTo(16L);
+        assertThat(storage.capacity(0, resource)).isEqualTo(100L);
+        assertThat(storage.insert(resource, 32L, true)).isEqualTo(32L);
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, resource, 32L, transaction)).isEqualTo(16L);
+            assertThat(storage.insert(0, resource, 32L, transaction)).isEqualTo(32L);
             transaction.commit();
         }
 
-        assertThat(storage.amount(0)).isEqualTo(16L);
+        assertThat(storage.amount(0)).isEqualTo(32L);
     }
 
     private static ItemResource resource(Item item) {

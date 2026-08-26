@@ -123,6 +123,8 @@
 
   "gui.mmcr.controller.energy": "能量: %s / %s FE",
   "gui.mmcr.port.empty": "无",
+  "gui.mmcr.port.items": "物品:",
+  "gui.mmcr.port.fluids": "流体:",
   "gui.mmcr.port.stored": "已存储:",
   "gui.mmcr.controller.failure.level_insufficient": "等级不足",
   "gui.mmcr.controller.failure.missing_energy": "缺少能量",

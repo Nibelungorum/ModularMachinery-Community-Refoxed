@@ -46,7 +46,8 @@ class CombinedPortScreenTest {
 
         assertThat(ExtendedCombinedScreen.displayLines(List.of(item), List.of(fluid)))
                 .extracting(component -> component.getString())
-                .containsExactly(item.amount() + " " + item.resource().getHoverName().getString(),
+                .containsExactly("gui.mmcr.port.items", item.amount() + " " + item.resource().getHoverName().getString(),
+                        "gui.mmcr.port.fluids",
                         fluid.amount() + " " + fluid.resource().getHoverName().getString());
     }
 

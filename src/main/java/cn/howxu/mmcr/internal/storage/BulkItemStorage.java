@@ -33,7 +33,7 @@ public final class BulkItemStorage extends SnapshotJournal<BulkItemStorage.Snaps
     public long insert(ItemResource resource, long amount, boolean simulate) {
         if (amount <= 0 || resource == null || resource.isEmpty()) return 0L;
         if (!this.resource.isEmpty() && !this.resource.equals(resource)) return 0L;
-        long moved = Math.min(amount, Math.max(0L, stackCapacity(resource) - this.amount));
+        long moved = Math.min(amount, Math.max(0L, capacity - this.amount));
         if (!simulate && moved > 0) {
             if (this.resource.isEmpty()) this.resource = resource;
             this.amount += moved;
@@ -74,7 +74,7 @@ public final class BulkItemStorage extends SnapshotJournal<BulkItemStorage.Snaps
     @Override
     public long capacity(int slot, @Nullable ItemResource resource) {
         checkSlot(slot);
-        return stackCapacity(resource);
+        return capacity;
     }
 
     @Override
@@ -90,7 +90,7 @@ public final class BulkItemStorage extends SnapshotJournal<BulkItemStorage.Snaps
         TransferPreconditions.checkNonEmpty(resource);
         checkNonNegative(amount);
         if (amount == 0L || !isValid(slot, resource)) return 0L;
-        long moved = Math.min(amount, Math.max(0L, stackCapacity(resource) - this.amount));
+        long moved = Math.min(amount, Math.max(0L, capacity - this.amount));
         if (moved > 0L) {
             updateSnapshots(transaction);
             if (this.resource.isEmpty()) this.resource = resource;
@@ -139,10 +139,6 @@ public final class BulkItemStorage extends SnapshotJournal<BulkItemStorage.Snaps
 
     private void checkNonNegative(long amount) {
         if (amount < 0L) throw new IllegalArgumentException("Expected value to be non-negative: " + amount);
-    }
-
-    private long stackCapacity(@Nullable ItemResource resource) {
-        return resource == null ? capacity : Math.min(capacity, resource.getMaxStackSize());
     }
 
     record Snapshot(ItemResource resource, long amount) {}

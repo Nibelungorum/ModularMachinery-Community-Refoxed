@@ -63,7 +63,6 @@ class ExtendedPortMenuTest {
         assertThat(menu.pos()).isEqualTo(POS);
         assertThat(menu.kind()).isEqualTo(PortKinds.EXTENDED_ITEM_INPUT.id());
         assertThat(menu.slotCount()).isEqualTo(2);
-        assertThat(menu.slots).isEmpty();
         assertThat(menu.entries()).isEmpty();
         assertThat(menu.selectedCapabilityId()).isEqualTo(MMCR.id("item"));
     }
@@ -101,7 +100,6 @@ class ExtendedPortMenuTest {
         assertThat(clientMenu.pos()).isEqualTo(POS);
         assertThat(clientMenu.itemSlotCount()).isEqualTo(serverMenu.itemSlotCount());
         assertThat(clientMenu.fluidTankCount()).isEqualTo(serverMenu.fluidTankCount());
-        assertThat(clientMenu.slots).isEmpty();
     }
 
     @Test

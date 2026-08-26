@@ -46,6 +46,7 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
             this.itemEntries = snapshot.itemEntries();
             this.fluidEntries = snapshot.fluidEntries();
         }
+        addPlayerSlots(playerInv, 47);
     }
 
     public ExtendedCombinedMenu(int containerId, Inventory playerInv, BlockPos pos, String kind,
@@ -63,6 +64,7 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
         this.fluidTankCount = fluidTankCount;
         this.itemEntries = List.of();
         this.fluidEntries = List.of();
+        addPlayerSlots(playerInv, 47);
     }
 
     public static ExtendedCombinedMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

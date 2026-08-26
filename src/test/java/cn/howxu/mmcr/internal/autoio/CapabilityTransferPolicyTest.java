@@ -162,7 +162,7 @@ class CapabilityTransferPolicyTest {
         Level level = LevelStub.createWithBlockEntities(List.of(input, output));
         input.setLevel(level);
         output.setLevel(level);
-        long amount = (long) Integer.MAX_VALUE + 1L;
+        long amount = Long.MAX_VALUE;
         output.energyStorage().setAmount(amount);
         LevelStub.setCapability(level, ModCapabilities.ENERGY_BLOCK, output.getBlockPos(), output.getEnergyHandler(null));
 
