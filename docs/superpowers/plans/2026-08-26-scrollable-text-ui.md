@@ -16,6 +16,8 @@
 - 不覆盖或回滚工作区已有的 `Combined*` 文件改动，包括 `CombinedPortScreen`、`CombinedPortScreenTest`、`CombinedPortMenu` 和 `CombinedPortMenuTest`。
 - 新增 Java 类包含 `@author howxu <dev@howxu.cn>` Javadoc。
 - 不添加水平滚动、自动换行或额外滚动条。
+- `guicontroller_large.png` 的文本边界为本地 GUI 坐标 `x = 9..168`、`y = 9..123`；标题固定后，扩展页面详情行从现有 `y = 24` 开始。
+- `guifactory.png` 右侧详情文本边界为本地 GUI 坐标 `x = 113..272`、`y = 9..123`；标题和状态固定后，详情行从现有 `y = 32` 开始。
 - 测试和业务代码在同一任务中连续完成，不保留故意失败的测试。
 - 禁止运行 `./gradlew runClient --no-daemon`。
 - 完成 Java 修改后，串行运行 `./gradlew test --no-daemon`，再运行 `./gradlew runGameTestServer --no-daemon`。
@@ -229,10 +231,8 @@ Change the superclass to `AbstractScrollableTextScreen<MachineControllerMenu>` a
 @Override
 protected TextViewport scrollableTextViewport() {
     int bodyY = titleLabelY + DETAIL_LINE_SPACING * 2;
-    int bottom = IMAGE_HEIGHT - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR
-            - RECIPE_LOCK_BUTTON_SIZE - 12 - 4;
-    return new TextViewport(titleLabelX, bodyY, IMAGE_WIDTH - titleLabelX - 8,
-            Math.max(1, bottom - bodyY), DETAIL_SCALE, DETAIL_LINE_SPACING);
+    return new TextViewport(9, bodyY, 160, 123 - bodyY + 1,
+            DETAIL_SCALE, DETAIL_LINE_SPACING);
 }
 
 @Override
@@ -273,7 +273,7 @@ Use the existing transformed `x` coordinate and pose scaling. Do not change `lev
 
 - [ ] **Step 3: Add ordinary-controller regression assertions**
 
-Add tests in `MenuScreenTest` for the extracted detail-line behavior using a client `MachineControllerMenu` snapshot. Assert that level, failure, module, parallel and progress rows retain their existing order and that an empty detail list has a zero maximum scroll offset through the shared helper.
+Add tests in `MenuScreenTest` for the extracted detail-line behavior using a client `MachineControllerMenu` snapshot. Assert that level, failure, module, parallel and progress rows retain their existing order.
 
 Keep the existing module-status, recipe-lock and progress-percent tests unchanged.
 
@@ -311,16 +311,14 @@ git commit -m "feat: scroll ordinary controller details"
 
 - [ ] **Step 1: Define the factory detail viewport and detail rows**
 
-Change the superclass to `AbstractScrollableTextScreen<FactoryControllerMenu>`. Use the existing factory detail start at `x = 113` and the detail body start immediately after the fixed title/status rows:
+Change the superclass to `AbstractScrollableTextScreen<FactoryControllerMenu>`. Use the existing factory detail start at `x = 113` and the detail body start immediately after the fixed title/status rows. The scroll viewport uses the confirmed right-side text boundary `x = 113..272`, `y = 9..123`:
 
 ```java
 @Override
 protected TextViewport scrollableTextViewport() {
     int bodyY = 12 + DETAIL_LINE_SPACING * 2;
-    int bottom = IMAGE_HEIGHT - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR
-            - RECIPE_LOCK_BUTTON_SIZE - 12 - 4;
-    return new TextViewport(113, bodyY, IMAGE_WIDTH - 113 - 8,
-            Math.max(1, bottom - bodyY), DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
+    return new TextViewport(113, bodyY, 160, 123 - bodyY + 1,
+            DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
 }
 
 @Override
@@ -357,7 +355,6 @@ protected boolean handleAdditionalScroll(double mouseX, double mouseY,
 Extend `FactoryControllerScreenTest` with assertions for:
 
 - The detail line count remaining independent from `clampScrollOffset` used by the left thread list.
-- A detail viewport with content larger than its visible range producing a positive maximum offset.
 - The existing selected failure behavior still hiding the aggregate failure for an active selected thread.
 
 - [ ] **Step 5: Run the focused factory tests**
@@ -406,12 +403,13 @@ protected AbstractPortScreen(M menu, Inventory inventory, Component title, int i
 }
 ```
 
-Add shared constants based on the existing extended-menu slot layout:
+Add shared coordinates based on the confirmed `guicontroller_large.png` text boundary `x = 9..168`, `y = 9..123` and the existing first detail row at `y = 24`:
 
 ```java
-protected static final int TEXT_VIEW_X = 12;
+protected static final int TEXT_VIEW_X = 9;
 protected static final int TEXT_VIEW_Y = 24;
-protected static final int TEXT_VIEW_BOTTOM = 127;
+protected static final int TEXT_VIEW_RIGHT = 168;
+protected static final int TEXT_VIEW_BOTTOM = 123;
 ```
 
 Implement the common viewport using `TEXT_DETAIL_SCALE`, `TEXT_DETAIL_LINE_SPACING`, `imageWidth` and `imageHeight`:
@@ -420,13 +418,13 @@ Implement the common viewport using `TEXT_DETAIL_SCALE`, `TEXT_DETAIL_LINE_SPACI
 @Override
 protected final TextViewport scrollableTextViewport() {
     return new TextViewport(TEXT_VIEW_X, TEXT_VIEW_Y,
-            imageWidth - TEXT_VIEW_X - 8,
-            Math.min(TEXT_VIEW_BOTTOM, imageHeight) - TEXT_VIEW_Y,
+            TEXT_VIEW_RIGHT - TEXT_VIEW_X + 1,
+            Math.min(TEXT_VIEW_BOTTOM, imageHeight) - TEXT_VIEW_Y + 1,
             TEXT_DETAIL_SCALE, TEXT_DETAIL_LINE_SPACING);
 }
 ```
 
-The bottom `127` leaves four pixels before the extended-menu player inventory row at `y = 131`. The Auto IO page remains outside this text viewport and continues to use its existing button and slot layout.
+The fixed title remains at `y = 12`; the scrollable detail rows use the confirmed `y = 24..123` range. The Auto IO page remains outside this text viewport and continues to use its existing button and slot layout.
 
 - [ ] **Step 2: Migrate the item and fluid text pages**
 
@@ -457,7 +455,6 @@ Extend `ExtendedPortScreenTest` with tests that assert:
 - Empty item and fluid storage has one logical line.
 - A combined port with two item entries and one fluid entry has five logical lines, including both section lines.
 - Existing display-line order and exact tooltip contents remain unchanged.
-- The shared visible range can select a later entry without changing the logical entry order.
 
 - [ ] **Step 5: Run the focused extended-port tests**
 
