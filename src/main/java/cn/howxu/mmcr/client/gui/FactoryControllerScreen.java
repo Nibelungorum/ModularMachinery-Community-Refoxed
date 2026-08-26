@@ -247,6 +247,9 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static int detailTitleY(int y) { return y; }
     static int nextDetailY(int y) { return y + DETAIL_LINE_SPACING; }
     static int detailTextY(int localY) { return (int) (localY / DETAIL_TEXT_SCALE); }
+    static int detailLineY(int statusY, int statusLocalY, int localY) {
+        return statusY + localY - statusLocalY;
+    }
     static boolean shouldRenderProgress(boolean active, int totalTick) { return active && totalTick > 0; }
     static int visibleThreadCount(int threadCount) { return Math.min(VISIBLE_THREADS, Math.max(0, threadCount)); }
     static int clampScrollOffset(int scrollOffset, int threadCount) {
@@ -331,12 +334,13 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 controllerStatusColor(menu.isFormed(), selected.active()), true);
         List<ControllerStatusLine> lines = detailLines(menu);
+        int statusLocalY = 12 + DETAIL_LINE_SPACING;
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
             ControllerStatusLine line = lines.get(index);
-            int textY = detailTextY(topPos + textLineY(visibleTextRow(index)));
+            int textY = detailLineY(lineY, statusLocalY, textLineY(visibleTextRow(index)));
             graphics.text(font, line.text(), x, textY, line.color(), true);
         }
         graphics.pose().popMatrix();

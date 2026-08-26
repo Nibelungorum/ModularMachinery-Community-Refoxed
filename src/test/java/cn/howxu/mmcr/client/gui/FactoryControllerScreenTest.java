@@ -110,6 +110,16 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void factory_detail_rows_keep_uniform_spacing_in_scaled_pose() {
+        int statusY = 100;
+        int firstDetailY = FactoryControllerScreen.detailLineY(statusY, 22, 32);
+        int secondDetailY = FactoryControllerScreen.detailLineY(statusY, 22, 42);
+
+        assertThat(firstDetailY - statusY).isEqualTo(10);
+        assertThat(secondDetailY - firstDetailY).isEqualTo(10);
+    }
+
+    @Test
     void thread_scroll_hit_test_stays_separate_from_detail_viewport() {
         int left = 37;
         int top = 19;

@@ -27,10 +27,9 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
 
     static int visibleLineCount(int viewportHeight, float scale, int lineSpacing, int fontLineHeight) {
         int scaledHeight = (int) Math.floor(viewportHeight * scale);
-        int scaledLineSpacing = Math.max(1, (int) Math.ceil(lineSpacing * scale));
         int scaledFontHeight = Math.max(1, (int) Math.ceil(fontLineHeight * scale));
-        int rowStride = Math.max(scaledFontHeight, scaledLineSpacing);
-        return Math.max(1, scaledHeight / rowStride);
+        double rowStride = Math.max(1.0, Math.max(lineSpacing, fontLineHeight) * scale);
+        return Math.max(1, 1 + (int) Math.floor((scaledHeight - scaledFontHeight) / rowStride));
     }
 
     static int maxScrollOffset(int lineCount, int visibleLineCount) {

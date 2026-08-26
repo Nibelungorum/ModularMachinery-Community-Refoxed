@@ -13,7 +13,12 @@ class ScrollableTextScreenTest {
 
     @Test
     void visible_line_count_uses_scaled_font_height_and_spacing() {
-        assertThat(AbstractScrollableTextScreen.visibleLineCount(100, 0.85F, 10, 9)).isEqualTo(9);
+        assertThat(AbstractScrollableTextScreen.visibleLineCount(100, 0.85F, 10, 9)).isEqualTo(10);
+    }
+
+    @Test
+    void factory_detail_viewport_includes_its_final_visible_line() {
+        assertThat(AbstractScrollableTextScreen.visibleLineCount(92, 0.85F, 10, 9)).isEqualTo(9);
     }
 
     @Test
