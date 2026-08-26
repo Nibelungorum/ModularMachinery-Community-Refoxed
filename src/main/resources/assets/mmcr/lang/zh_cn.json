@@ -123,6 +123,7 @@
 
   "gui.mmcr.controller.energy": "能量: %s / %s FE",
   "gui.mmcr.port.empty": "无",
+  "gui.mmcr.port.stored": "已存储:",
   "gui.mmcr.controller.failure.level_insufficient": "等级不足",
   "gui.mmcr.controller.failure.missing_energy": "缺少能量",
   "gui.mmcr.controller.failure.missing_input": "缺少输入",
@@ -319,7 +320,13 @@
 
   "mmcr.auto_io.auto_input": "自动输入",
   "mmcr.auto_io.auto_output": "自动输出",
-  "mmcr.auto_io.control": "输入/输出控制",
+  "mmcr.auto_io.back": "返回",
+  "mmcr.auto_io.energy_input_control": "能量输入控制",
+  "mmcr.auto_io.energy_output_control": "能量输出控制",
+  "mmcr.auto_io.fluid_input_control": "流体输入控制",
+  "mmcr.auto_io.fluid_output_control": "流体输出控制",
+  "mmcr.auto_io.item_input_control": "物品输入控制",
+  "mmcr.auto_io.item_output_control": "物品输出控制",
   "mmcr.auto_io.disabled": "已禁用",
   "mmcr.auto_io.eject_contents": "弹出内容物",
   "mmcr.auto_io.enabled": "已启用",

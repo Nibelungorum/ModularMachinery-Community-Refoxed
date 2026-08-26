@@ -67,6 +67,18 @@ class MenuScreenTest {
     }
 
     @Test
+    void auto_io_control_tooltip_uses_capability_and_direction() {
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("item"), false))
+                .isEqualTo("mmcr.auto_io.item_input_control");
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("item"), true))
+                .isEqualTo("mmcr.auto_io.item_output_control");
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("fluid"), false))
+                .isEqualTo("mmcr.auto_io.fluid_input_control");
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("fluid"), true))
+                .isEqualTo("mmcr.auto_io.fluid_output_control");
+    }
+
+    @Test
     void module_status_lines_remain_visible_before_formation_and_mark_offline_modules_red() {
         List<MachineControllerScreen.ControllerStatusLine> hostLines = MachineControllerScreen.moduleStatusLines(
                 true, false, 1, Optional.empty());

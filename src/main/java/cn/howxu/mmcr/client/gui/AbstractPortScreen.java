@@ -49,6 +49,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private static final int HIDDEN_INVENTORY_LABEL_Y = -1000;
     private static final int HIDDEN_SLOT_X = -1000;
     private static final int HIDDEN_SLOT_Y = -1000;
+    private static final int TEXT_UI_PLAYER_SLOT_Y_OFFSET = 47;
     private static final int AUTO_IO_SIDE_GRID_X = 12;
     private static final int AUTO_IO_SIDE_GRID_Y = 6;
     private static final int AUTO_IO_SIDE_GRID_STEP = 24;
@@ -56,20 +57,21 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private static final int AUTO_IO_TOGGLE_BUTTON_WIDTH = 69;
     private static final int AUTO_IO_TOGGLE_BUTTON_HEIGHT = 20;
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
-    private static final int CAPABILITY_BUTTON_X = 132;
-    private static final int CAPABILITY_BUTTON_Y = 4;
-    private static final int CAPABILITY_BUTTON_WIDTH = 24;
-    private static final int CAPABILITY_BUTTON_HEIGHT = 18;
-    private static final int CAPABILITY_BUTTON_STEP = 20;
+    private static final int TEXT_UI_PAGE_BUTTON_OFFSET_X = -6;
+    private static final int TEXT_UI_PAGE_BUTTON_OFFSET_Y = 5;
+    private static final int AUTO_IO_PAGE_BUTTON_STEP = 14;
+    protected static final float TEXT_DETAIL_SCALE = 0.85F;
+    protected static final int TEXT_DETAIL_LINE_SPACING = 10;
 
     protected boolean autoIOPage;
     private Identifier selectedCapabilityId;
     private Button autoIOPageButton;
+    private Button secondaryAutoIOPageButton;
     private Button autoIOToggleButton;
     private Button ejectButton;
     private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
-    private final List<Button> capabilityButtons = new ArrayList<>();
     private final List<HiddenSlotPosition> hiddenSlotPositions = new ArrayList<>();
+    private final List<RelocatedSlotPosition> relocatedPlayerSlotPositions = new ArrayList<>();
     private final List<TooltipEntry> tooltipEntries = new ArrayList<>();
 
     protected AbstractPortScreen(M menu, Inventory inventory, Component title, int imageHeight) {
@@ -144,12 +146,18 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private void initAutoIOButtons() {
-        autoIOPageButton = addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
-            autoIOPage = !autoIOPage;
-            updateAutoIOWidgets();
-            button.setFocused(false);
-        }).bounds(leftPos + imageWidth - 16, topPos + 4, 12, 12)
-                .tooltip(Tooltip.create(Component.translatable("mmcr.auto_io.control"))).build());
+        int autoIOPageButtonX = leftPos + imageWidth - 16;
+        int autoIOPageButtonY = topPos + 4;
+        if (isTextUi()) {
+            autoIOPageButtonX += TEXT_UI_PAGE_BUTTON_OFFSET_X;
+            autoIOPageButtonY += TEXT_UI_PAGE_BUTTON_OFFSET_Y;
+        }
+        List<Identifier> capabilityIds = supportedCapabilityIds();
+        autoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY, capabilityIds.getFirst());
+        if (capabilityIds.size() > 1) {
+            secondaryAutoIOPageButton = createAutoIOPageButton(autoIOPageButtonX,
+                    autoIOPageButtonY + AUTO_IO_PAGE_BUTTON_STEP, capabilityIds.get(1));
+        }
 
         autoIOToggleButton = addRenderableWidget(new AutoIOToggleButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
                 topPos + autoIOSideButtonY(2), autoIOToggleLabel(), button -> {
@@ -165,20 +173,6 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             ClientPacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId()));
                 button.setFocused(false);
         }, topPos + autoIOSideButtonY(1)));
-
-        List<Identifier> capabilityIds = supportedCapabilityIds();
-        if (capabilityIds.size() > 1) {
-            for (int index = 0; index < capabilityIds.size(); index++) {
-                Identifier capabilityId = capabilityIds.get(index);
-                Button button = addRenderableWidget(Button.builder(capabilityLabel(capabilityId), clicked -> {
-                    selectCapability(capabilityId);
-                    updateAutoIOWidgets();
-                    clicked.setFocused(false);
-                }).bounds(leftPos + CAPABILITY_BUTTON_X, topPos + CAPABILITY_BUTTON_Y + index * CAPABILITY_BUTTON_STEP,
-                        CAPABILITY_BUTTON_WIDTH, CAPABILITY_BUTTON_HEIGHT).build());
-                capabilityButtons.add(button);
-            }
-        }
 
         for (int y = 0; y < 3; y++) {
             for (int x = 0; x < 3; x++) {
@@ -204,9 +198,36 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         updateAutoIOWidgets();
     }
 
+    private Button createAutoIOPageButton(int x, int y, Identifier capabilityId) {
+        return addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
+            if (autoIOPage) {
+                autoIOPage = false;
+            } else {
+                selectCapability(capabilityId);
+                autoIOPage = true;
+            }
+            updateAutoIOWidgets();
+            button.setFocused(false);
+        }).bounds(x, y, 12, 12).build());
+    }
+
     private void updateAutoIOWidgets() {
         updateAutoIOSlotVisibility();
-        if (autoIOPageButton != null) autoIOPageButton.setMessage(Component.literal(autoIOPage ? "←" : "⇄"));
+        if (autoIOPageButton != null) {
+            autoIOPageButton.setMessage(Component.literal(autoIOPage ? "←" : "⇄"));
+            autoIOPageButton.setTooltip(Tooltip.create(autoIOPage
+                    ? Component.translatable("mmcr.auto_io.back")
+                    : Component.translatable(autoIOControlTooltipKey(supportedCapabilityIds().getFirst(), isOutputPort()))));
+        }
+        if (secondaryAutoIOPageButton != null) {
+            List<Identifier> capabilityIds = supportedCapabilityIds();
+            secondaryAutoIOPageButton.visible = !autoIOPage && capabilityIds.size() > 1;
+            secondaryAutoIOPageButton.active = secondaryAutoIOPageButton.visible;
+            if (capabilityIds.size() > 1) {
+                secondaryAutoIOPageButton.setTooltip(Tooltip.create(Component.translatable(
+                        autoIOControlTooltipKey(capabilityIds.get(1), isOutputPort()))));
+            }
+        }
         if (autoIOToggleButton != null) {
             autoIOToggleButton.visible = autoIOPage;
             autoIOToggleButton.active = autoIOPage;
@@ -226,13 +247,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             button.active = autoIOPage;
             button.setTooltip(Tooltip.create(autoIOSideTooltip(entry.getKey())));
         }
-        for (Button button : capabilityButtons) {
-            button.visible = autoIOPage;
-            button.active = autoIOPage;
-        }
     }
 
     private void updateAutoIOSlotVisibility() {
+        updatePlayerSlotLayout();
         int hiddenSlotCount = portSlotCount();
         if (hiddenSlotCount <= 0) return;
         if (autoIOPage) {
@@ -252,6 +270,26 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         hiddenSlotPositions.clear();
     }
 
+    private void updatePlayerSlotLayout() {
+        if (!isTextUi()) return;
+        if (autoIOPage) {
+            if (!relocatedPlayerSlotPositions.isEmpty()) return;
+            for (int slotIndex = portSlotCount(); slotIndex < menu.slots.size(); slotIndex++) {
+                Slot slot = menu.getSlot(slotIndex);
+                Slot relocatedSlot = new Slot(slot.container, slot.getContainerSlot(), slot.x,
+                        slot.y - TEXT_UI_PLAYER_SLOT_Y_OFFSET);
+                relocatedSlot.index = slot.index;
+                relocatedPlayerSlotPositions.add(new RelocatedSlotPosition(slotIndex, slot));
+                menu.slots.set(slotIndex, relocatedSlot);
+            }
+            return;
+        }
+        for (RelocatedSlotPosition position : relocatedPlayerSlotPositions) {
+            menu.slots.set(position.index(), position.slot());
+        }
+        relocatedPlayerSlotPositions.clear();
+    }
+
     private IOPortBlockEntity portEntity() {
         if (Minecraft.getInstance().level == null) return null;
         return Minecraft.getInstance().level.getBlockEntity(portPos()) instanceof IOPortBlockEntity port ? port : null;
@@ -260,6 +298,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private boolean isAutoIOEnabled() {
         IOPortBlockEntity port = portEntity();
         return port != null && selectedAutoIOConfig().enabled();
+    }
+
+    private boolean isTextUi() {
+        return menu instanceof ExtendedItemMenu || menu instanceof ExtendedFluidMenu
+                || menu instanceof ExtendedCombinedMenu;
     }
 
     private boolean isOutputPort() {
@@ -318,8 +361,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         return List.of(MMCR.id("item"));
     }
 
-    private static Component capabilityLabel(Identifier capabilityId) {
-        return Component.literal(capabilityId.getPath().equals("fluid") ? "F" : "I");
+    static String autoIOControlTooltipKey(Identifier capabilityId, boolean outputPort) {
+        return "mmcr.auto_io." + capabilityId.getPath() + (outputPort ? "_output" : "_input") + "_control";
     }
 
     protected final Identifier selectedCapabilityId(List<Identifier> capabilityIds) {
@@ -346,6 +389,9 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private record HiddenSlotPosition(int index, Slot slot) {
+    }
+
+    private record RelocatedSlotPosition(int index, Slot slot) {
     }
 
     private record TooltipEntry(int x, int y, int width, int height, List<Component> lines) {

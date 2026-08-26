@@ -123,6 +123,7 @@
 
   "gui.mmcr.controller.energy": "Energy: %s / %s FE",
   "gui.mmcr.port.empty": "Empty",
+  "gui.mmcr.port.stored": "Stored:",
   "gui.mmcr.controller.failure.level_insufficient": "Insufficient Level",
   "gui.mmcr.controller.failure.missing_energy": "Missing Energy",
   "gui.mmcr.controller.failure.missing_input": "Missing Input",
@@ -319,7 +320,13 @@
 
   "mmcr.auto_io.auto_input": "Auto Input",
   "mmcr.auto_io.auto_output": "Auto Output",
-  "mmcr.auto_io.control": "Input/Output Control",
+  "mmcr.auto_io.back": "Back",
+  "mmcr.auto_io.energy_input_control": "Energy Input Control",
+  "mmcr.auto_io.energy_output_control": "Energy Output Control",
+  "mmcr.auto_io.fluid_input_control": "Fluid Input Control",
+  "mmcr.auto_io.fluid_output_control": "Fluid Output Control",
+  "mmcr.auto_io.item_input_control": "Item Input Control",
+  "mmcr.auto_io.item_output_control": "Item Output Control",
   "mmcr.auto_io.disabled": "Disabled",
   "mmcr.auto_io.eject_contents": "Eject Contents",
   "mmcr.auto_io.enabled": "Enabled",
