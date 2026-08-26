@@ -7,10 +7,10 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.client.gui.MachineControllerScreen.ControllerStatusLine;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -29,7 +29,7 @@ import java.text.NumberFormat;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FactoryControllerScreen extends AbstractContainerScreen<FactoryControllerMenu> {
+public final class FactoryControllerScreen extends AbstractScrollableTextScreen<FactoryControllerMenu> {
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
     private static final int CONTROLLER_TITLE_COLOR = 0xFFE8E8E8;
     private static final int STATUS_LABEL_COLOR = CONTROLLER_TITLE_COLOR;
@@ -74,6 +74,18 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
         titleLabelY = -1000;
         inventoryLabelY = -1000;
+    }
+
+    @Override
+    protected TextViewport scrollableTextViewport() {
+        int bodyY = 12 + DETAIL_LINE_SPACING * 2;
+        return new TextViewport(113, bodyY, 160, 123 - bodyY + 1,
+                DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
+    }
+
+    @Override
+    protected int scrollableTextLineCount() {
+        return detailLines(menu).size();
     }
 
     public static int defaultSelectedThread() { return 0; }
@@ -160,6 +172,36 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         return selected.active() ? "" : menu.lastFailureUnloc();
     }
 
+    static List<ControllerStatusLine> detailLines(FactoryControllerMenu menu) {
+        List<ControllerStatusLine> lines = new ArrayList<>();
+        for (Component levelLine : levelLines(menu.foundLevelIds())) {
+            lines.add(new ControllerStatusLine(levelLine, STATUS_LABEL_COLOR));
+        }
+        String failure = selectedFailureUnloc(menu);
+        if (!failure.isEmpty()) {
+            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.last_failure",
+                    Component.translatable(failure)), STATUS_LABEL_COLOR));
+        }
+        if (menu.parallelSlots() > 0) {
+            lines.add(new ControllerStatusLine(parallelSlotLine(menu.parallelSlots()), STATUS_LABEL_COLOR));
+        }
+        lines.add(new ControllerStatusLine(parallelLine(selectedParallelism(menu), menu.maxParallelism()),
+                STATUS_LABEL_COLOR));
+        if (menu.isRedstonePaused()) {
+            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
+                    STATUS_LABEL_COLOR));
+        }
+        lines.add(new ControllerStatusLine(factoryThreadLine(menu.activeThreadCount(), menu.threadCount()),
+                STATUS_LABEL_COLOR));
+        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
+        if (selected.totalTick() > 0) {
+            int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
+            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.progress", percent + "%"),
+                    PROGRESS_STATUS_COLOR));
+        }
+        return lines;
+    }
+
     static Rect recipeLockButtonRect(int left, int top, int width, int height) {
         return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE - 12,
                 top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE - 12,
@@ -204,6 +246,7 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
     static int detailTitleY(int y) { return y; }
     static int nextDetailY(int y) { return y + DETAIL_LINE_SPACING; }
+    static int detailTextY(int localY) { return (int) (localY / DETAIL_TEXT_SCALE); }
     static boolean shouldRenderProgress(boolean active, int totalTick) { return active && totalTick > 0; }
     static int visibleThreadCount(int threadCount) { return Math.min(VISIBLE_THREADS, Math.max(0, threadCount)); }
     static int clampScrollOffset(int scrollOffset, int threadCount) {
@@ -287,33 +330,14 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), selected.active())),
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 controllerStatusColor(menu.isFormed(), selected.active()), true);
-        lineY = nextDetailY(lineY);
-        for (Component levelLine : levelLines(menu.foundLevelIds())) {
-            graphics.text(font, levelLine, x, lineY, STATUS_LABEL_COLOR, true);
-            lineY = nextDetailY(lineY);
-        }
-        String failure = selectedFailureUnloc(menu);
-        if (!failure.isEmpty()) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.last_failure", Component.translatable(failure)),
-                    x, lineY, STATUS_LABEL_COLOR, true);
-            lineY = nextDetailY(lineY);
-        }
-        if (menu.parallelSlots() > 0) {
-            graphics.text(font, parallelSlotLine(menu.parallelSlots()), x, lineY, STATUS_LABEL_COLOR, true);
-            lineY = nextDetailY(lineY);
-        }
-        graphics.text(font, parallelLine(selectedParallelism(menu), menu.maxParallelism()), x, lineY, STATUS_LABEL_COLOR, true);
-        lineY = nextDetailY(lineY);
-        if (menu.isRedstonePaused()) {
-            graphics.text(font, Component.translatable("gui.mmcr.controller.redstone_stopped"), x, lineY, STATUS_LABEL_COLOR, true);
-            lineY = nextDetailY(lineY);
-        }
-        graphics.text(font, factoryThreadLine(menu.activeThreadCount(), menu.threadCount()), x, lineY, STATUS_LABEL_COLOR, true);
-        lineY = nextDetailY(lineY);
-        if (selected.totalTick() > 0) {
-            int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
-            graphics.text(font, Component.translatable("gui.mmcr.controller.progress", percent + "%"), x, lineY,
-                    PROGRESS_STATUS_COLOR, true);
+        List<ControllerStatusLine> lines = detailLines(menu);
+        clampTextScrollOffset();
+        int first = firstVisibleTextLine();
+        int last = lastVisibleTextLineExclusive();
+        for (int index = first; index < last; index++) {
+            ControllerStatusLine line = lines.get(index);
+            int textY = detailTextY(topPos + textLineY(visibleTextRow(index)));
+            graphics.text(font, line.text(), x, textY, line.color(), true);
         }
         graphics.pose().popMatrix();
     }
@@ -365,7 +389,8 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
+    protected boolean handleAdditionalScroll(double mouseX, double mouseY, double deltaX, double deltaY) {
+        if (!mouseOverThreadList((int) mouseX, (int) mouseY)) return false;
         scrollOffset = clampScrollOffset(scrollOffset - (int) Math.signum(deltaY), menu.threads().size());
         return true;
     }
@@ -380,6 +405,18 @@ public final class FactoryControllerScreen extends AbstractContainerScreen<Facto
                 && mouseX < leftPos + SCROLLBAR_X + SCROLLBAR_HANDLE_WIDTH
                 && mouseY >= topPos + SCROLLBAR_Y
                 && mouseY < topPos + SCROLLBAR_Y + SCROLLBAR_HEIGHT;
+    }
+
+    private boolean mouseOverThreadList(int mouseX, int mouseY) {
+        return mouseOverThreadList(leftPos, topPos, mouseX, mouseY);
+    }
+
+    static boolean mouseOverThreadList(int left, int top, int mouseX, int mouseY) {
+        int listX = left + THREAD_ROW_X;
+        int listY = top + THREAD_ROW_Y;
+        int listHeight = VISIBLE_THREADS * THREAD_ROW_HEIGHT + (VISIBLE_THREADS - 1) * THREAD_ROW_GAP;
+        return mouseX >= listX && mouseX < listX + THREAD_ROW_WIDTH
+                && mouseY >= listY && mouseY < listY + listHeight;
     }
 
     private void updateRecipeLockTooltip() {
