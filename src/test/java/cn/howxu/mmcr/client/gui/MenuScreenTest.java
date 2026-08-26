@@ -162,6 +162,11 @@ class MenuScreenTest {
     }
 
     @Test
+    void controller_detail_rows_use_scaled_pose_coordinates() {
+        assertThat(MachineControllerScreen.detailTextY(34)).isEqualTo(40);
+    }
+
+    @Test
     void controller_detail_lines_preserve_snapshot_order() {
         Identifier levelTypeId = MMCR.id("menu_test_level_type");
         Identifier levelId = MMCR.id("menu_test_level");

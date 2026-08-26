@@ -114,9 +114,13 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
             ControllerStatusLine line = lines.get(index);
-            int textY = textLineY(visibleTextRow(index));
+            int textY = detailTextY(textLineY(visibleTextRow(index)));
             graphics.text(font, line.text(), x, textY, line.color(), true);
         }
+    }
+
+    static int detailTextY(int localY) {
+        return (int) (localY / DETAIL_SCALE);
     }
 
     static List<ControllerStatusLine> detailLines(MachineControllerMenu menu) {
