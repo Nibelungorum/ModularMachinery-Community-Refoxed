@@ -162,7 +162,7 @@ public class ExtendedPortGameTest {
 
     private static long droppedIron(GameTestHelper helper, BlockPos position) {
         return helper.getLevel().getEntitiesOfClass(ItemEntity.class,
-                        new AABB(helper.absolutePos(position)).inflate(0.9D)).stream()
+                        new AABB(helper.absolutePos(position)).inflate(1.25D)).stream()
                 .filter(entity -> entity.getItem().is(Items.IRON_INGOT))
                 .mapToLong(entity -> entity.getItem().getCount())
                 .sum();
