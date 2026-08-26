@@ -9,6 +9,7 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -33,6 +34,9 @@ class AutoIOPortTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(
+                DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+        Items.IRON_INGOT.resetDefaultResource();
     }
 
     @Test
