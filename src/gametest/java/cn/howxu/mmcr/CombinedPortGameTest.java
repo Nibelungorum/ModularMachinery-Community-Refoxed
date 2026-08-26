@@ -11,6 +11,7 @@ import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
@@ -29,6 +30,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -77,6 +80,31 @@ public class CombinedPortGameTest {
                         helper.getLevel(), extendedWorldPos, helper.getLevel().getBlockState(extendedWorldPos),
                         extended, Direction.UP) != null,
                 "Extended combined fluid capability is available");
+
+        IOPortBlockEntity extendedInput = helper.getBlockEntity(extendedPos, IOPortBlockEntity.class);
+        player.getInventory().clearContent();
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET, 2));
+        InteractionResult extendedEmptied = use(helper, extendedInput, player);
+        helper.assertTrue(extendedEmptied.consumesAction()
+                        && extendedInput.fluidStorage().amount(0) == 1_000L
+                        && player.getInventory().contains(new ItemStack(Items.BUCKET)),
+                "Extended combined input accepts a filled fluid container");
+
+        BlockPos extendedOutputPos = new BlockPos(4, 1, 3);
+        helper.setBlock(extendedOutputPos,
+                ModBlocks.BLOCKS.get("extended_combined_output_advanced").get().defaultBlockState());
+        IOPortBlockEntity extendedOutput = helper.getBlockEntity(extendedOutputPos, IOPortBlockEntity.class);
+        try (Transaction transaction = Transaction.openRoot()) {
+            extendedOutput.fluidStorage().insert(0, FluidResource.of(Fluids.WATER), 1_000L, transaction);
+            transaction.commit();
+        }
+        player.getInventory().clearContent();
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
+        InteractionResult extendedFilled = use(helper, extendedOutput, player);
+        helper.assertTrue(extendedFilled.consumesAction()
+                        && extendedOutput.fluidStorage().amount(0) == 0L
+                        && player.getInventory().contains(new ItemStack(Items.WATER_BUCKET)),
+                "Extended combined output fills an empty fluid container");
         helper.succeed();
     }
 
@@ -111,7 +139,7 @@ public class CombinedPortGameTest {
         });
     }
 
-    private static InteractionResult use(GameTestHelper helper, CombinedPortBlockEntity port, ServerPlayer player) {
+    private static InteractionResult use(GameTestHelper helper, IOPortBlockEntity port, ServerPlayer player) {
         BlockPos position = port.getBlockPos();
         return helper.getLevel().getBlockState(position).useItemOn(
                 player.getMainHandItem(), helper.getLevel(), player, InteractionHand.MAIN_HAND,

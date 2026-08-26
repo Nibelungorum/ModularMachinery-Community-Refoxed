@@ -63,6 +63,33 @@ public class ExtendedPortGameTest {
         });
     }
 
+    public void largeItemPortDropsUseLegalBoundedStacks(GameTestHelper helper) {
+        BlockPos position = new BlockPos(0, 1, 0);
+        helper.setBlock(position, ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
+        IOPortBlockEntity port = helper.getBlockEntity(position, IOPortBlockEntity.class);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+        try (Transaction transaction = Transaction.openRoot()) {
+            port.itemStorage().insert(0, iron, (long) Integer.MAX_VALUE + 1L, transaction);
+            port.itemStorage().insert(1, gold, Long.MAX_VALUE, transaction);
+            transaction.commit();
+        }
+
+        helper.destroyBlock(position);
+        helper.runAtTickTime(1, () -> {
+            List<ItemEntity> drops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                    new AABB(helper.absolutePos(position)).inflate(1.25D));
+            helper.assertTrue(drops.size() <= 128, "Large item drop count is bounded");
+            helper.assertTrue(drops.stream().allMatch(entity ->
+                            entity.getItem().getCount() <= entity.getItem().getMaxStackSize()),
+                    "Large item drops never exceed the item stack limit");
+            helper.assertTrue(port.itemStorage().amount(0) == 0L && port.itemStorage().resource(0) == null
+                            && port.itemStorage().amount(1) == 0L && port.itemStorage().resource(1) == null,
+                    "Large item storage is cleared after removal");
+            helper.succeed();
+        });
+    }
+
     public void standaloneExtendedPortsExposeItemFluidAndEnergyCapabilities(GameTestHelper helper) {
         BlockPos itemPos = new BlockPos(0, 1, 0);
         BlockPos fluidPos = new BlockPos(1, 1, 0);
@@ -131,7 +158,7 @@ public class ExtendedPortGameTest {
 
     private static long droppedIron(GameTestHelper helper, BlockPos position) {
         return helper.getLevel().getEntitiesOfClass(ItemEntity.class,
-                        new AABB(helper.absolutePos(position)).inflate(1.25D)).stream()
+                        new AABB(helper.absolutePos(position)).inflate(0.9D)).stream()
                 .filter(entity -> entity.getItem().is(Items.IRON_INGOT))
                 .mapToLong(entity -> entity.getItem().getCount())
                 .sum();

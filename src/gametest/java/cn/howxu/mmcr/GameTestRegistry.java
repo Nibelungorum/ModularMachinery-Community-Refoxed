@@ -70,6 +70,8 @@ public final class GameTestRegistry {
                 helper -> new ExtendedPortGameTest().extendedCombinedPortTransfersBeyondIntegerRange(helper));
         register(event, "item_port_removal_drops_contents", 100,
                 helper -> new ExtendedPortGameTest().itemPortsDropStoredItemsWhenRemoved(helper));
+        register(event, "large_item_port_bounded_drops", 100,
+                helper -> new ExtendedPortGameTest().largeItemPortDropsUseLegalBoundedStacks(helper));
         register(event, "extended_standalone_capabilities", 100,
                 helper -> new ExtendedPortGameTest().standaloneExtendedPortsExposeItemFluidAndEnergyCapabilities(helper));
         register(event, "extended_combined_port_appearance", 100,

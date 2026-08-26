@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import com.mojang.serialization.Codec;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
@@ -26,6 +27,7 @@ import java.util.function.IntConsumer;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
+    private static final int MAX_DROPPED_STACKS_PER_SLOT = 64;
 
     private final ItemStackHandler handler;
     private Boolean inventoryEmpty;
@@ -82,30 +84,35 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     }
 
     static void dropItemStacks(Level level, BlockPos pos, ItemStackHandler handler) {
-        if (level == null || level.isClientSide()) return;
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (stack.isEmpty()) continue;
-            Block.popResource(level, pos, stack);
-            handler.setStackInSlot(slot, ItemStack.EMPTY);
-        }
+        dropItemResources(level, pos, asResourceStorage(handler));
     }
 
     static void dropItemResources(Level level, BlockPos pos, ResourceStorage<ItemResource> storage) {
         if (level == null || level.isClientSide()) return;
         for (int slot = 0; slot < storage.size(); slot++) {
             ItemResource resource = storage.resource(slot);
-            long remaining = storage.amount(slot);
-            if (resource == null || resource.isEmpty() || remaining <= 0L) continue;
-            long amount = remaining;
-            while (remaining > 0L) {
-                int count = (int) Math.min(remaining, Integer.MAX_VALUE);
-                Block.popResource(level, pos, resource.toStack(count));
-                remaining -= count;
-            }
-            try (Transaction transaction = Transaction.openRoot()) {
-                storage.extract(slot, resource, amount, transaction);
-                transaction.commit();
+            long amount = storage.amount(slot);
+            if (resource == null || resource.isEmpty() || amount <= 0L) continue;
+
+            int stackLimit = resource.getMaxStackSize();
+            long physicalLimit = (long) stackLimit * MAX_DROPPED_STACKS_PER_SLOT;
+            long droppedAmount = Math.min(amount, physicalLimit);
+            try {
+                long remaining = droppedAmount;
+                while (remaining > 0L) {
+                    int count = (int) Math.min(remaining, stackLimit);
+                    Block.popResource(level, pos, resource.toStack(count));
+                    remaining -= count;
+                }
+                if (amount > droppedAmount) {
+                    MMCR.LOG.warn("Discarding {} item(s) from {} at {} after bounded drop", amount - droppedAmount,
+                            resource, pos);
+                }
+            } finally {
+                try (Transaction transaction = Transaction.openRoot()) {
+                    storage.extract(slot, resource, amount, transaction);
+                    transaction.commit();
+                }
             }
         }
     }
