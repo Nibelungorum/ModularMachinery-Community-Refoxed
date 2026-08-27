@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -18,6 +20,7 @@ import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -40,6 +43,7 @@ public final class MachineControllerRuntime {
     private final ComponentRuntime components = new ComponentRuntime();
     private final CraftingRuntime craftingRuntime;
     private final FactoryRuntime factoryRuntime;
+    private final ControllerScreenTextState screenText = new ControllerScreenTextState();
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
     private ControllerRuntimeSnapshot publishedSnapshot;
 
@@ -68,6 +72,27 @@ public final class MachineControllerRuntime {
 
     public ControllerRuntimeSnapshot snapshot() {
         return publishedSnapshot;
+    }
+
+    public ControllerScreenTextState screenText() {
+        return screenText;
+    }
+
+    public ControllerRuntimeContext runtimeContext() {
+        Machine configuredMachine = structure.snapshot().configuredMachine();
+        if (configuredMachine == null) {
+            throw new IllegalStateException("Controller runtime context requires a configured machine");
+        }
+        return new ControllerRuntimeContext(configuredMachine.registryName(), controller.getBlockPos(), screenText);
+    }
+
+    public void clearOperationText() {
+        screenText.clear(ControllerScreenTextScope.OPERATION);
+    }
+
+    public void clearAllText() {
+        screenText.clear(ControllerScreenTextScope.CONTROLLER);
+        screenText.clear(ControllerScreenTextScope.OPERATION);
     }
 
     void publishSnapshot() {

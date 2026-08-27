@@ -1,0 +1,164 @@
+package cn.howxu.mmcr.api.publicapi.controller;
+
+import cn.howxu.mmcr.MMCR;
+import net.minecraft.resources.Identifier;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Server-side registry for controller screen text handlers.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class ControllerScreenTextRegistry {
+    private static final Map<Identifier, List<Entry>> HANDLERS = new LinkedHashMap<>();
+    private static final List<Entry> PENDING_SERVER_SCRIPT_HANDLERS = new ArrayList<>();
+    private static boolean serverScriptReloading;
+
+    private ControllerScreenTextRegistry() {
+    }
+
+    public static synchronized Registration register(Identifier machineId,
+                                                     ControllerScreenTextHandler handler) {
+        return add(machineId, handler, Source.PUBLIC_API, false);
+    }
+
+    /**
+     * Internal source entry point for server-script integrations.
+     */
+    static synchronized Registration registerServerScript(Identifier machineId,
+                                                           ControllerScreenTextHandler handler) {
+        return add(machineId, handler, Source.SERVER_SCRIPT, serverScriptReloading);
+    }
+
+    public static void apply(ControllerRuntimeContext context) {
+        Objects.requireNonNull(context, "context");
+        List<Entry> handlers;
+        synchronized (ControllerScreenTextRegistry.class) {
+            handlers = List.copyOf(HANDLERS.getOrDefault(context.machineId(), List.of()));
+        }
+        for (Entry entry : handlers) {
+            if (!entry.isRegistered()) continue;
+            try {
+                entry.handler().apply(context);
+            } catch (RuntimeException exception) {
+                MMCR.LOG.error("Controller screen text handler failed for machine " + context.machineId(), exception);
+            }
+        }
+    }
+
+    public static synchronized void beginServerScriptReload() {
+        for (Entry entry : List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS)) entry.unregisterInternal();
+        PENDING_SERVER_SCRIPT_HANDLERS.clear();
+        Iterator<Map.Entry<Identifier, List<Entry>>> iterator = HANDLERS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            List<Entry> entries = iterator.next().getValue();
+            entries.removeIf(entry -> {
+                if (entry.source() != Source.SERVER_SCRIPT) return false;
+                entry.deactivateInternal();
+                return true;
+            });
+            if (entries.isEmpty()) iterator.remove();
+        }
+        serverScriptReloading = true;
+    }
+
+    public static synchronized void endServerScriptReload() {
+        if (!serverScriptReloading) return;
+        for (Entry entry : PENDING_SERVER_SCRIPT_HANDLERS) {
+            HANDLERS.computeIfAbsent(entry.machineId(), ignored -> new ArrayList<>()).add(entry);
+        }
+        PENDING_SERVER_SCRIPT_HANDLERS.clear();
+        serverScriptReloading = false;
+    }
+
+    /** Test-only helper. Never call from production code. */
+    public static synchronized void clearForTesting() {
+        HANDLERS.values().stream().flatMap(List::stream).toList().forEach(Entry::deactivateInternal);
+        List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS).forEach(Entry::deactivateInternal);
+        HANDLERS.clear();
+        PENDING_SERVER_SCRIPT_HANDLERS.clear();
+        serverScriptReloading = false;
+    }
+
+    private static Registration add(Identifier machineId,
+                                    ControllerScreenTextHandler handler, Source source,
+                                    boolean pendingServerScript) {
+        Objects.requireNonNull(machineId, "machineId");
+        Objects.requireNonNull(handler, "handler");
+        Entry entry = new Entry(machineId, handler, source);
+        if (pendingServerScript) {
+            PENDING_SERVER_SCRIPT_HANDLERS.add(entry);
+        } else {
+            HANDLERS.computeIfAbsent(machineId, ignored -> new ArrayList<>()).add(entry);
+        }
+        return entry;
+    }
+
+    public interface Registration {
+        void unregister();
+    }
+
+    private enum Source {
+        PUBLIC_API,
+        SERVER_SCRIPT
+    }
+
+    private static final class Entry implements Registration {
+        private final Identifier machineId;
+        private final ControllerScreenTextHandler handler;
+        private final Source source;
+        private boolean registered = true;
+
+        private Entry(Identifier machineId, ControllerScreenTextHandler handler, Source source) {
+            this.machineId = machineId;
+            this.handler = handler;
+            this.source = source;
+        }
+
+        private Identifier machineId() {
+            return machineId;
+        }
+
+        private ControllerScreenTextHandler handler() {
+            return handler;
+        }
+
+        private Source source() {
+            return source;
+        }
+
+        @Override
+        public void unregister() {
+            synchronized (ControllerScreenTextRegistry.class) {
+                unregisterInternal();
+            }
+        }
+
+        private void unregisterInternal() {
+            if (!registered) return;
+            deactivateInternal();
+            List<Entry> entries = HANDLERS.get(machineId);
+            if (entries != null) {
+                entries.remove(this);
+                if (entries.isEmpty()) HANDLERS.remove(machineId);
+            }
+            PENDING_SERVER_SCRIPT_HANDLERS.remove(this);
+        }
+
+        private void deactivateInternal() {
+            registered = false;
+        }
+
+        private boolean isRegistered() {
+            synchronized (ControllerScreenTextRegistry.class) {
+                return registered;
+            }
+        }
+    }
+}
