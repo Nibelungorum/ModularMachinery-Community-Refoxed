@@ -30,7 +30,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         ControllerScreenTextSnapshot.Line current = lines.get(key);
         if (current != null && current.text().equals(text)) return;
 
-        lines.put(key, new ControllerScreenTextSnapshot.Line(scope, lineId, text));
+        lines.put(key, new ControllerScreenTextSnapshot.Line(scope, lineId, text.copy()));
         markChanged();
     }
 
@@ -49,7 +49,9 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     }
 
     public ControllerScreenTextSnapshot snapshot() {
-        return new ControllerScreenTextSnapshot(revision, List.copyOf(lines.values()));
+        return new ControllerScreenTextSnapshot(revision, lines.values().stream()
+                .map(line -> new ControllerScreenTextSnapshot.Line(line.scope(), line.lineId(), line.text().copy()))
+                .toList());
     }
 
     public long revision() {

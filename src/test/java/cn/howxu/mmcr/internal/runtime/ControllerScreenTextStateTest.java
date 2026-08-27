@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import java.util.List;
 import static cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope.CONTROLLER;
 import static cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope.OPERATION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Controller screen text state behavior tests.
@@ -51,6 +53,22 @@ class ControllerScreenTextStateTest {
         state.append(CONTROLLER, id("example:status"), Component.literal("same"));
 
         assertEquals(revision, state.revision());
+    }
+
+    @Test
+    void mutatingAppendedComponentDoesNotChangeStoredSnapshotsOrRevision() {
+        MutableComponent text = Component.literal("one");
+        state.append(CONTROLLER, id("example:mutable"), text);
+        ControllerScreenTextSnapshot beforeMutation = state.snapshot();
+        long revision = state.revision();
+        state.clearDirty();
+
+        text.append(" changed");
+
+        assertEquals("one", beforeMutation.lines().getFirst().text().getString());
+        assertEquals("one", state.snapshot().lines().getFirst().text().getString());
+        assertEquals(revision, state.revision());
+        assertFalse(state.dirty());
     }
 
     private static Identifier id(String value) {
