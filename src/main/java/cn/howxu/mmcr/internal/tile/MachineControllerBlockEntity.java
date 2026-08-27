@@ -488,6 +488,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
+    public static void rebuildActiveControllerScreenText() {
+        FORMED_CONTROLLERS.removeIf(controller -> controller.isRemoved() || controller.level == null);
+        for (MachineControllerBlockEntity controller : FORMED_CONTROLLERS) {
+            if (!controller.level.isClientSide()) controller.rebuildControllerScreenText();
+        }
+    }
+
+    private void rebuildControllerScreenText() {
+        runtime.clearAllText();
+        applyControllerScreenText();
+        runtime.publishSnapshot();
+        syncOpenControllerScreenText();
+    }
+
     public void setLastFailureUnloc(@Nullable String key) {
         this.lastFailureUnloc = key;
     }

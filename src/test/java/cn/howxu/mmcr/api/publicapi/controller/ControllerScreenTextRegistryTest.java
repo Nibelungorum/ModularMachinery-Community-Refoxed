@@ -137,6 +137,25 @@ class ControllerScreenTextRegistryTest {
     }
 
     @Test
+    void abortedServerScriptReloadKeepsPreviousServerScriptRegistrations() throws Exception {
+        installCurrentServerForTesting(Thread.currentThread());
+        ControllerScreenTextState state = new ControllerScreenTextState();
+        List<String> calls = new ArrayList<>();
+        ControllerRuntimeContext context = context(MACHINE_ID, state);
+
+        ControllerScreenTextRegistry.beginServerScriptReload();
+        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> calls.add("old script"));
+        ControllerScreenTextRegistry.endServerScriptReload();
+
+        ControllerScreenTextRegistry.beginServerScriptReload();
+        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> calls.add("new script"));
+        ControllerScreenTextRegistry.abortServerScriptReload();
+        ControllerScreenTextRegistry.apply(context);
+
+        assertThat(calls).containsExactly("old script");
+    }
+
+    @Test
     void runtimeContextUsesConfiguredMachinePositionAndSameTextState() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MACHINE_ID);
         MachineControllerRuntime runtime = runtimeOf(controller);

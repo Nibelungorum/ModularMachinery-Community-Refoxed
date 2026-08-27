@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.MachineApi;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -20,6 +21,9 @@ import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
@@ -30,6 +34,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -43,6 +48,7 @@ import java.lang.ScopedValue;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -159,6 +165,26 @@ class PluginBindingTest {
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
         assertThat(synced).isTrue();
+    }
+
+    @Test
+    void successful_server_reload_rebuilds_text_for_formed_controllers() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_machine_name"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("stale_reload_text"), Component.literal("stale"));
+        Set<MachineControllerBlockEntity> formedControllers = formedControllers();
+        formedControllers.add(controller);
+
+        try {
+            Object reload = new Object();
+            Plugin.beginServerReload(reload, 0);
+            Plugin.completeServerReload(reload, 0);
+
+            assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+        } finally {
+            formedControllers.remove(controller);
+        }
     }
 
     @Test
@@ -681,6 +707,19 @@ class PluginBindingTest {
         final MachineRecipe[] recipe = new MachineRecipe[1];
         ScopedValue.where(RecipesKubeEvent.INSTANCE, event).run(() -> recipe[0] = builder.createObject());
         return recipe[0];
+    }
+
+    private static MachineControllerRuntime runtimeOf(MachineControllerBlockEntity controller) throws Exception {
+        var field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        field.setAccessible(true);
+        return (MachineControllerRuntime) field.get(controller);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<MachineControllerBlockEntity> formedControllers() throws Exception {
+        var field = MachineControllerBlockEntity.class.getDeclaredField("FORMED_CONTROLLERS");
+        field.setAccessible(true);
+        return (Set<MachineControllerBlockEntity>) field.get(null);
     }
 
     private static void setField(Object target, String name, Object value) {

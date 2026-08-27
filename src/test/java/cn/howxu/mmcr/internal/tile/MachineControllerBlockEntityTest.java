@@ -765,6 +765,11 @@ class MachineControllerBlockEntityTest {
         holder.set(deferredHolder, Holder.direct(menuType));
     }
 
+    /**
+     * Captures server packets for menu synchronization assertions.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class TestConnection extends ServerGamePacketListenerImpl {
         private List<Packet<?>> packets;
 

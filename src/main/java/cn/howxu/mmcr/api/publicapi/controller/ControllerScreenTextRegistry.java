@@ -59,27 +59,53 @@ public final class ControllerScreenTextRegistry {
 
     public static synchronized void beginServerScriptReload() {
         requireServerThread("begin server-script reload");
+        beginServerScriptReloadInternal();
+    }
+
+    /** Internal reload hook used while KubeJS evaluates scripts off the server thread. */
+    public static synchronized void beginServerScriptReloadFromReloadHook() {
+        beginServerScriptReloadInternal();
+    }
+
+    private static void beginServerScriptReloadInternal() {
         for (Entry entry : List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS)) entry.unregisterInternal();
         PENDING_SERVER_SCRIPT_HANDLERS.clear();
-        Iterator<Map.Entry<Identifier, List<Entry>>> iterator = HANDLERS.entrySet().iterator();
-        while (iterator.hasNext()) {
-            List<Entry> entries = iterator.next().getValue();
-            entries.removeIf(entry -> {
-                if (entry.source() != Source.SERVER_SCRIPT) return false;
-                entry.deactivateInternal();
-                return true;
-            });
-            if (entries.isEmpty()) iterator.remove();
-        }
         serverScriptReloading = true;
     }
 
     public static synchronized void endServerScriptReload() {
         requireServerThread("end server-script reload");
+        endServerScriptReloadInternal();
+    }
+
+    /** Internal reload hook; the caller dispatches this operation to the server thread. */
+    public static synchronized void endServerScriptReloadFromReloadHook() {
+        endServerScriptReloadInternal();
+    }
+
+    private static void endServerScriptReloadInternal() {
         if (!serverScriptReloading) return;
+        removeServerScriptHandlers();
         for (Entry entry : PENDING_SERVER_SCRIPT_HANDLERS) {
             HANDLERS.computeIfAbsent(entry.machineId(), ignored -> new ArrayList<>()).add(entry);
         }
+        PENDING_SERVER_SCRIPT_HANDLERS.clear();
+        serverScriptReloading = false;
+    }
+
+    public static synchronized void abortServerScriptReload() {
+        requireServerThread("abort server-script reload");
+        abortServerScriptReloadInternal();
+    }
+
+    /** Internal reload hook; the caller dispatches this operation to the server thread. */
+    public static synchronized void abortServerScriptReloadFromReloadHook() {
+        abortServerScriptReloadInternal();
+    }
+
+    private static void abortServerScriptReloadInternal() {
+        if (!serverScriptReloading) return;
+        for (Entry entry : List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS)) entry.unregisterInternal();
         PENDING_SERVER_SCRIPT_HANDLERS.clear();
         serverScriptReloading = false;
     }
@@ -105,6 +131,19 @@ public final class ControllerScreenTextRegistry {
             HANDLERS.computeIfAbsent(machineId, ignored -> new ArrayList<>()).add(entry);
         }
         return entry;
+    }
+
+    private static void removeServerScriptHandlers() {
+        Iterator<Map.Entry<Identifier, List<Entry>>> iterator = HANDLERS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            List<Entry> entries = iterator.next().getValue();
+            entries.removeIf(entry -> {
+                if (entry.source() != Source.SERVER_SCRIPT) return false;
+                entry.deactivateInternal();
+                return true;
+            });
+            if (entries.isEmpty()) iterator.remove();
+        }
     }
 
     private static void requireMutationThread(Source source, String operation) {
