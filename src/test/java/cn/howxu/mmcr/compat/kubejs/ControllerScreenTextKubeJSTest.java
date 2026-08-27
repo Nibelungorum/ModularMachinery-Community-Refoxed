@@ -146,6 +146,28 @@ class ControllerScreenTextKubeJSTest {
                 .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("new")));
     }
 
+    @Test
+    void server_registration_requires_reload_window_but_accepts_registration_inside_it() throws Exception {
+        installCurrentServerForTesting(Thread.currentThread());
+        MMCRServerEventJS event = new MMCRServerEventJS();
+
+        assertThatThrownBy(() -> event.registerControllerScreenText(MACHINE_ID.toString(), ignored -> { }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reload");
+
+        Object reload = new Object();
+        beginServerScriptReloadForTesting(reload, 0);
+        event.registerControllerScreenText(MACHINE_ID.toString(), text ->
+                text.append("controller", "example:window", Component.literal("accepted")));
+        Plugin.completeServerReloadForTesting(reload, 0, () -> { });
+
+        ControllerScreenTextState state = new ControllerScreenTextState();
+        ControllerScreenTextRegistry.apply(new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
+
+        assertThat(state.snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("accepted")));
+    }
+
     private static void clearRegistryForTesting() throws Exception {
         Method method = ControllerScreenTextRegistry.class.getDeclaredMethod("clearForTesting");
         method.setAccessible(true);

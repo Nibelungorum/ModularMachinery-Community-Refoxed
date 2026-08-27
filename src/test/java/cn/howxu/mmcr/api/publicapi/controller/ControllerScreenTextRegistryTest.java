@@ -218,9 +218,12 @@ class ControllerScreenTextRegistryTest {
         worker.start();
         worker.join();
 
-        assertThat(failures).hasSize(5).allSatisfy(failure ->
+        assertThat(failures).hasSize(5);
+        assertThat(failures.subList(0, 4)).allSatisfy(failure ->
                 assertThat(failure).isInstanceOf(IllegalStateException.class)
                         .hasMessageContaining("server thread"));
+        assertThat(failures.get(4)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reload");
     }
 
     @Test

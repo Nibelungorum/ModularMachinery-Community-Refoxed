@@ -37,6 +37,9 @@ public final class ControllerScreenTextRegistry {
      */
     public static synchronized Registration registerServerScript(Identifier machineId,
                                                                   ControllerScreenTextHandler handler) {
+        if (!serverScriptReloading) {
+            throw new IllegalStateException("server-script register requires an active reload window");
+        }
         requireMutationThread(Source.SERVER_SCRIPT, "server-script register");
         return add(machineId, handler, Source.SERVER_SCRIPT, serverScriptReloading);
     }
