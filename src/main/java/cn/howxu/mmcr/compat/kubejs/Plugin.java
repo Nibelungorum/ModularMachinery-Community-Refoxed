@@ -1,14 +1,12 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
@@ -19,7 +17,6 @@ import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -36,7 +33,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     @Override
     public void beforeScriptsLoaded(ScriptManager manager) {
         if (manager.scriptType == ScriptType.SERVER) {
-            beginServerScriptReload(manager, manager.scriptType.console.errors.size());
+            beginServerReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             beginStartupRegistryPhase();
@@ -81,29 +78,21 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
         StartupContentRegistration.registerKubeJSStartupMachine(definition);
     }
 
-    private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount,
-                                boolean controllerTextReload) {
+    private record ServerReload(KubeJSContentReloadTransaction transaction, int errorCount) {
     }
 
     static void beginServerReload(Object manager, int errorCount) {
         var transaction = new KubeJSContentReloadTransaction();
-        SERVER_RELOADS.put(manager, new ServerReload(transaction, errorCount, false));
-        KubeJSContentReloadTransaction.activate(transaction);
-    }
-
-    private static void beginServerScriptReload(Object manager, int errorCount) {
-        ControllerScreenTextRegistry.beginServerScriptReloadFromReloadHook();
-        var transaction = new KubeJSContentReloadTransaction();
-        SERVER_RELOADS.put(manager, new ServerReload(transaction, errorCount, true));
+        SERVER_RELOADS.put(manager, new ServerReload(transaction, errorCount));
         KubeJSContentReloadTransaction.activate(transaction);
     }
 
     static void completeServerReload(Object manager, int errorCount) {
-        completeServerReload(manager, errorCount, ServerLifecycleHooks.getCurrentServer(), currentServerSync);
+        completeServerReload(manager, errorCount, currentServerSync);
     }
 
     static void completeServerReload(Object manager, int errorCount, MinecraftServer server) {
-        completeServerReload(manager, errorCount, server, snapshot -> {
+        completeServerReload(manager, errorCount, snapshot -> {
             if (server != null) RuntimeContentSync.sendToAll(server, snapshot);
         });
     }
@@ -123,40 +112,10 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
 
     private static void completeServerReload(Object manager, int errorCount,
                                               Consumer<RuntimeContentSnapshot> afterCommit) {
-        completeServerReload(manager, errorCount, ServerLifecycleHooks.getCurrentServer(), afterCommit);
-    }
-
-    private static void completeServerReload(Object manager, int errorCount, MinecraftServer server,
-                                              Consumer<RuntimeContentSnapshot> afterCommit) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
             if (reload != null && errorCount == reload.errorCount()) {
-                if (reload.controllerTextReload()) {
-                    try {
-                        if (!runOnServerThread(server, () -> {
-                            try {
-                                RuntimeContentSnapshot snapshot = reload.transaction().commit().snapshot();
-                                ControllerScreenTextRegistry.endServerScriptReloadFromReloadHook();
-                                MachineControllerBlockEntity.rebuildActiveControllerScreenText();
-                                afterCommit.accept(snapshot);
-                            } catch (RuntimeException | Error failure) {
-                                abortServerScriptReload(server);
-                                throw failure;
-                            }
-                        })) {
-                            abortServerScriptReload(server);
-                        }
-                    } catch (RuntimeException | Error failure) {
-                        abortServerScriptReload(server);
-                        throw failure;
-                    }
-                } else {
-                    RuntimeContentSnapshot snapshot = reload.transaction().commit().snapshot();
-                    MachineControllerBlockEntity.rebuildActiveControllerScreenText();
-                    afterCommit.accept(snapshot);
-                }
-            } else if (reload != null && reload.controllerTextReload()) {
-                abortServerScriptReload(server);
+                afterCommit.accept(reload.transaction().commit().snapshot());
             }
         } finally {
             KubeJSContentReloadTransaction.deactivate();
@@ -164,30 +123,8 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
     }
 
     static void abortServerReload(Object manager) {
-        ServerReload reload = SERVER_RELOADS.remove(manager);
-        try {
-            if (reload != null && reload.controllerTextReload()) {
-                abortServerScriptReload(ServerLifecycleHooks.getCurrentServer());
-            }
-        } finally {
-            KubeJSContentReloadTransaction.deactivate();
-        }
-    }
-
-    private static void abortServerScriptReload(MinecraftServer server) {
-        if (!runOnServerThread(server, ControllerScreenTextRegistry::abortServerScriptReloadFromReloadHook)) {
-            ControllerScreenTextRegistry.abortServerScriptReloadFromReloadHook();
-        }
-    }
-
-    private static boolean runOnServerThread(MinecraftServer server, Runnable action) {
-        if (server == null) return false;
-        if (server.isSameThread()) {
-            action.run();
-        } else {
-            server.execute(action);
-        }
-        return true;
+        SERVER_RELOADS.remove(manager);
+        KubeJSContentReloadTransaction.deactivate();
     }
 
     static void setCurrentServerForTesting(MinecraftServer server) {

@@ -118,41 +118,12 @@ class ControllerScreenTextRegistryTest {
     }
 
     @Test
-    void serverScriptReloadReplacesOnlyServerScriptRegistrations() throws Exception {
-        installCurrentServerForTesting(Thread.currentThread());
-        ControllerScreenTextState state = new ControllerScreenTextState();
-        List<String> calls = new ArrayList<>();
-        ControllerRuntimeContext context = context(MACHINE_ID, state);
-        ControllerScreenTextRegistry.register(MACHINE_ID, received -> calls.add("startup"));
-        ControllerScreenTextRegistry.beginServerScriptReload();
-        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> calls.add("old script"));
-        ControllerScreenTextRegistry.endServerScriptReload();
-
-        ControllerScreenTextRegistry.beginServerScriptReload();
-        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> calls.add("new script"));
-        ControllerScreenTextRegistry.endServerScriptReload();
-        ControllerScreenTextRegistry.apply(context);
-
-        assertThat(calls).containsExactly("startup", "new script");
-    }
-
-    @Test
-    void abortedServerScriptReloadKeepsPreviousServerScriptRegistrations() throws Exception {
-        installCurrentServerForTesting(Thread.currentThread());
-        ControllerScreenTextState state = new ControllerScreenTextState();
-        List<String> calls = new ArrayList<>();
-        ControllerRuntimeContext context = context(MACHINE_ID, state);
-
-        ControllerScreenTextRegistry.beginServerScriptReload();
-        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> calls.add("old script"));
-        ControllerScreenTextRegistry.endServerScriptReload();
-
-        ControllerScreenTextRegistry.beginServerScriptReload();
-        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> calls.add("new script"));
-        ControllerScreenTextRegistry.abortServerScriptReload();
-        ControllerScreenTextRegistry.apply(context);
-
-        assertThat(calls).containsExactly("old script");
+    void registry_does_not_expose_server_script_registration_or_reload_lifecycle() {
+        assertThat(ControllerScreenTextRegistry.class.getDeclaredMethods())
+                .extracting(java.lang.reflect.Method::getName)
+                .doesNotContain("registerServerScript", "beginServerScriptReload", "endServerScriptReload",
+                        "abortServerScriptReload", "beginServerScriptReloadFromReloadHook",
+                        "endServerScriptReloadFromReloadHook", "abortServerScriptReloadFromReloadHook");
     }
 
     @Test
@@ -203,27 +174,19 @@ class ControllerScreenTextRegistryTest {
         installCurrentServerForTesting(Thread.currentThread());
         ControllerScreenTextRegistry.Registration startup = ControllerScreenTextRegistry.register(
                 MACHINE_ID, received -> { });
-        ControllerScreenTextRegistry.beginServerScriptReload();
-        ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> { });
-        ControllerScreenTextRegistry.endServerScriptReload();
         List<Throwable> failures = new ArrayList<>();
 
         Thread worker = new Thread(() -> {
             failures.add(attempt(() -> ControllerScreenTextRegistry.register(MACHINE_ID, received -> { })));
             failures.add(attempt(startup::unregister));
-            failures.add(attempt(ControllerScreenTextRegistry::beginServerScriptReload));
-            failures.add(attempt(ControllerScreenTextRegistry::endServerScriptReload));
-            failures.add(attempt(() -> ControllerScreenTextRegistry.registerServerScript(MACHINE_ID, received -> { })));
         });
         worker.start();
         worker.join();
 
-        assertThat(failures).hasSize(5);
-        assertThat(failures.subList(0, 4)).allSatisfy(failure ->
+        assertThat(failures).hasSize(2);
+        assertThat(failures).allSatisfy(failure ->
                 assertThat(failure).isInstanceOf(IllegalStateException.class)
                         .hasMessageContaining("server thread"));
-        assertThat(failures.get(4)).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("reload");
     }
 
     @Test

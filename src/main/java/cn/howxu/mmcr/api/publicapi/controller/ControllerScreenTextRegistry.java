@@ -7,7 +7,6 @@ import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,28 +19,14 @@ import java.util.Objects;
  */
 public final class ControllerScreenTextRegistry {
     private static final Map<Identifier, List<Entry>> HANDLERS = new LinkedHashMap<>();
-    private static final List<Entry> PENDING_SERVER_SCRIPT_HANDLERS = new ArrayList<>();
-    private static boolean serverScriptReloading;
 
     private ControllerScreenTextRegistry() {
     }
 
     public static synchronized Registration register(Identifier machineId,
                                                      ControllerScreenTextHandler handler) {
-        requireMutationThread(Source.PUBLIC_API, "register");
-        return add(machineId, handler, Source.PUBLIC_API, false);
-    }
-
-    /**
-     * Internal source entry point for server-script integrations.
-     */
-    public static synchronized Registration registerServerScript(Identifier machineId,
-                                                                  ControllerScreenTextHandler handler) {
-        if (!serverScriptReloading) {
-            throw new IllegalStateException("server-script register requires an active reload window");
-        }
-        requireMutationThread(Source.SERVER_SCRIPT, "server-script register");
-        return add(machineId, handler, Source.SERVER_SCRIPT, serverScriptReloading);
+        requireMutationThread("register");
+        return add(machineId, handler);
     }
 
     public static void apply(ControllerRuntimeContext context) {
@@ -60,102 +45,27 @@ public final class ControllerScreenTextRegistry {
         }
     }
 
-    public static synchronized void beginServerScriptReload() {
-        requireServerThread("begin server-script reload");
-        beginServerScriptReloadInternal();
-    }
-
-    /** Internal reload hook used while KubeJS evaluates scripts off the server thread. */
-    public static synchronized void beginServerScriptReloadFromReloadHook() {
-        beginServerScriptReloadInternal();
-    }
-
-    private static void beginServerScriptReloadInternal() {
-        for (Entry entry : List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS)) entry.unregisterInternal();
-        PENDING_SERVER_SCRIPT_HANDLERS.clear();
-        serverScriptReloading = true;
-    }
-
-    public static synchronized void endServerScriptReload() {
-        requireServerThread("end server-script reload");
-        endServerScriptReloadInternal();
-    }
-
-    /** Internal reload hook; the caller dispatches this operation to the server thread. */
-    public static synchronized void endServerScriptReloadFromReloadHook() {
-        endServerScriptReloadInternal();
-    }
-
-    private static void endServerScriptReloadInternal() {
-        if (!serverScriptReloading) return;
-        removeServerScriptHandlers();
-        for (Entry entry : PENDING_SERVER_SCRIPT_HANDLERS) {
-            HANDLERS.computeIfAbsent(entry.machineId(), ignored -> new ArrayList<>()).add(entry);
-        }
-        PENDING_SERVER_SCRIPT_HANDLERS.clear();
-        serverScriptReloading = false;
-    }
-
-    public static synchronized void abortServerScriptReload() {
-        requireServerThread("abort server-script reload");
-        abortServerScriptReloadInternal();
-    }
-
-    /** Internal reload hook; the caller dispatches this operation to the server thread. */
-    public static synchronized void abortServerScriptReloadFromReloadHook() {
-        abortServerScriptReloadInternal();
-    }
-
-    private static void abortServerScriptReloadInternal() {
-        if (!serverScriptReloading) return;
-        for (Entry entry : List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS)) entry.unregisterInternal();
-        PENDING_SERVER_SCRIPT_HANDLERS.clear();
-        serverScriptReloading = false;
-    }
-
     /** Test-only helper. Never call from production code. */
     static synchronized void clearForTesting() {
         HANDLERS.values().stream().flatMap(List::stream).toList().forEach(Entry::deactivateInternal);
-        List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS).forEach(Entry::deactivateInternal);
         HANDLERS.clear();
-        PENDING_SERVER_SCRIPT_HANDLERS.clear();
-        serverScriptReloading = false;
     }
 
-    private static Registration add(Identifier machineId,
-                                    ControllerScreenTextHandler handler, Source source,
-                                    boolean pendingServerScript) {
+    private static Registration add(Identifier machineId, ControllerScreenTextHandler handler) {
         Objects.requireNonNull(machineId, "machineId");
         Objects.requireNonNull(handler, "handler");
-        Entry entry = new Entry(machineId, handler, source);
-        if (pendingServerScript) {
-            PENDING_SERVER_SCRIPT_HANDLERS.add(entry);
-        } else {
-            HANDLERS.computeIfAbsent(machineId, ignored -> new ArrayList<>()).add(entry);
-        }
+        Entry entry = new Entry(machineId, handler);
+        HANDLERS.computeIfAbsent(machineId, ignored -> new ArrayList<>()).add(entry);
         return entry;
     }
 
-    private static void removeServerScriptHandlers() {
-        Iterator<Map.Entry<Identifier, List<Entry>>> iterator = HANDLERS.entrySet().iterator();
-        while (iterator.hasNext()) {
-            List<Entry> entries = iterator.next().getValue();
-            entries.removeIf(entry -> {
-                if (entry.source() != Source.SERVER_SCRIPT) return false;
-                entry.deactivateInternal();
-                return true;
-            });
-            if (entries.isEmpty()) iterator.remove();
-        }
-    }
-
-    private static void requireMutationThread(Source source, String operation) {
+    private static void requireMutationThread(String operation) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server != null) {
             requireServerThread(server, operation);
             return;
         }
-        if (source == Source.PUBLIC_API && PublicApiBootstrap.isRegistrationOpen()) return;
+        if (PublicApiBootstrap.isRegistrationOpen()) return;
         throw new IllegalStateException(operation + " requires the server thread");
     }
 
@@ -175,21 +85,14 @@ public final class ControllerScreenTextRegistry {
         void unregister();
     }
 
-    private enum Source {
-        PUBLIC_API,
-        SERVER_SCRIPT
-    }
-
     private static final class Entry implements Registration {
         private final Identifier machineId;
         private final ControllerScreenTextHandler handler;
-        private final Source source;
         private boolean registered = true;
 
-        private Entry(Identifier machineId, ControllerScreenTextHandler handler, Source source) {
+        private Entry(Identifier machineId, ControllerScreenTextHandler handler) {
             this.machineId = machineId;
             this.handler = handler;
-            this.source = source;
         }
 
         private Identifier machineId() {
@@ -200,15 +103,11 @@ public final class ControllerScreenTextRegistry {
             return handler;
         }
 
-        private Source source() {
-            return source;
-        }
-
         @Override
         public void unregister() {
             synchronized (ControllerScreenTextRegistry.class) {
                 if (!registered) return;
-                requireMutationThread(source, "unregister");
+                requireMutationThread("unregister");
                 unregisterInternal();
             }
         }
@@ -221,7 +120,6 @@ public final class ControllerScreenTextRegistry {
                 entries.remove(this);
                 if (entries.isEmpty()) HANDLERS.remove(machineId);
             }
-            PENDING_SERVER_SCRIPT_HANDLERS.remove(this);
         }
 
         private void deactivateInternal() {
