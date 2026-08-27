@@ -6,23 +6,38 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 
+import java.util.ArrayList;
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.UUID;
 
 public class ControllerTickGameTest {
 
@@ -45,8 +60,12 @@ public class ControllerTickGameTest {
         controller.serverTick();
         helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
         controller.setMachine(MachineRegistry.getMachine(machineId));
+        ServerPlayer observer = observer(helper);
+        observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        helper.getLevel().players().add(observer);
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
+            int payloadsBeforeFirst = screenTextPackets(observer);
             runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
                     MMCR.id("controller_tick_status"), Component.literal("forming complete"));
             controller.serverTick();
@@ -54,7 +73,10 @@ public class ControllerTickGameTest {
             helper.assertTrue(first.lines().size() == 1
                             && first.lines().getFirst().text().getString().equals("forming complete"),
                     "formed controller publishes controller-scoped text");
+            helper.assertTrue(screenTextPackets(observer) == payloadsBeforeFirst + 1,
+                    "formed controller sends the first text snapshot to the active menu observer");
 
+            int payloadsBeforeUpdate = screenTextPackets(observer);
             runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
                     MMCR.id("controller_tick_status"), Component.literal("updated"));
             controller.serverTick();
@@ -62,14 +84,22 @@ public class ControllerTickGameTest {
             helper.assertTrue(updated.lines().size() == 1
                             && updated.lines().getFirst().text().getString().equals("updated"),
                     "controller-scoped keyed text replaces the previous line");
+            helper.assertTrue(screenTextPackets(observer) == payloadsBeforeUpdate + 1,
+                    "updated controller text sends one replacement snapshot");
             long unchangedRevision = updated.revision();
+            int payloadCount = screenTextPackets(observer);
             controller.serverTick();
-            helper.assertTrue(screenTextSnapshot(controller).revision() == unchangedRevision,
-                    "unchanged controller text is not mutated again");
+            helper.assertTrue(screenTextSnapshot(controller).revision() == unchangedRevision
+                            && screenTextPackets(observer) == payloadCount,
+                    "unchanged controller text does not mutate or resend a payload");
 
+            int payloadsBeforeReset = screenTextPackets(observer);
             controller.invalidateFormedStructure();
-            helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty(),
-                    "reset clears controller-scoped text");
+            helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty()
+                            && screenTextPackets(observer) == payloadsBeforeReset + 1
+                            && lastScreenTextPacket(observer).lines().isEmpty(),
+                    "reset clears controller-scoped text and synchronizes the empty snapshot");
+            helper.getLevel().players().remove(observer);
             helper.succeed();
         });
     }
@@ -118,6 +148,50 @@ public class ControllerTickGameTest {
             return (MachineControllerRuntime) field.get(controller);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to inspect controller text snapshot", exception);
+        }
+    }
+
+    private static ServerPlayer observer(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerPlayer player = new ServerPlayer(server, helper.getLevel(),
+                new GameProfile(UUID.randomUUID(), "mmcr-controller-tick-observer"),
+                ClientInformation.createDefault());
+        player.connection = new RecordingConnection(server, player);
+        return player;
+    }
+
+    private static int screenTextPackets(ServerPlayer player) {
+        return (int) ((RecordingConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktControllerScreenTextPayload)
+                .count();
+    }
+
+    private static PktControllerScreenTextPayload lastScreenTextPacket(ServerPlayer player) {
+        return ((RecordingConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktControllerScreenTextPayload)
+                .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
+                .reduce((first, second) -> second)
+                .orElseThrow();
+    }
+
+    /**
+     * Captures controller screen text payloads without requiring a network client.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class RecordingConnection extends ServerGamePacketListenerImpl {
+        private final List<Packet<?>> packets = new ArrayList<>();
+
+        private RecordingConnection(MinecraftServer server, ServerPlayer player) {
+            super(server, new Connection(PacketFlow.CLIENTBOUND), player,
+                    CommonListenerCookie.createInitial(new GameProfile(UUID.randomUUID(), "mmcr-controller-tick-connection"), false));
+        }
+
+        @Override
+        public void send(Packet<?> packet) {
+            packets.add(packet);
         }
     }
 }

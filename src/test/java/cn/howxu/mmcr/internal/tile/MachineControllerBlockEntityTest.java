@@ -73,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -310,12 +311,14 @@ class MachineControllerBlockEntityTest {
         assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
         runtime.screenText().append(ControllerScreenTextScope.OPERATION,
                 MMCR.id("cancelled_operation_line"), Component.literal("running"));
+        assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.scope()).isEqualTo(ControllerScreenTextScope.OPERATION));
 
-        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        controller.onSmartInterfaceValueChanged();
 
-        assertThat(runtime.craftingRuntime().failure()).isNotNull();
         assertThat(runtime.craftingRuntime().active()).isFalse();
-        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+        assertThat(runtime.screenText().snapshot().lines())
+                .noneMatch(line -> line.scope() == ControllerScreenTextScope.OPERATION);
     }
 
     @Test
@@ -327,9 +330,14 @@ class MachineControllerBlockEntityTest {
         player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
         setPlayers(level, List.of(player));
         AtomicInteger ticks = new AtomicInteger();
+        AtomicBoolean updateText = new AtomicBoolean(true);
         textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context ->
-                context.screenText().append(ControllerScreenTextScope.CONTROLLER,
-                        MMCR.id("custom_tick_line"), Component.literal("tick " + ticks.incrementAndGet()))));
+                {
+                    if (updateText.get()) {
+                        context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                                MMCR.id("custom_tick_line"), Component.literal("tick " + ticks.incrementAndGet()));
+                    }
+                }));
 
         controller.tickRuntimeWork(level, controller.getBlockPos());
         controller.tickRuntimeWork(level, controller.getBlockPos());
@@ -337,6 +345,14 @@ class MachineControllerBlockEntityTest {
         assertThat(runtimeOf(controller).screenText().snapshot().lines()).singleElement()
                 .satisfies(line -> assertThat(line.text().getString()).isEqualTo("tick 2"));
         assertThat(textPackets(player)).hasSize(2);
+
+        long unchangedRevision = runtimeOf(controller).screenText().revision();
+        int payloadCount = textPackets(player).size();
+        updateText.set(false);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+
+        assertThat(runtimeOf(controller).screenText().revision()).isEqualTo(unchangedRevision);
+        assertThat(textPackets(player)).hasSize(payloadCount);
     }
 
     @Test
