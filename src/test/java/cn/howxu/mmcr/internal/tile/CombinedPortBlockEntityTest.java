@@ -101,10 +101,10 @@ class CombinedPortBlockEntityTest {
     }
 
     @Test
-    void extendedCombinedUsesThreeSixNineItemTypesAndOneTwoThreeFluidTypes() {
-        assertExtendedCombined("extended_combined_input_advanced", 3, 1);
-        assertExtendedCombined("extended_combined_input_reinforced", 6, 2);
-        assertExtendedCombined("extended_combined_input_ultimate", 9, 3);
+    void extendedCombinedUsesExpandedItemAndFluidTypeCounts() {
+        assertExtendedCombined("extended_combined_input_advanced", 6, 2);
+        assertExtendedCombined("extended_combined_input_reinforced", 12, 4);
+        assertExtendedCombined("extended_combined_input_ultimate", 18, 6);
     }
 
     @Test
@@ -171,7 +171,10 @@ class CombinedPortBlockEntityTest {
         List<ItemResource> resources = List.of(
                 itemResource(Items.IRON_INGOT), itemResource(Items.GOLD_INGOT), itemResource(Items.DIAMOND),
                 itemResource(Items.EMERALD), itemResource(Items.COPPER_INGOT), itemResource(Items.REDSTONE),
-                itemResource(Items.LAPIS_LAZULI), itemResource(Items.QUARTZ), itemResource(Items.COAL));
+                itemResource(Items.LAPIS_LAZULI), itemResource(Items.QUARTZ), itemResource(Items.COAL),
+                itemResource(Items.NETHERITE_INGOT), itemResource(Items.RAW_IRON), itemResource(Items.RAW_GOLD),
+                itemResource(Items.RAW_COPPER), itemResource(Items.COBBLESTONE), itemResource(Items.STONE),
+                itemResource(Items.DIRT), itemResource(Items.SAND), itemResource(Items.GRAVEL));
         ItemResource newItem = itemResource(Items.NETHER_STAR);
         FluidResource newFluid = FluidResource.of(Fluids.LAVA);
 

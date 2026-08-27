@@ -9,6 +9,8 @@ import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -20,6 +22,8 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
@@ -72,44 +76,52 @@ class IOPortSizeTest {
     }
 
     @Test
-    void extendedItemBusUsesLongResourceSlotsAndRejectsAResourceAfterAllTypesAreOccupied() {
-        ExtendedItemBusBlockEntity bus = extendedItemBus("extended_item_input_bus_basic");
-        ResourceStorage<ItemResource> storage = bus.itemStorage();
-        ItemResource iron = itemResource(Items.IRON_INGOT);
-        ItemResource gold = itemResource(Items.GOLD_INGOT);
-        ItemResource diamond = itemResource(Items.DIAMOND);
+    void extendedItemBusUsesExpandedLongResourceSlotsAndRejectsAResourceAfterAllTypesAreOccupied() {
+        List<ItemResource> resources = itemResources();
+        for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
+            ExtendedItemBusBlockEntity bus = extendedItemBus("extended_item_input_bus_" + size.id());
+            ResourceStorage<ItemResource> storage = bus.itemStorage();
 
-        assertThat(bus.capabilitySnapshot().capabilities()).hasSize(1)
-                .first().isInstanceOf(ItemBusCapability.class);
-        assertThat(storage.size()).isEqualTo(2);
-        assertThat(storage.capacity(0, iron)).isEqualTo(Long.MAX_VALUE);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, iron, Long.MAX_VALUE, transaction)).isEqualTo(Long.MAX_VALUE);
-            assertThat(storage.insert(1, gold, Long.MAX_VALUE, transaction)).isEqualTo(Long.MAX_VALUE);
-            assertThat(storage.insert(0, diamond, 1L, transaction)).isZero();
-            assertThat(storage.insert(1, diamond, 1L, transaction)).isZero();
-            transaction.commit();
+            assertThat(bus.capabilitySnapshot().capabilities()).hasSize(1)
+                    .first().isInstanceOf(ItemBusCapability.class);
+            assertThat(storage.size()).isEqualTo(size.slots());
+            assertThat(storage.capacity(0, resources.getFirst())).isEqualTo(Long.MAX_VALUE);
+            try (Transaction transaction = Transaction.openRoot()) {
+                for (int slot = 0; slot < size.slots(); slot++) {
+                    assertThat(storage.insert(slot, resources.get(slot), Long.MAX_VALUE, transaction))
+                            .isEqualTo(Long.MAX_VALUE);
+                }
+                ItemResource overflow = itemResource(Items.NETHER_STAR);
+                for (int slot = 0; slot < size.slots(); slot++) {
+                    assertThat(storage.insert(slot, overflow, 1L, transaction)).isZero();
+                }
+                transaction.commit();
+            }
         }
     }
 
     @Test
-    void extendedFluidHatchUsesLongResourceTanksAndRejectsAResourceAfterAllTypesAreOccupied() {
-        ExtendedFluidHatchBlockEntity hatch = extendedFluidHatch("extended_fluid_input_hatch_basic");
-        ResourceStorage<FluidResource> storage = hatch.fluidStorage();
-        FluidResource water = FluidResource.of(Fluids.WATER);
-        FluidResource lava = FluidResource.of(Fluids.LAVA);
-        FluidResource honey = FluidResource.of(Fluids.WATER);
+    void extendedFluidHatchUsesExpandedLongResourceTanksAndRejectsAResourceAfterAllTypesAreOccupied() {
+        for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
+            ExtendedFluidHatchBlockEntity hatch = extendedFluidHatch("extended_fluid_input_hatch_" + size.id());
+            ResourceStorage<FluidResource> storage = hatch.fluidStorage();
+            FluidResource water = FluidResource.of(Fluids.WATER);
+            FluidResource lava = FluidResource.of(Fluids.LAVA);
 
-        assertThat(hatch.capabilitySnapshot().capabilities()).hasSize(1)
-                .first().isInstanceOf(FluidHatchCapability.class);
-        assertThat(storage.size()).isEqualTo(2);
-        assertThat(storage.capacity(0, water)).isEqualTo(Long.MAX_VALUE);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, water, Long.MAX_VALUE, transaction)).isEqualTo(Long.MAX_VALUE);
-            assertThat(storage.insert(1, lava, Long.MAX_VALUE, transaction)).isEqualTo(Long.MAX_VALUE);
-            assertThat(storage.insert(0, honey, 1L, transaction)).isZero();
-            assertThat(storage.insert(1, honey, 1L, transaction)).isZero();
-            transaction.commit();
+            assertThat(hatch.capabilitySnapshot().capabilities()).hasSize(1)
+                    .first().isInstanceOf(FluidHatchCapability.class);
+            assertThat(storage.size()).isEqualTo(size.slots());
+            assertThat(storage.capacity(0, water)).isEqualTo(Long.MAX_VALUE);
+            try (Transaction transaction = Transaction.openRoot()) {
+                for (int slot = 0; slot < size.slots(); slot++) {
+                    assertThat(storage.insert(slot, water, Long.MAX_VALUE, transaction))
+                            .isEqualTo(Long.MAX_VALUE);
+                }
+                for (int slot = 0; slot < size.slots(); slot++) {
+                    assertThat(storage.insert(slot, lava, 1L, transaction)).isZero();
+                }
+                transaction.commit();
+            }
         }
     }
 
@@ -162,6 +174,21 @@ class IOPortSizeTest {
         ItemStack stack = item.getDefaultInstance();
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return ItemResource.of(stack);
+    }
+
+    private static List<ItemResource> itemResources() {
+        return List.of(
+                itemResource(Items.IRON_INGOT), itemResource(Items.GOLD_INGOT), itemResource(Items.DIAMOND),
+                itemResource(Items.COPPER_INGOT), itemResource(Items.COAL), itemResource(Items.REDSTONE),
+                itemResource(Items.LAPIS_LAZULI), itemResource(Items.QUARTZ), itemResource(Items.AMETHYST_SHARD),
+                itemResource(Items.EMERALD), itemResource(Items.NETHERITE_INGOT), itemResource(Items.RAW_IRON),
+                itemResource(Items.RAW_GOLD), itemResource(Items.RAW_COPPER), itemResource(Items.COBBLESTONE),
+                itemResource(Items.STONE), itemResource(Items.DIRT), itemResource(Items.SAND),
+                itemResource(Items.GRAVEL), itemResource(Items.OAK_LOG), itemResource(Items.SPRUCE_LOG),
+                itemResource(Items.BIRCH_LOG), itemResource(Items.JUNGLE_LOG), itemResource(Items.ACACIA_LOG),
+                itemResource(Items.DARK_OAK_LOG), itemResource(Items.CRIMSON_STEM), itemResource(Items.WARPED_STEM),
+                itemResource(Items.GLASS), itemResource(Items.BRICK), itemResource(Items.BOOK),
+                itemResource(Items.PAPER), itemResource(Items.WHEAT));
     }
 
     private static BlockState state(String id) {

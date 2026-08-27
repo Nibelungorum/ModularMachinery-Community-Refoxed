@@ -5,20 +5,14 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
-import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.client.gui.MachineControllerScreen.ControllerStatusLine;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,20 +49,15 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int THREAD_ELEMENT_Y_OFFSET = 0;
     static final int PROGRESS_THREAD_OVERLAY = 0x6600AA55;
     static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
-    static final int LOCKED_THREAD_OVERLAY = 0x66FFD966;
     private static final int DETAIL_LINE_SPACING = 10;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
-    private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
-    private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
-    private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
-    private Button recipeLockButton;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -89,18 +78,6 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     public static int defaultSelectedThread() { return 0; }
-
-    @Override
-    protected void init() {
-        super.init();
-        Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
-        recipeLockButton = addRenderableWidget(Button.builder(Component.empty(),
-                button -> {
-                    ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(menu.controllerPos(), menu.selectedThreadIndex()));
-                    clearRecipeLockButtonFocus(button);
-                }).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
-        updateRecipeLockTooltip();
-    }
 
     static int threadIndexAt(int left, int top, int scroll, int mouseX, int mouseY) {
         if (mouseX < left || mouseX >= left + THREAD_ROW_WIDTH) return -1;
@@ -202,23 +179,6 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return lines;
     }
 
-    static Rect recipeLockButtonRect(int left, int top, int width, int height) {
-        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE - 12,
-                top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE - 12,
-                RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
-    }
-
-    static List<Component> recipeLockTooltip(boolean locked, String recipeId) {
-        List<Component> lines = new ArrayList<>();
-        lines.add(Component.translatable(locked
-                ? "gui.mmcr.controller.recipe_lock.enabled"
-                : "gui.mmcr.controller.recipe_lock.disabled"));
-        if (locked && !recipeId.isEmpty()) {
-            lines.add(Component.translatable("gui.mmcr.controller.recipe_lock.recipe", Component.literal(recipeId)));
-        }
-        return lines;
-    }
-
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
     static int elementTextureHeight() { return ELEMENT_TEXTURE_HEIGHT; }
     static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
@@ -228,22 +188,11 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static int selectedOverlayHeight() { return THREAD_ROW_HEIGHT; }
     static int selectedOverlayRight(int x) { return selectedOverlayX(x) + selectedOverlayWidth() - 1; }
     static int selectedOverlayBottom(int y) { return selectedOverlayY(y) + selectedOverlayHeight() - 1; }
-    static int lockedOverlayX(int x) { return selectedOverlayX(x); }
-    static int lockedOverlayY(int y) { return selectedOverlayY(y); }
-    static int lockedOverlayRight(int x) { return selectedOverlayRight(x); }
-    static int lockedOverlayBottom(int y) { return selectedOverlayBottom(y); }
     static int progressOverlayX(int x) { return x; }
     static int progressOverlayY(int y) { return threadElementY(y); }
     static int progressOverlayHeight() { return THREAD_ROW_HEIGHT - 1; }
     static int progressOverlayRight(int x, int progress) { return progressOverlayX(x) + progress; }
     static int progressOverlayBottom(int y) { return progressOverlayY(y) + progressOverlayHeight(); }
-    static List<Integer> threadOverlayColors(FactoryRuntime.ThreadSnapshot thread, int selectedThreadIndex) {
-        List<Integer> colors = new ArrayList<>();
-        if (progressWidth(thread.tick(), thread.totalTick()) > 0) colors.add(PROGRESS_THREAD_OVERLAY);
-        if (thread.index() == selectedThreadIndex) colors.add(SELECTED_THREAD_OVERLAY);
-        if (thread.locked()) colors.add(LOCKED_THREAD_OVERLAY);
-        return colors;
-    }
     static int detailTitleY(int y) { return y; }
     static int nextDetailY(int y) { return y + DETAIL_LINE_SPACING; }
     static int detailTextY(int localY) { return (int) (localY / DETAIL_TEXT_SCALE); }
@@ -282,8 +231,6 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         scrollOffset = clampScrollOffset(scrollOffset, menu.threads().size());
-        updateRecipeLockTooltip();
-        renderRecipeLockButtonIcon(graphics);
         int visibleThreadCount = visibleThreadCount(menu.threads().size());
         for (int row = 0; row < visibleThreadCount; row++) {
             int index = scrollOffset + row;
@@ -303,10 +250,6 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             if (thread.index() == menu.selectedThread().index()) {
                 graphics.fill(selectedOverlayX, selectedOverlayY,
                         selectedOverlayRight(elementX), selectedOverlayBottom(y), SELECTED_THREAD_OVERLAY);
-            }
-            if (thread.locked()) {
-                graphics.fill(lockedOverlayX(elementX), lockedOverlayY(y),
-                        lockedOverlayRight(elementX), lockedOverlayBottom(y), LOCKED_THREAD_OVERLAY);
             }
             renderThreadText(graphics, Component.translatable("gui.mmcr.factory.thread", thread.index()),
                     leftPos + THREAD_ROW_X + 3, y + 3);
@@ -423,46 +366,4 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                 && mouseY >= listY && mouseY < listY + listHeight;
     }
 
-    private void updateRecipeLockTooltip() {
-        if (recipeLockButton == null) return;
-        recipeLockButton.setTooltip(Tooltip.create(tooltipComponent(recipeLockTooltip(menu.selectedRecipeLocked(), menu.selectedLockedRecipeId()))));
-    }
-
-    private void renderRecipeLockButtonIcon(GuiGraphicsExtractor graphics) {
-        if (recipeLockButton == null || !recipeLockButton.visible) return;
-        int x = recipeLockButton.getX();
-        int y = recipeLockButton.getY();
-        int width = recipeLockButton.getWidth();
-        int height = recipeLockButton.getHeight();
-        if (menu.selectedRecipeLocked()) {
-            graphics.fill(x, y, x + width, y + height, RECIPE_LOCK_ENABLED_BG_COLOR);
-        }
-        graphics.item(recipeLockIcon(), x + (width - 16) / 2,
-                y + (height - 16) / 2, 0);
-    }
-
-    private static ItemStack recipeLockIcon() {
-        return new ItemStack(Items.KNOWLEDGE_BOOK);
-    }
-
-    static void clearRecipeLockButtonFocus(Button button) {
-        button.setFocused(false);
-    }
-
-    private static Component tooltipComponent(List<Component> lines) {
-        Component component = Component.empty();
-        for (int i = 0; i < lines.size(); i++) {
-            if (i > 0) component = component.copy().append("\n");
-            component = component.copy().append(lines.get(i));
-        }
-        return component;
-    }
-
-    public record Rect(int left, int top, int width, int height) {
-        int right() { return left + width; }
-        int bottom() { return top + height; }
-        boolean overlaps(Rect other) {
-            return left < other.right() && right() > other.left && top < other.bottom() && bottom() > other.top;
-        }
-    }
 }

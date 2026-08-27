@@ -6,9 +6,9 @@ package cn.howxu.mmcr.internal.port;
  * @author howxu <dev@howxu.cn>
  */
 public enum ExtendedCombinedPortSize {
-    ADVANCED("advanced", 3, 1),
-    REINFORCED("reinforced", 6, 2),
-    ULTIMATE("ultimate", 9, 3);
+    ADVANCED("advanced", 6, 2),
+    REINFORCED("reinforced", 12, 4),
+    ULTIMATE("ultimate", 18, 6);
 
     private final String id;
     private final int itemTypes;

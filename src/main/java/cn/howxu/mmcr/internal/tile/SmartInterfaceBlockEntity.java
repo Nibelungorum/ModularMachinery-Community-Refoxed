@@ -104,6 +104,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         values.put(type, value);
         capabilityStorage.set(type, value);
         changed();
+        notifyControllersOfValueChange();
         postUpdate(type, oldValue, value);
         return true;
     }
@@ -207,7 +208,19 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         boolean valuesChanged = !values.equals(nextValues);
         values.clear();
         values.putAll(nextValues);
-        if (valuesChanged) changed();
+        if (valuesChanged) {
+            changed();
+            notifyControllersOfValueChange();
+        }
+    }
+
+    private void notifyControllersOfValueChange() {
+        if (level == null || level.isClientSide()) return;
+        for (BlockPos controllerPos : List.copyOf(controllers)) {
+            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+                controller.onSmartInterfaceValueChanged();
+            }
+        }
     }
 
     public record Binding(BlockPos controllerPos, Identifier machineId, String type, float value) {

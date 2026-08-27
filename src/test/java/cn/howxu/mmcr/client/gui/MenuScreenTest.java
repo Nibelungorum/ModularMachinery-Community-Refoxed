@@ -17,7 +17,6 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.locale.Language;
 import net.minecraft.world.entity.player.Inventory;
@@ -35,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
@@ -60,13 +60,19 @@ class MenuScreenTest {
     }
 
     @Test
-    void recipe_lock_button_loses_focus_after_click() {
-        Button button = Button.builder(Component.empty(), ignored -> {}).bounds(0, 0, 20, 20).build();
-        button.setFocused(true);
-
-        MachineControllerScreen.clearRecipeLockButtonFocus(button);
-
-        assertThat(button.isFocused()).isFalse();
+    void controller_screens_do_not_expose_recipe_lock_controls() {
+        assertThat(Arrays.stream(MachineControllerScreen.class.getDeclaredFields())
+                .map(Field::getName))
+                .doesNotContain("recipeLockButton");
+        assertThat(Arrays.stream(MachineControllerScreen.class.getDeclaredMethods())
+                .map(method -> method.getName().toLowerCase()))
+                .noneMatch(name -> name.contains("recipelock"));
+        assertThat(Arrays.stream(FactoryControllerScreen.class.getDeclaredFields())
+                .map(Field::getName))
+                .doesNotContain("recipeLockButton");
+        assertThat(Arrays.stream(FactoryControllerScreen.class.getDeclaredMethods())
+                .map(method -> method.getName().toLowerCase()))
+                .noneMatch(name -> name.contains("recipelock"));
     }
 
     @Test
@@ -144,15 +150,6 @@ class MenuScreenTest {
         screen.choose(fluid);
 
         assertThat(screen.resolve(List.of(item, fluid))).isEqualTo(fluid);
-    }
-
-    @Test
-    void controller_recipe_lock_state_uses_full_locked_recipe_id_from_menu() {
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
-        menu.setData(12, 1);
-
-        assertThat(MachineControllerScreen.recipeLockTooltip(menu.recipeLocked(), "mmcr:full_recipe_id"))
-                .hasSize(2);
     }
 
     @Test

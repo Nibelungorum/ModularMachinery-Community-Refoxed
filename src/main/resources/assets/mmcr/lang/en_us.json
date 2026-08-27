@@ -133,6 +133,7 @@
   "gui.mmcr.controller.failure.module_connection": "Module is not connected to a valid host",
   "gui.mmcr.controller.failure.module_offline": "Module Offline",
   "gui.mmcr.controller.failure.recipe_search_exception": "Recipe Search Error",
+  "gui.mmcr.controller.failure.smart_interface_changed": "Smart Interface Changed",
   "gui.mmcr.controller.fluid_input": "Input Fluid: %s %s mB",
   "gui.mmcr.controller.fluid_output": "Output Fluid: %s %s mB",
   "gui.mmcr.controller.formed": "Formed",

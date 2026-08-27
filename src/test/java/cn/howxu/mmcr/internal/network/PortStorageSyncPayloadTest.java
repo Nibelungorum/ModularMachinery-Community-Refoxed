@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
+import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
+import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
@@ -95,11 +97,11 @@ class PortStorageSyncPayloadTest {
     void payload_rejects_item_slots_outside_the_kind_storage() {
         assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
                 PortKinds.EXTENDED_ITEM_INPUT.id(),
-                List.of(new ItemStorageEntry(2, ItemResource.EMPTY, 0L, 1L)), List.of()))
+                List.of(new ItemStorageEntry(ExtendedItemBusSize.BASIC.slots(), ItemResource.EMPTY, 0L, 1L)), List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
                 PortKinds.EXTENDED_FLUID_INPUT.id(), List.of(),
-                List.of(new FluidStorageEntry(2, FluidResource.EMPTY, 0L, 1L))))
+                List.of(new FluidStorageEntry(ExtendedFluidHatchSize.BASIC.slots(), FluidResource.EMPTY, 0L, 1L))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

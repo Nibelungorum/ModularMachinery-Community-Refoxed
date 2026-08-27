@@ -6,10 +6,10 @@ package cn.howxu.mmcr.internal.port;
  * @author howxu <dev@howxu.cn>
  */
 public enum ExtendedFluidHatchSize {
-    BASIC("basic", 2),
-    ADVANCED("advanced", 4),
-    REINFORCED("reinforced", 6),
-    ULTIMATE("ultimate", 8);
+    BASIC("basic", 8),
+    ADVANCED("advanced", 16),
+    REINFORCED("reinforced", 24),
+    ULTIMATE("ultimate", 32);
 
     private final String id;
     private final int slots;

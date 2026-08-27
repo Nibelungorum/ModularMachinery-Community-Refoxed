@@ -6,17 +6,11 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
-import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -40,10 +34,6 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int PROGRESS_STATUS_COLOR = -1;
     private static final float DETAIL_SCALE = 0.85F;
     private static final int DETAIL_LINE_SPACING = 10;
-    private static final int RECIPE_LOCK_BUTTON_SIZE = 20;
-    private static final int PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR = 82;
-    private static final int RECIPE_LOCK_ENABLED_BG_COLOR = 0xFF66BB6A;
-    private Button recipeLockButton;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -62,17 +52,6 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected int scrollableTextLineCount() {
         return detailLines(menu).size();
-    }
-
-    @Override
-    protected void init() {
-        super.init();
-        Rect rect = recipeLockButtonRect(leftPos, topPos, imageWidth, imageHeight);
-        recipeLockButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
-            ClientPacketDistributor.sendToServer(new PktRecipeLockPayload(menu.controllerPos(), 0));
-            clearRecipeLockButtonFocus(button);
-        }).bounds(rect.left(), rect.top(), rect.width(), rect.height()).build());
-        updateRecipeLockTooltip();
     }
 
     @Override
@@ -95,8 +74,6 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         extractBackground(graphics, mouseX, mouseY, partialTicks);
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-        updateRecipeLockTooltip();
-        renderRecipeLockButtonIcon(graphics);
         extractTooltip(graphics, mouseX, mouseY);
     }
 
@@ -188,17 +165,6 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return machine == null ? Component.literal(id.toString()) : machine.displayName();
     }
 
-    static List<Component> recipeLockTooltip(boolean locked, String recipeId) {
-        List<Component> lines = new ArrayList<>();
-        lines.add(Component.translatable(locked ? "gui.mmcr.controller.recipe_lock.enabled" : "gui.mmcr.controller.recipe_lock.disabled"));
-        if (locked && !recipeId.isEmpty()) lines.add(Component.translatable("gui.mmcr.controller.recipe_lock.recipe", Component.literal(recipeId)));
-        return lines;
-    }
-
-    static void clearRecipeLockButtonFocus(Button button) {
-        button.setFocused(false);
-    }
-
     private static String controllerStatusKey(boolean formed, boolean active) {
         if (!formed) return "gui.mmcr.controller.unformed";
         return active ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle";
@@ -208,35 +174,6 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         if (!formed) return UNFORMED_STATUS_COLOR;
         return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
     }
-
-    private void updateRecipeLockTooltip() {
-        if (recipeLockButton == null) return;
-        String recipeId = menu.lockedRecipeId();
-        recipeLockButton.setTooltip(Tooltip.create(tooltipComponent(recipeLockTooltip(menu.recipeLocked(), recipeId == null ? "" : recipeId))));
-    }
-
-    private void renderRecipeLockButtonIcon(GuiGraphicsExtractor graphics) {
-        if (recipeLockButton == null || !recipeLockButton.visible) return;
-        int x = recipeLockButton.getX();
-        int y = recipeLockButton.getY();
-        if (menu.recipeLocked()) graphics.fill(x, y, x + recipeLockButton.getWidth(), y + recipeLockButton.getHeight(), RECIPE_LOCK_ENABLED_BG_COLOR);
-        graphics.item(new ItemStack(Items.KNOWLEDGE_BOOK), x + 2, y + 2, 0);
-    }
-
-    private static Component tooltipComponent(List<Component> lines) {
-        Component result = Component.empty();
-        for (int index = 0; index < lines.size(); index++) {
-            if (index > 0) result = result.copy().append("\n");
-            result = result.copy().append(lines.get(index));
-        }
-        return result;
-    }
-
-    private static Rect recipeLockButtonRect(int left, int top, int width, int height) {
-        return new Rect(left + width - RECIPE_LOCK_BUTTON_SIZE - 12, top + height - PLAYER_INVENTORY_HEIGHT_WITH_HOTBAR - RECIPE_LOCK_BUTTON_SIZE - 12, RECIPE_LOCK_BUTTON_SIZE, RECIPE_LOCK_BUTTON_SIZE);
-    }
-
-    private record Rect(int left, int top, int width, int height) {}
 
     record ControllerStatusLine(Component text, int color) {}
 }

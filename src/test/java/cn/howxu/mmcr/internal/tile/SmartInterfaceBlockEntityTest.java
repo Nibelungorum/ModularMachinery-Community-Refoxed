@@ -5,8 +5,12 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -20,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.lang.reflect.Field;
 
 import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -115,6 +120,25 @@ class SmartInterfaceBlockEntityTest {
     }
 
     @Test
+    void direct_value_change_invalidates_a_bound_controller_runtime() {
+        SmartInterfaceBlockEntity owner = createSmartInterface();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        owner.setLevel(controller.getLevel());
+        assertThat(owner.claimController(controller.getBlockPos(), MMCR.id("test_cube"), Map.of(
+                "mode", new SmartInterfaceType("mode", 1F, 0)), false)).isTrue();
+        CraftingRuntime runtime = controllerRuntime(controller);
+
+        assertThat(runtime.start(new MachineRecipe(MMCR.id("smart_change_controller_runtime"),
+                MMCR.id("test_cube"), 20, List.of(), List.of()), 1).isCrafting()).isTrue();
+
+        assertThat(owner.setValue("mode", 2F)).isTrue();
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "smart_interface_changed");
+    }
+
+    @Test
     void bind_with_server_level_stub_does_not_post_without_kubejs_listeners() {
         var smartInterface = createSmartInterface();
         smartInterface.setLevel(LevelStub.createWithBlockEntities(List.of(smartInterface)));
@@ -126,5 +150,15 @@ class SmartInterfaceBlockEntityTest {
     private static SmartInterfaceBlockEntity createSmartInterface() {
         return (SmartInterfaceBlockEntity) ModBlockEntities.SMART_INTERFACE.get().create(
                 BlockPos.ZERO, ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+    }
+
+    private static CraftingRuntime controllerRuntime(MachineControllerBlockEntity controller) {
+        try {
+            Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+            field.setAccessible(true);
+            return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to access controller runtime", exception);
+        }
     }
 }

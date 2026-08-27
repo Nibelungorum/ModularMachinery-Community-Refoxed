@@ -263,6 +263,27 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void smart_interface_change_invalidates_all_active_factory_lanes() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        MachineRecipe recipe = recipe("factory_smart_interface_change", 20);
+
+        runtime.tick(List.of(recipe), 1);
+        assertThat(runtime.activeLaneCount()).isEqualTo(2);
+
+        runtime.invalidateForSmartInterfaceChange();
+
+        assertThat(runtime.activeLaneCount()).isZero();
+        assertThat(runtime.snapshot().presentationLanes())
+                .allSatisfy(lane -> assertThat(lane.lastFailureUnloc())
+                        .isEqualTo("gui.mmcr.controller.failure.smart_interface_changed"));
+        assertThat(runtime.snapshot().failure()).isNotNull();
+        assertThat(runtime.snapshot().failure().details()).containsEntry("reason", "smart_interface_changed");
+    }
+
+    @Test
     void runtimeStateRoundTripsThroughValuePersistence() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("factory_persisted", 20);

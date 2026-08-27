@@ -304,6 +304,13 @@ public abstract class RecipeThread {
         clearPendingTick();
     }
 
+    public void invalidateForSmartInterfaceChange() {
+        runtime.invalidateForSmartInterfaceChange();
+        if (runtime.active()) return;
+        if (startPending) clearPendingStart(pendingStartToken, pendingStartRecipe);
+        clearPendingTick();
+    }
+
     protected void onStartSearchFailed(@Nullable ExecutionStatus failure) {
         runtime.recordSearchFailure(failure);
     }

@@ -8,11 +8,19 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.LevelStub;
@@ -32,6 +40,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.lang.reflect.Field;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -204,6 +213,62 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void smart_interface_change_invalidates_an_active_runtime_with_a_dedicated_failure() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_smart_interface_change", 20, List.of());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+
+        runtime.invalidateForSmartInterfaceChange();
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.smart_interface_changed");
+    }
+
+    @Test
+    void recipe_thread_forwards_smart_interface_change_to_its_runtime() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+
+        assertThat(thread.runtime().start(recipe("thread_smart_interface_change", 20, List.of()), 1)
+                .isCrafting()).isTrue();
+
+        thread.invalidateForSmartInterfaceChange();
+
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.runtime().failure().details()).containsEntry("reason", "smart_interface_changed");
+    }
+
+    @Test
+    void smart_interface_output_change_during_finish_is_applied_after_the_commit() {
+        SmartInterfaceBlockEntity smartInterface = (SmartInterfaceBlockEntity) ModBlockEntities.SMART_INTERFACE.get()
+                .create(new BlockPos(1, 0, 0), ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        smartInterface.setLevel(controller.getLevel());
+        assertThat(smartInterface.claimController(controller.getBlockPos(), MMCR.id("test_cube"), Map.of(
+                "mode", new SmartInterfaceType("mode", 1F, 0)), false)).isTrue();
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                null, smartInterface, smartInterface.getBlockPos(), smartInterface.getBlockPos(), (String) null)));
+        CraftingRuntime runtime = controllerRuntime(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_smart_interface_output"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(SmartInterfaceRequirement.output("mode", 9F)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+
+        assertThat(runtime.finish()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.failure(
+                "gui.mmcr.controller.failure.smart_interface_changed"));
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(smartInterface.value("mode")).contains(9F);
+    }
+
+    @Test
     void zero_consume_chance_retains_the_input_across_start_and_tick() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
@@ -346,5 +411,15 @@ class CraftingRuntimeTest {
         ItemStack stack = new ItemStack(item, count);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return stack;
+    }
+
+    private static CraftingRuntime controllerRuntime(MachineControllerBlockEntity controller) {
+        try {
+            Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+            field.setAccessible(true);
+            return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to access controller runtime", exception);
+        }
     }
 }

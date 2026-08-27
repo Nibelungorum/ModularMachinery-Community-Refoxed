@@ -276,6 +276,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
         setChanged();
     }
 
+    void onSmartInterfaceValueChanged() {
+        if (level == null || level.isClientSide()) return;
+        CraftingRuntime craftingRuntime = runtime.craftingRuntime();
+        craftingRuntime.invalidateForSmartInterfaceChange();
+        runtime.factoryRuntime().invalidateForSmartInterfaceChange();
+        if (!craftingRuntime.active()) {
+            clearPendingSharedStart();
+            clearSharedTickPending();
+        }
+        if (craftingRuntime.failure() != null) syncCraftingFailure();
+        setActiveState(craftingRuntime.active() || runtime.factoryRuntime().activeLaneCount() > 0);
+        syncRuntimeStateIfChanged();
+        setChanged();
+    }
+
     private void validateRuntimeBoundary(ServerLevel runtimeLevel, BlockPos runtimePos) {
         if (runtimeLevel == null || runtimePos == null) {
             throw new IllegalArgumentException("Controller runtime requires a level and controller position");
@@ -652,6 +667,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
             case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
             case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
+            case "smart_interface_changed" -> "gui.mmcr.controller.failure.smart_interface_changed";
             default -> "gui.mmcr.controller.failure.missing_input";
         };
     }

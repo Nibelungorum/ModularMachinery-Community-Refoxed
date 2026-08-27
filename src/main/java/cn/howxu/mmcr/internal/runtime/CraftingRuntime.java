@@ -48,6 +48,8 @@ public final class CraftingRuntime {
     private long componentStateVersion = Long.MIN_VALUE;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private CraftingStatus status = CraftingStatus.IDLE;
+    private boolean finishCommitInProgress;
+    private boolean smartInterfaceChangePending;
 
     public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -130,9 +132,20 @@ public final class CraftingRuntime {
             activeRecipe.markFinishBlocked(currentGameTime());
             return finishBlocked(result.failure());
         }
-        if (!finishPlan.commit()) {
+        finishCommitInProgress = true;
+        boolean committed;
+        try {
+            committed = finishPlan.commit();
+        } finally {
+            finishCommitInProgress = false;
+        }
+        if (!committed) {
             activeRecipe.markFinishBlocked(currentGameTime());
             return finishBlocked(finishPlan.failure());
+        }
+        if (smartInterfaceChangePending) {
+            smartInterfaceChangePending = false;
+            return invalidate("smart_interface_changed");
         }
 
         activeRecipe.applyTickGrant(true, true, currentGameTime());
@@ -237,8 +250,18 @@ public final class CraftingRuntime {
         consumedAtStart = Set.of();
         retainedInputs = Set.of();
         resourceDomain = null;
+        smartInterfaceChangePending = false;
         failure = null;
         status = CraftingStatus.IDLE;
+    }
+
+    public void invalidateForSmartInterfaceChange() {
+        if (!active()) return;
+        if (finishCommitInProgress) {
+            smartInterfaceChangePending = true;
+            return;
+        }
+        invalidate("smart_interface_changed");
     }
 
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
@@ -414,6 +437,7 @@ public final class CraftingRuntime {
             case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
             case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
             case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
+            case "smart_interface_changed" -> "gui.mmcr.controller.failure.smart_interface_changed";
             case "finish", "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
             case "per_tick" -> "gui.mmcr.controller.failure.missing_input";
             default -> "gui.mmcr.controller.failure.missing_input";

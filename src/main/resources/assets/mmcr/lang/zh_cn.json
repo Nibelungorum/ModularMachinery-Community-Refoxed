@@ -133,6 +133,7 @@
   "gui.mmcr.controller.failure.module_connection": "模块未连接到有效主机",
   "gui.mmcr.controller.failure.module_offline": "模块离线",
   "gui.mmcr.controller.failure.recipe_search_exception": "配方搜索错误",
+  "gui.mmcr.controller.failure.smart_interface_changed": "智能接口已变化",
   "gui.mmcr.controller.fluid_input": "输入流体: %s %s mB",
   "gui.mmcr.controller.fluid_output": "输出流体: %s %s mB",
   "gui.mmcr.controller.formed": "已成型",

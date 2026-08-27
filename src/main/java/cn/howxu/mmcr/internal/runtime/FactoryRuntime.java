@@ -156,6 +156,13 @@ public final class FactoryRuntime {
         return lanes.stream().map(FactoryRecipeThread::runtime).filter(CraftingRuntime::active).toList();
     }
 
+    public void invalidateForSmartInterfaceChange() {
+        for (FactoryRecipeThread lane : List.copyOf(lanes)) {
+            lane.invalidateForSmartInterfaceChange();
+        }
+        recomputeFailure();
+    }
+
     public int activeLaneCount() {
         return activeRuntimes().size();
     }
