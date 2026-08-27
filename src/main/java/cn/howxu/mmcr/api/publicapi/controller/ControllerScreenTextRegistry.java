@@ -35,8 +35,8 @@ public final class ControllerScreenTextRegistry {
     /**
      * Internal source entry point for server-script integrations.
      */
-    static synchronized Registration registerServerScript(Identifier machineId,
-                                                           ControllerScreenTextHandler handler) {
+    public static synchronized Registration registerServerScript(Identifier machineId,
+                                                                  ControllerScreenTextHandler handler) {
         requireMutationThread(Source.SERVER_SCRIPT, "server-script register");
         return add(machineId, handler, Source.SERVER_SCRIPT, serverScriptReloading);
     }

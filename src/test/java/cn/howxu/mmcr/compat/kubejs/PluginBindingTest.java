@@ -599,6 +599,7 @@ class PluginBindingTest {
         assertThat(event.createLevelType("mmcr:test_type")).isInstanceOf(LevelTypeBuilderJS.class);
         assertThat(event.createLevel("mmcr:test_level")).isInstanceOf(MachineLevelBuilderJS.class);
         assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
+                .contains("registerControllerScreenText")
                 .doesNotContain("createStructure", "createRecipe");
     }
 
@@ -704,6 +705,7 @@ class PluginBindingTest {
         assertThat(event.getAPI()).isInstanceOf(KubeJSApi.class);
         assertThat(event.createStructure("mmcr:test_structure")).isInstanceOf(MachineStructureBuilderJS.class);
         assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
+                .contains("registerControllerScreenText")
                 .doesNotContain("createMachine", "createLevelType", "createLevel", "levelSlot", "createRecipe");
     }
 

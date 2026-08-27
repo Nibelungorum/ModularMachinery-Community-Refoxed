@@ -2,8 +2,11 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.resources.Identifier;
+
+import java.util.function.Consumer;
 
 /**
  * Startup-script MMCR declarations exposed by {@code MMCREvents.startup}.
@@ -16,6 +19,11 @@ public final class MMCRStartupEventJS implements KubeEvent {
 
     public KubeJSApi getAPI() {
         return api;
+    }
+
+    public void registerControllerScreenText(String machineId, Consumer<ControllerScreenTextEventJS> handler) {
+        ControllerScreenTextRegistry.register(ControllerScreenTextEventJS.parseIdentifier(machineId, "machineId"),
+                ControllerScreenTextEventJS.handler(handler));
     }
 
     public MachineBuilderJS createMachine(String id) {
