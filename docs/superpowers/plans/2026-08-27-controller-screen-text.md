@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Keep rendering client-only; server code produces/synchronizes text data and never accesses Screen coordinates.
-- Register external handlers only through Public API and KubeJS `startup`/`server_script`; do not serialize JavaScript callbacks.
+- Register external handlers only through Public API and KubeJS `startup`; do not expose controller text registration from `server_script` and do not serialize JavaScript callbacks.
 - Keep MMCR's existing parallel-controller, parallelism, thread, and progress fields private to the internal standard presentation path.
 - Use stable namespaced line IDs with keyed upsert and removal; do not use an unkeyed append list for tick-driven updates.
 - Use `controller` and `operation` scopes; operation entries clear on recipe completion, failure, or cancellation.
@@ -55,10 +55,8 @@
 - `src/main/java/cn/howxu/mmcr/client/gui/MachineControllerScreen.java`: Produce internal standard lines, merge external lines, and render shared visual lines.
 - `src/main/java/cn/howxu/mmcr/client/gui/FactoryControllerScreen.java`: Use the same composition/cache path for factory details.
 - `src/main/java/cn/howxu/mmcr/compat/kubejs/MMCRStartupEventJS.java`: Expose startup registration of controller text handlers.
-- `src/main/java/cn/howxu/mmcr/compat/kubejs/MMCRServerEventJS.java`: Expose server-script registration of controller text handlers.
-- `src/main/java/cn/howxu/mmcr/compat/kubejs/ControllerScreenTextEventJS.java`: Adapt Public API context and append/remove operations to Rhino/KubeJS values.
+- `src/main/java/cn/howxu/mmcr/compat/kubejs/ControllerScreenTextEventJS.java`: Adapt startup Public API context and append/remove operations to Rhino/KubeJS values.
 - `src/main/java/cn/howxu/mmcr/compat/kubejs/MMCREvents.java`: Keep startup/server lifecycle registration connected to one registry.
-- `src/main/java/cn/howxu/mmcr/compat/kubejs/Plugin.java`: Reset/rebuild server-script text registrations with existing reload transactions.
 - `src/test/java/cn/howxu/mmcr/client/gui/MachineControllerScreenTest.java`: Verify external lines follow standard lines and use common layout.
 - `src/test/java/cn/howxu/mmcr/client/gui/FactoryControllerScreenTest.java`: Verify external lines and factory viewport layout.
 
@@ -162,7 +160,7 @@ git commit -m "feat: add controller screen text state"
 - `MachineControllerRuntime.screenText()` returns the instance state.
 - `MachineControllerRuntime.runtimeContext()` returns a context backed by the controller position and currently configured machine.
 - `MachineControllerRuntime.clearOperationText()` and `clearAllText()` perform lifecycle cleanup.
-- `ControllerScreenTextRegistry.beginServerScriptReload()` removes the previous server-script registrations and `endServerScriptReload()` publishes the new ordered set; startup/Public API registrations remain active.
+- Controller text registrations are startup-only and remain active for the server lifetime; no server-script registration or reload path exists.
 
 - [ ] **Step 1: Add registry tests**
 
@@ -176,7 +174,7 @@ Expected: FAIL because the registry and runtime context are not implemented.
 
 - [ ] **Step 3: Implement the registry and context**
 
-Store handlers by machine ID in insertion-ordered collections. Define the removable `Registration` as a nested public interface with `void unregister()`. Catch `RuntimeException` around each handler, log it through `MMCR.LOG`, and continue. Keep registration mutation on the server thread. Track registration source internally so `beginServerScriptReload()` removes only server-script registrations while preserving Public API startup registrations.
+Store handlers by machine ID in insertion-ordered collections. Define the removable `Registration` as a nested public interface with `void unregister()`. Catch `RuntimeException` around each handler, log it through `MMCR.LOG`, and continue. Keep registration mutation on the server thread. Public API registrations are startup-only and remain active for the server lifetime; do not add server-script sources or reload state.
 
 Add the state and context to `MachineControllerRuntime`; construct the context from `MachineControllerBlockEntity.getBlockPos()` and the current configured machine registry name. Do not expose standard presentation fields through `ControllerRuntimeContext`.
 
@@ -271,9 +269,9 @@ Call the new send method from the existing ordinary-controller open path and fac
 
 In `MachineControllerBlockEntity.tickRuntimeWork`, invoke the registry against the runtime context after machine runtime work has run and before the final publish/sync block. At the end of the same server runtime update path, send the full snapshot once if the text revision changed. Reuse the existing open-menu iteration and controller-position matching used by `syncOpenFactoryControllerMenus`; do not add a packet per `append` call or invoke handlers from client Screen methods.
 
-- [ ] **Step 5: Handle unform, reset, and script reload**
+- [ ] **Step 5: Handle unform and reset**
 
-Clear `OPERATION` entries when active recipe/factory work transitions to inactive, including failure and cancellation paths. Clear all external entries from `resetMachine` and controller unbinding, while keeping `CONTROLLER` entries across ordinary ticks. Increment revision and send an empty snapshot to current observers when the controller is reset or loses its configured machine. Add a registry reload hook that rebuilds active controller text after KubeJS server content is committed.
+Clear `OPERATION` entries when active recipe/factory work transitions to inactive, including failure and cancellation paths. Clear all external entries from `resetMachine` and controller unbinding, while keeping `CONTROLLER` entries across ordinary ticks. Increment revision and send an empty snapshot to current observers when the controller is reset or loses its configured machine. Do not add server-script reload handling for controller text.
 
 - [ ] **Step 6: Run focused tests and confirm pass**
 
@@ -288,15 +286,15 @@ git add src/main/java/cn/howxu/mmcr/internal/tile/MachineControllerBlockEntity.j
 git commit -m "feat: update controller text snapshots at runtime"
 ```
 
-## Task 5: Add Public API and KubeJS Registration Bridges
+## Task 5: Add Startup Public API and KubeJS Registration Bridges
 
 **Files:**
 - Create `ControllerScreenTextEventJS.java`.
-- Modify `MMCRStartupEventJS.java`, `MMCRServerEventJS.java`, `MMCREvents.java`, and `Plugin.java`.
+- Modify `MMCRStartupEventJS.java` and `MMCREvents.java` only as needed for startup registration.
 - Test `ControllerScreenTextKubeJSTest.java` and extend `PluginBindingTest.java` only for the new binding.
 
 **Interfaces:**
-- Startup and server event objects expose a method with this behavior:
+- The startup event object exposes a method with this behavior:
 
 ```java
 void registerControllerScreenText(String machineId, Consumer<ControllerScreenTextEventJS> handler);
@@ -314,7 +312,7 @@ void remove(String scope, String lineId);
 
 - [ ] **Step 1: Write bridge tests**
 
-Test that startup and server registrations reach the common registry, invalid scope/ID input throws a KubeJS-facing error, `appendTranslatable` creates a translatable Component with all supplied arguments, and server-script reload removes only server-script handlers.
+Test that startup registrations reach the common registry, invalid scope/ID input throws a KubeJS-facing error, and `appendTranslatable` creates a translatable Component with all supplied arguments. There is no server-script controller text registration or reload behavior to test.
 
 - [ ] **Step 2: Run focused KubeJS tests and confirm failure**
 
@@ -326,13 +324,13 @@ Expected: FAIL because the new event wrapper and registration methods do not exi
 
 Convert KubeJS strings to `Identifier` and `ControllerScreenTextScope`, reject null/blank values, construct `Component.translatable(key, args)`, and forward all mutations to the context's text handle. Do not expose internal standard values or packet objects.
 
-- [ ] **Step 4: Connect startup/server registration**
+- [ ] **Step 4: Connect startup registration**
 
-Add the same registration method to `MMCRStartupEventJS` and `MMCRServerEventJS`. Keep startup registrations in the persistent registry and mark server-script registrations with a source token that `Plugin.completeServerReload` can replace atomically.
+Add the registration method only to `MMCRStartupEventJS`. Keep these handlers in the persistent startup registry for the server lifetime; do not add a server-script source, token, or reload hook.
 
-- [ ] **Step 5: Verify KubeJS binding and reload behavior**
+- [ ] **Step 5: Verify KubeJS startup binding**
 
-Register the event methods through the existing `MMCREvents`/`Plugin` binding path, run the reload transaction, and invoke the registry handler with a test context. Assert that the handler runs server-side and its output is available to the controller snapshot.
+Register the startup event method through the existing `MMCREvents` binding path and invoke the registry handler with a test context. Assert that the handler runs server-side and its output is available to the controller snapshot.
 
 - [ ] **Step 6: Run focused tests and confirm pass**
 
@@ -343,7 +341,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit the registration bridges**
 
 ```bash
-git add src/main/java/cn/howxu/mmcr/compat/kubejs/MMCRStartupEventJS.java src/main/java/cn/howxu/mmcr/compat/kubejs/MMCRServerEventJS.java src/main/java/cn/howxu/mmcr/compat/kubejs/ControllerScreenTextEventJS.java src/main/java/cn/howxu/mmcr/compat/kubejs/MMCREvents.java src/main/java/cn/howxu/mmcr/compat/kubejs/Plugin.java src/test/java/cn/howxu/mmcr/compat/kubejs/ControllerScreenTextKubeJSTest.java src/test/java/cn/howxu/mmcr/compat/kubejs/PluginBindingTest.java
+git add src/main/java/cn/howxu/mmcr/compat/kubejs/MMCRStartupEventJS.java src/main/java/cn/howxu/mmcr/compat/kubejs/ControllerScreenTextEventJS.java src/main/java/cn/howxu/mmcr/compat/kubejs/MMCREvents.java src/test/java/cn/howxu/mmcr/compat/kubejs/ControllerScreenTextKubeJSTest.java src/test/java/cn/howxu/mmcr/compat/kubejs/PluginBindingTest.java
 git commit -m "feat: expose controller text to kubejs"
 ```
 
@@ -452,7 +450,7 @@ git commit -m "test: cover controller screen text lifecycle"
 
 ## Spec Coverage Review
 
-- Server/startup registration and server-only callback execution: Tasks 2 and 5.
+- Startup registration and server-only callback execution: Tasks 2 and 5.
 - Common controller runtime context for recipe and custom tick callbacks: Task 2.
 - Stable line IDs, keyed upsert, removal, and scopes: Task 1.
 - Runtime dirty tracking and per-controller state: Tasks 1, 2, and 4.
@@ -460,14 +458,14 @@ git commit -m "test: cover controller screen text lifecycle"
 - Existing standard fields kept private and on existing payloads: Task 6.
 - Unified ordinary/factory client composition and pagination: Task 6.
 - Error isolation and payload bounds: Tasks 2, 3, and 5.
-- Script reload cleanup: Tasks 2, 4, and 5.
+- Controller text has no server-script reload support: Tasks 2, 4, and 5.
 - Unit, network, Screen, and GameTest validation: Task 7.
 
 ## Plan Self-Review
 
-- No implementation task depends on a client callback being serialized from a server script.
+- No implementation task depends on a client callback being serialized from a script.
 - Public API names and method signatures are consistent across the registry, runtime context, and KubeJS wrapper.
 - `ControllerScreenTextState` owns only external lines; standard runtime fields remain in the existing snapshots and Menu code.
-- Full snapshot replacement handles add, update, remove, reset, and reload without a patch-order protocol.
+- Full snapshot replacement handles add, update, remove, and reset without a patch-order protocol.
 - Text wrapping is performed client-side after receiving logical Components, so server and client font differences do not corrupt pagination.
-- The plan intentionally does not implement recipe lifecycle or custom-machine registration APIs that are not yet present; it provides the shared controller context and text handle those future callbacks consume.
+- The plan intentionally does not implement recipe lifecycle or custom-machine registration APIs that are not yet present; it provides the shared controller context and text handle those future callbacks consume. Those functions are registered at startup only and never reload from `server_script`.
