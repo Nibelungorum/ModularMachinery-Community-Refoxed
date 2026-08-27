@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
@@ -126,6 +127,8 @@ public final class ModEventRegistration {
                         PktFactoryControllerStatePayload::handle)
                 .playToClient(PktControllerSpecsPayload.TYPE, PktControllerSpecsPayload.STREAM_CODEC,
                         PktControllerSpecsPayload::handle)
+                .playToClient(PktControllerScreenTextPayload.TYPE, PktControllerScreenTextPayload.STREAM_CODEC,
+                        PktControllerScreenTextPayload::handle)
                 .playToClient(PktMachineAppearancePayload.TYPE, PktMachineAppearancePayload.STREAM_CODEC,
                         PktMachineAppearancePayload::handle)
                  .playToClient(PktRuntimeContentPayload.TYPE, PktRuntimeContentPayload.STREAM_CODEC,
