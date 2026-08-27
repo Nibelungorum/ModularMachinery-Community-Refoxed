@@ -1,22 +1,27 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 
+import java.lang.reflect.Field;
 import java.util.List;
 
 public class ControllerTickGameTest {
@@ -42,6 +47,29 @@ public class ControllerTickGameTest {
         controller.setMachine(MachineRegistry.getMachine(machineId));
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
+            runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
+                    MMCR.id("controller_tick_status"), Component.literal("forming complete"));
+            controller.serverTick();
+            ControllerScreenTextSnapshot first = screenTextSnapshot(controller);
+            helper.assertTrue(first.lines().size() == 1
+                            && first.lines().getFirst().text().getString().equals("forming complete"),
+                    "formed controller publishes controller-scoped text");
+
+            runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
+                    MMCR.id("controller_tick_status"), Component.literal("updated"));
+            controller.serverTick();
+            ControllerScreenTextSnapshot updated = screenTextSnapshot(controller);
+            helper.assertTrue(updated.lines().size() == 1
+                            && updated.lines().getFirst().text().getString().equals("updated"),
+                    "controller-scoped keyed text replaces the previous line");
+            long unchangedRevision = updated.revision();
+            controller.serverTick();
+            helper.assertTrue(screenTextSnapshot(controller).revision() == unchangedRevision,
+                    "unchanged controller text is not mutated again");
+
+            controller.invalidateFormedStructure();
+            helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty(),
+                    "reset clears controller-scoped text");
             helper.succeed();
         });
     }
@@ -77,5 +105,19 @@ public class ControllerTickGameTest {
         helper.assertTrue(controller.runtimeSnapshot().crafting().tick() > progressBeforePause,
                 "Recipe resumes from paused progress");
         helper.succeed();
+    }
+
+    private static ControllerScreenTextSnapshot screenTextSnapshot(MachineControllerBlockEntity controller) {
+        return runtime(controller).screenText().snapshot();
+    }
+
+    private static MachineControllerRuntime runtime(MachineControllerBlockEntity controller) {
+        try {
+            Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+            field.setAccessible(true);
+            return (MachineControllerRuntime) field.get(controller);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to inspect controller text snapshot", exception);
+        }
     }
 }

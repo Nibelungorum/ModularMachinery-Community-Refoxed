@@ -11,8 +11,10 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
@@ -265,6 +267,98 @@ class MachineControllerBlockEntityTest {
         assertThat(runtime.screenText().snapshot().lines())
                 .extracting(ControllerScreenTextSnapshot.Line::scope)
                 .containsExactly(ControllerScreenTextScope.CONTROLLER);
+    }
+
+    @Test
+    void failed_operation_clears_operation_text() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_failed_operation"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_text_failed_recipe"),
+                MMCR.id("controller_text_failed_operation"), 20, List.of(), List.of());
+        assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
+        runtime.screenText().append(ControllerScreenTextScope.OPERATION,
+                MMCR.id("failed_operation_line"), Component.literal("running"));
+
+        controller.componentRuntime().replaceModifiers(Map.of("changed", List.of()));
+        RuntimeTestFixtures.republish(controller);
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(runtime.craftingRuntime().failure()).isNotNull();
+        assertThat(runtime.craftingRuntime().active()).isFalse();
+        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+    }
+
+    @Test
+    void cancelled_operation_clears_operation_text() throws Exception {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        Identifier machineId = MMCR.id("controller_text_cancelled_operation");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        DynamicMachine machine = new DynamicMachine(machineId, "cancelled text test",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()))),
+                MachineControllerSpec.defaultsFor(machineId));
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, energy);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(new MachineComponent(energy.kind(), energy.ioType()), energy,
+                        energy.getBlockPos(), BlockPos.ZERO, (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        energy.energyStorage().setAmount(2);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_text_cancelled_recipe"),
+                machineId, 20, List.of(), List.of(), List.of(), 0, 1, true,
+                List.of(), List.of(new EnergyRequirement(2)));
+        assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
+        runtime.screenText().append(ControllerScreenTextScope.OPERATION,
+                MMCR.id("cancelled_operation_line"), Component.literal("running"));
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(runtime.craftingRuntime().failure()).isNotNull();
+        assertThat(runtime.craftingRuntime().active()).isFalse();
+        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+    }
+
+    @Test
+    void custom_tick_updates_one_controller_line_without_duplicates() throws Exception {
+        Identifier machineId = MMCR.id("controller_text_custom_tick");
+        MachineControllerBlockEntity controller = textController(machineId);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer player = player(level, controller.getBlockPos());
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        setPlayers(level, List.of(player));
+        AtomicInteger ticks = new AtomicInteger();
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context ->
+                context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                        MMCR.id("custom_tick_line"), Component.literal("tick " + ticks.incrementAndGet()))));
+
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+
+        assertThat(runtimeOf(controller).screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text().getString()).isEqualTo("tick 2"));
+        assertThat(textPackets(player)).hasSize(2);
+    }
+
+    @Test
+    void handler_exception_does_not_interrupt_controller_runtime_update() throws Exception {
+        Identifier machineId = MMCR.id("controller_text_handler_exception");
+        MachineControllerBlockEntity controller = textController(machineId);
+        AtomicInteger invocations = new AtomicInteger();
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
+            invocations.incrementAndGet();
+            throw new IllegalStateException("expected test failure");
+        }));
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
+            invocations.incrementAndGet();
+            context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                    MMCR.id("after_exception"), Component.literal("continued"));
+        }));
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(invocations).hasValue(2);
+        assertThat(runtimeOf(controller).screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text().getString()).isEqualTo("continued"));
     }
 
     @Test

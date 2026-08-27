@@ -6,16 +6,23 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.block.Blocks;
 
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +70,26 @@ public class MultiFactoryControllerGameTest {
         for (int tick = 0; tick < 25; tick++) controller.serverTick();
         helper.assertTrue(controller.structureSnapshot().formed(), "replacing the factory controller should reform");
         helper.assertTrue(factoryComponentCount(controller) == 2, "reformed structure should reacquire both capacities");
+
+        FactoryControllerMenu menu = new FactoryControllerMenu(1, new Inventory(null, null), controller);
+        runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("factory_status"), Component.literal("factory ready"));
+        controller.serverTick();
+        ControllerScreenTextSnapshot first = screenTextSnapshot(controller);
+        helper.assertTrue(menu.controllerPos().equals(controller.getBlockPos()) && first.lines().size() == 1
+                        && first.lines().getFirst().text().getString().equals("factory ready"),
+                "factory menu uses the controller external snapshot");
+
+        runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("factory_status"), Component.literal("factory updated"));
+        controller.serverTick();
+        ControllerScreenTextSnapshot updated = screenTextSnapshot(controller);
+        helper.assertTrue(updated.lines().size() == 1
+                        && updated.lines().getFirst().text().getString().equals("factory updated"),
+                "factory runtime propagates a keyed text update");
+        controller.invalidateFormedStructure();
+        helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty(),
+                "factory controller reset clears external text");
         helper.succeed();
     }
 
@@ -75,5 +102,19 @@ public class MultiFactoryControllerGameTest {
     private static void placeFactory(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         helper.getBlockEntity(pos, FactorySchedulerBlockEntity.class);
+    }
+
+    private static ControllerScreenTextSnapshot screenTextSnapshot(MachineControllerBlockEntity controller) {
+        return runtime(controller).screenText().snapshot();
+    }
+
+    private static MachineControllerRuntime runtime(MachineControllerBlockEntity controller) {
+        try {
+            Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+            field.setAccessible(true);
+            return (MachineControllerRuntime) field.get(controller);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to inspect controller text snapshot", exception);
+        }
     }
 }
