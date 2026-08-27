@@ -186,8 +186,29 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         ItemStack result = stack.copy();
         if (index < itemSlotCount) {
             if (!moveItemStackTo(stack, itemSlotCount, slots.size(), true)) return ItemStack.EMPTY;
-        } else if (!moveItemStackTo(stack, 0, itemSlotCount, false)) {
-            return ItemStack.EMPTY;
+        } else {
+            boolean moved = false;
+            for (int slotIndex = 0; slotIndex < itemSlotCount && !stack.isEmpty(); slotIndex++) {
+                Slot itemSlot = slots.get(slotIndex);
+                ItemStack current = itemSlot.getItem();
+                if (!current.isEmpty() && ItemStack.isSameItemSameComponents(current, stack)) {
+                    int previousCount = stack.getCount();
+                    stack = itemSlot.safeInsert(stack);
+                    if (stack.getCount() < previousCount) {
+                        moved = true;
+                    }
+                }
+            }
+            for (int slotIndex = 0; slotIndex < itemSlotCount && !stack.isEmpty(); slotIndex++) {
+                Slot itemSlot = slots.get(slotIndex);
+                if (itemSlot.hasItem()) continue;
+                int previousCount = stack.getCount();
+                stack = itemSlot.safeInsert(stack);
+                if (stack.getCount() < previousCount) {
+                    moved = true;
+                }
+            }
+            if (!moved) return ItemStack.EMPTY;
         }
         if (stack.isEmpty()) slot.setByPlayer(ItemStack.EMPTY);
         else slot.setChanged();
