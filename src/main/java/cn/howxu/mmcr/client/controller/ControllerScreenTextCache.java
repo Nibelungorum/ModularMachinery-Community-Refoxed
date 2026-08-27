@@ -55,6 +55,12 @@ public final class ControllerScreenTextCache {
         }
     }
 
+    public static void clearChunk(int chunkX, int chunkZ) {
+        synchronized (LOCK) {
+            SNAPSHOTS.keySet().removeIf(pos -> (pos.getX() >> 4) == chunkX && (pos.getZ() >> 4) == chunkZ);
+        }
+    }
+
     public static void clearAll() {
         synchronized (LOCK) {
             SNAPSHOTS.clear();

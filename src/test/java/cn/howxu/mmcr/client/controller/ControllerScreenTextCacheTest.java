@@ -91,6 +91,23 @@ class ControllerScreenTextCacheTest {
     }
 
     @Test
+    void clear_chunk_discards_only_chunk_snapshots_and_resets_revision_gate() {
+        ControllerScreenTextSnapshot.Line first = line("test:first", "first");
+        ControllerScreenTextSnapshot.Line second = line("test:second", "second");
+        ControllerScreenTextSnapshot.Line replacement = line("test:replacement", "replacement");
+
+        ControllerScreenTextCache.replace(POS, 8L, List.of(first));
+        ControllerScreenTextCache.replace(SECOND_POS, 3L, List.of(second));
+
+        ControllerScreenTextCache.clearChunk(POS.getX() >> 4, POS.getZ() >> 4);
+
+        assertThat(ControllerScreenTextCache.linesAt(POS)).isEmpty();
+        assertThat(ControllerScreenTextCache.linesAt(SECOND_POS)).containsExactly(second);
+        assertThat(ControllerScreenTextCache.replace(POS, 1L, List.of(replacement))).isTrue();
+        assertThat(ControllerScreenTextCache.linesAt(POS)).containsExactly(replacement);
+    }
+
+    @Test
     void returned_lines_are_immutable() {
         ControllerScreenTextCache.replace(POS, 1L, List.of(line("test:line", "text")));
 

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -27,9 +28,9 @@ import java.util.Set;
 public record PktControllerScreenTextPayload(BlockPos controllerPos, long revision,
                                               List<ControllerScreenTextSnapshot.Line> lines)
         implements CustomPacketPayload {
-    public static final int MAX_LINES = 1024;
-    public static final int MAX_LINE_ID_LENGTH = 256;
-    public static final int MAX_ENCODED_TEXT_BYTES = 64 * 1024;
+    public static final int MAX_LINES = ControllerScreenTextState.MAX_LINES;
+    public static final int MAX_LINE_ID_LENGTH = ControllerScreenTextState.MAX_LINE_ID_LENGTH;
+    public static final int MAX_ENCODED_TEXT_BYTES = ControllerScreenTextState.MAX_ENCODED_TEXT_BYTES;
 
     public static final Type<PktControllerScreenTextPayload> TYPE = new Type<>(MMCR.id("controller_screen_text"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktControllerScreenTextPayload> STREAM_CODEC =

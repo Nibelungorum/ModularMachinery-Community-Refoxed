@@ -2,8 +2,13 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.network.connection.ConnectionType;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +21,10 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class ControllerScreenTextState implements ControllerScreenText {
+    public static final int MAX_LINES = 1024;
+    public static final int MAX_LINE_ID_LENGTH = 256;
+    public static final int MAX_ENCODED_TEXT_BYTES = 64 * 1024;
+
     private final Map<Key, ControllerScreenTextSnapshot.Line> lines = new LinkedHashMap<>();
     private long revision;
     private boolean dirty;
@@ -30,7 +39,12 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         ControllerScreenTextSnapshot.Line current = lines.get(key);
         if (current != null && current.text().equals(text)) return;
 
-        lines.put(key, new ControllerScreenTextSnapshot.Line(scope, lineId, text.copy()));
+        ControllerScreenTextSnapshot.Line replacement = new ControllerScreenTextSnapshot.Line(scope, lineId, text.copy());
+        Map<Key, ControllerScreenTextSnapshot.Line> candidate = new LinkedHashMap<>(lines);
+        candidate.put(key, replacement);
+        validateCandidate(candidate);
+
+        lines.put(key, replacement);
         markChanged();
     }
 
@@ -75,6 +89,30 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         Objects.requireNonNull(lineId, "lineId");
         if (lineId.getNamespace().isBlank()) {
             throw new IllegalArgumentException("lineId must have a namespace");
+        }
+        if (lineId.toString().length() > MAX_LINE_ID_LENGTH) {
+            throw new IllegalArgumentException("Controller screen text line ID is too long");
+        }
+    }
+
+    private static void validateCandidate(Map<Key, ControllerScreenTextSnapshot.Line> candidate) {
+        if (candidate.size() > MAX_LINES) {
+            throw new IllegalArgumentException("Too many controller screen text lines");
+        }
+
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
+        try {
+            for (ControllerScreenTextSnapshot.Line line : candidate.values()) {
+                buffer.writeVarInt(line.scope().ordinal());
+                Identifier.STREAM_CODEC.encode(buffer, line.lineId());
+                ComponentSerialization.STREAM_CODEC.encode(buffer, line.text());
+                if (buffer.writerIndex() > MAX_ENCODED_TEXT_BYTES) {
+                    throw new IllegalArgumentException("Encoded controller screen text is too large");
+                }
+            }
+        } finally {
+            buffer.release();
         }
     }
 

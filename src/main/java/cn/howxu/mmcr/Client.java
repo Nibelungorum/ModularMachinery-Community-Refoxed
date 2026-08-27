@@ -32,6 +32,7 @@ import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -47,6 +48,7 @@ public class Client {
         modBus.addListener(Client::registerPreviewReloadListener);
         NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
         NeoForge.EVENT_BUS.addListener(this::clearMachineSounds);
+        NeoForge.EVENT_BUS.addListener(this::clearControllerScreenTextCache);
         MachineAppearanceCache.loadPersistedSnapshot();
         MachineAppearanceCache.addInvalidationListener(Client::invalidateMachineModels);
         ControllerSpecCache.addInvalidationListener(Client::invalidateMachineModels);
@@ -60,6 +62,12 @@ public class Client {
         if (event.getLevel().isClientSide()) {
             ControllerScreenTextCache.clearAll();
             machineSoundManager.clear();
+        }
+    }
+
+    private void clearControllerScreenTextCache(ChunkEvent.Unload event) {
+        if (event.getLevel().isClientSide()) {
+            ControllerScreenTextCache.clearChunk(event.getChunk().getPos().x(), event.getChunk().getPos().z());
         }
     }
 
