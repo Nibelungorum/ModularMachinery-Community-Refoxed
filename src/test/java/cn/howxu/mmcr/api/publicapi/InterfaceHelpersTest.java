@@ -10,9 +10,13 @@ import cn.howxu.mmcr.compat.kubejs.MachineRecipeFactory;
 import cn.howxu.mmcr.compat.kubejs.MachineStructureBuilderJS;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.util.IOType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -27,11 +31,26 @@ class InterfaceHelpersTest {
 
     @Test
     void interface_predicates_keep_registered_port_alternatives() {
-        assertThat(InterfacePredicates.anyOfItemInput().alternatives()).hasSize(7);
-        assertThat(InterfacePredicates.anyOfFluidOutput().alternatives()).hasSize(8);
-        assertThat(InterfacePredicates.anyOfEnergyInput().alternatives()).hasSize(8);
+        assertThat(InterfacePredicates.anyOfItemInput().alternatives()).hasSize(18);
+        assertThat(InterfacePredicates.anyOfFluidOutput().alternatives()).hasSize(19);
+        assertThat(InterfacePredicates.anyOfEnergyInput().alternatives()).hasSize(10);
         assertThat(InterfacePredicates.anyOfPort("item_input_bus").alternatives()).hasSize(1);
         assertThat(InterfacePredicates.smartInterface().blockSupplier()).isPresent();
+    }
+
+    @Test
+    void interface_predicates_match_registered_capability_families() {
+        var combinedInput = ModBlocks.BLOCKS.get("combined_input_basic").get();
+
+        assertPredicateContainsBlock(InterfacePredicates.anyOfItemInput(), combinedInput);
+        assertPredicateContainsBlock(InterfacePredicates.anyOfFluidInput(), combinedInput);
+
+        assertFamilyPortsMatch(InterfacePredicates.anyOfItemInput(), PortFamilyIds.ITEM, IOType.INPUT);
+        assertFamilyPortsMatch(InterfacePredicates.anyOfItemOutput(), PortFamilyIds.ITEM, IOType.OUTPUT);
+        assertFamilyPortsMatch(InterfacePredicates.anyOfFluidInput(), PortFamilyIds.FLUID, IOType.INPUT);
+        assertFamilyPortsMatch(InterfacePredicates.anyOfFluidOutput(), PortFamilyIds.FLUID, IOType.OUTPUT);
+        assertFamilyPortsMatch(InterfacePredicates.anyOfEnergyInput(), PortFamilyIds.ENERGY, IOType.INPUT);
+        assertFamilyPortsMatch(InterfacePredicates.anyOfEnergyOutput(), PortFamilyIds.ENERGY, IOType.OUTPUT);
     }
 
     @Test
@@ -83,12 +102,12 @@ class InterfaceHelpersTest {
 
     @Test
     void kubejs_helpers_delegate_all_interface_shapes_and_requirements() {
-        assertThat(KubeJSInterfaceHelpers.anyOfItemInput().children()).hasSize(7);
-        assertThat(KubeJSInterfaceHelpers.anyOfItemOutput().children()).hasSize(7);
-        assertThat(KubeJSInterfaceHelpers.anyOfFluidInput().children()).hasSize(8);
-        assertThat(KubeJSInterfaceHelpers.anyOfFluidOutput().children()).hasSize(8);
-        assertThat(KubeJSInterfaceHelpers.anyOfEnergyInput().children()).hasSize(8);
-        assertThat(KubeJSInterfaceHelpers.anyOfEnergyOutput().children()).hasSize(8);
+        assertThat(KubeJSInterfaceHelpers.anyOfItemInput().children()).hasSize(18);
+        assertThat(KubeJSInterfaceHelpers.anyOfItemOutput().children()).hasSize(18);
+        assertThat(KubeJSInterfaceHelpers.anyOfFluidInput().children()).hasSize(19);
+        assertThat(KubeJSInterfaceHelpers.anyOfFluidOutput().children()).hasSize(19);
+        assertThat(KubeJSInterfaceHelpers.anyOfEnergyInput().children()).hasSize(10);
+        assertThat(KubeJSInterfaceHelpers.anyOfEnergyOutput().children()).hasSize(10);
         assertThat(KubeJSInterfaceHelpers.parallelControllers().children()).hasSize(8);
         assertThat(KubeJSInterfaceHelpers.smartInterface().matches(Blocks.STONE.defaultBlockState())).isFalse();
         assertThat(KubeJSInterfaceHelpers.itemOutputTier("big").requirements()).hasSize(1);
@@ -129,14 +148,14 @@ class InterfaceHelpersTest {
     @Test
     void kubejs_structure_builder_exposes_interface_helpers() {
         var builder = new MachineStructureBuilderJS("test:interfaces");
-        assertThat(builder.anyOfItemInput().children()).hasSize(7);
+        assertThat(builder.anyOfItemInput().children()).hasSize(18);
         assertThat(builder.anyOfPort("mmcr:item_input_bus").children()).hasSize(1);
         assertThat(builder.parallelControllers().children()).hasSize(8);
         assertThat(builder.smartInterface()).isNotNull();
         assertThat(builder.energyOutputTier("ultimate").requirements()).hasSize(1);
 
         var machineBuilder = new MachineBuilderJS("test:interfaces");
-        assertThat(machineBuilder.anyOfFluidOutput().children()).hasSize(8);
+        assertThat(machineBuilder.anyOfFluidOutput().children()).hasSize(19);
         assertThat(machineBuilder.smartInterfaceBlock()).isNotNull();
         assertThat(machineBuilder.itemInputTier("big").requirements()).hasSize(1);
     }
@@ -174,5 +193,20 @@ class InterfaceHelpersTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[axis=invalid]"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private static void assertFamilyPortsMatch(BlockPredicate predicate, Identifier familyId, IOType ioType) {
+        PortKinds.all().stream()
+                .filter(kind -> kind.ioType() == ioType)
+                .filter(kind -> kind.families().stream()
+                        .anyMatch(family -> family.familyId().equals(familyId) && family.ioType() == ioType))
+                .forEach(kind -> assertPredicateContainsBlock(predicate, ModBlocks.BLOCKS.get(kind.id()).get()));
+    }
+
+    private static void assertPredicateContainsBlock(BlockPredicate predicate, Block block) {
+        assertThat(predicate.alternatives()).anySatisfy(alternative -> {
+            assertThat(alternative.blockSupplier()).isPresent();
+            assertThat(alternative.blockSupplier().orElseThrow().get()).isSameAs(block);
+        });
     }
 }

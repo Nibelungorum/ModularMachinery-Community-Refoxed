@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -14,7 +18,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfItemInput() {
-        return anyOfPorts("item_input_bus", PortTiers.ItemTier.values());
+        return anyOfPorts(PortFamilyIds.ITEM, IOType.INPUT);
     }
 
     public static BlockPredicate anyItemInput() {
@@ -22,7 +26,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfItemOutput() {
-        return anyOfPorts("item_output_bus", PortTiers.ItemTier.values());
+        return anyOfPorts(PortFamilyIds.ITEM, IOType.OUTPUT);
     }
 
     public static BlockPredicate anyItemOutput() {
@@ -30,7 +34,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfFluidInput() {
-        return anyOfPorts("fluid_input_hatch", PortTiers.FluidTier.values());
+        return anyOfPorts(PortFamilyIds.FLUID, IOType.INPUT);
     }
 
     public static BlockPredicate anyFluidInput() {
@@ -38,7 +42,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfFluidOutput() {
-        return anyOfPorts("fluid_output_hatch", PortTiers.FluidTier.values());
+        return anyOfPorts(PortFamilyIds.FLUID, IOType.OUTPUT);
     }
 
     public static BlockPredicate anyFluidOutput() {
@@ -46,7 +50,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfEnergyInput() {
-        return anyOfPorts("energy_input_hatch", PortTiers.EnergyTier.values());
+        return anyOfPorts(PortFamilyIds.ENERGY, IOType.INPUT);
     }
 
     public static BlockPredicate anyEnergyInput() {
@@ -54,7 +58,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfEnergyOutput() {
-        return anyOfPorts("energy_output_hatch", PortTiers.EnergyTier.values());
+        return anyOfPorts(PortFamilyIds.ENERGY, IOType.OUTPUT);
     }
 
     public static BlockPredicate anyEnergyOutput() {
@@ -113,14 +117,13 @@ public final class InterfacePredicates {
         return port("smart_interface");
     }
 
-    private static BlockPredicate anyOfPorts(String base, Enum<?>[] tiers) {
-        List<BlockPredicate> predicates = new ArrayList<>(tiers.length + 1);
-        predicates.add(port(base));
-        for (Enum<?> tier : tiers) {
-            String id = tier instanceof PortTiers.ItemTier item ? item.id()
-                    : tier instanceof PortTiers.FluidTier fluid ? fluid.id()
-                    : ((PortTiers.EnergyTier) tier).id();
-            if (!id.equals("normal")) predicates.add(port(base + "_" + id));
+    private static BlockPredicate anyOfPorts(Identifier familyId, IOType ioType) {
+        List<BlockPredicate> predicates = new ArrayList<>();
+        for (IOPortKind kind : PortKinds.all()) {
+            if (kind.ioType() != ioType) continue;
+            boolean exposesFamily = kind.families().stream()
+                    .anyMatch(family -> family.familyId().equals(familyId) && family.ioType() == ioType);
+            if (exposesFamily) predicates.add(port(kind.id()));
         }
         return BlockPredicate.anyOf(predicates);
     }

@@ -107,12 +107,26 @@ class KubeJSApiTest {
 
     @Test
     void interface_predicate_factories_expose_all_port_categories() {
-        assertThat(api.anyOfItemInput().children()).hasSize(7);
-        assertThat(api.anyOfItemOutput().children()).hasSize(7);
-        assertThat(api.anyOfFluidInput().children()).hasSize(8);
-        assertThat(api.anyOfFluidOutput().children()).hasSize(8);
-        assertThat(api.anyOfEnergyInput().children()).hasSize(8);
-        assertThat(api.anyOfEnergyOutput().children()).hasSize(8);
+        assertThat(api.anyOfItemInput().children()).hasSize(18);
+        assertThat(api.anyOfItemOutput().children()).hasSize(18);
+        assertThat(api.anyOfFluidInput().children()).hasSize(19);
+        assertThat(api.anyOfFluidOutput().children()).hasSize(19);
+        assertThat(api.anyOfEnergyInput().children()).hasSize(10);
+        assertThat(api.anyOfEnergyOutput().children()).hasSize(10);
+    }
+
+    @Test
+    void kubejs_interface_predicates_match_extended_and_combined_ports() {
+        var combinedInput = ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState();
+
+        assertThat(api.anyOfItemInput().matches(combinedInput)).isTrue();
+        assertThat(api.anyOfFluidInput().matches(combinedInput)).isTrue();
+        assertThat(api.anyOfItemInput().matches(
+                ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfFluidInput().matches(
+                ModBlocks.BLOCKS.get("extended_fluid_input_hatch_basic").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfEnergyInput().matches(
+                ModBlocks.BLOCKS.get("extended_energy_input_hatch_reinforced").get().defaultBlockState())).isTrue();
     }
 
     @Test
