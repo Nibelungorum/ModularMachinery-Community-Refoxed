@@ -93,7 +93,7 @@ class MultiblockExportServiceTest {
                 BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState(), false, true));
         BuiltInRegistries.BLOCK.entrySet().stream()
                 .filter(entry -> entry.getValue() != Blocks.AIR)
-                .limit(62)
+                .limit(63)
                 .forEach(entry -> entries.add(new MultiblockExportService.SnapshotEntry(
                         new BlockPos(entries.size(), 0, 0), entry.getValue().defaultBlockState(), false)));
 
