@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.api.publicapi.controller;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -25,6 +28,7 @@ public final class ControllerScreenTextRegistry {
 
     public static synchronized Registration register(Identifier machineId,
                                                      ControllerScreenTextHandler handler) {
+        requireMutationThread(Source.PUBLIC_API, "register");
         return add(machineId, handler, Source.PUBLIC_API, false);
     }
 
@@ -33,6 +37,7 @@ public final class ControllerScreenTextRegistry {
      */
     static synchronized Registration registerServerScript(Identifier machineId,
                                                            ControllerScreenTextHandler handler) {
+        requireMutationThread(Source.SERVER_SCRIPT, "server-script register");
         return add(machineId, handler, Source.SERVER_SCRIPT, serverScriptReloading);
     }
 
@@ -53,6 +58,7 @@ public final class ControllerScreenTextRegistry {
     }
 
     public static synchronized void beginServerScriptReload() {
+        requireServerThread("begin server-script reload");
         for (Entry entry : List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS)) entry.unregisterInternal();
         PENDING_SERVER_SCRIPT_HANDLERS.clear();
         Iterator<Map.Entry<Identifier, List<Entry>>> iterator = HANDLERS.entrySet().iterator();
@@ -69,6 +75,7 @@ public final class ControllerScreenTextRegistry {
     }
 
     public static synchronized void endServerScriptReload() {
+        requireServerThread("end server-script reload");
         if (!serverScriptReloading) return;
         for (Entry entry : PENDING_SERVER_SCRIPT_HANDLERS) {
             HANDLERS.computeIfAbsent(entry.machineId(), ignored -> new ArrayList<>()).add(entry);
@@ -78,7 +85,7 @@ public final class ControllerScreenTextRegistry {
     }
 
     /** Test-only helper. Never call from production code. */
-    public static synchronized void clearForTesting() {
+    static synchronized void clearForTesting() {
         HANDLERS.values().stream().flatMap(List::stream).toList().forEach(Entry::deactivateInternal);
         List.copyOf(PENDING_SERVER_SCRIPT_HANDLERS).forEach(Entry::deactivateInternal);
         HANDLERS.clear();
@@ -98,6 +105,28 @@ public final class ControllerScreenTextRegistry {
             HANDLERS.computeIfAbsent(machineId, ignored -> new ArrayList<>()).add(entry);
         }
         return entry;
+    }
+
+    private static void requireMutationThread(Source source, String operation) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) {
+            requireServerThread(server, operation);
+            return;
+        }
+        if (source == Source.PUBLIC_API && PublicApiBootstrap.isRegistrationOpen()) return;
+        throw new IllegalStateException(operation + " requires the server thread");
+    }
+
+    private static void requireServerThread(String operation) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) throw new IllegalStateException(operation + " requires the server thread");
+        requireServerThread(server, operation);
+    }
+
+    private static void requireServerThread(MinecraftServer server, String operation) {
+        if (!server.isSameThread()) {
+            throw new IllegalStateException(operation + " must run on the server thread");
+        }
     }
 
     public interface Registration {
@@ -136,6 +165,8 @@ public final class ControllerScreenTextRegistry {
         @Override
         public void unregister() {
             synchronized (ControllerScreenTextRegistry.class) {
+                if (!registered) return;
+                requireMutationThread(source, "unregister");
                 unregisterInternal();
             }
         }
