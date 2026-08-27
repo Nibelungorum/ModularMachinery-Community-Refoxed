@@ -21,10 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ControllerScreenTextCacheTest {
     private static final BlockPos POS = new BlockPos(10, 20, 30);
+    private static final BlockPos SECOND_POS = new BlockPos(40, 50, 60);
 
     @BeforeEach
     void clearCacheEntry() {
         ControllerScreenTextCache.clear(POS);
+        ControllerScreenTextCache.clear(SECOND_POS);
     }
 
     @Test
@@ -69,6 +71,23 @@ class ControllerScreenTextCacheTest {
         ControllerScreenTextCache.clear(POS);
 
         assertThat(ControllerScreenTextCache.linesAt(POS)).isEmpty();
+    }
+
+    @Test
+    void clear_all_discards_snapshots_and_resets_revision_gate() {
+        ControllerScreenTextSnapshot.Line first = line("test:first", "first");
+        ControllerScreenTextSnapshot.Line second = line("test:second", "second");
+        ControllerScreenTextSnapshot.Line replacement = line("test:replacement", "replacement");
+
+        ControllerScreenTextCache.replace(POS, 8L, List.of(first));
+        ControllerScreenTextCache.replace(SECOND_POS, 3L, List.of(second));
+
+        ControllerScreenTextCache.clearAll();
+
+        assertThat(ControllerScreenTextCache.linesAt(POS)).isEmpty();
+        assertThat(ControllerScreenTextCache.linesAt(SECOND_POS)).isEmpty();
+        assertThat(ControllerScreenTextCache.replace(POS, 1L, List.of(replacement))).isTrue();
+        assertThat(ControllerScreenTextCache.linesAt(POS)).containsExactly(replacement);
     }
 
     @Test

@@ -13,6 +13,7 @@ import cn.howxu.mmcr.client.gui.MachineControllerScreen;
 import cn.howxu.mmcr.client.gui.SmartInterfaceScreen;
 import cn.howxu.mmcr.client.controller.ControllerModelInvalidator;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
+import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
@@ -57,6 +58,7 @@ public class Client {
 
     private void clearMachineSounds(LevelEvent.Unload event) {
         if (event.getLevel().isClientSide()) {
+            ControllerScreenTextCache.clearAll();
             machineSoundManager.clear();
         }
     }

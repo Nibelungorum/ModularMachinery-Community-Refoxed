@@ -55,6 +55,12 @@ public final class ControllerScreenTextCache {
         }
     }
 
+    public static void clearAll() {
+        synchronized (LOCK) {
+            SNAPSHOTS.clear();
+        }
+    }
+
     public static void addInvalidationListener(Runnable listener) {
         if (listener == null) throw new IllegalArgumentException("listener null");
         INVALIDATION_LISTENERS.add(listener);
