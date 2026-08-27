@@ -8,42 +8,70 @@ import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sun.misc.Unsafe;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,9 +82,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class MachineControllerBlockEntityTest {
+    private final List<ControllerScreenTextRegistry.Registration> textRegistrations = new ArrayList<>();
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        bind(ModUIs.MACHINE_CONTROLLER,
+                new MenuType<>((containerId, inventory) -> MachineControllerMenu.clientOpen(containerId, inventory),
+                        FeatureFlags.VANILLA_SET));
+        bind(ModUIs.FACTORY_CONTROLLER,
+                new MenuType<>((containerId, inventory) -> FactoryControllerMenu.clientOpen(containerId, inventory),
+                        FeatureFlags.VANILLA_SET));
+    }
+
+    @BeforeEach
+    void openTextRegistration() {
+        PublicApiBootstrap.clearForTesting();
+        PublicApiBootstrap.begin();
+    }
+
+    @AfterEach
+    void closeTextRegistration() {
+        textRegistrations.forEach(ControllerScreenTextRegistry.Registration::unregister);
+        textRegistrations.clear();
     }
 
     @Test
@@ -94,6 +142,159 @@ class MachineControllerBlockEntityTest {
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @Test
+    void runtime_update_invokes_matching_handlers_and_coalesces_same_component_updates() throws Exception {
+        Identifier machineId = MMCR.id("controller_text_runtime");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer player = player(level, controller.getBlockPos());
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        setPlayers(level, List.of(player));
+        AtomicInteger invocations = new AtomicInteger();
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
+            invocations.incrementAndGet();
+            assertThat(context.controllerPos()).isEqualTo(controller.getBlockPos());
+            context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                    MMCR.id("runtime_line"), Component.literal("same"));
+        }));
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        long revision = runtime.screenText().revision();
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(invocations).hasValue(2);
+        assertThat(runtime.screenText().revision()).isEqualTo(revision).isEqualTo(1L);
+        assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text().getString()).isEqualTo("same"));
+        assertThat(textPackets(player)).hasSize(1);
+    }
+
+    @Test
+    void open_controller_menus_receive_only_matching_revisioned_text_snapshots() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_audience"));
+        runtimeOf(controller).screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("audience_line"), Component.literal("visible"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer ordinary = player(level, controller.getBlockPos());
+        ordinary.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        ServerPlayer factory = player(level, controller.getBlockPos());
+        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller);
+        ServerPlayer wrongPosition = player(level, controller.getBlockPos());
+        wrongPosition.containerMenu = new MachineControllerMenu(3, new Inventory(null, null),
+                controller.getBlockPos().above());
+        ServerPlayer closed = player(level, controller.getBlockPos());
+        closed.containerMenu = closedMenu();
+        setPlayers(level, List.of(ordinary, factory, wrongPosition, closed));
+
+        invokeSyncOpenText(controller);
+
+        assertThat(textPackets(ordinary)).singleElement()
+                .satisfies(packet -> assertThat(packet.controllerPos()).isEqualTo(controller.getBlockPos()))
+                .satisfies(packet -> assertThat(packet.lines()).hasSize(1));
+        assertThat(textPackets(factory)).hasSize(1);
+        assertThat(textPackets(wrongPosition)).isEmpty();
+        assertThat(textPackets(closed)).isEmpty();
+
+        invokeSyncOpenText(controller);
+        assertThat(textPackets(ordinary)).hasSize(1);
+        assertThat(textPackets(factory)).hasSize(1);
+    }
+
+    @Test
+    void ordinary_and_factory_menu_open_paths_send_the_current_text_snapshot() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_open"));
+        runtimeOf(controller).screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("open_line"), Component.literal("open"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+
+        ServerPlayer ordinary = player(level, controller.getBlockPos());
+        controller.sendRecipeLockState(ordinary);
+        assertThat(textPackets(ordinary)).singleElement()
+                .satisfies(packet -> assertThat(packet.controllerPos()).isEqualTo(controller.getBlockPos()))
+                .satisfies(packet -> assertThat(packet.revision()).isEqualTo(1L));
+
+        MachineControllerBlockEntity factoryController = factoryTextController(MMCR.id("controller_text_factory_open"));
+        runtimeOf(factoryController).screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("factory_open_line"), Component.literal("factory open"));
+        ServerPlayer factory = player((ServerLevel) factoryController.getLevel(), factoryController.getBlockPos());
+        new FactoryControllerMenu(2, new Inventory(null, null), factoryController, factory);
+        assertThat(textPackets(factory)).singleElement()
+                .satisfies(packet -> assertThat(packet.controllerPos()).isEqualTo(factoryController.getBlockPos()))
+                .satisfies(packet -> assertThat(packet.lines()).singleElement()
+                        .satisfies(line -> assertThat(line.text().getString()).isEqualTo("factory open")));
+    }
+
+    @Test
+    void empty_text_snapshot_reaches_matching_menus_after_external_text_is_cleared() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_clear"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("clear_line"), Component.literal("clear"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer player = player(level, controller.getBlockPos());
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        setPlayers(level, List.of(player));
+        invokeSyncOpenText(controller);
+
+        runtime.screenText().clear(ControllerScreenTextScope.CONTROLLER);
+        invokeSyncOpenText(controller);
+
+        assertThat(textPackets(player)).hasSize(2);
+        assertThat(textPackets(player).getLast().revision()).isGreaterThan(1L);
+        assertThat(textPackets(player).getLast().lines()).isEmpty();
+    }
+
+    @Test
+    void completed_recipe_clears_operation_text_but_keeps_controller_text() throws Exception {
+        Identifier machineId = MMCR.id("controller_text_operation");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_text_operation_recipe"), machineId, 1,
+                List.of(), List.of());
+        assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("persistent_line"), Component.literal("persistent"));
+        runtime.screenText().append(ControllerScreenTextScope.OPERATION,
+                MMCR.id("operation_line"), Component.literal("operation"));
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(runtime.screenText().snapshot().lines())
+                .extracting(ControllerScreenTextSnapshot.Line::scope)
+                .containsExactly(ControllerScreenTextScope.CONTROLLER);
+    }
+
+    @Test
+    void reset_machine_clears_external_text_and_advances_revision() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_reset"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("reset_line"), Component.literal("reset"));
+        runtime.screenText().append(ControllerScreenTextScope.OPERATION,
+                MMCR.id("reset_operation"), Component.literal("operation"));
+        long revision = runtime.screenText().revision();
+
+        controller.invalidateFormedStructure();
+
+        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+        assertThat(runtime.screenText().revision()).isGreaterThan(revision);
+    }
+
+    @Test
+    void unbinding_configured_machine_clears_external_text_and_advances_revision() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_unbind"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("unbind_line"), Component.literal("unbind"));
+        long revision = runtime.screenText().revision();
+
+        controller.setMachine(null);
+
+        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+        assertThat(runtime.screenText().revision()).isGreaterThan(revision);
     }
 
     @Test
@@ -450,6 +651,130 @@ class MachineControllerBlockEntityTest {
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
         if (controller.resourceDomain() != null) {
             SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
+        }
+    }
+
+    private static MachineControllerBlockEntity textController(Identifier machineId) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        DynamicMachine machine = new DynamicMachine(machineId, "text test",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, false, 1);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity factoryTextController(Identifier machineId) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(1, 0, 0);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        DynamicMachine machine = new DynamicMachine(machineId, "factory text test",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, schedulerPos, BlockPos.ZERO, (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        return controller;
+    }
+
+    private static MachineControllerRuntime runtimeOf(MachineControllerBlockEntity controller) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        field.setAccessible(true);
+        return (MachineControllerRuntime) field.get(controller);
+    }
+
+    private static void invokeSyncOpenText(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("syncOpenControllerScreenText");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static List<PktControllerScreenTextPayload> textPackets(ServerPlayer player) {
+        return ((TestConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket)
+                .map(packet -> ((ClientboundCustomPayloadPacket) packet).payload())
+                .filter(PktControllerScreenTextPayload.class::isInstance)
+                .map(PktControllerScreenTextPayload.class::cast)
+                .toList();
+    }
+
+    private static AbstractContainerMenu closedMenu() {
+        return new AbstractContainerMenu(null, 0) {
+            @Override
+            public ItemStack quickMoveStack(net.minecraft.world.entity.player.Player player, int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public boolean stillValid(net.minecraft.world.entity.player.Player player) {
+                return true;
+            }
+        };
+    }
+
+    private static ServerPlayer player(ServerLevel level, BlockPos pos) throws Exception {
+        ServerPlayer player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
+        setField(Entity.class, player, "level", level);
+        setField(Entity.class, player, "position", Vec3.atCenterOf(pos));
+        TestConnection connection = (TestConnection) unsafe().allocateInstance(TestConnection.class);
+        connection.packets = new ArrayList<>();
+        player.connection = connection;
+        return player;
+    }
+
+    private static void setPlayers(ServerLevel level, List<ServerPlayer> players) throws Exception {
+        setField(ServerLevel.class, level, "players", players);
+    }
+
+    private static Unsafe unsafe() throws Exception {
+        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (Unsafe) field.get(null);
+    }
+
+    private static void setField(Class<?> type, Object target, String name, Object value) throws Exception {
+        Field field = null;
+        while (type != null && field == null) {
+            try {
+                field = type.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (field == null) throw new NoSuchFieldException(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
+        Class<?> type = deferredHolder.getClass();
+        Field holder = null;
+        while (type != null && holder == null) {
+            try {
+                holder = type.getDeclaredField("holder");
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        if (holder == null) throw new NoSuchFieldException("holder");
+        holder.setAccessible(true);
+        holder.set(deferredHolder, Holder.direct(menuType));
+    }
+
+    private static final class TestConnection extends ServerGamePacketListenerImpl {
+        private List<Packet<?>> packets;
+
+        private TestConnection() {
+            super(null, null, null, null);
+        }
+
+        @Override
+        public void send(Packet<?> packet) {
+            packets.add(packet);
         }
     }
 }

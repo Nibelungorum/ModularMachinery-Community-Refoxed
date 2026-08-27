@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
@@ -138,6 +139,20 @@ class PktControllerScreenTextPayloadTest {
         assertThatThrownBy(() -> PktControllerScreenTextPayload.STREAM_CODEC.decode(buffer))
                 .isInstanceOf(IllegalArgumentException.class);
         buffer.release();
+    }
+
+    @Test
+    void empty_newer_payload_replaces_stale_client_lines() {
+        ControllerScreenTextSnapshot.Line stale = line(ControllerScreenTextScope.CONTROLLER,
+                "test:stale", Component.literal("stale"));
+        BlockPos controllerPos = new BlockPos(3, 4, 5);
+
+        assertThat(ControllerScreenTextCache.replace(controllerPos, 1L, List.of(stale))).isTrue();
+        PktControllerScreenTextPayload empty = new PktControllerScreenTextPayload(controllerPos, 2L, List.of());
+        assertThat(ControllerScreenTextCache.replace(empty.controllerPos(), empty.revision(), empty.lines())).isTrue();
+
+        assertThat(ControllerScreenTextCache.linesAt(controllerPos)).isEmpty();
+        ControllerScreenTextCache.clear(controllerPos);
     }
 
     private static ControllerScreenTextSnapshot.Line line(ControllerScreenTextScope scope, String id,
