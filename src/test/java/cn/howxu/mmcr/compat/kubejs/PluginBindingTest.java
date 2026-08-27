@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.MachineApi;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -35,22 +36,33 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.players.NameAndId;
+import net.minecraft.util.debugchart.SampleLogger;
+import net.minecraft.SystemReport;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.ScopedValue;
+import java.io.IOException;
+import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.util.Queue;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import net.minecraft.resources.Identifier;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -205,6 +217,115 @@ class PluginBindingTest {
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
         assertThat(synced).isTrue();
+    }
+
+    @Test
+    void server_script_reload_without_current_server_aborts_without_server_actions() throws Exception {
+        clearCurrentServerHookForTesting();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_machine_name"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("null_server_reload_text"), Component.literal("old"));
+        Set<MachineControllerBlockEntity> formedControllers = formedControllers();
+        formedControllers.add(controller);
+        AtomicBoolean synced = new AtomicBoolean();
+
+        try {
+            Object reload = new Object();
+            beginServerScriptReloadForTesting(reload, 0);
+            Plugin.completeServerReloadForTesting(reload, 0, () -> synced.set(true));
+
+            assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                    .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("old")));
+            assertThat(synced).isFalse();
+        } finally {
+            formedControllers.remove(controller);
+        }
+    }
+
+    @Test
+    void successful_controller_text_reload_rebuilds_on_explicit_server_thread() throws Exception {
+        PublicApiBootstrap.clearForTesting();
+        PublicApiBootstrap.begin();
+        clearCurrentServerHookForTesting();
+        Identifier machineId = MMCR.id("test_machine_name");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("explicit_server_reload_old"), Component.literal("old"));
+        Set<MachineControllerBlockEntity> formedControllers = formedControllers();
+        formedControllers.add(controller);
+        ControllerScreenTextRegistry.Registration registration = ControllerScreenTextRegistry.register(machineId,
+                context -> context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                        MMCR.id("explicit_server_reload_new"), Component.literal("new")));
+        AtomicBoolean synced = new AtomicBoolean();
+        RuntimeContentSync.setSenderForTesting(ignored -> synced.set(true));
+        TestServer server = testServer(Thread.currentThread());
+
+        try {
+            Object reload = new Object();
+            beginServerScriptReloadForTesting(reload, 0);
+            Plugin.completeServerReload(reload, 0, server);
+
+            assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                    .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("new")));
+            assertThat(synced).isTrue();
+        } finally {
+            registration.unregister();
+            formedControllers.remove(controller);
+            PublicApiBootstrap.clearForTesting();
+        }
+    }
+
+    @Test
+    void worker_controller_text_reload_waits_for_explicit_server_executor() throws Exception {
+        PublicApiBootstrap.clearForTesting();
+        PublicApiBootstrap.begin();
+        clearCurrentServerHookForTesting();
+        Identifier machineId = MMCR.id("test_machine_name");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("async_server_reload_old"), Component.literal("old"));
+        Set<MachineControllerBlockEntity> formedControllers = formedControllers();
+        formedControllers.add(controller);
+        ControllerScreenTextRegistry.Registration registration = ControllerScreenTextRegistry.register(machineId,
+                context -> context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                        MMCR.id("async_server_reload_new"), Component.literal("new")));
+        AtomicBoolean synced = new AtomicBoolean();
+        RuntimeContentSync.setSenderForTesting(ignored -> synced.set(true));
+        TestServer server = testServer(Thread.currentThread());
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        Thread worker = new Thread(() -> {
+            try {
+                Object reload = new Object();
+                beginServerScriptReloadForTesting(reload, 0);
+                Plugin.completeServerReload(reload, 0, server);
+            } catch (Throwable failure) {
+                workerFailure.set(failure);
+            }
+        });
+
+        try {
+            worker.start();
+            worker.join();
+
+            assertThat(workerFailure).hasValue(null);
+            assertThat(server.queuedActions()).hasSize(1);
+            assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                    .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("old")));
+            assertThat(synced).isFalse();
+
+            server.runQueuedActions();
+
+            assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                    .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("new")));
+            assertThat(synced).isTrue();
+        } finally {
+            registration.unregister();
+            formedControllers.remove(controller);
+            PublicApiBootstrap.clearForTesting();
+        }
     }
 
     @Test
@@ -715,6 +836,25 @@ class PluginBindingTest {
         return (MachineControllerRuntime) field.get(controller);
     }
 
+    private static void beginServerScriptReloadForTesting(Object manager, int errorCount) throws Exception {
+        var method = Plugin.class.getDeclaredMethod("beginServerScriptReload", Object.class, int.class);
+        method.setAccessible(true);
+        method.invoke(null, manager, errorCount);
+    }
+
+    private static void clearCurrentServerHookForTesting() throws Exception {
+        var field = ServerLifecycleHooks.class.getDeclaredField("currentServer");
+        field.setAccessible(true);
+        field.set(null, null);
+    }
+
+    private static TestServer testServer(Thread serverThread) throws Exception {
+        TestServer server = (TestServer) allocate(TestServer.class);
+        server.serverThread = serverThread;
+        server.queuedActions = new ConcurrentLinkedQueue<>();
+        return server;
+    }
+
     @SuppressWarnings("unchecked")
     private static Set<MachineControllerBlockEntity> formedControllers() throws Exception {
         var field = MachineControllerBlockEntity.class.getDeclaredField("FORMED_CONTROLLERS");
@@ -749,5 +889,108 @@ class PluginBindingTest {
                         new ItemStack(Blocks.GOLD_BLOCK)))
                 .build(pattern);
         return new MachineStructureDefinition(id, pattern, PortRequirementSpec.none(), List.of(), requirements);
+    }
+
+    /**
+     * Minimal server executor used to verify that reload work is dispatched instead of run inline.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class TestServer extends MinecraftServer {
+        private Thread serverThread;
+        private Queue<Runnable> queuedActions;
+
+        private TestServer() {
+            super(null, null, null, null, Optional.empty(), Proxy.NO_PROXY, null, null, null, false);
+        }
+
+        @Override
+        public Thread getRunningThread() {
+            return serverThread;
+        }
+
+        @Override
+        public void execute(Runnable action) {
+            queuedActions.add(action);
+        }
+
+        private Queue<Runnable> queuedActions() {
+            return queuedActions;
+        }
+
+        private void runQueuedActions() {
+            Runnable action;
+            while ((action = queuedActions.poll()) != null) action.run();
+        }
+
+        @Override
+        protected boolean initServer() throws IOException {
+            return false;
+        }
+
+        @Override
+        public LevelBasedPermissionSet operatorUserPermissions() {
+            return LevelBasedPermissionSet.ALL;
+        }
+
+        @Override
+        public LevelBasedPermissionSet getFunctionCompilationPermissions() {
+            return LevelBasedPermissionSet.OWNER;
+        }
+
+        @Override
+        public boolean shouldRconBroadcast() {
+            return false;
+        }
+
+        @Override
+        public boolean isDedicatedServer() {
+            return false;
+        }
+
+        @Override
+        public int getRateLimitPacketsPerSecond() {
+            return 0;
+        }
+
+        @Override
+        public boolean useNativeTransport() {
+            return false;
+        }
+
+        @Override
+        public boolean isPublished() {
+            return false;
+        }
+
+        @Override
+        public boolean shouldInformAdmins() {
+            return false;
+        }
+
+        @Override
+        public boolean isSingleplayerOwner(NameAndId nameAndId) {
+            return false;
+        }
+
+        @Override
+        protected SampleLogger getTickTimeLogger() {
+            return null;
+        }
+
+        @Override
+        public boolean isTickTimeLoggingEnabled() {
+            return false;
+        }
+
+        @Override
+        public int getMaxPlayers() {
+            return 1;
+        }
+
+        @Override
+        public SystemReport fillServerSystemReport(SystemReport report) {
+            return report;
+        }
     }
 }
