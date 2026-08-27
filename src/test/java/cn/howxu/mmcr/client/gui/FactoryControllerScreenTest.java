@@ -1,16 +1,20 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
@@ -20,6 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -38,6 +43,11 @@ class FactoryControllerScreenTest {
             MMCR.id("factory_detail_level_one"),
             MMCR.id("factory_detail_level_two"),
             MMCR.id("factory_detail_level_three"));
+
+    @AfterEach
+    void clearCache() {
+        ControllerScreenTextCache.clear(BlockPos.ZERO);
+    }
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -74,26 +84,59 @@ class FactoryControllerScreenTest {
         FactoryControllerMenu menu = menuWithDetailRows();
 
         assertThat(FactoryControllerScreen.detailLines(menu)).containsExactly(
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.levelLine(
+                new ControllerTextLine(MachineControllerScreen.levelLine(
                         detailLevel(0)), MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.levelLine(
+                new ControllerTextLine(MachineControllerScreen.levelLine(
                         detailLevel(1)), MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.levelLine(
+                new ControllerTextLine(MachineControllerScreen.levelLine(
                         detailLevel(2)), MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.last_failure", Component.translatable("mmcr:selected_failure")),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.parallelSlotLine(2),
+                new ControllerTextLine(MachineControllerScreen.parallelSlotLine(2),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.parallelLine(4, 8),
+                new ControllerTextLine(MachineControllerScreen.parallelLine(4, 8),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.redstone_stopped"), MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.threads", Component.literal("2"), Component.literal("3")),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.progress", "100%"), -1));
+    }
+
+    @Test
+    void factory_screen_appends_external_lines_after_standard_lines() {
+        FactoryControllerMenu menu = menuWithDetailRows();
+        ControllerScreenTextCache.replace(BlockPos.ZERO, 1L,
+                List.of(new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
+                        MMCR.id("factory_external"), Component.literal("external"))));
+
+        List<ControllerTextLine> standard = FactoryControllerScreen.detailLines(menu);
+        List<ControllerTextLine> composed = FactoryControllerScreen.controllerTextLines(menu);
+
+        assertThat(composed.subList(0, standard.size())).containsExactlyElementsOf(standard);
+        assertThat(composed.getLast()).isEqualTo(new ControllerTextLine(Component.literal("external"),
+                ControllerScreenTextComposer.DEFAULT_EXTERNAL_COLOR));
+        ControllerScreenTextCache.clear(BlockPos.ZERO);
+    }
+
+    @Test
+    void factory_controller_viewport_wraps_long_external_text() throws Exception {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        ControllerScreenTextCache.replace(BlockPos.ZERO, 1L,
+                List.of(new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
+                        MMCR.id("factory_long"), Component.literal("x".repeat(161)))));
+        FactoryControllerScreen screen = (FactoryControllerScreen) unsafe().allocateInstance(FactoryControllerScreen.class);
+
+        List<ControllerScreenTextComposer.VisualLine> visualLines = ControllerScreenTextComposer.wrap(
+                ControllerScreenTextComposerTest.testFont(), FactoryControllerScreen.controllerTextLines(menu),
+                screen.scrollableTextViewport().width());
+
+        assertThat(visualLines).hasSizeGreaterThan(2);
+        assertThat(visualLines.getLast().color()).isEqualTo(ControllerScreenTextComposer.DEFAULT_EXTERNAL_COLOR);
+        ControllerScreenTextCache.clear(BlockPos.ZERO);
     }
 
     @Test
@@ -172,5 +215,11 @@ class FactoryControllerScreenTest {
         if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(menuType));
+    }
+
+    private static sun.misc.Unsafe unsafe() throws Exception {
+        Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (sun.misc.Unsafe) field.get(null);
     }
 }

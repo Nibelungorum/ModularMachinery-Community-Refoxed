@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -50,8 +51,8 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    protected int scrollableTextLineCount() {
-        return detailLines(menu).size();
+    protected List<ControllerTextLine> scrollableTextLines() {
+        return controllerTextLines(menu);
     }
 
     @Override
@@ -85,12 +86,12 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), active)), x + font.width(label) + 4, y,
                 controllerStatusColor(formed, active), true);
 
-        List<ControllerStatusLine> lines = detailLines(menu);
+        List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
-            ControllerStatusLine line = lines.get(index);
+            ControllerScreenTextComposer.VisualLine line = lines.get(index);
             int textY = detailTextY(textLineY(visibleTextRow(index)));
             graphics.text(font, line.text(), x, textY, line.color(), true);
         }
@@ -100,16 +101,20 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return (int) (localY / DETAIL_SCALE);
     }
 
-    static List<ControllerStatusLine> detailLines(MachineControllerMenu menu) {
-        List<ControllerStatusLine> lines = new ArrayList<>();
+    static List<ControllerTextLine> controllerTextLines(MachineControllerMenu menu) {
+        return ControllerScreenTextComposer.merge(detailLines(menu), ControllerScreenTextCache.linesAt(menu.controllerPos()));
+    }
+
+    static List<ControllerTextLine> detailLines(MachineControllerMenu menu) {
+        List<ControllerTextLine> lines = new ArrayList<>();
         for (String levelId : menu.foundLevelIds()) {
             MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
             if (level == null) continue;
-            lines.add(new ControllerStatusLine(levelLine(level), STATUS_LABEL_COLOR));
+            lines.add(new ControllerTextLine(levelLine(level), STATUS_LABEL_COLOR));
         }
         String failure = menu.lastFailureMessage();
         if (failure != null) {
-            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.last_failure",
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
                     Component.translatable(failure)), STATUS_LABEL_COLOR));
         }
         lines.addAll(moduleStatusLines(menu.isHostController(), menu.isModuleController(),
@@ -117,18 +122,18 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         if (menu.isFormed()) {
             int parallelSlots = menu.parallelControllerCount();
             if (parallelSlots > 0) {
-                lines.add(new ControllerStatusLine(parallelSlotLine(parallelSlots), STATUS_LABEL_COLOR));
+                lines.add(new ControllerTextLine(parallelSlotLine(parallelSlots), STATUS_LABEL_COLOR));
             }
-            lines.add(new ControllerStatusLine(parallelLine(menu.currentParallelism(), menu.maxParallelism()),
+            lines.add(new ControllerTextLine(parallelLine(menu.currentParallelism(), menu.maxParallelism()),
                     STATUS_LABEL_COLOR));
         }
         int totalTick = menu.activeRecipeTotalTick();
         if (menu.hasActiveRecipe() && totalTick > 0) {
-            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.progress",
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress",
                     progressPercent(menu.activeRecipeTick(), totalTick) + "%"), PROGRESS_STATUS_COLOR));
         }
         if (menu.isRedstonePaused()) {
-            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
                     STATUS_LABEL_COLOR));
         }
         return lines;
@@ -153,11 +158,11 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return Math.clamp((int) ((long) tick * 100 / totalTick), 0, 100);
     }
 
-    static List<ControllerStatusLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<Identifier> connectedHostId) {
-        if (hostController) return List.of(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.installed_modules", Component.literal(NUMBER_FORMAT.format(installedModuleCount))), STATUS_LABEL_COLOR));
+    static List<ControllerTextLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<Identifier> connectedHostId) {
+        if (hostController) return List.of(new ControllerTextLine(Component.translatable("gui.mmcr.controller.installed_modules", Component.literal(NUMBER_FORMAT.format(installedModuleCount))), STATUS_LABEL_COLOR));
         if (!moduleController) return List.of();
         Component host = connectedHostId.isEmpty() ? Component.translatable("gui.mmcr.controller.module_unconnected") : Component.translatable("gui.mmcr.controller.module_connected", hostName(connectedHostId.get()));
-        return List.of(new ControllerStatusLine(host, connectedHostId.isPresent() ? STATUS_LABEL_COLOR : UNFORMED_STATUS_COLOR));
+        return List.of(new ControllerTextLine(host, connectedHostId.isPresent() ? STATUS_LABEL_COLOR : UNFORMED_STATUS_COLOR));
     }
 
     private static Component hostName(Identifier id) {
@@ -175,5 +180,4 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
     }
 
-    record ControllerStatusLine(Component text, int color) {}
 }

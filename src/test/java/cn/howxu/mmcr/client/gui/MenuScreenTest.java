@@ -98,11 +98,11 @@ class MenuScreenTest {
 
     @Test
     void module_status_lines_remain_visible_before_formation_and_mark_offline_modules_red() {
-        List<MachineControllerScreen.ControllerStatusLine> hostLines = MachineControllerScreen.moduleStatusLines(
+        List<ControllerTextLine> hostLines = MachineControllerScreen.moduleStatusLines(
                 true, false, 1, Optional.empty());
-        List<MachineControllerScreen.ControllerStatusLine> offlineModuleLines = MachineControllerScreen.moduleStatusLines(
+        List<ControllerTextLine> offlineModuleLines = MachineControllerScreen.moduleStatusLines(
                 false, true, 0, Optional.empty());
-        List<MachineControllerScreen.ControllerStatusLine> connectedModuleLines = MachineControllerScreen.moduleStatusLines(
+        List<ControllerTextLine> connectedModuleLines = MachineControllerScreen.moduleStatusLines(
                 false, true, 0, Optional.of(MMCR.id("test_host")));
 
         assertThat(hostLines).singleElement().satisfies(line ->
@@ -185,22 +185,22 @@ class MenuScreenTest {
                 FluidStack.EMPTY, FluidStack.EMPTY));
 
         assertThat(MachineControllerScreen.detailLines(menu)).containsExactly(
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.levelLine(level),
+                new ControllerTextLine(MachineControllerScreen.levelLine(level),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.last_failure",
                         Component.translatable("gui.mmcr.controller.failure.missing_input")),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.module_connected", Component.literal("mmcr:host")),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.parallelSlotLine(2),
+                new ControllerTextLine(MachineControllerScreen.parallelSlotLine(2),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(MachineControllerScreen.parallelLine(6, 8),
+                new ControllerTextLine(MachineControllerScreen.parallelLine(6, 8),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.progress", "20%"), -1),
-                new MachineControllerScreen.ControllerStatusLine(Component.translatable(
+                new ControllerTextLine(Component.translatable(
                         "gui.mmcr.controller.redstone_stopped"), MachineControllerScreen.STATUS_LABEL_COLOR));
     }
 

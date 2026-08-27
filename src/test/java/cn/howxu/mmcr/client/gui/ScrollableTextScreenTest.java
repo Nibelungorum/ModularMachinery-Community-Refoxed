@@ -2,6 +2,9 @@ package cn.howxu.mmcr.client.gui;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -56,5 +59,69 @@ class ScrollableTextScreenTest {
 
         assertThat(AbstractScrollableTextScreen.containsViewport(viewport, 0, 0, 12, 24)).isTrue();
         assertThat(AbstractScrollableTextScreen.containsViewport(viewport, 0, 0, 164, 126)).isFalse();
+    }
+
+    @Test
+    void shrinking_external_visual_lines_clamps_the_existing_scroll_offset() throws Exception {
+        TestScreen screen = TestScreen.create();
+        screen.setLines(List.of(line("one"), line("two"), line("three")));
+
+        assertThat(screen.scroll(-1)).isTrue();
+        assertThat(screen.scroll(-1)).isTrue();
+        assertThat(screen.firstLine()).isEqualTo(2);
+
+        screen.setLines(List.of(line("one")));
+
+        assertThat(screen.firstLine()).isZero();
+    }
+
+    private static ControllerTextLine line(String text) {
+        return new ControllerTextLine(net.minecraft.network.chat.Component.literal(text), 0xFFFFFFFF);
+    }
+
+    private static final class TestScreen extends AbstractScrollableTextScreen<net.minecraft.world.inventory.AbstractContainerMenu> {
+        private List<ControllerTextLine> lines;
+
+        private TestScreen() {
+            super(null, null, net.minecraft.network.chat.Component.empty(), 176, 213);
+        }
+
+        private static TestScreen create() throws Exception {
+            TestScreen screen = (TestScreen) unsafe().allocateInstance(TestScreen.class);
+            java.lang.reflect.Field font = net.minecraft.client.gui.screens.Screen.class.getDeclaredField("font");
+            unsafe().putObject(screen, unsafe().objectFieldOffset(font),
+                    ControllerScreenTextComposerTest.testFont());
+            screen.lines = new ArrayList<>();
+            return screen;
+        }
+
+        private void setLines(List<ControllerTextLine> replacement) {
+            lines.clear();
+            lines.addAll(replacement);
+        }
+
+        private boolean scroll(double deltaY) {
+            return mouseScrolled(0, 0, 0, deltaY);
+        }
+
+        private int firstLine() {
+            return firstVisibleTextLine();
+        }
+
+        @Override
+        protected TextViewport scrollableTextViewport() {
+            return new TextViewport(0, 0, 100, 1, 1.0F, 1);
+        }
+
+        @Override
+        protected List<ControllerTextLine> scrollableTextLines() {
+            return lines;
+        }
+
+        private static sun.misc.Unsafe unsafe() throws Exception {
+            java.lang.reflect.Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            return (sun.misc.Unsafe) field.get(null);
+        }
     }
 }

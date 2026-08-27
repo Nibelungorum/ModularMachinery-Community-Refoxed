@@ -4,9 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
-import cn.howxu.mmcr.client.gui.MachineControllerScreen.ControllerStatusLine;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -73,8 +73,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    protected int scrollableTextLineCount() {
-        return detailLines(menu).size();
+    protected List<ControllerTextLine> scrollableTextLines() {
+        return controllerTextLines(menu);
     }
 
     public static int defaultSelectedThread() { return 0; }
@@ -149,31 +149,35 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return selected.active() ? "" : menu.lastFailureUnloc();
     }
 
-    static List<ControllerStatusLine> detailLines(FactoryControllerMenu menu) {
-        List<ControllerStatusLine> lines = new ArrayList<>();
+    static List<ControllerTextLine> controllerTextLines(FactoryControllerMenu menu) {
+        return ControllerScreenTextComposer.merge(detailLines(menu), ControllerScreenTextCache.linesAt(menu.controllerPos()));
+    }
+
+    static List<ControllerTextLine> detailLines(FactoryControllerMenu menu) {
+        List<ControllerTextLine> lines = new ArrayList<>();
         for (Component levelLine : levelLines(menu.foundLevelIds())) {
-            lines.add(new ControllerStatusLine(levelLine, STATUS_LABEL_COLOR));
+            lines.add(new ControllerTextLine(levelLine, STATUS_LABEL_COLOR));
         }
         String failure = selectedFailureUnloc(menu);
         if (!failure.isEmpty()) {
-            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.last_failure",
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
                     Component.translatable(failure)), STATUS_LABEL_COLOR));
         }
         if (menu.parallelSlots() > 0) {
-            lines.add(new ControllerStatusLine(parallelSlotLine(menu.parallelSlots()), STATUS_LABEL_COLOR));
+            lines.add(new ControllerTextLine(parallelSlotLine(menu.parallelSlots()), STATUS_LABEL_COLOR));
         }
-        lines.add(new ControllerStatusLine(parallelLine(selectedParallelism(menu), menu.maxParallelism()),
+        lines.add(new ControllerTextLine(parallelLine(selectedParallelism(menu), menu.maxParallelism()),
                 STATUS_LABEL_COLOR));
         if (menu.isRedstonePaused()) {
-            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
                     STATUS_LABEL_COLOR));
         }
-        lines.add(new ControllerStatusLine(factoryThreadLine(menu.activeThreadCount(), menu.threadCount()),
+        lines.add(new ControllerTextLine(factoryThreadLine(menu.activeThreadCount(), menu.threadCount()),
                 STATUS_LABEL_COLOR));
         FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
         if (selected.totalTick() > 0) {
             int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
-            lines.add(new ControllerStatusLine(Component.translatable("gui.mmcr.controller.progress", percent + "%"),
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress", percent + "%"),
                     PROGRESS_STATUS_COLOR));
         }
         return lines;
@@ -276,13 +280,13 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), selected.active())),
                 x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
                 controllerStatusColor(menu.isFormed(), selected.active()), true);
-        List<ControllerStatusLine> lines = detailLines(menu);
+        List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         int statusLocalY = 12 + DETAIL_LINE_SPACING;
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
-            ControllerStatusLine line = lines.get(index);
+            ControllerScreenTextComposer.VisualLine line = lines.get(index);
             int textY = detailLineY(lineY, statusLocalY, textLineY(visibleTextRow(index)));
             graphics.text(font, line.text(), x, textY, line.color(), true);
         }

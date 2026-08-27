@@ -5,6 +5,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 
+import java.util.List;
+
 /**
  * Shared scrolling behavior for screens that render text in a GUI viewport.
  *
@@ -57,7 +59,22 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
 
     protected abstract TextViewport scrollableTextViewport();
 
-    protected abstract int scrollableTextLineCount();
+    protected List<ControllerTextLine> scrollableTextLines() {
+        return List.of();
+    }
+
+    protected final List<ControllerScreenTextComposer.VisualLine> wrappedTextLines() {
+        TextViewport viewport = scrollableTextViewport();
+        List<ControllerScreenTextComposer.VisualLine> lines = ControllerScreenTextComposer.wrap(
+                font, scrollableTextLines(), viewport.width());
+        textScrollOffset = clampScrollOffset(textScrollOffset, lines.size(), visibleLineCount(
+                viewport.height(), viewport.scale(), viewport.lineSpacing(), font.lineHeight));
+        return lines;
+    }
+
+    protected int scrollableTextLineCount() {
+        return wrappedTextLines().size();
+    }
 
     protected boolean handleAdditionalScroll(double mouseX, double mouseY,
                                              double deltaX, double deltaY) {
