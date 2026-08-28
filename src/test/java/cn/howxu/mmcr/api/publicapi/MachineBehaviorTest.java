@@ -161,10 +161,10 @@ class MachineBehaviorTest {
     void tick_io_plan_simulates_without_committing_physical_io() {
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
 
-        assertThat(plan.simulate().successful()).isTrue();
-        assertThat(plan.inputsSatisfied()).isTrue();
-        assertThat(plan.energySatisfied()).isTrue();
-        assertThat(plan.commit()).isTrue();
+        assertThat(plan.simulate().failure()).isNull();
+        assertThat(plan.simulate().inputsSatisfied()).isTrue();
+        assertThat(plan.simulate().energySatisfied()).isTrue();
+        assertThat(plan.commit().successful()).isTrue();
     }
 
     @Test

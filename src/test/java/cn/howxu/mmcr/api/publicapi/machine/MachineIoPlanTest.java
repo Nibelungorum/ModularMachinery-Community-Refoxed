@@ -15,7 +15,10 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
@@ -213,9 +216,10 @@ class MachineIoPlanTest {
         DataStorage data = new DataStorage();
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new EnergyHatchCapability(energy, IOType.INPUT))));
-        plan.add(new EnergyRequirement(4));
+        plan.addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(4)));
 
-        assertThat(plan.commit(transaction -> data.set("value", DataValue.of(1), transaction))).isTrue();
+        assertThat(plan.simulate().energySatisfied()).isTrue();
+        assertThat(plan.commit(transaction -> data.set("value", DataValue.of(1), transaction)).successful()).isTrue();
         assertThat(energy.amount()).isEqualTo(6L);
         assertThat(data.get("value")).contains(DataValue.of(1));
     }
@@ -227,7 +231,8 @@ class MachineIoPlanTest {
         DataStorage data = new DataStorage();
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new EnergyHatchCapability(energy, IOType.INPUT))));
-        plan.add(new EnergyRequirement(4));
+        plan.addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(4)));
+        assertThat(plan.simulate().energySatisfied()).isTrue();
 
         assertThatThrownBy(() -> plan.commit(transaction -> {
             data.set("value", DataValue.of(1), transaction);
@@ -235,6 +240,77 @@ class MachineIoPlanTest {
         })).isInstanceOf(IllegalStateException.class);
         assertThat(energy.amount()).isEqualTo(10L);
         assertThat(data.get("value")).isEmpty();
+    }
+
+    @Test
+    void simulate_is_read_only_and_commit_requires_a_successful_simulation() {
+        LongValueStorage energy = new LongValueStorage(100L, 100L, null);
+        energy.setAmount(10L);
+        MachineIoPlan notSimulated = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new EnergyHatchCapability(energy, IOType.INPUT))));
+        notSimulated.addInput(new EnergyRequirement(4));
+
+        assertThat(notSimulated.commit().successful()).isFalse();
+        assertThat(energy.amount()).isEqualTo(10L);
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new EnergyHatchCapability(energy, IOType.INPUT))));
+        plan.addInput(new EnergyRequirement(4));
+        assertThat(plan.simulate().energySatisfied()).isTrue();
+        assertThat(energy.amount()).isEqualTo(10L);
+        assertThat(plan.commit().successful()).isTrue();
+        assertThat(plan.commit().successful()).isFalse();
+        assertThat(energy.amount()).isEqualTo(6L);
+    }
+
+    @Test
+    void output_requests_aggregate_across_capabilities_and_require_full_blocks_commit() {
+        LongResourceStorage<ItemResource> first = itemStorage(1);
+        LongResourceStorage<ItemResource> second = itemStorage(1);
+        ItemStack output = stack(Items.GOLD_NUGGET, 64);
+        output.setCount(4);
+        ItemResource gold = ItemResource.of(output);
+        insert(first, 0, gold, 63L);
+        insert(second, 0, gold, 63L);
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(first, IOType.OUTPUT),
+                new ItemBusCapability(second, IOType.OUTPUT))));
+        plan.addOutput(MachineRequirement.itemOutput(output),
+                OutputPolicy.REQUIRE_FULL);
+
+        MachineIoPlan.Simulation simulation = plan.simulate();
+        assertThat(simulation.outputs()).containsExactly(new OutputSimulation(4L, 2L, OutputFit.PARTIAL));
+        assertThat(simulation.failure()).isNotNull();
+        assertThat(plan.commit().successful()).isFalse();
+        assertThat(first.amount(0)).isEqualTo(63L);
+        assertThat(second.amount(0)).isEqualTo(63L);
+    }
+
+    @Test
+    void allow_partial_commits_the_accepted_output_amount() {
+        LongResourceStorage<ItemResource> first = itemStorage(1);
+        ItemStack output = stack(Items.GOLD_NUGGET, 64);
+        output.setCount(4);
+        ItemResource gold = ItemResource.of(output);
+        insert(first, 0, gold, 63L);
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(first, IOType.OUTPUT))));
+        plan.addOutput(MachineRequirement.itemOutput(output),
+                OutputPolicy.ALLOW_PARTIAL);
+
+        assertThat(plan.simulate().outputs())
+                .containsExactly(new OutputSimulation(4L, 1L, OutputFit.PARTIAL));
+        assertThat(plan.commit().successful()).isTrue();
+        assertThat(first.amount(0)).isEqualTo(64L);
+    }
+
+    @Test
+    void add_input_and_output_reject_the_wrong_direction() {
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
+
+        assertThatThrownBy(() -> plan.addInput(MachineRequirement.itemOutput(new ItemStack(Items.IRON_INGOT))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> plan.addOutput(new EnergyRequirement(1), OutputPolicy.REQUIRE_FULL))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static MachineIoView view(MachineCapability... capabilities) {

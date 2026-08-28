@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -167,6 +168,48 @@ class CraftingRuntimeTest {
             callbacks.incrementAndGet();
             throw new IllegalStateException("expected test callback failure");
         }).build(), callbacks);
+    }
+
+    @Test
+    void discard_outputs_removes_item_and_energy_outputs_without_committing_them() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output, energy);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_discard_outputs"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeFinish(context -> context.discardOutputs()).build()));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void finish_output_replacement_keeps_non_physical_outputs() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output, energy);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeFinish(context -> context.setOutputs(List.of(
+                        new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)))).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_replace_physical_output"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
     }
 
     @Test
