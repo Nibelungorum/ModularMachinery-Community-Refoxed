@@ -44,8 +44,8 @@ public final class RecipeStartContext {
         this.requestedParallelism = requestedParallelism;
         this.effectiveParallelism = effectiveParallelism;
         this.duration = duration;
-        this.requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
-        this.outputs = List.copyOf(Objects.requireNonNull(outputs, "outputs"));
+        this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
+        this.outputs = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
     }
 
     public MachineRecipe recipe() {
@@ -82,7 +82,7 @@ public final class RecipeStartContext {
     }
 
     public void setRequirements(List<MachineRequirement> requirements) {
-        this.requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
+        this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
         this.outputs = outputsFromRequirements(this.requirements);
     }
 
@@ -91,7 +91,7 @@ public final class RecipeStartContext {
     }
 
     public void setOutputs(List<MachineOutput> outputs) {
-        List<MachineOutput> copy = List.copyOf(Objects.requireNonNull(outputs, "outputs"));
+        List<MachineOutput> copy = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
         List<MachineRequirement> replacement = outputRequirements(copy);
         List<MachineRequirement> nextRequirements = new ArrayList<>();
         boolean inserted = false;

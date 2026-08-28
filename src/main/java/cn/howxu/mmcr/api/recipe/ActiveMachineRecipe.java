@@ -33,6 +33,7 @@ public final class ActiveMachineRecipe {
     private static final Logger LOG = LoggerFactory.getLogger(ActiveMachineRecipe.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final int RECIPE_DEFINITION_VERSION = 1;
+    private static final int EFFECTIVE_EXECUTION_SNAPSHOT_VERSION = 1;
 
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
@@ -45,6 +46,8 @@ public final class ActiveMachineRecipe {
     private int nextFinishRetryTick;
     private boolean finishPending;
     private @Nullable InputConsumptionPlan inputConsumptionPlan;
+    private @Nullable List<MachineRequirement> effectiveRequirements;
+    private @Nullable List<MachineOutput> effectiveOutputs;
 
     public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
         public InputConsumptionPlan {
@@ -71,9 +74,13 @@ public final class ActiveMachineRecipe {
         }
 
         public boolean isValidFor(MachineRecipe recipe) {
-            if (recipe == null || consumedInputBatches.size() != recipe.requirements().size()) return false;
+            return recipe != null && isValidFor(recipe.requirements());
+        }
+
+        public boolean isValidFor(List<MachineRequirement> requirements) {
+            if (requirements == null || consumedInputBatches.size() != requirements.size()) return false;
             for (int index = 0; index < consumedInputBatches.size(); index++) {
-                MachineRequirement requirement = recipe.requirements().get(index);
+                MachineRequirement requirement = requirements.get(index);
                 boolean consumable = requirement.io() == RecipeModifier.IOType.INPUT
                         && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement);
                 if (!consumable && consumedInputBatches.get(index) != 0) return false;
@@ -98,6 +105,8 @@ public final class ActiveMachineRecipe {
         this.maxParallelism = Math.max(1, maxParallelism);
         this.parallelism = 1;
         this.data = new CompoundTag();
+        this.effectiveRequirements = null;
+        this.effectiveOutputs = null;
         if (recipe == null) {
             LOG.warn("ActiveMachineRecipe#{} created with null recipe", instanceId);
         }
@@ -162,6 +171,8 @@ public final class ActiveMachineRecipe {
         this.data = new CompoundTag();
         this.inputConsumptionPlan = null;
         this.finishPending = false;
+        this.effectiveRequirements = null;
+        this.effectiveOutputs = null;
     }
 
     public boolean isCompleted() {
@@ -185,6 +196,13 @@ public final class ActiveMachineRecipe {
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         output.putBoolean("finishPending", this.finishPending);
+        if (effectiveRequirements != null && effectiveOutputs != null) {
+            output.putBoolean("has_effective_execution_snapshot", true);
+            output.putInt("effective_execution_snapshot_version", EFFECTIVE_EXECUTION_SNAPSHOT_VERSION);
+            output.putInt("effective_duration", totalTick);
+            output.store("effective_requirements", MachineRequirement.CODEC.listOf(), effectiveRequirements);
+            output.store("effective_outputs", MachineOutput.CODEC.listOf(), effectiveOutputs);
+        }
         if (recipe != null) {
             output.putBoolean("has_recipe_definition", true);
             output.putInt("recipe_definition_version", RECIPE_DEFINITION_VERSION);
@@ -232,6 +250,26 @@ public final class ActiveMachineRecipe {
             recipe = RecipeRegistry.getRecipe(recipeId);
         }
         if (recipe == null) return new LoadResult(null);
+        List<MachineRequirement> effectiveRequirements = null;
+        List<MachineOutput> effectiveOutputs = null;
+        int effectiveDuration = -1;
+        if (input.getBooleanOr("has_effective_execution_snapshot", false)) {
+            if (input.getIntOr("effective_execution_snapshot_version", -1)
+                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION) {
+                return new LoadResult(null);
+            }
+            try {
+                effectiveDuration = input.getIntOr("effective_duration", -1);
+                effectiveRequirements = input.read("effective_requirements", MachineRequirement.CODEC.listOf())
+                        .orElse(null);
+                effectiveOutputs = input.read("effective_outputs", MachineOutput.CODEC.listOf()).orElse(null);
+            } catch (RuntimeException exception) {
+                return new LoadResult(null);
+            }
+            if (effectiveDuration <= 0 || effectiveRequirements == null || effectiveOutputs == null) {
+                return new LoadResult(null);
+            }
+        }
         InputConsumptionPlan inputPlan = null;
         if (hasField(input, "has_input_consumption_plan") || hasField(input, "inputConsumptionPlan")) {
             try {
@@ -240,7 +278,9 @@ public final class ActiveMachineRecipe {
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
-            if (inputPlan == null || !inputPlan.isValidFor(recipe)) return new LoadResult(null);
+            List<MachineRequirement> validationRequirements = effectiveRequirements == null
+                    ? recipe.requirements() : effectiveRequirements;
+            if (inputPlan == null || !inputPlan.isValidFor(validationRequirements)) return new LoadResult(null);
         }
         ActiveMachineRecipe result = new ActiveMachineRecipe(recipe, input.getIntOr("maxParallelism", 1));
         result.tick = input.getIntOr("tick", 0);
@@ -250,11 +290,40 @@ public final class ActiveMachineRecipe {
         result.inputConsumptionPlan = inputPlan;
         result.setParallelism(input.getIntOr("parallelism", 1));
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
+        if (effectiveRequirements != null && effectiveOutputs != null) {
+            result.setEffectiveExecutionSnapshot(effectiveDuration, effectiveRequirements, effectiveOutputs);
+        }
         return new LoadResult(result);
     }
 
     public boolean hasValidInputConsumptionPlan() {
-        return inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(recipe);
+        return hasEffectiveExecutionSnapshot()
+                ? hasValidInputConsumptionPlan(effectiveRequirements)
+                : inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(recipe);
+    }
+
+    public boolean hasValidInputConsumptionPlan(List<MachineRequirement> requirements) {
+        return inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(requirements);
+    }
+
+    public boolean hasEffectiveExecutionSnapshot() {
+        return effectiveRequirements != null && effectiveOutputs != null;
+    }
+
+    public List<MachineRequirement> effectiveRequirements() {
+        return effectiveRequirements == null ? List.of() : MachineRequirement.copyList(effectiveRequirements);
+    }
+
+    public List<MachineOutput> effectiveOutputs() {
+        return effectiveOutputs == null ? List.of() : MachineOutput.copyList(effectiveOutputs);
+    }
+
+    public void setEffectiveExecutionSnapshot(int duration, List<MachineRequirement> requirements,
+                                               List<MachineOutput> outputs) {
+        if (duration <= 0) throw new IllegalArgumentException("duration must be positive");
+        this.totalTick = duration;
+        this.effectiveRequirements = MachineRequirement.copyList(requirements);
+        this.effectiveOutputs = MachineOutput.copyList(outputs);
     }
 
     public static boolean sameDefinition(MachineRecipe first, MachineRecipe second) {

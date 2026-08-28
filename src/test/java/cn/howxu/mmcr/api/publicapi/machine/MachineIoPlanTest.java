@@ -13,6 +13,10 @@ import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -200,6 +204,37 @@ class MachineIoPlanTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new MachineIoView.ResourceAmount<>(ItemResource.EMPTY, -1L))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void commit_callback_commits_capability_io_and_data_storage_together() {
+        LongValueStorage energy = new LongValueStorage(100L, 100L, null);
+        energy.setAmount(10L);
+        DataStorage data = new DataStorage();
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new EnergyHatchCapability(energy, IOType.INPUT))));
+        plan.add(new EnergyRequirement(4));
+
+        assertThat(plan.commit(transaction -> data.set("value", DataValue.of(1), transaction))).isTrue();
+        assertThat(energy.amount()).isEqualTo(6L);
+        assertThat(data.get("value")).contains(DataValue.of(1));
+    }
+
+    @Test
+    void commit_callback_rolls_back_capability_io_and_data_storage_together() {
+        LongValueStorage energy = new LongValueStorage(100L, 100L, null);
+        energy.setAmount(10L);
+        DataStorage data = new DataStorage();
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new EnergyHatchCapability(energy, IOType.INPUT))));
+        plan.add(new EnergyRequirement(4));
+
+        assertThatThrownBy(() -> plan.commit(transaction -> {
+            data.set("value", DataValue.of(1), transaction);
+            throw new IllegalStateException("callback failure");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(energy.amount()).isEqualTo(10L);
+        assertThat(data.get("value")).isEmpty();
     }
 
     private static MachineIoView view(MachineCapability... capabilities) {

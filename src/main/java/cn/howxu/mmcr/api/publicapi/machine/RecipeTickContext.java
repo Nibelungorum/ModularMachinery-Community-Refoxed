@@ -37,8 +37,8 @@ public final class RecipeTickContext {
         this.currentTick = currentTick;
         this.totalTick = totalTick;
         this.parallelism = parallelism;
-        this.requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
-        this.outputs = List.copyOf(Objects.requireNonNull(outputs, "outputs"));
+        this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
+        this.outputs = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
     }
 
     public MachineRecipe recipe() {

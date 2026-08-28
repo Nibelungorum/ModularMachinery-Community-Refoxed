@@ -109,11 +109,11 @@ public final class CraftingRuntime {
 
         activeRecipe = new ActiveMachineRecipe(recipe, plan.parallelism());
         activeRecipe.setParallelism(plan.parallelism());
-        activeRecipe.setTotalTick(effective.duration());
+        activeRecipe.setEffectiveExecutionSnapshot(effective.duration(), effective.requirements(), effective.outputs());
         startPlan = plan;
         finishPlan = null;
-        effectiveRequirements = effective.requirements();
-        effectiveOutputs = effective.outputs();
+        effectiveRequirements = MachineRequirement.copyList(effective.requirements());
+        effectiveOutputs = MachineOutput.copyList(effective.outputs());
         captureInputState(effectiveRequirements, plan);
         captureVersions(runtime);
         status = CraftingStatus.working();
@@ -337,7 +337,15 @@ public final class CraftingRuntime {
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
                         long restoredStructureVersion, long restoredCapabilityVersion,
                         long restoredModifierVersion, long restoredComponentStateVersion) {
-        if (restored == null || restored.getRecipe() == null || !restored.hasValidInputConsumptionPlan()) {
+        if (restored == null || restored.getRecipe() == null) {
+            failLoad();
+            return;
+        }
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        List<MachineRequirement> requirements = restored.hasEffectiveExecutionSnapshot()
+                ? restored.effectiveRequirements()
+                : restored.getRecipe().runtimeRequirements(contextModifiers(runtime));
+        if (!restored.hasValidInputConsumptionPlan(requirements)) {
             failLoad();
             return;
         }
@@ -349,10 +357,10 @@ public final class CraftingRuntime {
         capabilityVersion = restoredCapabilityVersion;
         modifierVersion = restoredModifierVersion;
         componentStateVersion = restoredComponentStateVersion;
-        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        List<MachineRequirement> requirements = restored.getRecipe().runtimeRequirements(contextModifiers(runtime));
-        effectiveRequirements = requirements;
-        effectiveOutputs = restored.getRecipe().runtimeMachineOutputs(contextModifiers(runtime));
+        effectiveRequirements = MachineRequirement.copyList(requirements);
+        effectiveOutputs = restored.hasEffectiveExecutionSnapshot()
+                ? restored.effectiveOutputs()
+                : restored.getRecipe().runtimeMachineOutputs(contextModifiers(runtime));
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {

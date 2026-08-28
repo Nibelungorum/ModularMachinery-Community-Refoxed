@@ -17,9 +17,11 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -27,6 +29,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -135,6 +139,32 @@ class MachineBehaviorRuntimeTest {
         runtime.finish();
 
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+    }
+
+    @Test
+    void recipe_tick_callback_cannot_mutate_effective_item_or_fluid_outputs() {
+        ItemOutputBusBlockEntity itemOutput = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        FluidOutputHatchBlockEntity fluidOutput = RuntimeTestFixtures.fluidOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, itemOutput, fluidOutput);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .recipeTick(context -> {
+                    ((MachineOutput.ItemOutput) context.outputs().get(0)).stack().setCount(64);
+                    ((MachineOutput.FluidOutput) context.outputs().get(1)).stack().setAmount(2_000);
+                }).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("behavior_tick_stack_isolation"), TEST_MACHINE_ID,
+                1, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                output(Items.IRON_NUGGET),
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new FluidStack(Fluids.WATER, 1_000))));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        runtime.finish();
+
+        assertThat(itemOutput.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(itemOutput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(fluidOutput.fluidStorage().getFluidStack().getAmount()).isEqualTo(1_000);
     }
 
     @Test

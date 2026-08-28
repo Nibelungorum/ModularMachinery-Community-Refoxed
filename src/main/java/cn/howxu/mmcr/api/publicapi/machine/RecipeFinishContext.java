@@ -64,7 +64,7 @@ public final class RecipeFinishContext {
     }
 
     public void setOutputs(List<MachineOutput> outputs) {
-        this.outputs = new ArrayList<>(Objects.requireNonNull(outputs, "outputs"));
+        this.outputs = new ArrayList<>(MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs")));
     }
 
     public void discardOutputs() {

@@ -13,7 +13,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Entry point for capability planning from a direct tick behavior.
@@ -63,8 +65,13 @@ public final class MachineIoPlan {
     }
 
     public boolean commit() {
+        return commit(ignored -> { });
+    }
+
+    public boolean commit(Consumer<TransactionContext> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
         PlanningResult result = simulation == null ? simulate() : simulation;
-        return result.successful() && result.plan().commit();
+        return result.successful() && result.plan().commit(transactionWrites);
     }
 
     public List<OutputSimulation> outputSimulations() {

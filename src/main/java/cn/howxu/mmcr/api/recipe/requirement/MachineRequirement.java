@@ -19,6 +19,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -34,6 +35,24 @@ public interface MachineRequirement {
 
     default List<String> tags() {
         return List.of();
+    }
+
+    static MachineRequirement copyOf(MachineRequirement requirement) {
+        Objects.requireNonNull(requirement, "requirement");
+        if (requirement instanceof ItemRequirement item) {
+            return new ItemRequirement(item.io(), item.item(), item.count(), item.stack(), item.chance(),
+                    item.tags(), item.components(), item.consumeChance());
+        }
+        if (requirement instanceof FluidRequirement fluid) {
+            return new FluidRequirement(fluid.io(), fluid.fluid(), fluid.amount(), fluid.stack(), fluid.chance(),
+                    fluid.tags());
+        }
+        return requirement;
+    }
+
+    static List<MachineRequirement> copyList(List<MachineRequirement> requirements) {
+        Objects.requireNonNull(requirements, "requirements");
+        return requirements.stream().map(MachineRequirement::copyOf).toList();
     }
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {

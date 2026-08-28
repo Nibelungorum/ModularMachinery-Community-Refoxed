@@ -456,6 +456,42 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void active_runtime_persists_the_start_effective_snapshot_and_consumption_plan() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> {
+                    context.setDuration(2);
+                    context.setRequirements(List.of(
+                            input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 2)));
+                }).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_persisted_effective_snapshot", 20, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1), output(Items.DIAMOND, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.totalTick()).isEqualTo(2);
+        assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(0)).isEqualTo(1);
+        assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(1)).isZero();
+        restored.tick();
+        restored.tick();
+        restored.finish();
+
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
     void active_runtime_finishes_with_its_original_recipe_after_registry_replacement() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
