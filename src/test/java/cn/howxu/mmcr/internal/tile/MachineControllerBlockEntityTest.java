@@ -76,6 +76,7 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -726,6 +727,40 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.structureScanCursorForTesting())
                 .as("dirty event should start or advance a scan")
+                .isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void unrelated_chunk_load_does_not_invalidate_active_structure_scan() {
+        TestBootstrap.registerRuntimeBuiltins();
+        Identifier machineId = MMCR.id("unrelated_chunk_scan");
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 20; index++) {
+            entries.put(new BlockPos(index + 1, 0, 0), new BlockPredicate.Any());
+        }
+        DynamicMachine machine = new DynamicMachine(machineId, "Unrelated Chunk Scan", new BlockArray(entries),
+                MachineControllerSpec.defaultsFor(machineId));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        DynamicMachine seedMachine = new DynamicMachine(MMCR.id("unrelated_chunk_scan_seed"), "Unrelated Chunk Scan Seed",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE))),
+                MachineControllerSpec.defaultsFor(MMCR.id("unrelated_chunk_scan_seed")));
+        RuntimeTestFixtures.formStructure(controller, seedMachine);
+        controller.setMachine(machine);
+        controller.invalidateFormedStructure();
+        controller.setStructureScanBatchesForTesting(5);
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.requestImmediateStructureCheck();
+
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        controller.tickStructure(level, controller.getBlockPos());
+        assertThat(controller.structureScanCursorForTesting()).isGreaterThanOrEqualTo(0);
+
+        MachineControllerBlockEntity.markStructureChunkDirty(level, new ChunkPos(100, 100));
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.tickStructure(level, controller.getBlockPos());
+
+        assertThat(controller.structureScanCursorForTesting())
+                .as("an unrelated chunk event must not invalidate the active scan")
                 .isGreaterThanOrEqualTo(0);
     }
 

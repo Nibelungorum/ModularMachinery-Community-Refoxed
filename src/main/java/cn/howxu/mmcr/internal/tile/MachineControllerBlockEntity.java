@@ -273,13 +273,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         int factoryActiveCount = factoryTickResult != null ? factoryTickResult.activeLaneCount()
                 : activeFactoryLaneCount != null ? activeFactoryLaneCount : runtime.factoryRuntime().activeLaneCount();
-        boolean activeState = craftingRuntime.active() || factoryActiveCount > 0 || hasTickBehavior(structure);
+        boolean activeState = craftingRuntime.active() || factoryActiveCount > 0;
+        boolean tickPaused = redstonePaused && hasTickBehavior(structure);
         Identifier recipeId = craftingRuntime.recipe() == null ? null : craftingRuntime.recipe().id();
         CraftingStatus status = !structure.formed()
                 ? CraftingStatus.MISSING_STRUCTURE
                 : !structure.structureAreaLoaded() ? CraftingStatus.CHUNK_UNLOADED
                 : activeState
                 ? redstonePaused ? CraftingStatus.paused() : CraftingStatus.working()
+                : tickPaused ? CraftingStatus.paused()
                 : lastFailureUnloc == null ? CraftingStatus.IDLE : CraftingStatus.failure(lastFailureUnloc);
         runtime.publishRuntimeState(isStructureAreaLoaded(structure), structure.formed(),
                 structure.configuredMachine(), structure.matchedStage(), recipeId, status,
@@ -583,10 +585,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         for (MachineControllerBlockEntity controller : ACTIVE_STRUCTURE_SCANS) {
-            if (!FORMED_CONTROLLERS.contains(controller) && controller.level == level) {
+            if (!FORMED_CONTROLLERS.contains(controller) && controller.level == level
+                    && controller.isChunkRelevantToActiveStructureScan(chunkPos)) {
                 controller.onStructureChunkChanged(serverLevel);
             }
         }
+    }
+
+    private boolean isChunkRelevantToActiveStructureScan(ChunkPos chunkPos) {
+        StructureWorkSnapshot work = structureWorkSnapshot();
+        if (work.scan() == null) return false;
+        if (!(work.scan().pattern() instanceof BlockArray pattern)) return true;
+        BoundingBox box = boundingBox(pattern);
+        int minChunkX = (getBlockPos().getX() + box.minX()) >> 4;
+        int maxChunkX = (getBlockPos().getX() + box.maxX()) >> 4;
+        int minChunkZ = (getBlockPos().getZ() + box.minZ()) >> 4;
+        int maxChunkZ = (getBlockPos().getZ() + box.maxZ()) >> 4;
+        return chunkPos.x() >= minChunkX && chunkPos.x() <= maxChunkX
+                && chunkPos.z() >= minChunkZ && chunkPos.z() <= maxChunkZ;
     }
 
     public void setLastFailureUnloc(@Nullable String key) {

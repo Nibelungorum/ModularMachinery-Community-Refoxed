@@ -41,8 +41,8 @@ public final class DataStorageGameTest {
             helper.assertTrue(ticks >= 1L && ticks <= 5L,
                     "Tick behavior writes at a 20-tick period, actual=" + ticks);
             helper.assertTrue(controller.runtimeSnapshot().crafting().status().getStatus()
-                            == CraftingStatus.Status.CRAFTING,
-                    "Pure-tick controller publishes working status");
+                            == CraftingStatus.Status.IDLE,
+                    "Pure-tick controller does not start recipe crafting");
             helper.assertTrue(new ControllerSyncRuntime().machineState(controller.runtimeSnapshot()).active(),
                     "Pure-tick controller projects active state");
             helper.assertTrue(controller.getBlockState().getValue(MachineControllerBlock.ACTIVE),

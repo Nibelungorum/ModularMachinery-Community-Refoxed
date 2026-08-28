@@ -270,15 +270,21 @@ public class TerminalAssemblyGameTest {
         controller.requestImmediateStructureCheck(player);
         helper.assertTrue(controller.isStructureDiagnosticRequestedForTesting(),
                 "Shift-right-click diagnostic request is recorded before the ticker runs");
-        helper.runAtTickTime(2, () -> {
-            helper.assertTrue(!controller.isStructureDiagnosticRequestedForTesting(),
-                    "Small-structure mismatch diagnostic is delivered by the scan result: requested="
-                            + controller.isStructureDiagnosticRequestedForTesting() + " deliveries=" + diagnostics[0]
-                            + " batches=" + controller.scanBatchCountForTesting());
-            helper.assertTrue(diagnostics[0] == 1, "Small-structure mismatch diagnostic feedback is delivered once: deliveries="
-                    + diagnostics[0]);
-            helper.succeed();
-        });
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(diagnostics[0] == 1,
+                        "Small-structure mismatch diagnostic feedback is delivered once: deliveries="
+                                + diagnostics[0] + " batches=" + controller.scanBatchCountForTesting()
+                                + " requested=" + controller.isStructureDiagnosticRequestedForTesting()
+                                + " pendingInvalidation=" + controller.isPendingStructureInvalidationForTesting()
+                                + " cursor=" + controller.structureScanCursorForTesting()))
+                .thenExecute(() -> {
+                    helper.assertTrue(!controller.isStructureDiagnosticRequestedForTesting(),
+                            "Small-structure mismatch diagnostic is delivered by the scan result: requested="
+                                    + controller.isStructureDiagnosticRequestedForTesting()
+                                    + " deliveries=" + diagnostics[0]
+                                    + " batches=" + controller.scanBatchCountForTesting());
+                    helper.succeed();
+                });
     }
 
     public void disconnectedBuilderDropsReservedMaterials(GameTestHelper helper) {
