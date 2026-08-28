@@ -63,6 +63,14 @@ class ReadableNumberTest {
     }
 
     @Test
+    void formats_fractional_scientific_values_by_truncating_the_fraction() {
+        BigDecimal value = new BigDecimal("1000000000000000000000000000.5");
+
+        assertThat(ReadableNumber.format(value)).isEqualTo("1.00E27");
+        assertThat(ReadableNumber.formatCompact(value)).isEqualTo("1.00E27");
+    }
+
+    @Test
     void rejects_negative_values() {
         assertThatThrownBy(() -> ReadableNumber.format(-1)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> ReadableNumber.formatExact(-1)).isInstanceOf(IllegalArgumentException.class);

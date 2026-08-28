@@ -87,7 +87,7 @@ public final class ReadableNumber {
         int exponent = value.precision() - value.scale() - 1;
         int prefixIndex = exponent / 3;
         if (prefixIndex >= SI_PREFIXES.length) {
-            return formatScientific(value.toBigIntegerExact());
+            return formatScientific(value);
         }
         BigDecimal divisor = BigDecimal.TEN.pow(prefixIndex * 3);
         BigDecimal truncated = value.divide(divisor, 2, RoundingMode.DOWN);
@@ -97,11 +97,12 @@ public final class ReadableNumber {
         return number + SI_PREFIXES[prefixIndex];
     }
 
-    private static String formatScientific(BigInteger value) {
-        if (value.signum() == 0) {
+    private static String formatScientific(BigDecimal value) {
+        BigInteger integerValue = value.setScale(0, RoundingMode.DOWN).toBigIntegerExact();
+        if (integerValue.signum() == 0) {
             return "0";
         }
-        String digits = value.toString();
+        String digits = integerValue.toString();
         int exponent = digits.length() - 1;
         BigDecimal mantissa = new BigDecimal(digits.charAt(0) + "." + digits.substring(1));
         return mantissa.setScale(2, RoundingMode.DOWN).toPlainString() + "E" + exponent;

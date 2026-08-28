@@ -19,8 +19,9 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -87,6 +88,8 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
         return recipeSlots.getSlotViews().stream()
                 .map(slot -> {
                     if (slot.getRole() != RecipeIngredientRole.INPUT
+                            || slot.getAllIngredients().noneMatch(ingredient ->
+                            ingredient.getIngredient(VanillaTypes.ITEM_STACK).isPresent())
                             || itemInputIndex[0] >= recipe.itemInputs().size()) {
                         return slot;
                     }
@@ -116,7 +119,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             for (ITypedIngredient<?> ingredient : delegate.getAllIngredientsList()) {
                 ingredients.add(ingredient == null ? null : withActualCount(ingredient, count));
             }
-            return ingredients;
+            return Collections.unmodifiableList(ingredients);
         }
 
         @Override

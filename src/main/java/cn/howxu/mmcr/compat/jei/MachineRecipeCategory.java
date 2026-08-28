@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.ReadableNumber;
@@ -18,6 +19,8 @@ import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.helpers.IGuiHelper;
+import mezz.jei.api.ingredients.IIngredientRenderer;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
@@ -25,7 +28,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jspecify.annotations.Nullable;
 
@@ -53,6 +59,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static final int ITEM_OVERLAY_X = 0;
     static final int ITEM_OVERLAY_Y = 0;
     static final float ITEM_OVERLAY_SCALE = 0.6F;
+    private static final IIngredientRenderer<FluidStack> FULL_FLUID_RENDERER = new IIngredientRenderer<>() {
+        @Override
+        public void render(GuiGraphicsExtractor guiGraphics, FluidStack fluid) {
+            FluidGuiRenderer.drawFluid(guiGraphics, fluid, 0, 0, 16, 16);
+        }
+
+        @Override
+        public List<Component> getTooltip(FluidStack fluid, TooltipFlag tooltipFlag) {
+            Minecraft minecraft = Minecraft.getInstance();
+            return fluidTooltip(fluid, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+        }
+    };
 
     private final Component title;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
@@ -324,16 +342,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
             int amount = recipe.fluidInputAmounts().get(entry.index());
-            setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
             recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid -> {
-                jeiSlot.setFluidRenderer(FLUID_SLOT_CAPACITY, true, 16, 16)
+                setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
+                jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
                         .add(fluid.value(), FLUID_SLOT_CAPACITY);
                 jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
             });
         } else {
             var stack = recipe.fluidOutputs().get(entry.index());
             setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
-            jeiSlot.setFluidRenderer(FLUID_SLOT_CAPACITY, false, 16, 16)
+            jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
                     .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, stack.getAmount()));
         }
@@ -359,6 +377,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return amount > FLUID_SLOT_CAPACITY
                 ? ReadableNumber.formatCompact(amount) + " mB"
                 : "";
+    }
+
+    static List<Component> fluidTooltip(FluidStack fluid, Item.TooltipContext context,
+            @Nullable Player player, TooltipFlag tooltipFlag) {
+        return fluid.getTooltipLines(context, player, tooltipFlag);
     }
 
     static String itemTooltipQuantity(int count) {
