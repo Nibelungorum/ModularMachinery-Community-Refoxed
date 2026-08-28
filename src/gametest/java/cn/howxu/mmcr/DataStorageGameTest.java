@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class DataStorageGameTest {
     private static final Identifier MACHINE_ID = MMCR.id("data_storage_tick");
@@ -144,6 +145,7 @@ public final class DataStorageGameTest {
         AtomicInteger starts = new AtomicInteger();
         AtomicInteger ticks = new AtomicInteger();
         AtomicInteger finishes = new AtomicInteger();
+        AtomicReference<String> callbackFailure = new AtomicReference<>();
         BlockArray pattern = new BlockArray(Map.of(
                 inputPos.subtract(controllerPos), new BlockPredicate.OfBlock(
                         ModBlocks.BLOCKS.get("item_input_bus").get()),
@@ -166,15 +168,19 @@ public final class DataStorageGameTest {
                         })
                         .recipeTick(context -> {
                             ticks.incrementAndGet();
-                            helper.assertTrue(context.totalTick() == 2
-                                            && ((ItemRequirement) context.requirements().getFirst()).count() == 2
-                                            && ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() == 2,
-                                    "Recipe Tick uses the loaded effective snapshot");
+                            if (context.totalTick() != 2
+                                    || ((ItemRequirement) context.requirements().getFirst()).count() != 2
+                                    || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
+                                callbackFailure.compareAndSet(null,
+                                        "Recipe Tick uses the loaded effective snapshot");
+                            }
                         })
                         .beforeFinish(context -> {
                             finishes.incrementAndGet();
-                            helper.assertTrue(((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() == 2,
-                                    "Recipe Finish uses the loaded effective output snapshot");
+                            if (((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
+                                callbackFailure.compareAndSet(null,
+                                        "Recipe Finish uses the loaded effective output snapshot");
+                            }
                         })
                         .build());
 
@@ -199,6 +205,9 @@ public final class DataStorageGameTest {
 
             controller.serverTick();
             controller.serverTick();
+            String callbackError = callbackFailure.get();
+            helper.assertTrue(callbackError == null,
+                    callbackError == null ? "Recipe callbacks use the loaded effective snapshot" : callbackError);
             helper.assertTrue(ticks.get() == 2 && finishes.get() == 1 && starts.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
