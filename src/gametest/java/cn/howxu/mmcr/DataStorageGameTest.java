@@ -1,6 +1,5 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -196,10 +195,11 @@ public final class DataStorageGameTest {
                             && controller.runtimeSnapshot().crafting().totalTick() == 2
                             && starts.get() == 1,
                     "Controller load restores the effective recipe without rerunning Start");
+            input.getItemHandler(null).extractItem(0, 1, false);
 
             controller.serverTick();
             controller.serverTick();
-            helper.assertTrue(ticks.get() == 2 && finishes.get() == 1,
+            helper.assertTrue(ticks.get() == 2 && finishes.get() == 1 && starts.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
                             && output.getItemHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)

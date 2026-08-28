@@ -13,7 +13,6 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -49,6 +48,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.items.ItemStackHandler;
 
 import java.util.ArrayList;
 import java.lang.reflect.Field;
@@ -242,6 +242,12 @@ public class ControllerTickGameTest {
                             .addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(5)))
                             .addOutput(MachineRequirement.itemOutput(new ItemStack(Items.GOLD_NUGGET, 3)),
                                     OutputPolicy.ALLOW_PARTIAL);
+                    List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.getItemStackHandler(null));
+                    List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.getItemStackHandler(null));
+                    List<ItemStack> firstOutputBeforeSimulation = snapshot(firstOutput.getItemStackHandler(null));
+                    List<ItemStack> secondOutputBeforeSimulation = snapshot(secondOutput.getItemStackHandler(null));
+                    long energyBeforeSimulation = energy.energyStorage().getAmountAsLong();
+                    Map<String, DataValue> dataBeforeSimulation = storage.storage().values();
                     MachineIoPlan.Simulation simulation = plan.simulate();
                     helper.assertTrue(simulation.inputsSatisfied() && simulation.energySatisfied(),
                             "Tick simulation accepts the complete input and energy plan");
@@ -250,6 +256,13 @@ public class ControllerTickGameTest {
                                     && simulation.outputs().getFirst().accepted() == 1L
                                     && simulation.outputs().getFirst().fit() == OutputFit.PARTIAL,
                             "Tick simulation reports the one-item partial output fit");
+                    helper.assertTrue(sameStacks(firstInputBeforeSimulation, snapshot(firstInput.getItemStackHandler(null)))
+                                    && sameStacks(secondInputBeforeSimulation, snapshot(secondInput.getItemStackHandler(null)))
+                                    && sameStacks(firstOutputBeforeSimulation, snapshot(firstOutput.getItemStackHandler(null)))
+                                    && sameStacks(secondOutputBeforeSimulation, snapshot(secondOutput.getItemStackHandler(null)))
+                                    && energy.energyStorage().getAmountAsLong() == energyBeforeSimulation
+                                    && dataBeforeSimulation.equals(storage.storage().values()),
+                            "Tick simulation leaves input, energy, output, and DataStorage state unchanged");
                     MachineIoPlan.CommitResult commit = plan.commit(transaction ->
                             storage.storage().set("ticks", DataValue.of(1L), transaction));
                     helper.assertTrue(commit.successful(), "Tick commit succeeds with the shared transaction");
@@ -290,6 +303,29 @@ public class ControllerTickGameTest {
             if (stack.is(item)) amount += stack.getCount();
         }
         return amount;
+    }
+
+    private static List<ItemStack> snapshot(ItemStackHandler handler) {
+        List<ItemStack> stacks = new ArrayList<>(handler.getSlots());
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            stacks.add(handler.getStackInSlot(slot).copy());
+        }
+        return List.copyOf(stacks);
+    }
+
+    private static boolean sameStacks(List<ItemStack> expected, List<ItemStack> actual) {
+        if (expected.size() != actual.size()) return false;
+        for (int slot = 0; slot < expected.size(); slot++) {
+            ItemStack expectedStack = expected.get(slot);
+            ItemStack actualStack = actual.get(slot);
+            if (expectedStack.isEmpty() || actualStack.isEmpty()) {
+                if (expectedStack.isEmpty() != actualStack.isEmpty()) return false;
+                continue;
+            }
+            if (expectedStack.getCount() != actualStack.getCount()
+                    || !ItemStack.isSameItemSameComponents(expectedStack, actualStack)) return false;
+        }
+        return true;
     }
 
     private static ControllerScreenTextSnapshot screenTextSnapshot(MachineControllerBlockEntity controller) {
