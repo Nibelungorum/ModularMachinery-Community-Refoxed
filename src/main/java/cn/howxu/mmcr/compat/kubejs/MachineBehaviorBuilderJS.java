@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -57,7 +58,7 @@ public final class MachineBehaviorBuilderJS {
         return this;
     }
 
-    public MachineBehaviorBuilderJS serverTick(Consumer<MachineBehaviorContext> callback) {
+    public MachineBehaviorBuilderJS serverTick(Consumer<TickBehaviorContext> callback) {
         requireTick();
         tickBuilder.serverTick(Objects.requireNonNull(callback, "callback")::accept);
         return this;

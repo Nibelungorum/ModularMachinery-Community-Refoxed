@@ -14,14 +14,23 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class RecipeFinishContext {
+    private final MachineBehaviorContext machineContext;
     private final MachineRecipe recipe;
     private final int requestedParallelism;
     private final int effectiveParallelism;
     private List<MachineOutput> outputs;
     private boolean cancelled;
+    private boolean outputsDiscarded;
 
     public RecipeFinishContext(MachineRecipe recipe, int requestedParallelism, int effectiveParallelism,
                                List<MachineOutput> outputs) {
+        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
+                requestedParallelism, effectiveParallelism, outputs);
+    }
+
+    public RecipeFinishContext(MachineBehaviorContext machineContext, MachineRecipe recipe,
+                               int requestedParallelism, int effectiveParallelism, List<MachineOutput> outputs) {
+        this.machineContext = Objects.requireNonNull(machineContext, "machineContext");
         this.recipe = Objects.requireNonNull(recipe, "recipe");
         if (requestedParallelism <= 0) throw new IllegalArgumentException("requestedParallelism must be positive");
         if (effectiveParallelism <= 0) throw new IllegalArgumentException("effectiveParallelism must be positive");
@@ -32,6 +41,10 @@ public final class RecipeFinishContext {
 
     public MachineRecipe recipe() {
         return recipe;
+    }
+
+    public MachineBehaviorContext machineContext() {
+        return machineContext;
     }
 
     public Identifier recipeId() {
@@ -52,6 +65,15 @@ public final class RecipeFinishContext {
 
     public void setOutputs(List<MachineOutput> outputs) {
         this.outputs = new ArrayList<>(Objects.requireNonNull(outputs, "outputs"));
+    }
+
+    public void discardOutputs() {
+        outputsDiscarded = true;
+        outputs = new ArrayList<>();
+    }
+
+    public boolean outputsDiscarded() {
+        return outputsDiscarded;
     }
 
     public void cancel() {

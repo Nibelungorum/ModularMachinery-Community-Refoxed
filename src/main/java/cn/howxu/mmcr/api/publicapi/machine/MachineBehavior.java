@@ -19,6 +19,11 @@ public sealed interface MachineBehavior permits RecipeBehavior, TickBehavior {
     }
 
     @FunctionalInterface
+    interface TickCallback {
+        void accept(TickBehaviorContext context);
+    }
+
+    @FunctionalInterface
     interface RecipeStartCallback {
         void accept(RecipeStartContext context);
     }

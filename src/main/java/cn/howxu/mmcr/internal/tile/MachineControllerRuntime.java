@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -9,6 +10,8 @@ import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -117,6 +120,15 @@ public final class MachineControllerRuntime {
     }
 
     public MachineBehaviorContext behaviorContext() {
+        return behaviorContext(new CapabilitySnapshot(components.capabilities()));
+    }
+
+    public TickBehaviorContext tickBehaviorContext() {
+        CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(components.capabilities());
+        return new TickBehaviorContext(behaviorContext(capabilitySnapshot), capabilitySnapshot);
+    }
+
+    private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot) {
         StructureSnapshot snapshot = structure.snapshot();
         Machine machine = snapshot.machine() == null ? snapshot.configuredMachine() : snapshot.machine();
         if (machine == null) throw new IllegalStateException("Machine behavior context requires a configured machine");
@@ -124,7 +136,7 @@ public final class MachineControllerRuntime {
         ServerLevel level = currentLevel instanceof ServerLevel serverLevel ? serverLevel : null;
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
-                screenText, dataStorages);
+                screenText, dataStorages, new MachineIoView(capabilitySnapshot));
     }
 
     public void clearOperationText() {

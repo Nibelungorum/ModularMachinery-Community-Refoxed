@@ -53,7 +53,7 @@ public final class CraftingContext {
 
     public PlanningResult planOutputs(List<MachineOutput> outputs, int parallelism) {
         if (outputs == null) throw new IllegalArgumentException("outputs must not be null");
-        return plan(outputRequirements(outputs), parallelism, true, indexes(outputs.size()));
+        return planSelected(outputRequirements(outputs), parallelism, true, indexes(outputs.size()));
     }
 
     public PlanningResult planOutputs(MachineRecipe recipe, List<MachineOutput> outputs, int parallelism) {
@@ -65,7 +65,7 @@ public final class CraftingContext {
                 requirements.add(requirement);
             }
         }
-        return plan(requirements, parallelism, recipe.allowPartialOutputs(), indexes(requirements.size()));
+        return planSelected(requirements, parallelism, recipe.allowPartialOutputs(), indexes(requirements.size()));
     }
 
     private static List<MachineRequirement> outputRequirements(List<MachineOutput> outputs) {
@@ -109,6 +109,45 @@ public final class CraftingContext {
         return plan(recipe, requestedParallelism, null, Set.of(), Set.of());
     }
 
+    public PlanningResult planStartRequirements(List<MachineRequirement> requirements, int requestedParallelism,
+                                                boolean allowPartialOutputs) {
+        return planSelected(requirements, requestedParallelism, allowPartialOutputs,
+                indexes(requirements == null ? 0 : requirements.size()));
+    }
+
+    public PlanningResult planInputRequirements(List<MachineRequirement> requirements, int parallelism,
+                                                Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
+        return planRequirements(requirements, parallelism, RecipeModifier.IOType.INPUT, false,
+                consumedAtStart == null ? Set.of() : consumedAtStart,
+                retainedInputs == null ? Set.of() : retainedInputs);
+    }
+
+    public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, int parallelism,
+                                                 boolean allowPartialOutputs) {
+        return planRequirements(requirements, parallelism, RecipeModifier.IOType.OUTPUT, allowPartialOutputs,
+                Set.of(), Set.of());
+    }
+
+    public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, List<MachineOutput> outputs,
+                                                 int parallelism, boolean allowPartialOutputs) {
+        List<MachineRequirement> replacement = outputRequirements(outputs);
+        List<MachineRequirement> merged = new ArrayList<>();
+        boolean inserted = false;
+        for (MachineRequirement requirement : requirements) {
+            if (isItemOrFluidOutput(requirement)) {
+                if (!inserted) {
+                    merged.addAll(replacement);
+                    inserted = true;
+                }
+            } else {
+                merged.add(requirement);
+            }
+        }
+        if (!inserted) merged.addAll(replacement);
+        return planRequirements(merged, parallelism, RecipeModifier.IOType.OUTPUT, allowPartialOutputs,
+                Set.of(), Set.of());
+    }
+
     public void setModifiers(List<RecipeModifier> modifiers) {
         this.modifiers = modifiers == null ? List.of() : List.copyOf(modifiers);
     }
@@ -137,13 +176,42 @@ public final class CraftingContext {
             requirements.add(requirement);
             requirementIndexes.add(index);
         }
-        return plan(requirements, parallelism,
+        return planSelected(requirements, parallelism,
                 direction != RecipeModifier.IOType.INPUT && recipe.allowPartialOutputs(), requirementIndexes);
     }
 
-    private PlanningResult plan(List<MachineRequirement> requirements, int parallelism, boolean allowPartialOutputs,
-                                List<Integer> requirementIndexes) {
+    private PlanningResult planRequirements(List<MachineRequirement> source, int parallelism,
+                                            RecipeModifier.IOType direction, boolean allowPartialOutputs,
+                                            Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
+        if (source == null) throw new IllegalArgumentException("requirements must not be null");
+        List<MachineRequirement> requirements = new ArrayList<>();
+        List<Integer> requirementIndexes = new ArrayList<>();
+        for (int index = 0; index < source.size(); index++) {
+            MachineRequirement requirement = source.get(index);
+            if (direction != null && requirement.io() != direction) continue;
+            if (consumedAtStart.contains(index)) continue;
+            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement item
+                    && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() > 0F) {
+                requirement = new ItemRequirement(item.io(), item.item(), item.count(), item.stack(null),
+                        item.chance(), item.tags(), item.components(), 0F);
+            }
+            requirements.add(requirement);
+            requirementIndexes.add(index);
+        }
+        return planSelected(requirements, parallelism, allowPartialOutputs, requirementIndexes);
+    }
+
+    private PlanningResult planSelected(List<MachineRequirement> requirements, int parallelism,
+                                        boolean allowPartialOutputs, List<Integer> requirementIndexes) {
+        if (requirements == null || requirementIndexes == null || requirements.size() != requirementIndexes.size()) {
+            throw new IllegalArgumentException("requirements and indexes must match");
+        }
         return new RequirementPlanner().plan(requirements, capabilities,
                 new PlanningContext(parallelism, 0, allowPartialOutputs), requirementIndexes);
+    }
+
+    private static boolean isItemOrFluidOutput(MachineRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT
+                && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement);
     }
 }

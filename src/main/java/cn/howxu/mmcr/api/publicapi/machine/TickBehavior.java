@@ -10,9 +10,9 @@ import java.util.Objects;
 public final class TickBehavior implements MachineBehavior {
     private static final TickBehavior DEFAULTS = new TickBehavior(context -> { });
 
-    private final MachineCallback serverTick;
+    private final TickCallback serverTick;
 
-    private TickBehavior(MachineCallback serverTick) {
+    private TickBehavior(TickCallback serverTick) {
         this.serverTick = Objects.requireNonNull(serverTick, "serverTick");
     }
 
@@ -29,14 +29,14 @@ public final class TickBehavior implements MachineBehavior {
         return Kind.TICK;
     }
 
-    public MachineCallback serverTick() {
+    public TickCallback serverTick() {
         return serverTick;
     }
 
     public static final class Builder {
-        private MachineCallback serverTick = context -> { };
+        private TickCallback serverTick = context -> { };
 
-        public Builder serverTick(MachineCallback callback) {
+        public Builder serverTick(TickCallback callback) {
             serverTick = Objects.requireNonNull(callback, "serverTick");
             return this;
         }
