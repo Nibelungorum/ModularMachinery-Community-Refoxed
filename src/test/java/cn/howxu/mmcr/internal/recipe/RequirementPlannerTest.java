@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.OutputFit;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -61,6 +63,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -439,6 +442,115 @@ class RequirementPlannerTest {
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(2);
+    }
+
+    @Test
+    void output_simulation_reports_full_fit() {
+        BulkItemStorage storage = new BulkItemStorage(4, null);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(4), 1F, List.of());
+
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(4L);
+                    assertThat(simulation.accepted()).isEqualTo(4L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
+                });
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void output_simulation_reports_partial_fit_and_partial_policy_commits_only_accepted_amount() {
+        BulkItemStorage storage = new BulkItemStorage(1, null);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(4), 1F, List.of());
+
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0, Map.of(0, OutputPolicy.ALLOW_PARTIAL)));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(4L);
+                    assertThat(simulation.accepted()).isEqualTo(1L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
+                });
+        assertThat(storage.amount(0)).isZero();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void require_full_output_with_partial_space_reports_partial_without_committing() {
+        BulkItemStorage storage = new BulkItemStorage(1, null);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(4), 1F, List.of());
+
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "insufficient_resource");
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.accepted()).isEqualTo(1L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
+                });
+        assertThat(result.failureRequirementIndex()).isEqualTo(0);
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void require_full_output_with_no_space_reports_none_without_committing() {
+        BulkItemStorage storage = new BulkItemStorage(0, null);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(4), 1F, List.of());
+
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
+        assertThat(result.failureRequirementIndex()).isEqualTo(0);
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void output_policy_is_selected_by_requirement_index() {
+        BulkItemStorage inputStorage = new BulkItemStorage(64, null);
+        BulkItemStorage outputStorage = new BulkItemStorage(1, null);
+        ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
+                ItemStack.EMPTY);
+        ItemRequirement output = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(4), 1F, List.of());
+        inputStorage.insert(ironResource(), 1, false);
+
+        var result = new RequirementPlanner().plan(
+                List.of(input, output),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, inputStorage),
+                        new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, outputStorage)),
+                new PlanningContext(1, 0, Map.of(1, OutputPolicy.ALLOW_PARTIAL)));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.PARTIAL);
     }
 
     @Test

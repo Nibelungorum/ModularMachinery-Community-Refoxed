@@ -6,9 +6,12 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 
 /**
@@ -47,7 +50,18 @@ public final class CraftingPlan {
     }
 
     public boolean commit() {
-        return commit(ignored -> true);
+        return commit(ignored -> { });
+    }
+
+    public boolean commit(Consumer<TransactionContext> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        if (failure != null) return false;
+        try (Transaction transaction = Transaction.openRoot()) {
+            if (!commitOperations(transaction, ignored -> true)) return false;
+            transactionWrites.accept(transaction);
+            transaction.commit();
+            return true;
+        }
     }
 
     public boolean commitInputs() {
@@ -69,25 +83,37 @@ public final class CraftingPlan {
                 && !requirement.operations().isEmpty());
     }
 
+    public List<OutputSimulation> outputSimulations() {
+        return requirements.stream()
+                .map(RequirementPlan::outputSimulation)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private boolean commit(IntPredicate selector) {
         if (failure != null) return false;
         try (Transaction transaction = Transaction.openRoot()) {
-            for (RequirementPlan requirement : requirements) {
-                if (!selector.test(requirement.requirementIndex())) continue;
-                for (CapabilityOperation operation : requirement.operations()) {
-                    CapabilityResult result = operation.commit(transaction);
-                    if (result == null || !result.success()) {
-                        if (failure == null) {
-                            failure = result == null || result.status() == null
-                                    ? UNSPECIFIED_OPERATION_FAILURE : result.status();
-                        }
-                        return false;
-                    }
-                }
-            }
+            if (!commitOperations(transaction, selector)) return false;
             transaction.commit();
             return true;
         }
+    }
+
+    private boolean commitOperations(TransactionContext transaction, IntPredicate selector) {
+        for (RequirementPlan requirement : requirements) {
+            if (!selector.test(requirement.requirementIndex())) continue;
+            for (CapabilityOperation operation : requirement.operations()) {
+                CapabilityResult result = operation.commit(transaction);
+                if (result == null || !result.success()) {
+                    if (failure == null) {
+                        failure = result == null || result.status() == null
+                                ? UNSPECIFIED_OPERATION_FAILURE : result.status();
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public int parallelism() {

@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -59,16 +60,20 @@ public final class RequirementPlanner {
             List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
             RequirementPlan requirementPlan = handler.plan(requirement, matching,
                     new PlanningContext(context.requestedParallelism(), requirementIndexes.get(index),
-                            context.allowPartialOutputs(), context.reservations()));
-            if (!requirementPlan.successful()) return new PlanningResult(null, requirementPlan.failure());
+                            context.allowPartialOutputs(), context.reservations(), context.outputPolicies()));
+            if (!requirementPlan.successful()) {
+                return failed(requirementPlan.failure(), requirementIndexes.get(index), plans, requirementPlan);
+            }
             parallelism = Math.min(parallelism, requirementPlan.maxParallelism());
             plans.add(requirementPlan.preparedAt(context.requestedParallelism()));
         }
         if (parallelism <= 0) {
-            return new PlanningResult(null, failure(requirements.isEmpty() ? null : requirements.getFirst()));
+            return new PlanningResult(null, failure(requirements.isEmpty() ? null : requirements.getFirst()),
+                    outputSimulations(plans), requirements.isEmpty() ? null : requirementIndexes.getFirst());
         }
         int selectedParallelism = 0;
         ExecutionStatus reservationFailure = null;
+        Integer reservationFailureIndex = null;
         for (int candidate = parallelism; candidate > 0; candidate--) {
             PlanningReservations reservations = context.reservations().copy();
             boolean reservationsAvailable = true;
@@ -76,6 +81,7 @@ public final class RequirementPlanner {
                 ExecutionStatus failure = plans.get(index).reserve(candidate, reservations);
                 if (failure != null) {
                     reservationFailure = failure;
+                    reservationFailureIndex = requirementIndexes.get(index);
                     reservationsAvailable = false;
                     break;
                 }
@@ -85,7 +91,9 @@ public final class RequirementPlanner {
                 break;
             }
         }
-        if (selectedParallelism <= 0) return new PlanningResult(null, reservationFailure);
+        if (selectedParallelism <= 0) {
+            return new PlanningResult(null, reservationFailure, outputSimulations(plans), reservationFailureIndex);
+        }
 
         PlanningReservations materializationReservations = context.reservations().copy();
         List<RequirementPlan> materialized = new ArrayList<>(plans.size());
@@ -94,11 +102,27 @@ public final class RequirementPlanner {
             RequirementPlan plan = plans.get(index);
             RequirementPlan resolved = plan.materialize(selectedParallelism, materializationReservations,
                     failure(requirements.get(index), "unsafe_operation_parallelism"));
-            if (!resolved.successful()) return new PlanningResult(null, resolved.failure());
+            if (!resolved.successful()) {
+                return failed(resolved.failure(), requirementIndexes.get(index), materialized, resolved);
+            }
             materialized.add(resolved);
             directions.put(requirementIndexes.get(index), requirements.get(index).io());
         }
         return new PlanningResult(new CraftingPlan(materialized, selectedParallelism, directions), null);
+    }
+
+    private static PlanningResult failed(ExecutionStatus failure, int failureRequirementIndex,
+                                         List<RequirementPlan> completed, RequirementPlan failed) {
+        List<RequirementPlan> plans = new ArrayList<>(completed);
+        plans.add(failed);
+        return new PlanningResult(null, failure, outputSimulations(plans), failureRequirementIndex);
+    }
+
+    private static List<OutputSimulation> outputSimulations(List<RequirementPlan> plans) {
+        return plans.stream()
+                .map(RequirementPlan::outputSimulation)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     private static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,

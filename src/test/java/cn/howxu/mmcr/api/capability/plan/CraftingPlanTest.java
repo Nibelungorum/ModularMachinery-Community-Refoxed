@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
+import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import net.minecraft.resources.Identifier;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies atomic execution of prepared capability operations.
@@ -91,6 +94,33 @@ class CraftingPlanTest {
         assertThat(plan.commit()).isFalse();
         assertThat(plan.failure()).isNotNull();
         assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
+    }
+
+    @Test
+    void commits_capability_operations_and_data_storage_in_the_same_transaction() {
+        JournalValue value = new JournalValue();
+        DataStorage storage = new DataStorage();
+
+        CraftingPlan plan = plan(operation(value, true));
+
+        assertThat(plan.commit(transaction -> storage.set("value", DataValue.of(1), transaction))).isTrue();
+        assertThat(value.value).isEqualTo(1);
+        assertThat(storage.get("value")).contains(DataValue.of(1));
+    }
+
+    @Test
+    void rolls_back_capability_operations_and_data_storage_when_transaction_callback_fails() {
+        JournalValue value = new JournalValue();
+        DataStorage storage = new DataStorage();
+
+        CraftingPlan plan = plan(operation(value, true));
+
+        assertThatThrownBy(() -> plan.commit(transaction -> {
+            storage.set("value", DataValue.of(1), transaction);
+            throw new IllegalStateException("callback failure");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(value.value).isZero();
+        assertThat(storage.get("value")).isEmpty();
     }
 
     @Test
