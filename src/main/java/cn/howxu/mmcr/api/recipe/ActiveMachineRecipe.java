@@ -253,7 +253,8 @@ public final class ActiveMachineRecipe {
         List<MachineRequirement> effectiveRequirements = null;
         List<MachineOutput> effectiveOutputs = null;
         int effectiveDuration = -1;
-        if (input.getBooleanOr("has_effective_execution_snapshot", false)) {
+        boolean hasEffectiveExecutionSnapshot = input.getBooleanOr("has_effective_execution_snapshot", false);
+        if (hasEffectiveExecutionSnapshot) {
             if (input.getIntOr("effective_execution_snapshot_version", -1)
                     != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION) {
                 return new LoadResult(null);
@@ -271,7 +272,12 @@ public final class ActiveMachineRecipe {
             }
         }
         InputConsumptionPlan inputPlan = null;
-        if (hasField(input, "has_input_consumption_plan") || hasField(input, "inputConsumptionPlan")) {
+        boolean hasInputConsumptionPlan = hasField(input, "has_input_consumption_plan")
+                || hasField(input, "inputConsumptionPlan");
+        if (hasEffectiveExecutionSnapshot && !hasInputConsumptionPlan) {
+            return new LoadResult(null);
+        }
+        if (hasInputConsumptionPlan) {
             try {
                 inputPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
                         .map(InputConsumptionPlan::deserialize).orElse(null);
@@ -303,7 +309,9 @@ public final class ActiveMachineRecipe {
     }
 
     public boolean hasValidInputConsumptionPlan(List<MachineRequirement> requirements) {
-        return inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(requirements);
+        return hasEffectiveExecutionSnapshot()
+                ? inputConsumptionPlan != null && inputConsumptionPlan.isValidFor(requirements)
+                : inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(requirements);
     }
 
     public boolean hasEffectiveExecutionSnapshot() {

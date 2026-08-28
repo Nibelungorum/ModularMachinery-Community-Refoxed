@@ -492,6 +492,31 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void active_runtime_rejects_effective_snapshot_without_consumption_plan() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_missing_effective_plan", 20, List.of(
+                input(Items.IRON_INGOT, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        savedRecipeTag.remove("has_input_consumption_plan");
+        savedRecipeTag.remove("inputConsumptionPlan");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
     void active_runtime_finishes_with_its_original_recipe_after_registry_replacement() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
