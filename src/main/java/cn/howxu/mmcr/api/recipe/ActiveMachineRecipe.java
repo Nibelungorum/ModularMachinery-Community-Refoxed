@@ -40,6 +40,10 @@ public final class ActiveMachineRecipe {
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final int RECIPE_DEFINITION_VERSION = 1;
     private static final int EFFECTIVE_EXECUTION_SNAPSHOT_VERSION = 1;
+    private static final String EFFECTIVE_DEFINITION_MARKER = "has_effective_definition";
+    private static final String EFFECTIVE_DEFINITION_VERSION = "effective_definition_version";
+    private static final String LEGACY_EFFECTIVE_SNAPSHOT_MARKER = "has_effective_execution_snapshot";
+    private static final String LEGACY_EFFECTIVE_SNAPSHOT_VERSION = "effective_execution_snapshot_version";
 
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
@@ -277,10 +281,43 @@ public final class ActiveMachineRecipe {
         List<MachineRequirement> effectiveRequirements = null;
         List<MachineOutput> effectiveOutputs = null;
         int effectiveDuration = -1;
-        boolean hasEffectiveExecutionSnapshot = input.getBooleanOr("has_effective_definition", false);
+        boolean hasCurrentSnapshotMarker = hasField(input, EFFECTIVE_DEFINITION_MARKER);
+        boolean hasLegacySnapshotMarker = hasField(input, LEGACY_EFFECTIVE_SNAPSHOT_MARKER);
+        boolean currentSnapshotMarker = input.getBooleanOr(EFFECTIVE_DEFINITION_MARKER, false);
+        boolean legacySnapshotMarker = input.getBooleanOr(LEGACY_EFFECTIVE_SNAPSHOT_MARKER, false);
+        boolean hasCurrentSnapshotVersion = hasField(input, EFFECTIVE_DEFINITION_VERSION);
+        boolean hasLegacySnapshotVersion = hasField(input, LEGACY_EFFECTIVE_SNAPSHOT_VERSION);
+        boolean hasEffectivePayload = hasField(input, "effective_duration")
+                || hasField(input, "effective_requirements")
+                || hasField(input, "effective_outputs")
+                || hasCurrentSnapshotVersion
+                || hasLegacySnapshotVersion;
+        if (hasCurrentSnapshotMarker && hasLegacySnapshotMarker
+                && currentSnapshotMarker != legacySnapshotMarker) {
+            return new LoadResult(null);
+        }
+        if (hasCurrentSnapshotVersion && hasLegacySnapshotVersion
+                && input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
+                != input.getIntOr(LEGACY_EFFECTIVE_SNAPSHOT_VERSION, -1)) {
+            return new LoadResult(null);
+        }
+        boolean hasEffectiveExecutionSnapshot = currentSnapshotMarker || legacySnapshotMarker;
+        if (!hasEffectiveExecutionSnapshot && hasEffectivePayload) {
+            return new LoadResult(null);
+        }
+        if (currentSnapshotMarker && hasLegacySnapshotVersion && !hasLegacySnapshotMarker) {
+            return new LoadResult(null);
+        }
+        if (legacySnapshotMarker && hasCurrentSnapshotVersion && !hasCurrentSnapshotMarker) {
+            return new LoadResult(null);
+        }
         if (hasEffectiveExecutionSnapshot) {
-            if (input.getIntOr("effective_definition_version", -1)
-                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION) {
+            if ((currentSnapshotMarker && (!hasCurrentSnapshotVersion
+                    || input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
+                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION))
+                    || (legacySnapshotMarker && (!hasLegacySnapshotVersion
+                    || input.getIntOr(LEGACY_EFFECTIVE_SNAPSHOT_VERSION, -1)
+                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION))) {
                 return new LoadResult(null);
             }
             try {
@@ -314,17 +351,25 @@ public final class ActiveMachineRecipe {
             if (inputPlan == null || !inputPlan.isValidFor(validationRequirements)) return new LoadResult(null);
         }
         int maxParallelism = input.getIntOr("maxParallelism", 1);
+        int parallelism = input.getIntOr("parallelism", 1);
+        int serializedTotalTick = input.getIntOr("totalTick", -1);
+        int tick = input.getIntOr("tick", 0);
+        boolean finishPending = input.getBooleanOr("finishPending", false);
+        int totalTick = hasEffectiveExecutionSnapshot ? effectiveDuration : serializedTotalTick;
+        if (serializedTotalTick < 1 || !validRuntimeState(tick, totalTick, maxParallelism, parallelism,
+                finishPending)) {
+            return new LoadResult(null);
+        }
         ActiveMachineRecipe result = hasEffectiveExecutionSnapshot
                 ? new ActiveMachineRecipe(recipe, maxParallelism,
                 new RecipeStartContext.ExecutionSnapshot(effectiveDuration, effectiveRequirements, effectiveOutputs))
                 : new ActiveMachineRecipe(recipe, maxParallelism, false);
-        result.tick = input.getIntOr("tick", 0);
-        result.totalTick = hasEffectiveExecutionSnapshot
-                ? effectiveDuration : input.getIntOr("totalTick", 0);
+        result.tick = tick;
+        result.totalTick = totalTick;
         result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
-        result.finishPending = input.getBooleanOr("finishPending", false);
+        result.finishPending = finishPending;
         result.inputConsumptionPlan = inputPlan;
-        result.setParallelism(input.getIntOr("parallelism", 1));
+        result.parallelism = parallelism;
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         return new LoadResult(result);
     }
@@ -409,6 +454,15 @@ public final class ActiveMachineRecipe {
 
     private static boolean validChance(float chance) {
         return Float.isFinite(chance) && chance >= 0F && chance <= 1F;
+    }
+
+    private static boolean validRuntimeState(int tick, int totalTick, int maxParallelism,
+                                             int parallelism, boolean finishPending) {
+        return totalTick >= 1
+                && tick >= 0 && tick <= totalTick
+                && maxParallelism >= 1
+                && parallelism >= 1 && parallelism <= maxParallelism
+                && (!finishPending || tick == totalTick - 1);
     }
 
     public static boolean sameDefinition(MachineRecipe first, MachineRecipe second) {

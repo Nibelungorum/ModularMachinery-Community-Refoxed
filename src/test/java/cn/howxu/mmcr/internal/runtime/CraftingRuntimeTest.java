@@ -61,6 +61,7 @@ import java.util.Map;
 import java.lang.reflect.Field;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -532,6 +533,102 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void active_runtime_loads_the_legacy_effective_execution_snapshot_alias() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> {
+                    starts.incrementAndGet();
+                    context.setDuration(2);
+                    context.setRequirements(List.of(input(Items.IRON_INGOT, 2)));
+                }).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        MachineRecipe recipe = recipe("runtime_legacy_effective_snapshot", 20,
+                List.of(input(Items.IRON_INGOT, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+        recipeTag.putBoolean("has_effective_execution_snapshot", true);
+        recipeTag.putInt("effective_execution_snapshot_version", 1);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(starts).hasValue(1);
+        assertThat(restored.totalTick()).isEqualTo(2);
+        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+    }
+
+    @Test
+    void active_runtime_rejects_conflicting_effective_snapshot_aliases() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_conflicting_effective_snapshot", 20, List.of());
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.putBoolean("has_effective_execution_snapshot", true);
+        recipeTag.putInt("effective_execution_snapshot_version", 2);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void active_runtime_rejects_effective_snapshot_payload_without_a_marker() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_unmarked_effective_snapshot", 20, List.of());
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void active_runtime_rejects_malformed_activity_state_before_restore() {
+        assertMalformedActivityState("runtime_invalid_total_tick",
+                recipeTag -> recipeTag.putInt("totalTick", 0));
+        assertMalformedActivityState("runtime_invalid_tick",
+                recipeTag -> recipeTag.putInt("tick", 21));
+        assertMalformedActivityState("runtime_invalid_max_parallelism",
+                recipeTag -> recipeTag.putInt("maxParallelism", 0));
+        assertMalformedActivityState("runtime_invalid_parallelism_zero",
+                recipeTag -> recipeTag.putInt("parallelism", 0));
+        assertMalformedActivityState("runtime_invalid_parallelism",
+                recipeTag -> recipeTag.putInt("parallelism", 2));
+        assertMalformedActivityState("runtime_invalid_finish_pending",
+                recipeTag -> recipeTag.putBoolean("finishPending", true));
+    }
+
+    @Test
     void active_runtime_rejects_effective_snapshot_without_consumption_plan() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
@@ -757,6 +854,25 @@ class CraftingRuntimeTest {
         assertThat(recipeTag.getStringOr("recipe_definition_fingerprint", ""))
                 .matches("[0-9a-f]{64}");
         recipeTag.getCompound("recipe_definition").orElseThrow().putInt("tick_time", 99);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    private static void assertMalformedActivityState(String recipePath,
+                                                      Consumer<CompoundTag> mutate) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe(recipePath, 20, List.of()), 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        mutate.accept(recipeTag);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
