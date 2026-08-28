@@ -273,14 +273,14 @@ public class ControllerTickGameTest {
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Real Tick machine forms with all I/O parts");
             helper.assertTrue(executed.get(), "Formed Tick machine invokes its server callback");
-            helper.assertTrue(firstInput.getItemHandler(null).getStackInSlot(0).isEmpty()
-                            && secondInput.getItemHandler(null).getStackInSlot(0).isEmpty(),
+            helper.assertTrue(count(firstInput.getItemStackHandler(null), Items.IRON_INGOT)
+                            + count(secondInput.getItemStackHandler(null), Items.IRON_INGOT) == 0L,
                     "Tick commit consumes both input buses according to the complete plan");
             helper.assertTrue(energy.energyStorage().getAmountAsLong() == 0L,
                     "Tick commit consumes the complete energy plan");
             helper.assertTrue(firstOutput.getItemHandler(null).getStackInSlot(0).getCount() == 64
-                            && count(firstOutput, Items.GOLD_NUGGET) - 63L == 1L
-                            && count(secondOutput, Items.GOLD_NUGGET) == 0L,
+                            && count(firstOutput.getItemStackHandler(null), Items.GOLD_NUGGET) - 63L == 1L
+                            && count(secondOutput.getItemStackHandler(null), Items.GOLD_NUGGET) == 0L,
                     "Partial output commit writes only the accepted item");
             helper.assertTrue(storage.storage().get("ticks").map(DataValue.of(1L)::equals).orElse(false),
                     "DataStorage writes commit with the Tick I/O transaction");
@@ -296,10 +296,10 @@ public class ControllerTickGameTest {
         }
     }
 
-    private static long count(ItemOutputBusBlockEntity output, Item item) {
+    private static long count(ItemStackHandler handler, Item item) {
         long amount = 0L;
-        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
-            ItemStack stack = output.getItemStackHandler(null).getStackInSlot(slot);
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            ItemStack stack = handler.getStackInSlot(slot);
             if (stack.is(item)) amount += stack.getCount();
         }
         return amount;

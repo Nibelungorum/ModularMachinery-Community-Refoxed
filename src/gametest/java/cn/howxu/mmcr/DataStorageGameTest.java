@@ -186,12 +186,12 @@ public final class DataStorageGameTest {
             helper.assertTrue(controller.structureSnapshot().formed(), "Recipe snapshot machine forms with real I/O buses");
             RecipeRegistry.register(recipe);
             controller.serverTick();
-            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() != null && starts.get() == 1,
+            helper.assertTrue(recipe.id().equals(controller.runtimeSnapshot().crafting().recipeId()) && starts.get() == 1,
                     "Recipe Start runs once before serialization");
 
             CompoundTag saved = saveController(controller, helper.getLevel().registryAccess());
             loadController(controller, helper.getLevel().registryAccess(), saved);
-            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() != null
+            helper.assertTrue(recipe.id().equals(controller.runtimeSnapshot().crafting().recipeId())
                             && controller.runtimeSnapshot().crafting().totalTick() == 2
                             && starts.get() == 1,
                     "Controller load restores the effective recipe without rerunning Start");
