@@ -75,6 +75,21 @@ class DataStorageBindingCoordinatorTest {
         assertThat(controller.behaviorContext().dataStorage(STORAGE_POS)).contains(storage.storage());
     }
 
+    @Test
+    void unbind_missing_keeps_current_storage_binding_and_releases_only_removed_storage() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        DataStorageBlockEntity retained = storage(STORAGE_POS);
+        DataStorageBlockEntity removed = storage(new BlockPos(0, 1, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine(), retained);
+
+        DataStorageBindingCoordinator coordinator = new DataStorageBindingCoordinator();
+        coordinator.reconcile(controller, List.of(retained, removed));
+        coordinator.unbindMissing(controller, List.of(retained, removed), List.of(retained));
+
+        assertThat(retained.controllerPosition()).contains(BlockPos.ZERO);
+        assertThat(removed.controllerPosition()).isEmpty();
+    }
+
     private static DataStorageBlockEntity storage(BlockPos pos) {
         return (DataStorageBlockEntity) ModBlockEntities.DATA_STORAGE.get().create(
                 pos, ModBlocks.DATA_STORAGE.get().defaultBlockState());
