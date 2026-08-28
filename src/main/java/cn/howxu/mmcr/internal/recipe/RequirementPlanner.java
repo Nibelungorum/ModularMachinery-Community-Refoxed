@@ -54,6 +54,8 @@ public final class RequirementPlanner {
 
         List<RequirementPlan> plans = new ArrayList<>(requirements.size());
         int parallelism = context.requestedParallelism();
+        ExecutionStatus parallelismFailure = null;
+        Integer parallelismFailureIndex = null;
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             RequirementHandler<MachineRequirement> handler = handler(requirement.type());
@@ -64,12 +66,15 @@ public final class RequirementPlanner {
             if (!requirementPlan.successful()) {
                 return failed(requirementPlan.failure(), requirementIndexes.get(index), plans, requirementPlan);
             }
+            if (parallelismFailure == null && requirementPlan.maxParallelism() <= 0) {
+                parallelismFailure = failure(requirement);
+                parallelismFailureIndex = requirementIndexes.get(index);
+            }
             parallelism = Math.min(parallelism, requirementPlan.maxParallelism());
             plans.add(requirementPlan.preparedAt(context.requestedParallelism()));
         }
         if (parallelism <= 0) {
-            return new PlanningResult(null, failure(requirements.isEmpty() ? null : requirements.getFirst()),
-                    outputSimulations(plans), requirements.isEmpty() ? null : requirementIndexes.getFirst());
+            return new PlanningResult(null, parallelismFailure, outputSimulations(plans), parallelismFailureIndex);
         }
         int selectedParallelism = 0;
         ExecutionStatus reservationFailure = null;

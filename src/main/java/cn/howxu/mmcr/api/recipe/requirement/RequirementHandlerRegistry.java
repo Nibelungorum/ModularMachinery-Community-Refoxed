@@ -77,8 +77,8 @@ public final class RequirementHandlerRegistry {
 
     private static RequirementPlan blockedOutputPlan(MachineRequirement requirement, PlanningContext context,
                                                      String reason, long requested) {
-        return new RequirementPlan(context.requirementIndex(), 0, List.of(), blocked(requirement, reason),
-                new OutputSimulation(requested, 0L, OutputFit.NONE));
+        return RequirementPlan.withOutputSimulation(context.requirementIndex(), 0, List.of(),
+                blocked(requirement, reason), new OutputSimulation(requested, 0L, OutputFit.NONE));
     }
 
     private static RequirementPlan deferredPlan(PlanningContext context,

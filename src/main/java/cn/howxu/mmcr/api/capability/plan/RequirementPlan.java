@@ -34,12 +34,6 @@ public record RequirementPlan(
 
     public RequirementPlan(int requirementIndex, int maxParallelism,
                            List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,
-                           @Nullable OutputSimulation outputSimulation) {
-        this(requirementIndex, maxParallelism, operations, failure, outputSimulation, null, null, 0);
-    }
-
-    public RequirementPlan(int requirementIndex, int maxParallelism,
-                           List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,
                            @Nullable OperationFactory operationFactory) {
         this(requirementIndex, maxParallelism, operations, failure, null, operationFactory, null, 0);
     }
@@ -58,6 +52,14 @@ public record RequirementPlan(
                            int preparedParallelism) {
         this(requirementIndex, maxParallelism, operations, failure, null, operationFactory, reservationFactory,
                 preparedParallelism);
+    }
+
+    public static RequirementPlan withOutputSimulation(int requirementIndex, int maxParallelism,
+                                                       List<CapabilityOperation> operations,
+                                                       @Nullable ExecutionStatus failure,
+                                                       @Nullable OutputSimulation outputSimulation) {
+        return new RequirementPlan(requirementIndex, maxParallelism, operations, failure, outputSimulation,
+                null, null, 0);
     }
 
     public RequirementPlan {
@@ -85,17 +87,18 @@ public record RequirementPlan(
                 for (CapabilityOperation operation : operations) {
                     CapabilityOperation scaled = operation.forParallelism(parallelism);
                     if (scaled == null) {
-                        return new RequirementPlan(requirementIndex, parallelism, List.of(), unsafeOperationFailure);
+                        return withOutputSimulation(requirementIndex, parallelism, List.of(), unsafeOperationFailure,
+                                outputSimulation);
                     }
                     adapted.add(scaled);
                 }
-                return new RequirementPlan(requirementIndex, parallelism, adapted, failure, outputSimulation);
+                return withOutputSimulation(requirementIndex, parallelism, adapted, failure, outputSimulation);
             }
-            return new RequirementPlan(requirementIndex, parallelism, operations, failure, outputSimulation);
+            return withOutputSimulation(requirementIndex, parallelism, operations, failure, outputSimulation);
         }
         OperationPlan result = operationFactory.create(parallelism, reservations);
         if (result == null) throw new IllegalStateException("Requirement operation factory returned null");
-        return new RequirementPlan(requirementIndex, parallelism, result.operations(), result.failure(),
+        return withOutputSimulation(requirementIndex, parallelism, result.operations(), result.failure(),
                 result.outputSimulation());
     }
 

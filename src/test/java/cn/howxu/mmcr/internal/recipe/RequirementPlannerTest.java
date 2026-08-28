@@ -67,6 +67,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies generic requirement planning without concrete port knowledge.
@@ -349,6 +350,38 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void reports_the_actual_zero_parallelism_requirement_and_original_index() {
+        RequirementType<TestRequirement> firstType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "positive_parallelism_requirement"));
+        RequirementType<TestRequirement> blockedType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "zero_parallelism_requirement"));
+        RequirementHandlerRegistry.register(new SimpleHandler(firstType));
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return blockedType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), 0, List.of(), null);
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(firstType, RecipeModifier.IOType.INPUT),
+                        new TestRequirement(blockedType, RecipeModifier.IOType.INPUT)),
+                List.of(new TestCapability(firstType.id(), IOType.INPUT, 1)),
+                new PlanningContext(1, 0), List.of(4, 11));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failureRequirementIndex()).isEqualTo(11);
+        assertThat(result.failure().id()).isEqualTo(blockedType.id());
+        assertThat(result.failure().source()).isEqualTo(blockedType.id());
+    }
+
+    @Test
     void built_in_energy_handler_prepares_a_real_transactional_storage_operation() {
         LongValueStorage storage = new LongValueStorage(100, 100, null);
         storage.setAmount(10);
@@ -462,6 +495,8 @@ class RequirementPlannerTest {
                     assertThat(simulation.accepted()).isEqualTo(4L);
                     assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
                 });
+        assertThatThrownBy(() -> result.outputSimulations().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
         assertThat(storage.amount(0)).isZero();
     }
 
@@ -563,6 +598,12 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0, true));
 
         assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(1_000L);
+                    assertThat(simulation.accepted()).isEqualTo(250L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
+                });
         assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
@@ -602,8 +643,20 @@ class RequirementPlannerTest {
 
         assertThat(itemResult.successful()).isFalse();
         assertThat(itemResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(itemResult.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(1L);
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
         assertThat(fluidResult.successful()).isFalse();
         assertThat(fluidResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(fluidResult.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(1_000L);
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
     }
 
     @Test
@@ -618,6 +671,50 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isFalse();
         assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(4L);
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
+    }
+
+    @Test
+    void output_energy_simulation_reports_full_fit() {
+        LongValueStorage storage = new LongValueStorage(100L, 100L, null);
+        storage.setAmount(40L);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 60)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(60L);
+                    assertThat(simulation.accepted()).isEqualTo(60L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
+                });
+    }
+
+    @Test
+    void partial_output_energy_simulation_reports_requested_accepted_and_fit() {
+        LongValueStorage storage = new LongValueStorage(100L, 100L, null);
+        storage.setAmount(50L);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 60)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0, true));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(60L);
+                    assertThat(simulation.accepted()).isEqualTo(50L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
+                });
     }
 
     @Test
@@ -901,6 +998,13 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().outputSimulations()).hasSize(2);
+        assertThat(result.plan().outputSimulations().get(0).requested()).isEqualTo(2L);
+        assertThat(result.plan().outputSimulations().get(0).accepted()).isEqualTo(2L);
+        assertThat(result.plan().outputSimulations().get(0).fit()).isEqualTo(OutputFit.FULL);
+        assertThat(result.plan().outputSimulations().get(1).requested()).isEqualTo(1_000L);
+        assertThat(result.plan().outputSimulations().get(1).accepted()).isEqualTo(1_000L);
+        assertThat(result.plan().outputSimulations().get(1).fit()).isEqualTo(OutputFit.FULL);
         assertThat(result.plan().commit()).isTrue();
         assertThat(port.itemStorage().amount(0)).isEqualTo(2L);
         assertThat(port.fluidStorage().amount(0)).isEqualTo(1_000L);

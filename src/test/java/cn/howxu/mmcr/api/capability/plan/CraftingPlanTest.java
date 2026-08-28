@@ -144,6 +144,42 @@ class CraftingPlanTest {
         assertThat(resolved.maxParallelism()).isEqualTo(3);
     }
 
+    @Test
+    void keeps_the_legacy_null_factory_constructor_unambiguous() {
+        RequirementPlan plan = new RequirementPlan(0, 1, List.of(), null, null);
+
+        assertThat(plan.operationFactory()).isNull();
+        assertThat(plan.outputSimulation()).isNull();
+    }
+
+    @Test
+    void preserves_output_simulation_when_direct_operation_cannot_scale() {
+        CapabilityOperation operation = transaction -> CapabilityResult.successful();
+        OutputSimulation simulation = new OutputSimulation(4L, 2L, OutputFit.PARTIAL);
+        ExecutionStatus unsafeFailure = new ExecutionStatus(
+                Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),
+                StatusSeverity.FAILURE,
+                Identifier.fromNamespaceAndPath("mmcr_test", "test"),
+                java.util.Map.of());
+
+        RequirementPlan resolved = RequirementPlan.withOutputSimulation(0, 2, List.of(operation), null, simulation)
+                .preparedAt(2)
+                .materialize(1, new PlanningReservations(), unsafeFailure);
+
+        assertThat(resolved.failure()).isSameAs(unsafeFailure);
+        assertThat(resolved.outputSimulation()).isSameAs(simulation);
+    }
+
+    @Test
+    void returns_immutable_output_simulation_collections() {
+        OutputSimulation simulation = new OutputSimulation(1L, 1L, OutputFit.FULL);
+        CraftingPlan plan = new CraftingPlan(
+                List.of(RequirementPlan.withOutputSimulation(0, 1, List.of(), null, simulation)), 1);
+
+        assertThatThrownBy(() -> plan.outputSimulations().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
     private static CraftingPlan plan(CapabilityOperation... operations) {
         return new CraftingPlan(List.of(new RequirementPlan(0, 1, List.of(operations), null)), 1);
     }
