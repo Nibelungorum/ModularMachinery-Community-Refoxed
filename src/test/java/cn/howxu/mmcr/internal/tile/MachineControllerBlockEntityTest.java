@@ -17,6 +17,9 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
+import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
+import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -34,6 +37,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -148,6 +152,19 @@ class MachineControllerBlockEntityTest {
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @Test
+    void data_storage_reuses_the_dynamic_casing_model() {
+        var definition = RuntimeMachineModelRegistry.dynamicBlockState(ModBlocks.DATA_STORAGE.get());
+        assertThat(definition.id()).isEqualTo(MMCR.id("data_storage"));
+        assertThat(definition.variants()).singleElement()
+                .satisfies(variant -> assertThat(variant.modelId()).isEqualTo(DynamicOverlayModelLoader.PORT_ID));
+
+        var itemDescription = DynamicOverlayItemModel.describeItem(ModItems.ITEMS.get("data_storage").get());
+        assertThat(itemDescription.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
+        assertThat(itemDescription.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(itemDescription.overlayTexture()).isEqualTo(MMCR.id("block/basic_casing"));
     }
 
     @Test
@@ -603,6 +620,7 @@ class MachineControllerBlockEntityTest {
         controller.handleStructureBlockChanged(controllerPos.offset(-1, 0, 0));
         assertThat(controller.structureSnapshot().version()).isGreaterThan(formedVersion);
         assertThat(controller.structureSnapshot().dirty()).isTrue();
+        assertThat(controller.structureWorkSnapshotForTesting().componentRefreshRequired()).isTrue();
     }
 
     @Test

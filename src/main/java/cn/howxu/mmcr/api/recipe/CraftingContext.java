@@ -7,7 +7,11 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +51,55 @@ public final class CraftingContext {
         return plan(recipe, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of());
     }
 
+    public PlanningResult planOutputs(List<MachineOutput> outputs, int parallelism) {
+        if (outputs == null) throw new IllegalArgumentException("outputs must not be null");
+        return plan(outputRequirements(outputs), parallelism, true, indexes(outputs.size()));
+    }
+
+    public PlanningResult planOutputs(MachineRecipe recipe, List<MachineOutput> outputs, int parallelism) {
+        if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
+        List<MachineRequirement> requirements = outputRequirements(outputs);
+        for (MachineRequirement requirement : recipe.runtimeRequirements(modifiers)) {
+            if (requirement.io() == RecipeModifier.IOType.OUTPUT
+                    && !(requirement instanceof ItemRequirement) && !(requirement instanceof FluidRequirement)) {
+                requirements.add(requirement);
+            }
+        }
+        return plan(requirements, parallelism, recipe.allowPartialOutputs(), indexes(requirements.size()));
+    }
+
+    private static List<MachineRequirement> outputRequirements(List<MachineOutput> outputs) {
+        if (outputs == null) throw new IllegalArgumentException("outputs must not be null");
+        List<MachineRequirement> requirements = new ArrayList<>(outputs.size());
+        for (MachineOutput output : outputs) {
+            if (output == null || !Float.isFinite(output.chance())) {
+                throw new IllegalArgumentException("outputs must contain finite, non-null values");
+            }
+            if (output instanceof MachineOutput.ItemOutput item) {
+                ItemStack stack = item.stack();
+                if (stack == null || stack.isEmpty() || stack.getCount() < 0) {
+                    throw new IllegalArgumentException("item outputs must contain a non-empty stack");
+                }
+                requirements.add(MachineRequirement.itemOutput(stack, item.chance()));
+            } else if (output instanceof MachineOutput.FluidOutput fluid) {
+                FluidStack stack = fluid.stack();
+                if (stack == null || stack.isEmpty() || stack.getAmount() < 0) {
+                    throw new IllegalArgumentException("fluid outputs must contain a non-empty stack");
+                }
+                requirements.add(MachineRequirement.fluidOutput(stack, fluid.chance()));
+            } else {
+                throw new IllegalArgumentException("Unknown machine output: " + output);
+            }
+        }
+        return requirements;
+    }
+
+    private static List<Integer> indexes(int size) {
+        List<Integer> indexes = new ArrayList<>(size);
+        for (int index = 0; index < size; index++) indexes.add(index);
+        return indexes;
+    }
+
     public CraftingPlan planStart(MachineRecipe recipe, int requestedParallelism) {
         PlanningResult result = plan(recipe, requestedParallelism, null, Set.of(), Set.of());
         return result.successful() ? result.plan() : null;
@@ -84,9 +137,13 @@ public final class CraftingContext {
             requirements.add(requirement);
             requirementIndexes.add(index);
         }
+        return plan(requirements, parallelism,
+                direction != RecipeModifier.IOType.INPUT && recipe.allowPartialOutputs(), requirementIndexes);
+    }
+
+    private PlanningResult plan(List<MachineRequirement> requirements, int parallelism, boolean allowPartialOutputs,
+                                List<Integer> requirementIndexes) {
         return new RequirementPlanner().plan(requirements, capabilities,
-                new PlanningContext(parallelism, 0,
-                        direction != RecipeModifier.IOType.INPUT && recipe.allowPartialOutputs()),
-                requirementIndexes);
+                new PlanningContext(parallelism, 0, allowPartialOutputs), requirementIndexes);
     }
 }

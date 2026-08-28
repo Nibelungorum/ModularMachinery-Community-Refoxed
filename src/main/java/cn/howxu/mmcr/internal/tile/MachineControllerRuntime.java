@@ -1,12 +1,14 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -45,6 +47,7 @@ public final class MachineControllerRuntime {
     private final CraftingRuntime craftingRuntime;
     private final FactoryRuntime factoryRuntime;
     private final ControllerScreenTextState screenText = new ControllerScreenTextState();
+    private Map<BlockPos, DataStorage> dataStorages = Map.of();
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
     private ControllerRuntimeSnapshot publishedSnapshot;
     private @Nullable ControllerRuntimeSnapshot workingSnapshot;
@@ -111,6 +114,17 @@ public final class MachineControllerRuntime {
             throw new IllegalStateException("Controller runtime context requires a configured machine");
         }
         return new ControllerRuntimeContext(configuredMachine.registryName(), controller.getBlockPos(), screenText);
+    }
+
+    public MachineBehaviorContext behaviorContext() {
+        StructureSnapshot snapshot = structure.snapshot();
+        Machine machine = snapshot.machine() == null ? snapshot.configuredMachine() : snapshot.machine();
+        if (machine == null) throw new IllegalStateException("Machine behavior context requires a configured machine");
+        net.minecraft.world.level.Level currentLevel = controller.getLevel();
+        ServerLevel level = currentLevel instanceof ServerLevel serverLevel ? serverLevel : null;
+        long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
+        return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
+                screenText, dataStorages);
     }
 
     public void clearOperationText() {
@@ -399,6 +413,7 @@ public final class MachineControllerRuntime {
     }
 
     void resetStructure(@Nullable Machine configuredMachine, boolean forceVersion) {
+        dataStorages = Map.of();
         structure.reset(configuredMachine, forceVersion);
         publishSnapshot();
     }
@@ -427,6 +442,14 @@ public final class MachineControllerRuntime {
         components.replaceLevels(levels);
         components.replaceLinkedPortPositions(linkedPositions);
         publishSnapshot();
+    }
+
+    void publishDataStorages(Map<BlockPos, DataStorage> nextDataStorages) {
+        dataStorages = Map.copyOf(nextDataStorages == null ? Map.of() : nextDataStorages);
+    }
+
+    Set<BlockPos> dataStoragePositions() {
+        return dataStorages.keySet();
     }
 
     void publishModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {

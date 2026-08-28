@@ -14,6 +14,11 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
@@ -68,6 +73,21 @@ public final class CraftingRuntime {
         if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
             return fail("module_connection");
         }
+        RecipeBehavior behavior = recipeBehavior(runtime);
+        if (behavior == null) return fail("recipe_behavior");
+        RecipeStartContext startContext = new RecipeStartContext(recipe, requestedParallelism,
+                Math.max(1, Math.min(requestedParallelism, runtime.maxParallelism())));
+        try {
+            behavior.beforeStart().accept(startContext);
+        } catch (RuntimeException exception) {
+            logCallbackFailure("beforeStart", runtime, recipe, exception);
+            return fail("behavior_before_start");
+        }
+        if (startContext.cancelled()) {
+            failure = null;
+            status = CraftingStatus.IDLE;
+            return status;
+        }
         CraftingContext context = context(runtime);
         PlanningResult result = context.planStartResult(recipe, requestedParallelism);
         CraftingPlan plan = result.plan();
@@ -97,6 +117,14 @@ public final class CraftingRuntime {
         if (activeRecipe.isFinishPending()) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        RecipeBehavior behavior = recipeBehavior(runtime);
+        if (behavior == null) return waiting(failure("recipe_behavior"));
+        try {
+            behavior.recipeTick().accept(new RecipeTickContext(activeRecipe.getRecipe(), activeRecipe.getTick(),
+                    activeRecipe.getTotalTick(), activeRecipe.getParallelism()));
+        } catch (RuntimeException exception) {
+            logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
+        }
         CraftingContext context = context(runtime);
         PlanningResult result = context.planInputs(activeRecipe.getRecipe(), activeRecipe.getParallelism(),
                 consumedAtStart, retainedInputs);
@@ -125,8 +153,28 @@ public final class CraftingRuntime {
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        RecipeBehavior behavior = recipeBehavior(runtime);
+        if (behavior == null) return finishBlocked(failure("recipe_behavior"));
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
+        List<cn.howxu.mmcr.api.recipe.MachineOutput> outputs = activeRecipe.getRecipe()
+                .runtimeMachineOutputs(contextModifiers(runtime));
+        RecipeFinishContext finishContext = new RecipeFinishContext(activeRecipe.getRecipe(),
+                activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(), outputs);
+        try {
+            behavior.beforeFinish().accept(finishContext);
+        } catch (RuntimeException exception) {
+            logCallbackFailure("beforeFinish", runtime, activeRecipe.getRecipe(), exception);
+            return finishBlocked(failure("behavior_before_finish"));
+        }
+        if (finishContext.cancelled()) return finishBlocked(failure("behavior_before_finish_cancelled"));
+        PlanningResult result;
+        try {
+            result = context.planOutputs(activeRecipe.getRecipe(), finishContext.outputs(),
+                    activeRecipe.getParallelism());
+        } catch (IllegalArgumentException exception) {
+            logCallbackFailure("beforeFinish.output_validation", runtime, activeRecipe.getRecipe(), exception);
+            return finishBlocked(failure("invalid_outputs"));
+        }
         finishPlan = result.plan();
         if (!result.successful() || finishPlan == null) {
             activeRecipe.markFinishBlocked(currentGameTime());
@@ -356,6 +404,7 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus finishBlocked(@Nullable ExecutionStatus nextFailure) {
+        if (activeRecipe != null) activeRecipe.markFinishBlocked(currentGameTime());
         failure = nextFailure == null ? failure("finish") : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
         return status;
@@ -386,6 +435,19 @@ public final class CraftingRuntime {
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
         return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime));
+    }
+
+    private RecipeBehavior recipeBehavior(ControllerRuntimeSnapshot runtime) {
+        MachineBehavior behavior = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine() == null ? null : runtime.structure().configuredMachine().behavior()
+                : runtime.structure().machine().behavior();
+        return behavior instanceof RecipeBehavior recipeBehavior ? recipeBehavior : null;
+    }
+
+    private void logCallbackFailure(String phase, ControllerRuntimeSnapshot runtime, MachineRecipe recipe,
+                                    RuntimeException exception) {
+        MMCR.LOG.warn("Machine behavior callback failed: phase={} machine={} recipe={} controller={}", phase,
+                runtime.machineId(), recipe.id(), controller.getBlockPos(), exception);
     }
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {

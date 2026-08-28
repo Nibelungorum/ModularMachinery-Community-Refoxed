@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -122,6 +124,7 @@ class CompiledMachinePatternTest {
         Identifier id = Identifier.parse("mmcr:compiled_stage");
         BlockArray first = pattern();
         BlockArray second = new BlockArray(Map.of(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
+        MachineBehavior behavior = TickBehavior.builder().build();
         Machine machine = new DynamicMachine(id, "Compiled Stage", first);
         machine = new Machine() {
             @Override public Identifier registryName() { return machineId(); }
@@ -133,6 +136,7 @@ class CompiledMachinePatternTest {
                         new MachineStructureStage(2, second, PortRequirementSpec.none(),
                                 PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
             }
+            @Override public MachineBehavior behavior() { return behavior; }
             private Identifier machineId() { return id; }
         };
 
@@ -142,6 +146,7 @@ class CompiledMachinePatternTest {
         assertThat(stages.get(0).boundingBox(Direction.SOUTH).maxX()).isEqualTo(1);
         assertThat(stages.get(1).boundingBox(Direction.SOUTH).maxX()).isEqualTo(2);
         assertThat(stages.get(1).machine().pattern()).isEqualTo(second);
+        assertThat(stages.get(1).machine().behavior()).isSameAs(behavior);
     }
 
     @Test

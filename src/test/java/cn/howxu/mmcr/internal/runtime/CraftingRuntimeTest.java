@@ -1,7 +1,17 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -9,6 +19,8 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -44,6 +56,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.lang.reflect.Field;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,6 +97,50 @@ class CraftingRuntimeTest {
         ItemStack result = output.getItemStackHandler(null).getStackInSlot(0);
         assertThat(result.getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(result.getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void cancelled_start_stays_idle_without_failure_or_input_consumption() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> context.cancel()).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe("runtime_cancelled_start", 20,
+                List.of(input(Items.IRON_INGOT, 1))), 1).getStatus())
+                .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNull();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void finish_veto_uses_the_retry_gate() {
+        AtomicInteger callbacks = new AtomicInteger();
+        assertFinishRetryGate(RecipeBehavior.builder().beforeFinish(context -> {
+            callbacks.incrementAndGet();
+            context.cancel();
+        }).build(), callbacks);
+    }
+
+    @Test
+    void finish_callback_exception_uses_the_retry_gate() {
+        AtomicInteger callbacks = new AtomicInteger();
+        assertFinishRetryGate(RecipeBehavior.builder().beforeFinish(context -> {
+            callbacks.incrementAndGet();
+            throw new IllegalStateException("expected test callback failure");
+        }).build(), callbacks);
+    }
+
+    @Test
+    void invalid_finish_output_uses_the_retry_gate() {
+        AtomicInteger callbacks = new AtomicInteger();
+        assertFinishRetryGate(RecipeBehavior.builder().beforeFinish(context -> {
+            callbacks.incrementAndGet();
+            context.setOutputs(List.of(new MachineOutput.ItemOutput(ItemStack.EMPTY, 1F)));
+        }).build(), callbacks);
     }
 
     @Test
@@ -580,6 +638,33 @@ class CraftingRuntimeTest {
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {
         return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), duration,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), new java.util.ArrayList<>(requirements));
+    }
+
+    private static void assertFinishRetryGate(MachineBehavior behavior, AtomicInteger callbacks) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.setMachine(machine(controller.machineId(), behavior));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe("runtime_finish_callback_retry", 1, List.of()), 1).isCrafting()).isTrue();
+        runtime.tick();
+        runtime.finish();
+        assertThat(callbacks).hasValue(1);
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+
+        runtime.finish();
+        assertThat(callbacks).hasValue(1);
+
+        LevelStub.setGameTime(controller.getLevel(), 10);
+        runtime.finish();
+        assertThat(callbacks).hasValue(2);
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+    }
+
+    private static Machine machine(net.minecraft.resources.Identifier id, MachineBehavior behavior) {
+        return new DynamicMachine(id, id.toString(), new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL,
+                Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), behavior);
     }
 
     private static ItemRequirement input(net.minecraft.world.item.Item item, int count) {

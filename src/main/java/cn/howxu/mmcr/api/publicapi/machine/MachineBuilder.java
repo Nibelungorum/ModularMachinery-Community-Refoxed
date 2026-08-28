@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 /**
@@ -35,6 +36,7 @@ public final class MachineBuilder {
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
     private Identifier runningSoundId;
     private Identifier finishSoundId;
+    private MachineBehavior behavior = RecipeBehavior.defaults();
 
     private MachineBuilder(Identifier id) {
         this.id = Objects.requireNonNull(id, "id");
@@ -61,6 +63,20 @@ public final class MachineBuilder {
 
     public MachineBuilder factory(UnaryOperator<FactorySpec.Builder> builder) {
         factory = Objects.requireNonNull(builder, "builder").apply(FactorySpec.builder()).build();
+        return this;
+    }
+
+    public MachineBuilder recipeBehavior(UnaryOperator<RecipeBehavior.Builder> builder) {
+        RecipeBehavior.Builder behaviorBuilder = RecipeBehavior.builder();
+        behavior = Objects.requireNonNull(Objects.requireNonNull(builder, "builder").apply(behaviorBuilder),
+                "recipe behavior").build();
+        return this;
+    }
+
+    public MachineBuilder tickBehavior(Consumer<TickBehavior.Builder> builder) {
+        TickBehavior.Builder behaviorBuilder = TickBehavior.builder();
+        Objects.requireNonNull(builder, "builder").accept(behaviorBuilder);
+        behavior = behaviorBuilder.build();
         return this;
     }
 
@@ -143,6 +159,6 @@ public final class MachineBuilder {
         return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
                 acceptedModuleIds, maxParallelism, parallelizable, failureAction, allowModifiers,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
-                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null);
+                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, behavior);
     }
 }

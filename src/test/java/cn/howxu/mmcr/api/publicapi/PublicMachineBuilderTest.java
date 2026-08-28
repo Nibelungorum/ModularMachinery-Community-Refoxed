@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
@@ -39,6 +40,7 @@ class PublicMachineBuilderTest {
 
         assertThat(definition.id()).isEqualTo(MMCR.id("base_machine"));
         assertThat(definition.displayNameKey()).isEqualTo("machine.mmcr.base_machine");
+        assertThat(definition.behavior().kind()).isEqualTo(MachineBehavior.Kind.RECIPE);
         assertThat(MachineBuilder.class.getDeclaredMethods()).noneMatch(method ->
                 method.getName().equals("pattern") || method.getName().equals("stage")
                         || method.getName().equals("expandableStructure"));

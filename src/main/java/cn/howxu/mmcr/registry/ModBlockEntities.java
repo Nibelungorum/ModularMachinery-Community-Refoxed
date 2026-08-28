@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -37,10 +38,12 @@ public final class ModBlockEntities {
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
         registerSmartInterface();
+        registerDataStorage();
         registerModuleCoupler();
     }
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> SMART_INTERFACE = BES.get("smart_interface");
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> DATA_STORAGE = BES.get("data_storage");
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> MODULE_BRIDGE = BES.get("module_bridge");
 
     private static void registerMachineController(Identifier machineId) {
@@ -71,6 +74,11 @@ public final class ModBlockEntities {
     private static void registerSmartInterface() {
         BES.put("smart_interface", register("smart_interface", () -> new BlockEntityType<>(
                 SmartInterfaceBlockEntity::new, ModBlocks.SMART_INTERFACE.get())));
+    }
+
+    private static void registerDataStorage() {
+        BES.put("data_storage", register("data_storage", () -> new BlockEntityType<>(
+                DataStorageBlockEntity::new, ModBlocks.DATA_STORAGE.get())));
     }
 
     private static void registerModuleCoupler() {

@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -35,6 +36,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSink;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.DataStorageBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -56,6 +58,10 @@ import cn.howxu.mmcr.util.IOType;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
@@ -207,6 +213,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ComponentRuntime componentRuntime() {
         return runtime.componentRuntime();
+    }
+
+    public MachineBehaviorContext behaviorContext() {
+        return runtime.behaviorContext();
     }
 
     int snapshotBuildCountForTesting() {
@@ -883,10 +893,29 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     if (runtime.craftingRuntime().active()
                             || (!factoryController && initialFactoryActiveLaneCount > 0)) setActiveState(true);
                     if (tickState.structure().formed() && tickState.structure().structureAreaLoaded()) {
-                        if (factoryController) {
-                            factoryTickResult = tickFactoryRecipes();
+                        Machine machine = tickState.structure().machine() == null
+                                ? tickState.structure().configuredMachine() : tickState.structure().machine();
+                        MachineBehavior behavior = machine == null ? null : machine.behavior();
+                        if (behavior instanceof TickBehavior tickBehavior) {
+                            setActiveState(true);
+                            try {
+                                tickBehavior.serverTick().accept(runtime.behaviorContext());
+                            } catch (RuntimeException exception) {
+                                logBehaviorCallbackFailure("serverTick", tickState, null, exception);
+                            }
                         } else {
-                            tickSingleActiveRecipe();
+                            boolean idleBefore = !hasActiveOperation();
+                            if (behavior instanceof RecipeBehavior recipeBehavior && idleBefore) {
+                                invokeIdleCallback("idleStart", recipeBehavior.idleStart(), tickState);
+                            }
+                            if (factoryController) {
+                                factoryTickResult = tickFactoryRecipes();
+                            } else {
+                                tickSingleActiveRecipe();
+                            }
+                            if (behavior instanceof RecipeBehavior recipeBehavior && !hasActiveOperation()) {
+                                invokeIdleCallback("idleEnd", recipeBehavior.idleEnd(), tickState);
+                            }
                         }
                     }
                 }
@@ -929,6 +958,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (currentRuntimeSnapshot().structure().configuredMachine() != null) {
             ControllerScreenTextRegistry.apply(runtime.runtimeContext());
         }
+    }
+
+    private void invokeIdleCallback(String phase, MachineBehavior.MachineCallback callback,
+                                    ControllerRuntimeSnapshot snapshot) {
+        try {
+            callback.accept(runtime.behaviorContext());
+        } catch (RuntimeException exception) {
+            logBehaviorCallbackFailure(phase, snapshot, null, exception);
+        }
+    }
+
+    private void logBehaviorCallbackFailure(String phase, ControllerRuntimeSnapshot snapshot,
+                                             @org.jetbrains.annotations.Nullable MachineRecipe recipe,
+                                             RuntimeException exception) {
+        MMCR.LOG.warn("Machine behavior callback failed: phase={} machine={} recipe={} controller={}", phase,
+                snapshot.machineId(), recipe == null ? "" : recipe.id(), getBlockPos(), exception);
     }
 
     public boolean startBuildTask(MultiblockAssemblyService.BuildTask task, ServerPlayer owner) {
@@ -2069,19 +2114,34 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                   Map<Identifier, MachineLevel> foundLevels) {
         List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
         for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
+        List<DataStorageBlockEntity> previousDataStorages = dataStorageComponents(previousStructure);
         List<SmartInterfaceBlockEntity> previousSmartInterfaces = runtime.components().stream()
                 .map(ProcessingComponent::getContainer)
                 .filter(SmartInterfaceBlockEntity.class::isInstance)
                 .map(SmartInterfaceBlockEntity.class::cast)
                 .toList();
         if (level == null || matchedMachine == null || matchedPattern == null) {
+            new DataStorageBindingCoordinator().unbind(this, previousDataStorages);
+            runtime.publishDataStorages(Map.of());
             runtime.publishComponentState(List.of(), foundModifiers, foundLevels, Set.of());
             return;
         }
 
         unlinkLinkedPorts(previousStructure, previousLinkedPortPositions);
+        List<DataStorageBlockEntity> dataStorages = dataStorageComponents(matchedPattern, compiledPattern, facing);
+        DataStorageBindingCoordinator dataStorageCoordinator = new DataStorageBindingCoordinator();
+        dataStorageCoordinator.unbindMissing(this, previousDataStorages, dataStorages);
+        dataStorageCoordinator.reconcile(this, dataStorages);
+        Map<BlockPos, DataStorage> boundDataStorages = new LinkedHashMap<>();
+        for (DataStorageBlockEntity storage : dataStorages) {
+            if (getBlockPos().equals(storage.controllerPosition().orElse(null))) {
+                boundDataStorages.put(storage.getBlockPos().immutable(), storage.storage());
+            }
+        }
+        runtime.publishDataStorages(boundDataStorages);
         List<ProcessingComponent> nextComponents = new ArrayList<>();
         Set<BlockPos> nextLinkedPortPositions = new HashSet<>();
+        nextLinkedPortPositions.addAll(boundDataStorages.keySet());
 
         List<SmartInterfaceBlockEntity> smartInterfaces = new ArrayList<>();
         for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
@@ -2138,9 +2198,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean componentsNeedRefresh(BlockArray pattern, @Nullable CompiledMachinePattern compiled,
                                           Direction facing) {
         if (level == null) return false;
+        Set<BlockPos> nextDataStoragePositions = new HashSet<>();
         List<BlockEntity> nextContainers = new ArrayList<>();
-        for (BlockPos relativePos : componentPositions(pattern, compiled, facing)) {
+        for (BlockPos relativePos : pattern.pattern().keySet()) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
+            if (entity instanceof DataStorageBlockEntity) nextDataStoragePositions.add(entity.getBlockPos().immutable());
             if (entity instanceof SmartInterfaceBlockEntity
                     || entity instanceof ParallelControllerBlockEntity
                     || entity instanceof FactorySchedulerBlockEntity
@@ -2151,7 +2213,28 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<BlockEntity> currentContainers = runtime.components().stream()
                 .map(ProcessingComponent::getContainer)
                 .toList();
-        return !currentContainers.equals(nextContainers);
+        return !currentContainers.equals(nextContainers)
+                || !runtime.dataStoragePositions().equals(nextDataStoragePositions);
+    }
+
+    private List<DataStorageBlockEntity> dataStorageComponents(StructureSnapshot structure) {
+        if (level == null || structure.pattern() == null || structure.facing() == null) return List.of();
+        return dataStorageComponents(structure.pattern(), structure.compiledPattern(), structure.facing());
+    }
+
+    private List<DataStorageBlockEntity> dataStorageComponents(BlockArray pattern,
+                                                               @Nullable CompiledMachinePattern compiled,
+                                                               Direction facing) {
+        if (level == null || pattern == null || facing == null) return List.of();
+        List<DataStorageBlockEntity> storages = new ArrayList<>();
+        List<BlockPos> positions = hasCompiledFacing(compiled, facing)
+                ? compiled.componentPositions(facing) : new ArrayList<>(pattern.pattern().keySet());
+        for (BlockPos relativePos : positions) {
+            if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof DataStorageBlockEntity storage) {
+                storages.add(storage);
+            }
+        }
+        return storages;
     }
 
     private void unlinkLinkedPorts() {
@@ -2484,6 +2567,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean hadActive = runtime.craftingRuntime().active();
         releaseStructureClaims();
         unbindSmartInterfaces();
+        unbindDataStorages();
         unlinkLinkedPorts();
         stopFactoryController();
         for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
@@ -2523,6 +2607,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(this, smartInterfaces);
+    }
+
+    private void unbindDataStorages() {
+        DataStorageBindingCoordinator coordinator = new DataStorageBindingCoordinator();
+        coordinator.unbind(this, dataStorageComponents(runtimeSnapshot().structure()));
+        runtime.publishDataStorages(Map.of());
     }
 
     public void releaseStructureClaims() {

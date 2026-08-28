@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -40,7 +42,8 @@ public record MachineRegistration(
         @Nullable Identifier finishSoundId,
         MachineRole role,
         Set<Identifier> acceptedModuleIds,
-        BlockArray pattern
+        BlockArray pattern,
+        MachineBehavior behavior
 ) {
     public MachineRegistration {
         if (id == null) throw new IllegalArgumentException("id null");
@@ -59,6 +62,20 @@ public record MachineRegistration(
             throw new IllegalArgumentException("Only HOST machines may accept modules");
         }
         pattern = pattern == null ? new BlockArray(Map.of()) : pattern;
+        behavior = Objects.requireNonNull(behavior, "behavior");
+    }
+
+    public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
+            MachineAppearanceSpec appearance, Identifier recipeFamilyId, boolean allowModifiers,
+            boolean allowMultithreading, boolean allowParallelism, int maxParallelAmount,
+            boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
+            boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
+            @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
+            Set<Identifier> acceptedModuleIds, BlockArray pattern) {
+        this(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
+                allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure,
+                smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
+                finishSoundId, role, acceptedModuleIds, pattern, RecipeBehavior.defaults());
     }
 
     public static Builder builder(Identifier id) {
@@ -85,7 +102,7 @@ public record MachineRegistration(
     public MachineRegistration withPattern(BlockArray pattern) {
         return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
-                smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, pattern);
+                smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, pattern, behavior);
     }
 
     public static String defaultDisplayNameKey(Identifier id) {
@@ -128,6 +145,7 @@ public record MachineRegistration(
         private boolean module;
         private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
         private BlockArray pattern;
+        private MachineBehavior behavior = RecipeBehavior.defaults();
 
         private Builder(Identifier id) {
             this.id = id;
@@ -241,6 +259,11 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder behavior(MachineBehavior behavior) {
+            this.behavior = Objects.requireNonNull(behavior, "behavior");
+            return this;
+        }
+
         public MachineRegistration build() {
             if (host && module) {
                 throw new IllegalArgumentException("Machine roles are mutually exclusive");
@@ -248,7 +271,7 @@ public record MachineRegistration(
             MachineRole role = host ? MachineRole.HOST : module ? MachineRole.MODULE : MachineRole.NORMAL;
             return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
                     allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
-                    smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, pattern);
+                    smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, pattern, behavior);
         }
 
         private static Identifier soundId(SoundEvent sound) {

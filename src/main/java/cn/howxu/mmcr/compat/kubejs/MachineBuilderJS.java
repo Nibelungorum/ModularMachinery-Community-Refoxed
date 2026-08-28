@@ -9,6 +9,9 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -23,6 +26,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.Arrays;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient String displayNameKey;
@@ -54,6 +59,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
     private boolean shareSmartInterfaces;
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
+    private MachineBehavior behavior = RecipeBehavior.defaults();
+    private MachineBehavior.Kind behaviorKind;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -86,7 +93,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .maxParallelAmount(maxParallelAmount)
                 .runningSound(runningSoundId)
                 .finishSound(finishSoundId)
-                .shareSmartInterfaces(shareSmartInterfaces);
+                .shareSmartInterfaces(shareSmartInterfaces)
+                .behavior(behavior);
         if (expandableStructure) registration.expandableStructure();
         if (explicitRole && (role == MachineRole.NORMAL && (!acceptedModuleIds.isEmpty() || module)
                 || role == MachineRole.HOST && module)) {
@@ -100,6 +108,28 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
         return registration.build();
+    }
+
+    public MachineBuilderJS recipeBehavior(Consumer<MachineBehaviorBuilderJS> builder) {
+        if (behaviorKind == MachineBehavior.Kind.TICK) {
+            throw new IllegalStateException("Machine cannot configure both recipe and tick behavior");
+        }
+        MachineBehaviorBuilderJS behaviorBuilder = new MachineBehaviorBuilderJS(MachineBehavior.Kind.RECIPE);
+        Objects.requireNonNull(builder, "builder").accept(behaviorBuilder);
+        behavior = behaviorBuilder.build();
+        behaviorKind = MachineBehavior.Kind.RECIPE;
+        return this;
+    }
+
+    public MachineBuilderJS tickBehavior(Consumer<MachineBehaviorBuilderJS> builder) {
+        if (behaviorKind == MachineBehavior.Kind.RECIPE) {
+            throw new IllegalStateException("Machine cannot configure both recipe and tick behavior");
+        }
+        MachineBehaviorBuilderJS behaviorBuilder = new MachineBehaviorBuilderJS(MachineBehavior.Kind.TICK);
+        Objects.requireNonNull(builder, "builder").accept(behaviorBuilder);
+        behavior = behaviorBuilder.build();
+        behaviorKind = MachineBehavior.Kind.TICK;
+        return this;
     }
 
     public MachineBuilderJS recipeFamily(String recipeFamilyId) {
@@ -505,6 +535,16 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .maxParallelism(registration.maxParallelAmount())
                 .parallelizable(registration.allowParallelism())
                 .failureAction(RecipeFailureActions.getDefaultAction());
+        if (registration.behavior() instanceof TickBehavior tick) {
+            builder.tickBehavior(behavior -> behavior.serverTick(tick.serverTick()));
+        } else if (registration.behavior() instanceof RecipeBehavior recipe) {
+            builder.recipeBehavior(behavior -> behavior
+                    .idleStart(recipe.idleStart())
+                    .idleEnd(recipe.idleEnd())
+                    .beforeStart(recipe.beforeStart())
+                    .recipeTick(recipe.recipeTick())
+                    .beforeFinish(recipe.beforeFinish()));
+        }
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
         if (registration.role() == MachineRole.MODULE) {
             builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);

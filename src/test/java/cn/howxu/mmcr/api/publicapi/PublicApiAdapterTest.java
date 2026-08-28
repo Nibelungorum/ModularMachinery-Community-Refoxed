@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
@@ -116,6 +117,21 @@ class PublicApiAdapterTest {
         assertThat(registration.id()).isEqualTo(machineId);
         assertThat(registration.displayNameKey()).isEqualTo("machine.registered");
         assertThat(registration.pattern().get(net.minecraft.core.BlockPos.ZERO)).isNotNull();
+    }
+
+    @Test
+    void adapter_preserves_tick_behavior_in_registration_and_dynamic_machine() {
+        var machineId = MMCR.id("adapter_tick_machine");
+        var definition = MachineBuilder.machine(machineId)
+                .tickBehavior(builder -> builder.serverTick(context -> { }))
+                .build();
+        var structure = structureFor(machineId);
+
+        var registration = PublicMachineAdapter.toStartupRegistration(definition, structure);
+        var machine = PublicMachineAdapter.toDynamicMachine(definition, structure);
+
+        assertThat(registration.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
+        assertThat(machine.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
     }
 
     @Test

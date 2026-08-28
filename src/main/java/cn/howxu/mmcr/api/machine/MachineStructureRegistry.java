@@ -114,7 +114,9 @@ public final class MachineStructureRegistry {
                 java.util.List.of(),
                 registration.role(),
                 registration.acceptedModuleIds(),
-                stages);
+                stages,
+                RecipeFailureActions.getDefaultAction(),
+                registration.behavior());
     }
 
     public static void validateDynamicRoles(Map<Identifier, MachineStructureDefinition> structures) {

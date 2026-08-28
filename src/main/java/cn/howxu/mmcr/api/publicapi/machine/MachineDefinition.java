@@ -35,7 +35,8 @@ public record MachineDefinition(
         List<SmartInterfaceModifier> smartInterfaceModifiers,
         Identifier runningSoundId,
         Identifier finishSoundId,
-        BlockArray pattern) {
+        BlockArray pattern,
+        MachineBehavior behavior) {
 
     public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
@@ -43,7 +44,22 @@ public record MachineDefinition(
             RecipeFailureActions failureAction) {
         this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 maxParallelism, parallelizable, failureAction, false, false, 1, false,
-                java.util.Map.of(), false, List.of(), null, null, new BlockArray(java.util.Map.of()));
+                java.util.Map.of(), false, List.of(), null, null, new BlockArray(java.util.Map.of()),
+                RecipeBehavior.defaults());
+    }
+
+    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+            AppearanceSpec appearance, FactorySpec factory, MachineRole role,
+            Set<Identifier> acceptedModuleIds, int maxParallelism, boolean parallelizable,
+            RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
+            int maxParallelAmount, boolean expandableStructure,
+            java.util.Map<String, SmartInterfaceType> smartInterfaceTypes,
+            boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
+            Identifier runningSoundId, Identifier finishSoundId, BlockArray pattern) {
+        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
+                maxParallelism, parallelizable, failureAction, allowModifiers, allowMultithreading,
+                maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
+                smartInterfaceModifiers, runningSoundId, finishSoundId, pattern, RecipeBehavior.defaults());
     }
 
     public MachineDefinition {
@@ -62,6 +78,7 @@ public record MachineDefinition(
         smartInterfaceTypes = java.util.Map.copyOf(smartInterfaceTypes == null ? java.util.Map.of() : smartInterfaceTypes);
         smartInterfaceModifiers = List.copyOf(smartInterfaceModifiers == null ? List.of() : smartInterfaceModifiers);
         failureAction = failureAction == null ? RecipeFailureActions.getDefaultAction() : failureAction;
+        behavior = java.util.Objects.requireNonNull(behavior, "behavior");
         if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
             throw new IllegalStateException("Only HOST machines may accept modules");
         }

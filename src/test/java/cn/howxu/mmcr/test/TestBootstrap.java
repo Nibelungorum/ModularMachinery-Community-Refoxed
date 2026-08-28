@@ -20,6 +20,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
@@ -28,6 +29,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
@@ -119,6 +121,7 @@ public final class TestBootstrap {
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
         bindSmartInterface();
+        bindDataStorage();
         bindModuleBridge();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         registerTestEvents();
@@ -389,6 +392,26 @@ public final class TestBootstrap {
         blockEntities.freeze();
         blocks.freeze();
         bind(ModBlockEntities.MODULE_BRIDGE, blockEntityType);
+    }
+
+    private static void bindDataStorage() throws Exception {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
+        DataStorageBlock block = new DataStorageBlock(
+                () -> ModBlockEntities.DATA_STORAGE.get(), Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id("data_storage"), block);
+        bind(ModBlocks.DATA_STORAGE, block);
+        Item item = registerItem(ModItems.ITEMS.get("data_storage"));
+        bind(ModItems.ITEMS.get("data_storage"), item);
+        Item.BY_BLOCK.put(block, item);
+
+        BlockEntityType<?> blockEntityType = new BlockEntityType<>(DataStorageBlockEntity::new, block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("data_storage"), blockEntityType);
+        blockEntities.freeze();
+        blocks.freeze();
+        bind(ModBlockEntities.DATA_STORAGE, blockEntityType);
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {

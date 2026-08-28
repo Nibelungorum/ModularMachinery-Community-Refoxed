@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
@@ -101,6 +103,7 @@ public final class MachinePatternCompiler {
         @Override public List<MachineStructureStage> structureStages() { return List.of(stage); }
         @Override public MachineRole role() { return parent.role(); }
         @Override public Set<Identifier> acceptedModuleIds() { return parent.acceptedModuleIds(); }
+        @Override public MachineBehavior behavior() { return parent.behavior(); }
     }
 
     public static Map<Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
@@ -166,7 +169,8 @@ public final class MachinePatternCompiler {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
                     || of.block() instanceof ParallelControllerBlock
-                    || of.block() instanceof FactorySchedulerBlock;
+                    || of.block() instanceof FactorySchedulerBlock
+                    || of.block() instanceof DataStorageBlock;
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
         };

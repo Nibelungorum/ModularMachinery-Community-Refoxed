@@ -3,6 +3,8 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
@@ -42,6 +44,8 @@ public final class GameTestRegistry {
         });
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
+        register(event, "data_storage_pure_tick", 100,
+                helper -> new DataStorageGameTest().pureTickWritesBoundStorage(helper));
         register(event, "multi_factory_controller", 160,
                 helper -> new MultiFactoryControllerGameTest().formsWithTwoFactoryControllersAndReformsAfterRelease(helper));
         register(event, "e2e_recipe_run", 200, helper -> new E2ERecipeRunGameTest().ironCompressorRuns(helper));
@@ -115,11 +119,20 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
-        for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
+        for (String name : List.of("test_cube", "controller_tick", "data_storage_tick", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
             builder.displayNameKey("machine.mmcr_test." + name);
+            if (name.equals("data_storage_tick")) {
+                builder.tickBehavior(tick -> tick.serverTick(context -> {
+                    if (!context.isDue(20)) return;
+                    DataStorage storage = context.dataStorage(context.controllerPos().west()).orElse(null);
+                    if (storage == null) return;
+                    long ticks = storage.get("ticks").map(DataValue::longValue).orElse(0L);
+                    storage.set("ticks", DataValue.of(ticks + 1L));
+                }));
+            }
             if (name.equals("expandable_structure_vertical_roll")) {
                 builder.controller(controller -> controller.allowVerticalFacing());
             }
@@ -138,12 +151,20 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
-        for (String name : List.of("test_cube", "controller_tick", "iron_compressor",
+        for (String name : List.of("test_cube", "controller_tick", "data_storage_tick", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
             event.registerStructure(id, structure -> {
                 BlockPredicate casing = BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get());
                 BlockPredicate controller = BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get());
+                if (name.equals("data_storage_tick")) {
+                    structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("CX")
+                            .where('C', controller)
+                            .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.DATA_STORAGE.get()))
+                            .controller('C')));
+                    return structure;
+                }
                 if (name.contains("expandable")) {
                     structure.fullStructure(stage -> stage.pattern(pattern -> pattern
                             .layer("CX")

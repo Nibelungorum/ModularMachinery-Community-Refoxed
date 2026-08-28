@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -86,5 +88,9 @@ public interface Machine {
 
     default boolean isModule() {
         return role() == MachineRole.MODULE;
+    }
+
+    default MachineBehavior behavior() {
+        return RecipeBehavior.defaults();
     }
 }

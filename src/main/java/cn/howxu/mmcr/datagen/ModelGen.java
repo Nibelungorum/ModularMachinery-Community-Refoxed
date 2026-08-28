@@ -2,6 +2,7 @@ package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -86,7 +87,8 @@ public final class ModelGen extends ModelProvider {
     private static boolean shouldGenerateBlockModels(String name, Supplier<? extends Block> block) {
         return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && !"smart_interface".equals(name) && !"module_bridge".equals(name)
-                && !(block.get() instanceof MachineControllerBlock);
+                && !(block.get() instanceof MachineControllerBlock)
+                && !(block.get() instanceof DataStorageBlock);
     }
 
     @FunctionalInterface

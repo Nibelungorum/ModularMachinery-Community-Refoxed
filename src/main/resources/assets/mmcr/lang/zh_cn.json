@@ -1,5 +1,6 @@
 {
   "block.mmcr.basic_casing": "基础机器外壳",
+  "block.mmcr.data_storage": "数据存储",
   "block.mmcr.energy_input_hatch": "普通能量输入仓",
   "block.mmcr.energy_input_hatch_big": "大型能量输入仓",
   "block.mmcr.energy_input_hatch_huge": "巨型能量输入仓",
@@ -88,6 +89,7 @@
   "container.mmcr.energy_output_hatch_tiny": "微型能量输出仓",
   "container.mmcr.energy_output_hatch_ultimate": "究极能量输出仓",
   "container.mmcr.factory_controller": "工厂控制器",
+  "container.mmcr.data_storage": "数据存储",
   "container.mmcr.fluid_input_hatch": "普通流体输入仓",
   "container.mmcr.fluid_input_hatch_big": "大型流体输入仓",
   "container.mmcr.fluid_input_hatch_huge": "巨型流体输入仓",

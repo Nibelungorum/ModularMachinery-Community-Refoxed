@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -156,6 +157,14 @@ public final class RuntimeMachineModelRegistry {
                     DynamicOverlayBakedModel.Kind.PORT,
                     portDefinition(port),
                     DynamicOverlayItemModel.Description.port(port.kind()));
+        }
+        if (block instanceof DataStorageBlock) {
+            return new RuntimeBlockModelDefinition(
+                    block,
+                    blockName,
+                    DynamicOverlayBakedModel.Kind.PORT,
+                    portStyleDefinition(block),
+                    DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/basic_casing")));
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock
                 || block instanceof SmartInterfaceBlock || block instanceof ModuleCouplerBlock) {

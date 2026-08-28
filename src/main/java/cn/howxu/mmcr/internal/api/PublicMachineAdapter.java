@@ -120,7 +120,8 @@ public final class PublicMachineAdapter {
                 toInternalRole(definition.role()),
                 definition.acceptedModuleIds(),
                 toStructureStages(structure),
-                definition.failureAction());
+                definition.failureAction(),
+                definition.behavior());
     }
 
     public static MachineRegistration toRegistration(MachineDefinition definition) {
@@ -143,7 +144,8 @@ public final class PublicMachineAdapter {
                 .maxParallelAmount(definition.maxParallelism())
                 .allowModifiers(definition.allowModifiers())
                 .allowMultithreading(definition.allowMultithreading())
-                .shareSmartInterfaces(definition.shareSmartInterfaces());
+                .shareSmartInterfaces(definition.shareSmartInterfaces())
+                .behavior(definition.behavior());
         definition.smartInterfaceTypes().values().stream().map(PublicMachineAdapter::toInternalSmartInterfaceType)
                 .forEach(builder::smartInterfaceType);
         definition.smartInterfaceModifiers().stream().map(PublicMachineAdapter::toInternalSmartInterfaceModifier)
