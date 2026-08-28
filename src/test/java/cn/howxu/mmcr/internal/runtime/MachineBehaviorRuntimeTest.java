@@ -37,6 +37,7 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -92,12 +93,14 @@ class MachineBehaviorRuntimeTest {
                 .beforeStart(context -> {
                     if (starts.getAndIncrement() == 0) context.cancel();
                 })
-                .recipeTick(context -> ticks.incrementAndGet())
+                .recipeTick(context -> {
+                    ticks.incrementAndGet();
+                    context.machineContext().screenText().append(ControllerScreenTextScope.OPERATION,
+                            MMCR.id("recipe_tick_status"), Component.literal("running"));
+                })
                 .beforeFinish(context -> {
                     finishes.incrementAndGet();
                     context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
-                    controller.behaviorContext().screenText().append(ControllerScreenTextScope.OPERATION,
-                            MMCR.id("behavior_lifecycle"), net.minecraft.network.chat.Component.literal("finished"));
                 }).build());
         controller.setMachine(machine);
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
@@ -119,7 +122,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(finishes).hasValue(1);
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
         assertThat(((ControllerScreenTextState) controller.behaviorContext().screenText()).snapshot().lines())
-                .anyMatch(line -> line.text().getString().equals("finished"));
+                .anyMatch(line -> line.text().getString().equals("running"));
     }
 
     @Test

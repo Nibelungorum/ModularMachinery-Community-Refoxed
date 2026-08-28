@@ -1,7 +1,11 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -38,6 +42,8 @@ import java.util.ArrayList;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ControllerTickGameTest {
 
@@ -50,24 +56,40 @@ public class ControllerTickGameTest {
         helper.assertTrue(!MachineRegistry.getCompiledStages(machineId).isEmpty(),
                 "GameTest startup compiles the effective structure");
 
+        DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
+        AtomicBoolean writeText = new AtomicBoolean();
+        AtomicReference<String> callbackText = new AtomicReference<>("forming complete");
+        Machine tickMachine = new DynamicMachine(registeredMachine.registryName(), registeredMachine.displayNameKey(),
+                registeredMachine.pattern(), registeredMachine.controller(), registeredMachine.appearance(),
+                registeredMachine.portRequirements(), registeredMachine.portTierRequirements(),
+                registeredMachine.dynamicPatterns(), registeredMachine.modifierReplacements(),
+                registeredMachine.maxParallelism(), registeredMachine.parallelizable(), registeredMachine.hasFactory(),
+                registeredMachine.factoryThreadLimit(), registeredMachine.factoryThreads(), registeredMachine.role(),
+                registeredMachine.acceptedModuleIds(), registeredMachine.structureStages(),
+                registeredMachine.failureAction(), TickBehavior.builder().serverTick(context -> {
+                    if (writeText.get()) context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                            MMCR.id("controller_tick_status"), Component.literal(callbackText.get()));
+                }).build());
+
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
             helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
 
-        BlockPos controllerPos = new BlockPos(1, 1, 1);
-        helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
+        BlockPos controllerBlockPos = new BlockPos(1, 1, 1);
+        helper.setBlock(controllerBlockPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
 
-        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        var controller = helper.getBlockEntity(controllerBlockPos, MachineControllerBlockEntity.class);
+        BlockPos controllerPos = controller.getBlockPos();
+        ControllerScreenTextCache.clear(controllerPos);
+        controller.setMachine(tickMachine);
         controller.serverTick();
         helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
-        controller.setMachine(MachineRegistry.getMachine(machineId));
         ServerPlayer observer = observer(helper);
         observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
         helper.getLevel().players().add(observer);
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
             int payloadsBeforeFirst = screenTextPackets(observer);
-            runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
-                    MMCR.id("controller_tick_status"), Component.literal("forming complete"));
+            writeText.set(true);
             controller.serverTick();
             ControllerScreenTextSnapshot first = screenTextSnapshot(controller);
             helper.assertTrue(first.lines().size() == 1
@@ -75,10 +97,12 @@ public class ControllerTickGameTest {
                     "formed controller publishes controller-scoped text");
             helper.assertTrue(screenTextPackets(observer) == payloadsBeforeFirst + 1,
                     "formed controller sends the first text snapshot to the active menu observer");
+            applyLastScreenTextPacket(observer);
+            helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "forming complete"),
+                    "first controller text snapshot reaches the client cache");
 
             int payloadsBeforeUpdate = screenTextPackets(observer);
-            runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
-                    MMCR.id("controller_tick_status"), Component.literal("updated"));
+            callbackText.set("updated");
             controller.serverTick();
             ControllerScreenTextSnapshot updated = screenTextSnapshot(controller);
             helper.assertTrue(updated.lines().size() == 1
@@ -86,6 +110,9 @@ public class ControllerTickGameTest {
                     "controller-scoped keyed text replaces the previous line");
             helper.assertTrue(screenTextPackets(observer) == payloadsBeforeUpdate + 1,
                     "updated controller text sends one replacement snapshot");
+            applyLastScreenTextPacket(observer);
+            helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "updated"),
+                    "replacement controller text reaches the client cache");
             long unchangedRevision = updated.revision();
             int payloadCount = screenTextPackets(observer);
             controller.serverTick();
@@ -95,9 +122,11 @@ public class ControllerTickGameTest {
 
             int payloadsBeforeReset = screenTextPackets(observer);
             controller.invalidateFormedStructure();
+            applyLastScreenTextPacket(observer);
             helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty()
                             && screenTextPackets(observer) == payloadsBeforeReset + 1
-                            && lastScreenTextPacket(observer).lines().isEmpty(),
+                            && lastScreenTextPacket(observer).lines().isEmpty()
+                            && ControllerScreenTextCache.linesAt(controllerPos).isEmpty(),
                     "reset clears controller-scoped text and synchronizes the empty snapshot");
             helper.getLevel().players().remove(observer);
             helper.succeed();
@@ -174,6 +203,15 @@ public class ControllerTickGameTest {
                 .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
                 .reduce((first, second) -> second)
                 .orElseThrow();
+    }
+
+    private static void applyLastScreenTextPacket(ServerPlayer player) {
+        PktControllerScreenTextPayload payload = lastScreenTextPacket(player);
+        ControllerScreenTextCache.replace(payload.controllerPos(), payload.revision(), payload.lines());
+    }
+
+    private static boolean hasText(List<ControllerScreenTextSnapshot.Line> lines, String text) {
+        return lines.stream().anyMatch(line -> line.text().getString().equals(text));
     }
 
     /**
