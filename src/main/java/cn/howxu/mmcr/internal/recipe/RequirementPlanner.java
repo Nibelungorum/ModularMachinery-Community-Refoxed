@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.IntStream;
 
 /**
  * Resolves requirements through the handler registry and capability protocol.
@@ -30,8 +29,12 @@ public final class RequirementPlanner {
     public PlanningResult plan(List<MachineRequirement> requirements,
                                List<MachineCapability> capabilities,
                                PlanningContext context) {
+        List<Integer> requirementIndexes = new ArrayList<>(requirements == null ? 0 : requirements.size());
+        if (requirements != null) {
+            for (int index = 0; index < requirements.size(); index++) requirementIndexes.add(index);
+        }
         return plan(requirements, capabilities, context,
-                IntStream.range(0, requirements == null ? 0 : requirements.size()).boxed().toList());
+                requirementIndexes);
     }
 
     public PlanningResult plan(List<MachineRequirement> requirements,

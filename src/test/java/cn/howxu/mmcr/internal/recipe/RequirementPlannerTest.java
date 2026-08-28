@@ -59,6 +59,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -494,6 +495,20 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void output_energy_without_capacity_is_reported_as_output_capacity_failure() {
+        LongValueStorage storage = new LongValueStorage(100L, 100L, null);
+        storage.setAmount(100L);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+    }
+
+    @Test
     void chance_zero_outputs_are_explicit_no_ops_even_in_partial_mode() {
         var result = new RequirementPlanner().plan(
                 List.of(
@@ -533,6 +548,34 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(2);
+    }
+
+    @Test
+    void default_requirement_indexes_are_assigned_in_ascending_order() {
+        RequirementType<TestRequirement> indexedType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "ascending_requirement_indexes"));
+        List<Integer> indexes = new ArrayList<>();
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return indexedType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                indexes.add(context.requirementIndex());
+                return new RequirementPlan(context.requirementIndex(), 1, List.of(), null);
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(indexedType, RecipeModifier.IOType.INPUT),
+                        new TestRequirement(indexedType, RecipeModifier.IOType.INPUT)),
+                List.of(), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(indexes).containsExactly(0, 1);
     }
 
     @Test

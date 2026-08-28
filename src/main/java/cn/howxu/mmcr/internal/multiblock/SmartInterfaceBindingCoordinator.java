@@ -33,7 +33,7 @@ public final class SmartInterfaceBindingCoordinator {
 
     public void reconcile(MachineControllerBlockEntity controller, Collection<SmartInterfaceBlockEntity> interfaces) {
         BlockPos controllerPos = controller.getBlockPos();
-        StructureSnapshot structure = controller.structureSnapshot();
+        StructureSnapshot structure = controller.currentStructureSnapshot();
         Machine machine = structure.machine();
         if (machine == null) return;
         var controllerAppearance = machine.appearance().formedPortBaseTexture();

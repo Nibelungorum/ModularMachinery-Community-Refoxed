@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
@@ -63,6 +64,31 @@ class ComponentRuntimeTest {
         assertThat(runtime.components()).containsExactlyElementsOf(components);
         assertThat(runtime.capabilities()).isEmpty();
         assertThat(runtime.capabilityVersion()).isEqualTo(version);
+    }
+
+    @Test
+    void replacement_methods_report_only_effective_changes() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        ProcessingComponent component = new ProcessingComponent(null, "input", BlockPos.ZERO);
+        Map<String, List<RecipeModifier>> modifiers = Map.of("modifier", List.of(
+                new RecipeModifier("modifier", RecipeModifier.IOType.INPUT, 1F,
+                        RecipeModifier.Operation.ADD, false)));
+        Identifier levelId = Identifier.fromNamespaceAndPath("mmcr_test", "replacement_level");
+        MachineLevel level = new MachineLevel(levelId, levelId, 1, new BlockPredicate.Any(),
+                net.minecraft.world.item.ItemStack.EMPTY, LevelModifier.IDENTITY);
+        ModuleConnectionStatus connection = ModuleConnectionStatus.connected(
+                Identifier.fromNamespaceAndPath("mmcr_test", "host"));
+
+        assertThat(runtime.replaceComponents(List.of(component))).isTrue();
+        assertThat(runtime.replaceComponents(List.of(component))).isFalse();
+        assertThat(runtime.replaceModifiers(modifiers)).isTrue();
+        assertThat(runtime.replaceModifiers(new LinkedHashMap<>(modifiers))).isFalse();
+        assertThat(runtime.replaceLevels(Map.of(levelId, level))).isTrue();
+        assertThat(runtime.replaceLevels(Map.of(levelId, level))).isFalse();
+        assertThat(runtime.replaceLinkedPortPositions(Set.of(BlockPos.ZERO))).isTrue();
+        assertThat(runtime.replaceLinkedPortPositions(Set.of(BlockPos.ZERO))).isFalse();
+        assertThat(runtime.replaceModuleConnectionState(connection, 1)).isTrue();
+        assertThat(runtime.replaceModuleConnectionState(connection, 1)).isFalse();
     }
 
     @Test
@@ -220,6 +246,45 @@ class ComponentRuntimeTest {
         runtime.replaceModifiers(modifiers);
         assertThat(runtime.modifierVersion()).isEqualTo(version + 1);
         assertThat(runtime.modifierList()).containsExactly(first, second, first);
+    }
+
+    @Test
+    void modifier_list_reuses_immutable_content_until_modifiers_change() {
+        RecipeModifier modifier = new RecipeModifier("cached", RecipeModifier.IOType.INPUT, 1F,
+                RecipeModifier.Operation.ADD, false);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceModifiers(Map.of("cached", List.of(modifier)));
+
+        List<RecipeModifier> first = runtime.modifierList();
+        List<RecipeModifier> second = runtime.modifierList();
+
+        assertThat(second).isSameAs(first);
+        assertThat(first).containsExactly(modifier);
+        assertThatThrownBy(first::clear).isInstanceOf(UnsupportedOperationException.class);
+
+        runtime.replaceModifiers(Map.of("changed", List.of(modifier)));
+
+        assertThat(runtime.modifierList()).isNotSameAs(first);
+        assertThat(runtime.modifierList()).containsExactly(modifier);
+    }
+
+    @Test
+    void factory_search_context_defaults_optional_lists_and_parallelism() {
+        ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
+                StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
+                ModuleConnectionStatus.disconnected(), 0,
+                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
+                CraftingStateSnapshot.empty(0L, 0L, 0L), FactorySnapshot.empty(),
+                List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1);
+        FactorySearchContext context = new FactorySearchContext(snapshot, null, null, null,
+                3L, 4L, 0, 5L);
+
+        assertThat(context.orderedCandidates()).isEmpty();
+        assertThat(context.capabilities()).isEmpty();
+        assertThat(context.modifiers()).isEmpty();
+        assertThat(context.maxParallelism()).isEqualTo(1);
+        assertThatThrownBy(() -> new FactorySearchContext(null, List.of(), List.of(), List.of(),
+                0L, 0L, 1, 0L)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

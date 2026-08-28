@@ -37,7 +37,7 @@ public final class StructureClaimRegistry {
 
     public ClaimResult claim(BlockPos controllerPos, List<Claim> requested) {
         BlockPos immutableControllerPos = controllerPos.immutable();
-        List<Claim> normalized = requested.stream().distinct().toList();
+        List<Claim> normalized = List.copyOf(new LinkedHashSet<>(requested));
         for (Claim claim : normalized) {
             Set<BlockPos> owners = ownersByComponent.getOrDefault(claim.componentPos(), Set.of());
             for (BlockPos owner : owners) {

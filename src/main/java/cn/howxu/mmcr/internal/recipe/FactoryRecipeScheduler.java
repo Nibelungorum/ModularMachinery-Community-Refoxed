@@ -16,7 +16,7 @@ public final class FactoryRecipeScheduler {
     public FactoryRecipeScheduler(int threadLimit, FactoryRuntime factoryRuntime) {
         if (factoryRuntime == null) throw new IllegalArgumentException("factoryRuntime must not be null");
         this.factoryRuntime = factoryRuntime;
-        factoryRuntime.setLaneLimit(threadLimit);
+        setThreadLimit(threadLimit);
     }
 
     public boolean hasCapacity() {

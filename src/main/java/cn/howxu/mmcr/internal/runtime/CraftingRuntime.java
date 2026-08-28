@@ -64,7 +64,7 @@ public final class CraftingRuntime {
         }
         if (active()) return status;
 
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
             return fail("module_connection");
         }
@@ -96,7 +96,7 @@ public final class CraftingRuntime {
         if (!versionsCurrent()) return invalidate("version_invalidated");
         if (activeRecipe.isFinishPending()) return status;
 
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         CraftingContext context = context(runtime);
         PlanningResult result = context.planInputs(activeRecipe.getRecipe(), activeRecipe.getParallelism(),
                 consumedAtStart, retainedInputs);
@@ -124,7 +124,7 @@ public final class CraftingRuntime {
         if (!activeRecipe.isFinishPending()) return status;
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         CraftingContext context = context(runtime);
         PlanningResult result = context.planOutputs(activeRecipe.getRecipe(), activeRecipe.getParallelism());
         finishPlan = result.plan();
@@ -231,7 +231,7 @@ public final class CraftingRuntime {
 
     public boolean versionsCurrent() {
         if (!active()) return true;
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         return structureVersion == runtime.structure().version()
                 && capabilityVersion == runtime.capabilityVersion()
                 && modifierVersion == runtime.modifierVersion()
@@ -267,8 +267,8 @@ public final class CraftingRuntime {
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
                         long restoredStructureVersion, long restoredCapabilityVersion,
                         long restoredModifierVersion, long restoredComponentStateVersion) {
-        if (restored == null || restored.getRecipe() == null) {
-            invalidate();
+        if (restored == null || restored.getRecipe() == null || !restored.hasValidInputConsumptionPlan()) {
+            failLoad();
             return;
         }
         activeRecipe = restored;
@@ -280,7 +280,7 @@ public final class CraftingRuntime {
         capabilityVersion = restoredCapabilityVersion;
         modifierVersion = restoredModifierVersion;
         componentStateVersion = restoredComponentStateVersion;
-        ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         List<MachineRequirement> requirements = restored.getRecipe().runtimeRequirements(contextModifiers(runtime));
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
@@ -303,7 +303,7 @@ public final class CraftingRuntime {
     }
 
     public void rebindCurrentVersions() {
-        if (active()) captureVersions(controller.runtimeSnapshot());
+        if (active()) captureVersions(controller.currentRuntimeSnapshot());
     }
 
     public void save(ValueOutput output) {
@@ -319,15 +319,27 @@ public final class CraftingRuntime {
     }
 
     public void load(ValueInput input, @Nullable StructureClaimRegistry.ResourceDomain domain) {
-        if (!input.getBooleanOr("active", false)) {
+        boolean active = input.getBooleanOr("active", false);
+        if (!active) {
             invalidate();
             return;
         }
-        restore(ActiveMachineRecipe.from(input.childOrEmpty("recipe")), domain,
+        ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(input.childOrEmpty("recipe"));
+        if (!loaded.successful()) {
+            failLoad();
+            return;
+        }
+        restore(loaded.recipe(), domain,
                 input.getLongOr("structure_version", Long.MIN_VALUE),
                 input.getLongOr("capability_version", Long.MIN_VALUE),
                 input.getLongOr("modifier_version", Long.MIN_VALUE),
                 input.getLongOr("component_state_version", Long.MIN_VALUE));
+    }
+
+    private void failLoad() {
+        invalidate();
+        failure = failure("recipe_load");
+        status = CraftingStatus.failure(failureUnloc(failure));
     }
 
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure) {

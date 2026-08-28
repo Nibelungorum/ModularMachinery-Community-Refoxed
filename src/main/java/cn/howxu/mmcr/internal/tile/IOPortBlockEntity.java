@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,6 +52,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;
     private final Map<CapabilityType, AutoIOState> autoIOStates = new LinkedHashMap<>();
+    private final Map<CapabilityType, AvailabilityState> availabilityStates = new LinkedHashMap<>();
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -94,7 +97,83 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     protected final void notifyStorageChanged() {
         setChanged();
         sendStorageSnapshot();
+        notifyAvailabilityChanges();
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (level != null && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+                controller.notifyCapabilityPresentationChanged();
+            }
+        }
     }
+
+    private void notifyAvailabilityChanges() {
+        for (MachineCapability capability : capabilitySnapshot().capabilities()) {
+            Object resource = capability.storage() instanceof LongValueStorage ? capability.type() : null;
+            List<Object> resources = new ArrayList<>();
+            List<SlotAvailability> slots = new ArrayList<>();
+            if (resource != null) resources.add(resource);
+            long amount = 0L;
+            if (capability.storage() instanceof LongValueStorage valueStorage) {
+                amount = valueStorage.amount();
+                slots.add(new SlotAvailability(resource, amount));
+            } else if (capability.storage() instanceof ResourceStorage<?> resourceStorage) {
+                for (int slot = 0; slot < resourceStorage.size(); slot++) {
+                    long slotAmount = resourceStorage.amount(slot);
+                    amount += slotAmount;
+                    Object slotResource = resourceStorage.resource(slot);
+                    slots.add(new SlotAvailability(slotResource, slotAmount));
+                    if (slotAmount > 0L && slotResource != null) {
+                        resources.add(slotResource);
+                        if (resource == null) resource = slotResource;
+                    }
+                }
+            }
+            AvailabilityState previous = availabilityStates.put(capability.type(),
+                    new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
+            long previousAmount = previous == null ? 0L : previous.amount();
+            List<Object> previousResources = previous == null ? List.of() : previous.resources();
+            boolean resourceChanged = previous != null && !resources.equals(previousResources);
+            if (amount > previousAmount && ioType() == IOType.INPUT) {
+                ResourceAvailabilityNotifier.Reason reason = capability.storage() instanceof LongValueStorage
+                                ? ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE
+                                : ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE;
+                for (Object available : resources) notifyControllers(reason, available);
+            } else if (resourceChanged && ioType() == IOType.INPUT) {
+                for (Object available : resources) {
+                    if (!previousResources.contains(available)) {
+                        notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, available);
+                    }
+                }
+            } else if (ioType() == IOType.OUTPUT) {
+                List<SlotAvailability> previousSlots = previous == null ? List.of() : previous.slots();
+                List<Object> notified = new ArrayList<>();
+                for (int slot = 0; slot < previousSlots.size(); slot++) {
+                    SlotAvailability previousSlot = previousSlots.get(slot);
+                    SlotAvailability currentSlot = slot < slots.size()
+                            ? slots.get(slot) : new SlotAvailability(null, 0L);
+                    if (previousSlot.amount() <= 0L || previousSlot.resource() == null) continue;
+                    boolean amountReleased = currentSlot.amount() < previousSlot.amount();
+                    boolean resourceReleased = !Objects.equals(previousSlot.resource(), currentSlot.resource());
+                    if ((amountReleased || resourceReleased) && notified.add(previousSlot.resource())) {
+                        notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY,
+                                previousSlot.resource());
+                    }
+                }
+            }
+        }
+    }
+
+    private void notifyControllers(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
+        if (level == null || level.isClientSide()) return;
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+                controller.notifyResourceAvailability(reason, resource);
+            }
+        }
+    }
+
+    private record AvailabilityState(long amount, List<Object> resources, List<SlotAvailability> slots) { }
+
+    private record SlotAvailability(@Nullable Object resource, long amount) { }
 
     public void dropContents() {
     }

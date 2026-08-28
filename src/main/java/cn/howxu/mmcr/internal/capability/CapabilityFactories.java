@@ -94,10 +94,9 @@ public final class CapabilityFactories {
 
     private static CapabilityOperation valueOperation(LongValueStorage storage, CapabilityRequests.ValueRequest request) {
         return transaction -> {
-            storage.updateSnapshots(transaction);
             long moved = request.insert()
-                    ? storage.insert(request.amount(), false)
-                    : storage.extract(request.amount(), false);
+                    ? storage.insert(request.amount(), transaction)
+                    : storage.extract(request.amount(), transaction);
             return moved == request.amount()
                     ? CapabilityResult.successful()
                     : CapabilityResult.failure(failure(request.type(), "insufficient_value"));

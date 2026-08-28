@@ -29,6 +29,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import org.jetbrains.annotations.Nullable;
 
 import net.neoforged.neoforge.capabilities.Capabilities;
 
@@ -211,22 +212,18 @@ public final class ModCapabilities {
         @Override public long getCapacityAsLong() { return storage.capacity(); }
         @Override public long getTransferLimit() { return storage.transferLimit(); }
         @Override public int insert(int amount, TransactionContext tx) {
-            storage.updateSnapshots(tx);
-            return (int) storage.insert(amount, false);
+            return (int) storage.insert(amount, tx);
         }
         @Override public int extract(int amount, TransactionContext tx) {
-            storage.updateSnapshots(tx);
-            return (int) storage.extract(amount, false);
+            return (int) storage.extract(amount, tx);
         }
         @Override public long insertLong(long amount, TransactionContext tx) {
             if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-            storage.updateSnapshots(tx);
-            return storage.insert(amount, false);
+            return storage.insert(amount, tx);
         }
         @Override public long extractLong(long amount, TransactionContext tx) {
             if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-            storage.updateSnapshots(tx);
-            return storage.extract(amount, false);
+            return storage.extract(amount, tx);
         }
     }
 
@@ -311,6 +308,10 @@ public final class ModCapabilities {
         @Override
         public int insert(int slot, ItemResource resource, int amount, TransactionContext tx) {
             if (!canInsert) return 0;
+            ResourceStorage<ItemResource> transactionalStorage = transactionalStorage();
+            if (transactionalStorage != null) {
+                return (int) transactionalStorage.insert(slot, resource, amount, tx);
+            }
             updateSnapshots(tx);
             ItemStack remainder = handler.insertItem(slot, resource.toStack(amount), false);
             int inserted = amount - remainder.getCount();
@@ -320,11 +321,20 @@ public final class ModCapabilities {
         @Override
         public int extract(int slot, ItemResource resource, int amount, TransactionContext tx) {
             if (!canExtract) return 0;
+            ResourceStorage<ItemResource> transactionalStorage = transactionalStorage();
+            if (transactionalStorage != null) {
+                return (int) transactionalStorage.extract(slot, resource, amount, tx);
+            }
             ItemStack stack = handler.getStackInSlot(slot);
             if (stack.isEmpty() || !ItemResource.of(stack).equals(resource)) return 0;
             updateSnapshots(tx);
             ItemStack extracted = handler.extractItem(slot, amount, false);
             return extracted.getCount();
+        }
+
+        @SuppressWarnings("unchecked")
+        private @Nullable ResourceStorage<ItemResource> transactionalStorage() {
+            return handler instanceof ResourceStorage<?> storage ? (ResourceStorage<ItemResource>) storage : null;
         }
 
         @Override

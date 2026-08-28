@@ -3,8 +3,9 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.crafting.Ingredient;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -63,11 +64,10 @@ public final class RecipeCandidateIndex {
 
     public List<MachineRecipe> candidates(Collection<Item> items) {
         if (allCandidates.isEmpty()) return allCandidates;
+        if (items == null) return allCandidates;
         Set<MachineRecipe> matching = new LinkedHashSet<>(fallbackCandidates);
-        if (items != null) {
-            for (Item item : items) {
-                matching.addAll(exactItemCandidates.getOrDefault(item, Set.of()));
-            }
+        for (Item item : items) {
+            matching.addAll(exactItemCandidates.getOrDefault(item, Set.of()));
         }
         if (matching.size() == allCandidates.size()) return allCandidates;
         return allCandidates.stream().filter(matching::contains).toList();
@@ -81,20 +81,24 @@ public final class RecipeCandidateIndex {
         Set<Item> requiredItems = new LinkedHashSet<>();
         boolean hasItemInput = false;
         for (MachineRequirement requirement : recipe.requirements()) {
-            if (!(requirement instanceof ItemRequirement item)
-                    || item.io() != RecipeModifier.IOType.INPUT
-                    || item.item() == null) {
+            if (!requirement.tags().isEmpty()) return null;
+            if (requirement.io() != RecipeModifier.IOType.INPUT) {
                 continue;
             }
+            if (!(requirement instanceof ItemRequirement item)
+                    || !item.components().isEmpty()
+                    || item.item() == null) return null;
             hasItemInput = true;
-            List<Holder<Item>> matchingItems;
+            Ingredient ingredient = item.item();
+            if (ingredient.isCustom()) return null;
+            HolderSet<Item> matchingItems;
             try {
-                matchingItems = item.item().items().toList();
-            } catch (UnsupportedOperationException ignored) {
+                matchingItems = ingredient.getValues();
+            } catch (IllegalStateException | UnsupportedOperationException ignored) {
                 return null;
             }
-            if (matchingItems.size() != 1) return null;
-            requiredItems.add(matchingItems.getFirst().value());
+            if (!matchingItems.isBound() || matchingItems.unwrapKey().isPresent() || matchingItems.size() != 1) return null;
+            requiredItems.add(matchingItems.get(0).value());
         }
         return hasItemInput ? requiredItems : null;
     }

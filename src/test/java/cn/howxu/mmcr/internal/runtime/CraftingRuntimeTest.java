@@ -27,6 +27,9 @@ import cn.howxu.mmcr.LevelStub;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -392,6 +395,186 @@ class CraftingRuntimeTest {
         assertThat(restored.finishPending()).isTrue();
         assertThat(restored.recipe()).isEqualTo(recipe);
         assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(0)).isZero();
+    }
+
+    @Test
+    void active_runtime_finishes_with_its_original_recipe_after_registry_replacement() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe oldRecipe = recipe("runtime_reload_active", 1, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
+        MachineRecipe replacement = recipe("runtime_reload_active", 1, List.of(
+                input(Items.GOLD_INGOT, 1), output(Items.DIAMOND, 1)));
+        RecipeRegistry.replaceDynamic(Map.of(oldRecipe.id(), oldRecipe));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(oldRecipe, 1).isCrafting()).isTrue();
+        RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
+
+        runtime.tick();
+        runtime.finish();
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.DIAMOND)).isFalse();
+    }
+
+    @Test
+    void active_runtime_load_uses_embedded_old_definition_and_does_not_extract_inputs_again() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe oldRecipe = recipe("runtime_reload_persisted", 1, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
+        MachineRecipe replacement = recipe("runtime_reload_persisted", 1, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.DIAMOND, 1)));
+        RecipeRegistry.replaceDynamic(Map.of(oldRecipe.id(), oldRecipe));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(oldRecipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+        var savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
+        assertThat(savedRecipeTag.getBooleanOr("has_recipe_definition", false)).isTrue();
+        assertThat(savedRecipeTag.getCompound("recipe_definition").orElseThrow().isEmpty()).isFalse();
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+
+        assertThat(restored.recipe()).isNotNull();
+        assertThat(restored.recipe().id()).isEqualTo(oldRecipe.id());
+        assertThat(restored.recipe().outputs()).singleElement()
+                .satisfies(recipeOutput -> assertThat(recipeOutput.is(Items.IRON_NUGGET)).isTrue());
+        restored.tick();
+        restored.finish();
+
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.DIAMOND)).isFalse();
+    }
+
+    @Test
+    void active_runtime_loads_old_nbt_without_an_embedded_definition_from_the_registry() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_old_nbt", 20, List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        savedRecipeTag.remove("has_recipe_definition");
+        savedRecipeTag.remove("recipe_definition");
+        savedRecipeTag.remove("recipe_definition_version");
+        savedRecipeTag.remove("recipe_definition_fingerprint");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.recipe()).isEqualTo(recipe);
+    }
+
+    @Test
+    void invalid_embedded_definition_loads_as_a_failed_idle_runtime_without_resource_operations() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_invalid_embedded", 20, List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        savedRecipeTag.remove("recipe_definition");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void corrupted_embedded_definition_fingerprint_loads_as_a_failed_idle_runtime() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_corrupt_fingerprint", 20, List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        savedRecipeTag.putString("recipe_definition_fingerprint", "0".repeat(64));
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void malformed_input_consumption_plan_fails_before_restore_and_resource_operations() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_malformed_plan", 20, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+        var savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag malformedPlan = new CompoundTag();
+        malformedPlan.putIntArray("consumedInputBatches", new int[]{1});
+        savedRecipeTag.put("inputConsumptionPlan", malformedPlan);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void modified_embedded_recipe_definition_is_rejected_by_its_fingerprint() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_modified_definition", 20, List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        var recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        assertThat(recipeTag.getStringOr("recipe_definition_fingerprint", ""))
+                .matches("[0-9a-f]{64}");
+        recipeTag.getCompound("recipe_definition").orElseThrow().putInt("tick_time", 99);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
     }
 
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {

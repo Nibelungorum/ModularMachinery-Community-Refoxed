@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
@@ -11,9 +12,12 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -22,6 +26,8 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import java.util.List;
+import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -148,6 +154,72 @@ class MachineRecipeJsonTest {
             assertThat(requirement.components().isEmpty()).isFalse();
             assertThat(requirement.consumeChance()).isEqualTo(0.5F);
         });
+    }
+
+    @Test
+    void machine_recipe_codec_round_trips_all_active_plan_requirements() {
+        var recipe = new MachineRecipe(id("codec_complete"), id("test_cube"), 40,
+                List.of(new MachineIngredient.ItemIngredient(
+                                net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2),
+                        new MachineIngredient.FluidIngredient(
+                                net.neoforged.neoforge.fluids.crafting.FluidIngredient.of(
+                                        net.minecraft.world.level.material.Fluids.WATER), 250),
+                        new MachineIngredient.EnergyIngredient(80)),
+                List.of(new ItemStack(Items.IRON_NUGGET, 3)),
+                List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 1.5F,
+                        RecipeModifier.Operation.MULTIPLY, true)),
+                3, 2, true,
+                List.of(new net.neoforged.neoforge.fluids.FluidStack(
+                        net.minecraft.world.level.material.Fluids.WATER.builtInRegistryHolder(), 500)),
+                List.of(), true, List.of(), true, Set.of(id("factory_controller")));
+
+        var ops = RegistryOps.create(JsonOps.INSTANCE,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(ops, recipe).getOrThrow();
+        var decoded = MachineRecipe.CODEC.codec().parse(ops, encoded).getOrThrow();
+
+        assertThat(encoded.getAsJsonObject().has("requirements")).isTrue();
+        assertThat(encoded.getAsJsonObject().has("inputs")).isFalse();
+        assertThat(encoded.getAsJsonObject().has("outputs")).isFalse();
+        assertThat(encoded.getAsJsonObject().has("fluid_outputs")).isFalse();
+        assertThat(decoded.id()).isEqualTo(recipe.id());
+        assertThat(decoded.machineId()).isEqualTo(recipe.machineId());
+        assertThat(decoded.tickTime()).isEqualTo(recipe.tickTime());
+        assertThat(decoded.requirements()).hasSize(5);
+        assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof ItemRequirement item
+                && item.io() == RecipeModifier.IOType.INPUT && item.count() == 2);
+        assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof FluidRequirement fluid
+                && fluid.io() == RecipeModifier.IOType.INPUT && fluid.amount() == 250);
+        assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof EnergyRequirement energy
+                && energy.io() == RecipeModifier.IOType.INPUT && energy.fePerTick() == 80);
+        assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof ItemRequirement item
+                && item.io() == RecipeModifier.IOType.OUTPUT && item.stack() != null
+                && item.stack().is(Items.IRON_NUGGET) && item.stack().getCount() == 3);
+        assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof FluidRequirement fluid
+                && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.stack().getAmount() == 500);
+        assertThat(decoded.outputs()).singleElement().satisfies(output ->
+                assertThat(output.getCount()).isEqualTo(3));
+        assertThat(decoded.fluidOutputs()).singleElement().satisfies(output ->
+                assertThat(output.getAmount()).isEqualTo(500));
+        assertThat(decoded.modifiers()).singleElement().satisfies(modifier -> {
+            assertThat(modifier.getTarget()).isEqualTo("item");
+            assertThat(modifier.getModifier()).isEqualTo(1.5F);
+            assertThat(modifier.affectsChance()).isTrue();
+        });
+        assertThat(decoded.priority()).isEqualTo(3);
+        assertThat(decoded.maxThreads()).isEqualTo(2);
+        assertThat(decoded.doesCancelRecipeOnPerTickFailure()).isTrue();
+        assertThat(decoded.isParallelized()).isTrue();
+        assertThat(decoded.allowPartialOutputs()).isTrue();
+        assertThat(decoded.requiredHostIds()).containsExactly(id("factory_controller"));
+        assertThat(decoded.inputs()).hasSize(recipe.inputs().size());
+        assertThat(decoded.outputs()).singleElement().satisfies(output -> {
+            assertThat(output.is(Items.IRON_NUGGET)).isTrue();
+            assertThat(output.getCount()).isEqualTo(3);
+        });
+        assertThat(decoded.modifiers()).as("modifiers").isEqualTo(recipe.modifiers());
+        assertThat(decoded.levelRequirements()).as("level requirements").isEqualTo(recipe.levelRequirements());
+        assertThat(decoded.requiredHostIds()).as("required host ids").isEqualTo(recipe.requiredHostIds());
     }
 
     @Test
