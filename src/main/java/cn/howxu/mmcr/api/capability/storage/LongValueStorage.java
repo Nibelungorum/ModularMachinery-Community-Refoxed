@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability.storage;
 
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Long-backed value storage with capacity and per-operation transfer limits.
@@ -39,11 +40,21 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
     }
 
     public long insert(long requested, boolean simulate) {
-        return insertInternal(requested, simulate, true);
+        return insertInternal(requested, simulate, true, true);
+    }
+
+    public long insert(long requested, TransactionContext transaction) {
+        updateSnapshots(transaction);
+        return insertInternal(requested, false, true, false);
     }
 
     public long extract(long requested, boolean simulate) {
-        return extractInternal(requested, simulate, true);
+        return extractInternal(requested, simulate, true, true);
+    }
+
+    public long extract(long requested, TransactionContext transaction) {
+        updateSnapshots(transaction);
+        return extractInternal(requested, false, true, false);
     }
 
     public void setAmount(long value) {
@@ -52,24 +63,24 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         onChange.run();
     }
 
-    private long insertInternal(long requested, boolean simulate, boolean limited) {
+    private long insertInternal(long requested, boolean simulate, boolean limited, boolean notify) {
         if (requested <= 0) return 0L;
         long allowed = limited ? Math.min(requested, transferLimit) : requested;
         long moved = Math.min(allowed, capacity - amount);
         if (!simulate && moved > 0) {
             amount += moved;
-            onChange.run();
+            if (notify) onChange.run();
         }
         return moved;
     }
 
-    private long extractInternal(long requested, boolean simulate, boolean limited) {
+    private long extractInternal(long requested, boolean simulate, boolean limited, boolean notify) {
         if (requested <= 0) return 0L;
         long allowed = limited ? Math.min(requested, transferLimit) : requested;
         long moved = Math.min(allowed, amount);
         if (!simulate && moved > 0) {
             amount -= moved;
-            onChange.run();
+            if (notify) onChange.run();
         }
         return moved;
     }
@@ -82,7 +93,6 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
     @Override
     protected void revertToSnapshot(Long snapshot) {
         amount = snapshot == null ? 0L : snapshot;
-        onChange.run();
     }
 
     @Override

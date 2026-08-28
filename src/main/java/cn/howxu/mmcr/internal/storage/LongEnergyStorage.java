@@ -14,11 +14,14 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements Lo
     private final LongValueStorage storage;
     private final long transferLimit;
     private final Runnable onChange;
+    private boolean restoring;
 
     public LongEnergyStorage(long capacity, long transferLimit, Runnable onChange) {
-        this.storage = new LongValueStorage(capacity, transferLimit, onChange);
         this.transferLimit = transferLimit;
         this.onChange = onChange == null ? () -> {} : onChange;
+        this.storage = new LongValueStorage(capacity, transferLimit, () -> {
+            if (!restoring) this.onChange.run();
+        });
     }
 
     public long getCapacityAsLong() {
@@ -61,7 +64,7 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements Lo
         TransferPreconditions.checkNonNegative(amount);
         if (amount == 0) return 0;
         updateSnapshots(tx);
-        return (int) storage.insert(amount, false);
+        return (int) storage.insert(amount, tx);
     }
 
     @Override
@@ -69,7 +72,7 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements Lo
         TransferPreconditions.checkNonNegative(amount);
         if (amount == 0) return 0;
         updateSnapshots(tx);
-        return (int) storage.extract(amount, false);
+        return (int) storage.extract(amount, tx);
     }
 
     @Override
@@ -77,7 +80,7 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements Lo
         if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
         if (amount == 0) return 0L;
         updateSnapshots(tx);
-        return storage.insert(amount, false);
+        return storage.insert(amount, tx);
     }
 
     @Override
@@ -85,7 +88,7 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements Lo
         if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
         if (amount == 0) return 0L;
         updateSnapshots(tx);
-        return storage.extract(amount, false);
+        return storage.extract(amount, tx);
     }
 
     @Override
@@ -95,13 +98,15 @@ public final class LongEnergyStorage extends SnapshotJournal<Long> implements Lo
 
     @Override
     protected void revertToSnapshot(Long snapshot) {
-        storage.setAmount(snapshot == null ? 0L : snapshot);
+        boolean wasRestoring = restoring;
+        restoring = true;
+        try {
+            storage.setAmount(snapshot == null ? 0L : snapshot);
+        } finally {
+            restoring = wasRestoring;
+        }
     }
 
     @Override
-    protected void onRootCommit(Long originalState) {
-        if (originalState == null || originalState != storage.amount()) {
-            onChange.run();
-        }
-    }
+    protected void onRootCommit(Long originalState) { }
 }

@@ -162,6 +162,29 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void catalog_change_before_shared_start_commit_never_runs_runtime_or_resource_transaction() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        AtomicLong catalogVersion = new AtomicLong(1L);
+        AtomicInteger runtimeStarts = new AtomicInteger();
+        AtomicInteger extractedInputs = new AtomicInteger();
+
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain, lane(A), 1L, 0L, 1,
+                ignored -> {
+                    runtimeStarts.incrementAndGet();
+                    extractedInputs.incrementAndGet();
+                    return 1;
+                }, ignored -> { }, () -> true, () -> 1L, () -> 0L,
+                1L, catalogVersion::get, () -> { }));
+        catalogVersion.set(2L);
+
+        coordinator.resolve(domain);
+
+        assertThat(runtimeStarts.get()).isZero();
+        assertThat(extractedInputs.get()).isZero();
+    }
+
+    @Test
     void stateVersionInvalidationAlsoDiscardsPendingRequests() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A);
@@ -222,6 +245,32 @@ class SharedIoCoordinatorTest {
 
         assertThat(committed).containsExactly("A");
         assertThat(staleInvoked).isFalse();
+    }
+
+    @Test
+    void validity_filtering_preserves_stage_order_when_requests_are_partitioned() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        AtomicBoolean invalid = new AtomicBoolean(false);
+        List<String> committed = new ArrayList<>();
+
+        coordinator.enqueue(start(domain, A, 1L, 1,
+                ignored -> 1, ignored -> committed.add("start"), () -> true, () -> 1L));
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane(A), 1L, 0L,
+                () -> {
+                    invalid.set(true);
+                    return true;
+                }, () -> false, () -> 1L, () -> 0L));
+        coordinator.enqueue(finish(domain, A, 1L,
+                () -> {
+                    committed.add("finish");
+                    return true;
+                }, () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("start", "finish");
+        assertThat(invalid).isFalse();
     }
 
     private static StructureClaimRegistry.ResourceDomain domain(BlockPos... positions) {

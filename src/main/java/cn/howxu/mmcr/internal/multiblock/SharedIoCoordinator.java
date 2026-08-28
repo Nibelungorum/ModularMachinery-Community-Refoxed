@@ -24,6 +24,7 @@ import java.util.function.LongSupplier;
  */
 public final class SharedIoCoordinator {
     private static final Map<ServerLevel, SharedIoCoordinator> COORDINATORS = new WeakHashMap<>();
+    private static final Comparator<Request> REQUEST_ORDER = Comparator.comparing(Request::laneKey);
     private final List<Request> pending = new ArrayList<>();
     private final Map<Long, LaneKey> startCursors = new HashMap<>();
     private final Map<Long, LaneKey> tickCursors = new HashMap<>();
@@ -72,28 +73,49 @@ public final class SharedIoCoordinator {
     }
 
     private List<Request> resolveDomain(StructureClaimRegistry.ResourceDomain domain, List<Request> requests) {
-        List<Request> current = requests.stream()
-                .filter(request -> request.domainId() == domain.id())
-                .filter(request -> request.domainGeneration() == domain.generation())
-                .filter(Request::isStillValid)
-                .sorted(Comparator.comparing(Request::laneKey))
-                .toList();
+        List<Request> current = new ArrayList<>(requests.size());
+        List<StartRequest> startRequests = new ArrayList<>();
+        List<TickRequest> tickRequests = new ArrayList<>();
+        List<FinishRequest> currentFinishRequests = new ArrayList<>();
+        for (Request request : requests) {
+            if (request.domainId() != domain.id()
+                    || request.domainGeneration() != domain.generation()
+                    || !request.isStillValid()) {
+                continue;
+            }
+            current.add(request);
+            if (request instanceof StartRequest startRequest) {
+                startRequests.add(startRequest);
+            } else if (request instanceof TickRequest tickRequest) {
+                tickRequests.add(tickRequest);
+            } else if (request instanceof FinishRequest finishRequest) {
+                currentFinishRequests.add(finishRequest);
+            }
+        }
+        current.sort(REQUEST_ORDER);
+        startRequests.sort(REQUEST_ORDER);
+        tickRequests.sort(REQUEST_ORDER);
+        currentFinishRequests.sort(REQUEST_ORDER);
         Set<Request> successful = Collections.newSetFromMap(new IdentityHashMap<>());
-        resolveRoundRobin(current.stream().filter(StartRequest.class::isInstance).map(StartRequest.class::cast).toList(), startCursors, domain.id(), successful);
-        resolveRoundRobin(current.stream().filter(TickRequest.class::isInstance).map(TickRequest.class::cast).toList(), tickCursors, domain.id(), successful);
+        resolveRoundRobin(startRequests, startCursors, domain.id(), successful);
+        resolveRoundRobin(tickRequests, tickCursors, domain.id(), successful);
         Set<StartRequest> pendingStartsBeforeFinish = Collections.newSetFromMap(new IdentityHashMap<>());
-        pending.stream()
-                .filter(StartRequest.class::isInstance)
-                .map(StartRequest.class::cast)
-                .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
-                .forEach(pendingStartsBeforeFinish::add);
-        List<FinishRequest> finishRequests = new ArrayList<>(current.stream()
-                .filter(FinishRequest.class::isInstance).map(FinishRequest.class::cast).toList());
+        for (Request request : pending) {
+            if (request instanceof StartRequest startRequest
+                    && startRequest.domainId() == domain.id()
+                    && startRequest.domainGeneration() == domain.generation()) {
+                pendingStartsBeforeFinish.add(startRequest);
+            }
+        }
+        List<FinishRequest> finishRequests = new ArrayList<>(currentFinishRequests);
         finishRequests.addAll(takePendingFinishRequests(domain));
         resolveRoundRobin(finishRequests, finishCursors, domain.id(), successful);
         List<StartRequest> finishSpawnedStarts = takePendingStartRequests(domain, pendingStartsBeforeFinish);
         resolveRoundRobin(finishSpawnedStarts, startCursors, domain.id(), successful);
-        List<Request> unresolved = new ArrayList<>(current.stream().filter(request -> !successful.contains(request)).toList());
+        List<Request> unresolved = new ArrayList<>(current.size());
+        for (Request request : current) {
+            if (!successful.contains(request)) unresolved.add(request);
+        }
         for (FinishRequest request : finishRequests) {
             if (!current.contains(request) && !successful.contains(request)) unresolved.add(request);
         }
@@ -104,27 +126,32 @@ public final class SharedIoCoordinator {
     }
 
     private List<FinishRequest> takePendingFinishRequests(StructureClaimRegistry.ResourceDomain domain) {
-        List<FinishRequest> result = pending.stream()
-                .filter(FinishRequest.class::isInstance)
-                .map(FinishRequest.class::cast)
-                .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
-                .toList();
+        List<FinishRequest> result = new ArrayList<>();
+        for (Request request : pending) {
+            if (request instanceof FinishRequest finishRequest
+                    && finishRequest.domainId() == domain.id()
+                    && finishRequest.domainGeneration() == domain.generation()) {
+                result.add(finishRequest);
+            }
+        }
         pending.removeAll(result);
         return result;
     }
 
     private List<StartRequest> takePendingStartRequests(StructureClaimRegistry.ResourceDomain domain, Set<StartRequest> excluded) {
-        List<StartRequest> matching = pending.stream()
-                .filter(StartRequest.class::isInstance)
-                .map(StartRequest.class::cast)
-                .filter(request -> request.domainId() == domain.id() && request.domainGeneration() == domain.generation())
-                .filter(request -> !excluded.contains(request))
-                .toList();
+        List<StartRequest> matching = new ArrayList<>();
+        for (Request request : pending) {
+            if (request instanceof StartRequest startRequest
+                    && startRequest.domainId() == domain.id()
+                    && startRequest.domainGeneration() == domain.generation()
+                    && !excluded.contains(startRequest)) {
+                matching.add(startRequest);
+            }
+        }
         pending.removeAll(matching);
-        return matching.stream()
-                .filter(Request::isStillValid)
-                .sorted(Comparator.comparing(Request::laneKey))
-                .toList();
+        matching.removeIf(request -> !request.isStillValid());
+        matching.sort(REQUEST_ORDER);
+        return matching;
     }
 
     private <T extends Request> void resolveRoundRobin(List<T> requests, Map<Long, LaneKey> cursors, long domainId, Set<Request> successful) {
@@ -143,6 +170,7 @@ public final class SharedIoCoordinator {
                 continue;
             }
             if (request.tryCommit()) {
+                request.onCommitted();
                 cursors.put(domainId, request.laneKey());
                 successful.add(request);
             }
@@ -172,6 +200,9 @@ public final class SharedIoCoordinator {
         LongSupplier controllerStateVersionSupplier();
 
         BooleanSupplier validator();
+
+        default void onCommitted() {
+        }
 
         default boolean isStillValid() {
             boolean valid = controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
@@ -208,35 +239,86 @@ public final class SharedIoCoordinator {
                                long controllerStructureVersion, long controllerStateVersion,
                                int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
                                BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
-                               LongSupplier controllerStateVersionSupplier) implements Request {
+                               LongSupplier controllerStateVersionSupplier, long catalogVersion,
+                               LongSupplier catalogVersionSupplier, Runnable commitNotifier) implements Request {
+
+        public StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                            long controllerStructureVersion, long controllerStateVersion,
+                             int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
+                             BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
+                             LongSupplier controllerStateVersionSupplier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, maximumParallelism,
+                    transaction, committer, validator, controllerStructureVersionSupplier,
+                    controllerStateVersionSupplier, Long.MIN_VALUE, () -> Long.MIN_VALUE, () -> { });
+        }
+
+        public StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                            long controllerStructureVersion, long controllerStateVersion,
+                            int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
+                            BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
+                            LongSupplier controllerStateVersionSupplier, long catalogVersion,
+                            LongSupplier catalogVersionSupplier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, maximumParallelism,
+                    transaction, committer, validator, controllerStructureVersionSupplier,
+                    controllerStateVersionSupplier, catalogVersion, catalogVersionSupplier, () -> { });
+        }
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
+        @Override public boolean isStillValid() {
+            if (catalogVersion != catalogVersionSupplier.getAsLong()) {
+                discard();
+                return false;
+            }
+            return Request.super.isStillValid();
+        }
         @Override public boolean tryCommit() {
             int granted = transaction.applyAsInt(maximumParallelism);
             if (granted <= 0) return false;
             committer.accept(granted);
             return true;
         }
+
+        @Override public void onCommitted() { commitNotifier.run(); }
     }
 
     public record TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                               long controllerStructureVersion, long controllerStateVersion,
                               BooleanSupplier transaction, BooleanSupplier validator,
                               LongSupplier controllerStructureVersionSupplier,
-                              LongSupplier controllerStateVersionSupplier) implements Request {
+                              LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) implements Request {
+        public TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                           long controllerStructureVersion, long controllerStateVersion,
+                           BooleanSupplier transaction, BooleanSupplier validator,
+                           LongSupplier controllerStructureVersionSupplier,
+                           LongSupplier controllerStateVersionSupplier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier, () -> { });
+        }
+
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
+        @Override public void onCommitted() { commitNotifier.run(); }
     }
 
     public record FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                                 long controllerStructureVersion, long controllerStateVersion,
                                 BooleanSupplier transaction, BooleanSupplier validator,
                                 LongSupplier controllerStructureVersionSupplier,
-                                LongSupplier controllerStateVersionSupplier) implements Request {
+                                LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) implements Request {
+        public FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                             long controllerStructureVersion, long controllerStateVersion,
+                             BooleanSupplier transaction, BooleanSupplier validator,
+                             LongSupplier controllerStructureVersionSupplier,
+                             LongSupplier controllerStateVersionSupplier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier, () -> { });
+        }
+
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
+        @Override public void onCommitted() { commitNotifier.run(); }
     }
 }

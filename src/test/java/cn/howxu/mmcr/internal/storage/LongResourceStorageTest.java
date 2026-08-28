@@ -44,6 +44,58 @@ class LongResourceStorageTest {
     }
 
     @Test
+    void value_storage_direct_set_reports_an_immediate_change() {
+        AtomicInteger changes = new AtomicInteger();
+        LongValueStorage storage = new LongValueStorage(100L, 100L, changes::incrementAndGet);
+
+        storage.setAmount(40L);
+
+        assertThat(storage.amount()).isEqualTo(40L);
+        assertThat(changes).hasValue(1);
+    }
+
+    @Test
+    void value_storage_transaction_rollback_does_not_report_a_change() {
+        AtomicInteger changes = new AtomicInteger();
+        LongValueStorage storage = new LongValueStorage(100L, 100L, changes::incrementAndGet);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(40L, transaction)).isEqualTo(40L);
+        }
+
+        assertThat(storage.amount()).isZero();
+        assertThat(changes).hasValue(0);
+    }
+
+    @Test
+    void value_storage_transaction_commit_reports_one_change() {
+        AtomicInteger changes = new AtomicInteger();
+        LongValueStorage storage = new LongValueStorage(100L, 100L, changes::incrementAndGet);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(40L, transaction)).isEqualTo(40L);
+            transaction.commit();
+        }
+
+        assertThat(storage.amount()).isEqualTo(40L);
+        assertThat(changes).hasValue(1);
+    }
+
+    @Test
+    void bulk_item_storage_transaction_rollback_does_not_report_a_change() {
+        AtomicInteger changes = new AtomicInteger();
+        BulkItemStorage storage = new BulkItemStorage(100L, changes::incrementAndGet);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 1L, transaction)).isEqualTo(1L);
+        }
+
+        assertThat(storage.amount(0)).isZero();
+        assertThat(changes).hasValue(0);
+    }
+
+    @Test
     void transaction_rollback_restores_fluid_amount_and_resource() {
         LongFluidStorage storage = new LongFluidStorage(100L, () -> {});
         FluidResource water = FluidResource.of(Fluids.WATER);

@@ -108,7 +108,9 @@ public final class RequirementHandlerRegistry {
         }
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         int maximum = energyMaximum(requirement.fePerTick(), insert, capabilities, context.requestedParallelism());
-        if (maximum <= 0) return blockedPlan(requirement, context, "insufficient_energy");
+        if (maximum <= 0) {
+            return blockedPlan(requirement, context, insert ? "no_output_capacity" : "insufficient_energy");
+        }
         return deferredPlan(context, maximum,
                 (parallelism, reservations) -> {
                     return planEnergyOperations(requirement, capabilities, parallelism, reservations, insert, true);
@@ -395,7 +397,8 @@ public final class RequirementHandlerRegistry {
             List<EnergyAction> actions = reserveEnergyBatch(requirement.fePerTick(), insert,
                     capabilities, reservations);
             if (actions == null) {
-                return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, "insufficient_energy"));
+                return new RequirementPlan.OperationPlan(List.of(), blocked(requirement,
+                        insert ? "no_output_capacity" : "insufficient_energy"));
             }
             if (!materialize) continue;
             for (EnergyAction action : actions) {

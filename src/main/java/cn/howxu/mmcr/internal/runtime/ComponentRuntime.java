@@ -42,26 +42,42 @@ public final class ComponentRuntime {
     private long capabilityVersion;
     private long modifierVersion;
     private long stateVersion;
+    private long componentPresentationEpoch;
+    private long capabilityPresentationEpoch;
+    private long levelVersion;
+    private long cachedComponentPresentationEpoch = Long.MIN_VALUE;
+    private List<ControllerRuntimeSnapshot.ComponentPresentation> cachedComponentPresentations = List.of();
+    private long cachedCapabilityPresentationEpoch = Long.MIN_VALUE;
+    private List<ControllerRuntimeSnapshot.CapabilityPresentation> cachedCapabilityPresentations = List.of();
     private Map<String, List<RecipeModifier>> foundModifiers = Map.of();
+    private List<RecipeModifier> flattenedModifiers = List.of();
     private Map<Identifier, MachineLevel> foundLevels = Map.of();
     private Set<BlockPos> linkedPortPositions = Set.of();
     private ModuleConnectionStatus moduleConnectionStatus = ModuleConnectionStatus.disconnected();
     private int installedModuleCount;
 
-    public void replaceComponents(List<ProcessingComponent> components) {
+    public boolean replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
         CapabilityState capabilityState = capabilityStateFor(nextComponents);
         List<MachineCapability> nextCapabilities = capabilityState.capabilities();
         List<CapabilityIdentity> nextIdentity = capabilityState.identity();
         boolean componentsChanged = !this.components.equals(nextComponents);
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
+        CapabilityAggregate nextAggregate = capabilityAggregate(nextCapabilities);
+        boolean capabilityValuesChanged = !capabilityAggregate.equals(nextAggregate);
         this.components = nextComponents;
-        if (componentsChanged) stateVersion++;
+        if (componentsChanged) {
+            stateVersion++;
+            componentPresentationEpoch++;
+        }
         this.capabilities = nextCapabilities;
-        this.capabilityAggregate = capabilityAggregate(nextCapabilities);
-        if (!capabilitiesChanged) return;
-        this.capabilityIdentity = nextIdentity;
-        capabilityVersion++;
+        this.capabilityAggregate = nextAggregate;
+        if (capabilitiesChanged || capabilityValuesChanged) capabilityPresentationEpoch++;
+        if (capabilitiesChanged) {
+            this.capabilityIdentity = nextIdentity;
+            capabilityVersion++;
+        }
+        return componentsChanged;
     }
 
     public List<ProcessingComponent> components() {
@@ -73,6 +89,7 @@ public final class ComponentRuntime {
     }
 
     public List<ControllerRuntimeSnapshot.ComponentPresentation> componentPresentations() {
+        if (cachedComponentPresentationEpoch == componentPresentationEpoch) return cachedComponentPresentations;
         List<ControllerRuntimeSnapshot.ComponentPresentation> snapshots = new ArrayList<>(components.size());
         for (ProcessingComponent component : components) {
             MachineComponent machineComponent = component.getComponent();
@@ -82,10 +99,13 @@ public final class ComponentRuntime {
                     machineComponent == null ? null : machineComponent.ioType(),
                     component.tags()));
         }
-        return List.copyOf(snapshots);
+        cachedComponentPresentations = List.copyOf(snapshots);
+        cachedComponentPresentationEpoch = componentPresentationEpoch;
+        return cachedComponentPresentations;
     }
 
     public List<ControllerRuntimeSnapshot.CapabilityPresentation> capabilityPresentations() {
+        if (cachedCapabilityPresentationEpoch == capabilityPresentationEpoch) return cachedCapabilityPresentations;
         List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(capabilities.size());
         for (MachineCapability capability : capabilities) {
             CapabilityStorage storage = capability.storage();
@@ -97,10 +117,12 @@ public final class ComponentRuntime {
                 snapshots.add(resourcePresentation(capability, resourceStorage));
             } else {
                 snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                        capability.type() == null ? null : capability.type().id(), capability.ioType(), 0L, 0L, List.of()));
+                    capability.type() == null ? null : capability.type().id(), capability.ioType(), 0L, 0L, List.of()));
             }
         }
-        return List.copyOf(snapshots);
+        cachedCapabilityPresentations = List.copyOf(snapshots);
+        cachedCapabilityPresentationEpoch = capabilityPresentationEpoch;
+        return cachedCapabilityPresentations;
     }
 
     public long capabilityVersion() {
@@ -115,7 +137,15 @@ public final class ComponentRuntime {
         return stateVersion;
     }
 
-    public void replaceModifiers(Map<String, List<RecipeModifier>> modifiers) {
+    public long levelVersion() {
+        return levelVersion;
+    }
+
+    public long capabilityPresentationEpoch() {
+        return capabilityPresentationEpoch;
+    }
+
+    public boolean replaceModifiers(Map<String, List<RecipeModifier>> modifiers) {
         Map<String, List<RecipeModifier>> next = new LinkedHashMap<>();
         if (modifiers != null) {
             modifiers.forEach((key, value) -> next.put(key, List.copyOf(value == null ? List.of() : value)));
@@ -130,11 +160,13 @@ public final class ComponentRuntime {
                     break;
                 }
             }
-            if (orderedEqual) return;
+            if (orderedEqual) return false;
         }
         foundModifiers = immutableMap(next);
+        flattenedModifiers = next.values().stream().flatMap(List::stream).toList();
         modifierVersion++;
         stateVersion++;
+        return true;
     }
 
     public Map<String, List<RecipeModifier>> foundModifiers() {
@@ -142,25 +174,28 @@ public final class ComponentRuntime {
     }
 
     public List<RecipeModifier> modifierList() {
-        return foundModifiers.values().stream().flatMap(List::stream).toList();
+        return flattenedModifiers;
     }
 
-    public void replaceLevels(Map<Identifier, MachineLevel> levels) {
+    public boolean replaceLevels(Map<Identifier, MachineLevel> levels) {
         Map<Identifier, MachineLevel> next = new LinkedHashMap<>(levels == null ? Map.of() : levels);
-        if (foundLevels.equals(next)) return;
+        if (foundLevels.equals(next)) return false;
         foundLevels = immutableMap(next);
+        levelVersion++;
         stateVersion++;
+        return true;
     }
 
     public Map<Identifier, MachineLevel> foundLevels() {
         return foundLevels;
     }
 
-    public void replaceLinkedPortPositions(Set<BlockPos> positions) {
+    public boolean replaceLinkedPortPositions(Set<BlockPos> positions) {
         Set<BlockPos> next = Set.copyOf(positions == null ? Set.of() : positions);
-        if (linkedPortPositions.equals(next)) return;
+        if (linkedPortPositions.equals(next)) return false;
         linkedPortPositions = next;
         stateVersion++;
+        return true;
     }
 
     public Set<BlockPos> linkedPortPositions() {
@@ -171,13 +206,14 @@ public final class ComponentRuntime {
         return position != null && linkedPortPositions.contains(position);
     }
 
-    public void replaceModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
+    public boolean replaceModuleConnectionState(ModuleConnectionStatus status, int installedModuleCount) {
         if (status == null) status = ModuleConnectionStatus.disconnected();
         if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
-        if (moduleConnectionStatus.equals(status) && this.installedModuleCount == installedModuleCount) return;
+        if (moduleConnectionStatus.equals(status) && this.installedModuleCount == installedModuleCount) return false;
         moduleConnectionStatus = status;
         this.installedModuleCount = installedModuleCount;
         stateVersion++;
+        return true;
     }
 
     public ModuleConnectionStatus moduleConnectionStatus() {
@@ -196,6 +232,11 @@ public final class ComponentRuntime {
 
     public CapabilityAggregate capabilityAggregate() {
         return capabilityAggregate;
+    }
+
+    public void markCapabilityPresentationChanged() {
+        capabilityAggregate = capabilityAggregate(capabilities);
+        capabilityPresentationEpoch++;
     }
 
     public int maxParallelism(Machine machine) {

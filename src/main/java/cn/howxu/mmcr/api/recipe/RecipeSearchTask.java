@@ -30,18 +30,28 @@ public final class RecipeSearchTask {
     private final List<MachineRecipe> candidates;
     private final @Nullable Identifier lockedRecipeId;
     private final List<MachineCapability> capabilities;
+    private final List<RecipeModifier> modifiers;
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
                             int maxParallelism, List<MachineRecipe> candidates,
                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities) {
+        this(snapshot, machineId, structureVersion, maxParallelism, orderedCandidates(candidates),
+                lockedRecipeId, capabilities, flattenModifiers(snapshot));
+    }
+
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+                            int maxParallelism, List<MachineRecipe> orderedCandidates,
+                            @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
+                            List<RecipeModifier> modifiers) {
         if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
         this.snapshot = snapshot;
         this.machineId = machineId;
         this.structureVersion = structureVersion;
         this.maxParallelism = Math.max(1, maxParallelism);
-        this.candidates = List.copyOf(candidates == null ? List.of() : candidates);
+        this.candidates = List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
         this.lockedRecipeId = lockedRecipeId;
         this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
+        this.modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
     }
 
     public RecipeSearchResult compute() {
@@ -49,7 +59,7 @@ public final class RecipeSearchTask {
         @Nullable ExecutionStatus bestFailure = null;
         @Nullable PlanningResult bestPlanningResult = null;
         float bestValidity = 0.0F;
-        List<MachineRecipe> ordered = orderedCandidates(searchCandidates());
+        List<MachineRecipe> ordered = searchCandidates();
 
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
             MachineRecipe recipe = ordered.get(recipeIndex);
@@ -99,11 +109,7 @@ public final class RecipeSearchTask {
     }
 
     private CraftingContext borrowContext(MachineRecipe recipe) {
-        return CraftingContextPool.global().borrow(recipe.id(), new CapabilitySnapshot(capabilities), modifiers());
-    }
-
-    private List<RecipeModifier> modifiers() {
-        return snapshot.foundModifiers().values().stream().flatMap(List::stream).toList();
+        return CraftingContextPool.global().borrow(recipe.id(), new CapabilitySnapshot(capabilities), modifiers);
     }
 
     private @Nullable LevelInsufficientFailure levelFailure(MachineRecipe recipe) {
@@ -118,12 +124,17 @@ public final class RecipeSearchTask {
         return null;
     }
 
-    private List<MachineRecipe> orderedCandidates(List<MachineRecipe> values) {
-        return values.stream()
+    private static List<MachineRecipe> orderedCandidates(List<MachineRecipe> values) {
+        return (values == null ? List.<MachineRecipe>of() : values).stream()
                 .sorted(Comparator.comparingInt(MachineRecipe::priority)
                         .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
                         .thenComparing(MachineRecipe::id))
                 .toList();
+    }
+
+    private static List<RecipeModifier> flattenModifiers(ControllerRuntimeSnapshot snapshot) {
+        return snapshot == null ? List.of()
+                : snapshot.foundModifiers().values().stream().flatMap(List::stream).toList();
     }
 
     private List<MachineRecipe> searchCandidates() {

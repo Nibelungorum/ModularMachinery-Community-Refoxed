@@ -123,7 +123,6 @@ public final class BulkItemStorage extends SnapshotJournal<BulkItemStorage.Snaps
     protected void revertToSnapshot(Snapshot snapshot) {
         resource = snapshot.resource;
         amount = snapshot.amount;
-        onChange.run();
     }
 
     @Override

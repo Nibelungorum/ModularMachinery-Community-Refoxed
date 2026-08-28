@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
@@ -124,6 +125,71 @@ class RecipeRegistryTest {
     }
 
     @Test
+    void replacingRecipeContentPublishesNewMachineCatalogVersion() {
+        Identifier machineA = Identifier.parse("mmcr:catalog_machine_a");
+        MachineRecipe first = recipe("mmcr:catalog_recipe_a", machineA.toString(), 20);
+        RecipeRegistry.replaceDynamic(Map.of(first.id(), first));
+        long firstVersion = RecipeRegistry.catalog(machineA).version();
+
+        MachineRecipe changed = recipe(first.id().toString(), machineA.toString(), 40);
+        RecipeRegistry.replaceDynamic(Map.of(changed.id(), changed));
+
+        assertThat(RecipeRegistry.catalog(machineA).version()).isNotEqualTo(firstVersion);
+        assertThat(RecipeRegistry.catalog(machineA).recipes()).containsExactly(changed);
+        assertThat(RecipeRegistry.catalog(machineA).recipes().getFirst().tickTime()).isEqualTo(40);
+    }
+
+    @Test
+    void changingOneMachineKeepsUnchangedMachineCatalogVersion() {
+        Identifier machineA = Identifier.parse("mmcr:catalog_tick_machine_a");
+        Identifier machineB = Identifier.parse("mmcr:catalog_tick_machine_b");
+        MachineRecipe firstA = recipe("mmcr:catalog_tick_recipe_a", machineA.toString(), 20);
+        MachineRecipe firstB = recipe("mmcr:catalog_tick_recipe_b", machineB.toString(), 20);
+        RecipeRegistry.replaceDynamic(Map.of(firstA.id(), firstA, firstB.id(), firstB));
+        long machineAVersion = RecipeRegistry.catalog(machineA).version();
+
+        MachineRecipe changedB = recipe(firstB.id().toString(), machineB.toString(), 60);
+        RecipeRegistry.replaceDynamic(Map.of(firstA.id(), firstA, changedB.id(), changedB));
+
+        assertThat(RecipeRegistry.catalog(machineA).version()).isEqualTo(machineAVersion);
+        assertThat(RecipeRegistry.catalog(machineA).recipes()).containsExactly(firstA);
+        assertThat(RecipeRegistry.catalog(machineB).recipes()).containsExactly(changedB);
+    }
+
+    @Test
+    void removingLastRecipePublishesVersionedEmptyMachineCatalog() {
+        Identifier machine = Identifier.parse("mmcr:catalog_empty_machine");
+        MachineRecipe recipe = recipe("mmcr:catalog_empty_recipe", machine.toString(), 20);
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        long populatedVersion = RecipeRegistry.catalog(machine).version();
+
+        RecipeRegistry.replaceDynamic(Map.of());
+
+        MachineRecipeCatalog emptyCatalog = RecipeRegistry.catalog(machine);
+        assertThat(emptyCatalog.version()).isGreaterThan(populatedVersion);
+        assertThat(emptyCatalog.recipes()).isEmpty();
+        assertThat(emptyCatalog.orderedRecipes()).isEmpty();
+        assertThat(emptyCatalog.inputIndex().allCandidates()).isEmpty();
+    }
+
+    @Test
+    void clearAllPublishesNewVersionedEmptyCatalogsForKnownMachines() {
+        Identifier machine = Identifier.parse("mmcr:catalog_clear_machine");
+        MachineRecipe recipe = recipe("mmcr:catalog_clear_recipe", machine.toString(), 20);
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        long populatedVersion = RecipeRegistry.catalog(machine).version();
+
+        RecipeRegistry.clearAll();
+
+        MachineRecipeCatalog emptyCatalog = RecipeRegistry.catalog(machine);
+        assertThat(emptyCatalog.version()).isGreaterThan(populatedVersion);
+        assertThat(emptyCatalog.recipes()).isEmpty();
+        assertThat(emptyCatalog.orderedRecipes()).isEmpty();
+        assertThat(emptyCatalog.inputIndex().allCandidates()).isEmpty();
+        assertThat(RecipeRegistry.catalog(Identifier.parse("mmcr:catalog_never_seen")).recipes()).isEmpty();
+    }
+
+    @Test
     void dynamicRecipeCannotConflictWithStaticRecipe() {
         var id = Identifier.parse("mmcr:dynamic_static_conflict");
         RecipeRegistry.registerStatic(recipe(id.toString(), "mmcr:machine"));
@@ -168,7 +234,25 @@ class RecipeRegistryTest {
                 .containsExactly("data-pack layer recipe mmcr:warning_recipe overrides static layer recipe mmcr:warning_recipe");
     }
 
+    @Test
+    void recipe_layer_publish_discards_pooled_planning_contexts() {
+        Identifier recipeId = Identifier.parse("mmcr:pool_reload_recipe");
+        CraftingContextPool pool = CraftingContextPool.global();
+        CraftingContext context = pool.borrow(recipeId, new CapabilitySnapshot(List.of()), List.of());
+        pool.returnContext(recipeId, context);
+
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe(recipeId.toString(), "mmcr:pool_reload_machine")));
+
+        CraftingContext replacement = pool.borrow(recipeId, new CapabilitySnapshot(List.of()), List.of());
+
+        assertThat(replacement).isNotSameAs(context);
+    }
+
     private static MachineRecipe recipe(String id, String machineId) {
-        return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
+        return recipe(id, machineId, 1);
+    }
+
+    private static MachineRecipe recipe(String id, String machineId, int tickTime) {
+        return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), tickTime, List.of(), List.of());
     }
 }

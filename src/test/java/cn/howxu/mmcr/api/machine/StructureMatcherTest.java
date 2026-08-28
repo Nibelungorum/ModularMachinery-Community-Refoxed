@@ -301,6 +301,31 @@ class StructureMatcherTest {
     }
 
     @Test
+    void compiled_pattern_reuses_an_immutable_scan_plan() {
+        Map<BlockPos, BlockPredicate> ordered = new LinkedHashMap<>();
+        ordered.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE));
+        ordered.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
+        ordered.put(new BlockPos(2, 0, 0), new BlockPredicate.Any());
+        BlockArray pattern = new BlockArray(ordered);
+        DynamicMachine machine = new DynamicMachine(
+                Identifier.fromNamespaceAndPath("mmcr", "matcher_scan_plan"), "Matcher Scan Plan", pattern);
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+        CompiledMachinePattern.ScanPlan first = compiled.scanPlan(Direction.SOUTH, 2);
+        CompiledMachinePattern.ScanPlan second = compiled.scanPlan(Direction.SOUTH, 2);
+
+        assertThat(second).isSameAs(first);
+        assertThat(first.entryPositions()).containsExactly(BlockPos.ZERO, new BlockPos(1, 0, 0), new BlockPos(2, 0, 0));
+        assertThat(first.entryPredicates()).containsExactly(
+                new BlockPredicate.OfBlock(Blocks.STONE),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPredicate.Any());
+        assertThat(first.entryOrder()).containsExactly(0, 1, 2);
+        assertThat(first.sentinelIndexes()).containsExactly(0, 1);
+        assertThat(first.sentinelMembership()).containsExactly(true, true, false);
+    }
+
+    @Test
     void bounded_scan_advances_one_of_five_batches_until_valid() {
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         for (int index = 0; index < 10; index++) {

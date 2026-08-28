@@ -8,12 +8,12 @@ import net.minecraft.resources.Identifier;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Set;
 
 /** Stores static, data-pack, and direct-runtime recipes and publishes one effective view.
  *
@@ -28,6 +28,8 @@ public final class RecipeRegistry {
     private static volatile State STATE = State.empty();
     private static long reloadVersion;
     private static long registryVersion;
+    private static long catalogGeneration;
+    private static final MachineRecipeCatalog EMPTY_CATALOG = new MachineRecipeCatalog(0L, List.of(), List.of(), RecipeCandidateIndex.empty());
 
     private RecipeRegistry() {
     }
@@ -80,7 +82,13 @@ public final class RecipeRegistry {
 
     public static List<MachineRecipe> byMachineId(Identifier machineId) {
         if (machineId == null) return Collections.emptyList();
-        return STATE.byMachine().getOrDefault(machineId, List.of());
+        MachineRecipeCatalog catalog = STATE.catalogs().get(machineId);
+        return catalog == null ? List.of() : catalog.recipes();
+    }
+
+    public static MachineRecipeCatalog catalog(Identifier machineId) {
+        if (machineId == null) return EMPTY_CATALOG;
+        return STATE.catalogs().getOrDefault(machineId, EMPTY_CATALOG);
     }
 
     public static List<MachineRecipe> recipes() {
@@ -223,24 +231,43 @@ public final class RecipeRegistry {
             recipes.putIfAbsent(entry.getKey(), entry.getValue());
         }
         Map<Identifier, List<MachineRecipe>> byMachine = new LinkedHashMap<>();
-        Map<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> ordered = new LinkedHashMap<>();
         for (MachineRecipe recipe : recipes.values()) {
-            TreeMap<Integer, TreeSet<MachineRecipe>> priorities = ordered.computeIfAbsent(
-                    recipe.machineId(), ignored -> new TreeMap<>());
-            priorities.computeIfAbsent(recipe.priority(), ignored ->
-                    new TreeSet<>(Comparator.comparing(MachineRecipe::id))).add(recipe);
+            byMachine.computeIfAbsent(recipe.machineId(), ignored -> new ArrayList<>()).add(recipe);
         }
-        for (Map.Entry<Identifier, TreeMap<Integer, TreeSet<MachineRecipe>>> entry : ordered.entrySet()) {
-            byMachine.put(entry.getKey(), entry.getValue().values().stream().flatMap(TreeSet::stream).toList());
+        Map<Identifier, MachineRecipeCatalog> catalogs = new LinkedHashMap<>();
+        Set<Identifier> machineIds = new LinkedHashSet<>(STATE.catalogs().keySet());
+        machineIds.addAll(byMachine.keySet());
+        for (Identifier machineId : machineIds) {
+            List<MachineRecipe> machineRecipes = byMachine.getOrDefault(machineId, List.of()).stream()
+                    .sorted(Comparator.comparingInt(MachineRecipe::priority)
+                            .thenComparing(MachineRecipe::id))
+                    .toList();
+            List<MachineRecipe> orderedRecipes = machineRecipes.stream()
+                    .sorted(Comparator.comparingInt(MachineRecipe::priority)
+                            .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
+                            .thenComparing(MachineRecipe::id))
+                    .toList();
+            MachineRecipeCatalog previous = STATE.catalogs().get(machineId);
+            long version = previous != null && previous.orderedRecipes().equals(orderedRecipes)
+                    ? previous.version() : ++catalogGeneration;
+            catalogs.put(machineId, new MachineRecipeCatalog(version, machineRecipes, orderedRecipes,
+                    RecipeCandidateIndex.build(orderedRecipes)));
         }
         STATE = new State(immutable(staticRecipes), immutable(dataPack), immutable(kubeJS), immutable(dynamic),
-                immutable(recipes), immutable(byMachine), List.copyOf(warnings));
+                immutable(recipes), immutable(catalogs), List.copyOf(warnings));
+        CraftingContextPool.onGlobalReload();
     }
 
     public static void clearAll() {
         synchronized (RuntimeContentVersion.lock()) {
+        Map<Identifier, MachineRecipeCatalog> emptyCatalogs = new LinkedHashMap<>();
+        for (Identifier machineId : STATE.catalogs().keySet()) {
+            emptyCatalogs.put(machineId, new MachineRecipeCatalog(++catalogGeneration,
+                    List.of(), List.of(), RecipeCandidateIndex.empty()));
+        }
         STATIC_RECIPES.clear();
-        STATE = State.empty();
+        STATE = State.empty(emptyCatalogs);
+        CraftingContextPool.onGlobalReload();
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
@@ -258,12 +285,16 @@ public final class RecipeRegistry {
     private record State(Map<Identifier, MachineRecipe> staticRecipes,
                          Map<Identifier, MachineRecipe> dataPack,
                          Map<Identifier, MachineRecipe> kubeJS,
-                         Map<Identifier, MachineRecipe> dynamic,
-                         Map<Identifier, MachineRecipe> effective,
-                         Map<Identifier, List<MachineRecipe>> byMachine,
-                         List<String> warnings) {
+                          Map<Identifier, MachineRecipe> dynamic,
+                          Map<Identifier, MachineRecipe> effective,
+                          Map<Identifier, MachineRecipeCatalog> catalogs,
+                          List<String> warnings) {
         private static State empty() {
-            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of());
+            return empty(Map.of());
+        }
+
+        private static State empty(Map<Identifier, MachineRecipeCatalog> catalogs) {
+            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), immutable(catalogs), List.of());
         }
 
         private List<MachineRecipe> effectiveValues() {

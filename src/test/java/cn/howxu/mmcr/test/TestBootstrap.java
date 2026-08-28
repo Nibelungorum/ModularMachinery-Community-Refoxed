@@ -134,7 +134,8 @@ public final class TestBootstrap {
 
     public static void registerRuntimeBuiltins() {
         if (!ContentRegistrationCoordinator.isCommitted()
-                || MachineDefinitions.getRegistration(id("test_cube")) == null) {
+                || MachineDefinitions.getRegistration(id("test_cube")) == null
+                || MachineRegistry.getMachine(id("test_cube")) == null) {
             restoreMachineDefinitions();
         }
         registerRuntimeTestContent();

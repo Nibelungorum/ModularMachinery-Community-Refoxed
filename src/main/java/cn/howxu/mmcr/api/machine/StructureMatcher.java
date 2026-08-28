@@ -14,12 +14,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 public final class StructureMatcher {
 
@@ -42,11 +40,43 @@ public final class StructureMatcher {
                                       int stageNumber, Object patternIdentity, BlockArray pattern,
                                       Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                       boolean stateSensitive, ScanOptions options, @Nullable Mismatch previousMismatch) {
-        List<Map.Entry<BlockPos, BlockPredicate>> entries = pattern.pattern().entrySet().stream()
-                .map(entry -> Map.entry(entry.getKey(), entry.getValue()))
-                .toList();
+        return beginScan(structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity, pattern,
+                replacements, stateSensitive, options, previousMismatch, null, Long.MIN_VALUE);
+    }
+
+    public static ScanState beginScan(long structureVersion, Direction frontFacing, Direction rollFacing,
+                                      int stageNumber, Object patternIdentity, BlockArray pattern,
+                                      Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                      boolean stateSensitive, ScanOptions options, @Nullable Mismatch previousMismatch,
+                                      @Nullable CompiledMachinePattern.ScanPlan scanPlan, long chunkStateEpoch) {
+        int batchSize = pattern.isEmpty() ? 0
+                : (pattern.pattern().size() + options.batchCount() - 1) / options.batchCount();
+        CompiledMachinePattern.ScanPlan effectivePlan = scanPlan == null
+                ? CompiledMachinePattern.ScanPlan.forPattern(pattern, Math.min(options.sentinelCount(), batchSize)) : scanPlan;
         return new ScanState(structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity,
-                entries, replacements == null ? Map.of() : replacements, stateSensitive, options, previousMismatch);
+                effectivePlan, replacements == null ? Map.of() : replacements, stateSensitive, options, previousMismatch,
+                chunkStateEpoch);
+    }
+
+    public static Optional<Mismatch> firstSentinelMismatch(long structureVersion, Direction frontFacing,
+                                                            Direction rollFacing, int stageNumber,
+                                                            Object patternIdentity, CompiledMachinePattern.ScanPlan plan,
+                                                            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
+                                                            boolean stateSensitive, Level level, BlockPos ctrlPos) {
+        Map<BlockPos, List<SingleBlockModifierReplacement>> effectiveReplacements = replacements == null
+                ? Map.of() : replacements;
+        for (int index = 0; index < plan.sentinelCount(); index++) {
+            int entryIndex = plan.sentinelAt(index);
+            BlockPos relativePos = plan.entryPositions().get(entryIndex);
+            BlockPredicate expected = plan.entryPredicates().get(entryIndex);
+            Mismatch mismatch = new Mismatch(relativePos, ctrlPos.offset(relativePos), expected,
+                    level.getBlockState(ctrlPos.offset(relativePos)), structureVersion, frontFacing, rollFacing,
+                    stageNumber, patternIdentity);
+            if (!matchesEntry(expected, mismatch.actualState(), effectiveReplacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
+                return Optional.of(mismatch);
+            }
+        }
+        return Optional.empty();
     }
 
     public enum ScanStatus { IN_PROGRESS, VALID, MISMATCH, INVALIDATED }
@@ -76,12 +106,11 @@ public final class StructureMatcher {
         private final Direction rollFacing;
         private final int stageNumber;
         private final Object patternIdentity;
-        private final List<Map.Entry<BlockPos, BlockPredicate>> entries;
+        private final CompiledMachinePattern.ScanPlan scanPlan;
         private final Map<BlockPos, List<SingleBlockModifierReplacement>> replacements;
         private final boolean stateSensitive;
         private final ScanOptions options;
-        private final List<Integer> sentinelIndexes;
-        private final Set<Integer> checkedSentinelIndexes = new HashSet<>();
+        private final int activeSentinelCount;
         private int sentinelCursor;
         private boolean sentinelsChecked;
         private int scanIndex;
@@ -90,26 +119,30 @@ public final class StructureMatcher {
         private @Nullable InvalidationReason invalidated;
 
         private ScanState(long structureVersion, Direction frontFacing, Direction rollFacing, int stageNumber,
-                          Object patternIdentity, List<Map.Entry<BlockPos, BlockPredicate>> entries,
+                          Object patternIdentity, CompiledMachinePattern.ScanPlan scanPlan,
                           Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
-                          boolean stateSensitive, ScanOptions options, @Nullable Mismatch previousMismatch) {
+                          boolean stateSensitive, ScanOptions options, @Nullable Mismatch previousMismatch,
+                          long chunkStateEpoch) {
             this.structureVersion = structureVersion;
             this.frontFacing = frontFacing;
             this.rollFacing = rollFacing;
             this.stageNumber = stageNumber;
             this.patternIdentity = patternIdentity;
-            this.entries = List.copyOf(entries);
+            this.scanPlan = scanPlan;
             this.replacements = Map.copyOf(replacements);
             this.stateSensitive = stateSensitive;
             this.options = options;
-            this.sentinelIndexes = sentinelIndexes(entries.size(), Math.min(options.sentinelCount(), batchSize()));
+            this.activeSentinelCount = Math.min(scanPlan.sentinelCount(), batchSize());
             this.previousMismatch = previousMismatch != null && previousMismatch.matchesIdentity(
                     structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity)
                     ? previousMismatch : null;
+            this.chunkStateEpoch = chunkStateEpoch;
         }
 
+        private final long chunkStateEpoch;
+
         public int batchSize() {
-            return entries.isEmpty() ? 0 : (entries.size() + options.batchCount() - 1) / options.batchCount();
+            return scanPlan.entryCount() == 0 ? 0 : (scanPlan.entryCount() + options.batchCount() - 1) / options.batchCount();
         }
 
         public int cursor() { return scanIndex; }
@@ -118,7 +151,9 @@ public final class StructureMatcher {
         public Direction rollFacing() { return rollFacing; }
         public int stageNumber() { return stageNumber; }
         public Object patternIdentity() { return patternIdentity; }
-        public List<Map.Entry<BlockPos, BlockPredicate>> entries() { return entries; }
+        public List<Map.Entry<BlockPos, BlockPredicate>> entries() { return scanPlan.entries(); }
+        public int entryCount() { return scanPlan.entryCount(); }
+        public long chunkStateEpoch() { return chunkStateEpoch; }
         public @Nullable Mismatch previousMismatch() { return previousMismatch; }
         public @Nullable InvalidationReason invalidated() { return invalidated; }
 
@@ -142,38 +177,46 @@ public final class StructureMatcher {
                 previousMismatch = null;
             }
             if (options.sentinelEnabled() && !sentinelsChecked) {
-                while (sentinelCursor < sentinelIndexes.size() && checked < budget) {
-                    int index = sentinelIndexes.get(sentinelCursor++);
-                    Map.Entry<BlockPos, BlockPredicate> entry = entries.get(index);
-                    Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
+                while (sentinelCursor < activeSentinelCount && checked < budget) {
+                    int index = scanPlan.sentinelAt(sentinelCursor++);
+                    BlockPos relativePos = scanPlan.entryPositions().get(index);
+                    BlockPredicate expected = scanPlan.entryPredicates().get(index);
+                    Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
                             structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
                     checked++;
-                    checkedSentinelIndexes.add(index);
-                    if (!matchesEntry(entry.getValue(), mismatch.actualState(),
-                            replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
+                    if (!matchesEntry(expected, mismatch.actualState(),
+                            replacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
                         previousMismatch = mismatch;
                         return result = new ScanResult(ScanStatus.MISMATCH, checked, mismatch, null);
                     }
                 }
-                sentinelsChecked = sentinelCursor == sentinelIndexes.size();
+                sentinelsChecked = sentinelCursor == activeSentinelCount;
             }
-            while (scanIndex < entries.size() && checked < budget) {
-                if (checkedSentinelIndexes.contains(scanIndex)) {
+            while (scanIndex < scanPlan.entryCount() && checked < budget) {
+                if (sentinelWasChecked(scanIndex)) {
                     scanIndex++;
                     continue;
                 }
-                Map.Entry<BlockPos, BlockPredicate> entry = entries.get(scanIndex++);
-                Mismatch mismatch = mismatchAt(entry.getKey(), entry.getValue(), level, ctrlPos,
+                int index = scanIndex++;
+                BlockPos relativePos = scanPlan.entryPositions().get(index);
+                BlockPredicate expected = scanPlan.entryPredicates().get(index);
+                Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
                         structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
                 checked++;
-                if (!matchesEntry(entry.getValue(), mismatch.actualState(),
-                        replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
+                if (!matchesEntry(expected, mismatch.actualState(),
+                        replacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
                     previousMismatch = mismatch;
                     return result = new ScanResult(ScanStatus.MISMATCH, checked, mismatch, null);
                 }
             }
-            ScanStatus status = scanIndex == entries.size() ? ScanStatus.VALID : ScanStatus.IN_PROGRESS;
+            ScanStatus status = scanIndex == scanPlan.entryCount() ? ScanStatus.VALID : ScanStatus.IN_PROGRESS;
             return result = new ScanResult(status, checked, null, null);
+        }
+
+        private boolean sentinelWasChecked(int index) {
+            if (!options.sentinelEnabled() || sentinelCursor == 0 || !scanPlan.isSentinel(index)) return false;
+            return sentinelsChecked || sentinelCursor == activeSentinelCount
+                    || index < scanPlan.sentinelAt(sentinelCursor);
         }
 
         private static Mismatch mismatchAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
@@ -185,16 +228,6 @@ public final class StructureMatcher {
         }
     }
 
-    private static List<Integer> sentinelIndexes(int size, int count) {
-        if (size == 0 || count == 0) return List.of();
-        Set<Integer> indexes = new HashSet<>();
-        indexes.add(0);
-        indexes.add(size - 1);
-        indexes.add(size / 2);
-        int slots = Math.min(size, count);
-        for (int slot = 0; slot < slots; slot++) indexes.add((int) ((long) slot * (size - 1) / Math.max(1, slots - 1)));
-        return indexes.stream().sorted().limit(count).toList();
-    }
 
     public static boolean matches(BlockArray pattern, Level level, BlockPos ctrlPos, Direction ctrlFacing) {
         return matches(pattern, level, ctrlPos, ctrlFacing, Map.of());

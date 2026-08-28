@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -27,6 +28,8 @@ import java.util.UUID;
 public final class StructureRuntime {
     private final MachineControllerBlockEntity controller;
 
+    public enum CheckReason { DIRTY_EVENT, DIAGNOSTIC, SCAN_CONTINUATION, SAFETY_CHECK }
+
     private Machine machine;
     private Machine foundMachine;
     private BlockArray foundPattern;
@@ -35,6 +38,10 @@ public final class StructureRuntime {
     private Direction matchedRollFacing = Direction.SOUTH;
     private int matchedStructureStage;
     private long version;
+    private long stateEpoch;
+    private CheckReason checkReason = CheckReason.DIRTY_EVENT;
+    private boolean componentRefreshRequired;
+    private long chunkStateEpoch;
     private int checkCounter;
     private long nextCheckTick = -1L;
     private boolean dirty = true;
@@ -63,9 +70,18 @@ public final class StructureRuntime {
     }
 
     public void requestCheck() {
-        if (!dirty || nextCheckTick >= 0L) version = nextVersion(version);
+        requestCheck(CheckReason.DIRTY_EVENT);
+    }
+
+    void requestCheck(CheckReason reason) {
+        boolean changed = !dirty || nextCheckTick >= 0L;
+        if (changed) {
+            version = nextVersion(version);
+            stateEpoch = nextVersion(stateEpoch);
+        }
         dirty = true;
         nextCheckTick = -1L;
+        checkReason = reason == null ? CheckReason.DIRTY_EVENT : reason;
     }
 
     public void onBlockChanged(BlockPos position) {
@@ -94,6 +110,11 @@ public final class StructureRuntime {
         boolean hadState = foundMachine != null || foundPattern != null || foundCompiledPattern != null
                 || controllerFacing != null || matchedStructureStage != 0 || formed || scan != null
                 || !Objects.equals(machine, configuredMachine);
+        boolean stateChanged = !Objects.equals(machine, configuredMachine) || foundMachine != null || foundPattern != null
+                || foundCompiledPattern != null || controllerFacing != null || matchedRollFacing != Direction.SOUTH
+                || matchedStructureStage != 0 || dirty || scan != null || formationFailure != null
+                || mismatchDiagnostic != null || lastStructureError != null || formed || !structureAreaLoaded
+                || !criticalChunks.isEmpty();
         long nextVersion = hadState || forceVersion ? nextVersion(version) : version;
         machine = configuredMachine;
         foundMachine = null;
@@ -103,6 +124,8 @@ public final class StructureRuntime {
         matchedRollFacing = Direction.SOUTH;
         matchedStructureStage = 0;
         version = nextVersion;
+        checkReason = CheckReason.DIRTY_EVENT;
+        componentRefreshRequired = false;
         checkCounter = 0;
         nextCheckTick = -1L;
         dirty = false;
@@ -124,6 +147,7 @@ public final class StructureRuntime {
         formed = false;
         structureAreaLoaded = true;
         criticalChunks = Set.of();
+        if (stateChanged || hadState || forceVersion) stateEpoch = nextVersion(stateEpoch);
     }
 
     public boolean formed() {
@@ -135,7 +159,14 @@ public final class StructureRuntime {
     }
 
     void restoreVersion(long version) {
-        this.version = Math.max(0L, version);
+        long restored = Math.max(0L, version);
+        if (this.version == restored) return;
+        this.version = restored;
+        stateEpoch = nextVersion(stateEpoch);
+    }
+
+    long stateEpoch() {
+        return stateEpoch;
     }
 
     private static long nextVersion(long version) {
@@ -150,15 +181,20 @@ public final class StructureRuntime {
 
     StructureWorkSnapshot workSnapshot() {
         return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick,
-                scan == null ? null : new StructureWorkSnapshot.ScanView(scan.cursor(), scan.batchSize(), scan.entries().size(),
-                        scan.structureVersion(), scan.frontFacing(), scan.rollFacing(), scan.stageNumber(), scan.patternIdentity()),
+                scan == null ? null : new StructureWorkSnapshot.ScanView(scan.cursor(), scan.batchSize(), scan.entryCount(),
+                        scan.structureVersion(), scan.frontFacing(), scan.rollFacing(), scan.stageNumber(), scan.patternIdentity(),
+                        scan.chunkStateEpoch()),
                 scanMachine, scanCandidate,
                 previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                 checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                mismatchDiagnostic, lastStructureError);
+                mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
     }
 
     void publishWork(StructureWorkSnapshot state) {
+        boolean snapshotChanged = dirty != state.dirty()
+                || !Objects.equals(formationFailure, state.formationFailure())
+                || !Objects.equals(mismatchDiagnostic, state.mismatchDiagnostic())
+                || !Objects.equals(lastStructureError, state.lastStructureError());
         dirty = state.dirty();
         checkCounter = state.checkCounter();
         nextCheckTick = state.nextCheckTick();
@@ -176,16 +212,22 @@ public final class StructureRuntime {
         formationFailure = state.formationFailure();
         mismatchDiagnostic = state.mismatchDiagnostic();
         lastStructureError = state.lastStructureError();
+        checkReason = state.checkReason();
+        componentRefreshRequired = state.componentRefreshRequired();
+        chunkStateEpoch = Math.max(chunkStateEpoch, state.chunkStateEpoch());
+        if (snapshotChanged) stateEpoch = nextVersion(stateEpoch);
     }
 
     Machine machine() {
         return machine;
     }
 
-    void setMachine(@Nullable Machine machine) {
-        if (Objects.equals(this.machine, machine)) return;
+    boolean setMachine(@Nullable Machine machine) {
+        if (Objects.equals(this.machine, machine)) return false;
         this.machine = machine;
-        version++;
+        version = nextVersion(version);
+        stateEpoch = nextVersion(stateEpoch);
+        return true;
     }
 
     @Nullable Machine foundMachine() {
@@ -212,18 +254,47 @@ public final class StructureRuntime {
         return matchedStructureStage;
     }
 
-    void setMatchedStructureStage(int matchedStructureStage) {
-        if (this.matchedStructureStage == matchedStructureStage) return;
+    boolean setMatchedStructureStage(int matchedStructureStage) {
+        if (this.matchedStructureStage == matchedStructureStage) return false;
         this.matchedStructureStage = matchedStructureStage;
-        version++;
+        version = nextVersion(version);
+        stateEpoch = nextVersion(stateEpoch);
+        return true;
     }
 
     boolean dirty() {
         return dirty;
     }
 
-    void setDirty(boolean dirty) {
+    CheckReason checkReason() {
+        return checkReason;
+    }
+
+    void setCheckReason(CheckReason checkReason) {
+        this.checkReason = checkReason == null ? CheckReason.DIRTY_EVENT : checkReason;
+    }
+
+    boolean componentRefreshRequired() {
+        return componentRefreshRequired;
+    }
+
+    void setComponentRefreshRequired(boolean required) {
+        componentRefreshRequired = required;
+    }
+
+    long chunkStateEpoch() {
+        return chunkStateEpoch;
+    }
+
+    void markChunkStateChanged() {
+        chunkStateEpoch = nextVersion(chunkStateEpoch);
+    }
+
+    boolean setDirty(boolean dirty) {
+        if (this.dirty == dirty) return false;
         this.dirty = dirty;
+        stateEpoch = nextVersion(stateEpoch);
+        return true;
     }
 
     int checkCounter() {
@@ -362,24 +433,21 @@ public final class StructureRuntime {
         this.lastStructureError = lastStructureError;
     }
 
-    void setFormed(boolean formed) {
-        if (this.formed == formed) return;
+    boolean setFormed(boolean formed) {
+        if (this.formed == formed) return false;
         this.formed = formed;
-        version++;
+        version = nextVersion(version);
+        stateEpoch = nextVersion(stateEpoch);
+        return true;
     }
 
     boolean publishFormationState(Machine machine, BlockArray pattern,
-                                         @Nullable CompiledMachinePattern compiledPattern,
-                                         Direction facing, Direction rollFacing, int matchedStage) {
+                                          @Nullable CompiledMachinePattern compiledPattern,
+                                          Direction facing, Direction rollFacing, int matchedStage) {
         Direction normalizedRoll = rollFacing == null ? Direction.SOUTH : rollFacing;
-        boolean changed = !Objects.equals(this.machine, machine)
-                || !Objects.equals(this.foundMachine, machine)
-                || !Objects.equals(this.foundPattern, pattern)
-                || !Objects.equals(this.foundCompiledPattern, compiledPattern)
-                || !Objects.equals(this.controllerFacing, facing)
-                || this.matchedRollFacing != normalizedRoll
-                || this.matchedStructureStage != matchedStage
-                || !formed;
+        FormationIdentity nextIdentity = new FormationIdentity(machine.registryName(), pattern, compiledPattern, facing, normalizedRoll,
+                matchedStage, true);
+        boolean changed = !formationIdentity().equals(nextIdentity);
         this.machine = machine;
         this.foundMachine = machine;
         this.foundPattern = pattern;
@@ -388,8 +456,19 @@ public final class StructureRuntime {
         this.matchedRollFacing = normalizedRoll;
         this.matchedStructureStage = matchedStage;
         this.formed = true;
-        if (changed) version++;
+        if (changed) {
+            version = nextVersion(version);
+            stateEpoch = nextVersion(stateEpoch);
+        }
         return changed;
+    }
+
+    boolean formationIdentityMatches(Machine machine, BlockArray pattern,
+                                     @Nullable CompiledMachinePattern compiledPattern,
+                                     Direction facing, Direction rollFacing, int matchedStage) {
+        Direction normalizedRoll = rollFacing == null ? Direction.SOUTH : rollFacing;
+        return formationIdentity().equals(new FormationIdentity(machine.registryName(), pattern, compiledPattern,
+                facing, normalizedRoll, matchedStage, true));
     }
 
     boolean publishClientState(@Nullable Machine machine, boolean formed, boolean structureAreaLoaded) {
@@ -424,7 +503,10 @@ public final class StructureRuntime {
         this.pendingInvalidation = false;
         this.formed = formed;
         this.dirty = false;
-        if (changed) version++;
+        if (changed) {
+            version = nextVersion(version);
+            stateEpoch = nextVersion(stateEpoch);
+        }
         return changed;
     }
 
@@ -432,16 +514,25 @@ public final class StructureRuntime {
         return structureAreaLoaded;
     }
 
-    void setStructureAreaLoaded(boolean structureAreaLoaded) {
+    boolean setStructureAreaLoaded(boolean structureAreaLoaded) {
+        if (this.structureAreaLoaded == structureAreaLoaded) return false;
         this.structureAreaLoaded = structureAreaLoaded;
+        version = nextVersion(version);
+        stateEpoch = nextVersion(stateEpoch);
+        return true;
     }
 
     Set<ChunkPos> criticalChunks() {
         return criticalChunks;
     }
 
-    void setCriticalChunks(Set<ChunkPos> criticalChunks) {
-        this.criticalChunks = Set.copyOf(criticalChunks == null ? Set.of() : criticalChunks);
+    boolean setCriticalChunks(Set<ChunkPos> criticalChunks) {
+        Set<ChunkPos> next = Set.copyOf(criticalChunks == null ? Set.of() : criticalChunks);
+        if (this.criticalChunks.equals(next)) return false;
+        this.criticalChunks = next;
+        version = nextVersion(version);
+        stateEpoch = nextVersion(stateEpoch);
+        return true;
     }
 
     List<ChunkPos> criticalChunkList() {
@@ -504,6 +595,15 @@ public final class StructureRuntime {
         if (scan != null) scan.invalidate(reason);
     }
 
+    private FormationIdentity formationIdentity() {
+        return new FormationIdentity(machine == null ? null : machine.registryName(), foundPattern, foundCompiledPattern, controllerFacing, matchedRollFacing,
+                matchedStructureStage, formed);
+    }
+
+    private record FormationIdentity(@Nullable Identifier machineId, @Nullable Object patternIdentity,
+                                     @Nullable CompiledMachinePattern compiledPattern, @Nullable Direction facing,
+                                     Direction rollFacing, int matchedStage, boolean formed) { }
+
     /**
      * Mutable structure-check state is exchanged as one published value so callers cannot update fields independently.
      *
@@ -527,7 +627,10 @@ public final class StructureRuntime {
             @Nullable ResourceKey<Level> diagnosticDimension,
             @Nullable PortRequirementSpec.Failure formationFailure,
             @Nullable String mismatchDiagnostic,
-            @Nullable Object lastStructureError) {
+            @Nullable Object lastStructureError,
+            CheckReason checkReason,
+            boolean componentRefreshRequired,
+            long chunkStateEpoch) {
 
         /**
          * Immutable view of the active incremental scan.
@@ -535,34 +638,39 @@ public final class StructureRuntime {
          * @author howxu <dev@howxu.cn>
          */
         record ScanView(int cursor, int batchSize, int entryCount, long version,
-                        @Nullable Direction facing, Direction rollFacing, int stage, @Nullable Object pattern) { }
+                        @Nullable Direction facing, Direction rollFacing, int stage, @Nullable Object pattern,
+                        long chunkStateEpoch) { }
+
+        StructureWorkSnapshot {
+            checkReason = checkReason == null ? CheckReason.DIRTY_EVENT : checkReason;
+        }
 
         StructureWorkSnapshot withDirty(boolean value) {
             return new StructureWorkSnapshot(value, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withCheckCounter(int value) {
             return new StructureWorkSnapshot(dirty, value, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withNextCheckTick(long value) {
             return new StructureWorkSnapshot(dirty, checkCounter, value, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withPendingInvalidation(boolean value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, value, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withPreviousMismatch(@Nullable StructureMatcher.Mismatch mismatch,
@@ -570,49 +678,64 @@ public final class StructureRuntime {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     mismatch, pattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withScanSteppedTick(long value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, value, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withCheckActive(boolean value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     value, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withDiagnostic(boolean requested, @Nullable UUID playerId,
                                              @Nullable ResourceKey<Level> dimension) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
-                    checkActive, requested, playerId, dimension, formationFailure, mismatchDiagnostic, lastStructureError);
+                    checkActive, requested, playerId, dimension, formationFailure, mismatchDiagnostic, lastStructureError,
+                    checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withFormationFailure(@Nullable PortRequirementSpec.Failure value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, value,
-                    mismatchDiagnostic, lastStructureError);
+                    mismatchDiagnostic, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withMismatchDiagnostic(@Nullable String value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    value, lastStructureError);
+                    value, lastStructureError, checkReason, componentRefreshRequired, chunkStateEpoch);
         }
 
         StructureWorkSnapshot withLastStructureError(@Nullable Object value) {
             return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
                     previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
                     checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
-                    mismatchDiagnostic, value);
+                    mismatchDiagnostic, value, checkReason, componentRefreshRequired, chunkStateEpoch);
+        }
+
+        StructureWorkSnapshot withCheckReason(CheckReason value) {
+            return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
+                    previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
+                    checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
+                    mismatchDiagnostic, lastStructureError, value, componentRefreshRequired, chunkStateEpoch);
+        }
+
+        StructureWorkSnapshot withComponentRefreshRequired(boolean value) {
+            return new StructureWorkSnapshot(dirty, checkCounter, nextCheckTick, scan, scanMachine, scanCandidate,
+                    previousMismatch, previousMismatchPattern, pendingInvalidation, scanSteppedTick, scanStartedTick,
+                    checkActive, diagnosticRequested, diagnosticPlayerId, diagnosticDimension, formationFailure,
+                    mismatchDiagnostic, lastStructureError, checkReason, value, chunkStateEpoch);
         }
     }
 }

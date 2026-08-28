@@ -143,4 +143,24 @@ class StructureClaimRegistryTest {
         assertThat(registry.claim(second, List.of(new StructureClaimRegistry.Claim(component,
                 ComponentClaimPolicy.EXCLUSIVE))).accepted()).isFalse();
     }
+
+    @Test
+    void duplicate_claims_report_conflicts_using_first_seen_order() {
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(10, 64, 0);
+        BlockPos firstComponent = new BlockPos(1, 64, 0);
+        BlockPos secondComponent = new BlockPos(2, 64, 0);
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+
+        registry.claim(first, List.of(
+                new StructureClaimRegistry.Claim(firstComponent, ComponentClaimPolicy.EXCLUSIVE),
+                new StructureClaimRegistry.Claim(secondComponent, ComponentClaimPolicy.EXCLUSIVE)));
+
+        StructureClaimRegistry.ClaimResult result = registry.claim(second, List.of(
+                new StructureClaimRegistry.Claim(secondComponent, ComponentClaimPolicy.EXCLUSIVE),
+                new StructureClaimRegistry.Claim(firstComponent, ComponentClaimPolicy.EXCLUSIVE),
+                new StructureClaimRegistry.Claim(secondComponent, ComponentClaimPolicy.EXCLUSIVE)));
+
+        assertThat(result.conflict().componentPos()).isEqualTo(secondComponent);
+    }
 }

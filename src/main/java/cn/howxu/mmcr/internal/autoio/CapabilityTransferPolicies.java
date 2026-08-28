@@ -274,22 +274,18 @@ public final class CapabilityTransferPolicies {
             @Override public long getCapacityAsLong() { return storage.capacity(); }
             @Override public long getTransferLimit() { return storage.transferLimit(); }
             @Override public int insert(int amount, TransactionContext transaction) {
-                storage.updateSnapshots(transaction);
-                return (int) storage.insert(amount, false);
+                return (int) storage.insert(amount, transaction);
             }
             @Override public int extract(int amount, TransactionContext transaction) {
-                storage.updateSnapshots(transaction);
-                return (int) storage.extract(amount, false);
+                return (int) storage.extract(amount, transaction);
             }
             @Override public long insertLong(long amount, TransactionContext transaction) {
                 if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-                storage.updateSnapshots(transaction);
-                return storage.insert(amount, false);
+                return storage.insert(amount, transaction);
             }
             @Override public long extractLong(long amount, TransactionContext transaction) {
                 if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-                storage.updateSnapshots(transaction);
-                return storage.extract(amount, false);
+                return storage.extract(amount, transaction);
             }
         };
     }
