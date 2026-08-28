@@ -72,14 +72,26 @@ public final class MachineIoPlan {
             throw new IllegalArgumentException("Requirement direction must be " + expectedIo);
         }
         if (consumed) throw new IllegalStateException("Machine I/O plan has already been consumed");
-        List<MachineRequirement> next = new ArrayList<>(requirements);
-        next.add(requirement);
-        requirements = List.copyOf(next);
-        if (outputPolicy != null) {
-            Map<Integer, OutputPolicy> nextPolicies = new LinkedHashMap<>(outputPolicies);
-            nextPolicies.put(next.size() - 1, outputPolicy);
-            outputPolicies = Map.copyOf(nextPolicies);
+        int insertionIndex = requirements.size();
+        if (expectedIo == RecipeModifier.IOType.INPUT) {
+            for (int index = 0; index < requirements.size(); index++) {
+                if (requirements.get(index).io() == RecipeModifier.IOType.OUTPUT) {
+                    insertionIndex = index;
+                    break;
+                }
+            }
         }
+        List<MachineRequirement> next = new ArrayList<>(requirements);
+        next.add(insertionIndex, requirement);
+        requirements = List.copyOf(next);
+        int finalInsertionIndex = insertionIndex;
+        Map<Integer, OutputPolicy> nextPolicies = new LinkedHashMap<>();
+        outputPolicies.forEach((index, policy) -> nextPolicies.put(
+                index >= finalInsertionIndex ? index + 1 : index, policy));
+        if (outputPolicy != null) {
+            nextPolicies.put(finalInsertionIndex, outputPolicy);
+        }
+        outputPolicies = Map.copyOf(nextPolicies);
         simulation = null;
         return this;
     }

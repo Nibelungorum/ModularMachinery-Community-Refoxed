@@ -196,6 +196,9 @@ public final class CraftingRuntime {
         } catch (IllegalArgumentException exception) {
             logCallbackFailure("beforeFinish.output_validation", runtime, activeRecipe.getRecipe(), exception);
             return finishBlocked(failure("invalid_outputs"));
+        } catch (RuntimeException exception) {
+            logFinishFailure("planning", runtime, activeRecipe.getRecipe(), exception);
+            return finishBlocked(failure("finish"));
         }
         finishPlan = result.plan();
         if (!result.successful() || finishPlan == null) {
@@ -206,6 +209,9 @@ public final class CraftingRuntime {
         boolean committed;
         try {
             committed = finishPlan.commit();
+        } catch (RuntimeException exception) {
+            logFinishFailure("commit", runtime, activeRecipe.getRecipe(), exception);
+            return finishBlocked(failure("finish"));
         } finally {
             finishCommitInProgress = false;
         }
@@ -479,6 +485,12 @@ public final class CraftingRuntime {
     private void logCallbackFailure(String phase, ControllerRuntimeSnapshot runtime, MachineRecipe recipe,
                                     RuntimeException exception) {
         MMCR.LOG.warn("Machine behavior callback failed: phase={} machine={} recipe={} controller={}", phase,
+                runtime.machineId(), recipe.id(), controller.getBlockPos(), exception);
+    }
+
+    private void logFinishFailure(String phase, ControllerRuntimeSnapshot runtime, MachineRecipe recipe,
+                                  RuntimeException exception) {
+        MMCR.LOG.warn("Machine recipe finish failed: phase={} machine={} recipe={} controller={}", phase,
                 runtime.machineId(), recipe.id(), controller.getBlockPos(), exception);
     }
 

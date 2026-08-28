@@ -304,6 +304,71 @@ class MachineIoPlanTest {
     }
 
     @Test
+    void reverse_addition_keeps_inputs_before_outputs_and_preserves_output_policy() {
+        LongResourceStorage<ItemResource> inputStorage = itemStorage(1);
+        LongResourceStorage<ItemResource> outputStorage = itemStorage(1);
+        ItemStack outputStack = stack(Items.GOLD_NUGGET, 64);
+        outputStack.setCount(4);
+        insert(inputStorage, 0, ItemResource.of(Items.IRON_INGOT), 1L);
+        insert(outputStorage, 0, ItemResource.of(outputStack), 63L);
+        LongValueStorage energyStorage = new LongValueStorage(100L, 100L, null);
+        energyStorage.setAmount(4L);
+
+        MachineRequirement itemInput = MachineRequirement.fromInput(
+                new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1));
+        MachineRequirement energyInput = MachineRequirement.fromInput(
+                new MachineIngredient.EnergyIngredient(4));
+        MachineRequirement output = MachineRequirement.itemOutput(outputStack);
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(outputStorage, IOType.OUTPUT),
+                new ItemBusCapability(inputStorage, IOType.INPUT),
+                new EnergyHatchCapability(energyStorage, IOType.INPUT))));
+
+        plan.addOutput(output, OutputPolicy.ALLOW_PARTIAL)
+                .addInput(itemInput)
+                .addInput(energyInput);
+
+        assertThat(plan.requirements()).containsExactly(itemInput, energyInput, output);
+        assertThat(plan.simulate())
+                .satisfies(simulation -> {
+                    assertThat(simulation.inputsSatisfied()).isTrue();
+                    assertThat(simulation.energySatisfied()).isTrue();
+                    assertThat(simulation.outputs()).containsExactly(
+                            new OutputSimulation(4L, 1L, OutputFit.PARTIAL));
+                    assertThat(simulation.failure()).isNull();
+                });
+        assertThat(plan.commit().successful()).isTrue();
+        assertThat(inputStorage.amount(0)).isZero();
+        assertThat(energyStorage.amount()).isZero();
+        assertThat(outputStorage.amount(0)).isEqualTo(64L);
+    }
+
+    @Test
+    void reports_full_and_none_output_fits() {
+        ItemStack output = stack(Items.GOLD_NUGGET, 64);
+        output.setCount(4);
+        LongResourceStorage<ItemResource> fullStorage = itemStorage(1);
+        MachineIoPlan fullPlan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(fullStorage, IOType.OUTPUT))));
+        fullPlan.addOutput(MachineRequirement.itemOutput(output), OutputPolicy.REQUIRE_FULL);
+
+        assertThat(fullPlan.simulate().outputs())
+                .containsExactly(new OutputSimulation(4L, 4L, OutputFit.FULL));
+        assertThat(fullPlan.simulate().failure()).isNull();
+
+        LongResourceStorage<ItemResource> noneStorage = itemStorage(1);
+        insert(noneStorage, 0, ItemResource.of(Items.COBBLESTONE), 64L);
+        MachineIoPlan nonePlan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(noneStorage, IOType.OUTPUT))));
+        nonePlan.addOutput(MachineRequirement.itemOutput(output), OutputPolicy.REQUIRE_FULL);
+
+        assertThat(nonePlan.simulate().outputs())
+                .containsExactly(new OutputSimulation(4L, 0L, OutputFit.NONE));
+        assertThat(nonePlan.simulate().failure()).isNotNull();
+        assertThat(nonePlan.commit().successful()).isFalse();
+    }
+
+    @Test
     void add_input_and_output_reject_the_wrong_direction() {
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
 

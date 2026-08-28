@@ -26,6 +26,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -53,6 +54,8 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -66,6 +69,7 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Final crafting runtime behavior tests.
@@ -172,23 +176,56 @@ class CraftingRuntimeTest {
 
     @Test
     void discard_outputs_removes_item_and_energy_outputs_without_committing_them() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(-1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
-        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(2, 0, 0));
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output, energy);
+        EnergyInputHatchBlockEntity inputEnergy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
+        EnergyOutputHatchBlockEntity outputEnergy = RuntimeTestFixtures.energyOutput(new BlockPos(3, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"),
+                input, output, inputEnergy, outputEnergy);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        inputEnergy.energyStorage().setAmount(2);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_discard_outputs"), MMCR.id("test_cube"), 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
-                List.of(output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1),
+                        output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeFinish(context -> context.discardOutputs()).build()));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(1L);
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
 
         assertThat(runtime.active()).isFalse();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isZero();
         assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+        assertThat(outputEnergy.energyStorage().getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void finish_capability_operation_exception_uses_the_retry_gate() {
+        ThrowingItemOutputBus output = new ThrowingItemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe("runtime_finish_operation_exception", 1,
+                List.of(output(Items.IRON_NUGGET, 1))), 1).isCrafting()).isTrue();
+        runtime.tick();
+
+        assertThatCode(runtime::finish).doesNotThrowAnyException();
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.finishPending()).isTrue();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "finish");
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+
+        LevelStub.setGameTime(controller.getLevel(), 10);
+        assertThat(runtime.shouldRetryFinish()).isTrue();
+        assertThatCode(runtime::finish).doesNotThrowAnyException();
+        assertThat(runtime.shouldRetryFinish()).isFalse();
     }
 
     @Test
@@ -978,6 +1015,30 @@ class CraftingRuntimeTest {
             return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller runtime", exception);
+        }
+    }
+
+    private static final class ThrowingItemOutputBus extends ItemOutputBusBlockEntity {
+        private final ThrowingItemStorage storage = new ThrowingItemStorage();
+
+        private ThrowingItemOutputBus(BlockPos pos) {
+            super(pos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
+        }
+
+        @Override
+        public ThrowingItemStorage itemStorage() {
+            return storage;
+        }
+    }
+
+    private static final class ThrowingItemStorage extends LongResourceStorage<ItemResource> {
+        private ThrowingItemStorage() {
+            super(ItemResource.class, 1, 100L, ItemResource::isEmpty, () -> {});
+        }
+
+        @Override
+        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+            throw new IllegalStateException("expected finish capability operation failure");
         }
     }
 }
