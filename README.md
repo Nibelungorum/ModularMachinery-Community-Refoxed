@@ -1,6 +1,7 @@
 # Modular Machinery Community: Refoxed
 
 **Currently, this mod is still under development !**
+
 **It's not approved to widely use this mod until these lines are been removed !**
 
 Modular Machinery Community: Refoxed (MMCR) is an **unofficial** NeoForge port and continuation of [Modular Machinery Community Edition](https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition) for newer Minecraft versions. It provides configurable multiblock machines, recipe processing, ports, controllers, a lot of DIY interfaces and integration of popular mods.
