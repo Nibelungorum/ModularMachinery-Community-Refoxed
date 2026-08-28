@@ -182,6 +182,12 @@ class KubeJSApiTest {
     }
 
     @Test
+    void readable_number_methods_are_available_to_kubejs_api() {
+        assertThat(api.readableNumber(1_000L)).isEqualTo("1k");
+        assertThat(api.readableNumberExact(1_000_000L)).isEqualTo("1,000,000");
+    }
+
+    @Test
     void single_block_modifier_factory_preserves_four_argument_value_state() {
         var predicate = new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK);
         var modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,

@@ -27,6 +27,21 @@ class ReadableNumberTest {
     }
 
     @Test
+    void formats_compact_values_from_one_thousand() {
+        assertThat(ReadableNumber.formatCompact(999)).isEqualTo("999");
+        assertThat(ReadableNumber.formatCompact(1_000)).isEqualTo("1k");
+        assertThat(ReadableNumber.formatCompact(1_234)).isEqualTo("1.23k");
+        assertThat(ReadableNumber.formatCompact(1_000_000)).isEqualTo("1M");
+        assertThat(ReadableNumber.formatCompact(Long.MAX_VALUE)).isEqualTo("9.22E");
+    }
+
+    @Test
+    void compact_formatter_rejects_negative_values() {
+        assertThatThrownBy(() -> ReadableNumber.formatCompact(-1))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void formats_exact_long_values_without_si_suffixes() {
         assertThat(ReadableNumber.formatExact(999_999L)).isEqualTo("999,999");
         assertThat(ReadableNumber.formatExact(1_000_000L)).isEqualTo("1,000,000");

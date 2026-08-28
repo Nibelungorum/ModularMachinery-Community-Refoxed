@@ -2,9 +2,6 @@ package cn.howxu.mmcr.util;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.text.NumberFormat;
-import java.util.Locale;
 
 /**
  * Formats readable numeric values for UI display.
@@ -13,73 +10,41 @@ import java.util.Locale;
  */
 public final class ReadableNumber {
 
-    private static final BigInteger ONE_MILLION = BigInteger.valueOf(1_000_000L);
-    private static final BigDecimal ONE_MILLION_DECIMAL = BigDecimal.valueOf(1_000_000L);
-    private static final BigDecimal THOUSAND_DECIMAL = BigDecimal.valueOf(1_000L);
-    private static final String[] SI_PREFIXES = {"", "k", "M", "G", "T", "P", "E", "Z", "Y"};
-    private static final NumberFormat INTEGER_FORMAT = NumberFormat.getIntegerInstance(Locale.ROOT);
-
     private ReadableNumber() {}
 
     public static String format(int value) {
-        return format((long) value);
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.format(value);
     }
 
     public static String format(long value) {
-        if (value < 0) {
-            throw new IllegalArgumentException("value must be non-negative");
-        }
-        if (value < 1_000_000L) {
-            return INTEGER_FORMAT.format(value);
-        }
-        return formatBigDecimal(BigDecimal.valueOf(value));
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.format(value);
     }
 
     public static String formatExact(long value) {
-        if (value < 0) {
-            throw new IllegalArgumentException("value must be non-negative");
-        }
-        return INTEGER_FORMAT.format(value);
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatExact(value);
     }
 
     public static String format(BigInteger value) {
-        if (value.signum() < 0) {
-            throw new IllegalArgumentException("value must be non-negative");
-        }
-        if (value.compareTo(ONE_MILLION) < 0) {
-            return INTEGER_FORMAT.format(value);
-        }
-        return formatBigDecimal(new BigDecimal(value));
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.format(value);
     }
 
     public static String format(BigDecimal value) {
-        if (value.signum() < 0) {
-            throw new IllegalArgumentException("value must be non-negative");
-        }
-        if (value.compareTo(ONE_MILLION_DECIMAL) < 0) {
-            return INTEGER_FORMAT.format(value.setScale(0, RoundingMode.DOWN).toBigIntegerExact());
-        }
-        return formatBigDecimal(value);
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.format(value);
     }
 
-    private static String formatBigDecimal(BigDecimal value) {
-        int exponent = value.precision() - value.scale() - 1;
-        int prefixIndex = exponent / 3;
-        if (prefixIndex >= SI_PREFIXES.length) {
-            return formatScientific(value.toBigIntegerExact());
-        }
-        BigDecimal divisor = BigDecimal.TEN.pow(prefixIndex * 3);
-        BigDecimal truncated = value.divide(divisor, 2, RoundingMode.DOWN);
-        return truncated.toPlainString() + SI_PREFIXES[prefixIndex];
+    public static String formatCompact(int value) {
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatCompact(value);
     }
 
-    private static String formatScientific(BigInteger value) {
-        if (value.signum() == 0) {
-            return "0";
-        }
-        String digits = value.toString();
-        int exponent = digits.length() - 1;
-        BigDecimal mantissa = new BigDecimal(digits.charAt(0) + "." + digits.substring(1));
-        return mantissa.setScale(2, RoundingMode.DOWN).toPlainString() + "E" + exponent;
+    public static String formatCompact(long value) {
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatCompact(value);
+    }
+
+    public static String formatCompact(BigInteger value) {
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatCompact(value);
+    }
+
+    public static String formatCompact(BigDecimal value) {
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatCompact(value);
     }
 }

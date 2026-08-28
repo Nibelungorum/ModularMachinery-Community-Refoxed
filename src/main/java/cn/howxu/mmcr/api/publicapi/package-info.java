@@ -9,6 +9,7 @@
  * <ul>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.MachineApi}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.RecipeApi}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.ReadableNumber}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.ApiRegistrationException}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent}</li>

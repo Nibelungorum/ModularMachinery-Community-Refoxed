@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.ReadableNumber;
 import cn.howxu.mmcr.util.IOType;
 import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -42,6 +43,14 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class KubeJSApi {
+    public String readableNumber(long value) {
+        return ReadableNumber.formatCompact(value);
+    }
+
+    public String readableNumberExact(long value) {
+        return ReadableNumber.formatExact(value);
+    }
+
     public Identifier id(String id) {
         return Identifier.parse(id);
     }

@@ -254,10 +254,16 @@ class PublicApiLifecycleTest {
 
     @Test
     void public_api_classes_do_not_embed_internal_bootstrap_dependency() throws IOException {
-        for (Class<?> apiClass : new Class<?>[]{MachineApi.class, RecipeApi.class}) {
+        for (Class<?> apiClass : new Class<?>[]{MachineApi.class, RecipeApi.class, ReadableNumber.class}) {
             String bytecode = new String(apiClass.getResourceAsStream(apiClass.getSimpleName() + ".class").readAllBytes());
             assertThat(bytecode).doesNotContain("cn/howxu/mmcr/internal/api/PublicApiBootstrap");
         }
+    }
+
+    @Test
+    void public_readable_number_exposes_compact_and_exact_formats() {
+        assertThat(ReadableNumber.formatCompact(1_000)).isEqualTo("1k");
+        assertThat(ReadableNumber.formatExact(1_000_000L)).isEqualTo("1,000,000");
     }
 
     private static MachineDefinition machine(String path) {
