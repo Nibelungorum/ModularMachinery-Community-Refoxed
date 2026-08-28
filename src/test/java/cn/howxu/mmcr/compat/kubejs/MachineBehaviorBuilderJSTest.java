@@ -66,6 +66,8 @@ class MachineBehaviorBuilderJSTest {
         BlockPos storagePos = new BlockPos(2, 3, 4);
         DataStorage storage = new DataStorage();
         ControllerScreenTextState screenText = new ControllerScreenTextState();
+        MachineBehaviorContext machineContext = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                storagePosId, 0L, screenText, Map.of(storagePos, storage));
         AtomicInteger starts = new AtomicInteger();
         AtomicInteger ticks = new AtomicInteger();
         AtomicInteger finishes = new AtomicInteger();
@@ -73,6 +75,7 @@ class MachineBehaviorBuilderJSTest {
                 .recipeBehavior(builder -> builder
                         .beforeStart(context -> {
                             assertThat(context).isInstanceOf(RecipeStartContext.class);
+                            assertThat(context.machineContext()).isSameAs(machineContext);
                             starts.incrementAndGet();
                         })
                         .recipeTick(context -> {
@@ -83,6 +86,7 @@ class MachineBehaviorBuilderJSTest {
                         })
                         .beforeFinish(context -> {
                             assertThat(context).isInstanceOf(RecipeFinishContext.class);
+                            assertThat(context.machineContext()).isSameAs(machineContext);
                             finishes.incrementAndGet();
                         }))
                 .createObject();
@@ -91,12 +95,11 @@ class MachineBehaviorBuilderJSTest {
         RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
         MachineRecipe recipe = new MachineRecipe(MMCR.id("kubejs_recipe_context"), storagePosId, 1,
                 List.of(), List.of());
-        MachineBehaviorContext machineContext = new MachineBehaviorContext(null, null, BlockPos.ZERO,
-                storagePosId, 0L, screenText, Map.of(storagePos, storage));
-        behavior.beforeStart().accept(new RecipeStartContext(recipe, 1, 1));
+        behavior.beforeStart().accept(new RecipeStartContext(machineContext, recipe, 1, 1, 1,
+                List.of(), List.of()));
         behavior.recipeTick().accept(new RecipeTickContext(machineContext, recipe, 0, 1, 1,
                 List.of(), List.of()));
-        behavior.beforeFinish().accept(new RecipeFinishContext(recipe, 1, 1, List.of()));
+        behavior.beforeFinish().accept(new RecipeFinishContext(machineContext, recipe, 1, 1, List.of()));
 
         assertThat(starts).hasValue(1);
         assertThat(ticks).hasValue(1);

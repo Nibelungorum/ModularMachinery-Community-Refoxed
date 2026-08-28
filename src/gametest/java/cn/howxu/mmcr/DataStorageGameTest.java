@@ -65,16 +65,17 @@ public final class DataStorageGameTest {
             PktControllerScreenTextPayload textPayload = lastScreenTextPacket(observer);
             helper.assertTrue(textPayload != null && hasDynamicText(textPayload.lines()),
                     "Pure-tick callback text is sent in the server payload");
-            ControllerScreenTextCache.clear(controllerPos);
             ControllerScreenTextCache.replace(textPayload.controllerPos(), textPayload.revision(), textPayload.lines());
+            ControllerScreenTextCache.clear(controllerPos);
             MachineControllerMenu reopenedMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
             observer.containerMenu = reopenedMenu;
             controller.sendControllerScreenText(observer);
             PktControllerScreenTextPayload reopenedTextPayload = lastScreenTextPacket(observer);
             helper.assertTrue(reopenedTextPayload != null && hasDynamicText(reopenedTextPayload.lines()),
                     "Reopened controller receives the current dynamic text payload");
-            ControllerScreenTextCache.replace(reopenedTextPayload.controllerPos(), reopenedTextPayload.revision(),
-                    reopenedTextPayload.lines());
+            helper.assertTrue(ControllerScreenTextCache.replace(reopenedTextPayload.controllerPos(),
+                            reopenedTextPayload.revision(), reopenedTextPayload.lines()),
+                    "Reopened controller payload replaces the cache snapshot");
             helper.assertTrue(hasDynamicText(ControllerScreenTextCache.linesAt(reopenedMenu.controllerPos())),
                     "Reopened controller cache exposes the dynamic text");
             helper.assertTrue(controller.runtimeSnapshot().crafting().status().getStatus()
