@@ -76,7 +76,13 @@ public record RequirementPlan(
     }
 
     public @Nullable ExecutionStatus reserve(int parallelism, PlanningReservations reservations) {
-        return reservationFactory == null ? null : reservationFactory.reserve(parallelism, reservations);
+        return reservationResult(parallelism, reservations).failure();
+    }
+
+    public ReservationResult reservationResult(int parallelism, PlanningReservations reservations) {
+        return reservationFactory == null
+                ? new ReservationResult(null, null)
+                : reservationFactory.reserveResult(parallelism, reservations);
     }
 
     public RequirementPlan materialize(int parallelism, PlanningReservations reservations,
@@ -110,6 +116,14 @@ public record RequirementPlan(
     @FunctionalInterface
     public interface ReservationFactory {
         @Nullable ExecutionStatus reserve(int parallelism, PlanningReservations reservations);
+
+        default ReservationResult reserveResult(int parallelism, PlanningReservations reservations) {
+            return new ReservationResult(reserve(parallelism, reservations), null);
+        }
+    }
+
+    public record ReservationResult(@Nullable ExecutionStatus failure,
+                                    @Nullable OutputSimulation outputSimulation) {
     }
 
     public record OperationPlan(List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,

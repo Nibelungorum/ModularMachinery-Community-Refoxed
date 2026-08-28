@@ -845,6 +845,78 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void shared_output_capacity_lowers_full_output_parallelism_before_materializing_operations() {
+        BulkItemStorage storage = new BulkItemStorage(8, null);
+        List<MachineRequirement> outputs = List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)));
+
+        var result = new RequirementPlanner().plan(
+                outputs,
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().requirements()).allSatisfy(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(8L);
+    }
+
+    @Test
+    void shared_output_capacity_lowers_partial_output_parallelism_when_a_candidate_accepts_zero() {
+        BulkItemStorage storage = new BulkItemStorage(8, null);
+        List<MachineRequirement> outputs = List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)));
+
+        var result = new RequirementPlanner().plan(
+                outputs,
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(2, 0, true));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1);
+        assertThat(result.plan().outputSimulations()).allSatisfy(simulation -> {
+            assertThat(simulation.requested()).isEqualTo(4L);
+            assertThat(simulation.accepted()).isEqualTo(4L);
+            assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
+        });
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(8L);
+    }
+
+    @Test
+    void preserves_output_simulation_when_all_partial_output_candidates_fail() {
+        BulkItemStorage storage = new BulkItemStorage(4, null);
+        List<MachineRequirement> outputs = List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)));
+
+        var result = new RequirementPlanner().plan(
+                outputs,
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                new PlanningContext(2, 0, true));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.failureRequirementIndex()).isEqualTo(1);
+        assertThat(result.outputSimulations()).satisfiesExactly(
+                first -> {
+                    assertThat(first.requested()).isEqualTo(4L);
+                    assertThat(first.accepted()).isEqualTo(4L);
+                    assertThat(first.fit()).isEqualTo(OutputFit.FULL);
+                },
+                second -> {
+                    assertThat(second.requested()).isEqualTo(4L);
+                    assertThat(second.accepted()).isZero();
+                    assertThat(second.fit()).isEqualTo(OutputFit.NONE);
+                });
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
     void shared_fluid_slot_is_reserved_during_planning() {
         LongFluidStorage storage = new LongFluidStorage(2_000, null);
         storage.setFluid(new FluidStack(Fluids.WATER, 1_000));

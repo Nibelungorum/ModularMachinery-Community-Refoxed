@@ -79,14 +79,22 @@ public final class RequirementPlanner {
         int selectedParallelism = 0;
         ExecutionStatus reservationFailure = null;
         Integer reservationFailureIndex = null;
+        List<OutputSimulation> reservationFailureOutputSimulations = List.of();
         for (int candidate = parallelism; candidate > 0; candidate--) {
             PlanningReservations reservations = context.reservations().copy();
+            List<OutputSimulation> candidateOutputSimulations = new ArrayList<>(outputSimulations(plans));
             boolean reservationsAvailable = true;
             for (int index = 0; index < plans.size(); index++) {
-                ExecutionStatus failure = plans.get(index).reserve(candidate, reservations);
+                RequirementPlan.ReservationResult reservation = plans.get(index)
+                        .reservationResult(candidate, reservations);
+                if (reservation.outputSimulation() != null) {
+                    candidateOutputSimulations.add(reservation.outputSimulation());
+                }
+                ExecutionStatus failure = reservation.failure();
                 if (failure != null) {
                     reservationFailure = failure;
                     reservationFailureIndex = requirementIndexes.get(index);
+                    reservationFailureOutputSimulations = candidateOutputSimulations;
                     reservationsAvailable = false;
                     break;
                 }
@@ -97,7 +105,8 @@ public final class RequirementPlanner {
             }
         }
         if (selectedParallelism <= 0) {
-            return new PlanningResult(null, reservationFailure, outputSimulations(plans), reservationFailureIndex);
+            return new PlanningResult(null, reservationFailure, reservationFailureOutputSimulations,
+                    reservationFailureIndex);
         }
 
         PlanningReservations materializationReservations = context.reservations().copy();

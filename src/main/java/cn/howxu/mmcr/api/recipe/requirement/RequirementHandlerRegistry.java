@@ -125,11 +125,22 @@ public final class RequirementHandlerRegistry {
         return new OutputSimulation(requested, accepted, fit);
     }
 
-    private static ExecutionStatus reservationFailure(RequirementPlan.OperationPlan operationPlan,
-                                                       boolean output) {
-        if (output && operationPlan.outputSimulation() != null
-                && operationPlan.outputSimulation().fit() != OutputFit.FULL) return null;
-        return operationPlan.failure();
+    private static RequirementPlan.ReservationFactory reservationFactory(
+            RequirementPlan.OperationFactory operationFactory) {
+        return new RequirementPlan.ReservationFactory() {
+            @Override
+            public ExecutionStatus reserve(int parallelism, PlanningReservations reservations) {
+                return operationFactory.create(parallelism, reservations).failure();
+            }
+
+            @Override
+            public RequirementPlan.ReservationResult reserveResult(int parallelism,
+                                                                    PlanningReservations reservations) {
+                RequirementPlan.OperationPlan operationPlan = operationFactory.create(parallelism, reservations);
+                return new RequirementPlan.ReservationResult(operationPlan.failure(),
+                        operationPlan.outputSimulation());
+            }
+        };
     }
 
     private record EnergyAction(MachineCapability capability, long amount) {
@@ -156,9 +167,9 @@ public final class RequirementHandlerRegistry {
                     return planEnergyOperations(requirement, capabilities, parallelism, reservations, insert,
                             allowPartialOutput, true);
                 },
-                (parallelism, reservations) -> reservationFailure(planEnergyOperations(
+                reservationFactory((parallelism, reservations) -> planEnergyOperations(
                         requirement, capabilities, parallelism, reservations, insert,
-                        allowPartialOutput, false), insert));
+                        allowPartialOutput, false)));
     }
 
     private static RequirementPlan planItem(ItemRequirement requirement,
@@ -192,9 +203,9 @@ public final class RequirementHandlerRegistry {
                 (finalParallelism, reservations) -> planItemOperations(
                         requirement, capabilities, finalParallelism, consumed, reservations,
                         allowPartialOutput, true),
-                (finalParallelism, reservations) -> reservationFailure(planItemOperations(
+                reservationFactory((finalParallelism, reservations) -> planItemOperations(
                         requirement, capabilities, finalParallelism, consumed, reservations,
-                        allowPartialOutput, false), requirement.io() == RecipeModifier.IOType.OUTPUT));
+                        allowPartialOutput, false)));
     }
 
     private static RequirementPlan planFluid(FluidRequirement requirement,
@@ -220,9 +231,9 @@ public final class RequirementHandlerRegistry {
                 (finalParallelism, reservations) -> planFluidOperations(
                         requirement, capabilities, finalParallelism, reservations,
                         allowPartialOutput, true),
-                (finalParallelism, reservations) -> reservationFailure(planFluidOperations(
+                reservationFactory((finalParallelism, reservations) -> planFluidOperations(
                         requirement, capabilities, finalParallelism, reservations,
-                        allowPartialOutput, false), requirement.io() == RecipeModifier.IOType.OUTPUT));
+                        allowPartialOutput, false)));
     }
 
     private static RequirementPlan planSmartInterface(SmartInterfaceRequirement requirement,
