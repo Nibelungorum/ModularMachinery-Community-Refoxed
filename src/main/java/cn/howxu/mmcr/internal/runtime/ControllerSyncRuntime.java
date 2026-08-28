@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 
 import java.util.List;
 
@@ -67,7 +69,10 @@ public final class ControllerSyncRuntime {
         require(runtime);
         if (!runtime.structure().formed() || !runtime.structure().structureAreaLoaded()
                 || runtime.crafting().status().isPaused() || runtime.factory().paused()) return false;
-        return runtime.crafting().recipeId() != null || runtime.factory().active();
+        Machine machine = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine() : runtime.structure().machine();
+        return runtime.crafting().recipeId() != null || runtime.factory().active()
+                || machine != null && machine.behavior() instanceof TickBehavior;
     }
 
     public int currentParallelism(ControllerRuntimeSnapshot runtime) {

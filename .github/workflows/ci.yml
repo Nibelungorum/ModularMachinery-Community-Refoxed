@@ -21,17 +21,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Data Permission
-        run: chmod u+x run_data.sh
-
       - name: Run Data
         run: ./run_data.sh
 
       - name: Compile Test
-        run: ./gradlew compileJava --no-daemon
+        run: gradle compileJava --no-daemon
       
       - name: Unit Test and GameTest
-        run: ./gradlew test --no-daemon
+        run: gradle test --no-daemon
 
       - name: Gametest Server
-        run: ./gradlew runGameTestServer --no-daemon
+        run: gradle runGameTestServer --no-daemon

@@ -273,7 +273,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         int factoryActiveCount = factoryTickResult != null ? factoryTickResult.activeLaneCount()
                 : activeFactoryLaneCount != null ? activeFactoryLaneCount : runtime.factoryRuntime().activeLaneCount();
-        boolean activeState = craftingRuntime.active() || factoryActiveCount > 0;
+        boolean activeState = craftingRuntime.active() || factoryActiveCount > 0 || hasTickBehavior(structure);
         Identifier recipeId = craftingRuntime.recipe() == null ? null : craftingRuntime.recipe().id();
         CraftingStatus status = !structure.formed()
                 ? CraftingStatus.MISSING_STRUCTURE
@@ -650,13 +650,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = runtime.currentStructureSnapshot();
         if (!structure.formed() || !structure.structureAreaLoaded()
                 || redstonePaused || runtime.factoryRuntime().isPaused()) return false;
-        return runtime.craftingRuntime().active() || runtime.factoryRuntime().activeLaneCount() > 0;
+        return runtime.craftingRuntime().active() || runtime.factoryRuntime().activeLaneCount() > 0
+                || hasTickBehavior(structure);
     }
 
     private boolean isRuntimeActive(ControllerRuntimeSnapshot state) {
-        if (!state.structure().formed() || !state.structure().structureAreaLoaded()
-                || state.crafting().status().isPaused() || state.factory().paused()) return false;
-        return state.crafting().recipeId() != null || state.factory().active();
+        return SYNC_RUNTIME.active(state);
     }
 
     public int currentParallelism() {
@@ -947,7 +946,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                          int activeFactoryLaneCount) {
         return hasActiveBuildTask()
                 || runtime.craftingRuntime().active()
-                || (factoryTickResult == null ? activeFactoryLaneCount : factoryTickResult.activeLaneCount()) > 0;
+                || (factoryTickResult == null ? activeFactoryLaneCount : factoryTickResult.activeLaneCount()) > 0
+                || hasTickBehavior(runtime.currentStructureSnapshot());
+    }
+
+    private boolean hasTickBehavior(StructureSnapshot structure) {
+        if (!structure.formed() || !structure.structureAreaLoaded()) return false;
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        return machine != null && machine.behavior() instanceof TickBehavior;
     }
 
     private boolean hasActiveOperation() {

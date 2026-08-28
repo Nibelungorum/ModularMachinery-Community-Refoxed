@@ -6,10 +6,13 @@ import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -28,6 +31,7 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
@@ -109,6 +113,31 @@ class ControllerSyncRuntimeTest {
         assertThat(state.formed()).isTrue();
         assertThat(state.machineId()).isEqualTo("mmcr:test_cube");
         assertThat(state.moduleConnected()).isFalse();
+    }
+
+    @Test
+    void tick_behavior_projects_as_active_without_recipe_or_factory_work() {
+        Identifier machineId = MMCR.id("sync_tick_machine");
+        DynamicMachine machine = new DynamicMachine(machineId, "Sync Tick", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId),
+                cn.howxu.mmcr.api.machine.MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1,
+                List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction(),
+                TickBehavior.builder().build());
+        StructureSnapshot structure = new StructureSnapshot(machine, machine, new BlockArray(Map.of()),
+                null, Direction.SOUTH, Direction.SOUTH, 1, true, 1L, null, null,
+                null, false, true, Set.of());
+        ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(structure, 0L, 0L, 0L,
+                Map.of(), Map.of(), Set.of(), ModuleConnectionStatus.notRequired(), 0,
+                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
+                CraftingStateSnapshot.empty(1L, 0L, 0L), FactorySnapshot.empty(),
+                List.of(), List.of(), List.of(), machineId.toString(), "Sync Tick", 0,
+                false, false, 0, 0, 1);
+
+        MachineStateSnapshot state = new ControllerSyncRuntime().machineState(runtime);
+
+        assertThat(state.active()).isTrue();
+        assertThat(state.activeRecipe()).isEmpty();
     }
 
     @Test

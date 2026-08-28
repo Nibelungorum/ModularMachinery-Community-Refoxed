@@ -1,2 +1,2 @@
-./gradlew runClientData --no-daemon
-./gradlew runServerData --no-daemon
+gradle runClientData --no-daemon
+gradle runServerData --no-daemon
