@@ -282,13 +282,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
             MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
-            List<ItemStack> stacks = item.stacks();
             String overlayText = inputOverlayText(item.consumeChance(), Minecraft.getInstance().getLanguageManager().getSelected());
-            if (!overlayText.isEmpty()) {
-                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
-                        ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
-            }
+            setItemOverlay(jeiSlot, overlayText, itemQuantityText(item.count()));
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
+            List<ItemStack> stacks = item.stacks().stream().map(MachineRecipeCategory::jeiItemStack).toList();
             if (stacks.isEmpty() && item.ingredient() != null) {
                 jeiSlot.add(item.ingredient());
             } else {
@@ -298,14 +295,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
             ItemStack stack = output.stack();
             String overlayText = outputOverlayText(output.chance());
-            if (!overlayText.isEmpty()) {
-                jeiSlot.setOverlay(new TextOverlayDrawable(overlayText, 0xFFFF4040, ITEM_OVERLAY_SCALE),
-                        ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
-            }
+            setItemOverlay(jeiSlot, overlayText, itemQuantityText(stack.getCount()));
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
-            ItemStack jeiStack = new ItemStack(stack.getItem().builtInRegistryHolder(), stack.getCount(), stack.getComponentsPatch());
-            jeiSlot.add(jeiStack);
+            jeiSlot.add(jeiItemStack(stack));
         }
+    }
+
+    static ItemStack jeiItemStack(ItemStack stack) {
+        return stack.copyWithCount(1);
     }
 
     static String describeAddedItemStack(ItemStack stack) {
@@ -327,13 +324,51 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
             int amount = recipe.fluidInputAmounts().get(entry.index());
-            recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst()
-                    .ifPresent(fluid -> jeiSlot.setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, amount), true, 16, 16).add(fluid.value(), amount));
+            setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
+            recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid -> {
+                jeiSlot.setFluidRenderer(FLUID_SLOT_CAPACITY, true, 16, 16)
+                        .add(fluid.value(), FLUID_SLOT_CAPACITY);
+                jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
+            });
         } else {
             var stack = recipe.fluidOutputs().get(entry.index());
-            jeiSlot.setFluidRenderer(Math.max(FLUID_SLOT_CAPACITY, stack.getAmount()), false, 16, 16)
-                    .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
+            setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
+            jeiSlot.setFluidRenderer(FLUID_SLOT_CAPACITY, false, 16, 16)
+                    .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, stack.getAmount()));
         }
+    }
+
+    private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {
+        if (!chanceText.isEmpty() || !quantityText.isEmpty()) {
+            jeiSlot.setOverlay(new SlotOverlayDrawable(chanceText, quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+        }
+    }
+
+    private static void setQuantityOverlay(IRecipeSlotBuilder jeiSlot, String quantityText) {
+        if (!quantityText.isEmpty()) {
+            jeiSlot.setOverlay(new SlotOverlayDrawable("", quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+        }
+    }
+
+    static String itemQuantityText(int count) {
+        return count > 1 ? ReadableNumber.formatCompact(count) : "";
+    }
+
+    static String fluidQuantityText(int amount) {
+        return amount > FLUID_SLOT_CAPACITY
+                ? ReadableNumber.formatCompact(amount) + " mB"
+                : "";
+    }
+
+    static String itemTooltipQuantity(int count) {
+        return count > 1 ? ReadableNumber.formatExact(count) : "";
+    }
+
+    static String fluidTooltipQuantity(int amount) {
+        return amount > FLUID_SLOT_CAPACITY
+                ? ReadableNumber.formatExact(amount) + " mB"
+                : "";
     }
 
     private static void appendOverflowTooltip(ITooltipBuilder tooltip,
@@ -380,6 +415,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void appendInputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemInputDisplay item) {
+        String quantity = itemTooltipQuantity(item.count());
+        if (!quantity.isEmpty()) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count", quantity));
+        }
         if (item.consumeChance() == 0F) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.keep"));
         } else if (item.consumeChance() < 1F) {
@@ -392,9 +431,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void appendOutputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemOutputDisplay output) {
+        String quantity = itemTooltipQuantity(output.stack().getCount());
+        if (!quantity.isEmpty()) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count", quantity));
+        }
         if (output.chance() < 1F) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.output_chance",
                     Math.round(output.chance() * 100F) + "%"));
+        }
+    }
+
+    private static void appendFluidQuantityTooltip(ITooltipBuilder tooltip, int amount) {
+        String quantity = fluidTooltipQuantity(amount);
+        if (!quantity.isEmpty()) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.fluid_amount", quantity));
         }
     }
 
@@ -417,23 +467,31 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Optional.empty();
     }
 
-    private record TextOverlayDrawable(String text, int color, float scale) implements IDrawable {
+    private record SlotOverlayDrawable(String chanceText, String quantityText) implements IDrawable {
         @Override
         public int getWidth() {
-            return (int) Math.ceil(Minecraft.getInstance().font.width(text) * scale);
+            return 16;
         }
 
         @Override
         public int getHeight() {
-            return (int) Math.ceil(Minecraft.getInstance().font.lineHeight * scale);
+            return 16;
         }
 
         @Override
         public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+            var font = Minecraft.getInstance().font;
             guiGraphics.pose().pushMatrix();
             guiGraphics.pose().translate(xOffset, yOffset);
-            guiGraphics.pose().scale(scale, scale);
-            guiGraphics.text(Minecraft.getInstance().font, text, 0, 0, color, false);
+            guiGraphics.pose().scale(ITEM_OVERLAY_SCALE, ITEM_OVERLAY_SCALE);
+            if (!chanceText.isEmpty()) {
+                guiGraphics.text(font, chanceText, 0, 0, 0xFFFF4040, false);
+            }
+            if (!quantityText.isEmpty()) {
+                int x = Math.max(0, (int) (16 / ITEM_OVERLAY_SCALE) - font.width(quantityText));
+                int y = (int) (16 / ITEM_OVERLAY_SCALE) - font.lineHeight;
+                guiGraphics.text(font, quantityText, x, y, 0xFFFFFFFF, true);
+            }
             guiGraphics.pose().popMatrix();
         }
     }

@@ -81,6 +81,36 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void itemQuantityTextIsOnlyShownAboveOne() {
+        assertThat(MachineRecipeCategory.itemQuantityText(1)).isEmpty();
+        assertThat(MachineRecipeCategory.itemQuantityText(1_234)).isEqualTo("1.23k");
+    }
+
+    @Test
+    void fluidQuantityTextIsOnlyShownAboveOneBucket() {
+        assertThat(MachineRecipeCategory.fluidQuantityText(1_000)).isEmpty();
+        assertThat(MachineRecipeCategory.fluidQuantityText(1_234)).isEqualTo("1.23k mB");
+    }
+
+    @Test
+    void tooltipQuantityTextUsesExactGrouping() {
+        assertThat(MachineRecipeCategory.itemTooltipQuantity(1)).isEmpty();
+        assertThat(MachineRecipeCategory.itemTooltipQuantity(1_234)).isEqualTo("1,234");
+        assertThat(MachineRecipeCategory.fluidTooltipQuantity(1_234)).isEqualTo("1,234 mB");
+    }
+
+    @Test
+    void jeiItemStackUsesOneAsDisplayCountAndPreservesSourceStack() {
+        ItemStack source = new ItemStack(Items.IRON_INGOT, 1_234);
+
+        ItemStack jeiStack = MachineRecipeCategory.jeiItemStack(source);
+
+        assertThat(source.getCount()).isEqualTo(1_234);
+        assertThat(jeiStack.getItem()).isSameAs(source.getItem());
+        assertThat(jeiStack.getCount()).isEqualTo(1);
+    }
+
+    @Test
     void display_uses_i18n_tooltip_for_interface_input() {
         var machineId = MMCR.id("interface_jei_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI")
