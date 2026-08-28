@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -14,7 +15,9 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -47,13 +50,20 @@ public final class CraftingContext {
                 retainedInputs == null ? Set.of() : retainedInputs);
     }
 
+    public PlanningResult planInputs(List<MachineRequirement> requirements, int parallelism,
+                                     Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
+        return plan(requirements, parallelism, RecipeModifier.IOType.INPUT,
+                consumedAtStart == null ? Set.of() : consumedAtStart,
+                retainedInputs == null ? Set.of() : retainedInputs, Map.of());
+    }
+
     public PlanningResult planOutputs(MachineRecipe recipe, int parallelism) {
         return plan(recipe, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of());
     }
 
     public PlanningResult planOutputs(List<MachineOutput> outputs, int parallelism) {
         if (outputs == null) throw new IllegalArgumentException("outputs must not be null");
-        return planSelected(outputRequirements(outputs), parallelism, true, indexes(outputs.size()));
+        return planSelected(outputRequirements(outputs), parallelism, partialOutputPolicies(outputs.size()), indexes(outputs.size()));
     }
 
     public PlanningResult planOutputs(MachineRecipe recipe, List<MachineOutput> outputs, int parallelism) {
@@ -65,7 +75,8 @@ public final class CraftingContext {
                 requirements.add(requirement);
             }
         }
-        return planSelected(requirements, parallelism, recipe.allowPartialOutputs(), indexes(requirements.size()));
+        return planSelected(requirements, parallelism,
+                partialOutputPolicies(requirements, recipe.allowPartialOutputs()), indexes(requirements.size()));
     }
 
     private static List<MachineRequirement> outputRequirements(List<MachineOutput> outputs) {
@@ -110,22 +121,25 @@ public final class CraftingContext {
     }
 
     public PlanningResult planStartRequirements(List<MachineRequirement> requirements, int requestedParallelism,
-                                                boolean allowPartialOutputs) {
-        return planSelected(requirements, requestedParallelism, allowPartialOutputs,
-                indexes(requirements == null ? 0 : requirements.size()));
+                                                 boolean allowPartialOutputs) {
+        return planRequirements(requirements, requestedParallelism,
+                partialOutputPolicies(requirements, allowPartialOutputs));
+    }
+
+    public PlanningResult planRequirements(List<MachineRequirement> requirements, int parallelism,
+                                           Map<Integer, OutputPolicy> outputPolicies) {
+        return plan(requirements, parallelism, null, Set.of(), Set.of(), outputPolicies);
     }
 
     public PlanningResult planInputRequirements(List<MachineRequirement> requirements, int parallelism,
-                                                Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
-        return planRequirements(requirements, parallelism, RecipeModifier.IOType.INPUT, false,
-                consumedAtStart == null ? Set.of() : consumedAtStart,
-                retainedInputs == null ? Set.of() : retainedInputs);
+                                                 Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
+        return planInputs(requirements, parallelism, consumedAtStart, retainedInputs);
     }
 
     public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, int parallelism,
-                                                 boolean allowPartialOutputs) {
-        return planRequirements(requirements, parallelism, RecipeModifier.IOType.OUTPUT, allowPartialOutputs,
-                Set.of(), Set.of());
+                                                  boolean allowPartialOutputs) {
+        return plan(requirements, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of(),
+                partialOutputPolicies(requirements, allowPartialOutputs));
     }
 
     public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, List<MachineOutput> outputs,
@@ -144,8 +158,8 @@ public final class CraftingContext {
             }
         }
         if (!inserted) merged.addAll(replacement);
-        return planRequirements(merged, parallelism, RecipeModifier.IOType.OUTPUT, allowPartialOutputs,
-                Set.of(), Set.of());
+        return plan(merged, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of(),
+                partialOutputPolicies(merged, allowPartialOutputs));
     }
 
     public void setModifiers(List<RecipeModifier> modifiers) {
@@ -161,11 +175,19 @@ public final class CraftingContext {
     private PlanningResult plan(MachineRecipe recipe, int parallelism, RecipeModifier.IOType direction,
                                 Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
         if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
+        List<MachineRequirement> recipeRequirements = recipe.runtimeRequirements(modifiers);
+        return plan(recipeRequirements, parallelism, direction, consumedAtStart, retainedInputs,
+                partialOutputPolicies(recipeRequirements, recipe.allowPartialOutputs()));
+    }
+
+    private PlanningResult plan(List<MachineRequirement> source, int parallelism, RecipeModifier.IOType direction,
+                                Set<Integer> consumedAtStart, Set<Integer> retainedInputs,
+                                Map<Integer, OutputPolicy> outputPolicies) {
+        if (source == null) throw new IllegalArgumentException("requirements must not be null");
         List<MachineRequirement> requirements = new ArrayList<>();
         List<Integer> requirementIndexes = new ArrayList<>();
-        List<MachineRequirement> recipeRequirements = recipe.runtimeRequirements(modifiers);
-        for (int index = 0; index < recipeRequirements.size(); index++) {
-            MachineRequirement requirement = recipeRequirements.get(index);
+        for (int index = 0; index < source.size(); index++) {
+            MachineRequirement requirement = source.get(index);
             if (direction != null && requirement.io() != direction) continue;
             if (consumedAtStart.contains(index)) continue;
             if (retainedInputs.contains(index) && requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement item
@@ -176,38 +198,41 @@ public final class CraftingContext {
             requirements.add(requirement);
             requirementIndexes.add(index);
         }
-        return planSelected(requirements, parallelism,
-                direction != RecipeModifier.IOType.INPUT && recipe.allowPartialOutputs(), requirementIndexes);
-    }
-
-    private PlanningResult planRequirements(List<MachineRequirement> source, int parallelism,
-                                            RecipeModifier.IOType direction, boolean allowPartialOutputs,
-                                            Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
-        if (source == null) throw new IllegalArgumentException("requirements must not be null");
-        List<MachineRequirement> requirements = new ArrayList<>();
-        List<Integer> requirementIndexes = new ArrayList<>();
-        for (int index = 0; index < source.size(); index++) {
-            MachineRequirement requirement = source.get(index);
-            if (direction != null && requirement.io() != direction) continue;
-            if (consumedAtStart.contains(index)) continue;
-            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement item
-                    && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() > 0F) {
-                requirement = new ItemRequirement(item.io(), item.item(), item.count(), item.stack(null),
-                        item.chance(), item.tags(), item.components(), 0F);
-            }
-            requirements.add(requirement);
-            requirementIndexes.add(index);
-        }
-        return planSelected(requirements, parallelism, allowPartialOutputs, requirementIndexes);
+        return planSelected(requirements, parallelism, outputPolicies, requirementIndexes);
     }
 
     private PlanningResult planSelected(List<MachineRequirement> requirements, int parallelism,
-                                        boolean allowPartialOutputs, List<Integer> requirementIndexes) {
+                                        Map<Integer, OutputPolicy> outputPolicies, List<Integer> requirementIndexes) {
         if (requirements == null || requirementIndexes == null || requirements.size() != requirementIndexes.size()) {
             throw new IllegalArgumentException("requirements and indexes must match");
         }
         return new RequirementPlanner().plan(requirements, capabilities,
-                new PlanningContext(parallelism, 0, allowPartialOutputs), requirementIndexes);
+                new PlanningContext(parallelism, 0, outputPolicies), requirementIndexes);
+    }
+
+    private static Map<Integer, OutputPolicy> partialOutputPolicies(int size) {
+        return outputPoliciesForIndexes(indexes(size), true);
+    }
+
+    private static Map<Integer, OutputPolicy> partialOutputPolicies(List<MachineRequirement> requirements,
+                                                                     boolean allowPartialOutputs) {
+        if (requirements == null) throw new IllegalArgumentException("requirements must not be null");
+        Map<Integer, OutputPolicy> policies = new LinkedHashMap<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            if (requirements.get(index).io() == RecipeModifier.IOType.OUTPUT) {
+                policies.put(index, allowPartialOutputs ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private static Map<Integer, OutputPolicy> outputPoliciesForIndexes(List<Integer> indexes,
+                                                                        boolean allowPartialOutputs) {
+        Map<Integer, OutputPolicy> policies = new LinkedHashMap<>();
+        for (Integer index : indexes) {
+            policies.put(index, allowPartialOutputs ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
+        }
+        return Map.copyOf(policies);
     }
 
     private static boolean isItemOrFluidOutput(MachineRequirement requirement) {

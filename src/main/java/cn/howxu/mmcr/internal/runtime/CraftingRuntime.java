@@ -97,8 +97,8 @@ public final class CraftingRuntime {
         }
         RecipeStartContext.ExecutionSnapshot effective = startContext.snapshot();
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planStartRequirements(effective.requirements(), requestedParallelism,
-                recipe.allowPartialOutputs());
+        PlanningResult result = context.planInputs(effective.requirements(), requestedParallelism,
+                Set.of(), Set.of());
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) {
             return fail(result.failure());
@@ -107,9 +107,8 @@ public final class CraftingRuntime {
             return fail(plan.failure());
         }
 
-        activeRecipe = new ActiveMachineRecipe(recipe, plan.parallelism());
+        activeRecipe = new ActiveMachineRecipe(recipe, plan.parallelism(), effective);
         activeRecipe.setParallelism(plan.parallelism());
-        activeRecipe.setEffectiveExecutionSnapshot(effective.duration(), effective.requirements(), effective.outputs());
         startPlan = plan;
         finishPlan = null;
         effectiveRequirements = MachineRequirement.copyList(effective.requirements());
@@ -132,12 +131,12 @@ public final class CraftingRuntime {
         try {
             behavior.recipeTick().accept(new RecipeTickContext(controller.behaviorContext(), activeRecipe.getRecipe(),
                     activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
-                    effectiveRequirements, effectiveOutputs));
+                    effectiveRequirements(), effectiveOutputs()));
         } catch (RuntimeException exception) {
             logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
         }
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planInputRequirements(effectiveRequirements, activeRecipe.getParallelism(),
+        PlanningResult result = context.planInputs(effectiveRequirements(), activeRecipe.getParallelism(),
                 consumedAtStart, retainedInputs);
         CraftingPlan tickPlan = result.plan();
         if (!result.successful() || tickPlan == null || tickPlan.parallelism() < activeRecipe.getParallelism()) {
@@ -168,7 +167,8 @@ public final class CraftingRuntime {
         if (behavior == null) return finishBlocked(failure("recipe_behavior"));
         CraftingContext context = context(runtime);
         RecipeFinishContext finishContext = new RecipeFinishContext(controller.behaviorContext(),
-                activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(), effectiveOutputs);
+                activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(),
+                effectiveOutputs());
         try {
             behavior.beforeFinish().accept(finishContext);
         } catch (RuntimeException exception) {
@@ -191,7 +191,7 @@ public final class CraftingRuntime {
         }
         PlanningResult result;
         try {
-            result = context.planOutputRequirements(effectiveRequirements, finishContext.outputs(),
+            result = context.planOutputRequirements(effectiveRequirements(), finishContext.outputs(),
                     activeRecipe.getParallelism(), activeRecipe.getRecipe().allowPartialOutputs());
         } catch (IllegalArgumentException exception) {
             logCallbackFailure("beforeFinish.output_validation", runtime, activeRecipe.getRecipe(), exception);
@@ -349,6 +349,9 @@ public final class CraftingRuntime {
             failLoad();
             return;
         }
+        List<MachineOutput> outputs = restored.hasEffectiveExecutionSnapshot()
+                ? restored.effectiveOutputs()
+                : restored.getRecipe().runtimeMachineOutputs(contextModifiers(runtime));
         activeRecipe = restored;
         startPlan = null;
         finishPlan = null;
@@ -358,9 +361,7 @@ public final class CraftingRuntime {
         modifierVersion = restoredModifierVersion;
         componentStateVersion = restoredComponentStateVersion;
         effectiveRequirements = MachineRequirement.copyList(requirements);
-        effectiveOutputs = restored.hasEffectiveExecutionSnapshot()
-                ? restored.effectiveOutputs()
-                : restored.getRecipe().runtimeMachineOutputs(contextModifiers(runtime));
+        effectiveOutputs = MachineOutput.copyList(outputs);
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
@@ -515,6 +516,16 @@ public final class CraftingRuntime {
     private void clearEffectiveRecipe() {
         effectiveRequirements = List.of();
         effectiveOutputs = List.of();
+    }
+
+    private List<MachineRequirement> effectiveRequirements() {
+        return activeRecipe != null && activeRecipe.hasEffectiveExecutionSnapshot()
+                ? activeRecipe.effectiveRequirements() : effectiveRequirements;
+    }
+
+    private List<MachineOutput> effectiveOutputs() {
+        return activeRecipe != null && activeRecipe.hasEffectiveExecutionSnapshot()
+                ? activeRecipe.effectiveOutputs() : effectiveOutputs;
     }
 
     private int duration(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {

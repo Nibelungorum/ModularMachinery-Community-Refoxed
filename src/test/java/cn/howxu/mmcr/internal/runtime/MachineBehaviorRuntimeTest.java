@@ -110,6 +110,52 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
+    void recipe_start_callback_freezes_the_effective_definition_for_the_lifecycle() {
+        AtomicInteger starts = new AtomicInteger();
+        AtomicInteger ticks = new AtomicInteger();
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input, output);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> {
+                    starts.incrementAndGet();
+                    assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+                    context.setDuration(2);
+                    context.setRequirements(List.of(
+                            new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                                    ItemStack.EMPTY),
+                            output(Items.GOLD_NUGGET)));
+                })
+                .recipeTick(context -> {
+                    ticks.incrementAndGet();
+                    assertThat(context.totalTick()).isEqualTo(2);
+                    assertThat(((ItemRequirement) context.requirements().getFirst()).count()).isEqualTo(2);
+                    ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(64);
+                }).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("behavior_start_snapshot"), TEST_MACHINE_ID, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                input(Items.IRON_INGOT), output(Items.IRON_NUGGET)));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(starts).hasValue(1);
+        assertThat(recipe.requirements()).hasSize(2);
+        assertThat(((ItemRequirement) recipe.requirements().getFirst()).count()).isEqualTo(1);
+        assertThat(runtime.totalTick()).isEqualTo(2);
+        assertThat(((ItemRequirement) runtime.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+
+        runtime.tick();
+        runtime.tick();
+        runtime.finish();
+
+        assertThat(starts).hasValue(1);
+        assertThat(ticks).hasValue(2);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
     void finish_callback_can_cancel_and_leave_finish_pending() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
