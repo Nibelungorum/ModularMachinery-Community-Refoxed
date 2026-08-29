@@ -2,7 +2,7 @@ ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_recipe_ticker',
-        tick_time: 300,
+        tick_time: 500,
         // Define the item and energy requirements.
         requirements: [
             {

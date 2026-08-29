@@ -565,7 +565,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                                 entry -> toPublicSmartInterfaceType(entry.getValue()))),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers().stream()
                         .map(MachineBuilderJS::toPublicSmartInterfaceModifier).toList(),
-                registration.runningSoundId(), registration.finishSoundId(), registration.pattern());
+                registration.runningSoundId(), registration.finishSoundId(), registration.pattern(), registration.behavior());
         Plugin.registerStartupMachine(definition);
     }
 

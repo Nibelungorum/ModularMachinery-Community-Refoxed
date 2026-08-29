@@ -11,7 +11,10 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.MachineApi;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -513,6 +516,34 @@ class PluginBindingTest {
 
             assertThat(MachineDefinitions.getRegistration(MMCR.id("kubejs_startup_window_press"))).isNotNull();
             assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+        } finally {
+            PublicApiBootstrap.clearForTesting();
+            TestBootstrap.restoreMachineDefinitions();
+            MachineDefinitions.freezeRegistryPhase();
+        }
+    }
+
+    @Test
+    void registered_startup_machine_retains_recipe_behavior_after_commit() {
+        MachineDefinitions.clearForTesting();
+        PublicApiBootstrap.clearForTesting();
+        var machineId = MMCR.id("kubejs_registered_behavior");
+        AtomicInteger ticks = new AtomicInteger();
+
+        try {
+            Plugin.beginStartupRegistryPhaseForTesting();
+            new MMCRStartupEventJS().createMachine(machineId.toString())
+                    .recipeBehavior(behavior -> behavior.recipeTick(context -> ticks.incrementAndGet()))
+                    .register();
+            StartupContentRegistration.completeKubeJSStartup();
+
+            MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+            assertThat(registration).isNotNull();
+            assertThat(registration.behavior()).isInstanceOf(RecipeBehavior.class);
+            ((RecipeBehavior) registration.behavior()).recipeTick().accept(new RecipeTickContext(
+                    new MachineRecipe(MMCR.id("kubejs_registered_behavior_recipe"), machineId, 1, List.of(), List.of()),
+                    0, 1, 1));
+            assertThat(ticks).hasValue(1);
         } finally {
             PublicApiBootstrap.clearForTesting();
             TestBootstrap.restoreMachineDefinitions();
