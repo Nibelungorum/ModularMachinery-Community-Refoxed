@@ -335,8 +335,14 @@ class MachineBehaviorRuntimeTest {
         assertThat(calls).hasValue(2);
         assertThat(firstInput.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
         assertThat(secondInput.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(firstOutput.getItemStackHandler(null).getStackInSlot(0).getCount()
-                + secondOutput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(66);
+        int outputCount = 0;
+        for (int slot = 0; slot < firstOutput.getItemStackHandler(null).getSlots(); slot++) {
+            outputCount += firstOutput.getItemStackHandler(null).getStackInSlot(slot).getCount();
+        }
+        for (int slot = 0; slot < secondOutput.getItemStackHandler(null).getSlots(); slot++) {
+            outputCount += secondOutput.getItemStackHandler(null).getStackInSlot(slot).getCount();
+        }
+        assertThat(outputCount).isEqualTo(66);
         assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(1L));
     }
 

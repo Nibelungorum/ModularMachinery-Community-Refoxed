@@ -956,6 +956,37 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void legacy_restore_rejects_progress_beyond_modifier_effective_duration() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
+                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
+                        0.5F, RecipeModifier.Operation.MULTIPLY, false))));
+        MachineRecipe recipe = recipe("runtime_legacy_invalid_progress", 2, List.of());
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+        recipeTag.remove("effective_duration");
+        recipeTag.remove("effective_requirements");
+        recipeTag.remove("effective_outputs");
+        recipeTag.putInt("totalTick", 2);
+        recipeTag.putInt("tick", 2);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
     void invalid_embedded_definition_loads_as_a_failed_idle_runtime_without_resource_operations() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("runtime_invalid_embedded", 20, List.of());

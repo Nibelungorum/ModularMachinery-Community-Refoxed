@@ -48,6 +48,7 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.world.level.material.Fluids;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -658,6 +659,35 @@ class RequirementPlannerTest {
                     assertThat(simulation.accepted()).isZero();
                     assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
                 });
+    }
+
+    @Test
+    void planner_rejects_different_resources_in_non_empty_zero_quantity_slots() {
+        ZeroQuantityItemStorage itemStorage = new ZeroQuantityItemStorage(ItemResource.of(Items.IRON_INGOT));
+        var itemResult = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new ItemStack(Items.GOLD_NUGGET, 1), 1F, List.of())),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, itemStorage)),
+                new PlanningContext(1, 0));
+
+        assertThat(itemResult.successful()).isFalse();
+        assertThat(itemResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(itemResult.outputSimulations()).singleElement()
+                .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.NONE);
+        assertThat(itemStorage.amount(0)).isZero();
+
+        ZeroQuantityFluidStorage fluidStorage = new ZeroQuantityFluidStorage(FluidResource.of(Fluids.LAVA));
+        var fluidResult = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new FluidStack(Fluids.WATER, 1), 1F, List.of())),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.OUTPUT, fluidStorage)),
+                new PlanningContext(1, 0));
+
+        assertThat(fluidResult.successful()).isFalse();
+        assertThat(fluidResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(fluidResult.outputSimulations()).singleElement()
+                .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.NONE);
+        assertThat(fluidStorage.amount(0)).isZero();
     }
 
     @Test
@@ -1377,6 +1407,44 @@ class RequirementPlannerTest {
 
     private static Ingredient ironIngredient() {
         return Ingredient.of(Items.IRON_INGOT);
+    }
+
+    private static final class ZeroQuantityItemStorage extends LongResourceStorage<ItemResource> {
+        private final ItemResource slotResource;
+
+        private ZeroQuantityItemStorage(ItemResource slotResource) {
+            super(ItemResource.class, 1, 64L, ItemResource::isEmpty, () -> {});
+            this.slotResource = slotResource;
+        }
+
+        @Override
+        public ItemResource resource(int slot) {
+            return slot == 0 ? slotResource : super.resource(slot);
+        }
+
+        @Override
+        public boolean isValid(int slot, ItemResource resource) {
+            return true;
+        }
+    }
+
+    private static final class ZeroQuantityFluidStorage extends LongResourceStorage<FluidResource> {
+        private final FluidResource slotResource;
+
+        private ZeroQuantityFluidStorage(FluidResource slotResource) {
+            super(FluidResource.class, 1, 64L, FluidResource::isEmpty, () -> {});
+            this.slotResource = slotResource;
+        }
+
+        @Override
+        public FluidResource resource(int slot) {
+            return slot == 0 ? slotResource : super.resource(slot);
+        }
+
+        @Override
+        public boolean isValid(int slot, FluidResource resource) {
+            return true;
+        }
     }
 
     private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io, List<String> tags)

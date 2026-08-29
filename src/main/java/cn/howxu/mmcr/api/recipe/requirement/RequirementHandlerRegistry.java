@@ -276,7 +276,7 @@ public final class RequirementHandlerRegistry {
             if (storage == null) continue;
             for (int slot = 0; slot < storage.size(); slot++) {
                 Object current = storage.resource(slot);
-                if (storage.amount(slot) > 0L && current instanceof ItemResource existing && !existing.equals(resource)) continue;
+                if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 long slotCapacity = Math.min(storage.capacityResource(slot, resource), stack.getMaxStackSize());
                 long room = Math.max(0L, slotCapacity - storage.amount(slot));
@@ -315,7 +315,7 @@ public final class RequirementHandlerRegistry {
             if (storage == null) continue;
             for (int slot = 0; slot < storage.size(); slot++) {
                 Object current = storage.resource(slot);
-                if (storage.amount(slot) > 0L && current instanceof FluidResource existing && !existing.equals(resource)) continue;
+                if (current instanceof FluidResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 capacity = saturatingAdd(capacity,
                         Math.max(0L, storage.capacityResource(slot, resource) - storage.amount(slot)));
@@ -362,7 +362,8 @@ public final class RequirementHandlerRegistry {
                         remaining -= moved;
                     }
                 } else {
-                    if (currentAmount > 0L && (! (current instanceof ItemResource resource) || !resource.equals(requestedResource))) continue;
+                    if (current instanceof ItemResource resource && !resource.isEmpty()
+                            && !resource.equals(requestedResource)) continue;
                     if (!storage.isValidResource(slot, requestedResource)) continue;
                     long capacity = Math.min(storage.capacityResource(slot, requestedResource), stackLimit);
                     long moved = Math.min(remaining, Math.max(0L, capacity - currentAmount));
@@ -418,7 +419,8 @@ public final class RequirementHandlerRegistry {
                         remaining -= moved;
                     }
                 } else {
-                    if (currentAmount > 0L && (!(current instanceof FluidResource resource) || !resource.equals(requestedResource))) continue;
+                    if (current instanceof FluidResource resource && !resource.isEmpty()
+                            && !resource.equals(requestedResource)) continue;
                     if (!storage.isValidResource(slot, requestedResource)) continue;
                     long moved = Math.min(remaining,
                             Math.max(0L, storage.capacityResource(slot, requestedResource) - currentAmount));

@@ -361,6 +361,12 @@ public final class CraftingRuntime {
         if (!restored.hasEffectiveExecutionSnapshot()) {
             restored.setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(
                     duration(restored.getRecipe(), runtime), requirements, outputs));
+            if (restored.getTotalTick() < 1 || restored.getTick() < 0
+                    || restored.getTick() > restored.getTotalTick()
+                    || (restored.isFinishPending() && restored.getTick() != restored.getTotalTick() - 1)) {
+                failLoad();
+                return;
+            }
         }
         activeRecipe = restored;
         startPlan = null;

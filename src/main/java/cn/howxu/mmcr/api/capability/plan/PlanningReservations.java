@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -52,7 +54,7 @@ public final class PlanningReservations {
         Long currentAmount = virtualAmount(storage, slot);
         long capacity = storage.capacityResource(slot, resource);
         if (currentAmount == null || currentAmount < 0L || capacity < 0L || currentAmount > capacity
-                || (currentAmount > 0L && !current.equals(resource))
+                || mismatchedNonEmptyResource(current, resource)
                 || amount > capacity - currentAmount) return false;
         if (reservation == null) reservation = reservation(storage, slot, true);
         if (reservation.insertedResource != null && !reservation.insertedResource.equals(resource)) return false;
@@ -119,6 +121,12 @@ public final class PlanningReservations {
         }
         copy.values.putAll(values);
         return copy;
+    }
+
+    private static boolean mismatchedNonEmptyResource(Object current, Object requested) {
+        if (current instanceof ItemResource item) return !item.isEmpty() && !item.equals(requested);
+        if (current instanceof FluidResource fluid) return !fluid.isEmpty() && !fluid.equals(requested);
+        return false;
     }
 
     private ResourceReservation reservation(ResourceStorage<?> storage, int slot, boolean create) {
