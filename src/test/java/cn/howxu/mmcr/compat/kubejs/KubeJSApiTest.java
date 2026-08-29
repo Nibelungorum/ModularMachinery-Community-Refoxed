@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -185,6 +186,20 @@ class KubeJSApiTest {
     void readable_number_methods_are_available_to_kubejs_api() {
         assertThat(api.readableNumber(1_000L)).isEqualTo("1k");
         assertThat(api.readableNumberExact(1_000_000L)).isEqualTo("1,000,000");
+    }
+
+    @Test
+    void rhino_exposes_controller_screen_scopes_through_api() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+
+        assertThat(context.evaluateString(scope, "api.screenScope().CONTROLLER.name() === 'CONTROLLER'",
+                "screen-scope-test", 1, null)).isEqualTo(true);
+        assertThat(context.evaluateString(scope, "api.screenScope().OPERATION.name() === 'OPERATION'",
+                "screen-scope-test", 1, null)).isEqualTo(true);
+        assertThat(api.screenScope().CONTROLLER).isSameAs(ControllerScreenTextScope.CONTROLLER);
+        assertThat(api.screenScope().OPERATION).isSameAs(ControllerScreenTextScope.OPERATION);
     }
 
     @Test

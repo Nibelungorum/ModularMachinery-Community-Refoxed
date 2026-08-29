@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -43,6 +44,22 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class KubeJSApi {
+    private final ScreenScopeValues screenScope = new ScreenScopeValues();
+
+    public ScreenScopeValues screenScope() {
+        return screenScope;
+    }
+
+    /**
+     * KubeJS-visible controller screen text scope constants.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class ScreenScopeValues {
+        public final ControllerScreenTextScope CONTROLLER = ControllerScreenTextScope.CONTROLLER;
+        public final ControllerScreenTextScope OPERATION = ControllerScreenTextScope.OPERATION;
+    }
+
     public String readableNumber(long value) {
         return ReadableNumber.formatCompact(value);
     }
