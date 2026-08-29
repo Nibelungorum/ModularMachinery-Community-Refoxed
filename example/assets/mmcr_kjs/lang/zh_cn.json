@@ -11,6 +11,8 @@
     "block.mmcr.kubejs_monster_farm_controller": "怪物农场控制器",
     "block.mmcr.gzr_controller": "四元方悔血炼池控制器",
     "block.mmcr.kubejs_recipe_ticker_controller": "配方Tick测试控制器",
+    "block.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick测试控制器",
+    
 
     "item.mmcr.kubejs_alloy_furnace_controller": "合金炉控制器",
     "item.mmcr.kubejs_blast_furnace_controller": "高炉控制器",
@@ -24,6 +26,7 @@
     "item.mmcr.kubejs_monster_farm_controller": "怪物农场控制器",
     "item.mmcr.gzr_controller": "四元方悔血炼池控制器",
     "item.mmcr.kubejs_recipe_ticker_controller": "配方Tick测试控制器",
+    "item.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick测试控制器",
 
     "machine.mmcr_kubejs.kubejs_alloy_furnace": "合金炉",
     "machine.mmcr_kubejs.kubejs_blast_furnace": "高炉",
@@ -37,6 +40,7 @@
     "machine.mmcr_kubejs.kubejs_monster_farm": "怪物农场",
     "machine.mmcr_kubejs.gzr": "四元方悔血炼池",
     "machine.mmcr_kubejs.kubejs_recipe_ticker": "配方Tick测试",
+    "machine.mmcr_kubejs.kubejs_pure_tick_machine": "Pure Tick测试",
 
     "level.mmcr_kubejs.thermal_smelting_coil": "线圈等级",
     

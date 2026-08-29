@@ -10,6 +10,8 @@
     "block.mmcr.kubejs_space_reassembler_controller": "Space Reassembler Controller",
     "block.mmcr.kubejs_monster_farm_controller": "Monster Farm Controller",
     "block.mmcr.gzr_controller": "Four Mete Regret Building Site Controller",
+    "block.mmcr.kubejs_recipe_ticker_controller": "Recipe Tick Test Controller",
+    "block.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick Test Controller",
 
     "item.mmcr.kubejs_alloy_furnace_controller": "Alloy Furnace Controller",
     "item.mmcr.kubejs_blast_furnace_controller": "Blast Furnace Controller",
@@ -22,6 +24,8 @@
     "item.mmcr.kubejs_space_reassembler_controller": "Space Reassembler Controller",
     "item.mmcr.kubejs_monster_farm_controller": "Monster Farm Controller",
     "item.mmcr.gzr_controller": "Four Mete Regret Building Site Controller",
+    "item.mmcr.kubejs_recipe_ticker_controller": "Recipe Tick Test Controller",
+    "item.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick Test Controller",
 
     "machine.mmcr_kubejs.kubejs_alloy_furnace": "Alloy Furnace",
     "machine.mmcr_kubejs.kubejs_blast_furnace": "Blast Furnace",
@@ -34,6 +38,8 @@
     "machine.mmcr_kubejs.kubejs_space_reassembler": "Space Reassembler",
     "machine.mmcr_kubejs.kubejs_monster_farm": "Monster Farm",
     "machine.mmcr_kubejs.gzr": "Four Mete Regret Building Site",
+    "machine.mmcr_kubejs.kubejs_recipe_ticker": "Recipe Tick Test",
+    "machine.mmcr_kubejs.kubejs_pure_tick_machine": "Pure Tick Test",
 
     "level.mmcr_kubejs.thermal_smelting_coil": "Coil Level",
 

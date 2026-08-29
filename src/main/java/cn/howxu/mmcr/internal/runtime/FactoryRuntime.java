@@ -190,26 +190,32 @@ public final class FactoryRuntime {
             byId.putIfAbsent(recipe.id(), recipe);
         }
 
-        Map<String, FactoryRecipeThread> existingCoreLanes = new LinkedHashMap<>();
+        Map<String, List<FactoryRecipeThread>> existingCoreLanes = new LinkedHashMap<>();
         List<FactoryRecipeThread> dynamicLanes = new ArrayList<>();
         for (FactoryRecipeThread lane : lanes) {
             if (lane.isBaseThread()) continue;
-            if (lane.isCoreThread()) existingCoreLanes.putIfAbsent(lane.threadName(), lane);
+            if (lane.isCoreThread()) existingCoreLanes
+                    .computeIfAbsent(lane.threadName(), ignored -> new ArrayList<>()).add(lane);
             else dynamicLanes.add(lane);
         }
 
         List<FactoryRecipeThread> reconciled = new ArrayList<>();
         reconciled.add(lanes.getFirst());
         if (machine != null) {
+            Map<String, Integer> coreOccurrences = new LinkedHashMap<>();
             for (FactoryThreadSpec spec : machine.factoryThreads()) {
                 Set<MachineRecipe> recipes = new LinkedHashSet<>();
                 for (Identifier id : spec.recipeIds()) {
                     MachineRecipe recipe = byId.get(id);
                     if (recipe != null) recipes.add(recipe);
                 }
-                FactoryRecipeThread lane = existingCoreLanes.remove(spec.name());
+                int occurrence = coreOccurrences.merge(spec.name(), 1, Integer::sum) - 1;
+                List<FactoryRecipeThread> matchingLanes = existingCoreLanes.get(spec.name());
+                FactoryRecipeThread lane = matchingLanes == null || matchingLanes.isEmpty()
+                        ? null : matchingLanes.removeFirst();
                 if (lane == null) {
-                    lane = FactoryRecipeThread.core(controller, spec.name(), recipes);
+                    String laneId = "core-" + spec.name() + (occurrence == 0 ? "" : "-" + occurrence);
+                    lane = FactoryRecipeThread.core(controller, spec.name(), recipes, laneId);
                     addLane(lane);
                 } else {
                     if (coreCatalogVersion != catalogVersion || !lane.recipeSet().equals(recipes)) {
@@ -220,7 +226,9 @@ public final class FactoryRuntime {
                 reconciled.add(lane);
             }
         }
-        for (FactoryRecipeThread removed : existingCoreLanes.values()) removeLane(removed);
+        for (List<FactoryRecipeThread> removed : existingCoreLanes.values()) {
+            for (FactoryRecipeThread lane : removed) removeLane(lane);
+        }
         reconciled.addAll(dynamicLanes);
         if (!lanes.equals(reconciled)) {
             lanes.clear();
@@ -452,6 +460,7 @@ public final class FactoryRuntime {
                         .filter(recipe -> spec.recipeIds().contains(recipe.id())).toList());
             }
         }
+        Map<String, Integer> restoredCoreOccurrences = new LinkedHashMap<>();
         for (int index = 0; index < count; index++) {
             ValueInput laneInput = input.childOrEmpty("lane_" + index);
             String lockedRecipeName = laneInput.getStringOr("locked_recipe", "");
@@ -459,7 +468,14 @@ public final class FactoryRuntime {
             List<MachineRecipe> candidates = laneInput.getBooleanOr("core", false)
                     ? coreCandidates.getOrDefault(laneInput.getStringOr("name", ""), List.of())
                     : catalog.recipes();
-            FactoryRecipeThread lane = FactoryRecipeThread.load(laneInput, controller, lockedRecipeId, candidates);
+            String fallbackLaneId = null;
+            if (laneInput.getBooleanOr("core", false)) {
+                String name = laneInput.getStringOr("name", "");
+                int occurrence = restoredCoreOccurrences.merge(name, 1, Integer::sum) - 1;
+                fallbackLaneId = "core-" + name + (occurrence == 0 ? "" : "-" + occurrence);
+            }
+            FactoryRecipeThread lane = FactoryRecipeThread.load(laneInput, controller, lockedRecipeId, candidates,
+                    fallbackLaneId);
             addLane(lane);
             if (laneInput.getBooleanOr("had_recipe_lock", false)) recipeLockUsed.add(lane);
             if (!lockedRecipeName.isEmpty()) {
@@ -694,8 +710,12 @@ public final class FactoryRuntime {
 
     private void removeLane(FactoryRecipeThread lane) {
         if (!lanes.contains(lane)) return;
+        String laneId = lane.laneId();
         lane.setFinishContinuation(null);
         lane.invalidate();
+        if (controller != null) {
+            controller.markRecipeScreenTextRemoved(laneId, controller.recipeScreenText(laneId).revision());
+        }
         lanes.remove(lane);
         removeLaneState(lane);
         readyLanes.remove(lane);

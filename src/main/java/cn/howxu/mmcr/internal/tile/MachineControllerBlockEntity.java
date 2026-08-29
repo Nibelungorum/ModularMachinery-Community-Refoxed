@@ -183,6 +183,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean syncedRuntimeActive;
     private long lastSentControllerScreenTextRevision = -1L;
     private final Map<String, Long> lastSentRecipeScreenTextRevisions = new LinkedHashMap<>();
+    private final Map<String, Long> removedRecipeScreenTextRevisions = new LinkedHashMap<>();
     private boolean runtimeStateBroadcastPending;
     private boolean factoryMenuSyncPending;
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
@@ -865,13 +866,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void sendFactoryControllerScreenText(ServerPlayer player) {
-        for (Map.Entry<String, ControllerScreenTextSnapshot> entry
-                : runtime.factoryRuntime().screenTextSnapshots().entrySet()) {
+        Map<String, ControllerScreenTextSnapshot> laneSnapshots = runtime.factoryRuntime().screenTextSnapshots();
+        for (Map.Entry<String, ControllerScreenTextSnapshot> entry : laneSnapshots.entrySet()) {
             ControllerScreenTextSnapshot laneSnapshot = entry.getValue();
             player.connection.send(new ClientboundCustomPayloadPacket(new PktControllerScreenTextPayload(
                     getBlockPos(), entry.getKey(), laneSnapshot.revision(), laneSnapshot.lines())));
             lastSentRecipeScreenTextRevisions.put(entry.getKey(), laneSnapshot.revision());
         }
+        for (Map.Entry<String, Long> entry : removedRecipeScreenTextRevisions.entrySet()) {
+            if (laneSnapshots.containsKey(entry.getKey())) continue;
+            player.connection.send(new ClientboundCustomPayloadPacket(new PktControllerScreenTextPayload(
+                    getBlockPos(), entry.getKey(), entry.getValue(), List.of())));
+        }
+    }
+
+    public void markRecipeScreenTextRemoved(String laneId, long revision) {
+        if (laneId == null || laneId.isEmpty()) return;
+        long tombstoneRevision = Math.max(revision, lastSentRecipeScreenTextRevisions.getOrDefault(laneId, -1L)) + 1L;
+        removedRecipeScreenTextRevisions.merge(laneId, tombstoneRevision, Math::max);
     }
 
     private void sendControllerScreenTextOnMenuOpen(ServerPlayer player) {
@@ -2757,11 +2769,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean globalChanged = snapshot.revision() != lastSentControllerScreenTextRevision;
         Map<String, ControllerScreenTextSnapshot> changedLanes = new LinkedHashMap<>();
         for (Map.Entry<String, ControllerScreenTextSnapshot> entry : laneSnapshots.entrySet()) {
+            removedRecipeScreenTextRevisions.remove(entry.getKey());
             if (!Objects.equals(lastSentRecipeScreenTextRevisions.get(entry.getKey()), entry.getValue().revision())) {
                 changedLanes.put(entry.getKey(), entry.getValue());
             }
         }
-        if (!globalChanged && changedLanes.isEmpty()) return;
+        if (!globalChanged && changedLanes.isEmpty() && removedRecipeScreenTextRevisions.isEmpty()) return;
         PktControllerScreenTextPayload globalPacket = new PktControllerScreenTextPayload(
                 getBlockPos(), snapshot.revision(), snapshot.lines());
         Map<String, PktControllerScreenTextPayload> lanePackets = new LinkedHashMap<>();
@@ -2787,12 +2800,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     player.connection.send(new ClientboundCustomPayloadPacket(entry.getValue()));
                     sentLanes.add(entry.getKey());
                 }
+                for (Map.Entry<String, Long> entry : removedRecipeScreenTextRevisions.entrySet()) {
+                    player.connection.send(new ClientboundCustomPayloadPacket(new PktControllerScreenTextPayload(
+                            getBlockPos(), entry.getKey(), entry.getValue(), List.of())));
+                    sentLanes.add(entry.getKey());
+                }
             }
         }
         if (globalSent) lastSentControllerScreenTextRevision = snapshot.revision();
         for (String laneId : sentLanes) {
-            lastSentRecipeScreenTextRevisions.put(laneId, changedLanes.get(laneId).revision());
+            ControllerScreenTextSnapshot changed = changedLanes.get(laneId);
+            if (changed != null) lastSentRecipeScreenTextRevisions.put(laneId, changed.revision());
+            else lastSentRecipeScreenTextRevisions.put(laneId, removedRecipeScreenTextRevisions.get(laneId));
         }
+        sentLanes.forEach(removedRecipeScreenTextRevisions::remove);
     }
 
     private void broadcastStateIfChanged() {

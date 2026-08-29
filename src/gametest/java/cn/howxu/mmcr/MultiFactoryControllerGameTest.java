@@ -126,7 +126,7 @@ public class MultiFactoryControllerGameTest {
         controller.invalidateFormedStructure();
         helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty()
                         && screenTextPackets(ordinary) == ordinaryPackets + 1
-                        && screenTextPackets(factory) == factoryPackets + 1
+                        && screenTextPackets(factory) == factoryPackets + 2
                         && lastScreenTextPacket(ordinary).lines().isEmpty()
                         && lastScreenTextPacket(factory).lines().isEmpty(),
                 "factory controller reset clears and synchronizes external text");

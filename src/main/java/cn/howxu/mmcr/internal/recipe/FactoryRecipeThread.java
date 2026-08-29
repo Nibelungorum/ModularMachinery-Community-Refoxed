@@ -72,11 +72,18 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller,
                                   boolean coreThread, boolean baseThread, String threadName) {
+        this(controller, coreThread, baseThread, threadName, null);
+    }
+
+    private FactoryRecipeThread(MachineControllerBlockEntity controller,
+                                  boolean coreThread, boolean baseThread, String threadName,
+                                  @Nullable String explicitLaneId) {
         super(controller);
         this.coreThread = coreThread;
         this.baseThread = baseThread;
         this.threadName = threadName == null ? "" : threadName;
-        this.laneId = baseThread ? "base" : coreThread ? "core-" + this.threadName
+        this.laneId = explicitLaneId != null && !explicitLaneId.isBlank() ? explicitLaneId
+                : baseThread ? "base" : coreThread ? "core-" + this.threadName
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
         this.runtime.setScreenText(controller.recipeScreenText(this.laneId));
     }
@@ -86,16 +93,22 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public static FactoryRecipeThread simple(MachineControllerBlockEntity controller, String laneId) {
-        return new FactoryRecipeThread(controller, false, false, laneId);
+        return new FactoryRecipeThread(controller, false, false, laneId, laneId);
     }
 
     public static FactoryRecipeThread base(MachineControllerBlockEntity controller) {
-        return new FactoryRecipeThread(controller, false, true, "");
+        return new FactoryRecipeThread(controller, false, true, "", "base");
     }
 
     public static FactoryRecipeThread core(MachineControllerBlockEntity controller,
                                            String threadName, Set<MachineRecipe> recipes) {
-        FactoryRecipeThread thread = new FactoryRecipeThread(controller, true, false, threadName);
+        return core(controller, threadName, recipes, null);
+    }
+
+    public static FactoryRecipeThread core(MachineControllerBlockEntity controller,
+                                           String threadName, Set<MachineRecipe> recipes,
+                                           @Nullable String laneId) {
+        FactoryRecipeThread thread = new FactoryRecipeThread(controller, true, false, threadName, laneId);
         thread.recipeSet.addAll(recipes == null ? Set.of() : recipes);
         return thread;
     }
@@ -547,6 +560,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         output.putBoolean("core", coreThread);
         output.putBoolean("base", baseThread);
         output.putString("name", threadName);
+        output.putString("lane_id", laneId);
         output.putInt("idle_ticks", idleTicks);
         output.putBoolean("has_last", lastRecipe != null);
         if (lastRecipe != null) {
@@ -588,8 +602,17 @@ public final class FactoryRecipeThread extends RecipeThread {
     public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
                                            @Nullable Identifier lockedRecipeId,
                                            @Nullable List<MachineRecipe> candidates) {
+        return load(input, controller, lockedRecipeId, candidates, null);
+    }
+
+    public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
+                                           @Nullable Identifier lockedRecipeId,
+                                           @Nullable List<MachineRecipe> candidates,
+                                           @Nullable String fallbackLaneId) {
+        String persistedLaneId = input.getStringOr("lane_id", "");
+        String laneId = persistedLaneId.isBlank() ? fallbackLaneId : persistedLaneId;
         FactoryRecipeThread thread = new FactoryRecipeThread(controller,
-                input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""));
+                input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""), laneId);
         List<MachineRecipe> availableCandidates = candidates == null ? catalogCandidates(controller) : candidates;
         RecipeSearchContextKey restoredKey = readSearchFailureKey(input);
         if (thread.coreThread) thread.recipeSet.addAll(availableCandidates);

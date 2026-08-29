@@ -212,6 +212,7 @@ public abstract class RecipeThread {
     private void invalidatePendingStart(long token, MachineRecipe recipe) {
         clearPendingStart(token, recipe);
         runtime.invalidate();
+        controller.clearRecipeScreenText(laneId());
         controller.syncRecipeRuntimeFailure(runtime);
     }
 
@@ -232,6 +233,7 @@ public abstract class RecipeThread {
     private void invalidatePendingStartForCatalog(long token, MachineRecipe recipe) {
         clearPendingStart(token, recipe);
         runtime.invalidate();
+        controller.clearRecipeScreenText(laneId());
         onPendingStartCatalogChanged();
         controller.syncRecipeRuntimeFailure(runtime);
     }
@@ -239,6 +241,7 @@ public abstract class RecipeThread {
     public void tick() {
         if (startPending && !isPendingStart(pendingStartToken, pendingStartRecipe)) {
             clearPendingStart(pendingStartToken, pendingStartRecipe);
+            controller.clearRecipeScreenText(laneId());
         }
         if (!runtime.active()) return;
         if (tickPending && !validateCurrentRuntime(pendingTickToken, pendingTickDomain)) clearPendingTick();
