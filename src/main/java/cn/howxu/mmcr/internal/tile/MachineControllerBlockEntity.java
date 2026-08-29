@@ -283,7 +283,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 ? redstonePaused ? CraftingStatus.paused() : CraftingStatus.working()
                 : tickPaused ? CraftingStatus.paused()
                 : lastFailureUnloc == null ? CraftingStatus.IDLE : CraftingStatus.failure(lastFailureUnloc);
-        runtime.publishRuntimeState(isStructureAreaLoaded(structure), structure.formed(),
+        runtime.publishRuntimeState(structure.structureAreaLoaded(), structure.formed(),
                 structure.configuredMachine(), structure.matchedStage(), recipeId, status,
                 craftingFailureStatus(), craftingRuntime.tickCount(),
                 craftingRuntime.totalTick(), craftingRuntime.parallelism(), craftingRuntime.maxParallelism());
@@ -474,6 +474,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.onStructureChunkChanged(changedLevel, getBlockPos());
     }
 
+    public void onStructureChunkUnloaded(ServerLevel changedLevel, ChunkPos unloadedChunk) {
+        validateRuntimeBoundary(changedLevel, getBlockPos());
+        onStructureChunkStateChanged(unloadedChunk);
+    }
+
     private boolean physicalFormed() {
         BlockState state = getBlockState();
         return state != null && state.hasProperty(MachineControllerBlock.FORMED)
@@ -575,19 +580,29 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public static void markStructureChunkDirty(LevelAccessor level, ChunkPos chunkPos) {
+        markStructureChunkDirty(level, chunkPos, false);
+    }
+
+    public static void markStructureChunkUnloaded(LevelAccessor level, ChunkPos chunkPos) {
+        markStructureChunkDirty(level, chunkPos, true);
+    }
+
+    private static void markStructureChunkDirty(LevelAccessor level, ChunkPos chunkPos, boolean unloading) {
         if (level == null || level.isClientSide()) return;
         FORMED_CONTROLLERS.removeIf(controller -> controller.isRemoved() || controller.level == null);
         ACTIVE_STRUCTURE_SCANS.removeIf(controller -> controller.isRemoved() || controller.level == null);
         if (!(level instanceof ServerLevel serverLevel)) return;
         for (MachineControllerBlockEntity controller : FORMED_CONTROLLERS) {
             if (controller.level == level && controller.structureSnapshot().criticalChunks().contains(chunkPos)) {
-                controller.onStructureChunkChanged(serverLevel);
+                if (unloading) controller.onStructureChunkUnloaded(serverLevel, chunkPos);
+                else controller.onStructureChunkChanged(serverLevel);
             }
         }
         for (MachineControllerBlockEntity controller : ACTIVE_STRUCTURE_SCANS) {
             if (!FORMED_CONTROLLERS.contains(controller) && controller.level == level
                     && controller.isChunkRelevantToActiveStructureScan(chunkPos)) {
-                controller.onStructureChunkChanged(serverLevel);
+                if (unloading) controller.onStructureChunkUnloaded(serverLevel, chunkPos);
+                else controller.onStructureChunkChanged(serverLevel);
             }
         }
     }
@@ -2440,12 +2455,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void onStructureChunkStateChanged() {
+        onStructureChunkStateChanged(null);
+    }
+
+    private void onStructureChunkStateChanged(@Nullable ChunkPos unloadedChunk) {
         runtime.markStructureChunkStateChanged();
         boolean scanActive = structureWorkSnapshot().scan() != null;
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         if (scanActive) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
         boolean wasLoaded = structure.structureAreaLoaded();
-        boolean loaded = isStructureAreaLoaded(structure);
+        ChunkPos controllerChunk = new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4);
+        boolean loaded = structure.formed() && unloadedChunk != null && !controllerChunk.equals(unloadedChunk)
+                ? false : isStructureAreaLoaded(structure);
         if (!structure.formed() || structure.pattern() == null || structure.facing() == null) {
             runtime.publishStructureState(loaded, structure.formed(), structure.configuredMachine(), structure.matchedStage());
             publishRuntimeState();

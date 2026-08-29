@@ -30,6 +30,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
@@ -40,9 +41,11 @@ import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -58,11 +61,93 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ControllerTickGameTest {
 
     public void structureForms3x3Casing(GameTestHelper helper) {
-        recipeMachineHooksPublishTextAndRespectRedstone(helper);
+        Identifier machineId = MMCR.id("controller_tick");
+        helper.assertTrue(MachineRegistry.getMachine(machineId) != null,
+                "GameTest startup installs the machine registry entry");
+        helper.assertTrue(cn.howxu.mmcr.api.machine.MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
+                "GameTest startup installs the effective structure");
+        helper.assertTrue(!MachineRegistry.getCompiledStages(machineId).isEmpty(),
+                "GameTest startup compiles the effective structure");
+
+        DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
+        AtomicBoolean writeText = new AtomicBoolean();
+        AtomicReference<String> callbackText = new AtomicReference<>("forming complete");
+        Machine tickMachine = new DynamicMachine(registeredMachine.registryName(), registeredMachine.displayNameKey(),
+                registeredMachine.pattern(), registeredMachine.controller(), registeredMachine.appearance(),
+                registeredMachine.portRequirements(), registeredMachine.portTierRequirements(),
+                registeredMachine.dynamicPatterns(), registeredMachine.modifierReplacements(),
+                registeredMachine.maxParallelism(), registeredMachine.parallelizable(), registeredMachine.hasFactory(),
+                registeredMachine.factoryThreadLimit(), registeredMachine.factoryThreads(), registeredMachine.role(),
+                registeredMachine.acceptedModuleIds(), registeredMachine.structureStages(),
+                registeredMachine.failureAction(), TickBehavior.builder().serverTick(context -> {
+                    if (writeText.get()) context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                            MMCR.id("controller_tick_status"), Component.literal(callbackText.get()));
+                }).build());
+
+        for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
+            helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
+
+        BlockPos controllerBlockPos = new BlockPos(1, 1, 1);
+        helper.setBlock(controllerBlockPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
+        var controller = helper.getBlockEntity(controllerBlockPos, MachineControllerBlockEntity.class);
+        BlockPos controllerPos = controller.getBlockPos();
+        ControllerScreenTextCache.clear(controllerPos);
+        controller.setMachine(tickMachine);
+        controller.serverTick();
+        helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
+        ServerPlayer observer = observer(helper);
+        observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        helper.getLevel().players().add(observer);
+        helper.runAtTickTime(10, () -> {
+            helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
+            int payloadsBeforeFirst = screenTextPackets(observer);
+            writeText.set(true);
+            controller.serverTick();
+            ControllerScreenTextSnapshot first = screenTextSnapshot(controller);
+            helper.assertTrue(first.lines().size() == 1
+                            && first.lines().getFirst().text().getString().equals("forming complete"),
+                    "formed controller publishes controller-scoped text");
+            helper.assertTrue(screenTextPackets(observer) == payloadsBeforeFirst + 1,
+                    "formed controller sends the first text snapshot to the active menu observer");
+            applyLastScreenTextPacket(observer);
+            helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "forming complete"),
+                    "first controller text snapshot reaches the client cache");
+
+            int payloadsBeforeUpdate = screenTextPackets(observer);
+            callbackText.set("updated");
+            controller.serverTick();
+            ControllerScreenTextSnapshot updated = screenTextSnapshot(controller);
+            helper.assertTrue(updated.lines().size() == 1
+                            && updated.lines().getFirst().text().getString().equals("updated"),
+                    "controller-scoped keyed text replaces the previous line");
+            helper.assertTrue(screenTextPackets(observer) == payloadsBeforeUpdate + 1,
+                    "updated controller text sends one replacement snapshot");
+            applyLastScreenTextPacket(observer);
+            helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "updated"),
+                    "replacement controller text reaches the client cache");
+            long unchangedRevision = updated.revision();
+            int payloadCount = screenTextPackets(observer);
+            controller.serverTick();
+            helper.assertTrue(screenTextSnapshot(controller).revision() == unchangedRevision
+                            && screenTextPackets(observer) == payloadCount,
+                    "unchanged controller text does not mutate or resend a payload");
+
+            int payloadsBeforeReset = screenTextPackets(observer);
+            controller.invalidateFormedStructure();
+            applyLastScreenTextPacket(observer);
+            helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty()
+                            && screenTextPackets(observer) == payloadsBeforeReset + 1
+                            && lastScreenTextPacket(observer).lines().isEmpty()
+                            && ControllerScreenTextCache.linesAt(controllerPos).isEmpty(),
+                    "reset clears controller-scoped text and synchronizes the empty snapshot");
+            helper.getLevel().players().remove(observer);
+            helper.succeed();
+        });
     }
 
     public void recipeMachineHooksPublishTextAndRespectRedstone(GameTestHelper helper) {
@@ -100,54 +185,111 @@ public class ControllerTickGameTest {
                         })
                         .build());
 
-        for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
-            helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
-
-        BlockPos controllerBlockPos = new BlockPos(1, 1, 1);
+        int controllerX = 240 + 15 - Math.floorMod(helper.absolutePos(BlockPos.ZERO).getX(), 16);
+        BlockPos controllerBlockPos = new BlockPos(controllerX, 1, 1);
+        ServerLevel level = helper.getLevel();
         helper.setBlock(controllerBlockPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerBlockPos,
                 MachineControllerBlockEntity.class);
         BlockPos controllerPos = controller.getBlockPos();
+        ChunkPos crossChunk = new ChunkPos((controllerPos.getX() + 1) >> 4, controllerPos.getZ() >> 4);
+        level.setChunkForced(crossChunk.x(), crossChunk.z(), true);
         controller.setMachine(recipeMachine);
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.setStructureScanBatchesForTesting(1);
         ServerPlayer observer = observer(helper);
         observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
-        helper.getLevel().players().add(observer);
+        level.players().add(observer);
         ControllerScreenTextCache.clear(controllerPos);
-        helper.runAtTickTime(10, () -> {
-            helper.assertTrue(controller.structureSnapshot().formed()
-                            && controller.structureSnapshot().structureAreaLoaded(),
-                    "recipe machine is formed and loaded before hooks run");
+
+        helper.runAfterDelay(2, () -> {
             invokeHooks.set(true);
-            int packetsBefore = screenTextPackets(observer);
             controller.serverTick();
-            helper.assertTrue(preCalls.get() == 1 && postCalls.get() == 1,
-                    "formed recipe machine invokes both machine-level hooks");
-            ControllerScreenTextSnapshot snapshot = runtime(controller).screenText().snapshot();
-            helper.assertTrue(snapshot.lines().size() == 1
-                            && snapshot.lines().getFirst().lineId().equals(MMCR.id("recipe_hook_status"))
-                            && snapshot.lines().getFirst().text().getString().equals("post"),
-                    "post hook replaces the keyed text written by pre hook");
-            helper.assertTrue(screenTextPackets(observer) == packetsBefore + 1,
-                    "hook text sends one controller payload");
-            applyLastScreenTextPacket(observer);
-            helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "post"),
-                    "hook text reaches the client cache");
+            helper.assertTrue(!controller.structureSnapshot().formed()
+                            && preCalls.get() == 0 && postCalls.get() == 0,
+                    "unformed recipe machine does not invoke machine-level hooks");
+            invokeHooks.set(false);
+            for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++) {
+                if (x != 0 || z != 0) {
+                    helper.setBlock(controllerBlockPos.offset(x, 0, z), ModBlocks.CASING.get().defaultBlockState());
+                }
+            }
+            controller.handleStructureBlockChanged(controllerBlockPos.offset(1, 0, 0));
+            controller.serverTick();
+            helper.runAfterDelay(10, () -> {
+                helper.assertTrue(controller.structureSnapshot().formed()
+                                && controller.structureSnapshot().structureAreaLoaded()
+                                && controller.structureSnapshot().criticalChunks().contains(crossChunk),
+                        "formed recipe machine has a loaded structure area spanning the critical chunk");
+                invokeHooks.set(true);
+                int packetsBefore = screenTextPackets(observer);
+                controller.serverTick();
+                helper.assertTrue(preCalls.get() == 1 && postCalls.get() == 1,
+                        "formed recipe machine invokes both machine-level hooks");
+                ControllerScreenTextSnapshot snapshot = runtime(controller).screenText().snapshot();
+                helper.assertTrue(snapshot.lines().size() == 1
+                                && snapshot.lines().getFirst().lineId().equals(MMCR.id("recipe_hook_status"))
+                                && snapshot.lines().getFirst().text().getString().equals("post"),
+                        "post hook replaces the keyed text written by pre hook");
+                helper.assertTrue(screenTextPackets(observer) == packetsBefore + 1,
+                        "hook text sends one controller payload");
+                applyLastScreenTextPacket(observer);
+                helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "post"),
+                        "hook text reaches the client cache");
+                invokeHooks.set(false);
 
-            int pausedPackets = screenTextPackets(observer);
-            helper.setBlock(controllerBlockPos.below(), Blocks.REDSTONE_TORCH.defaultBlockState());
-            controller.serverTick();
-            helper.assertTrue(controller.isRedstonePaused(), "redstone signal pauses the recipe machine");
-            helper.assertTrue(preCalls.get() == 1 && postCalls.get() == 1
-                            && screenTextPackets(observer) == pausedPackets,
-                    "redstone pause skips hooks and does not resend unchanged text");
+                int pausedPackets = screenTextPackets(observer);
+                helper.setBlock(controllerBlockPos.below(), Blocks.REDSTONE_TORCH.defaultBlockState());
+                controller.serverTick();
+                helper.assertTrue(controller.isRedstonePaused(), "redstone signal pauses the recipe machine");
+                helper.assertTrue(preCalls.get() == 1 && postCalls.get() == 1
+                                && screenTextPackets(observer) == pausedPackets,
+                        "redstone pause skips hooks and does not resend unchanged text");
 
-            helper.setBlock(controllerBlockPos.below(), Blocks.AIR.defaultBlockState());
-            controller.serverTick();
-            helper.assertTrue(!controller.isRedstonePaused()
-                            && preCalls.get() == 2 && postCalls.get() == 2,
-                    "removing redstone resumes both recipe machine hooks");
-            helper.getLevel().players().remove(observer);
-            helper.succeed();
+                helper.setBlock(controllerBlockPos.below(), Blocks.AIR.defaultBlockState());
+                controller.serverTick();
+                helper.assertTrue(!controller.isRedstonePaused(), "removing redstone resumes the recipe machine");
+
+                level.players().remove(observer);
+                level.setChunkForced(crossChunk.x(), crossChunk.z(), false);
+                level.getChunkSource().removeTicketWithRadius(TicketType.UNKNOWN, crossChunk, 0);
+                MachineControllerBlockEntity.markStructureChunkUnloaded(level, crossChunk);
+                helper.assertTrue(!controller.structureSnapshot().structureAreaLoaded(),
+                        "unload notification updates the published structure state");
+                helper.runAfterDelay(2, () -> {
+                    helper.assertTrue(!level.hasChunk(crossChunk.x(), crossChunk.z())
+                                    && !controller.structureSnapshot().structureAreaLoaded(),
+                            "unloaded critical structure area is published as unavailable");
+                    invokeHooks.set(true);
+                    int callsBeforeUnload = preCalls.get() + postCalls.get();
+                    controller.serverTick();
+                    helper.assertTrue(preCalls.get() + postCalls.get() == callsBeforeUnload,
+                            "unloaded recipe machine does not invoke machine-level hooks");
+                    invokeHooks.set(false);
+
+                    level.setChunkForced(crossChunk.x(), crossChunk.z(), true);
+                    level.players().add(observer);
+                    helper.runAfterDelay(2, () -> {
+                        MachineControllerBlockEntity.markStructureChunkDirty(level, crossChunk);
+                        helper.assertTrue(level.hasChunk(crossChunk.x(), crossChunk.z())
+                                        && controller.structureSnapshot().formed()
+                                        && controller.structureSnapshot().structureAreaLoaded(),
+                                "formed recipe machine recovers after its critical area is loaded");
+                        invokeHooks.set(true);
+                        int restoredPackets = screenTextPackets(observer);
+                        controller.serverTick();
+                        helper.assertTrue(preCalls.get() == 2 && postCalls.get() == 2,
+                                "loaded formed recipe machine invokes hooks after area recovery");
+                        helper.assertTrue(screenTextPackets(observer) == restoredPackets + 1,
+                                "recovered hook text sends a controller payload");
+                        applyLastScreenTextPacket(observer);
+                        helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "post"),
+                                "recovered hook text reaches the client cache");
+                        level.players().remove(observer);
+                        helper.succeed();
+                    });
+                });
+            });
         });
     }
 
@@ -331,6 +473,10 @@ public class ControllerTickGameTest {
                     || !ItemStack.isSameItemSameComponents(expectedStack, actualStack)) return false;
         }
         return true;
+    }
+
+    private static ControllerScreenTextSnapshot screenTextSnapshot(MachineControllerBlockEntity controller) {
+        return runtime(controller).screenText().snapshot();
     }
 
     private static MachineControllerRuntime runtime(MachineControllerBlockEntity controller) {
