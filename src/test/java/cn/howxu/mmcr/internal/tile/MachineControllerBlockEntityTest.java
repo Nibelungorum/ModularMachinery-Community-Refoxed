@@ -165,7 +165,7 @@ class MachineControllerBlockEntityTest {
         var itemDescription = DynamicOverlayItemModel.describeItem(ModItems.ITEMS.get("data_storage").get());
         assertThat(itemDescription.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(itemDescription.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
-        assertThat(itemDescription.overlayTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(itemDescription.overlayTexture()).isEqualTo(MMCR.id("block/overlay_data_storage"));
     }
 
     @Test
