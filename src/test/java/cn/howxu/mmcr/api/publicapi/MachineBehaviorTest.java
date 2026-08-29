@@ -51,6 +51,11 @@ class MachineBehaviorTest {
         }
 
         @Override
+        public void appendAfter(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
+                                Identifier lineId, Identifier afterLineId, Component text) {
+        }
+
+        @Override
         public void remove(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
                            Identifier lineId) {
         }
@@ -123,6 +128,29 @@ class MachineBehaviorTest {
         assertThat(finishContext.cancelled()).isTrue();
         finishContext.discardOutputs();
         assertThat(finishContext.outputsDiscarded()).isTrue();
+    }
+
+    @Test
+    void recipe_behavior_retains_machine_tick_callbacks() {
+        AtomicInteger preCalls = new AtomicInteger();
+        AtomicInteger postCalls = new AtomicInteger();
+        MachineBehavior.MachineCallback pre = context -> preCalls.incrementAndGet();
+        MachineBehavior.MachineCallback post = context -> postCalls.incrementAndGet();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("hook_machine"), 20L, SCREEN_TEXT);
+
+        RecipeBehavior behavior = RecipeBehavior.builder()
+                .preServerTick(pre)
+                .postServerTick(post)
+                .build();
+
+        behavior.preServerTick().accept(context);
+        behavior.postServerTick().accept(context);
+
+        assertThat(behavior.preServerTick()).isSameAs(pre);
+        assertThat(behavior.postServerTick()).isSameAs(post);
+        assertThat(preCalls).hasValue(1);
+        assertThat(postCalls).hasValue(1);
     }
 
     @Test

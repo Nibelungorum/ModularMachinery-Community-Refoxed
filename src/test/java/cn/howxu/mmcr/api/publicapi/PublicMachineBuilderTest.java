@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,6 +46,39 @@ class PublicMachineBuilderTest {
         assertThat(MachineBuilder.class.getDeclaredMethods()).noneMatch(method ->
                 method.getName().equals("pattern") || method.getName().equals("stage")
                         || method.getName().equals("expandableStructure"));
+    }
+
+    @Test
+    void machine_builder_retains_hooks_for_default_recipe_behavior() {
+        AtomicInteger preCalls = new AtomicInteger();
+        AtomicInteger postCalls = new AtomicInteger();
+
+        MachineDefinition definition = MachineBuilder.machine(MMCR.id("hook_builder_machine"))
+                .preServerTick(context -> preCalls.incrementAndGet())
+                .postServerTick(context -> postCalls.incrementAndGet())
+                .build();
+
+        assertThat(definition.behavior()).isInstanceOf(RecipeBehavior.class);
+        RecipeBehavior behavior = (RecipeBehavior) definition.behavior();
+        behavior.preServerTick().accept(null);
+        behavior.postServerTick().accept(null);
+        assertThat(preCalls).hasValue(1);
+        assertThat(postCalls).hasValue(1);
+    }
+
+    @Test
+    void machine_builder_rejects_hooks_when_selecting_tick_behavior() {
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("invalid_hook_machine"))
+                .preServerTick(context -> { })
+                .tickBehavior(builder -> builder.serverTick(context -> { })))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("server tick hooks");
+
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("invalid_tick_hook_machine"))
+                .tickBehavior(builder -> builder.serverTick(context -> { }))
+                .postServerTick(context -> { }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("server tick hooks");
     }
 
     @Test
