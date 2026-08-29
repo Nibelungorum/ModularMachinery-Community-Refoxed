@@ -9,6 +9,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -24,6 +25,18 @@ public sealed interface MachineOutput permits MachineOutput.ItemOutput, MachineO
     MachineOutput withChance(float chance);
 
     MachineOutput applyModifiers(List<RecipeModifier> modifiers);
+
+    static MachineOutput copyOf(MachineOutput output) {
+        Objects.requireNonNull(output, "output");
+        if (output instanceof ItemOutput item) return new ItemOutput(item.stack(), item.chance());
+        if (output instanceof FluidOutput fluid) return new FluidOutput(fluid.stack(), fluid.chance());
+        throw new IllegalArgumentException("Unknown machine output: " + output);
+    }
+
+    static List<MachineOutput> copyList(List<MachineOutput> outputs) {
+        Objects.requireNonNull(outputs, "outputs");
+        return outputs.stream().map(MachineOutput::copyOf).toList();
+    }
 
     private static <T> DataResult<T> encode(MachineOutput output, DynamicOps<T> ops, T prefix) {
         var builder = ops.mapBuilder()

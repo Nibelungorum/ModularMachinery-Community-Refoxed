@@ -89,6 +89,22 @@ class DataStorageTest {
     }
 
     @Test
+    void transaction_no_op_does_not_notify_or_change_the_stored_value() {
+        List<Map<String, DataValue>> changes = new ArrayList<>();
+        DataStorage storage = new DataStorage(changes::add);
+        storage.set("answer", DataValue.of(42));
+        changes.clear();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.set("answer", DataValue.of(42), transaction)).isFalse();
+            transaction.commit();
+        }
+
+        assertThat(storage.get("answer")).contains(DataValue.of(42));
+        assertThat(changes).isEmpty();
+    }
+
+    @Test
     void rejects_invalid_keys_values_and_non_finite_numbers() {
         DataStorage storage = new DataStorage(null);
         assertThatThrownBy(() -> storage.get(null)).isInstanceOf(IllegalArgumentException.class);

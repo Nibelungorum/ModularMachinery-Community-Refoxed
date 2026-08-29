@@ -914,7 +914,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         if (behavior instanceof TickBehavior tickBehavior) {
                             setActiveState(true);
                             try {
-                                tickBehavior.serverTick().accept(runtime.behaviorContext());
+                                tickBehavior.serverTick().accept(runtime.tickBehaviorContext());
                             } catch (RuntimeException exception) {
                                 logBehaviorCallbackFailure("serverTick", tickState, null, exception);
                             }

@@ -12,6 +12,7 @@ import java.util.List;
  * @param maxParallelism the maximum parallelism supported by this plan
  * @param operations the capability operations prepared by the handler
  * @param failure the failure status, or {@code null} when planning succeeded
+ * @param outputSimulation the simulated output fit, or {@code null} for non-output requirements
  * @param operationFactory creates operations only after the final parallelism is selected
  * @param reservationFactory simulates shared-resource reservations without preparing operations
  * @param preparedParallelism the parallelism used when direct operations were prepared
@@ -22,25 +23,43 @@ public record RequirementPlan(
         int maxParallelism,
         List<CapabilityOperation> operations,
         @Nullable ExecutionStatus failure,
+        @Nullable OutputSimulation outputSimulation,
         @Nullable OperationFactory operationFactory,
         @Nullable ReservationFactory reservationFactory,
         int preparedParallelism) {
     public RequirementPlan(int requirementIndex, int maxParallelism,
                            List<CapabilityOperation> operations, @Nullable ExecutionStatus failure) {
-        this(requirementIndex, maxParallelism, operations, failure, null, null, 0);
+        this(requirementIndex, maxParallelism, operations, failure, null, null, null, 0);
     }
 
     public RequirementPlan(int requirementIndex, int maxParallelism,
                            List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,
                            @Nullable OperationFactory operationFactory) {
-        this(requirementIndex, maxParallelism, operations, failure, operationFactory, null, 0);
+        this(requirementIndex, maxParallelism, operations, failure, null, operationFactory, null, 0);
     }
 
     public RequirementPlan(int requirementIndex, int maxParallelism,
                            List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,
                            @Nullable OperationFactory operationFactory,
                            @Nullable ReservationFactory reservationFactory) {
-        this(requirementIndex, maxParallelism, operations, failure, operationFactory, reservationFactory, 0);
+        this(requirementIndex, maxParallelism, operations, failure, null, operationFactory, reservationFactory, 0);
+    }
+
+    public RequirementPlan(int requirementIndex, int maxParallelism,
+                           List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,
+                           @Nullable OperationFactory operationFactory,
+                           @Nullable ReservationFactory reservationFactory,
+                           int preparedParallelism) {
+        this(requirementIndex, maxParallelism, operations, failure, null, operationFactory, reservationFactory,
+                preparedParallelism);
+    }
+
+    public static RequirementPlan withOutputSimulation(int requirementIndex, int maxParallelism,
+                                                       List<CapabilityOperation> operations,
+                                                       @Nullable ExecutionStatus failure,
+                                                       @Nullable OutputSimulation outputSimulation) {
+        return new RequirementPlan(requirementIndex, maxParallelism, operations, failure, outputSimulation,
+                null, null, 0);
     }
 
     public RequirementPlan {
@@ -52,12 +71,18 @@ public record RequirementPlan(
     }
 
     public RequirementPlan preparedAt(int parallelism) {
-        return new RequirementPlan(requirementIndex, maxParallelism, operations, failure, operationFactory,
-                reservationFactory, parallelism);
+        return new RequirementPlan(requirementIndex, maxParallelism, operations, failure, outputSimulation,
+                operationFactory, reservationFactory, parallelism);
     }
 
     public @Nullable ExecutionStatus reserve(int parallelism, PlanningReservations reservations) {
-        return reservationFactory == null ? null : reservationFactory.reserve(parallelism, reservations);
+        return reservationResult(parallelism, reservations).failure();
+    }
+
+    public ReservationResult reservationResult(int parallelism, PlanningReservations reservations) {
+        return reservationFactory == null
+                ? new ReservationResult(null, null)
+                : reservationFactory.reserveResult(parallelism, reservations);
     }
 
     public RequirementPlan materialize(int parallelism, PlanningReservations reservations,
@@ -68,17 +93,19 @@ public record RequirementPlan(
                 for (CapabilityOperation operation : operations) {
                     CapabilityOperation scaled = operation.forParallelism(parallelism);
                     if (scaled == null) {
-                        return new RequirementPlan(requirementIndex, parallelism, List.of(), unsafeOperationFailure);
+                        return withOutputSimulation(requirementIndex, parallelism, List.of(), unsafeOperationFailure,
+                                outputSimulation);
                     }
                     adapted.add(scaled);
                 }
-                return new RequirementPlan(requirementIndex, parallelism, adapted, failure);
+                return withOutputSimulation(requirementIndex, parallelism, adapted, failure, outputSimulation);
             }
-            return new RequirementPlan(requirementIndex, parallelism, operations, failure);
+            return withOutputSimulation(requirementIndex, parallelism, operations, failure, outputSimulation);
         }
         OperationPlan result = operationFactory.create(parallelism, reservations);
         if (result == null) throw new IllegalStateException("Requirement operation factory returned null");
-        return new RequirementPlan(requirementIndex, parallelism, result.operations(), result.failure());
+        return withOutputSimulation(requirementIndex, parallelism, result.operations(), result.failure(),
+                result.outputSimulation());
     }
 
     @FunctionalInterface
@@ -89,9 +116,22 @@ public record RequirementPlan(
     @FunctionalInterface
     public interface ReservationFactory {
         @Nullable ExecutionStatus reserve(int parallelism, PlanningReservations reservations);
+
+        default ReservationResult reserveResult(int parallelism, PlanningReservations reservations) {
+            return new ReservationResult(reserve(parallelism, reservations), null);
+        }
     }
 
-    public record OperationPlan(List<CapabilityOperation> operations, @Nullable ExecutionStatus failure) {
+    public record ReservationResult(@Nullable ExecutionStatus failure,
+                                    @Nullable OutputSimulation outputSimulation) {
+    }
+
+    public record OperationPlan(List<CapabilityOperation> operations, @Nullable ExecutionStatus failure,
+                                @Nullable OutputSimulation outputSimulation) {
+        public OperationPlan(List<CapabilityOperation> operations, @Nullable ExecutionStatus failure) {
+            this(operations, failure, null);
+        }
+
         public OperationPlan {
             operations = List.copyOf(operations);
         }

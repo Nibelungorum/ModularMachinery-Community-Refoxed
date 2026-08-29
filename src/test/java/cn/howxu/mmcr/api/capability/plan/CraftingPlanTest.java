@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
+import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import net.minecraft.resources.Identifier;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies atomic execution of prepared capability operations.
@@ -94,6 +97,33 @@ class CraftingPlanTest {
     }
 
     @Test
+    void commits_capability_operations_and_data_storage_in_the_same_transaction() {
+        JournalValue value = new JournalValue();
+        DataStorage storage = new DataStorage();
+
+        CraftingPlan plan = plan(operation(value, true));
+
+        assertThat(plan.commit(transaction -> storage.set("value", DataValue.of(1), transaction))).isTrue();
+        assertThat(value.value).isEqualTo(1);
+        assertThat(storage.get("value")).contains(DataValue.of(1));
+    }
+
+    @Test
+    void rolls_back_capability_operations_and_data_storage_when_transaction_callback_fails() {
+        JournalValue value = new JournalValue();
+        DataStorage storage = new DataStorage();
+
+        CraftingPlan plan = plan(operation(value, true));
+
+        assertThatThrownBy(() -> plan.commit(transaction -> {
+            storage.set("value", DataValue.of(1), transaction);
+            throw new IllegalStateException("callback failure");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(value.value).isZero();
+        assertThat(storage.get("value")).isEmpty();
+    }
+
+    @Test
     void direct_materialization_uses_the_final_parallelism_as_maximum() {
         CapabilityOperation operation = new CapabilityOperation() {
             @Override
@@ -112,6 +142,42 @@ class CraftingPlanTest {
                 .materialize(3, new PlanningReservations(), FIRST_FAILURE);
 
         assertThat(resolved.maxParallelism()).isEqualTo(3);
+    }
+
+    @Test
+    void keeps_the_legacy_null_factory_constructor_unambiguous() {
+        RequirementPlan plan = new RequirementPlan(0, 1, List.of(), null, null);
+
+        assertThat(plan.operationFactory()).isNull();
+        assertThat(plan.outputSimulation()).isNull();
+    }
+
+    @Test
+    void preserves_output_simulation_when_direct_operation_cannot_scale() {
+        CapabilityOperation operation = transaction -> CapabilityResult.successful();
+        OutputSimulation simulation = new OutputSimulation(4L, 2L, OutputFit.PARTIAL);
+        ExecutionStatus unsafeFailure = new ExecutionStatus(
+                Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),
+                StatusSeverity.FAILURE,
+                Identifier.fromNamespaceAndPath("mmcr_test", "test"),
+                java.util.Map.of());
+
+        RequirementPlan resolved = RequirementPlan.withOutputSimulation(0, 2, List.of(operation), null, simulation)
+                .preparedAt(2)
+                .materialize(1, new PlanningReservations(), unsafeFailure);
+
+        assertThat(resolved.failure()).isSameAs(unsafeFailure);
+        assertThat(resolved.outputSimulation()).isSameAs(simulation);
+    }
+
+    @Test
+    void returns_immutable_output_simulation_collections() {
+        OutputSimulation simulation = new OutputSimulation(1L, 1L, OutputFit.FULL);
+        CraftingPlan plan = new CraftingPlan(
+                List.of(RequirementPlan.withOutputSimulation(0, 1, List.of(), null, simulation)), 1);
+
+        assertThatThrownBy(() -> plan.outputSimulations().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     private static CraftingPlan plan(CapabilityOperation... operations) {

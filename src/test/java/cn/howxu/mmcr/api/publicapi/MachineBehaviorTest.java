@@ -1,24 +1,35 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
+import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -92,13 +103,26 @@ class MachineBehaviorTest {
         assertThat(startContext.recipeId()).isEqualTo(recipe.id());
         assertThat(startContext.requestedParallelism()).isEqualTo(4);
         assertThat(startContext.effectiveParallelism()).isEqualTo(3);
+        assertThat(startContext.machineContext()).isNotNull();
+        assertThat(startContext.machineContext().ioView()).isNotNull();
+        startContext.setDuration(40);
+        startContext.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
+        assertThat(startContext.snapshot().duration()).isEqualTo(40);
+        assertThat(startContext.snapshot().outputs()).containsExactlyElementsOf(startContext.outputs());
         assertThat(tickContext.recipe()).isSameAs(recipe);
         assertThat(tickContext.currentTick()).isEqualTo(2);
         assertThat(tickContext.totalTick()).isEqualTo(20);
         assertThat(tickContext.parallelism()).isEqualTo(3);
+        assertThat(tickContext.machineContext()).isNotNull();
+        assertThat(tickContext.requirements()).isUnmodifiable();
+        assertThat(tickContext.outputs()).isUnmodifiable();
+        assertThat(RecipeTickContext.class.getMethods()).extracting(Method::getName)
+                .doesNotContain("ioPlan");
         assertThat(finishContext.outputs()).hasSize(1);
         finishContext.cancel();
         assertThat(finishContext.cancelled()).isTrue();
+        finishContext.discardOutputs();
+        assertThat(finishContext.outputsDiscarded()).isTrue();
     }
 
     @Test
@@ -112,6 +136,67 @@ class MachineBehaviorTest {
 
         assertThat(behavior.kind()).isEqualTo(MachineBehavior.Kind.TICK);
         assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void tick_callback_receives_tick_context_with_a_fresh_io_plan() {
+        AtomicInteger calls = new AtomicInteger();
+        MachineBehavior.TickCallback callback = context -> {
+            assertThat(context).isInstanceOf(TickBehaviorContext.class);
+            assertThat(context.ioPlan()).isNotNull();
+            calls.incrementAndGet();
+        };
+        TickBehavior behavior = TickBehavior.builder().serverTick(callback).build();
+        MachineBehaviorContext base = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("tick_machine"), 0L, SCREEN_TEXT, Map.of(),
+                new MachineIoView(new CapabilitySnapshot(List.of())));
+        TickBehaviorContext tickContext = new TickBehaviorContext(base, new CapabilitySnapshot(List.of()));
+
+        behavior.serverTick().accept(tickContext);
+
+        assertThat(behavior.serverTick()).isSameAs(callback);
+        assertThat(calls).hasValue(1);
+        assertThat(tickContext.ioView()).isSameAs(base.ioView());
+    }
+
+    @Test
+    void tick_io_plan_simulates_without_committing_physical_io() {
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
+
+        assertThat(plan.simulate().failure()).isNull();
+        assertThat(plan.simulate().inputsSatisfied()).isTrue();
+        assertThat(plan.simulate().energySatisfied()).isTrue();
+        assertThat(plan.commit().successful()).isTrue();
+    }
+
+    @Test
+    void recipe_start_snapshot_replaces_item_and_fluid_outputs_with_defensive_copies() {
+        MachineRecipe recipe = recipe();
+        RecipeStartContext context = new RecipeStartContext(recipe, 1, 1);
+        List<MachineRequirement> requirements = List.of();
+        List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F));
+
+        context.setRequirements(List.of(MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))));
+        assertThat(context.outputs()).hasSize(1);
+        context.setRequirements(requirements);
+        context.setOutputs(outputs);
+
+        assertThat(context.requirements()).isUnmodifiable();
+        assertThat(context.outputs()).isUnmodifiable();
+        assertThat(context.snapshot().requirements()).isEqualTo(context.requirements());
+        assertThat(context.snapshot().outputs()).isEqualTo(context.outputs());
+        assertThatThrownBy(() -> context.setDuration(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void compatibility_start_constructor_applies_recipe_duration_modifier() {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("compatibility_duration"), MMCR.id("compatibility_machine"), 20,
+                List.of(), List.of(), List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION,
+                        RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)), 0, 1);
+
+        RecipeStartContext context = new RecipeStartContext(recipe, 1, 1);
+
+        assertThat(context.duration()).isEqualTo(40);
     }
 
     @Test

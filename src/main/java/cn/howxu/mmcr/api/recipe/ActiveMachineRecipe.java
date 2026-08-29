@@ -1,10 +1,14 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
@@ -13,9 +17,11 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +42,11 @@ public final class ActiveMachineRecipe {
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final int LEGACY_RECIPE_DEFINITION_VERSION = 1;
     private static final int RECIPE_DEFINITION_VERSION = 2;
+    private static final int EFFECTIVE_EXECUTION_SNAPSHOT_VERSION = 1;
+    private static final String EFFECTIVE_DEFINITION_MARKER = "has_effective_definition";
+    private static final String EFFECTIVE_DEFINITION_VERSION = "effective_definition_version";
+    private static final String LEGACY_EFFECTIVE_SNAPSHOT_MARKER = "has_effective_execution_snapshot";
+    private static final String LEGACY_EFFECTIVE_SNAPSHOT_VERSION = "effective_execution_snapshot_version";
 
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
@@ -48,6 +59,9 @@ public final class ActiveMachineRecipe {
     private int nextFinishRetryTick;
     private boolean finishPending;
     private @Nullable InputConsumptionPlan inputConsumptionPlan;
+    private List<MachineRequirement> effectiveRequirements;
+    private List<MachineOutput> effectiveOutputs;
+    private boolean effectiveSnapshotPresent;
 
     public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
         public InputConsumptionPlan {
@@ -74,9 +88,14 @@ public final class ActiveMachineRecipe {
         }
 
         public boolean isValidFor(MachineRecipe recipe) {
-            if (recipe == null || consumedInputBatches.size() != recipe.requirements().size()) return false;
+            return recipe != null && isValidFor(recipe.requirements());
+        }
+
+        public boolean isValidFor(List<MachineRequirement> requirements) {
+            if (requirements == null || consumedInputBatches.size() != requirements.size()) return false;
             for (int index = 0; index < consumedInputBatches.size(); index++) {
-                MachineRequirement requirement = recipe.requirements().get(index);
+                MachineRequirement requirement = requirements.get(index);
+                if (requirement == null || requirement.io() == null) return false;
                 boolean consumable = requirement.io() == RecipeModifier.IOType.INPUT
                         && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement);
                 if (!consumable && consumedInputBatches.get(index) != 0) return false;
@@ -96,14 +115,34 @@ public final class ActiveMachineRecipe {
     }
 
     public ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism) {
+        this(recipe, maxParallelism, false);
+    }
+
+    private ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism, boolean effectiveSnapshotPresent) {
         this.recipe = recipe;
         this.totalTick = recipe == null ? 0 : IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(recipe.modifiers(), recipe.getRecipeTotalTickTime()));
         this.maxParallelism = Math.max(1, maxParallelism);
         this.parallelism = 1;
         this.data = new CompoundTag();
+        this.effectiveRequirements = recipe == null ? List.of() : MachineRequirement.copyList(recipe.runtimeRequirements());
+        this.effectiveOutputs = recipe == null ? List.of() : MachineOutput.copyList(recipe.runtimeMachineOutputs());
+        this.effectiveSnapshotPresent = effectiveSnapshotPresent && recipe != null;
         if (recipe == null) {
             LOG.warn("ActiveMachineRecipe#{} created with null recipe", instanceId);
         }
+    }
+
+    public ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism,
+                               RecipeStartContext.ExecutionSnapshot execution) {
+        this.recipe = Objects.requireNonNull(recipe, "recipe");
+        Objects.requireNonNull(execution, "execution");
+        this.totalTick = execution.duration();
+        this.maxParallelism = Math.max(1, maxParallelism);
+        this.parallelism = 1;
+        this.data = new CompoundTag();
+        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements());
+        this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
+        this.effectiveSnapshotPresent = true;
     }
 
     public MachineRecipe getRecipe() {
@@ -192,6 +231,13 @@ public final class ActiveMachineRecipe {
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         output.putBoolean("finishPending", this.finishPending);
+        if (effectiveSnapshotPresent) {
+            output.putBoolean("has_effective_definition", true);
+            output.putInt("effective_definition_version", EFFECTIVE_EXECUTION_SNAPSHOT_VERSION);
+            output.putInt("effective_duration", totalTick);
+            output.store("effective_requirements", MachineRequirement.CODEC.listOf(), effectiveRequirements);
+            output.store("effective_outputs", MachineOutput.CODEC.listOf(), effectiveOutputs);
+        }
         if (recipe != null && registries != null) {
             String fingerprint = definitionFingerprint(recipe, registries);
             output.putBoolean("has_recipe_definition", true);
@@ -254,29 +300,202 @@ public final class ActiveMachineRecipe {
             recipe = RecipeRegistry.getRecipe(recipeId);
         }
         if (recipe == null) return new LoadResult(null);
+        List<MachineRequirement> effectiveRequirements = null;
+        List<MachineOutput> effectiveOutputs = null;
+        int effectiveDuration = -1;
+        boolean hasCurrentSnapshotMarker = hasField(input, EFFECTIVE_DEFINITION_MARKER);
+        boolean hasLegacySnapshotMarker = hasField(input, LEGACY_EFFECTIVE_SNAPSHOT_MARKER);
+        boolean currentSnapshotMarker = input.getBooleanOr(EFFECTIVE_DEFINITION_MARKER, false);
+        boolean legacySnapshotMarker = input.getBooleanOr(LEGACY_EFFECTIVE_SNAPSHOT_MARKER, false);
+        boolean hasCurrentSnapshotVersion = hasField(input, EFFECTIVE_DEFINITION_VERSION);
+        boolean hasLegacySnapshotVersion = hasField(input, LEGACY_EFFECTIVE_SNAPSHOT_VERSION);
+        boolean hasEffectivePayload = hasField(input, "effective_duration")
+                || hasField(input, "effective_requirements")
+                || hasField(input, "effective_outputs")
+                || hasCurrentSnapshotVersion
+                || hasLegacySnapshotVersion;
+        if (hasCurrentSnapshotMarker && hasLegacySnapshotMarker
+                && currentSnapshotMarker != legacySnapshotMarker) {
+            return new LoadResult(null);
+        }
+        if (hasCurrentSnapshotVersion && hasLegacySnapshotVersion
+                && input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
+                != input.getIntOr(LEGACY_EFFECTIVE_SNAPSHOT_VERSION, -1)) {
+            return new LoadResult(null);
+        }
+        boolean hasEffectiveExecutionSnapshot = currentSnapshotMarker || legacySnapshotMarker;
+        if (!hasEffectiveExecutionSnapshot && hasEffectivePayload) {
+            return new LoadResult(null);
+        }
+        if (currentSnapshotMarker && hasLegacySnapshotVersion && !hasLegacySnapshotMarker) {
+            return new LoadResult(null);
+        }
+        if (legacySnapshotMarker && hasCurrentSnapshotVersion && !hasCurrentSnapshotMarker) {
+            return new LoadResult(null);
+        }
+        if (hasEffectiveExecutionSnapshot) {
+            if ((currentSnapshotMarker && (!hasCurrentSnapshotVersion
+                    || input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
+                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION))
+                    || (legacySnapshotMarker && (!hasLegacySnapshotVersion
+                    || input.getIntOr(LEGACY_EFFECTIVE_SNAPSHOT_VERSION, -1)
+                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION))) {
+                return new LoadResult(null);
+            }
+            try {
+                effectiveDuration = input.getIntOr("effective_duration", -1);
+                effectiveRequirements = input.read("effective_requirements", MachineRequirement.CODEC.listOf())
+                        .orElse(null);
+                effectiveOutputs = input.read("effective_outputs", MachineOutput.CODEC.listOf()).orElse(null);
+            } catch (RuntimeException exception) {
+                return new LoadResult(null);
+            }
+            if (effectiveDuration <= 0 || !validRequirements(effectiveRequirements)
+                    || !validOutputs(effectiveOutputs)) {
+                return new LoadResult(null);
+            }
+        }
         InputConsumptionPlan inputPlan = null;
-        if (hasField(input, "has_input_consumption_plan") || hasField(input, "inputConsumptionPlan")) {
+        boolean hasInputConsumptionPlan = hasField(input, "has_input_consumption_plan")
+                || hasField(input, "inputConsumptionPlan");
+        if (hasEffectiveExecutionSnapshot && !hasInputConsumptionPlan) {
+            return new LoadResult(null);
+        }
+        if (hasInputConsumptionPlan) {
             try {
                 inputPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
                         .map(InputConsumptionPlan::deserialize).orElse(null);
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
-            if (inputPlan == null || !inputPlan.isValidFor(recipe)) return new LoadResult(null);
+            List<MachineRequirement> validationRequirements = effectiveRequirements == null
+                    ? recipe.requirements() : effectiveRequirements;
+            if (inputPlan == null || !inputPlan.isValidFor(validationRequirements)) return new LoadResult(null);
         }
-        ActiveMachineRecipe result = new ActiveMachineRecipe(recipe, input.getIntOr("maxParallelism", 1));
-        result.tick = input.getIntOr("tick", 0);
-        result.totalTick = input.getIntOr("totalTick", 0);
+        int maxParallelism = input.getIntOr("maxParallelism", 1);
+        int parallelism = input.getIntOr("parallelism", 1);
+        int serializedTotalTick = input.getIntOr("totalTick", -1);
+        int tick = input.getIntOr("tick", 0);
+        boolean finishPending = input.getBooleanOr("finishPending", false);
+        int totalTick = hasEffectiveExecutionSnapshot ? effectiveDuration : serializedTotalTick;
+        if (serializedTotalTick < 1 || !validRuntimeState(tick, totalTick, maxParallelism, parallelism,
+                finishPending)) {
+            return new LoadResult(null);
+        }
+        ActiveMachineRecipe result = hasEffectiveExecutionSnapshot
+                ? new ActiveMachineRecipe(recipe, maxParallelism,
+                new RecipeStartContext.ExecutionSnapshot(effectiveDuration, effectiveRequirements, effectiveOutputs))
+                : new ActiveMachineRecipe(recipe, maxParallelism, false);
+        result.tick = tick;
+        result.totalTick = totalTick;
         result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
-        result.finishPending = input.getBooleanOr("finishPending", false);
+        result.finishPending = finishPending;
         result.inputConsumptionPlan = inputPlan;
-        result.setParallelism(input.getIntOr("parallelism", 1));
+        result.parallelism = parallelism;
         result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
         return new LoadResult(result);
     }
 
     public boolean hasValidInputConsumptionPlan() {
-        return inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(recipe);
+        return hasEffectiveExecutionSnapshot()
+                ? hasValidInputConsumptionPlan(effectiveRequirements)
+                : inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(recipe);
+    }
+
+    public boolean hasValidInputConsumptionPlan(List<MachineRequirement> requirements) {
+        return hasEffectiveExecutionSnapshot()
+                ? inputConsumptionPlan != null && inputConsumptionPlan.isValidFor(requirements)
+                : inputConsumptionPlan == null || inputConsumptionPlan.isValidFor(requirements);
+    }
+
+    public boolean hasEffectiveExecutionSnapshot() {
+        return effectiveSnapshotPresent;
+    }
+
+    public List<MachineRequirement> effectiveRequirements() {
+        return MachineRequirement.copyList(effectiveRequirements);
+    }
+
+    public List<MachineOutput> effectiveOutputs() {
+        return MachineOutput.copyList(effectiveOutputs);
+    }
+
+    public RecipeStartContext.ExecutionSnapshot executionSnapshot() {
+        return new RecipeStartContext.ExecutionSnapshot(
+                totalTick, effectiveRequirements(), effectiveOutputs());
+    }
+
+    /**
+     * Promotes a legacy active recipe to the effective runtime definition selected during restore.
+     */
+    public void setEffectiveExecutionSnapshot(RecipeStartContext.ExecutionSnapshot execution) {
+        Objects.requireNonNull(execution, "execution");
+        this.totalTick = execution.duration();
+        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements());
+        this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
+        this.effectiveSnapshotPresent = true;
+    }
+
+    private static boolean validRequirements(List<MachineRequirement> requirements) {
+        if (requirements == null) return false;
+        return requirements.stream().allMatch(ActiveMachineRecipe::validRequirement);
+    }
+
+    private static boolean validRequirement(MachineRequirement requirement) {
+        try {
+            if (requirement == null || requirement.io() == null || requirement.type() == null
+                    || RequirementHandlerRegistry.handlerFor(requirement.type()) == null) return false;
+            if (requirement instanceof ItemRequirement item) {
+                if (item.io() == RecipeModifier.IOType.INPUT) return item.item() != null && item.count() >= 0;
+                return validItemStack(item.stack(null)) && validChance(item.chance());
+            }
+            if (requirement instanceof FluidRequirement fluid) {
+                if (fluid.io() == RecipeModifier.IOType.INPUT) return fluid.fluid() != null && fluid.amount() >= 0;
+                return validFluidStack(fluid.stack()) && validChance(fluid.chance());
+            }
+            if (requirement instanceof EnergyRequirement energy) {
+                return energy.fePerTick() >= 0;
+            }
+            return requirement instanceof SmartInterfaceRequirement || requirement.io() != null;
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private static boolean validOutputs(List<MachineOutput> outputs) {
+        if (outputs == null) return false;
+        for (MachineOutput output : outputs) {
+            if (output == null || !validChance(output.chance())) return false;
+            if (output instanceof MachineOutput.ItemOutput item) {
+                if (!validItemStack(item.stack())) return false;
+            } else if (output instanceof MachineOutput.FluidOutput fluid) {
+                if (!validFluidStack(fluid.stack())) return false;
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean validItemStack(ItemStack stack) {
+        return stack != null && !stack.isEmpty() && stack.getCount() > 0;
+    }
+
+    private static boolean validFluidStack(FluidStack stack) {
+        return stack != null && !stack.isEmpty() && stack.getAmount() > 0;
+    }
+
+    private static boolean validChance(float chance) {
+        return Float.isFinite(chance) && chance >= 0F && chance <= 1F;
+    }
+
+    private static boolean validRuntimeState(int tick, int totalTick, int maxParallelism,
+                                             int parallelism, boolean finishPending) {
+        return totalTick >= 1
+                && tick >= 0 && tick <= totalTick
+                && maxParallelism >= 1
+                && parallelism >= 1 && parallelism <= maxParallelism
+                && (!finishPending || tick == totalTick - 1);
     }
 
     public static boolean sameDefinition(MachineRecipe first, MachineRecipe second) {

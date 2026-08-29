@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -13,18 +14,27 @@ import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -42,13 +52,18 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -58,9 +73,12 @@ import java.util.Map;
 import java.lang.reflect.Field;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Final crafting runtime behavior tests.
@@ -100,6 +118,37 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void start_plans_inputs_without_requiring_output_capacity() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_output_capacity_is_deferred", 20, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+    }
+
+    @Test
+    void active_recipe_copies_and_exposes_the_execution_snapshot() {
+        MachineRecipe recipe = recipe("active_effective_snapshot", 20, List.of());
+        ItemStack outputStack = stack(Items.GOLD_NUGGET, 1);
+        RecipeStartContext.ExecutionSnapshot execution = new RecipeStartContext.ExecutionSnapshot(7,
+                List.of(input(Items.IRON_INGOT, 2), output(Items.GOLD_NUGGET, 1)),
+                List.of(new MachineOutput.ItemOutput(outputStack, 1F)));
+
+        ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 2, execution);
+        outputStack.setCount(64);
+        ((MachineOutput.ItemOutput) active.effectiveOutputs().getFirst()).stack().setCount(64);
+
+        assertThat(active.getTotalTick()).isEqualTo(7);
+        assertThat(((ItemRequirement) active.effectiveRequirements().getFirst()).count()).isEqualTo(2);
+        assertThat(((MachineOutput.ItemOutput) active.effectiveOutputs().getFirst()).stack().getCount()).isEqualTo(1);
+        assertThat(active.executionSnapshot().duration()).isEqualTo(7);
+    }
+
+    @Test
     void cancelled_start_stays_idle_without_failure_or_input_consumption() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
@@ -132,6 +181,81 @@ class CraftingRuntimeTest {
             callbacks.incrementAndGet();
             throw new IllegalStateException("expected test callback failure");
         }).build(), callbacks);
+    }
+
+    @Test
+    void discard_outputs_removes_item_and_energy_outputs_without_committing_them() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(-1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        EnergyInputHatchBlockEntity inputEnergy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
+        EnergyOutputHatchBlockEntity outputEnergy = RuntimeTestFixtures.energyOutput(new BlockPos(3, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"),
+                input, output, inputEnergy, outputEnergy);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        inputEnergy.energyStorage().setAmount(2);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_discard_outputs"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1),
+                        output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeFinish(context -> context.discardOutputs()).build()));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(1L);
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isZero();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(outputEnergy.energyStorage().getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void finish_capability_operation_exception_uses_the_retry_gate() {
+        ThrowingItemOutputBus output = new ThrowingItemOutputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe("runtime_finish_operation_exception", 1,
+                List.of(output(Items.IRON_NUGGET, 1))), 1).isCrafting()).isTrue();
+        runtime.tick();
+
+        assertThatCode(runtime::finish).doesNotThrowAnyException();
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.finishPending()).isTrue();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "finish");
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+
+        LevelStub.setGameTime(controller.getLevel(), 10);
+        assertThat(runtime.shouldRetryFinish()).isTrue();
+        assertThatCode(runtime::finish).doesNotThrowAnyException();
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+    }
+
+    @Test
+    void finish_output_replacement_keeps_non_physical_outputs() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output, energy);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeFinish(context -> context.setOutputs(List.of(
+                        new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)))).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_replace_physical_output"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
     }
 
     @Test
@@ -456,6 +580,193 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void active_runtime_persists_the_start_effective_snapshot_and_consumption_plan() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> {
+                    starts.incrementAndGet();
+                    context.setDuration(2);
+                    context.setRequirements(List.of(
+                            input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 2)));
+                }).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_persisted_effective_snapshot", 20, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1), output(Items.DIAMOND, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+        CompoundTag savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
+        assertThat(savedRecipeTag.getBooleanOr("has_effective_definition", false)).isTrue();
+        savedRecipeTag.putInt("totalTick", 99);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(starts).hasValue(1);
+        assertThat(restored.totalTick()).isEqualTo(2);
+        assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(0)).isEqualTo(1);
+        assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(1)).isZero();
+        restored.tick();
+        restored.tick();
+        restored.finish();
+
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
+    void active_runtime_loads_the_legacy_effective_execution_snapshot_alias() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> {
+                    starts.incrementAndGet();
+                    context.setDuration(2);
+                    context.setRequirements(List.of(input(Items.IRON_INGOT, 2)));
+                }).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        MachineRecipe recipe = recipe("runtime_legacy_effective_snapshot", 20,
+                List.of(input(Items.IRON_INGOT, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+        recipeTag.putBoolean("has_effective_execution_snapshot", true);
+        recipeTag.putInt("effective_execution_snapshot_version", 1);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(starts).hasValue(1);
+        assertThat(restored.totalTick()).isEqualTo(2);
+        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+    }
+
+    @Test
+    void active_runtime_rejects_conflicting_effective_snapshot_aliases() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_conflicting_effective_snapshot", 20, List.of());
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.putBoolean("has_effective_execution_snapshot", true);
+        recipeTag.putInt("effective_execution_snapshot_version", 2);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void active_runtime_rejects_effective_snapshot_payload_without_a_marker() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_unmarked_effective_snapshot", 20, List.of());
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void active_runtime_rejects_malformed_activity_state_before_restore() {
+        assertMalformedActivityState("runtime_invalid_total_tick",
+                recipeTag -> recipeTag.putInt("totalTick", 0));
+        assertMalformedActivityState("runtime_invalid_tick",
+                recipeTag -> recipeTag.putInt("tick", 21));
+        assertMalformedActivityState("runtime_invalid_max_parallelism",
+                recipeTag -> recipeTag.putInt("maxParallelism", 0));
+        assertMalformedActivityState("runtime_invalid_parallelism_zero",
+                recipeTag -> recipeTag.putInt("parallelism", 0));
+        assertMalformedActivityState("runtime_invalid_parallelism",
+                recipeTag -> recipeTag.putInt("parallelism", 2));
+        assertMalformedActivityState("runtime_invalid_finish_pending",
+                recipeTag -> recipeTag.putBoolean("finishPending", true));
+    }
+
+    @Test
+    void active_runtime_rejects_effective_snapshot_without_consumption_plan() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_missing_effective_plan", 20, List.of(
+                input(Items.IRON_INGOT, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        savedRecipeTag.remove("has_input_consumption_plan");
+        savedRecipeTag.remove("inputConsumptionPlan");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
+    void active_runtime_rejects_an_invalid_effective_requirement_before_restore() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_invalid_effective_requirement", 20, List.of(
+                input(Items.IRON_INGOT, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        ListTag requirements = recipeTag.get("effective_requirements").asList().orElseThrow();
+        requirements.getFirst().asCompound().orElseThrow().putInt("count", -1);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
+    @Test
     void active_runtime_finishes_with_its_original_recipe_after_registry_replacement() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
@@ -543,6 +854,136 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isTrue();
         assertThat(restored.recipe()).isEqualTo(recipe);
+        assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isTrue();
+    }
+
+    @Test
+    void active_runtime_round_trips_a_registered_custom_requirement_handler() {
+        RequirementHandlerRegistry.register(new RequirementHandler<CustomRequirement>() {
+            @Override
+            public RequirementType<CustomRequirement> type() {
+                return CustomRequirement.TYPE;
+            }
+
+            @Override
+            public Codec<CustomRequirement> codec() {
+                return CustomRequirement.CODEC;
+            }
+
+            @Override
+            public RequirementPlan plan(CustomRequirement requirement, List<MachineCapability> capabilities,
+                                        cn.howxu.mmcr.api.capability.plan.PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+            }
+        });
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new CustomRequirement(RecipeModifier.IOType.INPUT, 7)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeRecipe().effectiveRequirements()).singleElement()
+                .isEqualTo(new CustomRequirement(RecipeModifier.IOType.INPUT, 7));
+        restored.tick();
+        restored.tick();
+        assertThat(restored.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+    }
+
+    @Test
+    void legacy_restore_promotes_runtime_modifier_values_to_the_public_effective_snapshot() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        AtomicReference<String> callbackFailure = new AtomicReference<>();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .recipeTick(context -> {
+                    if (context.totalTick() != 2
+                            || ((ItemRequirement) context.requirements().getFirst()).count() != 2
+                            || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
+                        callbackFailure.compareAndSet(null, "legacy restore did not expose the effective snapshot");
+                    }
+                }).build()));
+        controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
+                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false))));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        MachineRecipe recipe = recipe("runtime_legacy_modifier_restore", 1,
+                List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+        CompoundTag root = outputTag.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+        recipeTag.remove("effective_duration");
+        recipeTag.remove("effective_requirements");
+        recipeTag.remove("effective_outputs");
+        recipeTag.putInt("totalTick", 1);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isTrue();
+        assertThat(restored.totalTick()).isEqualTo(2);
+        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+        assertThat(((MachineOutput.ItemOutput) restored.activeRecipe().effectiveOutputs().getFirst()).stack().getCount())
+                .isEqualTo(2);
+        restored.tick();
+        restored.tick();
+        restored.finish();
+
+        assertThat(callbackFailure).hasValue(null);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+    }
+
+    @Test
+    void legacy_restore_rejects_progress_beyond_modifier_effective_duration() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
+                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
+                        0.5F, RecipeModifier.Operation.MULTIPLY, false))));
+        MachineRecipe recipe = recipe("runtime_legacy_invalid_progress", 2, List.of());
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag root = output.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+        recipeTag.remove("effective_duration");
+        recipeTag.remove("effective_requirements");
+        recipeTag.remove("effective_outputs");
+        recipeTag.putInt("totalTick", 2);
+        recipeTag.putInt("tick", 2);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
     }
 
     @Test
@@ -640,6 +1081,25 @@ class CraftingRuntimeTest {
         assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
     }
 
+    private static void assertMalformedActivityState(String recipePath,
+                                                      Consumer<CompoundTag> mutate) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe(recipePath, 20, List.of()), 1).isCrafting()).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+        CompoundTag recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        mutate.accept(recipeTag);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+    }
+
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {
         return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), duration,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), new java.util.ArrayList<>(requirements));
@@ -693,6 +1153,45 @@ class CraftingRuntimeTest {
             return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller runtime", exception);
+        }
+    }
+
+    private record CustomRequirement(RecipeModifier.IOType io, int value) implements MachineRequirement {
+        private static final RequirementType<CustomRequirement> TYPE = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "runtime_custom_requirement"));
+        private static final Codec<CustomRequirement> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.STRING.fieldOf("type").forGetter(value -> TYPE.id().toString()),
+                RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(CustomRequirement::io),
+                Codec.INT.fieldOf("value").forGetter(CustomRequirement::value)
+        ).apply(instance, (ignored, io, value) -> new CustomRequirement(io, value)));
+
+        @Override
+        public RequirementType<CustomRequirement> type() {
+            return TYPE;
+        }
+    }
+
+    private static final class ThrowingItemOutputBus extends ItemOutputBusBlockEntity {
+        private final ThrowingItemStorage storage = new ThrowingItemStorage();
+
+        private ThrowingItemOutputBus(BlockPos pos) {
+            super(pos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
+        }
+
+        @Override
+        public ThrowingItemStorage itemStorage() {
+            return storage;
+        }
+    }
+
+    private static final class ThrowingItemStorage extends LongResourceStorage<ItemResource> {
+        private ThrowingItemStorage() {
+            super(ItemResource.class, 1, 100L, ItemResource::isEmpty, () -> {});
+        }
+
+        @Override
+        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+            throw new IllegalStateException("expected finish capability operation failure");
         }
     }
 }

@@ -1,14 +1,18 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.Objects;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -17,7 +21,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class MachineBehaviorContext {
+public class MachineBehaviorContext {
     private final MachineControllerBlockEntity controller;
     private final ServerLevel level;
     private final BlockPos controllerPos;
@@ -25,16 +29,24 @@ public final class MachineBehaviorContext {
     private final long gameTime;
     private final ControllerScreenText screenText;
     private final Map<BlockPos, DataStorage> dataStorages;
+    private final MachineIoView ioView;
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText) {
-        this(controller, level, controllerPos, machineId, gameTime, screenText, Map.of());
+        this(controller, level, controllerPos, machineId, gameTime, screenText, Map.of(), emptyIoView());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText, Map<BlockPos, DataStorage> dataStorages) {
+        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorages, emptyIoView());
+    }
+
+    public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
+                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  ControllerScreenText screenText, Map<BlockPos, DataStorage> dataStorages,
+                                  MachineIoView ioView) {
         this.controller = controller;
         this.level = level;
         this.controllerPos = Objects.requireNonNull(controllerPos, "controllerPos").immutable();
@@ -47,6 +59,7 @@ public final class MachineBehaviorContext {
                     Objects.requireNonNull(storage, "data storage")));
         }
         this.dataStorages = Map.copyOf(copy);
+        this.ioView = Objects.requireNonNull(ioView, "ioView");
     }
 
     public MachineControllerBlockEntity controller() {
@@ -85,4 +98,30 @@ public final class MachineBehaviorContext {
     public Optional<DataStorage> dataStorage(BlockPos pos) {
         return pos == null ? Optional.empty() : Optional.ofNullable(dataStorages.get(pos));
     }
+
+    public MachineIoView ioView() {
+        return ioView;
+    }
+
+    static MachineBehaviorContext empty(Identifier machineId) {
+        return new MachineBehaviorContext(null, null, BlockPos.ZERO, machineId, 0L, EMPTY_SCREEN_TEXT);
+    }
+
+    private static MachineIoView emptyIoView() {
+        return new MachineIoView(new CapabilitySnapshot(List.of()));
+    }
+
+    private static final ControllerScreenText EMPTY_SCREEN_TEXT = new ControllerScreenText() {
+        @Override
+        public void append(ControllerScreenTextScope scope, Identifier lineId, Component text) {
+        }
+
+        @Override
+        public void remove(ControllerScreenTextScope scope, Identifier lineId) {
+        }
+
+        @Override
+        public void clear(ControllerScreenTextScope scope) {
+        }
+    };
 }
