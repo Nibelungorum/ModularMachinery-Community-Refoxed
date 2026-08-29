@@ -21,8 +21,8 @@ public interface ControllerScreenText {
     }
 
     /**
-     * Appends or updates a line while keeping it after another line in the same scope.
-     * The relative order is retained if the target line is added later.
+     * Appends or updates a line immediately after another line in the same scope.
+     * If the target line does not exist, the operation is ignored.
      *
      * <p>The default implementation appends normally for compatibility with existing custom implementations.
      * Implementations that support relative ordering should override this method.</p>

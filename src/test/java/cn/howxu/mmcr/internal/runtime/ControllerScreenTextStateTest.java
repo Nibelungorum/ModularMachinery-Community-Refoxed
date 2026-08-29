@@ -45,28 +45,60 @@ class ControllerScreenTextStateTest {
     }
 
     @Test
-    void appendAfter_keeps_dependent_line_after_anchor_added_later() {
-        state.appendAfter(CONTROLLER, id("example:dependent"), id("example:anchor"),
-                Component.literal("dependent"));
-        state.append(CONTROLLER, id("example:other"), Component.literal("other"));
-        state.append(CONTROLLER, id("example:anchor"), Component.literal("anchor"));
+    void appendAfter_ignores_missing_anchor_without_mutating_state() {
+        state.append(CONTROLLER, id("example:existing"), Component.literal("existing"));
+        ControllerScreenTextSnapshot before = state.snapshot();
+        long revision = state.revision();
+        state.clearDirty();
 
-        assertThat(state.snapshot().lines())
-                .extracting(ControllerScreenTextSnapshot.Line::lineId)
-                .containsExactly(id("example:other"), id("example:anchor"), id("example:dependent"));
+        state.appendAfter(CONTROLLER, id("example:inserted"), id("example:missing"),
+                Component.literal("inserted"));
+        state.appendAfter(CONTROLLER, id("example:missing"), id("example:missing"),
+                Component.literal("also ignored"));
+
+        assertThat(state.snapshot()).isEqualTo(before);
+        assertThat(state.revision()).isEqualTo(revision);
+        assertThat(state.dirty()).isFalse();
     }
 
     @Test
-    void appendAfter_rejects_circular_ordering_without_mutating_state() {
+    void appendAfter_inserts_immediately_after_anchor_and_shifts_successor() {
+        state.append(CONTROLLER, id("example:anchor"), Component.literal("anchor"));
+        state.append(CONTROLLER, id("example:successor"), Component.literal("successor"));
+
+        state.appendAfter(CONTROLLER, id("example:inserted"), id("example:anchor"),
+                Component.literal("inserted"));
+
+        assertThat(state.snapshot().lines())
+                .extracting(ControllerScreenTextSnapshot.Line::lineId)
+                .containsExactly(id("example:anchor"), id("example:inserted"), id("example:successor"));
+    }
+
+    @Test
+    void appendAfter_moves_existing_line_and_last_insert_is_closest_to_anchor() {
+        state.append(CONTROLLER, id("example:anchor"), Component.literal("anchor"));
         state.append(CONTROLLER, id("example:first"), Component.literal("first"));
-        state.appendAfter(CONTROLLER, id("example:second"), id("example:first"), Component.literal("second"));
+        state.append(CONTROLLER, id("example:other"), Component.literal("other"));
+
+        state.appendAfter(CONTROLLER, id("example:first"), id("example:anchor"), Component.literal("updated"));
+        state.appendAfter(CONTROLLER, id("example:second"), id("example:anchor"), Component.literal("second"));
+
+        assertThat(state.snapshot().lines())
+                .extracting(ControllerScreenTextSnapshot.Line::lineId)
+                .containsExactly(id("example:anchor"), id("example:second"), id("example:first"), id("example:other"));
+        assertThat(state.snapshot().lines().get(2).text()).isEqualTo(Component.literal("updated"));
+    }
+
+    @Test
+    void appendAfter_rejects_self_insertion_without_mutating_state() {
+        state.append(CONTROLLER, id("example:line"), Component.literal("line"));
         ControllerScreenTextSnapshot before = state.snapshot();
         state.clearDirty();
 
-        assertThatThrownBy(() -> state.appendAfter(CONTROLLER, id("example:first"), id("example:second"),
+        assertThatThrownBy(() -> state.appendAfter(CONTROLLER, id("example:line"), id("example:line"),
                 Component.literal("replacement")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("cycle");
+                .hasMessageContaining("itself");
         assertThat(state.snapshot()).isEqualTo(before);
         assertThat(state.dirty()).isFalse();
     }
