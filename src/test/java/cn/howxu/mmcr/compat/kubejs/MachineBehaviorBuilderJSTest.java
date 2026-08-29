@@ -136,6 +136,31 @@ class MachineBehaviorBuilderJSTest {
     }
 
     @Test
+    void create_object_retains_direct_and_recipe_callbacks_together() {
+        AtomicInteger calls = new AtomicInteger();
+        MachineRegistration registration = new MachineBuilderJS(MMCR.id("kubejs_combined_hook_machine"))
+                .recipeBehavior(builder -> builder
+                        .idleStart(context -> calls.incrementAndGet())
+                        .idleEnd(context -> calls.incrementAndGet())
+                        .beforeStart(context -> calls.incrementAndGet())
+                        .recipeTick(context -> calls.incrementAndGet())
+                        .beforeFinish(context -> calls.incrementAndGet()))
+                .preServerTick(context -> calls.incrementAndGet())
+                .postServerTick(context -> calls.incrementAndGet())
+                .createObject();
+
+        RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
+        behavior.idleStart().accept(null);
+        behavior.idleEnd().accept(null);
+        behavior.beforeStart().accept(null);
+        behavior.recipeTick().accept(null);
+        behavior.beforeFinish().accept(null);
+        behavior.preServerTick().accept(null);
+        behavior.postServerTick().accept(null);
+        assertThat(calls).hasValue(7);
+    }
+
+    @Test
     void create_object_rejects_machine_level_hooks_for_tick_behavior() {
         assertThatThrownBy(() -> new MachineBuilderJS(MMCR.id("kubejs_tick_hook_machine"))
                 .tickBehavior(builder -> builder.serverTick(context -> { }))

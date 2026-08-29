@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Set;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
@@ -227,6 +228,35 @@ class MachineBuilderJSTest {
         assertThat(registration.smartInterfaceTypes()).containsKey("speed");
         assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
         assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:entity.ender_dragon.growl"));
+    }
+
+    @Test
+    void registered_machine_preserves_all_recipe_behavior_callbacks() {
+        Identifier id = MMCR.id("registered_recipe_callbacks");
+        AtomicInteger calls = new AtomicInteger();
+        new MachineBuilderJS(id)
+                .recipeBehavior(builder -> builder
+                        .idleStart(context -> calls.incrementAndGet())
+                        .idleEnd(context -> calls.incrementAndGet())
+                        .beforeStart(context -> calls.incrementAndGet())
+                        .recipeTick(context -> calls.incrementAndGet())
+                        .beforeFinish(context -> calls.incrementAndGet()))
+                .preServerTick(context -> calls.incrementAndGet())
+                .postServerTick(context -> calls.incrementAndGet())
+                .registerObject();
+
+        Plugin.freezeStartupRegistryPhaseForTesting();
+        MachineRegistration registration = MachineDefinitions.getRegistration(id);
+        assertThat(registration.behavior()).isInstanceOf(RecipeBehavior.class);
+        RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
+        behavior.idleStart().accept(null);
+        behavior.idleEnd().accept(null);
+        behavior.beforeStart().accept(null);
+        behavior.recipeTick().accept(null);
+        behavior.beforeFinish().accept(null);
+        behavior.preServerTick().accept(null);
+        behavior.postServerTick().accept(null);
+        assertThat(calls).hasValue(7);
     }
 
     @Test
