@@ -43,5 +43,12 @@
     "mmcr.smart_interface.type.kubejs_conversation": "转化率",
     "mmcr.smart_interface.type.kubejs_conversation.description": "[0,1] 更高的耗能和更高的产量",
     "mmcr.smart_interface.type.kubejs_mode": "模式",
-    "mmcr.smart_interface.type.kubejs_mode.description": "[1,2,3] 取决于配方"
+    "mmcr.smart_interface.type.kubejs_mode.description": "[1,2,3] 取决于配方",
+
+    "gui.mmcr_kubejs.before_line": "§a------------------",
+    "gui.mmcr_kubejs.sp_line_1":   "§a                ",
+    "gui.mmcr_kubejs.in_line":     "§a    寰宇猪咪系统  ",
+    "gui.mmcr_kubejs.sp_line_2":   "§a                ",
+    "gui.mmcr_kubejs.after_line":  "§a------------------",
+    "gui.mmcr_kubejs.display_when_idle": "当Idle时显示一行文本"
 }

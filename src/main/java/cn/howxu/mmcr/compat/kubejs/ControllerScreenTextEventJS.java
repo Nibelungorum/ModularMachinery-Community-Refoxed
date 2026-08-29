@@ -36,11 +36,23 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
         textHandle().append(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"), requireText(text));
     }
 
+    public void appendAfter(String scope, String lineId, String afterLineId, Component text) {
+        textHandle().appendAfter(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
+                parseNamespacedIdentifier(afterLineId, "afterLineId"), requireText(text));
+    }
+
     public void appendTranslatable(String scope, String lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
         textHandle().append(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
                 Component.translatable(key, args));
+    }
+
+    public void appendAfterTranslatable(String scope, String lineId, String afterLineId, String key, Object... args) {
+        requireText(key, "key");
+        if (args == null) throw new IllegalArgumentException("args must not be null");
+        textHandle().appendAfter(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
+                parseNamespacedIdentifier(afterLineId, "afterLineId"), Component.translatable(key, args));
     }
 
     public void remove(String scope, String lineId) {

@@ -117,6 +117,10 @@ public class MachineBehaviorContext {
         }
 
         @Override
+        public void appendAfter(ControllerScreenTextScope scope, Identifier lineId, Identifier afterLineId, Component text) {
+        }
+
+        @Override
         public void remove(ControllerScreenTextScope scope, Identifier lineId) {
         }
 

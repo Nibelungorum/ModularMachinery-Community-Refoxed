@@ -51,6 +51,11 @@ class MachineBehaviorTest {
         }
 
         @Override
+        public void appendAfter(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
+                                Identifier lineId, Identifier afterLineId, Component text) {
+        }
+
+        @Override
         public void remove(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
                            Identifier lineId) {
         }

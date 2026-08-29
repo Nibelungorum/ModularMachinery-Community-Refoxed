@@ -10,10 +10,13 @@ import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Runtime-only ordered controller screen text state.
@@ -26,6 +29,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     public static final int MAX_ENCODED_TEXT_BYTES = 64 * 1024;
 
     private final Map<Key, ControllerScreenTextSnapshot.Line> lines = new LinkedHashMap<>();
+    private final Map<Key, Key> afterKeys = new LinkedHashMap<>();
     private long revision;
     private boolean dirty;
 
@@ -33,32 +37,35 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     public void append(ControllerScreenTextScope scope, Identifier lineId, Component text) {
         Objects.requireNonNull(scope, "scope");
         requireNamespaced(lineId);
-        Objects.requireNonNull(text, "text");
-
         Key key = new Key(scope, lineId);
-        ControllerScreenTextSnapshot.Line current = lines.get(key);
-        if (current != null && current.text().equals(text)) return;
+        appendInternal(key, text, afterKeys.get(key));
+    }
 
-        ControllerScreenTextSnapshot.Line replacement = new ControllerScreenTextSnapshot.Line(scope, lineId, text.copy());
-        Map<Key, ControllerScreenTextSnapshot.Line> candidate = new LinkedHashMap<>(lines);
-        candidate.put(key, replacement);
-        validateCandidate(candidate);
-
-        lines.put(key, replacement);
-        markChanged();
+    @Override
+    public void appendAfter(ControllerScreenTextScope scope, Identifier lineId, Identifier afterLineId, Component text) {
+        Objects.requireNonNull(scope, "scope");
+        requireNamespaced(lineId);
+        requireNamespaced(afterLineId);
+        Key key = new Key(scope, lineId);
+        appendInternal(key, text, new Key(scope, afterLineId));
     }
 
     @Override
     public void remove(ControllerScreenTextScope scope, Identifier lineId) {
         Objects.requireNonNull(scope, "scope");
         requireNamespaced(lineId);
-        if (lines.remove(new Key(scope, lineId)) != null) markChanged();
+        Key key = new Key(scope, lineId);
+        if (lines.remove(key) != null) {
+            afterKeys.remove(key);
+            markChanged();
+        }
     }
 
     @Override
     public void clear(ControllerScreenTextScope scope) {
         Objects.requireNonNull(scope, "scope");
         boolean changed = lines.keySet().removeIf(key -> key.scope() == scope);
+        changed |= afterKeys.keySet().removeIf(key -> key.scope() == scope);
         if (changed) markChanged();
     }
 
@@ -83,6 +90,70 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     private void markChanged() {
         revision++;
         dirty = true;
+    }
+
+    private void appendInternal(Key key, Component text, Key afterKey) {
+        Objects.requireNonNull(text, "text");
+
+        ControllerScreenTextSnapshot.Line replacement = new ControllerScreenTextSnapshot.Line(
+                key.scope(), key.lineId(), text.copy());
+        Map<Key, ControllerScreenTextSnapshot.Line> candidate = new LinkedHashMap<>(lines);
+        candidate.put(key, replacement);
+        Map<Key, Key> candidateAfterKeys = new LinkedHashMap<>(afterKeys);
+        if (afterKey != null) candidateAfterKeys.put(key, afterKey);
+
+        Map<Key, ControllerScreenTextSnapshot.Line> ordered = order(candidate, candidateAfterKeys);
+        validateCandidate(ordered);
+        boolean changed = !new ArrayList<>(lines.entrySet()).equals(new ArrayList<>(ordered.entrySet()))
+                || !afterKeys.equals(candidateAfterKeys);
+        if (!changed) return;
+
+        lines.clear();
+        lines.putAll(ordered);
+        afterKeys.clear();
+        afterKeys.putAll(candidateAfterKeys);
+        markChanged();
+    }
+
+    private static Map<Key, ControllerScreenTextSnapshot.Line> order(
+            Map<Key, ControllerScreenTextSnapshot.Line> candidate, Map<Key, Key> afterKeys) {
+        List<Key> keys = new ArrayList<>(candidate.keySet());
+        Map<Key, Integer> dependencyCounts = new LinkedHashMap<>();
+        Map<Key, List<Key>> dependents = new LinkedHashMap<>();
+        for (Key key : keys) {
+            Key afterKey = afterKeys.get(key);
+            if (afterKey != null && candidate.containsKey(afterKey)) {
+                dependencyCounts.put(key, 1);
+                dependents.computeIfAbsent(afterKey, ignored -> new ArrayList<>()).add(key);
+            } else {
+                dependencyCounts.put(key, 0);
+            }
+        }
+
+        List<Key> orderedKeys = new ArrayList<>(candidate.size());
+        Set<Key> emitted = new HashSet<>();
+        while (orderedKeys.size() < keys.size()) {
+            Key next = null;
+            for (Key key : keys) {
+                if (!emitted.contains(key) && dependencyCounts.get(key) == 0) {
+                    next = key;
+                    break;
+                }
+            }
+            if (next == null) {
+                throw new IllegalArgumentException("Controller screen text ordering contains a cycle");
+            }
+
+            emitted.add(next);
+            orderedKeys.add(next);
+            for (Key dependent : dependents.getOrDefault(next, List.of())) {
+                dependencyCounts.put(dependent, dependencyCounts.get(dependent) - 1);
+            }
+        }
+
+        Map<Key, ControllerScreenTextSnapshot.Line> ordered = new LinkedHashMap<>();
+        for (Key key : orderedKeys) ordered.put(key, candidate.get(key));
+        return ordered;
     }
 
     private static void requireNamespaced(Identifier lineId) {

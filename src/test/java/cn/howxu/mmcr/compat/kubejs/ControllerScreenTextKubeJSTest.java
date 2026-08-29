@@ -19,6 +19,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope.CONTROLLER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -84,6 +85,21 @@ class ControllerScreenTextKubeJSTest {
     }
 
     @Test
+    void append_after_translatable_exposes_relative_ordering_to_kubejs() {
+        ControllerScreenTextState state = new ControllerScreenTextState();
+        state.append(CONTROLLER, Identifier.parse("example:target"), Component.literal("target"));
+        ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
+                new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
+
+        event.appendAfterTranslatable("controller", "example:after", "example:target",
+                "example.controller.after", Component.literal("arg"));
+
+        assertThat(state.snapshot().lines())
+                .extracting(line -> line.lineId().toString())
+                .containsExactly("example:target", "example:after");
+    }
+
+    @Test
     void invalid_kubejs_screen_text_values_have_facing_errors() {
         ControllerScreenTextState state = new ControllerScreenTextState();
         ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
@@ -101,6 +117,8 @@ class ControllerScreenTextKubeJSTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("key");
         assertThatThrownBy(() -> event.appendTranslatable("controller", "example:line", " "))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("key");
+        assertThatThrownBy(() -> event.appendAfterTranslatable("controller", "example:line", "line", "example:key"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("afterLineId");
         assertThatThrownBy(() -> new MMCRStartupEventJS().registerControllerScreenText(null, ignored -> { }))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("machineId");
     }

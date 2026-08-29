@@ -45,6 +45,33 @@ class ControllerScreenTextStateTest {
     }
 
     @Test
+    void appendAfter_keeps_dependent_line_after_anchor_added_later() {
+        state.appendAfter(CONTROLLER, id("example:dependent"), id("example:anchor"),
+                Component.literal("dependent"));
+        state.append(CONTROLLER, id("example:other"), Component.literal("other"));
+        state.append(CONTROLLER, id("example:anchor"), Component.literal("anchor"));
+
+        assertThat(state.snapshot().lines())
+                .extracting(ControllerScreenTextSnapshot.Line::lineId)
+                .containsExactly(id("example:other"), id("example:anchor"), id("example:dependent"));
+    }
+
+    @Test
+    void appendAfter_rejects_circular_ordering_without_mutating_state() {
+        state.append(CONTROLLER, id("example:first"), Component.literal("first"));
+        state.appendAfter(CONTROLLER, id("example:second"), id("example:first"), Component.literal("second"));
+        ControllerScreenTextSnapshot before = state.snapshot();
+        state.clearDirty();
+
+        assertThatThrownBy(() -> state.appendAfter(CONTROLLER, id("example:first"), id("example:second"),
+                Component.literal("replacement")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cycle");
+        assertThat(state.snapshot()).isEqualTo(before);
+        assertThat(state.dirty()).isFalse();
+    }
+
+    @Test
     void removeAndScopeClearOnlyAffectRequestedEntries() {
         state.append(CONTROLLER, id("example:controller"), Component.literal("controller"));
         state.append(OPERATION, id("example:operation"), Component.literal("operation"));
