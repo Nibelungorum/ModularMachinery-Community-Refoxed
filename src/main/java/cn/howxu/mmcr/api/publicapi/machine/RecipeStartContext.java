@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -29,7 +30,9 @@ public final class RecipeStartContext {
 
     public RecipeStartContext(MachineRecipe recipe, int requestedParallelism, int effectiveParallelism) {
         this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
-                requestedParallelism, effectiveParallelism, recipe.tickTime(), recipe.runtimeRequirements(),
+                requestedParallelism, effectiveParallelism,
+                Math.max(1, IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(
+                        recipe.modifiers(), recipe.tickTime()))), recipe.runtimeRequirements(),
                 recipe.runtimeMachineOutputs());
     }
 
@@ -92,20 +95,18 @@ public final class RecipeStartContext {
 
     public void setOutputs(List<MachineOutput> outputs) {
         List<MachineOutput> copy = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
-        List<MachineRequirement> replacement = outputRequirements(copy);
+        List<MachineRequirement> replacement = outputRequirements(copy, requirements);
         List<MachineRequirement> nextRequirements = new ArrayList<>();
-        boolean inserted = false;
+        int outputIndex = 0;
         for (MachineRequirement requirement : requirements) {
-            if (isItemOrFluidOutput(requirement)) {
-                if (!inserted) {
-                    nextRequirements.addAll(replacement);
-                    inserted = true;
-                }
-            } else {
+            if (!isItemOrFluidOutput(requirement)) {
                 nextRequirements.add(requirement);
+                continue;
             }
+            if (outputIndex < replacement.size()) nextRequirements.add(replacement.get(outputIndex));
+            outputIndex++;
         }
-        if (!inserted) nextRequirements.addAll(replacement);
+        while (outputIndex < replacement.size()) nextRequirements.add(replacement.get(outputIndex++));
         this.requirements = List.copyOf(nextRequirements);
         this.outputs = copy;
     }
@@ -135,13 +136,26 @@ public final class RecipeStartContext {
         return List.copyOf(result);
     }
 
-    private static List<MachineRequirement> outputRequirements(List<MachineOutput> outputs) {
+    private static List<MachineRequirement> outputRequirements(List<MachineOutput> outputs,
+                                                               List<MachineRequirement> templates) {
         List<MachineRequirement> result = new ArrayList<>(outputs.size());
+        int templateIndex = 0;
         for (MachineOutput output : outputs) {
+            MachineRequirement template = null;
+            while (templateIndex < templates.size()) {
+                MachineRequirement candidate = templates.get(templateIndex++);
+                if (isItemOrFluidOutput(candidate)) {
+                    template = candidate;
+                    break;
+                }
+            }
+            List<String> tags = template == null ? List.of() : template.tags();
             if (output instanceof MachineOutput.ItemOutput item) {
-                result.add(MachineRequirement.itemOutput(item.stack(), item.chance()));
+                result.add(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        item.stack(), item.chance(), tags));
             } else if (output instanceof MachineOutput.FluidOutput fluid) {
-                result.add(MachineRequirement.fluidOutput(fluid.stack(), fluid.chance()));
+                result.add(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        fluid.stack(), fluid.chance(), tags));
             }
         }
         return result;

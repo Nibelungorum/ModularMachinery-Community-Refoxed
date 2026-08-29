@@ -128,7 +128,7 @@ public final class MachineIoView {
             for (int slot = 0; slot < storage.size(); slot++) {
                 Object current = storage.resource(slot);
                 long amount = storage.amount(slot);
-                if (amount > 0L && (!(current instanceof ItemResource existing) || !existing.equals(resource))) continue;
+                if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 long slotCapacity = Math.min(storage.capacityResource(slot, resource), resource.getMaxStackSize());
                 capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - amount));
@@ -147,7 +147,7 @@ public final class MachineIoView {
             for (int slot = 0; slot < storage.size(); slot++) {
                 Object current = storage.resource(slot);
                 long amount = storage.amount(slot);
-                if (amount > 0L && (!(current instanceof FluidResource existing) || !existing.equals(resource))) continue;
+                if (current instanceof FluidResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 long slotCapacity = storage.capacityResource(slot, resource);
                 capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - amount));

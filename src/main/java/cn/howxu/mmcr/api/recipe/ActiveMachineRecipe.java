@@ -56,9 +56,9 @@ public final class ActiveMachineRecipe {
     private int nextFinishRetryTick;
     private boolean finishPending;
     private @Nullable InputConsumptionPlan inputConsumptionPlan;
-    private final List<MachineRequirement> effectiveRequirements;
-    private final List<MachineOutput> effectiveOutputs;
-    private final boolean effectiveSnapshotPresent;
+    private List<MachineRequirement> effectiveRequirements;
+    private List<MachineOutput> effectiveOutputs;
+    private boolean effectiveSnapshotPresent;
 
     public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
         public InputConsumptionPlan {
@@ -403,6 +403,17 @@ public final class ActiveMachineRecipe {
                 totalTick, effectiveRequirements(), effectiveOutputs());
     }
 
+    /**
+     * Promotes a legacy active recipe to the effective runtime definition selected during restore.
+     */
+    public void setEffectiveExecutionSnapshot(RecipeStartContext.ExecutionSnapshot execution) {
+        Objects.requireNonNull(execution, "execution");
+        this.totalTick = execution.duration();
+        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements());
+        this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
+        this.effectiveSnapshotPresent = true;
+    }
+
     private static boolean validRequirements(List<MachineRequirement> requirements) {
         if (requirements == null) return false;
         return requirements.stream().allMatch(ActiveMachineRecipe::validRequirement);
@@ -423,7 +434,7 @@ public final class ActiveMachineRecipe {
             if (requirement instanceof EnergyRequirement energy) {
                 return energy.fePerTick() >= 0;
             }
-            return requirement instanceof SmartInterfaceRequirement;
+            return requirement instanceof SmartInterfaceRequirement || requirement.io() != null;
         } catch (RuntimeException exception) {
             return false;
         }

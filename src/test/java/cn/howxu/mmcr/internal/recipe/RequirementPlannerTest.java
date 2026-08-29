@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -1299,6 +1300,53 @@ class RequirementPlannerTest {
                 .extracting(RequirementPlan::requirementIndex).isEqualTo(1);
     }
 
+    @Test
+    void output_replacement_preserves_the_original_requirement_tags_and_index() {
+        BulkItemStorage untaggedStorage = new BulkItemStorage(1, null);
+        BulkItemStorage taggedStorage = new BulkItemStorage(1, null);
+        RequirementType<TestRequirement> trailingType = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "trailing_output_requirement"));
+        AtomicInteger trailingIndex = new AtomicInteger(-1);
+        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementType<TestRequirement> type() {
+                return trailingType;
+            }
+
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                trailingIndex.set(context.requirementIndex());
+                return new RequirementPlan(context.requirementIndex(), 1, List.of(), null);
+            }
+        });
+
+        MachineRequirement taggedOutput = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(1), 1F, List.of("primary"));
+        MachineRequirement trailingOutput = new TestRequirement(trailingType, RecipeModifier.IOType.OUTPUT);
+        StorageCapability untaggedCapability = new StorageCapability(
+                ItemRequirement.TYPE.id(), IOType.OUTPUT, untaggedStorage, List.of("other"));
+        StorageCapability taggedCapability = new StorageCapability(
+                ItemRequirement.TYPE.id(), IOType.OUTPUT, taggedStorage, List.of("primary"));
+        var result = new CraftingContext(new CapabilitySnapshot(List.of(
+                untaggedCapability,
+                taggedCapability,
+                new TestCapability(trailingType.id(), IOType.OUTPUT, 1))))
+                .planOutputRequirements(List.of(taggedOutput, trailingOutput),
+                        List.of(new MachineOutput.ItemOutput(Items.GOLD_NUGGET.getDefaultInstance(), 1F),
+                                new MachineOutput.ItemOutput(Items.DIAMOND.getDefaultInstance(), 1F)), 1, false);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(trailingIndex).hasValue(1);
+        assertThat(untaggedCapability.prepareCalls).isEqualTo(1);
+        assertThat(taggedCapability.prepareCalls).isEqualTo(1);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(untaggedStorage.amount(0)).isEqualTo(1L);
+        assertThat(untaggedStorage.resource(0).toStack(1).is(Items.DIAMOND)).isTrue();
+        assertThat(taggedStorage.amount(0)).isEqualTo(1L);
+        assertThat(taggedStorage.resource(0).toStack(1).is(Items.GOLD_NUGGET)).isTrue();
+    }
+
     private static ItemStack ironStack(int count) {
         ItemStack stack = Items.IRON_INGOT.getDefaultInstance().copyWithCount(count);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
@@ -1442,13 +1490,19 @@ class RequirementPlannerTest {
         private final CapabilityType type;
         private final IOType ioType;
         private final CapabilityStorage storage;
+        private final List<String> tags;
         private int prepareCalls;
         private CapabilityRequests.ResourceRequest<?> lastResourceRequest;
 
         private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
+            this(type, ioType, storage, List.of());
+        }
+
+        private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage, List<String> tags) {
             this.type = new CapabilityType(type);
             this.ioType = ioType;
             this.storage = storage;
+            this.tags = List.copyOf(tags);
         }
 
         @Override
@@ -1472,6 +1526,11 @@ class RequirementPlannerTest {
                 @Override
                 public IOType ioType() {
                     return StorageCapability.this.ioType;
+                }
+
+                @Override
+                public List<String> tags() {
+                    return StorageCapability.this.tags;
                 }
             };
         }

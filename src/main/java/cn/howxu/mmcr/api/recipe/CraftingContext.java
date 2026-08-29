@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -68,39 +69,24 @@ public final class CraftingContext {
 
     public PlanningResult planOutputs(MachineRecipe recipe, List<MachineOutput> outputs, int parallelism) {
         if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
-        List<MachineRequirement> requirements = outputRequirements(outputs);
-        for (MachineRequirement requirement : recipe.runtimeRequirements(modifiers)) {
-            if (requirement.io() == RecipeModifier.IOType.OUTPUT
-                    && !(requirement instanceof ItemRequirement) && !(requirement instanceof FluidRequirement)) {
-                requirements.add(requirement);
-            }
+        IndexedRequirements replacement = replacePhysicalOutputs(recipe.runtimeRequirements(modifiers), outputs);
+        List<MachineRequirement> requirements = new ArrayList<>();
+        List<Integer> requirementIndexes = new ArrayList<>();
+        for (int index = 0; index < replacement.requirements().size(); index++) {
+            MachineRequirement requirement = replacement.requirements().get(index);
+            if (requirement.io() != RecipeModifier.IOType.OUTPUT) continue;
+            requirements.add(requirement);
+            requirementIndexes.add(replacement.indexes().get(index));
         }
         return planSelected(requirements, parallelism,
-                partialOutputPolicies(requirements, recipe.allowPartialOutputs()), indexes(requirements.size()));
+                outputPoliciesForIndexes(requirementIndexes, recipe.allowPartialOutputs()), requirementIndexes);
     }
 
     private static List<MachineRequirement> outputRequirements(List<MachineOutput> outputs) {
         if (outputs == null) throw new IllegalArgumentException("outputs must not be null");
         List<MachineRequirement> requirements = new ArrayList<>(outputs.size());
         for (MachineOutput output : outputs) {
-            if (output == null || !Float.isFinite(output.chance())) {
-                throw new IllegalArgumentException("outputs must contain finite, non-null values");
-            }
-            if (output instanceof MachineOutput.ItemOutput item) {
-                ItemStack stack = item.stack();
-                if (stack == null || stack.isEmpty() || stack.getCount() < 0) {
-                    throw new IllegalArgumentException("item outputs must contain a non-empty stack");
-                }
-                requirements.add(MachineRequirement.itemOutput(stack, item.chance()));
-            } else if (output instanceof MachineOutput.FluidOutput fluid) {
-                FluidStack stack = fluid.stack();
-                if (stack == null || stack.isEmpty() || stack.getAmount() < 0) {
-                    throw new IllegalArgumentException("fluid outputs must contain a non-empty stack");
-                }
-                requirements.add(MachineRequirement.fluidOutput(stack, fluid.chance()));
-            } else {
-                throw new IllegalArgumentException("Unknown machine output: " + output);
-            }
+            requirements.add(outputRequirement(output, null));
         }
         return requirements;
     }
@@ -143,23 +129,11 @@ public final class CraftingContext {
     }
 
     public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, List<MachineOutput> outputs,
-                                                 int parallelism, boolean allowPartialOutputs) {
-        List<MachineRequirement> replacement = outputRequirements(outputs);
-        List<MachineRequirement> merged = new ArrayList<>();
-        boolean inserted = false;
-        for (MachineRequirement requirement : requirements) {
-            if (isItemOrFluidOutput(requirement)) {
-                if (!inserted) {
-                    merged.addAll(replacement);
-                    inserted = true;
-                }
-            } else {
-                merged.add(requirement);
-            }
-        }
-        if (!inserted) merged.addAll(replacement);
-        return plan(merged, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of(),
-                partialOutputPolicies(merged, allowPartialOutputs));
+                                                  int parallelism, boolean allowPartialOutputs) {
+        IndexedRequirements replacement = replacePhysicalOutputs(requirements, outputs);
+        return planSelected(replacement.requirements(), replacement.indexes(), parallelism,
+                RecipeModifier.IOType.OUTPUT,
+                outputPoliciesForIndexes(replacement.indexes(), allowPartialOutputs));
     }
 
     public void setModifiers(List<RecipeModifier> modifiers) {
@@ -210,6 +184,23 @@ public final class CraftingContext {
                 new PlanningContext(parallelism, 0, outputPolicies), requirementIndexes);
     }
 
+    private PlanningResult planSelected(List<MachineRequirement> source, List<Integer> sourceIndexes,
+                                        int parallelism, RecipeModifier.IOType direction,
+                                        Map<Integer, OutputPolicy> outputPolicies) {
+        if (source == null || sourceIndexes == null || source.size() != sourceIndexes.size()) {
+            throw new IllegalArgumentException("requirements and indexes must match");
+        }
+        List<MachineRequirement> requirements = new ArrayList<>();
+        List<Integer> requirementIndexes = new ArrayList<>();
+        for (int index = 0; index < source.size(); index++) {
+            MachineRequirement requirement = source.get(index);
+            if (direction != null && requirement.io() != direction) continue;
+            requirements.add(requirement);
+            requirementIndexes.add(sourceIndexes.get(index));
+        }
+        return planSelected(requirements, parallelism, outputPolicies, requirementIndexes);
+    }
+
     private static Map<Integer, OutputPolicy> partialOutputPolicies(int size) {
         return outputPoliciesForIndexes(indexes(size), true);
     }
@@ -227,12 +218,67 @@ public final class CraftingContext {
     }
 
     private static Map<Integer, OutputPolicy> outputPoliciesForIndexes(List<Integer> indexes,
-                                                                        boolean allowPartialOutputs) {
+                                                                         boolean allowPartialOutputs) {
         Map<Integer, OutputPolicy> policies = new LinkedHashMap<>();
         for (Integer index : indexes) {
             policies.put(index, allowPartialOutputs ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
         }
         return Map.copyOf(policies);
+    }
+
+    private static IndexedRequirements replacePhysicalOutputs(List<MachineRequirement> base,
+                                                              List<MachineOutput> outputs) {
+        if (base == null) throw new IllegalArgumentException("requirements must not be null");
+        List<MachineOutput> copiedOutputs = MachineOutput.copyList(
+                Objects.requireNonNull(outputs, "outputs"));
+        List<MachineRequirement> result = new ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
+        int outputIndex = 0;
+        int extraOutputIndex = 0;
+        for (int index = 0; index < base.size(); index++) {
+            MachineRequirement requirement = base.get(index);
+            if (!isItemOrFluidOutput(requirement)) {
+                result.add(requirement);
+                indexes.add(index);
+                continue;
+            }
+            if (outputIndex < copiedOutputs.size()) {
+                result.add(outputRequirement(copiedOutputs.get(outputIndex++), requirement));
+                indexes.add(index);
+            } else {
+                outputIndex++;
+            }
+        }
+        while (outputIndex < copiedOutputs.size()) {
+            result.add(outputRequirement(copiedOutputs.get(outputIndex++), null));
+            indexes.add(base.size() + extraOutputIndex++);
+        }
+        return new IndexedRequirements(List.copyOf(result), List.copyOf(indexes));
+    }
+
+    private static MachineRequirement outputRequirement(MachineOutput output, MachineRequirement template) {
+        if (output == null || !Float.isFinite(output.chance())) {
+            throw new IllegalArgumentException("outputs must contain finite, non-null values");
+        }
+        List<String> tags = template == null ? List.of() : template.tags();
+        if (output instanceof MachineOutput.ItemOutput item) {
+            ItemStack stack = item.stack();
+            if (stack == null || stack.isEmpty() || stack.getCount() < 0) {
+                throw new IllegalArgumentException("item outputs must contain a non-empty stack");
+            }
+            return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, item.stack(), item.chance(), tags);
+        }
+        if (!(output instanceof MachineOutput.FluidOutput fluid)) {
+            throw new IllegalArgumentException("Unknown machine output: " + output);
+        }
+        FluidStack stack = fluid.stack();
+        if (stack == null || stack.isEmpty() || stack.getAmount() < 0) {
+            throw new IllegalArgumentException("fluid outputs must contain a non-empty stack");
+        }
+        return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, fluid.stack(), fluid.chance(), tags);
+    }
+
+    private record IndexedRequirements(List<MachineRequirement> requirements, List<Integer> indexes) {
     }
 
     private static boolean isItemOrFluidOutput(MachineRequirement requirement) {

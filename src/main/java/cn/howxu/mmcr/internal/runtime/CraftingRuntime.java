@@ -358,6 +358,10 @@ public final class CraftingRuntime {
         List<MachineOutput> outputs = restored.hasEffectiveExecutionSnapshot()
                 ? restored.effectiveOutputs()
                 : restored.getRecipe().runtimeMachineOutputs(contextModifiers(runtime));
+        if (!restored.hasEffectiveExecutionSnapshot()) {
+            restored.setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(
+                    duration(restored.getRecipe(), runtime), requirements, outputs));
+        }
         activeRecipe = restored;
         startPlan = null;
         finishPlan = null;

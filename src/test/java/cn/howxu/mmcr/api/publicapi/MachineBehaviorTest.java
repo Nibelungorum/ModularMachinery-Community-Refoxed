@@ -15,6 +15,8 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -184,6 +186,17 @@ class MachineBehaviorTest {
         assertThat(context.snapshot().requirements()).isEqualTo(context.requirements());
         assertThat(context.snapshot().outputs()).isEqualTo(context.outputs());
         assertThatThrownBy(() -> context.setDuration(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void compatibility_start_constructor_applies_recipe_duration_modifier() {
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("compatibility_duration"), MMCR.id("compatibility_machine"), 20,
+                List.of(), List.of(), List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION,
+                        RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)), 0, 1);
+
+        RecipeStartContext context = new RecipeStartContext(recipe, 1, 1);
+
+        assertThat(context.duration()).isEqualTo(40);
     }
 
     @Test

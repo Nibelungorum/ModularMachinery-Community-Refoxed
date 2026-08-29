@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -13,12 +14,17 @@ import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
@@ -51,6 +57,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -65,6 +73,7 @@ import java.util.Map;
 import java.lang.reflect.Field;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -845,7 +854,105 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isTrue();
         assertThat(restored.recipe()).isEqualTo(recipe);
-        assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isFalse();
+        assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isTrue();
+    }
+
+    @Test
+    void active_runtime_round_trips_a_registered_custom_requirement_handler() {
+        RequirementHandlerRegistry.register(new RequirementHandler<CustomRequirement>() {
+            @Override
+            public RequirementType<CustomRequirement> type() {
+                return CustomRequirement.TYPE;
+            }
+
+            @Override
+            public Codec<CustomRequirement> codec() {
+                return CustomRequirement.CODEC;
+            }
+
+            @Override
+            public RequirementPlan plan(CustomRequirement requirement, List<MachineCapability> capabilities,
+                                        cn.howxu.mmcr.api.capability.plan.PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+            }
+        });
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new CustomRequirement(RecipeModifier.IOType.INPUT, 7)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeRecipe().effectiveRequirements()).singleElement()
+                .isEqualTo(new CustomRequirement(RecipeModifier.IOType.INPUT, 7));
+        restored.tick();
+        restored.tick();
+        assertThat(restored.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+    }
+
+    @Test
+    void legacy_restore_promotes_runtime_modifier_values_to_the_public_effective_snapshot() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        AtomicReference<String> callbackFailure = new AtomicReference<>();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .recipeTick(context -> {
+                    if (context.totalTick() != 2
+                            || ((ItemRequirement) context.requirements().getFirst()).count() != 2
+                            || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
+                        callbackFailure.compareAndSet(null, "legacy restore did not expose the effective snapshot");
+                    }
+                }).build()));
+        controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
+                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false),
+                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false))));
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        MachineRecipe recipe = recipe("runtime_legacy_modifier_restore", 1,
+                List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 1)));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+        CompoundTag root = outputTag.buildResult();
+        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        recipeTag.remove("has_effective_definition");
+        recipeTag.remove("effective_definition_version");
+        recipeTag.remove("effective_duration");
+        recipeTag.remove("effective_requirements");
+        recipeTag.remove("effective_outputs");
+        recipeTag.putInt("totalTick", 1);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isTrue();
+        assertThat(restored.totalTick()).isEqualTo(2);
+        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+        assertThat(((MachineOutput.ItemOutput) restored.activeRecipe().effectiveOutputs().getFirst()).stack().getCount())
+                .isEqualTo(2);
+        restored.tick();
+        restored.tick();
+        restored.finish();
+
+        assertThat(callbackFailure).hasValue(null);
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
     }
 
     @Test
@@ -1015,6 +1122,21 @@ class CraftingRuntimeTest {
             return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller runtime", exception);
+        }
+    }
+
+    private record CustomRequirement(RecipeModifier.IOType io, int value) implements MachineRequirement {
+        private static final RequirementType<CustomRequirement> TYPE = new RequirementType<>(
+                Identifier.fromNamespaceAndPath("mmcr_test", "runtime_custom_requirement"));
+        private static final Codec<CustomRequirement> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.STRING.fieldOf("type").forGetter(value -> TYPE.id().toString()),
+                RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(CustomRequirement::io),
+                Codec.INT.fieldOf("value").forGetter(CustomRequirement::value)
+        ).apply(instance, (ignored, io, value) -> new CustomRequirement(io, value)));
+
+        @Override
+        public RequirementType<CustomRequirement> type() {
+            return TYPE;
         }
     }
 

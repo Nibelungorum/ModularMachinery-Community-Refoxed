@@ -86,6 +86,8 @@ public interface MachineRequirement {
     }
 
     private static <T> DataResult<T> encode(MachineRequirement requirement, DynamicOps<T> ops, T prefix) {
+        RequirementHandler<?> handler = RequirementHandlerRegistry.handlerFor(requirement.type());
+        if (handler == null) return DataResult.error(() -> "Unknown requirement type: " + requirement.type().id());
         var builder = ops.mapBuilder()
                 .add("type", ops.createString(requirement.type().id().getPath()))
                 .add("io", RecipeModifier.IO_TYPE_CODEC.encodeStart(ops, requirement.io()).getOrThrow());
@@ -127,7 +129,7 @@ public interface MachineRequirement {
                     .add("max_value", ops.createFloat(smartInterface.maxValue()))
                     .build(prefix);
         }
-        return DataResult.error(() -> "Unknown machine requirement: " + requirement);
+        return encodeCustom(handler, requirement, ops, prefix);
     }
 
     private static <T> DataResult<Pair<MachineRequirement, T>> decode(DynamicOps<T> ops, T input) {
@@ -169,10 +171,37 @@ public interface MachineRequirement {
                             .flatMap(ops::getNumberValue)
                             .flatMap(minValue -> ops.get(input, "max_value")
                                     .flatMap(ops::getNumberValue)
-                                    .<MachineRequirement>map(maxValue -> new SmartInterfaceRequirement(io, interfaceType,
-                                            minValue.floatValue(), maxValue.floatValue())))));
+                                     .<MachineRequirement>map(maxValue -> new SmartInterfaceRequirement(io, interfaceType,
+                                             minValue.floatValue(), maxValue.floatValue())))));
         }
-        return DataResult.error(() -> "Unknown requirement type: " + serializedType);
+        return decodeCustom(RequirementHandlerRegistry.handlerFor(type), type, ops, input, serializedType);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> DataResult<T> encodeCustom(RequirementHandler<?> handler, MachineRequirement requirement,
+                                                   DynamicOps<T> ops, T prefix) {
+        Codec<MachineRequirement> codec = (Codec<MachineRequirement>) handler.codec();
+        return codec == null
+                ? DataResult.error(() -> "Requirement handler has no codec: " + requirement.type().id())
+                : codec.encode(requirement, ops, prefix);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> DataResult<MachineRequirement> decodeCustom(RequirementHandler<?> handler,
+                                                                    RequirementType<MachineRequirement> type,
+                                                                    DynamicOps<T> ops, T input,
+                                                                    String serializedType) {
+        if (handler == null) return DataResult.error(() -> "Unknown requirement type: " + serializedType);
+        Codec<MachineRequirement> codec = (Codec<MachineRequirement>) handler.codec();
+        if (codec == null) {
+            return DataResult.error(() -> "Requirement handler has no codec: " + type.id());
+        }
+        return codec.parse(ops, input).flatMap(requirement -> {
+            if (requirement == null || !type.equals(requirement.type()) || requirement.io() == null) {
+                return DataResult.error(() -> "Decoded requirement does not match registered type: " + type.id());
+            }
+            return DataResult.success(requirement);
+        });
     }
 
     private static <T> DataResult<MachineRequirement> decodeItem(DynamicOps<T> ops, T input) {

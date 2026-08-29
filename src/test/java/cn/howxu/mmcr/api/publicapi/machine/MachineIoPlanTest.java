@@ -153,6 +153,18 @@ class MachineIoPlanTest {
     }
 
     @Test
+    void output_capacity_requires_matching_resource_for_non_empty_zero_quantity_slots() {
+        ItemStack ironStack = stack(Items.IRON_INGOT, 64);
+        ItemResource iron = ItemResource.of(ironStack);
+        ZeroQuantityItemStorage storage = new ZeroQuantityItemStorage(iron);
+
+        MachineIoView view = view(capability(storage, IOType.OUTPUT, List.of()));
+
+        assertThat(view.itemOutputCapacity(new ItemStack(Items.GOLD_NUGGET))).isZero();
+        assertThat(view.itemOutputCapacity(ironStack)).isEqualTo(64L);
+    }
+
+    @Test
     void counts_same_fluid_slots_and_empty_slots_but_not_different_fluids() {
         LongFluidStorage storage = new LongFluidStorage(3, 2_000L, null);
         storage.setContents(0, FluidResource.of(Fluids.WATER), 500L);
@@ -454,6 +466,25 @@ class MachineIoPlanTest {
         @Override
         public boolean isValid(int slot, ItemResource resource) {
             return slot != 1 && super.isValid(slot, resource);
+        }
+    }
+
+    private static final class ZeroQuantityItemStorage extends LongResourceStorage<ItemResource> {
+        private final ItemResource slotResource;
+
+        private ZeroQuantityItemStorage(ItemResource slotResource) {
+            super(ItemResource.class, 1, 64L, ItemResource::isEmpty, () -> {});
+            this.slotResource = slotResource;
+        }
+
+        @Override
+        public ItemResource resource(int slot) {
+            return slot == 0 ? slotResource : super.resource(slot);
+        }
+
+        @Override
+        public boolean isValid(int slot, ItemResource resource) {
+            return true;
         }
     }
 
