@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
@@ -20,6 +21,7 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -38,15 +40,18 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +70,11 @@ class MachineBehaviorRuntimeTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @AfterEach
+    void cleanupRecipes() {
+        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -367,7 +377,7 @@ class MachineBehaviorRuntimeTest {
         AtomicInteger idleStart = new AtomicInteger();
         AtomicInteger idleEnd = new AtomicInteger();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
-        Machine recipeMachine = machine(controller.machineId(), RecipeBehavior.builder()
+        Machine recipeMachine = machine(TEST_MACHINE_ID, RecipeBehavior.builder()
                 .idleStart(context -> idleStart.incrementAndGet())
                 .idleEnd(context -> idleEnd.incrementAndGet()).build());
         RuntimeTestFixtures.formStructure(controller, recipeMachine);
@@ -376,6 +386,89 @@ class MachineBehaviorRuntimeTest {
 
         assertThat(idleStart).hasValue(1);
         assertThat(idleEnd).hasValue(1);
+    }
+
+    @Test
+    void recipe_machine_hooks_surround_existing_recipe_work_with_fresh_contexts() {
+        Identifier machineId = MMCR.id("recipe_hook_lifecycle_machine");
+        List<String> phases = new ArrayList<>();
+        List<MachineBehaviorContext> preContexts = new ArrayList<>();
+        List<MachineBehaviorContext> postContexts = new ArrayList<>();
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(-1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(-2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
+        BlockArray pattern = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
+                new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get())));
+        Machine recipeMachine = machine(machineId, pattern, RecipeBehavior.builder()
+                .preServerTick(context -> {
+                    preContexts.add(context);
+                    phases.add("pre");
+                    assertThat(context.ioView()).isNotNull();
+                    context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                            MMCR.id("recipe_hook_status"), Component.literal("pre"));
+                })
+                .beforeStart(context -> phases.add("beforeStart"))
+                .recipeTick(context -> phases.add("recipeTick"))
+                .beforeFinish(context -> phases.add("beforeFinish"))
+                .postServerTick(context -> {
+                    postContexts.add(context);
+                    phases.add("post");
+                    context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                            MMCR.id("recipe_hook_status"), Component.literal("post"));
+                })
+                .build());
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        RuntimeTestFixtures.formStructureWithComponents(controller, recipeMachine, input, output);
+        MachineRecipe lifecycleRecipe = recipe("behavior_recipe_hook_lifecycle", machineId,
+                input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
+        RecipeRegistry.registerStatic(lifecycleRecipe);
+        assertThat(controller.structureSnapshot().machine()).isSameAs(recipeMachine);
+        assertThat(RecipeRegistry.byMachineId(machineId)).containsExactly(lifecycleRecipe);
+        assertThat(controller.componentRuntime().capabilities())
+                .as("components=%s capabilities=%s", controller.componentRuntime().components(),
+                        controller.componentRuntime().capabilities())
+                .hasSize(2);
+        assertThat(controller.behaviorContext().ioView().itemAmount(Ingredient.of(Items.IRON_INGOT))).isEqualTo(1L);
+
+        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(),
+                controller.getBlockPos());
+        assertThat(controller.runtimeSnapshot().crafting().recipeId())
+                .as("registered recipe starts: status=%s failure=%s", controller.runtimeSnapshot().crafting().status(),
+                        controller.runtimeSnapshot().crafting().failure())
+                .isEqualTo(lifecycleRecipe.id());
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(),
+                controller.getBlockPos());
+
+        assertThat(phases).containsExactly("pre", "beforeStart", "post", "pre", "recipeTick", "beforeFinish", "post");
+        assertThat(preContexts).hasSize(2);
+        assertThat(postContexts).hasSize(2);
+        assertThat(preContexts.get(0)).isNotSameAs(postContexts.get(0));
+        assertThat(preContexts.get(1)).isNotSameAs(postContexts.get(1));
+        assertThat(preContexts.get(0)).isNotSameAs(preContexts.get(1));
+        assertThat(postContexts.get(0)).isNotSameAs(postContexts.get(1));
+        assertThat(preContexts.get(0).screenText()).isSameAs(postContexts.get(0).screenText());
+        assertThat(preContexts.get(1).screenText()).isSameAs(postContexts.get(1).screenText());
+        assertThat(((ControllerScreenTextState) preContexts.get(1).screenText()).snapshot().lines())
+                 .singleElement().satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("post")));
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+    }
+
+    @Test
+    void recipe_machine_hook_failure_does_not_skip_the_other_hook() {
+        AtomicInteger postCalls = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        Machine recipeMachine = machine(controller.machineId(), RecipeBehavior.builder()
+                .preServerTick(context -> { throw new IllegalStateException("pre hook failure"); })
+                .postServerTick(context -> postCalls.incrementAndGet())
+                .build());
+        RuntimeTestFixtures.formStructure(controller, recipeMachine);
+
+        assertThatCode(() -> controller.tickRuntimeWork(
+                (net.minecraft.server.level.ServerLevel) controller.getLevel(), controller.getBlockPos()))
+                .doesNotThrowAnyException();
+        assertThat(postCalls).hasValue(1);
     }
 
     @Test
@@ -425,7 +518,11 @@ class MachineBehaviorRuntimeTest {
     }
 
     private static MachineRecipe recipe(String path, ItemRequirement... requirements) {
-        return new MachineRecipe(MMCR.id(path), TEST_MACHINE_ID, 1, List.of(), List.of(),
+        return recipe(path, TEST_MACHINE_ID, requirements);
+    }
+
+    private static MachineRecipe recipe(String path, Identifier machineId, ItemRequirement... requirements) {
+        return new MachineRecipe(MMCR.id(path), machineId, 1, List.of(), List.of(),
                 List.of(), 0, 1, false, List.of(), List.of(requirements));
     }
 

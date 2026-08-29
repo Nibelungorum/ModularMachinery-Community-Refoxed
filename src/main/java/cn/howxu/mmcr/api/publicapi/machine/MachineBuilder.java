@@ -37,6 +37,8 @@ public final class MachineBuilder {
     private Identifier runningSoundId;
     private Identifier finishSoundId;
     private MachineBehavior behavior = RecipeBehavior.defaults();
+    private MachineBehavior.MachineCallback preServerTick;
+    private MachineBehavior.MachineCallback postServerTick;
 
     private MachineBuilder(Identifier id) {
         this.id = Objects.requireNonNull(id, "id");
@@ -74,9 +76,28 @@ public final class MachineBuilder {
     }
 
     public MachineBuilder tickBehavior(Consumer<TickBehavior.Builder> builder) {
+        if (preServerTick != null || postServerTick != null) {
+            throw new IllegalStateException("Cannot configure server tick hooks for tick behavior");
+        }
         TickBehavior.Builder behaviorBuilder = TickBehavior.builder();
         Objects.requireNonNull(builder, "builder").accept(behaviorBuilder);
         behavior = behaviorBuilder.build();
+        return this;
+    }
+
+    public MachineBuilder preServerTick(MachineBehavior.MachineCallback callback) {
+        if (behavior instanceof TickBehavior) {
+            throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
+        }
+        preServerTick = Objects.requireNonNull(callback, "preServerTick");
+        return this;
+    }
+
+    public MachineBuilder postServerTick(MachineBehavior.MachineCallback callback) {
+        if (behavior instanceof TickBehavior) {
+            throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
+        }
+        postServerTick = Objects.requireNonNull(callback, "postServerTick");
         return this;
     }
 
@@ -156,9 +177,24 @@ public final class MachineBuilder {
     }
 
     public MachineDefinition build() {
+        MachineBehavior resolvedBehavior = behavior;
+        if (preServerTick != null || postServerTick != null) {
+            if (!(behavior instanceof RecipeBehavior recipe)) {
+                throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
+            }
+            resolvedBehavior = RecipeBehavior.builder()
+                    .idleStart(recipe.idleStart())
+                    .idleEnd(recipe.idleEnd())
+                    .beforeStart(recipe.beforeStart())
+                    .recipeTick(recipe.recipeTick())
+                    .beforeFinish(recipe.beforeFinish())
+                    .preServerTick(preServerTick == null ? recipe.preServerTick() : preServerTick)
+                    .postServerTick(postServerTick == null ? recipe.postServerTick() : postServerTick)
+                    .build();
+        }
         return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
                 acceptedModuleIds, maxParallelism, parallelizable, failureAction, allowModifiers,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
-                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, behavior);
+                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior);
     }
 }

@@ -131,6 +131,29 @@ class MachineBehaviorTest {
     }
 
     @Test
+    void recipe_behavior_retains_machine_tick_callbacks() {
+        AtomicInteger preCalls = new AtomicInteger();
+        AtomicInteger postCalls = new AtomicInteger();
+        MachineBehavior.MachineCallback pre = context -> preCalls.incrementAndGet();
+        MachineBehavior.MachineCallback post = context -> postCalls.incrementAndGet();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("hook_machine"), 20L, SCREEN_TEXT);
+
+        RecipeBehavior behavior = RecipeBehavior.builder()
+                .preServerTick(pre)
+                .postServerTick(post)
+                .build();
+
+        behavior.preServerTick().accept(context);
+        behavior.postServerTick().accept(context);
+
+        assertThat(behavior.preServerTick()).isSameAs(pre);
+        assertThat(behavior.postServerTick()).isSameAs(post);
+        assertThat(preCalls).hasValue(1);
+        assertThat(postCalls).hasValue(1);
+    }
+
+    @Test
     void tick_behavior_has_tick_kind_and_retains_callback() {
         AtomicInteger calls = new AtomicInteger();
         TickBehavior behavior = TickBehavior.builder()

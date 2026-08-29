@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -62,6 +63,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
     private MachineBehavior behavior = RecipeBehavior.defaults();
     private MachineBehavior.Kind behaviorKind;
+    private MachineBehavior.MachineCallback preServerTick;
+    private MachineBehavior.MachineCallback postServerTick;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
@@ -81,6 +84,22 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return displayNameKey(name);
     }
 
+    public MachineBuilderJS preServerTick(Consumer<MachineBehaviorContext> callback) {
+        if (behaviorKind == MachineBehavior.Kind.TICK) {
+            throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
+        }
+        preServerTick = Objects.requireNonNull(callback, "preServerTick")::accept;
+        return this;
+    }
+
+    public MachineBuilderJS postServerTick(Consumer<MachineBehaviorContext> callback) {
+        if (behaviorKind == MachineBehavior.Kind.TICK) {
+            throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
+        }
+        postServerTick = Objects.requireNonNull(callback, "postServerTick")::accept;
+        return this;
+    }
+
     @Override
     public MachineRegistration createObject() {
         var registration = MachineRegistration.builder(id)
@@ -95,7 +114,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .runningSound(runningSoundId)
                 .finishSound(finishSoundId)
                 .shareSmartInterfaces(shareSmartInterfaces)
-                .behavior(behavior);
+                .behavior(behaviorWithServerTickHooks());
         if (expandableStructure) registration.expandableStructure();
         if (explicitRole && (role == MachineRole.NORMAL && (!acceptedModuleIds.isEmpty() || module)
                 || role == MachineRole.HOST && module)) {
@@ -123,6 +142,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS tickBehavior(Consumer<MachineBehaviorBuilderJS> builder) {
+        if (preServerTick != null || postServerTick != null) {
+            throw new IllegalStateException("Cannot configure server tick hooks for tick behavior");
+        }
         if (behaviorKind == MachineBehavior.Kind.RECIPE) {
             throw new IllegalStateException("Machine cannot configure both recipe and tick behavior");
         }
@@ -131,6 +153,22 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         behavior = behaviorBuilder.build();
         behaviorKind = MachineBehavior.Kind.TICK;
         return this;
+    }
+
+    private MachineBehavior behaviorWithServerTickHooks() {
+        if (preServerTick == null && postServerTick == null) return behavior;
+        if (!(behavior instanceof RecipeBehavior recipe)) {
+            throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
+        }
+        return RecipeBehavior.builder()
+                .idleStart(recipe.idleStart())
+                .idleEnd(recipe.idleEnd())
+                .beforeStart(recipe.beforeStart())
+                .recipeTick(recipe.recipeTick())
+                .beforeFinish(recipe.beforeFinish())
+                .preServerTick(preServerTick == null ? recipe.preServerTick() : preServerTick)
+                .postServerTick(postServerTick == null ? recipe.postServerTick() : postServerTick)
+                .build();
     }
 
     public MachineBuilderJS recipeFamily(String recipeFamilyId) {
@@ -550,7 +588,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                     .idleEnd(recipe.idleEnd())
                     .beforeStart(recipe.beforeStart())
                     .recipeTick(recipe.recipeTick())
-                    .beforeFinish(recipe.beforeFinish()));
+                    .beforeFinish(recipe.beforeFinish()))
+                    .preServerTick(recipe.preServerTick())
+                    .postServerTick(recipe.postServerTick());
         }
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
         if (registration.role() == MachineRole.MODULE) {

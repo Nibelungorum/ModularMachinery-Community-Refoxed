@@ -15,6 +15,8 @@ public final class RecipeBehavior implements MachineBehavior {
     private final RecipeStartCallback beforeStart;
     private final RecipeTickCallback recipeTick;
     private final RecipeFinishCallback beforeFinish;
+    private final MachineCallback preServerTick;
+    private final MachineCallback postServerTick;
 
     private RecipeBehavior(Builder builder) {
         idleStart = builder.idleStart;
@@ -22,6 +24,8 @@ public final class RecipeBehavior implements MachineBehavior {
         beforeStart = builder.beforeStart;
         recipeTick = builder.recipeTick;
         beforeFinish = builder.beforeFinish;
+        preServerTick = builder.preServerTick;
+        postServerTick = builder.postServerTick;
     }
 
     public static RecipeBehavior defaults() {
@@ -57,12 +61,22 @@ public final class RecipeBehavior implements MachineBehavior {
         return beforeFinish;
     }
 
+    public MachineCallback preServerTick() {
+        return preServerTick;
+    }
+
+    public MachineCallback postServerTick() {
+        return postServerTick;
+    }
+
     public static final class Builder {
         private MachineCallback idleStart = context -> { };
         private MachineCallback idleEnd = context -> { };
         private RecipeStartCallback beforeStart = context -> { };
         private RecipeTickCallback recipeTick = context -> { };
         private RecipeFinishCallback beforeFinish = context -> { };
+        private MachineCallback preServerTick = context -> { };
+        private MachineCallback postServerTick = context -> { };
 
         public Builder idleStart(MachineCallback callback) {
             idleStart = Objects.requireNonNull(callback, "idleStart");
@@ -86,6 +100,16 @@ public final class RecipeBehavior implements MachineBehavior {
 
         public Builder beforeFinish(RecipeFinishCallback callback) {
             beforeFinish = Objects.requireNonNull(callback, "beforeFinish");
+            return this;
+        }
+
+        public Builder preServerTick(MachineCallback callback) {
+            preServerTick = Objects.requireNonNull(callback, "preServerTick");
+            return this;
+        }
+
+        public Builder postServerTick(MachineCallback callback) {
+            postServerTick = Objects.requireNonNull(callback, "postServerTick");
             return this;
         }
 

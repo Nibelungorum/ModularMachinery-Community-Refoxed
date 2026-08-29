@@ -111,6 +111,71 @@ class MachineBehaviorBuilderJSTest {
     }
 
     @Test
+    void create_object_retains_machine_level_recipe_tick_callbacks() {
+        AtomicInteger preCalls = new AtomicInteger();
+        AtomicInteger postCalls = new AtomicInteger();
+        MachineRegistration registration = new MachineBuilderJS(MMCR.id("kubejs_hook_machine"))
+                .preServerTick(context -> {
+                    assertThat(context.ioView()).isNotNull();
+                    preCalls.incrementAndGet();
+                })
+                .postServerTick(context -> {
+                    assertThat(context.screenText()).isNotNull();
+                    postCalls.incrementAndGet();
+                })
+                .createObject();
+
+        assertThat(registration.behavior()).isInstanceOf(RecipeBehavior.class);
+        RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("kubejs_hook_machine"), 0L, new ControllerScreenTextState());
+        behavior.preServerTick().accept(context);
+        behavior.postServerTick().accept(context);
+        assertThat(preCalls).hasValue(1);
+        assertThat(postCalls).hasValue(1);
+    }
+
+    @Test
+    void create_object_retains_direct_and_recipe_callbacks_together() {
+        AtomicInteger calls = new AtomicInteger();
+        MachineRegistration registration = new MachineBuilderJS(MMCR.id("kubejs_combined_hook_machine"))
+                .recipeBehavior(builder -> builder
+                        .idleStart(context -> calls.incrementAndGet())
+                        .idleEnd(context -> calls.incrementAndGet())
+                        .beforeStart(context -> calls.incrementAndGet())
+                        .recipeTick(context -> calls.incrementAndGet())
+                        .beforeFinish(context -> calls.incrementAndGet()))
+                .preServerTick(context -> calls.incrementAndGet())
+                .postServerTick(context -> calls.incrementAndGet())
+                .createObject();
+
+        RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
+        behavior.idleStart().accept(null);
+        behavior.idleEnd().accept(null);
+        behavior.beforeStart().accept(null);
+        behavior.recipeTick().accept(null);
+        behavior.beforeFinish().accept(null);
+        behavior.preServerTick().accept(null);
+        behavior.postServerTick().accept(null);
+        assertThat(calls).hasValue(7);
+    }
+
+    @Test
+    void create_object_rejects_machine_level_hooks_for_tick_behavior() {
+        assertThatThrownBy(() -> new MachineBuilderJS(MMCR.id("kubejs_tick_hook_machine"))
+                .tickBehavior(builder -> builder.serverTick(context -> { }))
+                .preServerTick(context -> { }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("recipe behavior");
+
+        assertThatThrownBy(() -> new MachineBuilderJS(MMCR.id("kubejs_late_tick_hook_machine"))
+                .preServerTick(context -> { })
+                .tickBehavior(builder -> builder.serverTick(context -> { })))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("server tick hooks");
+    }
+
+    @Test
     void builder_rejects_mixing_recipe_and_tick_behaviors() {
         assertThatThrownBy(() -> new MachineBuilderJS(MMCR.id("kubejs_mixed_machine"))
                 .recipeBehavior(builder -> builder.idleStart(context -> { }))
