@@ -1,4 +1,4 @@
-ServerEvents.recipes( event => {
+ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_reactor',
@@ -14,7 +14,7 @@ ServerEvents.recipes( event => {
                 type: 'fluid',
                 io: 'input',
                 fluid: 'minecraft:water',
-                amount: 1000
+                amount: 1
             },
             {
                 type: 'item',

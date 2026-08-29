@@ -10,7 +10,9 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NumericTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -32,7 +34,8 @@ public final class ActiveMachineRecipe {
 
     private static final Logger LOG = LoggerFactory.getLogger(ActiveMachineRecipe.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
-    private static final int RECIPE_DEFINITION_VERSION = 1;
+    private static final int LEGACY_RECIPE_DEFINITION_VERSION = 1;
+    private static final int RECIPE_DEFINITION_VERSION = 2;
 
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
@@ -178,6 +181,10 @@ public final class ActiveMachineRecipe {
     }
 
     public void serialize(ValueOutput output) {
+        serialize(output, null);
+    }
+
+    public void serialize(ValueOutput output, @Nullable HolderLookup.Provider registries) {
         output.putString("recipeName", recipe == null ? "" : recipe.id().toString());
         output.putInt("tick", this.tick);
         output.putInt("totalTick", this.totalTick);
@@ -185,10 +192,11 @@ public final class ActiveMachineRecipe {
         output.putInt("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         output.putBoolean("finishPending", this.finishPending);
-        if (recipe != null) {
+        if (recipe != null && registries != null) {
+            String fingerprint = definitionFingerprint(recipe, registries);
             output.putBoolean("has_recipe_definition", true);
             output.putInt("recipe_definition_version", RECIPE_DEFINITION_VERSION);
-            output.putString("recipe_definition_fingerprint", definitionFingerprint(recipe));
+            output.putString("recipe_definition_fingerprint", fingerprint);
             output.store("recipe_definition", MachineRecipe.CODEC.codec(), recipe);
         }
         if (inputConsumptionPlan != null) {
@@ -205,6 +213,7 @@ public final class ActiveMachineRecipe {
     }
 
     public static LoadResult load(ValueInput input) {
+        HolderLookup.Provider registries = input.lookup();
         String recipeName = input.getStringOr("recipeName", "");
         Identifier recipeId;
         try {
@@ -214,6 +223,14 @@ public final class ActiveMachineRecipe {
         }
         MachineRecipe recipe;
         if (input.getBooleanOr("has_recipe_definition", false)) {
+            int definitionVersion = input.getIntOr("recipe_definition_version", -1);
+            if (definitionVersion != LEGACY_RECIPE_DEFINITION_VERSION
+                    && definitionVersion != RECIPE_DEFINITION_VERSION) {
+                return new LoadResult(null);
+            }
+            if (definitionVersion == RECIPE_DEFINITION_VERSION && registries == null) {
+                return new LoadResult(null);
+            }
             try {
                 recipe = input.read("recipe_definition", MachineRecipe.CODEC.codec()).orElse(null);
             } catch (RuntimeException exception) {
@@ -223,9 +240,14 @@ public final class ActiveMachineRecipe {
                 return new LoadResult(null);
             }
             String expectedFingerprint = input.getStringOr("recipe_definition_fingerprint", "");
-            String actualFingerprint = definitionFingerprint(recipe);
-            if (input.getIntOr("recipe_definition_version", -1) != RECIPE_DEFINITION_VERSION
-                    || !expectedFingerprint.equals(actualFingerprint)) {
+            String actualFingerprint;
+            try {
+                actualFingerprint = definitionFingerprint(recipe,
+                        definitionVersion == LEGACY_RECIPE_DEFINITION_VERSION ? null : registries);
+            } catch (IllegalStateException exception) {
+                return new LoadResult(null);
+            }
+            if (!expectedFingerprint.equals(actualFingerprint)) {
                 return new LoadResult(null);
             }
         } else {
@@ -258,7 +280,24 @@ public final class ActiveMachineRecipe {
     }
 
     public static boolean sameDefinition(MachineRecipe first, MachineRecipe second) {
-        return first != null && second != null && definitionFingerprint(first).equals(definitionFingerprint(second));
+        if (first == null || second == null) return false;
+        try {
+            return definitionFingerprint(first, null).equals(definitionFingerprint(second, null));
+        } catch (IllegalStateException exception) {
+            return first.equals(second);
+        }
+    }
+
+    public static boolean sameDefinition(MachineRecipe first, MachineRecipe second,
+                                         @Nullable HolderLookup.Provider registries) {
+        if (first == null || second == null) return false;
+        try {
+            return registries == null
+                    ? sameDefinition(first, second)
+                    : definitionFingerprint(first, registries).equals(definitionFingerprint(second, registries));
+        } catch (IllegalStateException exception) {
+            return false;
+        }
     }
 
     private static boolean hasField(ValueInput input, String field) {
@@ -267,9 +306,10 @@ public final class ActiveMachineRecipe {
                 || input instanceof TagValueInput tagInput && tagInput.keySet().contains(field);
     }
 
-    private static String definitionFingerprint(MachineRecipe recipe) {
+    private static String definitionFingerprint(MachineRecipe recipe, @Nullable HolderLookup.Provider registries) {
+        var ops = registries == null ? NbtOps.INSTANCE : RegistryOps.create(NbtOps.INSTANCE, registries);
         CompoundTag encoded = (CompoundTag) MachineRecipe.CODEC.codec()
-                .encodeStart(NbtOps.INSTANCE, recipe).getOrThrow();
+                .encodeStart(ops, recipe).getOrThrow();
         encoded.remove("inputs");
         encoded.remove("outputs");
         encoded.remove("fluid_outputs");

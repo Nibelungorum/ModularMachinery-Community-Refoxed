@@ -532,6 +532,11 @@ class CraftingRuntimeTest {
         savedRecipeTag.remove("recipe_definition");
         savedRecipeTag.remove("recipe_definition_version");
         savedRecipeTag.remove("recipe_definition_fingerprint");
+        savedRecipeTag.remove("has_effective_definition");
+        savedRecipeTag.remove("effective_definition_version");
+        savedRecipeTag.remove("effective_duration");
+        savedRecipeTag.remove("effective_requirements");
+        savedRecipeTag.remove("effective_outputs");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);

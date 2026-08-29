@@ -16,7 +16,7 @@ ServerEvents.recipes( event => {
                 type: 'item',
                 io: 'input',
                 item: 'minecraft:coal',
-                count: 1
+                count: 10000
             },
             {
                 type: 'item',

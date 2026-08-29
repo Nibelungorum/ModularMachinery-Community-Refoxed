@@ -35,6 +35,8 @@ import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jspecify.annotations.Nullable;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Comparator;
@@ -374,9 +376,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static String fluidQuantityText(int amount) {
-        return amount > FLUID_SLOT_CAPACITY
-                ? ReadableNumber.formatCompact(amount) + " mB"
-                : "";
+        return amount <= 10
+                ? ReadableNumber.formatExact(amount) + "mB"
+                : fluidBucketText(amount, amount >= FLUID_SLOT_CAPACITY ? 2 : 3);
     }
 
     static List<Component> fluidTooltip(FluidStack fluid, Item.TooltipContext context,
@@ -389,9 +391,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static String fluidTooltipQuantity(int amount) {
-        return amount > FLUID_SLOT_CAPACITY
-                ? ReadableNumber.formatExact(amount) + " mB"
-                : "";
+        return amount <= 10
+                ? ReadableNumber.formatExact(amount) + "mB"
+                : fluidBucketText(amount, 3);
+    }
+
+    private static String fluidBucketText(int amount, int decimalPlaces) {
+        return BigDecimal.valueOf(amount, 3)
+                .setScale(decimalPlaces, RoundingMode.DOWN)
+                .stripTrailingZeros()
+                .toPlainString() + "B";
     }
 
     private static void appendOverflowTooltip(ITooltipBuilder tooltip,
@@ -511,8 +520,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 guiGraphics.text(font, chanceText, 0, 0, 0xFFFF4040, false);
             }
             if (!quantityText.isEmpty()) {
-                int x = Math.max(0, (int) (16 / ITEM_OVERLAY_SCALE) - font.width(quantityText));
-                int y = (int) (16 / ITEM_OVERLAY_SCALE) - font.lineHeight;
+                int x = Math.max(0, (int) (16 / ITEM_OVERLAY_SCALE) - font.width(quantityText)) + 1;
+                int y = (int) (16 / ITEM_OVERLAY_SCALE) - font.lineHeight + 1;
                 guiGraphics.text(font, quantityText, x, y, 0xFFFFFFFF, true);
             }
             guiGraphics.pose().popMatrix();

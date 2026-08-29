@@ -267,7 +267,7 @@
   "jei.mmcr.machine_recipe.minimum_level": "(Minimum Level)",
   "jei.mmcr.machine_recipe.output_chance": "Output Chance: %s",
   "jei.mmcr.machine_recipe.output_overflow": "Additional Outputs: ",
-  "jei.mmcr.machine_recipe.fluid_amount": "Fluid Amount: %s",
+  "jei.mmcr.machine_recipe.fluid_amount": "Fluid: %s",
   "jei.mmcr.machine_recipe.overflow_entry": "%s x %s",
   "jei.mmcr.machine_recipe.required_host": "Install on: %s",
   "jei.mmcr.multiblock_structure": "Multiblock Structure",

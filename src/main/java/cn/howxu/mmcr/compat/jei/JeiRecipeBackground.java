@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 import mezz.jei.api.gui.drawable.IScalableDrawable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -24,5 +25,6 @@ public final class JeiRecipeBackground implements IScalableDrawable {
         scale = Math.max(1, Math.min(4, scale));
         Identifier texture = MMCR.id("textures/gui/jei/recipe/" + scale + "x.png");
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0.0F, 0.0F, width, height, width, height);
+        ((GuiGraphicsExtractorAccessor) guiGraphics).mmcr$getGuiRenderState().nextStratum();
     }
 }

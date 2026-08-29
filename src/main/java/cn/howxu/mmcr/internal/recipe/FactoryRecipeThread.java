@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.ValueInput;
@@ -235,7 +236,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                     .filter(candidate -> lastRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
             if (lastRecipeCatalogVersion != catalog.version()
-                    && (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current))) {
+                    && (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess()))) {
                 clearLastRecipe();
             }
         }
@@ -613,7 +614,8 @@ public final class FactoryRecipeThread extends RecipeThread {
             MachineRecipe current = availableCandidates.stream()
                     .filter(candidate -> candidate != null && activeRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
-            if (current == null || !ActiveMachineRecipe.sameDefinition(activeRecipe, current)) {
+            if (current == null || !ActiveMachineRecipe.sameDefinition(activeRecipe, current,
+                    input.lookup())) {
                 thread.clearLastRecipe();
             }
         }
@@ -643,6 +645,10 @@ public final class FactoryRecipeThread extends RecipeThread {
                 ? null : snapshot.structure().configuredMachine().registryName()
                 : snapshot.structure().machine().registryName());
         return catalog.recipes();
+    }
+
+    private @Nullable HolderLookup.Provider registryAccess() {
+        return controller.getLevel() == null ? null : controller.getLevel().registryAccess();
     }
 
     private static @Nullable RecipeSearchContextKey readSearchFailureKey(ValueInput input) {

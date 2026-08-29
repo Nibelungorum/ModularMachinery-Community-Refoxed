@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -362,7 +363,7 @@ public final class CraftingRuntime {
             output.putLong("capability_version", capabilityVersion);
             output.putLong("modifier_version", modifierVersion);
             output.putLong("component_state_version", componentStateVersion);
-            activeRecipe.serialize(output.child("recipe"));
+            activeRecipe.serialize(output.child("recipe"), registryAccess());
         }
     }
 
@@ -452,6 +453,10 @@ public final class CraftingRuntime {
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
         return runtime.foundModifiers().values().stream().flatMap(List::stream).toList();
+    }
+
+    private @Nullable HolderLookup.Provider registryAccess() {
+        return controller.getLevel() == null ? null : controller.getLevel().registryAccess();
     }
 
     private void captureVersions(ControllerRuntimeSnapshot runtime) {
