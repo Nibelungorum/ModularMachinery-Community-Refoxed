@@ -36,6 +36,8 @@ class InterfaceHelpersTest {
         assertThat(InterfacePredicates.anyOfEnergyInput().alternatives()).hasSize(10);
         assertThat(InterfacePredicates.anyOfPort("item_input_bus").alternatives()).hasSize(1);
         assertThat(InterfacePredicates.smartInterface().blockSupplier()).isPresent();
+        assertThat(InterfacePredicates.dataStorage().blockSupplier().orElseThrow().get())
+                .isSameAs(ModBlocks.DATA_STORAGE.get());
     }
 
     @Test
@@ -152,11 +154,13 @@ class InterfaceHelpersTest {
         assertThat(builder.anyOfPort("mmcr:item_input_bus").children()).hasSize(1);
         assertThat(builder.parallelControllers().children()).hasSize(8);
         assertThat(builder.smartInterface()).isNotNull();
+        assertThat(builder.dataStorage().matches(ModBlocks.DATA_STORAGE.get().defaultBlockState())).isTrue();
         assertThat(builder.energyOutputTier("ultimate").requirements()).hasSize(1);
 
         var machineBuilder = new MachineBuilderJS("test:interfaces");
         assertThat(machineBuilder.anyOfFluidOutput().children()).hasSize(19);
         assertThat(machineBuilder.smartInterfaceBlock()).isNotNull();
+        assertThat(machineBuilder.dataStorage().matches(ModBlocks.DATA_STORAGE.get().defaultBlockState())).isTrue();
         assertThat(machineBuilder.itemInputTier("big").requirements()).hasSize(1);
     }
 

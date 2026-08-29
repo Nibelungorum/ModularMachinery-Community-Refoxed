@@ -1004,6 +1004,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void applyControllerScreenText() {
         if (currentRuntimeSnapshot().structure().configuredMachine() != null) {
             ControllerScreenTextRegistry.apply(runtime.runtimeContext());
+            runtime.screenText().flushReplacements();
         }
     }
 

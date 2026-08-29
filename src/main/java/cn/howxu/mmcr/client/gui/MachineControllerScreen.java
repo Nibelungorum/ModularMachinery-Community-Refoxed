@@ -45,7 +45,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
 
     @Override
     protected TextViewport scrollableTextViewport() {
-        int bodyY = titleLabelY + DETAIL_LINE_SPACING * 2;
+        int bodyY = titleLabelY + DETAIL_LINE_SPACING;
         return new TextViewport(9, bodyY, 160, 123 - bodyY + 1,
                 DETAIL_SCALE, DETAIL_LINE_SPACING);
     }
@@ -67,7 +67,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
         graphics.text(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
-        renderControllerStatus(graphics, (int) (titleLabelX / DETAIL_SCALE), (int) ((titleLabelY + 10) / DETAIL_SCALE));
+        renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE));
         graphics.pose().popMatrix();
     }
 
@@ -78,14 +78,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         extractTooltip(graphics, mouseX, mouseY);
     }
 
-    private void renderControllerStatus(GuiGraphicsExtractor graphics, int x, int y) {
-        boolean active = menu.hasActiveRecipe();
-        boolean formed = menu.isFormed();
-        Component label = Component.translatable("gui.mmcr.controller.status_label");
-        graphics.text(font, label, x, y, STATUS_LABEL_COLOR, true);
-        graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), active)), x + font.width(label) + 4, y,
-                controllerStatusColor(formed, active), true);
-
+    private void renderScrollableText(GuiGraphicsExtractor graphics, int x) {
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
@@ -107,6 +100,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
 
     static List<ControllerTextLine> detailLines(MachineControllerMenu menu) {
         List<ControllerTextLine> lines = new ArrayList<>();
+        lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
         for (String levelId : menu.foundLevelIds()) {
             MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
             if (level == null) continue;
@@ -137,6 +131,13 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     STATUS_LABEL_COLOR));
         }
         return lines;
+    }
+
+    private static ControllerTextLine statusLine(boolean formed, boolean active) {
+        return new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
+                .append(Component.literal(" "))
+                .append(Component.translatable(controllerStatusKey(formed, active))),
+                controllerStatusColor(formed, active));
     }
 
     static Component levelLine(MachineLevel level) {

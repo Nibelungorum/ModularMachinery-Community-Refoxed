@@ -49,12 +49,31 @@ class MachineControllerScreenTest {
         ControllerScreenTextCache.replace(CONTROLLER_POS, 1L, List.of(line("test:first", "first")));
         assertThat(MachineControllerScreen.controllerTextLines(menu))
                 .extracting(ControllerTextLine::text)
-                .containsExactly(Component.literal("first"));
+                .containsExactly(
+                        Component.translatable("gui.mmcr.controller.status_label")
+                                .append(Component.literal(" "))
+                                .append(Component.translatable("gui.mmcr.controller.unformed")),
+                        Component.literal("first"));
 
         ControllerScreenTextCache.replace(CONTROLLER_POS, 2L, List.of(line("test:second", "second")));
         assertThat(MachineControllerScreen.controllerTextLines(menu))
                 .extracting(ControllerTextLine::text)
-                .containsExactly(Component.literal("second"));
+                .containsExactly(
+                        Component.translatable("gui.mmcr.controller.status_label")
+                                .append(Component.literal(" "))
+                                .append(Component.translatable("gui.mmcr.controller.unformed")),
+                        Component.literal("second"));
+    }
+
+    @Test
+    void controller_status_is_first_scrollable_detail_line() {
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS);
+
+        assertThat(MachineControllerScreen.detailLines(menu).getFirst()).isEqualTo(
+                new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
+                        .append(Component.literal(" "))
+                        .append(Component.translatable("gui.mmcr.controller.unformed")),
+                        MachineControllerScreen.UNFORMED_STATUS_COLOR));
     }
 
     @Test
@@ -68,7 +87,9 @@ class MachineControllerScreenTest {
                 ControllerScreenTextComposerTest.testFont(), MachineControllerScreen.controllerTextLines(menu),
                 screen.scrollableTextViewport().width());
 
-        assertThat(visualLines).hasSize(2).allSatisfy(line ->
+        assertThat(visualLines).hasSize(3);
+        assertThat(visualLines.getFirst().color()).isEqualTo(MachineControllerScreen.UNFORMED_STATUS_COLOR);
+        assertThat(visualLines.subList(1, visualLines.size())).allSatisfy(line ->
                 assertThat(line.color()).isEqualTo(ControllerScreenTextComposer.DEFAULT_EXTERNAL_COLOR));
     }
 

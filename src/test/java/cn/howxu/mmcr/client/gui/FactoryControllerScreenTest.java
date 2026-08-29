@@ -82,8 +82,15 @@ class FactoryControllerScreenTest {
     @Test
     void factory_detail_lines_preserve_snapshot_order() {
         FactoryControllerMenu menu = menuWithDetailRows();
+        List<ControllerTextLine> detailLines = FactoryControllerScreen.detailLines(menu);
 
-        assertThat(FactoryControllerScreen.detailLines(menu)).containsExactly(
+        assertThat(detailLines.getFirst().text()).isEqualTo(
+                Component.translatable("gui.mmcr.controller.status_label")
+                        .append(Component.literal(" "))
+                        .append(Component.translatable("gui.mmcr.controller.running")));
+        assertThat(detailLines.getFirst().color()).isEqualTo(0xFF55FF55);
+
+        assertThat(detailLines.subList(1, detailLines.size())).containsExactly(
                 new ControllerTextLine(MachineControllerScreen.levelLine(
                         detailLevel(0)), MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(MachineControllerScreen.levelLine(
@@ -143,7 +150,7 @@ class FactoryControllerScreenTest {
     void factory_detail_line_count_is_independent_from_thread_scroll_range() {
         FactoryControllerMenu menu = menuWithDetailRows();
 
-        assertThat(FactoryControllerScreen.detailLines(menu)).hasSize(9);
+        assertThat(FactoryControllerScreen.detailLines(menu)).hasSize(10);
         assertThat(FactoryControllerScreen.clampScrollOffset(99, menu.threads().size())).isZero();
     }
 
@@ -167,7 +174,7 @@ class FactoryControllerScreenTest {
         int left = 37;
         int top = 19;
         AbstractScrollableTextScreen.TextViewport viewport =
-                new AbstractScrollableTextScreen.TextViewport(113, 32, 160, 92, 0.85F, 10);
+                new AbstractScrollableTextScreen.TextViewport(113, 22, 160, 102, 0.85F, 10);
 
         assertThat(FactoryControllerScreen.mouseOverThreadList(left, top,
                 left + FactoryControllerScreen.THREAD_ROW_X + 1,

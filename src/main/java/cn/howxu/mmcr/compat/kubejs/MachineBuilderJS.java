@@ -460,6 +460,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public BlockPredicate dataStorage() { return KubeJSInterfaceHelpers.dataStorage(); }
     public PortTierRequirementSpec itemInputTier(String id) { return KubeJSInterfaceHelpers.itemInputTier(id); }
     public PortTierRequirementSpec itemOutputTier(String id) { return KubeJSInterfaceHelpers.itemOutputTier(id); }
     public PortTierRequirementSpec fluidInputTier(String id) { return KubeJSInterfaceHelpers.fluidInputTier(id); }

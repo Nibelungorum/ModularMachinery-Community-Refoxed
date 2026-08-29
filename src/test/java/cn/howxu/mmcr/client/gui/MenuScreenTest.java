@@ -185,6 +185,9 @@ class MenuScreenTest {
                 FluidStack.EMPTY, FluidStack.EMPTY));
 
         assertThat(MachineControllerScreen.detailLines(menu)).containsExactly(
+                new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
+                        .append(Component.literal(" "))
+                        .append(Component.translatable("gui.mmcr.controller.running")), 0xFF55FF55),
                 new ControllerTextLine(MachineControllerScreen.levelLine(level),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(Component.translatable(

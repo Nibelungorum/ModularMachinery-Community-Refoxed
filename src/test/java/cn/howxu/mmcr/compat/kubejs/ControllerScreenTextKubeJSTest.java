@@ -100,6 +100,37 @@ class ControllerScreenTextKubeJSTest {
     }
 
     @Test
+    void replace_updates_controller_text_after_append() {
+        ControllerScreenTextState state = new ControllerScreenTextState();
+        state.append(CONTROLLER, Identifier.parse("example:progress"), Component.literal("old"));
+        ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
+                new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
+
+        event.replace("example:progress", Component.literal("new"));
+        state.flushReplacements();
+
+        assertThat(state.snapshot().lines()).singleElement()
+                .extracting(line -> line.text())
+                .isEqualTo(Component.literal("new"));
+    }
+
+    @Test
+    void replace_translatable_preserves_all_kubejs_arguments() {
+        ControllerScreenTextState state = new ControllerScreenTextState();
+        state.append(CONTROLLER, Identifier.parse("example:progress"), Component.literal("old"));
+        ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
+                new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
+        Object[] arguments = {Component.literal("75%"), 4};
+
+        event.replaceTranslatable("example:progress", "example.controller.progress", arguments);
+        state.flushReplacements();
+
+        assertThat(state.snapshot().lines()).singleElement()
+                .extracting(line -> line.text())
+                .isEqualTo(Component.translatable("example.controller.progress", arguments));
+    }
+
+    @Test
     void invalid_kubejs_screen_text_values_have_facing_errors() {
         ControllerScreenTextState state = new ControllerScreenTextState();
         ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(

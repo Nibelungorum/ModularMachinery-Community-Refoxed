@@ -50,6 +50,8 @@ public final class KubeJSInterfaceHelpers {
 
     public static BlockPredicate smartInterface() { return convert(InterfacePredicates.smartInterface()); }
 
+    public static BlockPredicate dataStorage() { return convert(InterfacePredicates.dataStorage()); }
+
     public static BlockPredicate port(String id) {
         return convert(InterfacePredicates.anyOfPort(id));
     }

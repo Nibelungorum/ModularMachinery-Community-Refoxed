@@ -307,6 +307,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate factoryController() { return anyOfPort("factory_controller"); }
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public BlockPredicate dataStorage() { return KubeJSInterfaceHelpers.dataStorage(); }
 
     @Override
     public MachineStructureDefinition createObject() {

@@ -67,7 +67,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
 
     @Override
     protected TextViewport scrollableTextViewport() {
-        int bodyY = 12 + DETAIL_LINE_SPACING * 2;
+        int bodyY = 12 + DETAIL_LINE_SPACING;
         return new TextViewport(113, bodyY, 160, 123 - bodyY + 1,
                 DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
     }
@@ -155,6 +155,11 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
 
     static List<ControllerTextLine> detailLines(FactoryControllerMenu menu) {
         List<ControllerTextLine> lines = new ArrayList<>();
+        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
+        lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
+                        .append(Component.literal(" "))
+                        .append(Component.translatable(controllerStatusKey(menu.isFormed(), selected.active()))),
+                controllerStatusColor(menu.isFormed(), selected.active())));
         for (Component levelLine : levelLines(menu.foundLevelIds())) {
             lines.add(new ControllerTextLine(levelLine, STATUS_LABEL_COLOR));
         }
@@ -174,7 +179,6 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         }
         lines.add(new ControllerTextLine(factoryThreadLine(menu.activeThreadCount(), menu.threadCount()),
                 STATUS_LABEL_COLOR));
-        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
         if (selected.totalTick() > 0) {
             int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress", percent + "%"),
@@ -275,19 +279,13 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         y = (int) (y / DETAIL_TEXT_SCALE);
         String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
         graphics.text(font, Component.translatable(machineName).append(" #" + selected.index()), x, detailTitleY(y), CONTROLLER_TITLE_COLOR, true);
-        int lineY = nextDetailY(y);
-        graphics.text(font, Component.translatable("gui.mmcr.controller.status_label"), x, lineY, STATUS_LABEL_COLOR, true);
-        graphics.text(font, Component.translatable(controllerStatusKey(menu.isFormed(), selected.active())),
-                x + font.width(Component.translatable("gui.mmcr.controller.status_label")) + 4, lineY,
-                controllerStatusColor(menu.isFormed(), selected.active()), true);
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
-        int statusLocalY = 12 + DETAIL_LINE_SPACING;
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
             ControllerScreenTextComposer.VisualLine line = lines.get(index);
-            int textY = detailLineY(lineY, statusLocalY, textLineY(visibleTextRow(index)));
+            int textY = detailTextY(textLineY(visibleTextRow(index)));
             graphics.text(font, line.text(), x, textY, line.color(), true);
         }
         graphics.pose().popMatrix();

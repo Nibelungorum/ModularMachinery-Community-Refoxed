@@ -92,6 +92,51 @@ class ControllerScreenTextStateTest {
     }
 
     @Test
+    void replace_updates_existing_line_without_changing_order_or_scope() {
+        state.append(OPERATION, id("example:operation"), Component.literal("old"));
+        state.append(CONTROLLER, id("example:controller"), Component.literal("controller"));
+
+        state.replace(id("example:operation"), Component.literal("new"));
+        state.flushReplacements();
+
+        assertThat(state.snapshot().lines())
+                .extracting(ControllerScreenTextSnapshot.Line::lineId)
+                .containsExactly(id("example:operation"), id("example:controller"));
+        assertThat(state.snapshot().lines().getFirst().scope()).isEqualTo(OPERATION);
+        assertThat(state.snapshot().lines().getFirst().text()).isEqualTo(Component.literal("new"));
+    }
+
+    @Test
+    void replace_prefers_controller_scope_and_never_inserts_missing_lines() {
+        Identifier duplicate = id("example:progress");
+        state.append(OPERATION, duplicate, Component.literal("operation"));
+        state.append(CONTROLLER, duplicate, Component.literal("controller"));
+
+        state.replace(duplicate, Component.literal("replacement"));
+        state.flushReplacements();
+
+        assertThat(state.snapshot().lines()).extracting(ControllerScreenTextSnapshot.Line::text)
+                .containsExactly(Component.literal("operation"), Component.literal("replacement"));
+        int lineCount = state.snapshot().lines().size();
+        state.replace(id("example:missing"), Component.literal("ignored"));
+        state.flushReplacements();
+        assertThat(state.snapshot().lines()).hasSize(lineCount);
+    }
+
+    @Test
+    void replace_uses_the_last_value_for_an_id_in_one_update() {
+        state.append(CONTROLLER, id("example:progress"), Component.literal("old"));
+
+        state.replace(id("example:progress"), Component.literal("first"));
+        state.replace(id("example:progress"), Component.literal("last"));
+        state.flushReplacements();
+
+        assertThat(state.snapshot().lines()).singleElement()
+                .extracting(ControllerScreenTextSnapshot.Line::text)
+                .isEqualTo(Component.literal("last"));
+    }
+
+    @Test
     void mutatingAppendedComponentDoesNotChangeStoredSnapshotsOrRevision() {
         MutableComponent text = Component.literal("one");
         state.append(CONTROLLER, id("example:mutable"), text);

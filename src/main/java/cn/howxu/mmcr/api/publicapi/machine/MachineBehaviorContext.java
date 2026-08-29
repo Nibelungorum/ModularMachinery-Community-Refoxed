@@ -121,6 +121,10 @@ public class MachineBehaviorContext {
         }
 
         @Override
+        public void replace(Identifier lineId, Component text) {
+        }
+
+        @Override
         public void remove(ControllerScreenTextScope scope, Identifier lineId) {
         }
 

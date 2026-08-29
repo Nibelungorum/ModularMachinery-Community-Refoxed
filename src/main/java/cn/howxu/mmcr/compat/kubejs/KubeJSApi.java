@@ -83,6 +83,7 @@ public final class KubeJSApi {
     public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
+    public BlockPredicate dataStorage() { return KubeJSInterfaceHelpers.dataStorage(); }
     public BlockPredicate factoryController() { return KubeJSInterfaceHelpers.factoryController(); }
 
     public BlockPredicate block(String blockId) {

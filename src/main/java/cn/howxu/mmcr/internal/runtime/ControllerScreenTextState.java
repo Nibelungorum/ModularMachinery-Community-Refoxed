@@ -30,6 +30,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
 
     private final Map<Key, ControllerScreenTextSnapshot.Line> lines = new LinkedHashMap<>();
     private final Map<Key, Key> afterKeys = new LinkedHashMap<>();
+    private final Map<Identifier, Component> pendingReplacements = new LinkedHashMap<>();
     private long revision;
     private boolean dirty;
 
@@ -48,6 +49,12 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         requireNamespaced(afterLineId);
         Key key = new Key(scope, lineId);
         appendInternal(key, text, new Key(scope, afterLineId));
+    }
+
+    @Override
+    public void replace(Identifier lineId, Component text) {
+        requireNamespaced(lineId);
+        pendingReplacements.put(lineId, Objects.requireNonNull(text, "text").copy());
     }
 
     @Override
@@ -85,6 +92,26 @@ public final class ControllerScreenTextState implements ControllerScreenText {
 
     public void clearDirty() {
         dirty = false;
+    }
+
+    public void flushReplacements() {
+        if (pendingReplacements.isEmpty()) return;
+        Map<Key, ControllerScreenTextSnapshot.Line> candidate = new LinkedHashMap<>(lines);
+        for (var replacement : pendingReplacements.entrySet()) {
+            Key key = findReplacementKey(candidate, replacement.getKey());
+            if (key == null) continue;
+            ControllerScreenTextSnapshot.Line old = candidate.get(key);
+            candidate.put(key, new ControllerScreenTextSnapshot.Line(
+                    old.scope(), old.lineId(), replacement.getValue().copy()));
+        }
+        validateCandidate(candidate);
+        boolean changed = !new ArrayList<>(lines.entrySet()).equals(new ArrayList<>(candidate.entrySet()));
+        pendingReplacements.clear();
+        if (!changed) return;
+
+        lines.clear();
+        lines.putAll(candidate);
+        markChanged();
     }
 
     private void markChanged() {
@@ -154,6 +181,17 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         Map<Key, ControllerScreenTextSnapshot.Line> ordered = new LinkedHashMap<>();
         for (Key key : orderedKeys) ordered.put(key, candidate.get(key));
         return ordered;
+    }
+
+    private static Key findReplacementKey(Map<Key, ControllerScreenTextSnapshot.Line> candidate,
+                                          Identifier lineId) {
+        for (Key key : candidate.keySet()) {
+            if (key.scope() == ControllerScreenTextScope.CONTROLLER && key.lineId().equals(lineId)) return key;
+        }
+        for (Key key : candidate.keySet()) {
+            if (key.scope() == ControllerScreenTextScope.OPERATION && key.lineId().equals(lineId)) return key;
+        }
+        return null;
     }
 
     private static void requireNamespaced(Identifier lineId) {

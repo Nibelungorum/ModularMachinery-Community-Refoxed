@@ -135,6 +135,8 @@ class KubeJSApiTest {
         assertThat(api.parallelControllers().children()).hasSize(8);
         assertThat(api.smartInterface()).isInstanceOf(BlockPredicate.DeferredBlock.class);
         assertThat(api.factoryController()).isInstanceOf(BlockPredicate.DeferredBlock.class);
+        assertThat(api.dataStorage().matches(ModBlocks.DATA_STORAGE.get().defaultBlockState())).isTrue();
+        assertThat(api.dataStorage().matches(Blocks.STONE.defaultBlockState())).isFalse();
     }
 
     @Test

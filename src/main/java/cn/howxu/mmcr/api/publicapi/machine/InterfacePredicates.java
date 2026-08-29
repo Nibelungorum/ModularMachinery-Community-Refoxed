@@ -117,6 +117,10 @@ public final class InterfacePredicates {
         return port("smart_interface");
     }
 
+    public static BlockPredicate dataStorage() {
+        return port("data_storage");
+    }
+
     private static BlockPredicate anyOfPorts(Identifier familyId, IOType ioType) {
         List<BlockPredicate> predicates = new ArrayList<>();
         for (IOPortKind kind : PortKinds.all()) {
