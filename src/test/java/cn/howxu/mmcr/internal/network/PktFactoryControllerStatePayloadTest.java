@@ -240,6 +240,7 @@ class PktFactoryControllerStatePayloadTest {
     private static void writeThread(RegistryFriendlyByteBuf buffer, int index, int tick, int totalTick,
                                     long parallelism) {
         buffer.writeVarInt(index);
+        buffer.writeUtf(index == 0 ? "base" : "factory-" + index);
         buffer.writeBoolean(index == 0);
         buffer.writeBoolean(false);
         buffer.writeBoolean(false);

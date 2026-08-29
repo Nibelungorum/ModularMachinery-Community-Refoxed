@@ -150,7 +150,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     static List<ControllerTextLine> controllerTextLines(FactoryControllerMenu menu) {
-        return ControllerScreenTextComposer.merge(detailLines(menu), ControllerScreenTextCache.linesAt(menu.controllerPos()));
+        return ControllerScreenTextComposer.merge(detailLines(menu),
+                ControllerScreenTextCache.linesAt(menu.controllerPos(), menu.selectedThread().laneId()));
     }
 
     static List<ControllerTextLine> detailLines(FactoryControllerMenu menu) {

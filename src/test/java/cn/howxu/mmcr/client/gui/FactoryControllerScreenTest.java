@@ -130,6 +130,33 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void factory_screen_uses_text_for_the_selected_thread_only() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 1L, false,
+                List.of(new FactoryRuntime.ThreadSnapshot(0, "lane-0", true, false, true,
+                                "mmcr:recipe_0", 1, 20, 1, "", false, ""),
+                        new FactoryRuntime.ThreadSnapshot(1, "lane-1", false, false, true,
+                                "mmcr:recipe_1", 2, 20, 1, "", false, "")),
+                "Factory", 0, null, List.of()));
+        ControllerScreenTextSnapshot.Line first = new ControllerScreenTextSnapshot.Line(
+                ControllerScreenTextScope.CONTROLLER, MMCR.id("factory_lane_0"), Component.literal("lane 0"));
+        ControllerScreenTextSnapshot.Line second = new ControllerScreenTextSnapshot.Line(
+                ControllerScreenTextScope.CONTROLLER, MMCR.id("factory_lane_1"), Component.literal("lane 1"));
+        ControllerScreenTextCache.replace(BlockPos.ZERO, "lane-0", 1L, List.of(first));
+        ControllerScreenTextCache.replace(BlockPos.ZERO, "lane-1", 1L, List.of(second));
+
+        assertThat(FactoryControllerScreen.controllerTextLines(menu))
+                .anyMatch(line -> line.text().equals(first.text()))
+                .noneMatch(line -> line.text().equals(second.text()));
+
+        menu.selectThread(1);
+
+        assertThat(FactoryControllerScreen.controllerTextLines(menu))
+                .anyMatch(line -> line.text().equals(second.text()))
+                .noneMatch(line -> line.text().equals(first.text()));
+    }
+
+    @Test
     void factory_controller_viewport_wraps_long_external_text() throws Exception {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         ControllerScreenTextCache.replace(BlockPos.ZERO, 1L,

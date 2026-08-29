@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
@@ -34,6 +35,7 @@ import net.minecraft.world.level.ChunkPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -50,6 +52,7 @@ public final class MachineControllerRuntime {
     private final CraftingRuntime craftingRuntime;
     private final FactoryRuntime factoryRuntime;
     private final ControllerScreenTextState screenText = new ControllerScreenTextState();
+    private final Map<String, ControllerScreenTextState> recipeScreenTexts = new LinkedHashMap<>();
     private Map<BlockPos, DataStorage> dataStorages = Map.of();
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
     private ControllerRuntimeSnapshot publishedSnapshot;
@@ -123,12 +126,21 @@ public final class MachineControllerRuntime {
         return behaviorContext(new CapabilitySnapshot(components.capabilities()));
     }
 
+    public MachineBehaviorContext behaviorContext(ControllerScreenText recipeScreenText) {
+        return behaviorContext(new CapabilitySnapshot(components.capabilities()), recipeScreenText);
+    }
+
     public TickBehaviorContext tickBehaviorContext() {
         CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(components.capabilities());
         return new TickBehaviorContext(behaviorContext(capabilitySnapshot), capabilitySnapshot);
     }
 
     private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot) {
+        return behaviorContext(capabilitySnapshot, screenText);
+    }
+
+    private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot,
+                                                   ControllerScreenText screenText) {
         StructureSnapshot snapshot = structure.snapshot();
         Machine machine = snapshot.machine() == null ? snapshot.configuredMachine() : snapshot.machine();
         if (machine == null) throw new IllegalStateException("Machine behavior context requires a configured machine");
@@ -139,13 +151,30 @@ public final class MachineControllerRuntime {
                 screenText, dataStorages, new MachineIoView(capabilitySnapshot));
     }
 
+    public ControllerScreenTextState recipeScreenText(String laneId) {
+        Objects.requireNonNull(laneId, "laneId");
+        return recipeScreenTexts.computeIfAbsent(laneId, ignored -> new ControllerScreenTextState());
+    }
+
+    public void clearRecipeScreenText(String laneId) {
+        ControllerScreenTextState state = recipeScreenTexts.get(laneId);
+        if (state == null) return;
+        state.clear(ControllerScreenTextScope.CONTROLLER);
+        state.clear(ControllerScreenTextScope.OPERATION);
+    }
+
     public void clearOperationText() {
         screenText.clear(ControllerScreenTextScope.OPERATION);
+        recipeScreenTexts.values().forEach(state -> state.clear(ControllerScreenTextScope.OPERATION));
     }
 
     public void clearAllText() {
         screenText.clear(ControllerScreenTextScope.CONTROLLER);
         screenText.clear(ControllerScreenTextScope.OPERATION);
+        recipeScreenTexts.values().forEach(state -> {
+            state.clear(ControllerScreenTextScope.CONTROLLER);
+            state.clear(ControllerScreenTextScope.OPERATION);
+        });
     }
 
     ControllerRuntimeSnapshot currentSnapshot() {

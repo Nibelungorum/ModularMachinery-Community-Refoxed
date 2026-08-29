@@ -6,7 +6,7 @@ MMCREvents.server(event => {
         .pattern("XXX", "AAA", "XXX")
         .pattern("XXX", "A A", "X X")
         .pattern("XXX", "ACA", "XXX")
-        .set('X', api.block('minecraft:green_terracotta')) // Use a level slot to match the corresponding level block.
+        .set('X', api.block('minecraft:green_terracotta'))
         .set('A', api.anyOf(
             api.anyOfItemInput(),
             api.anyOfItemOutput(),
@@ -16,8 +16,5 @@ MMCREvents.server(event => {
         ))
         .set('D', api.block('minecraft:reinforced_deepslate'))
         .controller('C')
-        // Build the structure.
         .build()
-
-    // See server_scripts/recipe/A_Level_Machine.js for the recipe definitions.
 })

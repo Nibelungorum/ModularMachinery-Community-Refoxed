@@ -57,6 +57,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
@@ -70,6 +71,7 @@ import cn.howxu.mmcr.internal.recipe.FactoryRecipeScheduler;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -180,6 +182,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long pendingSharedTickToken;
     private boolean syncedRuntimeActive;
     private long lastSentControllerScreenTextRevision = -1L;
+    private final Map<String, Long> lastSentRecipeScreenTextRevisions = new LinkedHashMap<>();
     private boolean runtimeStateBroadcastPending;
     private boolean factoryMenuSyncPending;
     private Map<UUID, Long> previewReceivers = new LinkedHashMap<>();
@@ -217,6 +220,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineBehaviorContext behaviorContext() {
         return runtime.behaviorContext();
+    }
+
+    public MachineBehaviorContext behaviorContext(ControllerScreenText screenText) {
+        return runtime.behaviorContext(screenText);
+    }
+
+    public ControllerScreenTextState recipeScreenText(String laneId) {
+        return runtime.recipeScreenText(laneId);
+    }
+
+    public void clearRecipeScreenText(String laneId) {
+        runtime.clearRecipeScreenText(laneId);
     }
 
     int snapshotBuildCountForTesting() {
@@ -827,6 +842,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             player.connection.send(new ClientboundCustomPayloadPacket(
                     new PktFactoryControllerStatePayload(getBlockPos(), SYNC_RUNTIME.factoryState(state))));
             sendControllerScreenTextOnMenuOpen(player);
+            sendFactoryControllerScreenText(player);
         }
     }
 
@@ -836,6 +852,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
         player.connection.send(new ClientboundCustomPayloadPacket(new PktControllerScreenTextPayload(
                 getBlockPos(), snapshot.revision(), snapshot.lines())));
         lastSentControllerScreenTextRevision = snapshot.revision();
+        if (player.containerMenu instanceof FactoryControllerMenu menu
+                && menu.controllerPos().equals(getBlockPos())) {
+            sendFactoryControllerScreenText(player);
+        }
+    }
+
+    private void sendFactoryControllerScreenText(ServerPlayer player) {
+        for (Map.Entry<String, ControllerScreenTextSnapshot> entry
+                : runtime.factoryRuntime().screenTextSnapshots().entrySet()) {
+            ControllerScreenTextSnapshot laneSnapshot = entry.getValue();
+            player.connection.send(new ClientboundCustomPayloadPacket(new PktControllerScreenTextPayload(
+                    getBlockPos(), entry.getKey(), laneSnapshot.revision(), laneSnapshot.lines())));
+            lastSentRecipeScreenTextRevisions.put(entry.getKey(), laneSnapshot.revision());
+        }
     }
 
     private void sendControllerScreenTextOnMenuOpen(ServerPlayer player) {
@@ -2712,20 +2742,47 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void syncOpenControllerScreenText() {
         if (!(level instanceof ServerLevel serverLevel)) return;
         ControllerScreenTextSnapshot snapshot = runtime.screenText().snapshot();
-        if (snapshot.revision() == lastSentControllerScreenTextRevision) return;
-        PktControllerScreenTextPayload packet = new PktControllerScreenTextPayload(
-                getBlockPos(), snapshot.revision(), snapshot.lines());
-        boolean sent = false;
-        for (ServerPlayer player : serverLevel.players()) {
-            if ((player.containerMenu instanceof MachineControllerMenu menu
-                    && menu.controllerPos().equals(getBlockPos()))
-                    || (player.containerMenu instanceof FactoryControllerMenu factoryMenu
-                    && factoryMenu.controllerPos().equals(getBlockPos()))) {
-                player.connection.send(new ClientboundCustomPayloadPacket(packet));
-                sent = true;
+        Map<String, ControllerScreenTextSnapshot> laneSnapshots = runtime.factoryRuntime().screenTextSnapshots();
+        lastSentRecipeScreenTextRevisions.keySet().retainAll(laneSnapshots.keySet());
+        boolean globalChanged = snapshot.revision() != lastSentControllerScreenTextRevision;
+        Map<String, ControllerScreenTextSnapshot> changedLanes = new LinkedHashMap<>();
+        for (Map.Entry<String, ControllerScreenTextSnapshot> entry : laneSnapshots.entrySet()) {
+            if (!Objects.equals(lastSentRecipeScreenTextRevisions.get(entry.getKey()), entry.getValue().revision())) {
+                changedLanes.put(entry.getKey(), entry.getValue());
             }
         }
-        if (sent) lastSentControllerScreenTextRevision = snapshot.revision();
+        if (!globalChanged && changedLanes.isEmpty()) return;
+        PktControllerScreenTextPayload globalPacket = new PktControllerScreenTextPayload(
+                getBlockPos(), snapshot.revision(), snapshot.lines());
+        Map<String, PktControllerScreenTextPayload> lanePackets = new LinkedHashMap<>();
+        for (Map.Entry<String, ControllerScreenTextSnapshot> entry : changedLanes.entrySet()) {
+            ControllerScreenTextSnapshot laneSnapshot = entry.getValue();
+            lanePackets.put(entry.getKey(), new PktControllerScreenTextPayload(
+                    getBlockPos(), entry.getKey(), laneSnapshot.revision(), laneSnapshot.lines()));
+        }
+        boolean globalSent = false;
+        Set<String> sentLanes = new HashSet<>();
+        for (ServerPlayer player : serverLevel.players()) {
+            boolean ordinaryMenu = player.containerMenu instanceof MachineControllerMenu menu
+                    && menu.controllerPos().equals(getBlockPos());
+            boolean factoryMenu = player.containerMenu instanceof FactoryControllerMenu factory
+                    && factory.controllerPos().equals(getBlockPos());
+            if (!ordinaryMenu && !factoryMenu) continue;
+            if (globalChanged) {
+                player.connection.send(new ClientboundCustomPayloadPacket(globalPacket));
+                globalSent = true;
+            }
+            if (factoryMenu) {
+                for (Map.Entry<String, PktControllerScreenTextPayload> entry : lanePackets.entrySet()) {
+                    player.connection.send(new ClientboundCustomPayloadPacket(entry.getValue()));
+                    sentLanes.add(entry.getKey());
+                }
+            }
+        }
+        if (globalSent) lastSentControllerScreenTextRevision = snapshot.revision();
+        for (String laneId : sentLanes) {
+            lastSentRecipeScreenTextRevisions.put(laneId, changedLanes.get(laneId).revision());
+        }
     }
 
     private void broadcastStateIfChanged() {

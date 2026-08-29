@@ -120,6 +120,7 @@ public abstract class RecipeThread {
         }
         CraftingStatus state = runtime.start(next, requestedParallelism);
         if (!state.isCrafting()) {
+            controller.clearRecipeScreenText(laneId());
             onStartFailed(searchContextKeyForStart());
             return false;
         }
@@ -152,6 +153,7 @@ public abstract class RecipeThread {
                     if (!isPendingStart(token, next) || runtime.active()) return 0L;
                     CraftingStatus state = runtime.start(next, requested);
                     if (!state.isCrafting()) {
+                        controller.clearRecipeScreenText(laneId());
                         RecipeSearchContextKey failureKey = pendingStartSearchContextKey;
                         clearPendingStart(token, next);
                         onStartFailed(failureKey);
@@ -356,11 +358,13 @@ public abstract class RecipeThread {
             } else {
                 onRecipeFailure();
             }
+            controller.clearRecipeScreenText(laneId());
         }
     }
 
     public void invalidate() {
         runtime.invalidate();
+        controller.clearRecipeScreenText(laneId());
         startPending = false;
         pendingStartRecipe = null;
         pendingStartDomain = null;
@@ -379,6 +383,7 @@ public abstract class RecipeThread {
         if (runtime.active()) return;
         if (startPending) clearPendingStart(pendingStartToken, pendingStartRecipe);
         clearPendingTick();
+        controller.clearRecipeScreenText(laneId());
     }
 
     protected void onStartSearchFailed(@Nullable ExecutionStatus failure) {

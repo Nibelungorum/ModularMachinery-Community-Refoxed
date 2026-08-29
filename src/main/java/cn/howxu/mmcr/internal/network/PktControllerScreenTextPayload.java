@@ -25,7 +25,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktControllerScreenTextPayload(BlockPos controllerPos, long revision,
+public record PktControllerScreenTextPayload(BlockPos controllerPos, String laneId, long revision,
                                               List<ControllerScreenTextSnapshot.Line> lines)
         implements CustomPacketPayload {
     public static final int MAX_LINES = ControllerScreenTextState.MAX_LINES;
@@ -36,8 +36,15 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, long revisi
     public static final StreamCodec<RegistryFriendlyByteBuf, PktControllerScreenTextPayload> STREAM_CODEC =
             StreamCodec.of(PktControllerScreenTextPayload::write, PktControllerScreenTextPayload::read);
 
+    public PktControllerScreenTextPayload(BlockPos controllerPos, long revision,
+                                          List<ControllerScreenTextSnapshot.Line> lines) {
+        this(controllerPos, "", revision, lines);
+    }
+
     public PktControllerScreenTextPayload {
         controllerPos = Objects.requireNonNull(controllerPos, "controllerPos").immutable();
+        laneId = Objects.requireNonNull(laneId, "laneId");
+        if (laneId.length() > MAX_LINE_ID_LENGTH) throw new IllegalArgumentException("laneId is too long");
         if (revision < 0L) throw new IllegalArgumentException("revision must not be negative");
         lines = List.copyOf(lines == null ? List.of() : lines);
         validateLines(lines);
@@ -49,11 +56,12 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, long revisi
     }
 
     public void handle(IPayloadContext context) {
-        context.enqueueWork(() -> ControllerScreenTextCache.replace(controllerPos, revision, lines));
+        context.enqueueWork(() -> ControllerScreenTextCache.replace(controllerPos, laneId, revision, lines));
     }
 
     private static void write(RegistryFriendlyByteBuf buffer, PktControllerScreenTextPayload payload) {
         buffer.writeBlockPos(payload.controllerPos);
+        buffer.writeUtf(payload.laneId, MAX_LINE_ID_LENGTH);
         buffer.writeLong(payload.revision);
         buffer.writeVarInt(payload.lines.size());
         int textStart = buffer.writerIndex();
@@ -69,6 +77,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, long revisi
 
     private static PktControllerScreenTextPayload read(RegistryFriendlyByteBuf buffer) {
         BlockPos controllerPos = buffer.readBlockPos();
+        String laneId = buffer.readUtf(MAX_LINE_ID_LENGTH);
         long revision = buffer.readLong();
         if (revision < 0L) throw new IllegalArgumentException("revision must not be negative");
 
@@ -96,7 +105,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, long revisi
             }
             lines.add(new ControllerScreenTextSnapshot.Line(scope, lineId, text));
         }
-        return new PktControllerScreenTextPayload(controllerPos, revision, lines);
+        return new PktControllerScreenTextPayload(controllerPos, laneId, revision, lines);
     }
 
     private static void validateLines(List<ControllerScreenTextSnapshot.Line> lines) {

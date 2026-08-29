@@ -252,6 +252,27 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void factory_menu_sync_sends_recipe_text_with_its_lane_id() throws Exception {
+        MachineControllerBlockEntity controller = factoryTextController(MMCR.id("controller_text_factory_lane"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.factoryRuntime().ensureBaseLane(controller);
+        runtime.recipeScreenText("base").append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("factory_lane_line"), Component.literal("factory lane"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer factory = player(level, controller.getBlockPos());
+        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller);
+        setPlayers(level, List.of(factory));
+
+        invokeSyncOpenText(controller);
+
+        assertThat(textPackets(factory)).anySatisfy(packet -> {
+            assertThat(packet.laneId()).isEqualTo("base");
+            assertThat(packet.lines()).singleElement()
+                    .satisfies(line -> assertThat(line.text().getString()).isEqualTo("factory lane"));
+        });
+    }
+
+    @Test
     void empty_text_snapshot_reaches_matching_menus_after_external_text_is_cleared() throws Exception {
         MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_clear"));
         MachineControllerRuntime runtime = runtimeOf(controller);

@@ -115,6 +115,18 @@ class ControllerScreenTextCacheTest {
     }
 
     @Test
+    void lane_snapshots_are_isolated_from_each_other() {
+        ControllerScreenTextSnapshot.Line first = line("test:first", "first");
+        ControllerScreenTextSnapshot.Line second = line("test:second", "second");
+
+        ControllerScreenTextCache.replace(POS, "lane-0", 1L, List.of(first));
+        ControllerScreenTextCache.replace(POS, "lane-1", 1L, List.of(second));
+
+        assertThat(ControllerScreenTextCache.linesAt(POS, "lane-0")).containsExactly(first);
+        assertThat(ControllerScreenTextCache.linesAt(POS, "lane-1")).containsExactly(second);
+    }
+
+    @Test
     void listeners_run_only_for_accepted_newer_replacements() {
         AtomicInteger invocations = new AtomicInteger();
         ControllerScreenTextCache.addInvalidationListener(invocations::incrementAndGet);

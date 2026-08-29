@@ -36,9 +36,14 @@
     "machine.mmcr_kubejs.gzr": "Four Mete Regret Building Site",
 
     "level.mmcr_kubejs.thermal_smelting_coil": "Coil Level",
-    
+
     "mmcr.smart_interface.type.kubejs_conversation": "Conversion Rate",
     "mmcr.smart_interface.type.kubejs_conversation.description": "[0,1] higher increases energy and output",
     "mmcr.smart_interface.type.kubejs_mode": "Mode",
-    "mmcr.smart_interface.type.kubejs_mode.description": "[1,2,3] Based on the recipe"
+    "mmcr.smart_interface.type.kubejs_mode.description": "[1,2,3] Based on the recipe",
+
+    "gui.mmcr_kubejs.before_line": "§a------------",
+    "gui.mmcr_kubejs.in_line": "§a  Demo Tick System",
+    "gui.mmcr_kubejs.after_line": "§a------------",
+    "gui.mmcr_kubejs.display_when_idle": "Demo Tick System: Idle"
 }

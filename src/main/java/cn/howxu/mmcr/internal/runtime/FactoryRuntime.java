@@ -313,16 +313,27 @@ public final class FactoryRuntime {
             FactoryRecipeThread lane = lanes.get(index);
             CraftingStateSnapshot state = lane.runtime().snapshot();
             Identifier lockedRecipe = recipeLocks.get(lane);
-            snapshots.add(new ThreadSnapshot(index, lane.isBaseThread(), lane.isCoreThread(), lane.runtime().active(),
+            snapshots.add(new ThreadSnapshot(index, lane.laneId(), lane.isBaseThread(), lane.isCoreThread(), lane.runtime().active(),
                     state.recipeId() == null ? "" : state.recipeId().toString(), lane.runtime().tickCount(),
                     lane.runtime().totalTick(), lane.runtime().active() ? lane.runtime().parallelism() : 1,
                     lane.runtime().failureUnloc(), lockedRecipe != null,
                     lockedRecipe == null ? "" : lockedRecipe.toString()));
         }
         while (snapshots.size() < laneLimit) {
-            snapshots.add(new ThreadSnapshot(snapshots.size(), false, false, false, "", 0, 0, 1, "", false, ""));
+            int index = snapshots.size();
+            snapshots.add(new ThreadSnapshot(index, "idle-" + index, false, false, false,
+                    "", 0, 0, 1, "", false, ""));
         }
         return List.copyOf(snapshots);
+    }
+
+    public Map<String, ControllerScreenTextSnapshot> screenTextSnapshots() {
+        if (controller == null) return Map.of();
+        Map<String, ControllerScreenTextSnapshot> snapshots = new LinkedHashMap<>();
+        for (FactoryRecipeThread lane : lanes) {
+            snapshots.put(lane.laneId(), controller.recipeScreenText(lane.laneId()).snapshot());
+        }
+        return Map.copyOf(snapshots);
     }
 
     public FactorySnapshot snapshot() {
@@ -757,17 +768,25 @@ public final class FactoryRuntime {
     }
 
     /** Immutable runtime-owned lane snapshot. */
-    public record ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
-                                  String recipeId, int tick, int totalTick, long parallelism,
+    public record ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,
+                                 String recipeId, int tick, int totalTick, long parallelism,
                                  String lastFailureUnloc, boolean locked, String lockedRecipeId) {
+        public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
+                              String recipeId, int tick, int totalTick, long parallelism,
+                              String lastFailureUnloc, boolean locked, String lockedRecipeId) {
+            this(index, index == 0 ? "base" : "factory-" + index, baseThread, coreThread, active,
+                    recipeId, tick, totalTick, parallelism, lastFailureUnloc, locked, lockedRecipeId);
+        }
+
         public ThreadSnapshot {
+            laneId = laneId == null ? "" : laneId;
             recipeId = recipeId == null ? "" : recipeId;
             lastFailureUnloc = lastFailureUnloc == null ? "" : lastFailureUnloc;
             lockedRecipeId = locked ? lockedRecipeId == null ? "" : lockedRecipeId : "";
         }
 
         public static ThreadSnapshot idleBase() {
-            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1L, "", false, "");
+            return new ThreadSnapshot(0, "base", true, false, false, "", 0, 0, 1L, "", false, "");
         }
     }
 }

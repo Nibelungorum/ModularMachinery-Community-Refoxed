@@ -35,7 +35,7 @@ class PktControllerScreenTextPayloadTest {
     @Test
     void payload_round_trips_translatable_components_and_preserves_scope_id_and_order() {
         PktControllerScreenTextPayload payload = new PktControllerScreenTextPayload(
-                new BlockPos(3, 4, 5), 7L, List.of(
+                new BlockPos(3, 4, 5), "factory-0", 7L, List.of(
                 line(ControllerScreenTextScope.CONTROLLER, "addon:status",
                         Component.translatable("example.progress", Component.literal("75%"))),
                 line(ControllerScreenTextScope.OPERATION, "addon:operation", Component.literal("running"))));
@@ -46,6 +46,7 @@ class PktControllerScreenTextPayloadTest {
         PktControllerScreenTextPayload decoded = PktControllerScreenTextPayload.STREAM_CODEC.decode(buffer);
 
         assertThat(decoded.controllerPos()).isEqualTo(payload.controllerPos());
+        assertThat(decoded.laneId()).isEqualTo("factory-0");
         assertThat(decoded.revision()).isEqualTo(payload.revision());
         assertThat(decoded.lines()).hasSize(2);
         assertThat(decoded.lines().get(0).scope()).isEqualTo(ControllerScreenTextScope.CONTROLLER);
@@ -122,6 +123,7 @@ class PktControllerScreenTextPayloadTest {
     void decoder_rejects_negative_revision() {
         RegistryFriendlyByteBuf buffer = buffer();
         buffer.writeBlockPos(BlockPos.ZERO);
+        buffer.writeUtf("");
         buffer.writeLong(-1L);
 
         assertThatThrownBy(() -> PktControllerScreenTextPayload.STREAM_CODEC.decode(buffer))
@@ -162,6 +164,7 @@ class PktControllerScreenTextPayloadTest {
 
     private static void writeHeader(RegistryFriendlyByteBuf buffer, int lineCount) {
         buffer.writeBlockPos(BlockPos.ZERO);
+        buffer.writeUtf("");
         buffer.writeLong(0L);
         buffer.writeVarInt(lineCount);
     }

@@ -127,6 +127,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
 
     private static void writeThread(RegistryFriendlyByteBuf buf, FactoryRuntime.ThreadSnapshot thread) {
         buf.writeVarInt(thread.index());
+        buf.writeUtf(thread.laneId(), MAX_STRING_LENGTH);
         buf.writeBoolean(thread.baseThread());
         buf.writeBoolean(thread.coreThread());
         buf.writeBoolean(thread.active());
@@ -141,6 +142,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
 
     private static FactoryRuntime.ThreadSnapshot readThread(RegistryFriendlyByteBuf buf) {
         int index = buf.readVarInt();
+        String laneId = buf.readUtf(MAX_STRING_LENGTH);
         boolean baseThread = buf.readBoolean();
         boolean coreThread = buf.readBoolean();
         boolean active = buf.readBoolean();
@@ -149,7 +151,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         int totalTick = buf.readVarInt();
         long parallelism = buf.readLong();
         validateThread(active, tick, totalTick, parallelism);
-        return new FactoryRuntime.ThreadSnapshot(index, baseThread, coreThread, active, recipeId, tick,
+        return new FactoryRuntime.ThreadSnapshot(index, laneId, baseThread, coreThread, active, recipeId, tick,
                 totalTick, parallelism, buf.readUtf(MAX_STRING_LENGTH), buf.readBoolean(),
                 buf.readUtf(MAX_STRING_LENGTH));
     }
@@ -202,6 +204,9 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         for (FactoryRuntime.ThreadSnapshot thread : state.presentationLanes()) {
             if (thread == null || thread.index() < 0 || thread.index() >= state.laneLimit() || !indexes.add(thread.index())) {
                 throw new IllegalArgumentException("Invalid factory thread snapshot index");
+            }
+            if (thread.laneId().isBlank() || thread.laneId().length() > MAX_STRING_LENGTH) {
+                throw new IllegalArgumentException("Invalid factory thread lane ID");
             }
             validateThread(thread.active(), thread.tick(), thread.totalTick(), thread.parallelism());
         }

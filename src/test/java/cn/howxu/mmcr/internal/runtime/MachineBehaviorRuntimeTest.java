@@ -136,6 +136,41 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
+    void recipe_callbacks_use_the_assigned_lane_screen_text() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input, output);
+        ControllerScreenTextState laneText = new ControllerScreenTextState();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> context.machineContext().screenText().append(
+                        ControllerScreenTextScope.CONTROLLER, MMCR.id("lane_progress"), Component.literal("start")))
+                .recipeTick(context -> {
+                    context.machineContext().screenText().replace(MMCR.id("lane_progress"),
+                            Component.literal("tick"));
+                    context.machineContext().screenText().append(
+                            ControllerScreenTextScope.OPERATION, MMCR.id("lane_operation"), Component.literal("running"));
+                })
+                .beforeFinish(context -> {
+                    context.machineContext().screenText().append(
+                            ControllerScreenTextScope.CONTROLLER, MMCR.id("lane_finished"), Component.literal("finish"));
+                    context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
+                }).build()));
+        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.setScreenText(laneText);
+
+        assertThat(runtime.start(recipe("lane_text", input(Items.IRON_INGOT)), 1).isCrafting()).isTrue();
+        runtime.tick();
+        runtime.finish();
+
+        assertThat(laneText.snapshot().lines()).extracting(ControllerScreenTextSnapshot.Line::text)
+                .extracting(Component::getString)
+                .containsExactly("tick", "running", "finish");
+        assertThat(((ControllerScreenTextState) controller.behaviorContext().screenText()).snapshot().lines())
+                .isEmpty();
+    }
+
+    @Test
     void recipe_start_callback_freezes_the_effective_definition_for_the_lifecycle() {
         AtomicInteger starts = new AtomicInteger();
         AtomicInteger ticks = new AtomicInteger();

@@ -18,21 +18,28 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class ControllerScreenTextCache {
     private static final Object LOCK = new Object();
-    private static final Map<BlockPos, Entry> SNAPSHOTS = new HashMap<>();
+    private static final Map<BlockPos, Map<String, Entry>> SNAPSHOTS = new HashMap<>();
     private static final List<Runnable> INVALIDATION_LISTENERS = new CopyOnWriteArrayList<>();
 
     private ControllerScreenTextCache() {
     }
 
     public static boolean replace(BlockPos pos, long revision, List<ControllerScreenTextSnapshot.Line> lines) {
+        return replace(pos, "", revision, lines);
+    }
+
+    public static boolean replace(BlockPos pos, String laneId, long revision,
+                                  List<ControllerScreenTextSnapshot.Line> lines) {
         BlockPos key = Objects.requireNonNull(pos, "pos").immutable();
+        String snapshotKey = Objects.requireNonNull(laneId, "laneId");
         if (revision < 0L) throw new IllegalArgumentException("revision must not be negative");
         List<ControllerScreenTextSnapshot.Line> replacement = copyLines(lines);
 
         synchronized (LOCK) {
-            Entry current = SNAPSHOTS.get(key);
+            Map<String, Entry> snapshots = SNAPSHOTS.computeIfAbsent(key, ignored -> new HashMap<>());
+            Entry current = snapshots.get(snapshotKey);
             if (current != null && revision <= current.revision()) return false;
-            SNAPSHOTS.put(key, new Entry(revision, replacement));
+            snapshots.put(snapshotKey, new Entry(revision, replacement));
         }
 
         notifyListeners();
@@ -40,12 +47,25 @@ public final class ControllerScreenTextCache {
     }
 
     public static List<ControllerScreenTextSnapshot.Line> linesAt(BlockPos pos) {
+        return linesAt(pos, "");
+    }
+
+    public static List<ControllerScreenTextSnapshot.Line> linesAt(BlockPos pos, String laneId) {
         BlockPos key = Objects.requireNonNull(pos, "pos").immutable();
-        Entry entry;
+        String snapshotKey = Objects.requireNonNull(laneId, "laneId");
+        Entry controllerEntry;
+        Entry laneEntry;
         synchronized (LOCK) {
-            entry = SNAPSHOTS.get(key);
+            Map<String, Entry> snapshots = SNAPSHOTS.get(key);
+            controllerEntry = snapshots == null ? null : snapshots.get("");
+            laneEntry = snapshotKey.isEmpty() || snapshots == null ? null : snapshots.get(snapshotKey);
         }
-        return entry == null ? List.of() : copyLines(entry.lines());
+        if (controllerEntry == null && laneEntry == null) return List.of();
+        if (laneEntry == null) return copyLines(controllerEntry.lines());
+        List<ControllerScreenTextSnapshot.Line> lines = new ArrayList<>();
+        if (controllerEntry != null) lines.addAll(controllerEntry.lines());
+        lines.addAll(laneEntry.lines());
+        return List.copyOf(lines);
     }
 
     public static void clear(BlockPos pos) {

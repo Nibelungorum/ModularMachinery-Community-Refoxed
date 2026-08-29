@@ -78,6 +78,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         this.threadName = threadName == null ? "" : threadName;
         this.laneId = baseThread ? "base" : coreThread ? "core-" + this.threadName
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
+        this.runtime.setScreenText(controller.recipeScreenText(this.laneId));
     }
 
     public static FactoryRecipeThread simple(MachineControllerBlockEntity controller) {

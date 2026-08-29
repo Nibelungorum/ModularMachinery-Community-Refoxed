@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.HolderLookup;
@@ -43,6 +44,7 @@ import java.util.Set;
 public final class CraftingRuntime {
     private final MachineControllerBlockEntity controller;
     private final ComponentRuntime components;
+    private @Nullable ControllerScreenText screenText;
     private @Nullable ActiveMachineRecipe activeRecipe;
     private @Nullable CraftingPlan startPlan;
     private @Nullable CraftingPlan finishPlan;
@@ -67,6 +69,10 @@ public final class CraftingRuntime {
         this.components = components;
     }
 
+    public void setScreenText(@Nullable ControllerScreenText screenText) {
+        this.screenText = screenText;
+    }
+
     public CraftingStatus start(MachineRecipe recipe, long requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0) {
             return fail("invalid_start");
@@ -82,7 +88,7 @@ public final class CraftingRuntime {
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
         List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers(runtime));
         List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers(runtime));
-        MachineBehaviorContext machineContext = controller.behaviorContext();
+        MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, duration(recipe, runtime), requirements, outputs);
         try {
@@ -90,6 +96,8 @@ public final class CraftingRuntime {
         } catch (RuntimeException exception) {
             logCallbackFailure("beforeStart", runtime, recipe, exception);
             return fail("behavior_before_start");
+        } finally {
+            flushScreenTextReplacements(machineContext.screenText());
         }
         if (startContext.cancelled()) {
             failure = null;
@@ -129,12 +137,15 @@ public final class CraftingRuntime {
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return waiting(failure("recipe_behavior"));
+        MachineBehaviorContext machineContext = behaviorContext();
         try {
-            behavior.recipeTick().accept(new RecipeTickContext(controller.behaviorContext(), activeRecipe.getRecipe(),
+            behavior.recipeTick().accept(new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                     activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
                     effectiveRequirements(), effectiveOutputs()));
         } catch (RuntimeException exception) {
             logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
+        } finally {
+            flushScreenTextReplacements(machineContext.screenText());
         }
         CraftingContext context = context(runtime);
         PlanningResult result = context.planInputs(effectiveRequirements(), activeRecipe.getParallelism(),
@@ -167,7 +178,8 @@ public final class CraftingRuntime {
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return finishBlocked(failure("recipe_behavior"));
         CraftingContext context = context(runtime);
-        RecipeFinishContext finishContext = new RecipeFinishContext(controller.behaviorContext(),
+        MachineBehaviorContext machineContext = behaviorContext();
+        RecipeFinishContext finishContext = new RecipeFinishContext(machineContext,
                 activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(),
                 effectiveOutputs());
         try {
@@ -175,6 +187,8 @@ public final class CraftingRuntime {
         } catch (RuntimeException exception) {
             logCallbackFailure("beforeFinish", runtime, activeRecipe.getRecipe(), exception);
             return finishBlocked(failure("behavior_before_finish"));
+        } finally {
+            flushScreenTextReplacements(machineContext.screenText());
         }
         if (finishContext.cancelled()) return finishBlocked(failure("behavior_before_finish_cancelled"));
         if (finishContext.outputsDiscarded()) {
@@ -480,6 +494,14 @@ public final class CraftingRuntime {
 
     private CraftingStatus fail(String reason) {
         return fail(failure(reason));
+    }
+
+    private MachineBehaviorContext behaviorContext() {
+        return screenText == null ? controller.behaviorContext() : controller.behaviorContext(screenText);
+    }
+
+    private static void flushScreenTextReplacements(ControllerScreenText screenText) {
+        if (screenText instanceof ControllerScreenTextState state) state.flushReplacements();
     }
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
