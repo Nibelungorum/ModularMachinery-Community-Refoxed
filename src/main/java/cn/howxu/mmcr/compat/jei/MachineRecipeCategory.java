@@ -372,13 +372,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static String itemQuantityText(int count) {
-        return count > 1 ? ReadableNumber.formatCompact(count) : "";
+        return count > 1 ? ReadableNumber.formatForSlot(count, 0, "") : "";
     }
 
     static String fluidQuantityText(int amount) {
         return amount <= 10
-                ? ReadableNumber.formatExact(amount) + "mB"
-                : fluidBucketText(amount, amount >= FLUID_SLOT_CAPACITY ? 2 : 3);
+                ? ReadableNumber.formatForSlot(amount, 0, "mB")
+                : ReadableNumber.formatForSlot(amount, 3, "B");
     }
 
     static List<Component> fluidTooltip(FluidStack fluid, Item.TooltipContext context,

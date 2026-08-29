@@ -83,12 +83,15 @@ class MachineRecipeDisplayTest {
     @Test
     void itemQuantityTextIsOnlyShownAboveOne() {
         assertThat(MachineRecipeCategory.itemQuantityText(1)).isEmpty();
-        assertThat(MachineRecipeCategory.itemQuantityText(1_234)).isEqualTo("1.23k");
+        assertThat(MachineRecipeCategory.itemQuantityText(1_234)).isEqualTo("1.23K");
+        assertThat(MachineRecipeCategory.itemQuantityText(114_514)).isEqualTo("114K");
     }
 
     @Test
     void fluidQuantityTextIsOnlyShownAboveOneBucket() {
-        assertThat(MachineRecipeCategory.fluidQuantityText(1_000)).isEqualTo("1B");
+        assertThat(MachineRecipeCategory.fluidQuantityText(1_000)).isEqualTo("1.00B");
+        assertThat(MachineRecipeCategory.fluidQuantityText(1_001)).isEqualTo("1.00B");
+        assertThat(MachineRecipeCategory.fluidQuantityText(140)).isEqualTo("0.14B");
         assertThat(MachineRecipeCategory.fluidQuantityText(1_234)).isEqualTo("1.23B");
     }
 

@@ -47,4 +47,8 @@ public final class ReadableNumber {
     public static String formatCompact(BigDecimal value) {
         return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatCompact(value);
     }
+
+    public static String formatForSlot(long value, int scale, String unit) {
+        return cn.howxu.mmcr.api.publicapi.ReadableNumber.formatForSlot(value, scale, unit);
+    }
 }

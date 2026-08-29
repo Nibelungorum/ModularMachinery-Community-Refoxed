@@ -36,6 +36,34 @@ class ReadableNumberTest {
     }
 
     @Test
+    void formats_slot_quantities_with_at_most_five_characters() {
+        assertThat(ReadableNumber.formatForSlot(999, 0, "")).isEqualTo("999");
+        assertThat(ReadableNumber.formatForSlot(1_000, 0, "")).isEqualTo("1.00K");
+        assertThat(ReadableNumber.formatForSlot(1_234, 0, "")).isEqualTo("1.23K");
+        assertThat(ReadableNumber.formatForSlot(10_000, 0, "")).isEqualTo("10.0K");
+        assertThat(ReadableNumber.formatForSlot(114_514, 0, "")).isEqualTo("114K");
+        assertThat(ReadableNumber.formatForSlot(114_100, 0, "")).isEqualTo("114K");
+    }
+
+    @Test
+    void formats_scaled_slot_quantities_without_rounding() {
+        assertThat(ReadableNumber.formatForSlot(1, 0, "mB")).isEqualTo("1mB");
+        assertThat(ReadableNumber.formatForSlot(10, 0, "mB")).isEqualTo("10mB");
+        assertThat(ReadableNumber.formatForSlot(11, 3, "B")).isEqualTo("0.01B");
+        assertThat(ReadableNumber.formatForSlot(140, 3, "B")).isEqualTo("0.14B");
+        assertThat(ReadableNumber.formatForSlot(1_001, 3, "B")).isEqualTo("1.00B");
+        assertThat(ReadableNumber.formatForSlot(114_514, 3, "B")).isEqualTo("114B");
+    }
+
+    @Test
+    void slot_formatter_rejects_invalid_values() {
+        assertThatThrownBy(() -> ReadableNumber.formatForSlot(-1, 0, ""))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ReadableNumber.formatForSlot(1, -1, ""))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void compact_formatter_rejects_negative_values() {
         assertThatThrownBy(() -> ReadableNumber.formatCompact(-1))
                 .isInstanceOf(IllegalArgumentException.class);
