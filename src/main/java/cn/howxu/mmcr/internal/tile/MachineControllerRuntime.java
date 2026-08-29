@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -132,7 +133,14 @@ public final class MachineControllerRuntime {
 
     public TickBehaviorContext tickBehaviorContext() {
         CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(components.capabilities());
-        return new TickBehaviorContext(behaviorContext(capabilitySnapshot), capabilitySnapshot);
+        StructureSnapshot structureSnapshot = structure.snapshot();
+        Machine machine = structureSnapshot.machine() == null
+                ? structureSnapshot.configuredMachine() : structureSnapshot.machine();
+        int factoryThreadCount = machine == null || !machine.hasFactory()
+                ? 1 : controller.effectiveFactoryThreadLimit();
+        long parallelism = components.maxParallelism(machine);
+        return new TickBehaviorContext(behaviorContext(capabilitySnapshot), capabilitySnapshot,
+                factoryThreadCount, parallelism);
     }
 
     private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot) {
@@ -182,7 +190,8 @@ public final class MachineControllerRuntime {
         StructureSnapshot structureSnapshot = structure.snapshot();
         FactorySnapshot factorySnapshot = factoryRuntime.snapshot();
         Machine machine = structureSnapshot.machine() != null ? structureSnapshot.machine() : structureSnapshot.configuredMachine();
-        boolean factorySupported = machine != null && machine.hasFactory();
+        boolean recipeBehavior = machine != null && machine.behavior() instanceof RecipeBehavior;
+        boolean factorySupported = recipeBehavior && machine.hasFactory();
         boolean factoryControllerPresent = factorySupported && components.components().stream()
                 .anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
         int parallelControllerCount = (int) components.components().stream()

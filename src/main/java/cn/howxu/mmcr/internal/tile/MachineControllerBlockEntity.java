@@ -286,11 +286,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
             ExecutionStatus runtimeFailure = craftingRuntime.failure();
             lastFailureUnloc = runtimeFailure == null ? null : failureUnloc(runtimeFailure);
         }
-        int factoryActiveCount = factoryTickResult != null ? factoryTickResult.activeLaneCount()
+        boolean tickMachine = hasTickBehavior(structure);
+        int factoryActiveCount = tickMachine ? 0 : factoryTickResult != null ? factoryTickResult.activeLaneCount()
                 : activeFactoryLaneCount != null ? activeFactoryLaneCount : runtime.factoryRuntime().activeLaneCount();
         boolean activeState = craftingRuntime.active() || factoryActiveCount > 0;
-        boolean tickPaused = redstonePaused && hasTickBehavior(structure);
-        Identifier recipeId = craftingRuntime.recipe() == null ? null : craftingRuntime.recipe().id();
+        boolean tickPaused = redstonePaused && tickMachine;
+        Identifier recipeId = tickMachine || craftingRuntime.recipe() == null ? null : craftingRuntime.recipe().id();
         CraftingStatus status = !structure.formed()
                 ? CraftingStatus.MISSING_STRUCTURE
                 : !structure.structureAreaLoaded() ? CraftingStatus.CHUNK_UNLOADED
@@ -737,7 +738,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public @Nullable FactorySchedulerBlockEntity getFactoryController() {
         Machine configuredMachine = currentRuntimeSnapshot().structure().configuredMachine();
-        if (configuredMachine == null || !configuredMachine.hasFactory()) return null;
+        if (configuredMachine == null || !configuredMachine.hasFactory()
+                || configuredMachine.behavior() instanceof TickBehavior) return null;
         return factoryComponents().stream().findFirst().orElse(null);
     }
 
@@ -779,8 +781,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public int effectiveFactoryThreadLimit() {
-        Machine configuredMachine = runtime.currentStructureSnapshot().configuredMachine();
-        if (configuredMachine == null || !configuredMachine.hasFactory()) return 1;
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        if (machine == null || !machine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();
         int levelBonus = runtime.componentRuntime().foundLevels().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
@@ -788,11 +791,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
                 .sum();
         long extraThreads = Math.max(0L, (long) aggregatedThreads - 1L);
-        long effective = Math.max(1, configuredMachine.factoryThreadLimit()) + extraThreads + levelBonus;
+        long effective = Math.max(1, machine.factoryThreadLimit()) + extraThreads + levelBonus;
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
     }
 
     public FactoryRecipeScheduler factoryScheduler() {
+        if (hasTickBehavior(runtime.currentStructureSnapshot())) {
+            throw new IllegalStateException("Factory scheduler requested for tick machine");
+        }
         ensureFactoryRuntimeLoaded();
         if (factoryScheduler == null && !hasFactoryControllerCurrent()) {
             throw new IllegalStateException("Factory scheduler requested without a formed factory controller");
@@ -811,7 +817,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean hasFactoryControllerCurrent() {
         StructureSnapshot structure = runtime.currentStructureSnapshot();
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
-        if (machine == null || !machine.hasFactory()) return false;
+        if (machine == null || !machine.hasFactory() || machine.behavior() instanceof TickBehavior) return false;
         return runtime.components().stream()
                 .anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
     }
@@ -906,7 +912,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void invalidateFactoryCapacity() {
-        if (factoryComponents().isEmpty()) return;
+        if (factoryComponents().isEmpty() || hasTickBehavior(runtime.currentStructureSnapshot())) return;
         int threadLimit = effectiveFactoryThreadLimit();
         factoryScheduler().setThreadLimit(threadLimit);
         setChanged();
@@ -930,8 +936,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         ControllerRuntimeSnapshot tickState = currentRuntimeSnapshot();
-        boolean factoryController = isFactoryController(tickState);
-        int initialFactoryActiveLaneCount = runtime.factoryRuntime().activeLaneCount();
+        boolean tickMachine = hasTickBehavior(tickState.structure());
+        boolean factoryController = !tickMachine && isFactoryController(tickState);
+        int initialFactoryActiveLaneCount = factoryController ? runtime.factoryRuntime().activeLaneCount() : 0;
         boolean hadActiveWork = hasActiveRuntimeWork(null, initialFactoryActiveLaneCount);
         boolean hadActiveOperation = hasActiveOperation();
         boolean wasRedstonePaused = redstonePaused;
@@ -1016,8 +1023,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean hasActiveRuntimeWork(@Nullable FactoryTickResult factoryTickResult,
                                          int activeFactoryLaneCount) {
         return hasActiveBuildTask()
-                || runtime.craftingRuntime().active()
-                || (factoryTickResult == null ? activeFactoryLaneCount : factoryTickResult.activeLaneCount()) > 0
+                || !hasTickBehavior(runtime.currentStructureSnapshot()) && runtime.craftingRuntime().active()
+                || !hasTickBehavior(runtime.currentStructureSnapshot())
+                && (factoryTickResult == null ? activeFactoryLaneCount : factoryTickResult.activeLaneCount()) > 0
                 || hasTickBehavior(runtime.currentStructureSnapshot());
     }
 
@@ -1028,6 +1036,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean hasActiveOperation() {
+        if (hasTickBehavior(runtime.currentStructureSnapshot())) return false;
         return runtime.craftingRuntime().active() || runtime.factoryRuntime().activeLaneCount() > 0;
     }
 
@@ -2431,6 +2440,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private java.util.Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
             Machine candidate, BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+        if (candidate.behavior() instanceof TickBehavior) return java.util.Optional.empty();
         int count = countFactoryControllers(rotatedPattern, compiledPattern, facing);
         if (count == 0 || candidate.hasFactory()) return java.util.Optional.empty();
         return java.util.Optional.of(new PortRequirementSpec.Failure(

@@ -21,7 +21,9 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -32,7 +34,9 @@ import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -287,6 +291,86 @@ class MachineBehaviorRuntimeTest {
         assertThat(calls).hasValue(1);
         assertThat(controller.currentRuntimeSnapshot().crafting().recipeId()).isNull();
         assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isFalse();
+    }
+
+    @Test
+    void tick_context_exposes_effective_factory_threads_and_parallelism() {
+        Identifier machineId = MMCR.id("tick_context_components");
+        BlockPos factoryPos = new BlockPos(1, 0, 0);
+        BlockPos parallelPos = new BlockPos(2, 0, 0);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.STICK, 2));
+        ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, parallelPos,
+                ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
+        parallel.setCurrentParallelism(4);
+        AtomicInteger calls = new AtomicInteger();
+        BlockArray pattern = new BlockArray(Map.of(
+                factoryPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()),
+                parallelPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("parallel_controller_normal").get())));
+        Machine machine = new DynamicMachine(machineId, machineId.toString(), pattern,
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 8, true, true, 3, List.of(), MachineRole.NORMAL,
+                Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), TickBehavior.builder()
+                        .serverTick(context -> {
+                            calls.incrementAndGet();
+                            assertThat(context.factoryThreadCount()).isEqualTo(5);
+                            assertThat(context.parallelism()).isEqualTo(4L);
+                        }).build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, parallel);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, factoryPos, factoryPos, (String) null),
+                new ProcessingComponent(null, parallel, parallelPos, parallelPos, (String) null)));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        assertThat(scheduler.threadCount()).isEqualTo(3);
+        assertThat(controller.factorySchedulerThreadCount()).isEqualTo(3);
+        assertThat(controller.structureSnapshot().machine().factoryThreadLimit()).isEqualTo(3);
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(calls).hasValue(1);
+        assertThat(controller.runtimeSnapshot().factory().active()).isFalse();
+    }
+
+    @Test
+    void tick_context_uses_neutral_component_values_when_features_are_disabled() {
+        Identifier machineId = MMCR.id("tick_context_disabled_components");
+        BlockPos factoryPos = new BlockPos(1, 0, 0);
+        BlockPos parallelPos = new BlockPos(2, 0, 0);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.STICK, 2));
+        ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, parallelPos,
+                ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
+        parallel.setCurrentParallelism(4);
+        AtomicInteger calls = new AtomicInteger();
+        BlockArray pattern = new BlockArray(Map.of(
+                factoryPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()),
+                parallelPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("parallel_controller_normal").get())));
+        Machine machine = new DynamicMachine(machineId, machineId.toString(), pattern,
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL,
+                Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), TickBehavior.builder()
+                        .serverTick(context -> {
+                            calls.incrementAndGet();
+                            assertThat(context.factoryThreadCount()).isEqualTo(1);
+                            assertThat(context.parallelism()).isEqualTo(1L);
+                        }).build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, parallel);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, factoryPos, factoryPos, (String) null),
+                new ProcessingComponent(null, parallel, parallelPos, parallelPos, (String) null)));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(calls).hasValue(1);
+        assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(1);
+        assertThat(controller.runtimeSnapshot().factory().active()).isFalse();
     }
 
     @Test

@@ -14,6 +14,8 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -180,8 +182,10 @@ public final class MachineIoView {
 
     public Map<String, Float> smartInterfaceValues() {
         Map<String, Float> values = new LinkedHashMap<>();
+        Set<FloatValueStorage> seenStorages = Collections.newSetFromMap(new IdentityHashMap<>());
         for (MachineCapability capability : snapshot.capabilities()) {
             if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
+            if (!seenStorages.add(storage)) continue;
             storage.values().forEach(values::putIfAbsent);
         }
         return Map.copyOf(values);

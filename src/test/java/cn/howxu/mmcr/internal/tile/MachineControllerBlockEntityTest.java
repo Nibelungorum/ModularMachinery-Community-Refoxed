@@ -6,11 +6,17 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -509,6 +515,28 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.structureSnapshot().formed()).isTrue();
         assertThat(controller.runtimeSnapshot().factory().active())
                 .as("factory snapshot=%s", controller.runtimeSnapshot().factory()).isTrue();
+    }
+
+    @Test
+    void tick_machine_accepts_an_ignored_factory_controller() {
+        Identifier machineId = MMCR.id("tick_machine_ignored_factory");
+        BlockPos schedulerPos = new BlockPos(1, 0, 0);
+        DynamicMachine machine = new DynamicMachine(machineId, "Tick Machine Ignored Factory",
+                new BlockArray(Map.of(schedulerPos,
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL,
+                Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), TickBehavior.builder().build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+
+        assertThat(controller.structureSnapshot().formed()).isTrue();
+        assertThat(controller.hasFactoryController()).isFalse();
+        assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(1);
+        assertThat(controller.runtimeSnapshot().factoryControllerPresent()).isFalse();
     }
 
     @Test
