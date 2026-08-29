@@ -12,5 +12,5 @@ public interface CapabilityRequest {
 
     IOType ioType();
 
-    int parallelism();
+    long parallelism();
 }

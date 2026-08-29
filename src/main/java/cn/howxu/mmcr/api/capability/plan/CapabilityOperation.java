@@ -17,7 +17,7 @@ public interface CapabilityOperation {
      * @param parallelism the final plan parallelism
      * @return an operation safe for the final parallelism
      */
-    default @Nullable CapabilityOperation forParallelism(int parallelism) {
+    default @Nullable CapabilityOperation forParallelism(long parallelism) {
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
         return null;
     }

@@ -54,8 +54,8 @@ public interface Machine {
                 dynamicPatterns(), MachineStructureRequirements.EMPTY));
     }
 
-    default int maxParallelism() {
-        return 1;
+    default long maxParallelism() {
+        return 1L;
     }
 
     default boolean parallelizable() {

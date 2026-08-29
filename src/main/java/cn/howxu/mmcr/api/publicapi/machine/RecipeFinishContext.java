@@ -16,20 +16,20 @@ import java.util.Objects;
 public final class RecipeFinishContext {
     private final MachineBehaviorContext machineContext;
     private final MachineRecipe recipe;
-    private final int requestedParallelism;
-    private final int effectiveParallelism;
+    private final long requestedParallelism;
+    private final long effectiveParallelism;
     private List<MachineOutput> outputs;
     private boolean cancelled;
     private boolean outputsDiscarded;
 
-    public RecipeFinishContext(MachineRecipe recipe, int requestedParallelism, int effectiveParallelism,
+    public RecipeFinishContext(MachineRecipe recipe, long requestedParallelism, long effectiveParallelism,
                                List<MachineOutput> outputs) {
         this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
                 requestedParallelism, effectiveParallelism, outputs);
     }
 
     public RecipeFinishContext(MachineBehaviorContext machineContext, MachineRecipe recipe,
-                               int requestedParallelism, int effectiveParallelism, List<MachineOutput> outputs) {
+                               long requestedParallelism, long effectiveParallelism, List<MachineOutput> outputs) {
         this.machineContext = Objects.requireNonNull(machineContext, "machineContext");
         this.recipe = Objects.requireNonNull(recipe, "recipe");
         if (requestedParallelism <= 0) throw new IllegalArgumentException("requestedParallelism must be positive");
@@ -51,11 +51,11 @@ public final class RecipeFinishContext {
         return recipe.id();
     }
 
-    public int requestedParallelism() {
+    public long requestedParallelism() {
         return requestedParallelism;
     }
 
-    public int effectiveParallelism() {
+    public long effectiveParallelism() {
         return effectiveParallelism;
     }
 

@@ -12,6 +12,10 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -19,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -223,6 +228,47 @@ class ComponentRuntimeTest {
 
         assertThat(presentation.amount()).isEqualTo(Long.MAX_VALUE);
         assertThat(presentation.capacity()).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
+    void structure_normalization_preserves_capacity_above_integer_maximum() {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr_test", "long_parallel_machine");
+        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
+        ParallelControllerBlockEntity first = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
+                new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
+        ParallelControllerBlockEntity second = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
+                new BlockPos(2, 0, 0), parallelBlock.defaultBlockState());
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(first, "first"), component(second, "second")));
+
+        Machine machine = new Machine() {
+            @Override
+            public Identifier registryName() {
+                return machineId;
+            }
+
+            @Override
+            public BlockArray pattern() {
+                return new BlockArray(Map.of());
+            }
+
+            @Override
+            public MachineControllerSpec controller() {
+                return MachineControllerSpec.defaultsFor(machineId);
+            }
+
+            @Override
+            public long maxParallelism() {
+                return Long.MAX_VALUE;
+            }
+
+            @Override
+            public boolean parallelizable() {
+                return true;
+            }
+        };
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(2L * Integer.MAX_VALUE);
     }
 
     @Test

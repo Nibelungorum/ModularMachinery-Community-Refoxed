@@ -88,15 +88,15 @@ class MachineRecipeDisplayTest {
 
     @Test
     void fluidQuantityTextIsOnlyShownAboveOneBucket() {
-        assertThat(MachineRecipeCategory.fluidQuantityText(1_000)).isEmpty();
-        assertThat(MachineRecipeCategory.fluidQuantityText(1_234)).isEqualTo("1.23k mB");
+        assertThat(MachineRecipeCategory.fluidQuantityText(1_000)).isEqualTo("1B");
+        assertThat(MachineRecipeCategory.fluidQuantityText(1_234)).isEqualTo("1.23B");
     }
 
     @Test
     void tooltipQuantityTextUsesExactGrouping() {
         assertThat(MachineRecipeCategory.itemTooltipQuantity(1)).isEmpty();
         assertThat(MachineRecipeCategory.itemTooltipQuantity(1_234)).isEqualTo("1,234");
-        assertThat(MachineRecipeCategory.fluidTooltipQuantity(1_234)).isEqualTo("1,234 mB");
+        assertThat(MachineRecipeCategory.fluidTooltipQuantity(1_234)).isEqualTo("1.234B");
     }
 
     @Test

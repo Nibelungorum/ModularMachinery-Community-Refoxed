@@ -1,6 +1,6 @@
 {
   "block.mmcr.basic_casing": "基础机器外壳",
-  "block.mmcr.data_storage": "数据存储",
+  "block.mmcr.data_storage": "数据存储器",
   "block.mmcr.energy_input_hatch": "普通能量输入仓",
   "block.mmcr.energy_input_hatch_big": "大型能量输入仓",
   "block.mmcr.energy_input_hatch_huge": "巨型能量输入仓",
@@ -170,6 +170,7 @@
   "gui.mmcr.factory.thread_progress": "进度: %s / %s (%s)",
 
   "item.mmcr.basic_casing": "基础机器外壳",
+  "item.mmcr.data_storage": "数据存储器",
   "item.mmcr.energy_input_hatch": "普通能量输入仓",
   "item.mmcr.energy_input_hatch_big": "大型能量输入仓",
   "item.mmcr.energy_input_hatch_huge": "巨型能量输入仓",

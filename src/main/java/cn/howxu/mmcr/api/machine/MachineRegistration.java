@@ -33,7 +33,7 @@ public record MachineRegistration(
         boolean allowModifiers,
         boolean allowMultithreading,
         boolean allowParallelism,
-        int maxParallelAmount,
+        long maxParallelAmount,
         boolean expandableStructure,
         Map<String, SmartInterfaceType> smartInterfaceTypes,
         boolean shareSmartInterfaces,
@@ -67,7 +67,7 @@ public record MachineRegistration(
 
     public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
             MachineAppearanceSpec appearance, Identifier recipeFamilyId, boolean allowModifiers,
-            boolean allowMultithreading, boolean allowParallelism, int maxParallelAmount,
+            boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
@@ -134,7 +134,7 @@ public record MachineRegistration(
         private boolean allowModifiers;
         private boolean allowMultithreading;
         private boolean allowParallelism;
-        private int maxParallelAmount = 1;
+        private long maxParallelAmount = 1L;
         private boolean expandableStructure;
         private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
         private boolean shareSmartInterfaces;
@@ -191,7 +191,7 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder maxParallelAmount(int maxParallelAmount) {
+        public Builder maxParallelAmount(long maxParallelAmount) {
             this.maxParallelAmount = maxParallelAmount;
             return this;
         }

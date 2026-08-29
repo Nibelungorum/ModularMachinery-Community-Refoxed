@@ -23,7 +23,7 @@ public record MachineDefinition(
         FactorySpec factory,
         MachineRole role,
         Set<Identifier> acceptedModuleIds,
-        int maxParallelism,
+        long maxParallelism,
         boolean parallelizable,
         RecipeFailureActions failureAction,
         boolean allowModifiers,
@@ -40,7 +40,7 @@ public record MachineDefinition(
 
     public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
-            Set<Identifier> acceptedModuleIds, int maxParallelism, boolean parallelizable,
+            Set<Identifier> acceptedModuleIds, long maxParallelism, boolean parallelizable,
             RecipeFailureActions failureAction) {
         this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 maxParallelism, parallelizable, failureAction, false, false, 1, false,
@@ -50,7 +50,7 @@ public record MachineDefinition(
 
     public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
-            Set<Identifier> acceptedModuleIds, int maxParallelism, boolean parallelizable,
+            Set<Identifier> acceptedModuleIds, long maxParallelism, boolean parallelizable,
             RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
             int maxParallelAmount, boolean expandableStructure,
             java.util.Map<String, SmartInterfaceType> smartInterfaceTypes,
@@ -73,7 +73,7 @@ public record MachineDefinition(
         factory = factory == null ? FactorySpec.builder().build() : factory;
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
-        if (maxParallelism < 1) throw new IllegalArgumentException("maxParallelism must be positive");
+        if (maxParallelism < 1L) throw new IllegalArgumentException("maxParallelism must be positive");
         if (maxParallelAmount < 1) throw new IllegalArgumentException("maxParallelAmount must be positive");
         smartInterfaceTypes = java.util.Map.copyOf(smartInterfaceTypes == null ? java.util.Map.of() : smartInterfaceTypes);
         smartInterfaceModifiers = List.copyOf(smartInterfaceModifiers == null ? List.of() : smartInterfaceModifiers);

@@ -54,8 +54,8 @@ public final class ActiveMachineRecipe {
     private CompoundTag data;
     private int tick;
     private int totalTick;
-    private int maxParallelism;
-    private int parallelism;
+    private long maxParallelism;
+    private long parallelism;
     private int nextFinishRetryTick;
     private boolean finishPending;
     private @Nullable InputConsumptionPlan inputConsumptionPlan;
@@ -114,11 +114,11 @@ public final class ActiveMachineRecipe {
         this(recipe, 1);
     }
 
-    public ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism) {
+    public ActiveMachineRecipe(MachineRecipe recipe, long maxParallelism) {
         this(recipe, maxParallelism, false);
     }
 
-    private ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism, boolean effectiveSnapshotPresent) {
+    private ActiveMachineRecipe(MachineRecipe recipe, long maxParallelism, boolean effectiveSnapshotPresent) {
         this.recipe = recipe;
         this.totalTick = recipe == null ? 0 : IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(recipe.modifiers(), recipe.getRecipeTotalTickTime()));
         this.maxParallelism = Math.max(1, maxParallelism);
@@ -132,7 +132,7 @@ public final class ActiveMachineRecipe {
         }
     }
 
-    public ActiveMachineRecipe(MachineRecipe recipe, int maxParallelism,
+    public ActiveMachineRecipe(MachineRecipe recipe, long maxParallelism,
                                RecipeStartContext.ExecutionSnapshot execution) {
         this.recipe = Objects.requireNonNull(recipe, "recipe");
         Objects.requireNonNull(execution, "execution");
@@ -167,20 +167,20 @@ public final class ActiveMachineRecipe {
         this.totalTick = Math.max(0, totalTick);
     }
 
-    public int getMaxParallelism() {
+    public long getMaxParallelism() {
         return maxParallelism;
     }
 
-    public void setMaxParallelism(int maxParallelism) {
+    public void setMaxParallelism(long maxParallelism) {
         this.maxParallelism = Math.max(1, maxParallelism);
         setParallelism(parallelism);
     }
 
-    public int getParallelism() {
+    public long getParallelism() {
         return parallelism;
     }
 
-    public void setParallelism(int parallelism) {
+    public void setParallelism(long parallelism) {
         this.parallelism = Math.max(1, Math.min(parallelism, maxParallelism));
     }
 
@@ -227,8 +227,8 @@ public final class ActiveMachineRecipe {
         output.putString("recipeName", recipe == null ? "" : recipe.id().toString());
         output.putInt("tick", this.tick);
         output.putInt("totalTick", this.totalTick);
-        output.putInt("maxParallelism", this.maxParallelism);
-        output.putInt("parallelism", this.parallelism);
+        output.putLong("maxParallelism", this.maxParallelism);
+        output.putLong("parallelism", this.parallelism);
         output.putInt("nextFinishRetryTick", this.nextFinishRetryTick);
         output.putBoolean("finishPending", this.finishPending);
         if (effectiveSnapshotPresent) {
@@ -372,8 +372,8 @@ public final class ActiveMachineRecipe {
                     ? recipe.requirements() : effectiveRequirements;
             if (inputPlan == null || !inputPlan.isValidFor(validationRequirements)) return new LoadResult(null);
         }
-        int maxParallelism = input.getIntOr("maxParallelism", 1);
-        int parallelism = input.getIntOr("parallelism", 1);
+        long maxParallelism = input.getLongOr("maxParallelism", 1L);
+        long parallelism = input.getLongOr("parallelism", 1L);
         int serializedTotalTick = input.getIntOr("totalTick", -1);
         int tick = input.getIntOr("tick", 0);
         boolean finishPending = input.getBooleanOr("finishPending", false);
@@ -489,8 +489,8 @@ public final class ActiveMachineRecipe {
         return Float.isFinite(chance) && chance >= 0F && chance <= 1F;
     }
 
-    private static boolean validRuntimeState(int tick, int totalTick, int maxParallelism,
-                                             int parallelism, boolean finishPending) {
+    private static boolean validRuntimeState(int tick, int totalTick, long maxParallelism,
+                                             long parallelism, boolean finishPending) {
         return totalTick >= 1
                 && tick >= 0 && tick <= totalTick
                 && maxParallelism >= 1

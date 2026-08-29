@@ -25,7 +25,7 @@ public final class MachineBuilder {
     private FactorySpec factory = FactorySpec.builder().build();
     private MachineRole role = MachineRole.NORMAL;
     private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
-    private int maxParallelism = 1;
+    private long maxParallelism = 1L;
     private boolean parallelizable;
     private RecipeFailureActions failureAction = RecipeFailureActions.getDefaultAction();
     private boolean allowModifiers;
@@ -90,7 +90,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder maxParallelism(int maxParallelism) {
+    public MachineBuilder maxParallelism(long maxParallelism) {
         this.maxParallelism = maxParallelism;
         return this;
     }

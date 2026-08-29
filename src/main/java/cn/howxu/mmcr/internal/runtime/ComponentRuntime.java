@@ -239,9 +239,9 @@ public final class ComponentRuntime {
         capabilityPresentationEpoch++;
     }
 
-    public int maxParallelism(Machine machine) {
+    public long maxParallelism(Machine machine) {
         if (machine == null || !machine.parallelizable()) {
-            return 1;
+            return 1L;
         }
         long max = 0L;
         for (ProcessingComponent component : components) {
@@ -256,8 +256,8 @@ public final class ComponentRuntime {
                 .mapToLong(foundLevel -> foundLevel.modifier().parallelismBonus())
                 .sum();
         long effective = Math.max(1L, max) + levelBonus;
-        long bounded = Math.min(Integer.MAX_VALUE, Math.max(1L, effective));
-        return (int) Math.min(Math.max(1, machine.maxParallelism()), bounded);
+        long bounded = Math.min(Long.MAX_VALUE, Math.max(1L, effective));
+        return Math.min(Math.max(1L, machine.maxParallelism()), bounded);
     }
 
     public void clear() {

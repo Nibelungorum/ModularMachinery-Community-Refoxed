@@ -21,14 +21,14 @@ import java.util.Objects;
 public final class RecipeStartContext {
     private final MachineBehaviorContext machineContext;
     private final MachineRecipe recipe;
-    private final int requestedParallelism;
-    private final int effectiveParallelism;
+    private final long requestedParallelism;
+    private final long effectiveParallelism;
     private int duration;
     private List<MachineRequirement> requirements;
     private List<MachineOutput> outputs;
     private boolean cancelled;
 
-    public RecipeStartContext(MachineRecipe recipe, int requestedParallelism, int effectiveParallelism) {
+    public RecipeStartContext(MachineRecipe recipe, long requestedParallelism, long effectiveParallelism) {
         this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
                 requestedParallelism, effectiveParallelism,
                 Math.max(1, IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(
@@ -37,7 +37,7 @@ public final class RecipeStartContext {
     }
 
     public RecipeStartContext(MachineBehaviorContext machineContext, MachineRecipe recipe,
-                              int requestedParallelism, int effectiveParallelism, int duration,
+                              long requestedParallelism, long effectiveParallelism, int duration,
                               List<MachineRequirement> requirements, List<MachineOutput> outputs) {
         this.machineContext = Objects.requireNonNull(machineContext, "machineContext");
         this.recipe = Objects.requireNonNull(recipe, "recipe");
@@ -63,11 +63,11 @@ public final class RecipeStartContext {
         return recipe.id();
     }
 
-    public int requestedParallelism() {
+    public long requestedParallelism() {
         return requestedParallelism;
     }
 
-    public int effectiveParallelism() {
+    public long effectiveParallelism() {
         return effectiveParallelism;
     }
 

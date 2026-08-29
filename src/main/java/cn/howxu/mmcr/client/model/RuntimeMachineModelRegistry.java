@@ -164,7 +164,7 @@ public final class RuntimeMachineModelRegistry {
                     blockName,
                     DynamicOverlayBakedModel.Kind.PORT,
                     portStyleDefinition(block),
-                    DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/basic_casing")));
+                    DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/overlay_data_storage")));
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock
                 || block instanceof SmartInterfaceBlock || block instanceof ModuleCouplerBlock) {

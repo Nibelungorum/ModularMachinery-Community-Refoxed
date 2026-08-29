@@ -12,7 +12,7 @@ import java.util.Map;
  * @param outputPolicies output policies keyed by recipe requirement index
  * @author howxu <dev@howxu.cn>
  */
-public record PlanningContext(int requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
+public record PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
                                PlanningReservations reservations,
                                Map<Integer, OutputPolicy> outputPolicies) {
     public PlanningContext(int requestedParallelism, int requirementIndex) {

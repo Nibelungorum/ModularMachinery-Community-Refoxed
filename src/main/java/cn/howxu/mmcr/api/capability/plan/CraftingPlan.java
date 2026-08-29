@@ -26,15 +26,15 @@ public final class CraftingPlan {
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
             java.util.Map.of("reason", "operation_failed_without_status"));
     private final List<RequirementPlan> requirements;
-    private final int parallelism;
+    private final long parallelism;
     private final Map<Integer, RecipeModifier.IOType> directions;
     private @Nullable ExecutionStatus failure;
 
-    public CraftingPlan(List<RequirementPlan> requirements, int parallelism) {
+    public CraftingPlan(List<RequirementPlan> requirements, long parallelism) {
         this(requirements, parallelism, Map.of());
     }
 
-    public CraftingPlan(List<RequirementPlan> requirements, int parallelism,
+    public CraftingPlan(List<RequirementPlan> requirements, long parallelism,
                         Map<Integer, RecipeModifier.IOType> directions) {
         if (requirements == null) throw new IllegalArgumentException("requirements must not be null");
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
@@ -116,7 +116,7 @@ public final class CraftingPlan {
         return true;
     }
 
-    public int parallelism() {
+    public long parallelism() {
         return parallelism;
     }
 

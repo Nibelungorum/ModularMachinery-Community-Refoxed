@@ -17,17 +17,17 @@ public final class RecipeTickContext {
     private final MachineRecipe recipe;
     private final int currentTick;
     private final int totalTick;
-    private final int parallelism;
+    private final long parallelism;
     private final List<MachineRequirement> requirements;
     private final List<MachineOutput> outputs;
 
-    public RecipeTickContext(MachineRecipe recipe, int currentTick, int totalTick, int parallelism) {
+    public RecipeTickContext(MachineRecipe recipe, int currentTick, int totalTick, long parallelism) {
         this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
                 currentTick, totalTick, parallelism, recipe.runtimeRequirements(), recipe.runtimeMachineOutputs());
     }
 
     public RecipeTickContext(MachineBehaviorContext machineContext, MachineRecipe recipe, int currentTick,
-                             int totalTick, int parallelism, List<MachineRequirement> requirements,
+                             int totalTick, long parallelism, List<MachineRequirement> requirements,
                              List<MachineOutput> outputs) {
         this.machineContext = Objects.requireNonNull(machineContext, "machineContext");
         this.recipe = Objects.requireNonNull(recipe, "recipe");
@@ -57,7 +57,7 @@ public final class RecipeTickContext {
         return totalTick;
     }
 
-    public int parallelism() {
+    public long parallelism() {
         return parallelism;
     }
 

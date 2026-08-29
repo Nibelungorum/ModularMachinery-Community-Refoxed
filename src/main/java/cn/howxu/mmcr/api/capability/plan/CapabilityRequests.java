@@ -23,7 +23,7 @@ public final class CapabilityRequests {
         }
     }
 
-    public record ResourceRequest<R>(CapabilityType type, IOType ioType, int parallelism,
+    public record ResourceRequest<R>(CapabilityType type, IOType ioType, long parallelism,
                                      List<ResourceAction<R>> actions) implements CapabilityRequest {
         public ResourceRequest {
             if (type == null || ioType == null) throw new IllegalArgumentException("request identity must not be null");
@@ -32,7 +32,7 @@ public final class CapabilityRequests {
         }
     }
 
-    public record ValueRequest(CapabilityType type, IOType ioType, int parallelism,
+    public record ValueRequest(CapabilityType type, IOType ioType, long parallelism,
                                long amount, boolean insert) implements CapabilityRequest {
         public ValueRequest {
             if (type == null || ioType == null) throw new IllegalArgumentException("request identity must not be null");
@@ -41,7 +41,7 @@ public final class CapabilityRequests {
         }
     }
 
-    public record SmartValueRequest(CapabilityType type, IOType ioType, int parallelism,
+    public record SmartValueRequest(CapabilityType type, IOType ioType, long parallelism,
                                     String interfaceType, float value) implements CapabilityRequest {
         public SmartValueRequest {
             if (type == null || ioType == null) throw new IllegalArgumentException("request identity must not be null");
