@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -419,6 +420,22 @@ class MachineBuilderJSTest {
                 .isEqualTo(Identifier.parse("minecraft:block/quartz_block_bottom"));
         assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
         assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:entity.ender_dragon.growl"));
+    }
+
+    @Test
+    void rhino_startup_builder_accepts_machine_level_recipe_tick_hooks() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "builder", new MachineBuilderJS("mmcr:kubejs_hook_rhino"), context);
+
+        var result = (Wrapper) context.evaluateString(scope, """
+                builder.preServerTick(ctx => {})
+                  .postServerTick(ctx => {})
+                  .createObject();
+                """, "machine-hook-test", 1, null);
+
+        var registration = (MachineRegistration) result.unwrap();
+        assertThat(registration.behavior()).isInstanceOf(RecipeBehavior.class);
     }
 
     @Test
