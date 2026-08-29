@@ -919,17 +919,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                 logBehaviorCallbackFailure("serverTick", tickState, null, exception);
                             }
                         } else {
-                            boolean idleBefore = !hasActiveOperation();
-                            if (behavior instanceof RecipeBehavior recipeBehavior && idleBefore) {
-                                invokeIdleCallback("idleStart", recipeBehavior.idleStart(), tickState);
+                            RecipeBehavior recipeBehavior = behavior instanceof RecipeBehavior recipe ? recipe : null;
+                            if (recipeBehavior != null) {
+                                invokeServerTickCallback("preServerTick", recipeBehavior.preServerTick(), tickState);
                             }
-                            if (factoryController) {
-                                factoryTickResult = tickFactoryRecipes();
-                            } else {
-                                tickSingleActiveRecipe();
-                            }
-                            if (behavior instanceof RecipeBehavior recipeBehavior && !hasActiveOperation()) {
-                                invokeIdleCallback("idleEnd", recipeBehavior.idleEnd(), tickState);
+                            try {
+                                boolean idleBefore = !hasActiveOperation();
+                                if (recipeBehavior != null && idleBefore) {
+                                    invokeIdleCallback("idleStart", recipeBehavior.idleStart(), tickState);
+                                }
+                                if (factoryController) {
+                                    factoryTickResult = tickFactoryRecipes();
+                                } else {
+                                    tickSingleActiveRecipe();
+                                }
+                                if (recipeBehavior != null && !hasActiveOperation()) {
+                                    invokeIdleCallback("idleEnd", recipeBehavior.idleEnd(), tickState);
+                                }
+                            } finally {
+                                if (recipeBehavior != null) {
+                                    invokeServerTickCallback("postServerTick", recipeBehavior.postServerTick(), tickState);
+                                }
                             }
                         }
                     }
@@ -984,6 +994,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void invokeIdleCallback(String phase, MachineBehavior.MachineCallback callback,
                                     ControllerRuntimeSnapshot snapshot) {
+        try {
+            callback.accept(runtime.behaviorContext());
+        } catch (RuntimeException exception) {
+            logBehaviorCallbackFailure(phase, snapshot, null, exception);
+        }
+    }
+
+    private void invokeServerTickCallback(String phase, MachineBehavior.MachineCallback callback,
+                                          ControllerRuntimeSnapshot snapshot) {
         try {
             callback.accept(runtime.behaviorContext());
         } catch (RuntimeException exception) {

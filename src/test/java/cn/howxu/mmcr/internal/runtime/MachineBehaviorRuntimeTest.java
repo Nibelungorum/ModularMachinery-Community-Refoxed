@@ -379,6 +379,61 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
+    void recipe_machine_hooks_surround_existing_recipe_work_with_fresh_contexts() {
+        List<String> phases = new java.util.ArrayList<>();
+        java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext> preContext =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext> postContext =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        Machine recipeMachine = machine(controller.machineId(), RecipeBehavior.builder()
+                .preServerTick(context -> {
+                    preContext.set(context);
+                    phases.add("pre");
+                    assertThat(context.ioView()).isNotNull();
+                    context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                            MMCR.id("recipe_hook_status"), Component.literal("pre"));
+                })
+                .idleStart(context -> phases.add("idleStart"))
+                .idleEnd(context -> phases.add("idleEnd"))
+                .postServerTick(context -> {
+                    postContext.set(context);
+                    phases.add("post");
+                    context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                            MMCR.id("recipe_hook_status"), Component.literal("post"));
+                })
+                .build());
+        RuntimeTestFixtures.formStructure(controller, recipeMachine);
+
+        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(),
+                controller.getBlockPos());
+
+        assertThat(phases).containsExactly("pre", "idleStart", "idleEnd", "post");
+        assertThat(preContext.get()).isNotNull();
+        assertThat(postContext.get()).isNotNull();
+        assertThat(preContext.get()).isNotSameAs(postContext.get());
+        assertThat(preContext.get().screenText()).isSameAs(postContext.get().screenText());
+        assertThat(((ControllerScreenTextState) preContext.get().screenText()).snapshot().lines())
+                .singleElement().satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("post")));
+    }
+
+    @Test
+    void recipe_machine_hook_failure_does_not_skip_the_other_hook() {
+        AtomicInteger postCalls = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        Machine recipeMachine = machine(controller.machineId(), RecipeBehavior.builder()
+                .preServerTick(context -> { throw new IllegalStateException("pre hook failure"); })
+                .postServerTick(context -> postCalls.incrementAndGet())
+                .build());
+        RuntimeTestFixtures.formStructure(controller, recipeMachine);
+
+        assertThatCode(() -> controller.tickRuntimeWork(
+                (net.minecraft.server.level.ServerLevel) controller.getLevel(), controller.getBlockPos()))
+                .doesNotThrowAnyException();
+        assertThat(postCalls).hasValue(1);
+    }
+
+    @Test
     void callback_exception_cancels_start_without_consuming_inputs() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input);
