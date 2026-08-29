@@ -72,6 +72,7 @@
   "command.mmcr.reload.success": "[DEBUG MMCR]: structures +%s ~%s -%s, recipes +%s ~%s -%s",
 
   "config.jade.plugin_mmcr.machine_controller": "Machine Controller",
+  "config.jade.plugin_mmcr.parallel_controller": "Parallel Controller",
   "container.mmcr.energy_input_hatch": "Normal Energy Input Hatch",
   "container.mmcr.energy_input_hatch_big": "Big Energy Input Hatch",
   "container.mmcr.energy_input_hatch_huge": "Huge Energy Input Hatch",
