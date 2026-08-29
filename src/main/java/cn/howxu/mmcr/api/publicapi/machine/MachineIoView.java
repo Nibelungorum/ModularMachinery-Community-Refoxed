@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.IOType;
@@ -17,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -164,6 +166,25 @@ public final class MachineIoView {
             }
         }
         return capacity;
+    }
+
+    public Optional<Float> smartInterfaceValue(String name) {
+        if (name == null) return Optional.empty();
+        for (MachineCapability capability : snapshot.capabilities()) {
+            if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
+            Optional<Float> value = storage.value(name);
+            if (value.isPresent()) return value;
+        }
+        return Optional.empty();
+    }
+
+    public Map<String, Float> smartInterfaceValues() {
+        Map<String, Float> values = new LinkedHashMap<>();
+        for (MachineCapability capability : snapshot.capabilities()) {
+            if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
+            storage.values().forEach(values::putIfAbsent);
+        }
+        return Map.copyOf(values);
     }
 
     private List<MachineCapability> capabilities(IOType ioType) {
