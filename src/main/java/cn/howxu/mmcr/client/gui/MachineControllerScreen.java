@@ -145,7 +145,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return Component.translatable("gui.mmcr.controller.level", type.displayName(), predicate.state().getBlock().getName());
     }
 
-    static Component parallelLine(int parallelism, int maxParallelism) {
+    static Component parallelLine(long parallelism, long maxParallelism) {
         return Component.translatable("gui.mmcr.controller.parallel", Component.literal(NUMBER_FORMAT.format(parallelism)), Component.literal(NUMBER_FORMAT.format(maxParallelism)));
     }
 

@@ -32,7 +32,7 @@ public class PURPUR_FURNACE {
                     .machine(PURPUR_FURNACE)
                     .displayNameKey("machine.mmcr.purpur_furnace")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("end_stone_bricks")))
-                    .maxParallelAmount(32).parallelizable(true)
+                    .maxParallelism(32).parallelizable(true)
                     .smartInterface(new SmartInterfaceType("mode", 1F, 3F, 1, SmartInterfaceType.ValueType.INTEGER))
                     .smartInterface(new SmartInterfaceType("conversation", 0F, 1F, 0))
                     .smartInterfaceModifier(SmartInterfaceModifier.energy("mode", 1F, 2F, 1F, 2F, RecipeModifier.Operation.MULTIPLY))

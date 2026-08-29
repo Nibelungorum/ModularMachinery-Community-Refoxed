@@ -31,6 +31,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -77,7 +78,7 @@ public class SharedMultiblockIoGameTest {
             MachineRecipe recipe = itemRecipe("shared_input_start");
             StructureClaimRegistry.ResourceDomain domain = first.resourceDomain();
             SharedIoCoordinator coordinator = SharedIoCoordinator.get(helper.getLevel());
-            AtomicInteger totalParallelism = new AtomicInteger();
+            AtomicLong totalParallelism = new AtomicLong();
 
             enqueueStart(coordinator, domain, first, recipe, totalParallelism);
             enqueueStart(coordinator, domain, second, recipe, totalParallelism);
@@ -194,7 +195,7 @@ public class SharedMultiblockIoGameTest {
     }
 
     private static void enqueueStart(SharedIoCoordinator coordinator, StructureClaimRegistry.ResourceDomain domain,
-                                     MachineControllerBlockEntity controller, MachineRecipe recipe, AtomicInteger total) {
+                                     MachineControllerBlockEntity controller, MachineRecipe recipe, AtomicLong total) {
         coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), "base"), controller.runtimeSnapshot().structure().version(),
                 controller.runtimeSnapshot().stateVersion(), 8,

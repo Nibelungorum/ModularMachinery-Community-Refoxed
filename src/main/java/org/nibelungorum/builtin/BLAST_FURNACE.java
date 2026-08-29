@@ -38,7 +38,7 @@ public class BLAST_FURNACE {
                     .machine(BLAST_FURNACE)
                     .displayNameKey("machine.mmcr.blast_furnace")
                     .allowMultithreading()
-                    .maxParallelAmount(Integer.MAX_VALUE)
+                    .maxParallelism(Integer.MAX_VALUE)
                     .parallelizable(true)
                     .factory(factory -> factory.hasFactory(true).threadLimit(4)) // allow multi thread limit 4
                     .build();

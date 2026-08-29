@@ -311,9 +311,9 @@ class SharedIoCoordinatorTest {
 
     private static SharedIoCoordinator.StartRequest start(StructureClaimRegistry.ResourceDomain domain,
                                                            BlockPos position, long structureVersion,
-                                                           int maximumParallelism,
-                                                           java.util.function.IntUnaryOperator transaction,
-                                                           java.util.function.IntConsumer committer,
+                                                            long maximumParallelism,
+                                                            java.util.function.LongUnaryOperator transaction,
+                                                            java.util.function.LongConsumer committer,
                                                            java.util.function.BooleanSupplier validator,
                                                            java.util.function.LongSupplier structureVersionSupplier) {
         return new SharedIoCoordinator.StartRequest(domain, lane(position), structureVersion, 0L,

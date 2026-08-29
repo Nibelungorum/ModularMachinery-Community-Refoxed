@@ -43,7 +43,7 @@ public final class FactoryRuntime {
     private final Set<FactoryRecipeThread> recipeLockUsed = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, Identifier> startReservations = new IdentityHashMap<>();
     private int laneLimit = 1;
-    private int perThreadParallelLimit = 1;
+    private long perThreadParallelLimit = 1L;
     private boolean paused;
     private long nextFactoryLaneId;
     private long coreCatalogVersion = Long.MIN_VALUE;
@@ -66,23 +66,23 @@ public final class FactoryRuntime {
     private Set<Identifier> cachedIndexedLockedRecipeIds = Set.of();
     private List<MachineRecipe> cachedIndexedCandidates = List.of();
 
-    public FactoryTickResult tick(List<MachineRecipe> candidates, int maxParallelism) {
+    public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism) {
         return tick(candidates, maxParallelism, currentGameTime());
     }
 
-    public FactoryTickResult tick(List<MachineRecipe> candidates, int maxParallelism, Runnable onFinished) {
+    public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished) {
         return tick(candidates, maxParallelism, onFinished, currentGameTime());
     }
 
-    public FactoryTickResult tick(List<MachineRecipe> candidates, int maxParallelism, long gameTime) {
+    public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, long gameTime) {
         return tick(candidates, maxParallelism, () -> { }, gameTime);
     }
 
-    public FactoryTickResult tick(List<MachineRecipe> candidates, int maxParallelism, long gameTime, Runnable onFinished) {
+    public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, long gameTime, Runnable onFinished) {
         return tick(candidates, maxParallelism, onFinished, gameTime);
     }
 
-    public FactoryTickResult tick(List<MachineRecipe> candidates, int maxParallelism, Runnable onFinished, long gameTime) {
+    public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished, long gameTime) {
         if (controller == null) return currentTickResult(factoryStateEpoch, false);
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         return tick(createSearchContext(snapshot, candidates, maxParallelism, gameTime), onFinished);
@@ -334,12 +334,8 @@ public final class FactoryRuntime {
                 .filter(state -> state.recipeId() != null || state.failure() != null)
                 .toList();
         int activeCount = activeLaneCount();
-        int parallelism = 0;
-        for (FactoryRecipeThread lane : lanes) {
-            if (lane.runtime().active()) parallelism += lane.runtime().parallelism();
-        }
-        cachedSnapshot = new FactorySnapshot(false, activeCount > 0, laneSnapshots, parallelism, laneLimit,
-                activeCount, Math.max(1, perThreadParallelLimit), paused, threadSnapshots(), "", 0, failure,
+        cachedSnapshot = new FactorySnapshot(false, activeCount > 0, laneSnapshots, laneLimit,
+                activeCount, Math.max(1L, perThreadParallelLimit), paused, threadSnapshots(), "", 0, failure,
                 List.of());
         cachedSnapshotEpoch = factoryStateEpoch;
         return cachedSnapshot;
@@ -387,7 +383,7 @@ public final class FactoryRuntime {
         while (lanes.size() > this.laneLimit) {
             FactoryRecipeThread removed = lanes.stream()
                     .filter(lane -> !lane.isBaseThread())
-                    .min(Comparator.comparingInt(lane -> lane.runtime().parallelism()))
+                    .min(Comparator.comparingLong(lane -> lane.runtime().parallelism()))
                     .orElse(null);
             if (removed == null) break;
             removeLane(removed);
@@ -489,7 +485,7 @@ public final class FactoryRuntime {
 
     public FactorySearchContext createSearchContext(ControllerRuntimeSnapshot snapshot,
                                                     List<MachineRecipe> candidates,
-                                                    int maxParallelism, long gameTime) {
+                                                     long maxParallelism, long gameTime) {
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         Identifier machineId = machine == null ? null : machine.registryName();
@@ -762,7 +758,7 @@ public final class FactoryRuntime {
 
     /** Immutable runtime-owned lane snapshot. */
     public record ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
-                                 String recipeId, int tick, int totalTick, int parallelism,
+                                  String recipeId, int tick, int totalTick, long parallelism,
                                  String lastFailureUnloc, boolean locked, String lockedRecipeId) {
         public ThreadSnapshot {
             recipeId = recipeId == null ? "" : recipeId;
@@ -771,7 +767,7 @@ public final class FactoryRuntime {
         }
 
         public static ThreadSnapshot idleBase() {
-            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1, "", false, "");
+            return new ThreadSnapshot(0, true, false, false, "", 0, 0, 1L, "", false, "");
         }
     }
 }

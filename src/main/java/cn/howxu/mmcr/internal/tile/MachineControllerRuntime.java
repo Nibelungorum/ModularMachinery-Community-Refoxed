@@ -159,8 +159,8 @@ public final class MachineControllerRuntime {
         int parallelControllerCount = (int) components.components().stream()
                 .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
                 .count();
-        int maxParallelControllerCount = machine != null && machine.parallelizable()
-                ? Math.max(1, machine.maxParallelism()) : 0;
+        long maxParallelControllerCount = machine != null && machine.parallelizable()
+                ? Math.max(1L, machine.maxParallelism()) : 0L;
         int controllerRole = machine == null ? 0 : machine.isHost() ? 1 : machine.isModule() ? 2 : 0;
         workingSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.capabilityVersion(),
                 components.modifierVersion(), components.stateVersion(), components.foundModifiers(), components.foundLevels(),
@@ -329,7 +329,7 @@ public final class MachineControllerRuntime {
                              @Nullable Machine configuredMachine, int matchedStage,
                              @Nullable Identifier recipeId, CraftingStatus status,
                              @Nullable ExecutionStatus failure, int tick, int totalTick,
-                             int parallelism, int maxParallelism) {
+                               long parallelism, long maxParallelism) {
         structure.setStructureAreaLoaded(structureAreaLoaded);
         structure.setFormed(formed);
         structure.setMachine(configuredMachine);
@@ -435,7 +435,7 @@ public final class MachineControllerRuntime {
         publishSnapshot();
     }
 
-    int maxParallelism(@Nullable Machine machine) {
+    long maxParallelism(@Nullable Machine machine) {
         return components.maxParallelism(machine);
     }
 
@@ -480,7 +480,7 @@ public final class MachineControllerRuntime {
 
     void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
                               @Nullable ExecutionStatus failure, int tick, int totalTick,
-                              int parallelism, int maxParallelism) {
+                              long parallelism, long maxParallelism) {
         boolean client = controller.getLevel() != null && controller.getLevel().isClientSide();
         boolean recipeLocked = client ? controller.hasClientRecipeLock() : controller.lockedRecipeId() != null;
         String lockedRecipeId = client ? controller.clientLockedRecipeId()

@@ -62,7 +62,7 @@ class CapabilityContractTest {
         assertThatThrownBy(() -> CapabilityResult.failure(null)).isInstanceOf(NullPointerException.class);
     }
 
-    private record TestRequest(int parallelism) implements CapabilityRequest {
+    private record TestRequest(long parallelism) implements CapabilityRequest {
         @Override
         public CapabilityType type() {
             return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "test"));

@@ -51,11 +51,11 @@ public abstract class RecipeThread {
         this.runtime = new CraftingRuntime(controller, controller.componentRuntime());
     }
 
-    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
+    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
         return searchAndStartRecipe(candidates, availableParallelism, structureVersion, null);
     }
 
-    protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
+    protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                            long structureVersion, @Nullable Identifier lockedRecipeId) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
@@ -107,11 +107,11 @@ public abstract class RecipeThread {
         return startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
     }
 
-    protected boolean startRecipe(MachineRecipe next, int requestedParallelism, long structureVersion) {
+    protected boolean startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion) {
         return startRecipe(next, requestedParallelism, structureVersion, null);
     }
 
-    protected boolean startRecipe(MachineRecipe next, int requestedParallelism, long structureVersion,
+    protected boolean startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion,
                                   @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
@@ -128,7 +128,7 @@ public abstract class RecipeThread {
     }
 
     private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                 MachineRecipe next, int requestedParallelism, long structureVersion,
+                                  MachineRecipe next, long requestedParallelism, long structureVersion,
                                  @Nullable FactorySearchContext context) {
         long token = ++nextStartToken;
         startPending = true;
@@ -149,14 +149,14 @@ public abstract class RecipeThread {
                 snapshot.stateVersion(),
                 requestedParallelism,
                 requested -> {
-                    if (!isPendingStart(token, next) || runtime.active()) return 0;
+                    if (!isPendingStart(token, next) || runtime.active()) return 0L;
                     CraftingStatus state = runtime.start(next, requested);
                     if (!state.isCrafting()) {
                         RecipeSearchContextKey failureKey = pendingStartSearchContextKey;
                         clearPendingStart(token, next);
                         onStartFailed(failureKey);
                         controller.syncRecipeRuntimeFailure(runtime);
-                        return 0;
+                        return 0L;
                     }
                     return runtime.parallelism();
                 },
@@ -402,7 +402,7 @@ public abstract class RecipeThread {
     public boolean isIdle() { return !startPending && !runtime.active(); }
     public boolean isStartPending() { return startPending; }
     public @Nullable MachineRecipe getPendingStartRecipe() { return pendingStartRecipe; }
-    public int usedParallelism() { return runtime.parallelism(); }
+    public long usedParallelism() { return runtime.parallelism(); }
     public CraftingRuntime runtime() { return runtime; }
 
 }

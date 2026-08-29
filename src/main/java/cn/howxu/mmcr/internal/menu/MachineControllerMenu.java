@@ -39,8 +39,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot lastFailure;
     private final DataSlot redstonePaused;
     private final DataSlot parallelControllerCount;
-    private final DataSlot currentParallelism;
-    private final DataSlot maxParallelism;
     private final DataSlot factoryControllerPresent;
     private final DataSlot factoryThreadCount;
     private final DataSlot factoryActiveThreadCount;
@@ -89,14 +87,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public int get() { return machineState(owner).parallelControllerCount(); }
             @Override public void set(int value) {}
         });
-        this.currentParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return machineState(owner).parallelism(); }
-            @Override public void set(int value) {}
-        });
-        this.maxParallelism = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return machineState(owner).maxParallelism(); }
-            @Override public void set(int value) {}
-        });
         this.factoryControllerPresent = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() { return machineState(owner).factoryControllerPresent() ? 1 : 0; }
             @Override public void set(int value) {}
@@ -134,8 +124,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.lastFailure = addDataSlot(DataSlot.standalone());
         this.redstonePaused = addDataSlot(DataSlot.standalone());
         this.parallelControllerCount = addDataSlot(DataSlot.standalone());
-        this.currentParallelism = addDataSlot(DataSlot.standalone());
-        this.maxParallelism = addDataSlot(DataSlot.standalone());
         this.factoryControllerPresent = addDataSlot(DataSlot.standalone());
         this.factoryThreadCount = addDataSlot(DataSlot.standalone());
         this.factoryActiveThreadCount = addDataSlot(DataSlot.standalone());
@@ -265,16 +253,16 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? parallelControllerCount.get() : state.parallelControllerCount();
     }
 
-    public int currentParallelism() {
+    public long currentParallelism() {
         if (clientSnapshot != null) return clientSnapshot.parallelism();
         MachineStateSnapshot state = localState();
-        return state == null ? currentParallelism.get() : state.parallelism();
+        return state == null ? 0L : state.parallelism();
     }
 
-    public int maxParallelism() {
+    public long maxParallelism() {
         if (clientSnapshot != null) return clientSnapshot.maxParallelism();
         MachineStateSnapshot state = localState();
-        return state == null ? Math.max(1, maxParallelism.get()) : state.maxParallelism();
+        return state == null ? 1L : state.maxParallelism();
     }
 
     public boolean hasFactoryController() {
@@ -347,8 +335,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.activeTotalTick.set(snapshot.totalTick());
         this.lastFailure.set(failureCode(SYNC_RUNTIME.failureMessage(snapshot.failure())));
         this.redstonePaused.set(snapshot.redstonePaused() ? 1 : 0);
-        this.currentParallelism.set(snapshot.parallelism());
-        this.maxParallelism.set(snapshot.maxParallelism());
         this.factoryControllerPresent.set(snapshot.factoryControllerPresent() ? 1 : 0);
         this.factoryThreadCount.set(snapshot.factoryThreadCount());
         this.factoryActiveThreadCount.set(snapshot.activeFactoryThreadCount());

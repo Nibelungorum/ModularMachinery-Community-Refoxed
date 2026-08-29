@@ -19,13 +19,13 @@ public record FactorySearchContext(
         List<RecipeModifier> modifiers,
         long catalogVersion,
         long resourceAvailabilityEpoch,
-        int maxParallelism,
+        long maxParallelism,
         long gameTime) {
     public FactorySearchContext {
         if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
         orderedCandidates = List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
         capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
         modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
-        maxParallelism = Math.max(1, maxParallelism);
+        maxParallelism = Math.max(1L, maxParallelism);
     }
 }

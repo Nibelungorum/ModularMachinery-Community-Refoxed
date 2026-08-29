@@ -34,10 +34,10 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                      boolean moduleConnected, String connectedHostId,
                                       CraftingStatus.Status craftingStatus, String craftingMessage,
                                       ExecutionStatus failure, boolean structureAreaLoaded, boolean redstonePaused,
-                                      int tick, int totalTick, int parallelism, int maxParallelism,
+                                       int tick, int totalTick, long parallelism, long maxParallelism,
                                       boolean factoryControllerPresent, int factoryThreadCount,
                                       int activeFactoryThreadCount, int parallelControllerCount,
-                                      int maxParallelControllerCount, long totalStoredEnergy,
+                                       long maxParallelControllerCount, long totalStoredEnergy,
                                       long totalCapacityEnergy, FluidStack primaryFluid,
                                       FluidStack primaryOutputFluid)
         implements CustomPacketPayload {
@@ -152,13 +152,13 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeBoolean(payload.redstonePaused);
         buf.writeVarInt(payload.tick);
         buf.writeVarInt(payload.totalTick);
-        buf.writeVarInt(payload.parallelism);
-        buf.writeVarInt(payload.maxParallelism);
+         buf.writeLong(payload.parallelism);
+         buf.writeLong(payload.maxParallelism);
         buf.writeBoolean(payload.factoryControllerPresent);
         buf.writeVarInt(payload.factoryThreadCount);
         buf.writeVarInt(payload.activeFactoryThreadCount);
         buf.writeVarInt(payload.parallelControllerCount);
-        buf.writeVarInt(payload.maxParallelControllerCount);
+         buf.writeLong(payload.maxParallelControllerCount);
         buf.writeLong(payload.totalStoredEnergy);
         buf.writeLong(payload.totalCapacityEnergy);
         FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryFluid);
@@ -193,8 +193,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 recipeLocked, lockedRecipeId, machineId, controllerRole, installedModuleCount,
                 moduleConnected, connectedHostId, status, craftingMessage, failure, structureAreaLoaded,
                 redstonePaused,
-                buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
-                buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(),
+                 buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(),
+                 buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readLong(),
                 buf.readLong(), buf.readLong(), FluidStack.OPTIONAL_STREAM_CODEC.decode(buf),
                 FluidStack.OPTIONAL_STREAM_CODEC.decode(buf));
     }

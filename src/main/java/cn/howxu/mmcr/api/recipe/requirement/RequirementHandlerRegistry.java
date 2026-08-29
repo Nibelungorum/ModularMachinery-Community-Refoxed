@@ -146,6 +146,18 @@ public final class RequirementHandlerRegistry {
     private record EnergyAction(MachineCapability capability, long amount) {
     }
 
+    private record ConsumeProfile(boolean[] decisions, float chance) {
+        private long consumedBatches(long parallelism) {
+            if (decisions == null) return Math.round(parallelism * (double) chance);
+            long consumed = 0L;
+            int limit = (int) Math.min(parallelism, decisions.length);
+            for (int index = 0; index < limit; index++) {
+                if (decisions[index]) consumed++;
+            }
+            return consumed;
+        }
+    }
+
     private static RequirementPlan planEnergy(EnergyRequirement requirement,
                                                List<MachineCapability> capabilities,
                                                PlanningContext context) {
@@ -191,14 +203,14 @@ public final class RequirementHandlerRegistry {
                     requestedAmount(requirement, context.requestedParallelism()))
                     : blockedPlan(requirement, context, "insufficient_resource");
         }
-        boolean[] consumed = requirement.io() == RecipeModifier.IOType.INPUT
-                ? consumeDecisions(requirement.consumeChance(), parallelism) : new boolean[parallelism];
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && requirement.stack(null).isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
+        ConsumeProfile consumed = requirement.io() == RecipeModifier.IOType.INPUT
+                ? consumeProfile(requirement.consumeChance(), parallelism) : null;
         return deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planItemOperations(
                         requirement, capabilities, finalParallelism, consumed, reservations,
@@ -328,12 +340,13 @@ public final class RequirementHandlerRegistry {
 
     private static RequirementPlan.OperationPlan planItemOperations(ItemRequirement requirement,
                                                                        List<MachineCapability> capabilities,
-                                                                       long parallelism, boolean[] consumed,
+                                                                       long parallelism,
+                                                                       ConsumeProfile consumed,
                                                                        PlanningReservations reservations,
                                                                        boolean allowPartialOutputs,
                                                                        boolean materialize) {
         long batches = requirement.io() == RecipeModifier.IOType.INPUT
-                ? consumedPrefix(consumed, parallelism) : parallelism;
+                ? consumed.consumedBatches(parallelism) : parallelism;
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
                 ? scaled(requirement.count(), batches)
                 : scaled(requirement.stack(null).getCount(), parallelism);
@@ -464,19 +477,16 @@ public final class RequirementHandlerRegistry {
                                                                        boolean materialize) {
         List<CapabilityOperation> operations = new ArrayList<>();
         long requested = insert ? requestedAmount(requirement, parallelism) : 0L;
-        long accepted = 0L;
-        for (int batch = 0; batch < parallelism; batch++) {
-            List<EnergyAction> actions = reserveEnergyBatch(requirement.fePerTick(), insert,
-                    capabilities, reservations);
-            long batchAccepted = energyAmount(actions);
-            accepted = saturatingAdd(accepted, batchAccepted);
-            if (batchAccepted < requirement.fePerTick() && (!allowPartialOutput || !insert)) {
-                return new RequirementPlan.OperationPlan(List.of(), blocked(requirement,
-                        batchAccepted == 0L && insert ? "no_output_capacity" :
-                                insert ? "insufficient_resource" : "insufficient_energy"),
-                        outputSimulation(requested, accepted));
-            }
-            if (!materialize) continue;
+        long required = scaled(requirement.fePerTick(), parallelism);
+        List<EnergyAction> actions = reserveEnergy(required, parallelism, insert, capabilities, reservations);
+        long accepted = energyAmount(actions);
+        if (accepted < required && (!allowPartialOutput || !insert)) {
+            return new RequirementPlan.OperationPlan(List.of(), blocked(requirement,
+                    accepted == 0L && insert ? "no_output_capacity" :
+                            insert ? "insufficient_resource" : "insufficient_energy"),
+                    outputSimulation(requested, accepted));
+        }
+        if (materialize) {
             for (EnergyAction action : actions) {
                 operations.add(action.capability().prepare(new CapabilityRequests.ValueRequest(
                         action.capability().view().type(), action.capability().view().ioType(),
@@ -494,13 +504,19 @@ public final class RequirementHandlerRegistry {
                                       long requested, boolean allowPartialOutput) {
         if (insert && allowPartialOutput) return hasEnergyCapacity(capabilities) ? requested : 0;
         PlanningReservations reservations = new PlanningReservations();
-        long maximum = 0;
-        for (long batch = 0; batch < requested; batch++) {
-            if (energyAmount(reserveEnergyBatch(perBatch, insert, capabilities, reservations)) < perBatch) break;
-            maximum++;
+        long lower = 0L;
+        long upper = requested;
+        while (lower < upper) {
+            long distance = upper - lower;
+            long candidate = lower + (distance >>> 1) + (distance & 1L);
+            if (canReserveEnergyBatches(perBatch, candidate, insert, capabilities, reservations)) {
+                lower = candidate;
+            } else {
+                upper = candidate - 1L;
+            }
         }
-        if (insert && maximum == 0 && hasEnergyCapacity(capabilities)) return 1;
-        return maximum;
+        if (insert && lower == 0 && hasEnergyCapacity(capabilities)) return 1;
+        return lower;
     }
 
     private static boolean hasEnergyCapacity(List<MachineCapability> capabilities) {
@@ -513,16 +529,31 @@ public final class RequirementHandlerRegistry {
         return false;
     }
 
-    private static List<EnergyAction> reserveEnergyBatch(long amount, boolean insert,
-                                                          List<MachineCapability> capabilities,
-                                                          PlanningReservations reservations) {
+    private static boolean canReserveEnergyBatches(long perBatch, long batches, boolean insert,
+                                                   List<MachineCapability> capabilities,
+                                                   PlanningReservations reservations) {
+        long required = scaled(perBatch, batches);
+        long available = 0L;
+        for (MachineCapability capability : capabilities) {
+            if (!(capability.storage() instanceof LongValueStorage storage)) continue;
+            long transferable = Math.min(reservations.valueAvailable(storage, insert),
+                    scaled(storage.transferLimit(), batches));
+            available = saturatingAdd(available, transferable);
+            if (available >= required) return true;
+        }
+        return available >= required;
+    }
+
+    private static List<EnergyAction> reserveEnergy(long amount, long batches, boolean insert,
+                                                    List<MachineCapability> capabilities,
+                                                    PlanningReservations reservations) {
         long remaining = amount;
         List<EnergyAction> actions = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
             if (!(capability.storage() instanceof LongValueStorage storage)) continue;
             long available = reservations.valueAvailable(storage, insert);
-            long moved = Math.min(remaining, Math.min(available, storage.transferLimit()));
-            if (moved <= 0L || !reservations.reserveValue(storage, moved, insert)) continue;
+            long moved = Math.min(remaining, Math.min(available, scaled(storage.transferLimit(), batches)));
+            if (moved <= 0L || !reservations.reserveValueTotal(storage, moved, insert)) continue;
             actions.add(new EnergyAction(capability, moved));
             remaining -= moved;
             if (remaining == 0L) break;
@@ -536,18 +567,16 @@ public final class RequirementHandlerRegistry {
         return amount;
     }
 
-    private static long consumedPrefix(boolean[] consumed, long parallelism) {
-        long batches = 0L;
-        for (int index = 0; index < parallelism; index++) if (consumed[index]) batches++;
-        return batches;
-    }
-
-    private static boolean[] consumeDecisions(float chance, long parallelism) {
-        boolean[] decisions = new boolean[Math.toIntExact(parallelism)];
-        for (int index = 0; index < parallelism; index++) {
-            decisions[index] = chance >= 1F || chance > 0F && Math.random() < chance;
+    private static ConsumeProfile consumeProfile(float chance, long parallelism) {
+        if (parallelism <= 1_024L) {
+            boolean[] decisions = new boolean[(int) parallelism];
+            for (int index = 0; index < decisions.length; index++) {
+                decisions[index] = chance >= 1F || Math.random() < chance;
+            }
+            return new ConsumeProfile(decisions, chance);
         }
-        return decisions;
+        // A per-batch decision vector cannot be represented for long capacities.
+        return new ConsumeProfile(null, chance);
     }
 
     private static boolean matchesItem(ItemRequirement requirement, ItemResource resource) {

@@ -99,7 +99,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return Math.min(THREAD_ROW_WIDTH, tick * THREAD_ROW_WIDTH / totalTick);
     }
 
-    static int selectedParallelism(FactoryControllerMenu menu) {
+    static long selectedParallelism(FactoryControllerMenu menu) {
         return menu.currentParallelism();
     }
 
@@ -123,7 +123,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return Component.translatable("gui.mmcr.controller.parallel_slots", Component.literal(NUMBER_FORMAT.format(parallelSlots)));
     }
 
-    private static Component parallelLine(int parallelism, int maxParallelism) {
+    private static Component parallelLine(long parallelism, long maxParallelism) {
         return Component.translatable("gui.mmcr.controller.parallel", Component.literal(NUMBER_FORMAT.format(parallelism)),
                 Component.literal(NUMBER_FORMAT.format(maxParallelism)));
     }

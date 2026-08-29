@@ -38,6 +38,17 @@ class PktMachineStatePayloadTest {
     }
 
     @Test
+    void long_parallelism_values_round_trip_without_truncation() {
+        PktMachineStatePayload payload = payload(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE);
+        RegistryFriendlyByteBuf buffer = buffer();
+
+        PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
+
+        assertThat(PktMachineStatePayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
+        buffer.release();
+    }
+
+    @Test
     void encoder_rejects_oversized_machine_level_snapshot() {
         assertThatThrownBy(() -> PktMachineStatePayload.STREAM_CODEC.encode(buffer(),
                 payload(IntStream.range(0, PktMachineStatePayload.MAX_LEVEL_SNAPSHOTS + 1)
@@ -79,9 +90,21 @@ class PktMachineStatePayloadTest {
     }
 
     private static PktMachineStatePayload payload(List<String> levels, ExecutionStatus failure) {
+        return payload(1L, 1L, 0L, levels, failure);
+    }
+
+    private static PktMachineStatePayload payload(long parallelism, long maxParallelism,
+                                                  long maxParallelControllerCount) {
+        return payload(parallelism, maxParallelism, maxParallelControllerCount, List.of(), null);
+    }
+
+    private static PktMachineStatePayload payload(long parallelism, long maxParallelism,
+                                                  long maxParallelControllerCount, List<String> levels,
+                                                  ExecutionStatus failure) {
         return new PktMachineStatePayload(BlockPos.ZERO, "mmcr:recipe", true, true, levels, false, "",
                 "mmcr:machine", 0, 0, false, "", CraftingStatus.Status.IDLE,
-                "", failure, true, false, 0, 10, 1, 1, false, 0, 0, 0, 0, 0L, 0L,
+                "", failure, true, false, 0, 10, parallelism, maxParallelism, false, 0, 0, 0,
+                maxParallelControllerCount, 0L, 0L,
                 FluidStack.EMPTY, FluidStack.EMPTY);
     }
 

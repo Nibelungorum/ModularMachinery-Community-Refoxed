@@ -67,7 +67,7 @@ public final class CraftingRuntime {
         this.components = components;
     }
 
-    public CraftingStatus start(MachineRecipe recipe, int requestedParallelism) {
+    public CraftingStatus start(MachineRecipe recipe, long requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0) {
             return fail("invalid_start");
         }
@@ -79,7 +79,7 @@ public final class CraftingRuntime {
         }
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return fail("recipe_behavior");
-        int effectiveParallelism = Math.max(1, Math.min(requestedParallelism, runtime.maxParallelism()));
+        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
         List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers(runtime));
         List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers(runtime));
         MachineBehaviorContext machineContext = controller.behaviorContext();
@@ -285,12 +285,12 @@ public final class CraftingRuntime {
         return activeRecipe == null ? 0 : activeRecipe.getTotalTick();
     }
 
-    public int parallelism() {
+    public long parallelism() {
         return activeRecipe == null ? 0 : activeRecipe.getParallelism();
     }
 
-    public int maxParallelism() {
-        return activeRecipe == null ? 1 : activeRecipe.getMaxParallelism();
+    public long maxParallelism() {
+        return activeRecipe == null ? 1L : activeRecipe.getMaxParallelism();
     }
 
     public boolean finishPending() {

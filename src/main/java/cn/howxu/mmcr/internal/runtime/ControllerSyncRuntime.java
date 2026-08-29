@@ -55,8 +55,8 @@ public final class ControllerSyncRuntime {
         FactorySnapshot factory = runtime.factory();
         ExecutionStatus failure = factory.failure() == null ? runtime.crafting().failure() : factory.failure();
         return new FactorySnapshot(runtime.structure().formed(), factory.active(), factory.lanes(),
-                factory.activeParallelism(), factory.laneLimit(), factory.activeLaneCount(),
-                runtime.maxParallelism(), factory.paused(), factory.presentationLanes(), runtime.machineName(),
+                factory.laneLimit(), factory.activeLaneCount(), runtime.maxParallelism(),
+                factory.paused(), factory.presentationLanes(), runtime.machineName(),
                 runtime.parallelControllerCount(), failure, runtime.foundLevelIds());
     }
 
@@ -75,12 +75,13 @@ public final class ControllerSyncRuntime {
                 || machine != null && machine.behavior() instanceof TickBehavior;
     }
 
-    public int currentParallelism(ControllerRuntimeSnapshot runtime) {
+    public long currentParallelism(ControllerRuntimeSnapshot runtime) {
         require(runtime);
-        return factoryControllerPresent(runtime) ? runtime.factory().activeParallelism() : runtime.crafting().parallelism();
+        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(runtime);
+        return thread == null ? runtime.crafting().parallelism() : thread.parallelism();
     }
 
-    public int maxParallelism(ControllerRuntimeSnapshot runtime) {
+    public long maxParallelism(ControllerRuntimeSnapshot runtime) {
         require(runtime);
         return runtime.maxParallelism();
     }
@@ -95,7 +96,7 @@ public final class ControllerSyncRuntime {
         return runtime.parallelControllerCount();
     }
 
-    public int maxParallelControllerCount(ControllerRuntimeSnapshot runtime) {
+    public long maxParallelControllerCount(ControllerRuntimeSnapshot runtime) {
         require(runtime);
         return runtime.maxParallelControllerCount();
     }

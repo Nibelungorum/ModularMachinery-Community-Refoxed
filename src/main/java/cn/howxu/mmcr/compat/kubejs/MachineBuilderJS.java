@@ -41,7 +41,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient boolean allowModifiers = false;
     public transient boolean allowMultithreading = false;
     public transient boolean allowParallelism = false;
-    public transient int maxParallelAmount = 1;
+    public transient long maxParallelAmount = 1L;
+    private transient int factoryThreadLimit = 1;
     public transient Identifier machineBasicBlock;
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
@@ -147,7 +148,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS factoryThreads(int factoryThreads) {
-        return maxParallelAmount(factoryThreads);
+        if (factoryThreads < 1) throw new IllegalArgumentException("factoryThreads must be positive");
+        this.factoryThreadLimit = factoryThreads;
+        return this;
     }
 
     public MachineBuilderJS controllerSpec(MachineControllerSpec controllerSpec) {
@@ -345,9 +348,13 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
-    public MachineBuilderJS maxParallelAmount(int amount) {
+    public MachineBuilderJS maxParallelAmount(long amount) {
         this.maxParallelAmount = amount;
         return this;
+    }
+
+    public MachineBuilderJS maxParallelism(long maxParallelism) {
+        return maxParallelAmount(maxParallelism);
     }
 
     public MachineBuilderJS machineBasicBlock(String blockId) {
@@ -529,8 +536,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                         .controllerBaseTexture(registration.appearance().controllerBaseTexture())
                         .formedPortBaseTexture(registration.appearance().formedPortBaseTexture()))
                 .factory(factory -> factory
-                        .hasFactory(registration.maxParallelAmount() > 1)
-                        .threadLimit(registration.maxParallelAmount()))
+                        .hasFactory(factoryThreadLimit > 1)
+                        .threadLimit(factoryThreadLimit))
                 .role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.valueOf(registration.role().name()))
                 .maxParallelism(registration.maxParallelAmount())
                 .parallelizable(registration.allowParallelism())
@@ -552,7 +559,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineDefinition base = builder.build();
         MachineDefinition definition = new MachineDefinition(base.id(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
-                registration.allowModifiers(), registration.allowMultithreading(), registration.maxParallelAmount(),
+                registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
                 registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()
                         .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
                                 entry -> toPublicSmartInterfaceType(entry.getValue()))),

@@ -13,8 +13,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
-import java.util.function.IntConsumer;
-import java.util.function.IntUnaryOperator;
+import java.util.function.LongConsumer;
+import java.util.function.LongUnaryOperator;
 import java.util.function.LongSupplier;
 
 /**
@@ -237,14 +237,14 @@ public final class SharedIoCoordinator {
 
     public record StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                                long controllerStructureVersion, long controllerStateVersion,
-                               int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
+                               long maximumParallelism, LongUnaryOperator transaction, LongConsumer committer,
                                BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
                                LongSupplier controllerStateVersionSupplier, long catalogVersion,
                                LongSupplier catalogVersionSupplier, Runnable commitNotifier) implements Request {
 
         public StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                             long controllerStructureVersion, long controllerStateVersion,
-                             int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
+                              long maximumParallelism, LongUnaryOperator transaction, LongConsumer committer,
                              BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
                              LongSupplier controllerStateVersionSupplier) {
             this(domain, laneKey, controllerStructureVersion, controllerStateVersion, maximumParallelism,
@@ -254,7 +254,7 @@ public final class SharedIoCoordinator {
 
         public StartRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                             long controllerStructureVersion, long controllerStateVersion,
-                            int maximumParallelism, IntUnaryOperator transaction, IntConsumer committer,
+                             long maximumParallelism, LongUnaryOperator transaction, LongConsumer committer,
                             BooleanSupplier validator, LongSupplier controllerStructureVersionSupplier,
                             LongSupplier controllerStateVersionSupplier, long catalogVersion,
                             LongSupplier catalogVersionSupplier) {
@@ -273,8 +273,8 @@ public final class SharedIoCoordinator {
             return Request.super.isStillValid();
         }
         @Override public boolean tryCommit() {
-            int granted = transaction.applyAsInt(maximumParallelism);
-            if (granted <= 0) return false;
+            long granted = transaction.applyAsLong(maximumParallelism);
+            if (granted <= 0L) return false;
             committer.accept(granted);
             return true;
         }

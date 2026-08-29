@@ -83,7 +83,17 @@ public final class PlanningReservations {
     }
 
     public boolean reserveValue(LongValueStorage storage, long amount, boolean insert) {
-        if (amount <= 0L || amount > storage.transferLimit() || valueAvailable(storage, insert) < amount) return false;
+        return reserveValue(storage, amount, insert, true);
+    }
+
+    public boolean reserveValueTotal(LongValueStorage storage, long amount, boolean insert) {
+        return reserveValue(storage, amount, insert, false);
+    }
+
+    private boolean reserveValue(LongValueStorage storage, long amount, boolean insert,
+                                 boolean enforceTransferLimit) {
+        if (amount <= 0L || enforceTransferLimit && amount > storage.transferLimit()
+                || valueAvailable(storage, insert) < amount) return false;
         long reserved = values.getOrDefault(storage, 0L);
         long next;
         try {

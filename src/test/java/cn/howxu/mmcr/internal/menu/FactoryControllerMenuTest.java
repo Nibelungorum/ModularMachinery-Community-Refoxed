@@ -54,7 +54,7 @@ class FactoryControllerMenuTest {
     @Test
     void current_parallelism_uses_the_selected_active_thread() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
-        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 24, 2, 2, 24, false,
+         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 24L, false,
                 List.of(activeThread(0, 12), activeThread(1, 8)), "Factory", 0, null, List.of()));
 
         menu.selectThread(1);
@@ -66,7 +66,7 @@ class FactoryControllerMenuTest {
     @Test
     void selected_thread_exposes_only_its_own_recipe_lock() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
-        menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 0, 2, 0, 1, false,
+         menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 2, 0, 1L, false,
                 List.of(lockedThread(0, false, ""), lockedThread(1, true, "mmcr:locked")),
                 "Factory", 0, null, List.of()));
 
@@ -79,7 +79,7 @@ class FactoryControllerMenuTest {
     @Test
     void inactive_thread_reports_zero_parallelism_and_failure_is_exposed() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
-        menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 0, 1, 0, 1, false,
+         menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 1, 0, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, false, "", 0, 0, 1,
                         "gui.mmcr.controller.failure.missing_input", false, "")),
                 "Factory", 0, null, List.of()));
@@ -99,7 +99,7 @@ class FactoryControllerMenuTest {
     }
 
     private static FactorySnapshot snapshot(int... indexes) {
-        return new FactorySnapshot(true, false, List.of(), 0, indexes.length, 0, 1, false,
+         return new FactorySnapshot(true, false, List.of(), indexes.length, 0, 1L, false,
                 java.util.Arrays.stream(indexes).mapToObj(index -> lockedThread(index, false, "")).toList(),
                 "", 0, null, List.of());
     }

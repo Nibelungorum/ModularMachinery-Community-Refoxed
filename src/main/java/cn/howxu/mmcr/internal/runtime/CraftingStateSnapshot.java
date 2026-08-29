@@ -19,8 +19,8 @@ public record CraftingStateSnapshot(
         long modifierVersion,
         int tick,
         int totalTick,
-        int parallelism,
-        int maxParallelism,
+        long parallelism,
+        long maxParallelism,
         boolean recipeLocked,
         String lockedRecipeId) {
 
@@ -37,7 +37,7 @@ public record CraftingStateSnapshot(
 
     public static CraftingStateSnapshot empty(long structureVersion, long capabilityVersion, long modifierVersion) {
         return new CraftingStateSnapshot(null, CraftingStatus.IDLE, null,
-                structureVersion, capabilityVersion, modifierVersion, 0, 0, 0, 1, false, "");
+                structureVersion, capabilityVersion, modifierVersion, 0, 0, 0L, 1L, false, "");
     }
 
     @Override

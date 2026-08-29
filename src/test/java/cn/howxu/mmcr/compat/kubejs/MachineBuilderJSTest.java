@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineBuilderJSTest {
@@ -245,6 +246,7 @@ class MachineBuilderJSTest {
                 .recipeFamily("mmcr_kubejs:kubejs_family")
                 .expandableStructure(true)
                 .factoryThreads(4)
+                .maxParallelism(4)
                 .controllerTextures("mmcr_kubejs:block/derived_front", "mmcr_kubejs:block/derived_side")
                 .controllerSpec(controllerSpec)
                 .machineBasicBlock("mmcr_kubejs:derived_casing")
@@ -312,6 +314,26 @@ class MachineBuilderJSTest {
         assertThat(speed.defaultValue()).isEqualTo(1F);
         assertThat(speed.minValue()).isEqualTo(1F);
         assertThat(speed.maxValue()).isEqualTo(4F);
+    }
+
+    @Test
+    void builder_preserves_parallel_capacity_above_integer_maximum() {
+        long parallelism = (long) Integer.MAX_VALUE + 1L;
+
+        MachineRegistration registration = new MachineBuilderJS("mmcr:long_parallel_builder")
+                .maxParallelism(parallelism)
+                .createObject();
+
+        assertThat(registration.maxParallelAmount()).isEqualTo(parallelism);
+    }
+
+    @Test
+    void registering_parallel_capacity_above_integer_maximum_does_not_narrow_factory_settings() {
+        assertThatCode(() -> new MachineBuilderJS("mmcr:long_registered_machine")
+                .maxParallelism(Long.MAX_VALUE)
+                .factoryThreads(4)
+                .registerObject())
+                .doesNotThrowAnyException();
     }
 
     @Test

@@ -32,10 +32,10 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         FactorySnapshot factory = SYNC_RUNTIME.factoryState(runtime);
         data.putBoolean("formed", machineState.formed());
         data.putBoolean("active", machineState.active());
-        data.putInt("parallelism", machineState.parallelism());
-        data.putInt("maxParallelism", machineState.maxParallelism());
+        data.putLong("parallelism", machineState.parallelism());
+        data.putLong("maxParallelism", machineState.maxParallelism());
         data.putInt("parallelSlots", factory.parallelSlots());
-        data.putInt("maxParallelSlots", machineState.maxParallelControllerCount());
+        data.putLong("maxParallelSlots", machineState.maxParallelControllerCount());
         data.putBoolean("factorySupported", runtime.factorySupported());
         data.putBoolean("factoryPresent", machineState.factoryControllerPresent());
         data.putInt("factoryLanes", factory.activeLaneCount());

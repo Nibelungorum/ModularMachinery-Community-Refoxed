@@ -263,11 +263,11 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     @Override
-    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism, long structureVersion) {
+    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
         return searchAndStartRecipe(candidates, availableParallelism, structureVersion, null);
     }
 
-    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, int availableParallelism,
+    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                         long structureVersion, @Nullable Identifier lockedRecipeId) {
         setSearchContextKey(null);
         clearSearchGameTime();
@@ -296,7 +296,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         return started;
     }
 
-    public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, int availableParallelism,
+    public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                         long structureVersion, long capabilityVersion,
                                         long modifierVersion, long componentStateVersion,
                                         @Nullable Identifier lockedRecipeId) {
@@ -307,7 +307,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public boolean tryRestartLastRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
-                                        int availableParallelism, long structureVersion, long capabilityVersion,
+                                         long availableParallelism, long structureVersion, long capabilityVersion,
                                         long modifierVersion, long componentStateVersion,
                                         @Nullable Identifier lockedRecipeId) {
         if (context != null) {
@@ -322,7 +322,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 context == null ? Long.MIN_VALUE : context.catalogVersion(), context);
     }
 
-    private boolean tryRestartLastRecipe(List<MachineRecipe> candidates, int availableParallelism,
+    private boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                           long structureVersion, long capabilityVersion,
                                           long modifierVersion, long componentStateVersion,
                                           @Nullable Identifier lockedRecipeId, long catalogVersion,

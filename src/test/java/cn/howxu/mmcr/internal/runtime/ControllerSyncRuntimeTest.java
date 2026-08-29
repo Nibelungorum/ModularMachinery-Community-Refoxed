@@ -91,11 +91,12 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
-    void factoryProjectionUsesImmutableLaneSnapshotsAndAggregatedParallelism() {
+    void factoryProjectionUsesImmutableLaneSnapshotsAndPerLaneParallelism() {
         FactorySnapshot factory = new ControllerSyncRuntime().factoryState(runtimeSnapshot());
 
         assertThat(factory.active()).isTrue();
-        assertThat(factory.activeParallelism()).isEqualTo(6);
+        assertThat(factory.maxParallelism()).isEqualTo(8L);
+        assertThat(factory.presentationLanes().getFirst().parallelism()).isEqualTo(6L);
         assertThat(factory.laneLimit()).isEqualTo(2);
         assertThat(factory.presentationLanes()).hasSize(2).isUnmodifiable();
         assertThat(factory.foundLevelIds()).containsExactly("mmcr:steel");
@@ -430,7 +431,7 @@ class ControllerSyncRuntimeTest {
                 "", 0, 0, 1, "", false, "");
         CraftingStateSnapshot crafting = new CraftingStateSnapshot(MMCR.id("crafting_recipe"),
                 CraftingStatus.working(), null, 7L, 8L, 9L, 3, 20, 2, 8, true, "mmcr:crafting_recipe");
-        FactorySnapshot factory = new FactorySnapshot(true, true, List.of(crafting), 6, 2, 1, 8,
+        FactorySnapshot factory = new FactorySnapshot(true, true, List.of(crafting), 2, 1, 8L,
                 false, List.of(activeLane, idleLane), "factory", 3, failure, List.of("mmcr:steel"));
         StructureSnapshot structure = new StructureSnapshot(null, null, null, null, null,
                 net.minecraft.core.Direction.SOUTH, 1, true, 7L, null, null, null, false, true, Set.of());

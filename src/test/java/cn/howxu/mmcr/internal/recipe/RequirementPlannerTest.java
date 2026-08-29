@@ -67,6 +67,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -117,7 +118,7 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(3);
-        assertThat(matching.requestedParallelisms()).containsExactly(3);
+        assertThat(matching.requestedParallelisms()).containsExactly(3L);
         assertThat(wrongDirection.requestedParallelisms()).isEmpty();
         assertThat(wrongType.requestedParallelisms()).isEmpty();
     }
@@ -199,7 +200,7 @@ class RequirementPlannerTest {
         RequirementType<TestRequirement> factoryType = new RequirementType<>(
                 Identifier.fromNamespaceAndPath("mmcr_test", "single_operation_factory"));
         AtomicInteger factoryCalls = new AtomicInteger();
-        AtomicInteger operationParallelism = new AtomicInteger();
+        AtomicLong operationParallelism = new AtomicLong();
         TestCapability capability = new TestCapability(factoryType.id(), IOType.INPUT, 2);
         RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
             @Override
@@ -233,7 +234,7 @@ class RequirementPlannerTest {
         assertThat(result.plan().parallelism()).isEqualTo(1);
         assertThat(factoryCalls).hasValue(1);
         assertThat(operationParallelism).hasValue(1);
-        assertThat(capability.requestedParallelisms()).containsExactly(1);
+        assertThat(capability.requestedParallelisms()).containsExactly(1L);
     }
 
     @Test
@@ -270,7 +271,7 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isFalse();
         assertThat(result.failure()).isSameAs(materializationFailure);
         assertThat(factoryCalls).hasValue(1);
-        assertThat(capability.requestedParallelisms()).containsExactly(2);
+        assertThat(capability.requestedParallelisms()).containsExactly(2L);
     }
 
     @Test
@@ -1210,6 +1211,51 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void item_planning_supports_parallelism_above_integer_maximum() {
+        long parallelism = (long) Integer.MAX_VALUE + 1L;
+        BulkItemStorage storage = new BulkItemStorage(Long.MAX_VALUE, null);
+        storage.insert(ironResource(), Long.MAX_VALUE, false);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
+                        ItemStack.EMPTY)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(parallelism, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(parallelism);
+    }
+
+    @Test
+    void energy_planning_supports_long_parallelism_without_batch_iteration() {
+        LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, 1L, null);
+        storage.setAmount(Long.MAX_VALUE);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(Long.MAX_VALUE, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
+    void shared_long_energy_requirements_find_the_highest_feasible_parallelism() {
+        LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, null);
+        storage.setAmount(Long.MAX_VALUE);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1),
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage)),
+                new PlanningContext(Long.MAX_VALUE, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(Long.MAX_VALUE / 2L);
+    }
+
+    @Test
     void full_context_plan_start_honors_partial_outputs() {
         BulkItemStorage storage = new BulkItemStorage(2, null);
         MachineRecipe recipe = new MachineRecipe(
@@ -1454,7 +1500,7 @@ class RequirementPlannerTest {
         }
     }
 
-    private record TestRequest(int parallelism) implements CapabilityRequest {
+    private record TestRequest(long parallelism) implements CapabilityRequest {
         @Override
         public CapabilityType type() {
             return new CapabilityType(TYPE.id());
@@ -1471,7 +1517,7 @@ class RequirementPlannerTest {
         private final IOType ioType;
         private final int limit;
         private final List<String> tags;
-        private final java.util.ArrayList<Integer> requestedParallelisms = new java.util.ArrayList<>();
+        private final java.util.ArrayList<Long> requestedParallelisms = new java.util.ArrayList<>();
 
         private TestCapability(Identifier type, IOType ioType, int limit) {
             this(type, ioType, limit, List.of());
@@ -1488,7 +1534,7 @@ class RequirementPlannerTest {
             return limit;
         }
 
-        private List<Integer> requestedParallelisms() {
+        private List<Long> requestedParallelisms() {
             return requestedParallelisms;
         }
 

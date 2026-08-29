@@ -53,7 +53,7 @@ public final class RequirementPlanner {
         }
 
         List<RequirementPlan> plans = new ArrayList<>(requirements.size());
-        int parallelism = context.requestedParallelism();
+        long parallelism = context.requestedParallelism();
         ExecutionStatus parallelismFailure = null;
         Integer parallelismFailureIndex = null;
         for (int index = 0; index < requirements.size(); index++) {
@@ -76,38 +76,27 @@ public final class RequirementPlanner {
         if (parallelism <= 0) {
             return new PlanningResult(null, parallelismFailure, outputSimulations(plans), parallelismFailureIndex);
         }
-        int selectedParallelism = 0;
-        ExecutionStatus reservationFailure = null;
-        Integer reservationFailureIndex = null;
-        List<OutputSimulation> reservationFailureOutputSimulations = List.of();
-        for (int candidate = parallelism; candidate > 0; candidate--) {
-            PlanningReservations reservations = context.reservations().copy();
-            List<OutputSimulation> candidateOutputSimulations = new ArrayList<>(outputSimulations(plans));
-            boolean reservationsAvailable = true;
-            for (int index = 0; index < plans.size(); index++) {
-                RequirementPlan.ReservationResult reservation = plans.get(index)
-                        .reservationResult(candidate, reservations);
-                if (reservation.outputSimulation() != null) {
-                    candidateOutputSimulations.add(reservation.outputSimulation());
-                }
-                ExecutionStatus failure = reservation.failure();
-                if (failure != null) {
-                    reservationFailure = failure;
-                    reservationFailureIndex = requirementIndexes.get(index);
-                    reservationFailureOutputSimulations = candidateOutputSimulations;
-                    reservationsAvailable = false;
-                    break;
-                }
-            }
-            if (reservationsAvailable) {
-                selectedParallelism = candidate;
-                break;
+        long lower = 0L;
+        long upper = parallelism;
+        ReservationAttempt lastFailure = null;
+        while (lower < upper) {
+            long distance = upper - lower;
+            long candidate = lower + (distance >>> 1) + (distance & 1L);
+            ReservationAttempt attempt = reserveCandidate(plans, requirementIndexes, candidate,
+                    context.reservations());
+            if (attempt.successful()) {
+                lower = candidate;
+            } else {
+                lastFailure = attempt;
+                upper = candidate - 1L;
             }
         }
-        if (selectedParallelism <= 0) {
-            return new PlanningResult(null, reservationFailure, reservationFailureOutputSimulations,
-                    reservationFailureIndex);
+        if (lower <= 0L) {
+            return new PlanningResult(null, lastFailure == null ? null : lastFailure.failure(),
+                    lastFailure == null ? List.of() : lastFailure.outputSimulations(),
+                    lastFailure == null ? null : lastFailure.failureIndex());
         }
+        long selectedParallelism = lower;
 
         PlanningReservations materializationReservations = context.reservations().copy();
         List<RequirementPlan> materialized = new ArrayList<>(plans.size());
@@ -123,6 +112,31 @@ public final class RequirementPlanner {
             directions.put(requirementIndexes.get(index), requirements.get(index).io());
         }
         return new PlanningResult(new CraftingPlan(materialized, selectedParallelism, directions), null);
+    }
+
+    private static ReservationAttempt reserveCandidate(List<RequirementPlan> plans,
+                                                        List<Integer> requirementIndexes,
+                                                        long candidate,
+                                                        PlanningReservations baseReservations) {
+        PlanningReservations reservations = baseReservations.copy();
+        List<OutputSimulation> candidateOutputSimulations = new ArrayList<>(outputSimulations(plans));
+        for (int index = 0; index < plans.size(); index++) {
+            RequirementPlan.ReservationResult reservation = plans.get(index)
+                    .reservationResult(candidate, reservations);
+            if (reservation.outputSimulation() != null) {
+                candidateOutputSimulations.add(reservation.outputSimulation());
+            }
+            ExecutionStatus failure = reservation.failure();
+            if (failure != null) {
+                return new ReservationAttempt(false, failure, requirementIndexes.get(index),
+                        candidateOutputSimulations);
+            }
+        }
+        return new ReservationAttempt(true, null, null, candidateOutputSimulations);
+    }
+
+    private record ReservationAttempt(boolean successful, ExecutionStatus failure, Integer failureIndex,
+                                      List<OutputSimulation> outputSimulations) {
     }
 
     private static PlanningResult failed(ExecutionStatus failure, int failureRequirementIndex,

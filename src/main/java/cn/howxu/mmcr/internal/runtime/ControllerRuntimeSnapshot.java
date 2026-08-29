@@ -42,8 +42,8 @@ public record ControllerRuntimeSnapshot(
         boolean factorySupported,
         boolean factoryControllerPresent,
         int parallelControllerCount,
-        int maxParallelControllerCount,
-        int maxParallelism) {
+        long maxParallelControllerCount,
+        long maxParallelism) {
 
     public ControllerRuntimeSnapshot {
         structure = structure == null ? StructureSnapshot.empty() : structure;

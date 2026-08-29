@@ -34,7 +34,7 @@ public class DISTILLATION_TOWER {
                     .machine(DISTILLATION_TOWER)
                     .displayNameKey("machine.mmcr.distillation_tower")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("polished_blackstone")))
-                    .maxParallelAmount(32)
+                    .maxParallelism(32)
                     .parallelizable(true)
                     .build();
             event.registerMachine(machine);

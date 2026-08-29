@@ -132,7 +132,7 @@ class CraftingPlanTest {
             }
 
             @Override
-            public CapabilityOperation forParallelism(int parallelism) {
+            public CapabilityOperation forParallelism(long parallelism) {
                 return this;
             }
         };

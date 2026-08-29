@@ -15,20 +15,20 @@ import java.util.Map;
 public record PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
                                PlanningReservations reservations,
                                Map<Integer, OutputPolicy> outputPolicies) {
-    public PlanningContext(int requestedParallelism, int requirementIndex) {
+    public PlanningContext(long requestedParallelism, int requirementIndex) {
         this(requestedParallelism, requirementIndex, false, new PlanningReservations(), Map.of());
     }
 
-    public PlanningContext(int requestedParallelism, int requirementIndex, boolean allowPartialOutputs) {
+    public PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs) {
         this(requestedParallelism, requirementIndex, allowPartialOutputs, new PlanningReservations(), Map.of());
     }
 
-    public PlanningContext(int requestedParallelism, int requirementIndex,
+    public PlanningContext(long requestedParallelism, int requirementIndex,
                            Map<Integer, OutputPolicy> outputPolicies) {
         this(requestedParallelism, requirementIndex, false, new PlanningReservations(), outputPolicies);
     }
 
-    public PlanningContext(int requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
+    public PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
                            PlanningReservations reservations) {
         this(requestedParallelism, requirementIndex, allowPartialOutputs, reservations, Map.of());
     }

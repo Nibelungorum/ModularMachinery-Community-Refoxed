@@ -620,7 +620,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                  int controllerRole, int installedModuleCount, boolean moduleConnected,
                                  @Nullable Identifier connectedHostId, CraftingStatus craftingStatus,
                                  @Nullable ExecutionStatus failure, boolean structureAreaLoaded,
-                                 int tick, int totalTick, int parallelism, int maxParallelism) {
+                                  int tick, int totalTick, long parallelism, long maxParallelism) {
         if (level == null || !level.isClientSide()) return;
         if (physicalFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -674,7 +674,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return SYNC_RUNTIME.active(state);
     }
 
-    public int currentParallelism() {
+    public long currentParallelism() {
         ControllerRuntimeSnapshot state = runtimeSnapshot();
         return SYNC_RUNTIME.machineState(state).parallelism();
     }
@@ -693,7 +693,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         unlinkLinkedPorts();
     }
 
-    public int getMaxParallelism() {
+    public long getMaxParallelism() {
         return SYNC_RUNTIME.machineState(currentRuntimeSnapshot()).maxParallelism();
     }
 
@@ -701,7 +701,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return SYNC_RUNTIME.machineState(runtimeSnapshot()).parallelControllerCount();
     }
 
-    public int maxParallelControllerCount() {
+    public long maxParallelControllerCount() {
         return SYNC_RUNTIME.machineState(runtimeSnapshot()).maxParallelControllerCount();
     }
 
@@ -1075,7 +1075,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private FactoryTickResult tickFactoryRecipes() {
         ControllerRuntimeSnapshot current = currentRuntimeSnapshot();
         StructureSnapshot structure = current.structure();
-        int maxParallelism = runtime.maxParallelism(structure.machine());
+        long maxParallelism = runtime.maxParallelism(structure.machine());
         List<MachineRecipe> candidates = recipesForMachine();
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
@@ -2709,7 +2709,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Identifier machineId = matchedMachine == null ? null : matchedMachine.registryName();
         if (machineId == null) return false;
         List<MachineRecipe> candidates = recipesForMachine();
-        int maxParallelism = getMaxParallelism();
+        long maxParallelism = getMaxParallelism();
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(current, machineId, current.structure().version(),
@@ -2871,14 +2871,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 snapshot.stateVersion(),
                 getMaxParallelism(),
                 requested -> {
-                    if (!isPendingSharedStart(token, next, domain) || runtime.craftingRuntime().active()) return 0;
+                    if (!isPendingSharedStart(token, next, domain) || runtime.craftingRuntime().active()) return 0L;
                     CraftingStatus state = runtime.craftingRuntime().start(next, requested);
                     if (!state.isCrafting()) {
                         clearPendingSharedStart();
                         recipeSearchRetryCounter++;
                         syncCraftingFailure();
                         syncRuntimeStateIfChanged();
-                        return 0;
+                        return 0L;
                     }
                     return runtime.craftingRuntime().parallelism();
                 },

@@ -88,11 +88,11 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public boolean isRedstonePaused() { return snapshot.paused() || state.redstonePaused.get() != 0; }
     public int activeThreadCount() { return snapshot.activeLaneCount(); }
     public int threadCount() { return snapshot.laneLimit(); }
-    public int currentParallelism() {
+    public long currentParallelism() {
         FactoryRuntime.ThreadSnapshot thread = selectedThread();
-        return thread.active() ? thread.parallelism() : 0;
+        return thread.active() ? thread.parallelism() : 0L;
     }
-    public int maxParallelism() { return snapshot.maxParallelism(); }
+    public long maxParallelism() { return snapshot.maxParallelism(); }
     public String machineName() { return snapshot.machineName(); }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public List<String> foundLevelIds() { return snapshot.foundLevelIds(); }

@@ -65,7 +65,7 @@ class FactoryControllerScreenTest {
     @Test
     void active_selected_thread_hides_aggregate_last_failure() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
-        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 1, 2, 1, 1, false,
+         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, true, "mmcr:recipe", 1, 20,
                         1, "", false, ""),
                         new FactoryRuntime.ThreadSnapshot(1, false, false, false, "", 0, 0, 1,
@@ -180,7 +180,7 @@ class FactoryControllerScreenTest {
 
     private static FactoryControllerMenu menuWithDetailRows() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
-        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 4, 3, 2, 8, true,
+         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 3, 2, 8L, true,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, true, "mmcr:recipe", 20, 20,
                         4, "mmcr:selected_failure", false, "")),
                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList()));

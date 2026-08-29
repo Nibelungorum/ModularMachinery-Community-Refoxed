@@ -134,7 +134,7 @@ public final class InterfaceTooltips {
                 .withStyle(ChatFormatting.LIGHT_PURPLE);
     }
 
-    private static String formatParallel(int parallelism) {
+    private static String formatParallel(long parallelism) {
         return parallelism + "x";
     }
 

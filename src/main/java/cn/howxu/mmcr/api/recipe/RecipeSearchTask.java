@@ -26,28 +26,28 @@ public final class RecipeSearchTask {
     private final ControllerRuntimeSnapshot snapshot;
     private final Identifier machineId;
     private final long structureVersion;
-    private final int maxParallelism;
+    private final long maxParallelism;
     private final List<MachineRecipe> candidates;
     private final @Nullable Identifier lockedRecipeId;
     private final List<MachineCapability> capabilities;
     private final List<RecipeModifier> modifiers;
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
-                            int maxParallelism, List<MachineRecipe> candidates,
+                            long maxParallelism, List<MachineRecipe> candidates,
                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities) {
         this(snapshot, machineId, structureVersion, maxParallelism, orderedCandidates(candidates),
                 lockedRecipeId, capabilities, flattenModifiers(snapshot));
     }
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
-                            int maxParallelism, List<MachineRecipe> orderedCandidates,
+                            long maxParallelism, List<MachineRecipe> orderedCandidates,
                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
                             List<RecipeModifier> modifiers) {
         if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
         this.snapshot = snapshot;
         this.machineId = machineId;
         this.structureVersion = structureVersion;
-        this.maxParallelism = Math.max(1, maxParallelism);
+        this.maxParallelism = Math.max(1L, maxParallelism);
         this.candidates = List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
         this.lockedRecipeId = lockedRecipeId;
         this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);

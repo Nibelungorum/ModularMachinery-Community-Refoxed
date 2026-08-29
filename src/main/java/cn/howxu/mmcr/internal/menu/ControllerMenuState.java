@@ -20,8 +20,6 @@ final class ControllerMenuState {
     final DataSlot lastFailure;
     final DataSlot redstonePaused;
     final DataSlot parallelControllerCount;
-    final DataSlot currentParallelism;
-    final DataSlot maxParallelism;
 
     ControllerMenuState(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         formed = add(menu, owner, state -> state.formed() ? 1 : 0);
@@ -29,8 +27,6 @@ final class ControllerMenuState {
         lastFailure = add(menu, owner, state -> failureCode(SYNC_RUNTIME.failureMessage(state.failure())));
         redstonePaused = add(menu, owner, state -> state.redstonePaused() ? 1 : 0);
         parallelControllerCount = add(menu, owner, MachineStateSnapshot::parallelControllerCount);
-        currentParallelism = add(menu, owner, MachineStateSnapshot::parallelism);
-        maxParallelism = add(menu, owner, MachineStateSnapshot::maxParallelism);
     }
 
     private static DataSlot add(AbstractMachineMenu menu, MachineControllerBlockEntity owner,

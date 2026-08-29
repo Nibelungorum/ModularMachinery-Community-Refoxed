@@ -156,7 +156,7 @@ class CapabilityHostTest {
         return kind.entityFactory().create(BlockPos.ZERO, state);
     }
 
-    private record TestRequest(CapabilityType type, IOType ioType, int parallelism) implements CapabilityRequest {}
+    private record TestRequest(CapabilityType type, IOType ioType, long parallelism) implements CapabilityRequest {}
 
     private static final class MixedPort extends IOPortBlockEntity {
         private static final IOPortKind KIND = new IOPortKind() {
