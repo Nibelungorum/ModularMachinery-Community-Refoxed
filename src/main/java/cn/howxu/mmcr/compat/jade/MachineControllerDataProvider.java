@@ -74,5 +74,6 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putInt("fluidOutputs", fluidOutputs);
         data.putInt("energyInputs", energyInputs);
         data.putInt("energyOutputs", energyOutputs);
+        JadeTextCodec.write(data, controller.jadeTextSnapshot());
     }
 }

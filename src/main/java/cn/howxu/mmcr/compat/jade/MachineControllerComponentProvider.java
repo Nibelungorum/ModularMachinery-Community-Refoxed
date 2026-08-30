@@ -33,6 +33,9 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         for (String key : lineKeys(snapshot)) {
             tooltip.add(row(key, lineValue(snapshot, key)));
         }
+        for (Component line : JadeTextCodec.read(accessor.getServerData())) {
+            tooltip.add(line);
+        }
     }
 
     static List<String> lineKeys(Snapshot snapshot) {
