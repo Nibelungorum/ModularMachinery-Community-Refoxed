@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.client.preview;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
@@ -8,17 +7,10 @@ import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderContext;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.world.phys.BlockHitResult;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-
-import org.joml.Matrix4f;
-import org.joml.Vector4f;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,11 +25,9 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     private final PreviewLevel level;
     private final PreviewSceneRenderer scene;
     private final PreviewScenePictureInPictureRenderer pictureInPicture;
-    private final PreviewOwnerLifecycle lifecycle = new PreviewOwnerLifecycle();
     private final AtomicBoolean releaseScheduled = new AtomicBoolean();
     private BlockHitResult hoverHit;
     private BlockHitResult selectedHit;
-    private GpuBuffer depthReadbackBuffer;
     private volatile boolean closed;
 
     public StructurePreviewRenderer(StructurePreviewSchema schema) {
@@ -66,21 +56,26 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     @Override
     public void render(PreviewRenderContext context) {
-        lifecycle.drainOwnerQueue();
         if (closed || context.viewport().width() <= 0 || context.viewport().height() <= 0) return;
         GuiGraphicsExtractorAccessor graphics = (GuiGraphicsExtractorAccessor) context.graphics();
         int mouseX = graphics.mmcr$getMouseX();
         int mouseY = graphics.mmcr$getMouseY();
         PreviewViewport absoluteViewport = context.absoluteViewport();
-        PreviewViewport.FramebufferViewport framebuffer = context.framebufferViewport();
+        if (absoluteViewport.contains(mouseX, mouseY)) {
+            double localMouseX = mouseX - absoluteViewport.x();
+            double localMouseY = mouseY - absoluteViewport.y();
+            PreviewSceneCamera camera = PreviewSceneCamera.from(context.camera(),
+                    absoluteViewport.width(), absoluteViewport.height());
+            hoverHit = scene.rayTrace(camera, localMouseX, localMouseY,
+                    absoluteViewport.width(), absoluteViewport.height());
+        } else {
+            hoverHit = null;
+        }
         int guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-        PreviewFrameViewport frame = new PreviewFrameViewport(absoluteViewport, framebuffer,
-                absoluteViewport.width() * guiScale, absoluteViewport.height() * guiScale, guiScale);
-        if (!frame.containsAbsoluteGui(mouseX, mouseY)) hoverHit = null;
         pictureInPicture.prepare(new PreviewSceneRenderState(scene, context.camera(),
                 absoluteViewport.x(), absoluteViewport.y(), absoluteViewport.x() + absoluteViewport.width(), absoluteViewport.y() + absoluteViewport.height(),
                 context.partialTick(), context.graphics().peekScissorStack(),
-                mouseX, mouseY, frame, this),
+                this),
                 graphics.mmcr$getGuiRenderState(), guiScale);
     }
 
@@ -96,52 +91,8 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         }
     }
 
-    /** Called after PiP has flushed its scene buffers into the owned depth texture. */
-    public void onPictureInPicturePrepared(GpuTexture depthTexture, PreviewSceneCamera camera,
-                                            int mouseX, int mouseY, PreviewFrameViewport frame) {
-        lifecycle.drainOwnerQueue();
-        if (closed) return;
-        if (depthTexture == null || !frame.containsAbsoluteGui(mouseX, mouseY)) {
-            hoverHit = null;
-            return;
-        }
-        if ((depthTexture.usage() & GpuTexture.USAGE_COPY_SRC) == 0) {
-            hoverHit = null;
-            return;
-        }
-        long now = System.currentTimeMillis();
-        if (lifecycle.readbackInFlight() || !lifecycle.shouldRead(mouseX, mouseY, now)) return;
-        if (depthReadbackBuffer == null) {
-            depthReadbackBuffer = RenderSystem.getDevice().createBuffer(() -> "MMCR preview depth readback",
-                    GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, 4L);
-        }
-        long token = lifecycle.nextReadback(mouseX, mouseY, now);
-        GpuBuffer issuedBuffer = depthReadbackBuffer;
-        PreviewDepthReadbackSample sample = PreviewDepthReadbackSample.of(depthTexture, depthTexture.getWidth(0),
-                depthTexture.getHeight(0), issuedBuffer, token, frame, mouseX, mouseY, camera);
-        lifecycle.beginReadback(token, issuedBuffer);
-        try {
-            RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(depthTexture, issuedBuffer, 0L, () ->
-                    lifecycle.enqueueCallback(token, () -> readDepthOnOwner(sample)), 0, sample.texel().x(), sample.texel().y(), 1, 1);
-        } catch (RuntimeException exception) {
-            lifecycle.failReadback(token, issuedBuffer, depthReadbackBuffer);
-            MMCR.LOG.warn("Couldn't request structure preview depth readback", exception);
-        }
-    }
-
     public void renderScene(PreviewSceneRenderContext context, PreviewCamera camera) {
         scene.render(context, camera, hoverHit, selectedHit);
-    }
-
-    private void readDepthOnOwner(PreviewDepthReadbackSample sample) {
-        try {
-            if (closed || !lifecycle.accepts(sample.generation()) || sample.buffer() != depthReadbackBuffer) return;
-            try (GpuBuffer.MappedView mapped = RenderSystem.getDevice().createCommandEncoder().mapBuffer(sample.buffer(), true, false)) {
-                applyDepth(mapped.data().getFloat(0), sample);
-            }
-        } finally {
-            lifecycle.completeReadback(sample.generation(), sample.buffer());
-        }
     }
 
     void markDirty() {
@@ -157,25 +108,13 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     @Override
     public void close() {
-        if (!lifecycle.queueRelease(this::releaseResources)) return;
+        if (!releaseScheduled.compareAndSet(false, true)) return;
         StructurePreviewReloadListener.unregister(this);
         if (Minecraft.getInstance().isSameThread()) {
-            lifecycle.drainOwnerQueue();
+            releaseResources();
         } else {
-            Minecraft.getInstance().execute(lifecycle::drainOwnerQueue);
+            Minecraft.getInstance().execute(this::releaseResources);
         }
-    }
-
-    private void applyDepth(float depth, PreviewDepthReadbackSample sample) {
-        if (closed || depth >= 1.0F) {
-            hoverHit = null;
-            return;
-        }
-        Vector4f point = new Vector4f(sample.ndcX(), sample.ndcY(), depth * 2.0F - 1.0F, 1.0F);
-        Matrix4f inverse = sample.camera().projection().mul(sample.camera().view(), new Matrix4f()).invert();
-        inverse.transform(point);
-        Vec3 target = new Vec3(point.x / point.w, point.y / point.w, point.z / point.w);
-        hoverHit = copyHit(scene.clip(new Vec3(sample.camera().eye()), target));
     }
 
     private static @Nullable BlockHitResult copyHit(@Nullable BlockHitResult hit) {
@@ -184,12 +123,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     private void releaseResources() {
-        if (!releaseScheduled.compareAndSet(false, true)) return;
         closed = true;
-        if (depthReadbackBuffer != null) {
-            depthReadbackBuffer.close();
-            depthReadbackBuffer = null;
-        }
         pictureInPicture.close();
         scene.dispose();
     }

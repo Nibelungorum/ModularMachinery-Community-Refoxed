@@ -43,7 +43,6 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
     private GpuTextureView previewLightmapView;
     private final Projection projection = new Projection();
     private final ProjectionMatrixBuffer projectionMatrixBuffer = new ProjectionMatrixBuffer("MMCR structure preview");
-    private PreviewSceneCamera preparedCamera;
     public PreviewScenePictureInPictureRenderer(MultiBufferSource.BufferSource bufferSource) {
         super(bufferSource);
     }
@@ -79,13 +78,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
             renderToTexture(state, poseStack);
             bufferSource.endBatch();
             blitTexture(state, guiRenderState);
-            PreviewSceneCamera camera = preparedCamera;
-            if (camera != null) {
-                state.owner().onPictureInPicturePrepared(depthTexture, camera,
-                        state.mouseX(), state.mouseY(), state.frame());
-            }
         } finally {
-            preparedCamera = null;
             RenderSystem.outputColorTextureOverride = previousColor;
             RenderSystem.outputDepthTextureOverride = previousDepth;
             RenderSystem.restoreProjectionMatrix();
@@ -100,7 +93,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
                 GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, TextureFormat.RGBA8, width, height, 1, 1);
         colorTextureView = device.createTextureView(colorTexture);
         depthTexture = device.createTexture(() -> "MMCR structure preview depth",
-                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC,
+                GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST,
                 Minecraft.getInstance().getMainRenderTarget().getDepthTexture().getFormat(), width, height, 1, 1);
         depthTextureView = device.createTextureView(depthTexture);
     }
@@ -179,7 +172,6 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
             modelView.popMatrix();
             RenderSystem.restoreProjectionMatrix();
         }
-        preparedCamera = camera;
     }
 
 }

@@ -8,12 +8,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
  * @author howxu <dev@howxu.cn>
  */
 record PreviewRenderContext(GuiGraphicsExtractor graphics, PreviewViewport viewport, float partialTick,
-                            int guiOriginX, int guiOriginY, int guiWidth, int guiHeight,
-                            int framebufferWidth, int framebufferHeight, PreviewCamera camera) {
-    PreviewViewport.FramebufferViewport framebufferViewport() {
-        return absoluteViewport().framebufferViewport(guiWidth, guiHeight, framebufferWidth, framebufferHeight);
-    }
-
+                             int guiOriginX, int guiOriginY, PreviewCamera camera) {
     PreviewViewport absoluteViewport() {
         return new PreviewViewport(guiOriginX + viewport.x(), guiOriginY + viewport.y(), viewport.width(), viewport.height());
     }

@@ -50,8 +50,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
             int guiOriginX, int guiOriginY) {
         Minecraft minecraft = Minecraft.getInstance();
         render(new PreviewRenderContext(graphics, new PreviewViewport(x, y, width, height), partialTick,
-                guiOriginX, guiOriginY, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight(),
-                minecraft.getWindow().getWidth(), minecraft.getWindow().getHeight(), camera));
+                guiOriginX, guiOriginY, camera));
     }
 
     public Object hoverHit() {

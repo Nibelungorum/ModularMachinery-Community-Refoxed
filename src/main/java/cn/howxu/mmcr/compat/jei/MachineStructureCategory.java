@@ -71,21 +71,22 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     @Override
     public void draw(MachineStructureDisplay display, IRecipeSlotsView recipeSlotsView,
             GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
+        var font = Minecraft.getInstance().font;
         Component machineName = display.machine().displayName();
-        int textWidth = Minecraft.getInstance().font.width(machineName);
+        int textWidth = font.width(machineName);
         if (textWidth <= 0) return;
 
         float scale = Math.min(MACHINE_NAME_SCALE, Math.min(
                 (float) MACHINE_NAME_WIDTH / textWidth,
-                (float) MACHINE_NAME_HEIGHT / Minecraft.getInstance().font.lineHeight));
+                (float) MACHINE_NAME_HEIGHT / font.lineHeight));
         float scaledWidth = textWidth * scale;
-        float scaledHeight = Minecraft.getInstance().font.lineHeight * scale;
+        float scaledHeight = font.lineHeight * scale;
         graphics.pose().pushMatrix();
         graphics.pose().translate(
-                MACHINE_NAME_X + (MACHINE_NAME_WIDTH - scaledWidth) / 2.0F,
-                MACHINE_NAME_Y + (MACHINE_NAME_HEIGHT - scaledHeight) / 2.0F);
+                MACHINE_NAME_X + MACHINE_NAME_WIDTH / 2.0F - scaledWidth / 2.0F,
+                MACHINE_NAME_Y + MACHINE_NAME_HEIGHT / 2.0F - scaledHeight);
         graphics.pose().scale(scale, scale);
-        graphics.text(Minecraft.getInstance().font, machineName, 0, 0, 0xFFFFFFFF, false);
+        graphics.text(font, machineName, 0, 0, 0xFFFFFFFF, false);
         graphics.pose().popMatrix();
     }
 

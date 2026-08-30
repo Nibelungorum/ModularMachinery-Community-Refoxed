@@ -6,8 +6,6 @@
   "client": [
     "MeshDataAccessor",
     "GuiGraphicsExtractorAccessor",
-    "GlBufferAccessor",
-    "GlCommandEncoderMixin",
     "GameRendererMixin",
     "RenderTypeAccessor",
     "RenderSetupAccessor"

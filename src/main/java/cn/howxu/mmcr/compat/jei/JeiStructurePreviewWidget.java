@@ -146,12 +146,13 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             if (compileAnimationStart < 0L) compileAnimationStart = clock.getAsLong();
             long elapsed = Math.max(0L, clock.getAsLong() - compileAnimationStart);
             graphics.text(Minecraft.getInstance().font, Component.literal(compileStatus(elapsed)),
-                    0, height / 2, 0xFF404040, false);
+                    0, height / 2, 0xFFFFFFFF, false);
             return;
         }
         GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
         ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
         preview.render(graphics, 0, 0, width, height, origin.x(), origin.y());
+        graphics.nextStratum();
         String[] labels = hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
         for (int index = 0; index < labels.length; index++) {
             int controlX = UI_X_OFFSET + index * CONTROL_STEP;

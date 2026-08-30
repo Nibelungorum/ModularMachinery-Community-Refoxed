@@ -37,7 +37,10 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -54,6 +57,7 @@ public final class PreviewSceneRenderer {
     private final StructurePreviewSchema schema;
     private final SceneCompileState compileState = new SceneCompileState();
     private final PreviewSceneMeshCache meshes = new PreviewSceneMeshCache(null);
+    private final Thread renderThread = Thread.currentThread();
     private PreviewVisibility visibility = PreviewVisibility.ALL;
     private long requestedGeneration;
     private Vector3f lastEye;
@@ -108,6 +112,23 @@ public final class PreviewSceneRenderer {
         if (!(result instanceof BlockHitResult block)) return null;
         BlockState state = level.getBlockState(block.getBlockPos());
         return state != null && !state.isAir() && visibility.isVisible(block.getBlockPos(), state) ? block : null;
+    }
+
+    public @Nullable BlockHitResult rayTrace(PreviewSceneCamera camera,
+                                             double mouseX, double mouseY,
+                                             int width, int height) {
+        if (width <= 0 || height <= 0 || mouseX < 0.0D || mouseX >= width
+                || mouseY < 0.0D || mouseY >= height) {
+            return null;
+        }
+        float ndcX = (float) (2.0D * (mouseX + 0.5D) / width - 1.0D);
+        float ndcY = (float) (1.0D - 2.0D * (mouseY + 0.5D) / height);
+        Matrix4f inverse = camera.projection().mul(camera.view(), new Matrix4f()).invert();
+        Vector4f near = inverse.transform(new Vector4f(ndcX, ndcY, -1.0F, 1.0F));
+        Vector4f far = inverse.transform(new Vector4f(ndcX, ndcY, 1.0F, 1.0F));
+        Vec3 from = new Vec3(near.x / near.w, near.y / near.w, near.z / near.w);
+        Vec3 to = new Vec3(far.x / far.w, far.y / far.w, far.z / far.w);
+        return clip(from, to);
     }
 
     public void dispose() {
@@ -279,7 +300,8 @@ public final class PreviewSceneRenderer {
     }
 
     private void assertRenderThread() {
-        if (!Minecraft.getInstance().isSameThread()) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null ? !minecraft.isSameThread() : Thread.currentThread() != renderThread) {
             throw new IllegalStateException("preview scene rendering must occur on the render thread");
         }
     }
