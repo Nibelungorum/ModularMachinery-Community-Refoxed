@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
@@ -97,9 +97,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
                 blocks.put(pos, entry.base());
                 symbolsByPosition.put(pos, key);
                 if (requirementKeys.add(key)) {
-                    for (SingleBlockModifierReplacement modifier : entry.modifiers()) {
-                        requirementBuilder.modifier(key, modifier);
-                    }
                     if (value instanceof LevelSlot levelSlot) {
                         requirementBuilder.levelSlot(key, validateLevelType(levelSlot.typeId()));
                     }
@@ -146,12 +143,19 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         char key = symbol.charAt(0);
         PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(key, entry.base());
-        for (SingleBlockModifierReplacement modifier : entry.modifiers()) {
-            sliceRequirements.modifier(key, modifier);
-        }
         if (value instanceof LevelSlot levelSlot) {
             sliceRequirements.levelSlot(key, validateLevelType(levelSlot.typeId()));
         }
+        return this;
+    }
+
+    public MachineStructureBuilderJS modifier(String symbol, ModifierUse use) {
+        selectPatternApi(PatternApiMode.CHAINED);
+        if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
+            throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
+        }
+        Objects.requireNonNull(use, "use");
+        sliceRequirements.modifier(symbol.charAt(0), use.modifierId(), toInternalBlockPredicate(use.replacement()));
         return this;
     }
 
@@ -341,13 +345,33 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return switch (value) {
             case PatternEntry entry -> entry;
             case String blockId -> new PatternEntry(
-                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))), List.of());
-            case Block block -> new PatternEntry(new BlockPredicate.OfBlock(block), List.of());
-            case BlockState state -> new PatternEntry(new BlockPredicate.OfBlockState(state), List.of());
-            case BlockPredicate predicate -> new PatternEntry(predicate, List.of());
-            case LevelSlot levelSlot -> new PatternEntry(levelPredicate(levelSlot), List.of());
+                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))));
+            case Block block -> new PatternEntry(new BlockPredicate.OfBlock(block));
+            case BlockState state -> new PatternEntry(new BlockPredicate.OfBlockState(state));
+            case BlockPredicate predicate -> new PatternEntry(predicate);
+            case LevelSlot levelSlot -> new PatternEntry(levelPredicate(levelSlot));
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
+    }
+
+    static BlockPredicate toInternalBlockPredicate(
+            cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+        Objects.requireNonNull(predicate, "replacement");
+        if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();
+        if (predicate.blockState().isPresent()) {
+            return new BlockPredicate.OfBlockState(predicate.blockState().get());
+        }
+        if (predicate.block().isPresent()) {
+            return new BlockPredicate.OfBlock(predicate.block().get());
+        }
+        if (predicate.blockSupplier().isPresent()) {
+            return new BlockPredicate.DeferredBlock(predicate.blockSupplier().get());
+        }
+        if (predicate.tag().isPresent()) {
+            return new BlockPredicate.OfTag(predicate.tag().get());
+        }
+        return new BlockPredicate.AnyOf(predicate.alternatives().stream()
+                .map(MachineStructureBuilderJS::toInternalBlockPredicate).toList());
     }
 
     private void applyPendingPatternMetadata() {
@@ -405,15 +429,13 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     /**
-     * Character-key structure declaration value carrying a base predicate plus modifier alternatives.
+     * Character-key structure declaration value carrying a base predicate.
      *
      * @author howxu <dev@howxu.cn>
      */
-    public record PatternEntry(BlockPredicate base, List<SingleBlockModifierReplacement> modifiers) {
+    public record PatternEntry(BlockPredicate base) {
         public PatternEntry {
             Objects.requireNonNull(base, "base");
-            modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
-            modifiers.forEach(modifier -> Objects.requireNonNull(modifier, "modifier"));
         }
     }
 }

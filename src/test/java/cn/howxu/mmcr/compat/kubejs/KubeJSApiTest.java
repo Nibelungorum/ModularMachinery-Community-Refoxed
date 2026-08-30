@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -224,31 +226,31 @@ class KubeJSApiTest {
     }
 
     @Test
-    void single_block_modifier_factory_preserves_four_argument_value_state() {
-        var predicate = new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK);
+    void modifier_definition_factory_wraps_recipe_modifiers() {
         var modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,
                 RecipeModifier.Operation.MULTIPLY, false);
-        var display = new ItemStack(Blocks.DIAMOND_BLOCK);
 
-        var replacement = api.singleBlockModifier("diamond_speedup", predicate, List.of(modifier), display);
+        ModifierDefinition definition = api.modifierDefinition(List.of(modifier));
 
-        assertThat(replacement.getModifierName()).isEqualTo("diamond_speedup");
-        assertThat(replacement.getReplacement()).isSameAs(predicate);
-        assertThat(replacement.getModifiers()).containsExactly(modifier);
-        assertThat(replacement.getDescriptiveStack()).isSameAs(display);
-        assertThat(replacement.getDescriptionLines()).isEmpty();
+        assertThat(definition.modifiers()).containsExactly(modifier);
     }
 
     @Test
-    void pattern_entry_factory_preserves_base_and_modifier_alternatives() {
-        var base = new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE);
-        var replacement = api.singleBlockModifier("diamond_speedup",
-                new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+    void modifier_use_factory_parses_id_and_converts_replacement_predicate() {
+        var replacement = new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK);
 
-        var entry = api.patternEntry(base, List.of(replacement));
+        ModifierUse use = api.modifierUse("mmcr_kubejs:diamond_speedup", replacement);
 
-        assertThat(entry.base()).isSameAs(base);
-        assertThat(entry.modifiers()).containsExactly(replacement);
+        assertThat(use.modifierId()).isEqualTo(Identifier.parse("mmcr_kubejs:diamond_speedup"));
+        assertThat(use.replacement().block()).contains(Blocks.DIAMOND_BLOCK);
+    }
+
+    @Test
+    void removed_modifier_factories_are_not_exposed() {
+        assertThat(java.util.Arrays.stream(KubeJSApi.class.getMethods())
+                .filter(method -> method.getName().equals("singleBlockModifier")
+                        || method.getName().equals("patternEntry")))
+                .isEmpty();
     }
 
     @Test
@@ -264,14 +266,17 @@ class KubeJSApiTest {
 
     @Test
     void slice_pattern_binds_symbols_and_normalizes_controller() {
-        var replacement = api.singleBlockModifier("explicit", api.block("minecraft:stone"), List.of(), ItemStack.EMPTY);
+        var replacement = api.modifierUse("mmcr:explicit", api.block("minecraft:stone"));
+        var controllerReplacement = api.modifierUse("mmcr:controller_explicit", api.block("minecraft:gold_block"));
         var definition = new MachineStructureBuilderJS("mmcr_test:iron_compressor")
                 .pattern(List.of("XCX", "XXX", "XXX"))
-                .set("X", api.patternEntry(api.block("minecraft:bricks"), List.of(replacement)))
+                .set("X", api.block("minecraft:bricks"))
                 .set("C", api.block("minecraft:blast_furnace"))
                 .controller("C")
+                .modifier("X", replacement)
+                .modifier("C", controllerReplacement)
                 .fullStructure(api.portRequirements(Map.of()), api.portTierRequirements(List.of()),
-                        List.of(), MachineStructureRequirements.builder().modifier('C', replacement).build())
+                        List.of(), MachineStructureRequirements.EMPTY)
                 .createObject();
 
         assertThat(definition.pattern().pattern()).hasSize(9);

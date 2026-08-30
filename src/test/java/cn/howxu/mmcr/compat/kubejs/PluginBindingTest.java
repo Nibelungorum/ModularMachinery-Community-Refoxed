@@ -9,8 +9,10 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.MachineApi;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -18,6 +20,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
@@ -77,6 +80,7 @@ class PluginBindingTest {
         RuntimeContentSync.resetSenderForTesting();
         MachineStructureRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
+        ModifierRegistry.installSnapshot(Map.of());
     }
 
     @Test
@@ -487,6 +491,55 @@ class PluginBindingTest {
     }
 
     @Test
+    void startup_event_registers_modifier_definition_and_item_binding() {
+        var modifierId = MMCR.id("kubejs_startup_modifier");
+        MMCRMachineStructuresEvent.resetCollector();
+        try {
+            var event = new MMCRStartupEventJS();
+            var definition = new ModifierDefinition(List.of());
+
+            event.registerModifier(modifierId.toString(), definition);
+            event.registerModifierItem(new ItemStack(Items.DIAMOND, 16), modifierId.toString());
+
+            var snapshot = MMCRMachineStructuresEvent.current().freeze();
+            assertThat(snapshot.modifiers()).containsEntry(modifierId, definition);
+            assertThat(snapshot.modifierItems().get(modifierId)).singleElement()
+                    .satisfies(stack -> assertThat(stack.getCount()).isEqualTo(1));
+        } finally {
+            MMCRMachineStructuresEvent.resetCollector();
+        }
+    }
+
+    @Test
+    void unknown_kubejs_modifier_rejects_entire_server_reload() {
+        var oldMachineId = MMCR.id("test_machine_name");
+        var validMachineId = MMCR.id("cracker");
+        var unknownModifierId = MMCR.id("kubejs_unknown_modifier");
+
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(oldMachineId));
+        previous.commit();
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(validMachineId));
+        KubeJSContentReloadTransaction.active().registerStructure(new MachineStructureBuilderJS(oldMachineId)
+                .pattern("M")
+                .set("M", Blocks.IRON_BLOCK)
+                .modifier("M", new KubeJSApi().modifierUse(unknownModifierId.toString(),
+                        new KubeJSApi().block("minecraft:diamond_block")))
+                .createObject());
+
+        assertThatThrownBy(() -> Plugin.completeServerReload(reload, 0))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(oldMachineId.toString())
+                .hasMessageContaining(unknownModifierId.toString());
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(validMachineId);
+    }
+
+    @Test
     void startup_scripts_run_inside_machine_registry_phase() {
         MachineDefinitions.clearForTesting();
         PublicApiBootstrap.clearForTesting();
@@ -772,12 +825,13 @@ class PluginBindingTest {
     }
 
     private static MachineStructureDefinition modifierStructure(Identifier id) {
+        ModifierRegistry.installSnapshot(Map.of(MMCR.id("speed"), new ModifierDefinition(List.of())));
         BlockArray pattern = BlockArray.builder()
                 .pattern("M")
                 .set('M', new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))
                 .build();
         MachineStructureRequirements requirements = MachineStructureRequirements.builder()
-                .modifier('M', new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                .modifier('M', new SingleBlockModifierReplacement(MMCR.id("speed").toString(), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                         List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F,
                                 RecipeModifier.Operation.MULTIPLY, false)),
                         new ItemStack(Blocks.GOLD_BLOCK)))

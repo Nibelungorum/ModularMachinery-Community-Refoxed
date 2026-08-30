@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
@@ -68,10 +68,20 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
             throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
         }
         MachineStructureBuilderJS.PatternEntry entry = toPatternEntry(value);
-        sliceBuilder.set(symbol.charAt(0), entry.base(), entry.modifiers().toArray(SingleBlockModifierReplacement[]::new));
+        sliceBuilder.set(symbol.charAt(0), entry.base());
         if (value instanceof LevelSlot levelSlot) {
             stageRequirements.levelSlot(symbol.charAt(0), levelSlot.typeId());
         }
+        return this;
+    }
+
+    public MachineStructureStageBuilderJS modifier(String symbol, ModifierUse use) {
+        if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
+            throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
+        }
+        Objects.requireNonNull(use, "use");
+        stageRequirements.modifier(symbol.charAt(0), use.modifierId(),
+                MachineStructureBuilderJS.toInternalBlockPredicate(use.replacement()));
         return this;
     }
 
@@ -139,11 +149,11 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
         return switch (value) {
             case MachineStructureBuilderJS.PatternEntry entry -> entry;
             case String blockId -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(
-                    BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))), List.of());
-            case Block block -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(block), List.of());
-            case BlockState state -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlockState(state), List.of());
-            case BlockPredicate predicate -> new MachineStructureBuilderJS.PatternEntry(predicate, List.of());
-            case LevelSlot levelSlot -> new MachineStructureBuilderJS.PatternEntry(levelPredicate(levelSlot), List.of());
+                    BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))));
+            case Block block -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(block));
+            case BlockState state -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlockState(state));
+            case BlockPredicate predicate -> new MachineStructureBuilderJS.PatternEntry(predicate);
+            case LevelSlot levelSlot -> new MachineStructureBuilderJS.PatternEntry(levelPredicate(levelSlot));
             default -> throw new IllegalArgumentException("Unknown pattern key value: " + value);
         };
     }

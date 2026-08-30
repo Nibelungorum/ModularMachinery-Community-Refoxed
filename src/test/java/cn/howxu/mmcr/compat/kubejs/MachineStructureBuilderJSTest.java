@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
@@ -175,22 +176,42 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
-    void pattern_entry_binds_modifiers_to_every_matching_character_position() {
-        var base = new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE);
-        var replacement = new SingleBlockModifierReplacement(
-                "diamond_speedup", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
+    void chained_builder_modifier_use_creates_an_optional_id_only_replacement() {
+        ModifierUse use = new KubeJSApi().modifierUse("mmcr:diamond_speedup",
+                new KubeJSApi().block("minecraft:diamond_block"));
 
         var definition = new MachineStructureBuilderJS("test:pattern_entry")
-                .pattern("MM", Map.of("M", new MachineStructureBuilderJS.PatternEntry(base, List.of(replacement))))
+                .pattern("MM")
+                .set("M", Blocks.BLAST_FURNACE)
+                .modifier("M", use)
                 .createObject();
 
         assertThat(definition.pattern().pattern())
-                .containsEntry(BlockPos.ZERO, base)
-                .containsEntry(new BlockPos(1, 0, 0), base);
-        assertThat(definition.requirements().modifierReplacements()).containsEntry('M', List.of(replacement));
-        assertThat(definition.modifierReplacements())
-                .containsEntry(BlockPos.ZERO, List.of(replacement))
-                .containsEntry(new BlockPos(1, 0, 0), List.of(replacement));
+                .containsEntry(new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))
+                .containsEntry(new BlockPos(0, 0, 0), new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
+        var replacements = definition.requirements().modifierReplacements().get('M');
+        assertThat(replacements).hasSize(1);
+        assertThat(replacements.getFirst().getModifierId()).isEqualTo(Identifier.parse("mmcr:diamond_speedup"));
+        assertThat(replacements.getFirst().getReplacement().matches(Blocks.DIAMOND_BLOCK.defaultBlockState())).isTrue();
+        assertThat(replacements.getFirst().getModifiers()).isEmpty();
+    }
+
+    @Test
+    void callback_stage_builder_exposes_modifier_use_separately_from_base_value() {
+        ModifierUse use = new KubeJSApi().modifierUse("mmcr:callback_speedup",
+                new KubeJSApi().block("minecraft:diamond_block"));
+
+        var definition = new MachineStructureBuilderJS("test:callback_modifier")
+                .mainStructure(stage -> stage.pattern("M")
+                        .set("M", Blocks.BLAST_FURNACE)
+                        .modifier("M", use))
+                .createObject();
+
+        var replacements = definition.declarations().getFirst().requirements().modifierReplacements().get('M');
+        assertThat(replacements).singleElement().satisfies(replacement -> {
+            assertThat(replacement.getModifierId()).isEqualTo(Identifier.parse("mmcr:callback_speedup"));
+            assertThat(replacement.getModifiers()).isEmpty();
+        });
     }
 
     @Test

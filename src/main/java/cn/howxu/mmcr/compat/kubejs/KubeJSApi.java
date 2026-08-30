@@ -12,10 +12,11 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.ReadableNumber;
@@ -34,12 +35,14 @@ import net.neoforged.neoforge.fluids.FluidStack;
 
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Public declaration helpers exposed to KubeJS through {@code MMCR.getAPI()} and MMCR event objects.
@@ -204,14 +207,13 @@ public final class KubeJSApi {
         return new RecipeModifier(target, ioType(io), value, operation(operation), chance);
     }
 
-    public SingleBlockModifierReplacement singleBlockModifier(String name, BlockPredicate predicate,
-            List<RecipeModifier> modifiers, ItemStack display) {
-        return new SingleBlockModifierReplacement(name, predicate, modifiers, display);
+    public ModifierDefinition modifierDefinition(List<RecipeModifier> modifiers) {
+        return new ModifierDefinition(modifiers);
     }
 
-    public MachineStructureBuilderJS.PatternEntry patternEntry(BlockPredicate base,
-            List<SingleBlockModifierReplacement> modifiers) {
-        return new MachineStructureBuilderJS.PatternEntry(base, modifiers);
+    public ModifierUse modifierUse(String modifierId, BlockPredicate replacement) {
+        Identifier id = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
+        return new ModifierUse(id, toPublicBlockPredicate(replacement));
     }
 
     public LevelRequirement levelRequirement(String typeId, String levelId) {
@@ -299,6 +301,27 @@ public final class KubeJSApi {
             case "subtract" -> RecipeModifier.Operation.SUBTRACT;
             case "divide" -> RecipeModifier.Operation.DIVIDE;
             default -> throw new IllegalArgumentException("Unknown modifier operation: " + operation);
+        };
+    }
+
+    private static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate toPublicBlockPredicate(
+            BlockPredicate predicate) {
+        Objects.requireNonNull(predicate, "replacement");
+        return switch (predicate) {
+            case BlockPredicate.Air ignored -> cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.AIR);
+            case BlockPredicate.Any ignored -> throw new IllegalArgumentException(
+                    "Any is not supported as a modifier replacement predicate");
+            case BlockPredicate.MachineCoupler ignored ->
+                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.machineCoupler();
+            case BlockPredicate.OfBlock ofBlock ->
+                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(ofBlock.block());
+            case BlockPredicate.DeferredBlock deferredBlock ->
+                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.deferredBlock(deferredBlock.supplier());
+            case BlockPredicate.OfBlockState ofBlockState ->
+                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.blockState(ofBlockState.state());
+            case BlockPredicate.OfTag ofTag -> cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.tag(ofTag.tag());
+            case BlockPredicate.AnyOf anyOf -> cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.anyOf(
+                    anyOf.children().stream().map(KubeJSApi::toPublicBlockPredicate).toList());
         };
     }
 
