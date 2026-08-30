@@ -9,8 +9,10 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
@@ -137,6 +139,23 @@ class KubeJSApiTest {
         assertThat(api.factoryController()).isInstanceOf(BlockPredicate.DeferredBlock.class);
         assertThat(api.dataStorage().matches(ModBlocks.DATA_STORAGE.get().defaultBlockState())).isTrue();
         assertThat(api.dataStorage().matches(Blocks.STONE.defaultBlockState())).isFalse();
+    }
+
+    @Test
+    void exposes_recipe_io_and_output_policy_values_to_kubejs() {
+        assertThat(api.recipeIO().INPUT).isSameAs(RecipeIo.INPUT);
+        assertThat(api.recipeIO().OUTPUT).isSameAs(RecipeIo.OUTPUT);
+        assertThat(api.outputPolicy().REQUIRE_FULL).isSameAs(OutputPolicy.REQUIRE_FULL);
+        assertThat(api.outputPolicy().ALLOW_PARTIAL).isSameAs(OutputPolicy.ALLOW_PARTIAL);
+        assertThat(new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(api.recipeIO().OUTPUT, 1).io())
+                .isEqualTo(RecipeModifier.IOType.OUTPUT);
+
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+        assertThat(context.evaluateString(scope,
+                "api.recipeIO().OUTPUT.name() === 'OUTPUT' && api.outputPolicy().ALLOW_PARTIAL.name() === 'ALLOW_PARTIAL'",
+                "io-policy-test", 1, null)).isEqualTo(true);
     }
 
     @Test

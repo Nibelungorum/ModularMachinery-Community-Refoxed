@@ -2,7 +2,6 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
-import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -28,7 +27,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 public final class MachineIoPlan {
     private final CapabilitySnapshot capabilitySnapshot;
     private List<MachineRequirement> requirements = List.of();
-    private Map<Integer, OutputPolicy> outputPolicies = Map.of();
+    private Map<Integer, cn.howxu.mmcr.api.capability.plan.OutputPolicy> outputPolicies = Map.of();
     private @Nullable PlanningResult simulation;
     private boolean consumed;
 
@@ -55,8 +54,8 @@ public final class MachineIoPlan {
     }
 
     public MachineIoPlan addOutput(MachineRequirement requirement, OutputPolicy policy) {
-        return addRequirement(requirement, RecipeModifier.IOType.OUTPUT,
-                Objects.requireNonNull(policy, "policy"));
+        Objects.requireNonNull(policy, "policy");
+        return addRequirement(requirement, RecipeModifier.IOType.OUTPUT, toInternal(policy));
     }
 
     public MachineIoPlan add(MachineRequirement requirement) {
@@ -66,7 +65,7 @@ public final class MachineIoPlan {
     }
 
     private MachineIoPlan addRequirement(MachineRequirement requirement, RecipeModifier.IOType expectedIo,
-                                         @Nullable OutputPolicy outputPolicy) {
+                                         @Nullable cn.howxu.mmcr.api.capability.plan.OutputPolicy outputPolicy) {
         Objects.requireNonNull(requirement, "requirement");
         if (requirement.io() != expectedIo) {
             throw new IllegalArgumentException("Requirement direction must be " + expectedIo);
@@ -85,7 +84,7 @@ public final class MachineIoPlan {
         next.add(insertionIndex, requirement);
         requirements = List.copyOf(next);
         int finalInsertionIndex = insertionIndex;
-        Map<Integer, OutputPolicy> nextPolicies = new LinkedHashMap<>();
+        Map<Integer, cn.howxu.mmcr.api.capability.plan.OutputPolicy> nextPolicies = new LinkedHashMap<>();
         outputPolicies.forEach((index, policy) -> nextPolicies.put(
                 index >= finalInsertionIndex ? index + 1 : index, policy));
         if (outputPolicy != null) {
@@ -94,6 +93,12 @@ public final class MachineIoPlan {
         outputPolicies = Map.copyOf(nextPolicies);
         simulation = null;
         return this;
+    }
+
+    private static cn.howxu.mmcr.api.capability.plan.OutputPolicy toInternal(OutputPolicy policy) {
+        return policy == OutputPolicy.ALLOW_PARTIAL
+                ? cn.howxu.mmcr.api.capability.plan.OutputPolicy.ALLOW_PARTIAL
+                : cn.howxu.mmcr.api.capability.plan.OutputPolicy.REQUIRE_FULL;
     }
 
     public List<MachineRequirement> requirements() {

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
-import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
+import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;

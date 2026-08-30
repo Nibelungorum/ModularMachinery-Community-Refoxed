@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 import java.util.List;
@@ -21,6 +22,10 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
 
     public EnergyRequirement(RecipeModifier.IOType io, int fePerTick) {
         this(io, fePerTick, List.of());
+    }
+
+    public EnergyRequirement(RecipeIo io, int fePerTick) {
+        this(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT, fePerTick);
     }
 
     public EnergyRequirement {

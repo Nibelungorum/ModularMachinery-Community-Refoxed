@@ -13,6 +13,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.ReadableNumber;
@@ -45,9 +47,19 @@ import java.util.Map;
  */
 public final class KubeJSApi {
     private final ScreenScopeValues screenScope = new ScreenScopeValues();
+    private final RecipeIoValues recipeIO = new RecipeIoValues();
+    private final OutputPolicyValues outputPolicy = new OutputPolicyValues();
 
     public ScreenScopeValues screenScope() {
         return screenScope;
+    }
+
+    public RecipeIoValues recipeIO() {
+        return recipeIO;
+    }
+
+    public OutputPolicyValues outputPolicy() {
+        return outputPolicy;
     }
 
     /**
@@ -58,6 +70,22 @@ public final class KubeJSApi {
     public static final class ScreenScopeValues {
         public final ControllerScreenTextScope CONTROLLER = ControllerScreenTextScope.CONTROLLER;
         public final ControllerScreenTextScope OPERATION = ControllerScreenTextScope.OPERATION;
+    }
+
+    /** KubeJS-visible recipe input/output direction constants.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class RecipeIoValues {
+        public final RecipeIo INPUT = RecipeIo.INPUT;
+        public final RecipeIo OUTPUT = RecipeIo.OUTPUT;
+    }
+
+    /** KubeJS-visible machine output policy constants.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class OutputPolicyValues {
+        public final OutputPolicy REQUIRE_FULL = OutputPolicy.REQUIRE_FULL;
+        public final OutputPolicy ALLOW_PARTIAL = OutputPolicy.ALLOW_PARTIAL;
     }
 
     public String readableNumber(long value) {
