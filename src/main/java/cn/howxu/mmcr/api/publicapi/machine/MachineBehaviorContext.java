@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -28,6 +29,7 @@ public class MachineBehaviorContext {
     private final ControllerScreenText screenText;
     private final @Nullable DataStorage dataStorage;
     private final MachineIoView ioView;
+    private final List<ItemStack> upgradeItems;
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
@@ -45,6 +47,13 @@ public class MachineBehaviorContext {
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView) {
+        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, ioView, List.of());
+    }
+
+    public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
+                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  ControllerScreenText screenText, @Nullable DataStorage dataStorage,
+                                  MachineIoView ioView, List<ItemStack> upgradeItems) {
         this.controller = controller;
         this.level = level;
         this.controllerPos = Objects.requireNonNull(controllerPos, "controllerPos").immutable();
@@ -53,6 +62,7 @@ public class MachineBehaviorContext {
         this.screenText = Objects.requireNonNull(screenText, "screenText");
         this.dataStorage = dataStorage;
         this.ioView = Objects.requireNonNull(ioView, "ioView");
+        this.upgradeItems = copyStacks(upgradeItems);
     }
 
     public MachineControllerBlockEntity controller() {
@@ -92,12 +102,22 @@ public class MachineBehaviorContext {
         return ioView;
     }
 
+    public List<ItemStack> upgradeItems() {
+        return copyStacks(upgradeItems);
+    }
+
     static MachineBehaviorContext empty(Identifier machineId) {
         return new MachineBehaviorContext(null, null, BlockPos.ZERO, machineId, 0L, EMPTY_SCREEN_TEXT);
     }
 
     private static MachineIoView emptyIoView() {
         return new MachineIoView(new CapabilitySnapshot(List.of()));
+    }
+
+    private static List<ItemStack> copyStacks(List<ItemStack> stacks) {
+        if (stacks == null || stacks.isEmpty()) return List.of();
+        return List.copyOf(stacks.stream()
+                .map(stack -> Objects.requireNonNull(stack, "upgrade item").copy()).toList());
     }
 
     private static final ControllerScreenText EMPTY_SCREEN_TEXT = new ControllerScreenText() {

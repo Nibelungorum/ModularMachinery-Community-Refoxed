@@ -542,7 +542,7 @@ public final class CraftingRuntime {
     }
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
-        return runtime.foundModifiers().values().stream().flatMap(List::stream).toList();
+        return components.modifierList();
     }
 
     private @Nullable HolderLookup.Provider registryAccess() {

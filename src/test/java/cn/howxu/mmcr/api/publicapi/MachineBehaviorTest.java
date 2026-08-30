@@ -247,6 +247,23 @@ class MachineBehaviorTest {
     }
 
     @Test
+    void machine_behavior_context_exposes_an_immutable_copied_upgrade_snapshot() {
+        ItemStack source = new ItemStack(Items.IRON_INGOT, 3);
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("upgrade_context_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(source));
+
+        source.setCount(1);
+        assertThat(context.upgradeItems()).singleElement().satisfies(stack -> {
+            assertThat(stack).isNotSameAs(source);
+            assertThat(stack.getCount()).isEqualTo(3);
+        });
+        assertThatThrownBy(() -> context.upgradeItems().clear()).isInstanceOf(UnsupportedOperationException.class);
+        context.upgradeItems().getFirst().setCount(1);
+        assertThat(context.upgradeItems()).singleElement().extracting(ItemStack::getCount).isEqualTo(3);
+    }
+
+    @Test
     void default_behavior_is_recipe() {
         assertThat(RecipeBehavior.defaults().kind()).isEqualTo(MachineBehavior.Kind.RECIPE);
         assertThat(TickBehavior.defaults().kind()).isEqualTo(MachineBehavior.Kind.TICK);

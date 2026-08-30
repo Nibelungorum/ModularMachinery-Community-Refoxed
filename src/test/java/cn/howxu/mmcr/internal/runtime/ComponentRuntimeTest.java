@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -32,6 +33,8 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
@@ -362,6 +365,47 @@ class ComponentRuntimeTest {
         assertThat(snapshot.installedModuleCount()).isEqualTo(2);
         assertThatThrownBy(() -> snapshot.foundModifiers().put("x", List.of()))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void upgrade_bus_items_aggregate_modifier_units_across_buses_without_merging_snapshots() {
+        Identifier speedupId = Identifier.fromNamespaceAndPath("mmcr_test", "speedup");
+        ItemStack speedup = new ItemStack(Items.IRON_INGOT, 2);
+        ItemStack sameSpeedup = new ItemStack(Items.IRON_INGOT, 3);
+        ItemStack differentSpeedup = new ItemStack(Items.IRON_INGOT, 7);
+        differentSpeedup.set(net.minecraft.core.component.DataComponents.MAX_STACK_SIZE, 16);
+        ModifierRegistry.installSnapshot(Map.of(speedupId,
+                        new cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition(List.of(
+                                new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
+                                        RecipeModifier.Operation.ADD, false)))),
+                Map.of(speedupId, List.of(speedup)));
+
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceUpgradeBuses(List.of(
+                new ComponentRuntime.UpgradeBusSnapshot(new BlockPos(1, 0, 0), List.of(sameSpeedup)),
+                new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(speedup, ItemStack.EMPTY, differentSpeedup))));
+
+        assertThat(runtime.upgradeItems()).hasSize(3);
+        assertThat(runtime.upgradeItems()).extracting(ItemStack::getCount).containsExactly(2, 7, 3);
+        assertThat(runtime.upgradeItems()).allSatisfy(stack -> assertThat(stack).isNotSameAs(speedup)
+                .isNotSameAs(sameSpeedup).isNotSameAs(differentSpeedup));
+        assertThat(runtime.upgradeModifierUnits().get(speedupId)).isEqualTo(5L);
+        assertThat(runtime.modifierList()).containsExactly(new RecipeModifier("item", RecipeModifier.IOType.INPUT,
+                5F, RecipeModifier.Operation.ADD, false));
+    }
+
+    @Test
+    void upgrade_bus_changes_increment_state_and_modifier_versions_even_when_values_stay_equal() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
+        runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(stack))));
+        long modifierVersion = runtime.modifierVersion();
+        long stateVersion = runtime.stateVersion();
+
+        runtime.refreshUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(stack.copy()))));
+
+        assertThat(runtime.modifierVersion()).isEqualTo(modifierVersion + 1);
+        assertThat(runtime.stateVersion()).isEqualTo(stateVersion + 1);
     }
 
     private static ProcessingComponent component(BlockEntity host, String tag) {

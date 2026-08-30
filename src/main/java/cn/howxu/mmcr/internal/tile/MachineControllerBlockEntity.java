@@ -199,6 +199,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int buildTaskAge;
     private final Map<Long, Integer> buildTaskPlacementsPerTickForTesting = new LinkedHashMap<>();
     private final transient MachineControllerRuntime runtime;
+    private List<UpgradeBusBlockEntity> boundUpgradeBuses = List.of();
+    private final Runnable upgradeBusChangeListener = this::onUpgradeBusContentsChanged;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -405,6 +407,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!bindingRestoredMachine) stopFactoryController();
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
+        runtime.setModifiersAllowed(allowsModifiers(m));
         ControllerRuntimeSnapshot currentState = runtimeSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(currentState.structure()), currentState.structure().formed(), m,
                 currentState.structure().matchedStage());
@@ -2130,6 +2133,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             long previousCapabilityVersion = previousSnapshot.capabilityVersion();
             refreshModuleConnectionState();
+            runtime.setModifiersAllowed(allowsModifiers(matchedMachine));
             Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
             runtime.publishComponentState(runtime.components(), foundModifiers, levels, previousLinkedPortPositions);
             refreshCriticalStructureChunks(rotatedPattern, compiledPattern, facing);
@@ -2208,6 +2212,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return nextModifiers;
     }
 
+    private static boolean allowsModifiers(@Nullable Machine machine) {
+        if (machine == null) return false;
+        MachineRegistration registration = MachineDefinitions.getRegistration(machine.registryName());
+        return registration != null && registration.allowModifiers();
+    }
+
     private void clearFoundModifiers() {
         ControllerRuntimeSnapshot current = runtimeSnapshot();
         if (current.foundModifiers().isEmpty()) return;
@@ -2222,6 +2232,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                   Map<Identifier, MachineLevel> foundLevels) {
         List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
         for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
+        unbindUpgradeBuses();
         List<DataStorageBlockEntity> previousDataStorages = dataStorageComponents(previousStructure);
         List<SmartInterfaceBlockEntity> previousSmartInterfaces = runtime.components().stream()
                 .map(ProcessingComponent::getContainer)
@@ -2231,6 +2242,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || matchedMachine == null || matchedPattern == null) {
             new DataStorageBindingCoordinator().unbind(this, previousDataStorages);
             runtime.publishDataStorages(Map.of());
+            runtime.publishUpgradeBusState(List.of());
             runtime.publishComponentState(List.of(), foundModifiers, foundLevels, Set.of());
             return;
         }
@@ -2247,6 +2259,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         runtime.publishDataStorages(boundDataStorages);
+        List<UpgradeBusBlockEntity> upgradeBuses = upgradeBusComponents(matchedPattern);
+        bindUpgradeBuses(upgradeBuses);
+        runtime.publishUpgradeBusState(upgradeBusSnapshots(upgradeBuses));
         List<ProcessingComponent> nextComponents = new ArrayList<>();
         Set<BlockPos> nextLinkedPortPositions = new HashSet<>();
         nextLinkedPortPositions.addAll(boundDataStorages.keySet());
@@ -2303,14 +2318,54 @@ public class MachineControllerBlockEntity extends BlockEntity {
         invalidateFactoryCapacity();
     }
 
+    private List<UpgradeBusBlockEntity> upgradeBusComponents(BlockArray pattern) {
+        if (level == null || pattern == null) return List.of();
+        List<UpgradeBusBlockEntity> buses = new ArrayList<>();
+        for (BlockPos relativePos : pattern.pattern().keySet()) {
+            if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof UpgradeBusBlockEntity bus) {
+                buses.add(bus);
+            }
+        }
+        return List.copyOf(buses);
+    }
+
+    private List<ComponentRuntime.UpgradeBusSnapshot> upgradeBusSnapshots(
+            List<UpgradeBusBlockEntity> buses) {
+        List<ComponentRuntime.UpgradeBusSnapshot> snapshots = new ArrayList<>();
+        for (UpgradeBusBlockEntity bus : buses) {
+            snapshots.add(new ComponentRuntime.UpgradeBusSnapshot(
+                    bus.getBlockPos().subtract(getBlockPos()), bus.itemSnapshot()));
+        }
+        return List.copyOf(snapshots);
+    }
+
+    private void bindUpgradeBuses(List<UpgradeBusBlockEntity> buses) {
+        for (UpgradeBusBlockEntity bus : buses) bus.addControllerChangeListener(upgradeBusChangeListener);
+        boundUpgradeBuses = List.copyOf(buses);
+    }
+
+    private void unbindUpgradeBuses() {
+        for (UpgradeBusBlockEntity bus : boundUpgradeBuses) bus.removeControllerChangeListener(upgradeBusChangeListener);
+        boundUpgradeBuses = List.of();
+    }
+
+    private void onUpgradeBusContentsChanged() {
+        if (level == null || level.isClientSide() || boundUpgradeBuses.isEmpty()) return;
+        runtime.refreshUpgradeBusState(upgradeBusSnapshots(boundUpgradeBuses));
+        setChanged();
+        syncRuntimeStateIfChanged();
+    }
+
     private boolean componentsNeedRefresh(BlockArray pattern, @Nullable CompiledMachinePattern compiled,
                                           Direction facing) {
         if (level == null) return false;
         Set<BlockPos> nextDataStoragePositions = new HashSet<>();
+        Set<BlockPos> nextUpgradeBusPositions = new HashSet<>();
         List<BlockEntity> nextContainers = new ArrayList<>();
         for (BlockPos relativePos : pattern.pattern().keySet()) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
             if (entity instanceof DataStorageBlockEntity) nextDataStoragePositions.add(entity.getBlockPos().immutable());
+            if (entity instanceof UpgradeBusBlockEntity) nextUpgradeBusPositions.add(relativePos.immutable());
             if (entity instanceof SmartInterfaceBlockEntity
                     || entity instanceof ParallelControllerBlockEntity
                     || entity instanceof FactorySchedulerBlockEntity
@@ -2322,7 +2377,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .map(ProcessingComponent::getContainer)
                 .toList();
         return !currentContainers.equals(nextContainers)
-                || !runtime.dataStoragePositions().equals(nextDataStoragePositions);
+                || !runtime.dataStoragePositions().equals(nextDataStoragePositions)
+                || !runtime.upgradeBusPositions().equals(nextUpgradeBusPositions);
     }
 
     private List<DataStorageBlockEntity> dataStorageComponents(StructureSnapshot structure) {
@@ -2687,6 +2743,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         stopFactoryController();
         for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
         runtime.clearAllText();
+        unbindUpgradeBuses();
         runtime.resetStructure(configuredMachine, wasFormed || hadActive);
         if (!clearFormationFailure) {
             publishStructureWork(state -> state.withFormationFailure(previousFormationFailure)
@@ -2696,6 +2753,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             publishStructureWork(state -> state.withNextCheckTick(work.nextCheckTick()));
         }
         FORMED_CONTROLLERS.remove(this);
+        runtime.publishUpgradeBusState(List.of());
         runtime.publishComponentState(List.of(), Map.of(), Map.of(), Set.of());
         if (wasFormed && invalidateScheduledCheck) publishStructureWork(state -> state.withNextCheckTick(-1L));
         runtime.craftingRuntime().invalidate();
@@ -2842,7 +2900,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(current, machineId, current.structure().version(),
-                    maxParallelism, candidates, lockedRecipeId, componentRuntime().capabilities()).compute();
+                    maxParallelism, candidates, lockedRecipeId, componentRuntime().capabilities(),
+                    componentRuntime().modifierList()).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();

@@ -157,7 +157,7 @@ public final class MachineControllerRuntime {
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
                 screenText, dataStorages.values().stream().findFirst().orElse(null),
-                new MachineIoView(capabilitySnapshot));
+                new MachineIoView(capabilitySnapshot), components.upgradeItems());
     }
 
     public ControllerScreenTextState recipeScreenText(String laneId) {
@@ -207,7 +207,8 @@ public final class MachineControllerRuntime {
                 components.capabilityAggregate(), craftingState, factorySnapshot, components.componentPresentations(),
                 components.capabilityPresentations(), foundLevelIds(), machine == null ? "" : machine.registryName().toString(),
                 machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
-                parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine));
+                parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),
+                components.upgradeItems(), components.upgradeContentRevision());
         workingStructureEpoch = structure.stateEpoch();
         workingCapabilityVersion = components.capabilityVersion();
         workingCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
@@ -331,6 +332,10 @@ public final class MachineControllerRuntime {
 
     List<ProcessingComponent> components() {
         return components.components();
+    }
+
+    Set<BlockPos> upgradeBusPositions() {
+        return components.upgradeBusPositions();
     }
 
     ComponentRuntime componentRuntime() {
@@ -492,6 +497,21 @@ public final class MachineControllerRuntime {
         components.replaceModifiers(modifiers);
         components.replaceLevels(levels);
         components.replaceLinkedPortPositions(linkedPositions);
+        publishSnapshot();
+    }
+
+    void publishUpgradeBusState(List<ComponentRuntime.UpgradeBusSnapshot> buses) {
+        components.replaceUpgradeBuses(buses);
+        publishSnapshot();
+    }
+
+    void refreshUpgradeBusState(List<ComponentRuntime.UpgradeBusSnapshot> buses) {
+        components.refreshUpgradeBuses(buses);
+        publishSnapshot();
+    }
+
+    void setModifiersAllowed(boolean allowed) {
+        components.setModifiersAllowed(allowed);
         publishSnapshot();
     }
 

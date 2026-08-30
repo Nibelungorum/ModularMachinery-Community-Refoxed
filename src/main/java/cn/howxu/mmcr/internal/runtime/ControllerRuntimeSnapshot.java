@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,7 +44,27 @@ public record ControllerRuntimeSnapshot(
         boolean factoryControllerPresent,
         int parallelControllerCount,
         long maxParallelControllerCount,
-        long maxParallelism) {
+        long maxParallelism,
+        List<ItemStack> upgradeItems,
+        long upgradeContentRevision) {
+
+    public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion, long modifierVersion,
+                                     long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
+                                     Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
+                                     ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
+                                     ComponentRuntime.CapabilityAggregate capabilityAggregate,
+                                     CraftingStateSnapshot crafting, FactorySnapshot factory,
+                                     List<ComponentPresentation> componentPresentations,
+                                     List<CapabilityPresentation> capabilityPresentations, List<String> foundLevelIds,
+                                     String machineId, String machineName, int controllerRole, boolean factorySupported,
+                                     boolean factoryControllerPresent, int parallelControllerCount,
+                                     long maxParallelControllerCount, long maxParallelism) {
+        this(structure, capabilityVersion, modifierVersion, stateVersion, foundModifiers, foundLevels,
+                linkedPortPositions, moduleConnectionStatus, installedModuleCount, capabilityAggregate, crafting,
+                factory, componentPresentations, capabilityPresentations, foundLevelIds, machineId, machineName,
+                controllerRole, factorySupported, factoryControllerPresent, parallelControllerCount,
+                maxParallelControllerCount, maxParallelism, List.of(), 0L);
+    }
 
     public ControllerRuntimeSnapshot {
         structure = structure == null ? StructureSnapshot.empty() : structure;
@@ -66,6 +87,8 @@ public record ControllerRuntimeSnapshot(
         foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
         machineId = machineId == null ? "" : machineId;
         machineName = machineName == null ? "" : machineName;
+        if (upgradeContentRevision < 0L) throw new IllegalArgumentException("Upgrade content revision must not be negative");
+        upgradeItems = copyStacks(upgradeItems == null ? List.of() : upgradeItems);
         if (controllerRole < 0 || parallelControllerCount < 0 || maxParallelControllerCount < 0 || maxParallelism < 1) {
             throw new IllegalArgumentException("Invalid controller presentation values");
         }
@@ -89,6 +112,15 @@ public record ControllerRuntimeSnapshot(
 
     public FluidStack primaryOutputFluid() {
         return capabilityAggregate.primaryOutputFluid();
+    }
+
+    @Override
+    public List<ItemStack> upgradeItems() {
+        return copyStacks(upgradeItems);
+    }
+
+    private static List<ItemStack> copyStacks(List<ItemStack> stacks) {
+        return List.copyOf(stacks.stream().map(ItemStack::copy).toList());
     }
 
     /**

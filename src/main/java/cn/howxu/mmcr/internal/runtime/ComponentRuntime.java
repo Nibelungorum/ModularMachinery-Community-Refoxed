@@ -7,14 +7,17 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
@@ -55,6 +58,12 @@ public final class ComponentRuntime {
     private Set<BlockPos> linkedPortPositions = Set.of();
     private ModuleConnectionStatus moduleConnectionStatus = ModuleConnectionStatus.disconnected();
     private int installedModuleCount;
+    private List<UpgradeBusSnapshot> upgradeBuses = List.of();
+    private List<ItemStack> upgradeItems = List.of();
+    private Map<Identifier, Long> upgradeModifierUnits = Map.of();
+    private List<RecipeModifier> upgradeModifiers = List.of();
+    private long upgradeContentRevision;
+    private boolean modifiersAllowed = true;
 
     public boolean replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
@@ -163,7 +172,7 @@ public final class ComponentRuntime {
             if (orderedEqual) return false;
         }
         foundModifiers = immutableMap(next);
-        flattenedModifiers = next.values().stream().flatMap(List::stream).toList();
+        rebuildModifierList();
         modifierVersion++;
         stateVersion++;
         return true;
@@ -175,6 +184,42 @@ public final class ComponentRuntime {
 
     public List<RecipeModifier> modifierList() {
         return flattenedModifiers;
+    }
+
+    public boolean replaceUpgradeBuses(List<UpgradeBusSnapshot> buses) {
+        return replaceUpgradeBuses(buses, false);
+    }
+
+    public void refreshUpgradeBuses(List<UpgradeBusSnapshot> buses) {
+        replaceUpgradeBuses(buses, true);
+    }
+
+    public List<UpgradeBusSnapshot> upgradeBuses() {
+        return upgradeBuses;
+    }
+
+    public Set<BlockPos> upgradeBusPositions() {
+        return upgradeBuses.stream().map(UpgradeBusSnapshot::position).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    public List<ItemStack> upgradeItems() {
+        return copyStacks(upgradeItems);
+    }
+
+    public Map<Identifier, Long> upgradeModifierUnits() {
+        return upgradeModifierUnits;
+    }
+
+    public long upgradeContentRevision() {
+        return upgradeContentRevision;
+    }
+
+    public void setModifiersAllowed(boolean allowed) {
+        if (modifiersAllowed == allowed) return;
+        modifiersAllowed = allowed;
+        rebuildModifierList();
+        modifierVersion++;
+        stateVersion++;
     }
 
     public boolean replaceLevels(Map<Identifier, MachineLevel> levels) {
@@ -266,6 +311,7 @@ public final class ComponentRuntime {
         replaceLevels(Map.of());
         replaceLinkedPortPositions(Set.of());
         replaceModuleConnectionState(ModuleConnectionStatus.disconnected(), 0);
+        replaceUpgradeBuses(List.of());
     }
 
     private static CapabilityState capabilityStateFor(List<ProcessingComponent> components) {
@@ -288,6 +334,98 @@ public final class ComponentRuntime {
 
     private static <K, V> Map<K, V> immutableMap(Map<K, V> values) {
         return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
+
+    private boolean replaceUpgradeBuses(List<UpgradeBusSnapshot> buses, boolean forceRefresh) {
+        List<UpgradeBusSnapshot> next = new ArrayList<>();
+        if (buses != null) next.addAll(buses);
+        next.sort(Comparator.comparing(UpgradeBusSnapshot::position, ComponentRuntime::comparePositions));
+        next = List.copyOf(next);
+        if (!forceRefresh && upgradeBuses.equals(next)) return false;
+
+        upgradeBuses = next;
+        List<ItemStack> items = new ArrayList<>();
+        Map<Identifier, Long> units = new LinkedHashMap<>();
+        for (UpgradeBusSnapshot bus : next) {
+            for (ItemStack stack : bus.stacks()) {
+                if (stack.isEmpty()) continue;
+                items.add(stack.copy());
+                Identifier modifierId = ModifierRegistry.modifierFor(stack);
+                if (modifierId != null) units.merge(modifierId, (long) stack.getCount(), Long::sum);
+            }
+        }
+        upgradeItems = List.copyOf(items);
+        upgradeModifierUnits = immutableMap(units);
+        upgradeModifiers = upgradeModifiers(units);
+        upgradeContentRevision++;
+        rebuildModifierList();
+        modifierVersion++;
+        stateVersion++;
+        return true;
+    }
+
+    private List<RecipeModifier> upgradeModifiers(Map<Identifier, Long> units) {
+        List<RecipeModifier> result = new ArrayList<>();
+        for (Map.Entry<Identifier, Long> entry : units.entrySet()) {
+            ModifierDefinition definition = ModifierRegistry.get(entry.getKey());
+            if (definition == null) continue;
+            for (RecipeModifier modifier : definition.modifiers()) {
+                result.add(withUnitCount(modifier, entry.getValue()));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private void rebuildModifierList() {
+        if (!modifiersAllowed) {
+            flattenedModifiers = List.of();
+            return;
+        }
+        List<RecipeModifier> modifiers = new ArrayList<>();
+        foundModifiers.values().forEach(modifiers::addAll);
+        modifiers.addAll(upgradeModifiers);
+        flattenedModifiers = List.copyOf(modifiers);
+    }
+
+    private static RecipeModifier withUnitCount(RecipeModifier modifier, long count) {
+        if (count <= 1L) return modifier;
+        float value = switch (modifier.getOperation()) {
+            case ADD, SUBTRACT -> (float) ((double) modifier.getModifier() * count);
+            case MULTIPLY, DIVIDE -> power(modifier.getModifier(), count);
+        };
+        return new RecipeModifier(modifier.getTarget(), modifier.getIOTarget(), value,
+                modifier.getOperation(), modifier.affectsChance());
+    }
+
+    private static float power(float base, long exponent) {
+        float result = 1F;
+        float factor = base;
+        long remaining = exponent;
+        while (remaining > 0L) {
+            if ((remaining & 1L) != 0L) result *= factor;
+            remaining >>>= 1;
+            if (remaining > 0L) factor *= factor;
+        }
+        return result;
+    }
+
+    private static int comparePositions(BlockPos first, BlockPos second) {
+        int x = Integer.compare(first.getX(), second.getX());
+        if (x != 0) return x;
+        int y = Integer.compare(first.getY(), second.getY());
+        return y != 0 ? y : Integer.compare(first.getZ(), second.getZ());
+    }
+
+    private static List<ItemStack> copyStacks(List<ItemStack> stacks) {
+        return List.copyOf(stacks.stream().map(ItemStack::copy).toList());
+    }
+
+    /** Immutable content snapshot for one bound Upgrade Bus. */
+    public record UpgradeBusSnapshot(BlockPos position, List<ItemStack> stacks) {
+        public UpgradeBusSnapshot {
+            position = position == null ? BlockPos.ZERO : position.immutable();
+            stacks = copyStacks(stacks == null ? List.of() : stacks);
+        }
     }
 
     private static ControllerRuntimeSnapshot.CapabilityPresentation resourcePresentation(

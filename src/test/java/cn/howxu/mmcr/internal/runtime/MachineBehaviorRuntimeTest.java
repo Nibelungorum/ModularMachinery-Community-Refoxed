@@ -37,6 +37,8 @@ import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -371,6 +373,26 @@ class MachineBehaviorRuntimeTest {
         assertThat(calls).hasValue(1);
         assertThat(controller.effectiveFactoryThreadLimit()).isEqualTo(1);
         assertThat(controller.runtimeSnapshot().factory().active()).isFalse();
+    }
+
+    @Test
+    void tick_context_keeps_upgrade_items_when_recipe_modifiers_are_disabled() {
+        UpgradeBusBlockEntity bus = new UpgradeBusBlockEntity(UpgradeBusSize.NORMAL, new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
+        ItemStack source = new ItemStack(Items.IRON_INGOT, 2);
+        bus.itemStackHandler().setStackInSlot(0, source);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
+        Machine machine = machine(TEST_MACHINE_ID, new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))),
+                TickBehavior.builder().serverTick(context -> {
+                    assertThat(context.upgradeItems()).singleElement().satisfies(stack -> {
+                        assertThat(stack).isNotSameAs(source);
+                        assertThat(stack.getCount()).isEqualTo(2);
+                    });
+                }).build());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, bus);
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
     }
 
     @Test
