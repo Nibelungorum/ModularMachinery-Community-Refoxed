@@ -35,15 +35,18 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final float MACHINE_NAME_SCALE = 1.1F;
     private static final int PREVIEW_X = 4;
     private static final int PREVIEW_Y = 23;
-    private static final int MATERIAL_X = 5;
-    private static final int MATERIAL_Y_4X = 129;
-    private static final int MATERIAL_Y_3X = 199;
-    private static final int MATERIAL_Y_2X = 259;
-    private static final int MATERIAL_Y_1X = 279;
-    private static final int MATERIAL_STEP = 18;
+    private static final int MATERIAL_X = 0;
+    private static final int MATERIAL_Y_4X = 131;
+    private static final int MATERIAL_Y_3X = 201;
+    private static final int MATERIAL_Y_2X = 261;
+    private static final int MATERIAL_Y_1X = 281;
+    private static final int MATERIAL_STEP = 19;
     private static final int MATERIAL_SLOT_COUNT = 9;
     static final int TRANSFER_BUTTON_X = 152;
-    private static final int TRANSFER_BUTTON_Y = 129;
+    private static final int TRANSFER_BUTTON_Y = 258;
+    private static final int TRANSFER_BUTTON_Y_2X = 241;
+    private static final int TRANSFER_BUTTON_Y_3X = 181;
+    private static final int TRANSFER_BUTTON_Y_4X = 111;
 
     private final IDrawable icon;
     public MachineStructureCategory(IGuiHelper guiHelper) {
@@ -98,7 +101,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
             builder.addInputSlot(-1000, -1000).add(stack);
         }
         builder.addOutputSlot(-1000, -1000).add(structureOutput(display));
-        builder.moveRecipeTransferButton(TRANSFER_BUTTON_X, TRANSFER_BUTTON_Y);
+        builder.moveRecipeTransferButton(TRANSFER_BUTTON_X, transferButtonY());
     }
 
     @Override
@@ -162,6 +165,15 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
             case 2 -> MATERIAL_Y_2X;
             case 3 -> MATERIAL_Y_3X;
             default -> MATERIAL_Y_4X;
+        };
+    }
+
+    private static int transferButtonY() {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> TRANSFER_BUTTON_Y;
+            case 2 -> TRANSFER_BUTTON_Y_2X;
+            case 3 -> TRANSFER_BUTTON_Y_3X;
+            default -> TRANSFER_BUTTON_Y_4X;
         };
     }
 

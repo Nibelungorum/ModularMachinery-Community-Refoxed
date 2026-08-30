@@ -20,7 +20,7 @@ import java.util.function.LongSupplier;
  */
 public final class StructureMaterialWidget implements IRecipeWidget {
     public static final int SLOT_COUNT = 9;
-    public static final int SLOT_STEP = 18;
+    public static final int SLOT_STEP = 19;
     public static final long PAGE_DURATION_MILLIS = 8_000L;
 
     private final StructureMaterialSummary summary;

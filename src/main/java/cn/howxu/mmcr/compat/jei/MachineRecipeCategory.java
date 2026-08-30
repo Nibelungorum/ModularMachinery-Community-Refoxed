@@ -22,6 +22,7 @@ import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
@@ -132,6 +133,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
+        addTransferSlots(builder, recipe);
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
 
@@ -290,11 +292,39 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static void addEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.SlotPlan slot, boolean input) {
-        IRecipeSlotBuilder jeiSlot = input ? builder.addInputSlot(slot.x(), slot.y()) : builder.addOutputSlot(slot.x(), slot.y());
+        IRecipeSlotBuilder jeiSlot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slot.x(), slot.y());
         jeiSlot.setStandardSlotBackground();
         switch (slot.entry().kind()) {
             case FLUID -> addFluid(jeiSlot, recipe, slot.entry(), input);
             case ITEM -> addItem(jeiSlot, recipe, slot.entry(), input);
+        }
+    }
+
+    private static void addTransferSlots(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe) {
+        for (int index = 0; index < recipe.fluidInputs().size(); index++) {
+            IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
+            int amount = recipe.fluidInputAmounts().get(index);
+            recipe.fluidInputs().get(index).fluids().forEach(fluid -> slot.add(fluid.value(), amount));
+        }
+        for (MachineRecipeDisplay.ItemInputDisplay item : recipe.itemInputs()) {
+            IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
+            addActualItem(slot, item);
+        }
+        for (FluidStack fluid : recipe.fluidOutputs()) {
+            builder.addOutputSlot(-1000, -1000)
+                    .add(fluid.getFluid(), fluid.getAmount(), fluid.getComponentsPatch());
+        }
+        for (MachineRecipeDisplay.ItemOutputDisplay output : recipe.itemOutputs()) {
+            builder.addOutputSlot(-1000, -1000).add(output.stack());
+        }
+    }
+
+    private static void addActualItem(IRecipeSlotBuilder slot, MachineRecipeDisplay.ItemInputDisplay item) {
+        List<ItemStack> stacks = item.stacks();
+        if (stacks.isEmpty() && item.ingredient() != null) {
+            slot.add(item.ingredient());
+        } else {
+            slot.addItemStacks(stacks);
         }
     }
 
@@ -322,7 +352,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static ItemStack jeiItemStack(ItemStack stack) {
-        return stack.copy();
+        return stack.copyWithCount(1);
     }
 
     static String describeAddedItemStack(ItemStack stack) {
@@ -347,14 +377,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid -> {
                 setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
                 jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                        .add(fluid.value(), amount);
+                        .add(fluid.value(), FLUID_SLOT_CAPACITY);
                 jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
             });
         } else {
             var stack = recipe.fluidOutputs().get(entry.index());
             setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                    .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
+                    .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, stack.getAmount()));
         }
     }
