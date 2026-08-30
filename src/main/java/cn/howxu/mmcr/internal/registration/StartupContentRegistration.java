@@ -60,7 +60,7 @@ public final class StartupContentRegistration {
         if (pendingProductionDefinitions == null) return;
         boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
                 && !Plugin.startupScriptsLoaded();
-        bindVanillaItemComponents();
+        bindItemComponentsForStartup();
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(
                 pendingProductionDefinitions.definitions().keySet());
         registerGameTestBuiltins("registerMachineStructures",
@@ -194,7 +194,7 @@ public final class StartupContentRegistration {
         definitions.freeze();
         ContentRegistrationCoordinator.collectMachines(definitions);
 
-        bindVanillaItemComponents();
+        bindItemComponentsForStartup();
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
         eventBus.post(structures);
@@ -220,7 +220,10 @@ public final class StartupContentRegistration {
         ModItems.registerMachineControllerItems(machineIds);
     }
 
-    private static void bindVanillaItemComponents() {
+    /**
+     * Ensures item holders can be used by startup declarations before the game has bound components.
+     */
+    public static void bindItemComponentsForStartup() {
         try {
             Fluids.WATER.builtInRegistryHolder().components();
         } catch (NullPointerException ignored) {

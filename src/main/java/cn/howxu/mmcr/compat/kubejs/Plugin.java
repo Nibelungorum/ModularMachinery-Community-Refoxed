@@ -36,6 +36,7 @@ public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
             beginServerReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
+            StartupContentRegistration.bindItemComponentsForStartup();
             beginStartupRegistryPhase();
             registerDevelopmentMachineLevels();
         }
