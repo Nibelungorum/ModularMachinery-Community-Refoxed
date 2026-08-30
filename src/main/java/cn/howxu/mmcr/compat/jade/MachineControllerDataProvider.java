@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
@@ -30,8 +32,11 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         ControllerRuntimeSnapshot runtime = controller.runtimeSnapshot();
         MachineStateSnapshot machineState = SYNC_RUNTIME.machineState(runtime);
         FactorySnapshot factory = SYNC_RUNTIME.factoryState(runtime);
+        Machine machine = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine() : runtime.structure().machine();
         data.putBoolean("formed", machineState.formed());
         data.putBoolean("active", machineState.active());
+        data.putBoolean("tickMachine", machine != null && machine.behavior() instanceof TickBehavior);
         data.putLong("parallelism", machineState.parallelism());
         data.putLong("maxParallelism", machineState.maxParallelism());
         data.putInt("parallelSlots", factory.parallelSlots());

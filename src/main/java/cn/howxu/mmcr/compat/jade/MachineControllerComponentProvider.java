@@ -36,6 +36,8 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
     }
 
     static List<String> lineKeys(Snapshot snapshot) {
+        if (snapshot.tickMachine()) return List.of("structure");
+
         List<String> keys = new ArrayList<>();
         keys.add("structure");
         keys.add("state");
@@ -73,9 +75,10 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
     }
 
     record Snapshot(
-            boolean formed,
-            boolean active,
-            String activeRecipe,
+        boolean formed,
+        boolean active,
+        boolean tickMachine,
+        String activeRecipe,
             int tick,
             int totalTick,
             long parallelism,
@@ -98,6 +101,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             return new Snapshot(
                     tag.getBooleanOr("formed", false),
                     tag.getBooleanOr("active", false),
+                    tag.getBooleanOr("tickMachine", false),
                     tag.getStringOr("activeRecipe", ""),
                     tag.getIntOr("tick", 0),
                     tag.getIntOr("totalTick", 0),

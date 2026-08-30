@@ -21,4 +21,17 @@ class MachineControllerComponentProviderTest {
                 MachineControllerComponentProvider.Snapshot.from(tag)))
                 .doesNotContain("machine");
     }
+
+    @Test
+    void lineKeysOnlyIncludeStructureForTickMachine() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("tickMachine", true);
+        tag.putBoolean("formed", true);
+        tag.putBoolean("active", true);
+        tag.putString("activeRecipe", "mmcr:recipe");
+
+        assertThat(MachineControllerComponentProvider.lineKeys(
+                MachineControllerComponentProvider.Snapshot.from(tag)))
+                .containsExactly("structure");
+    }
 }
