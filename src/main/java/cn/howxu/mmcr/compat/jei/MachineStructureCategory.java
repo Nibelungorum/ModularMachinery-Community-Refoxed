@@ -80,8 +80,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         for (int slotIndex = 0; slotIndex < MATERIAL_SLOT_COUNT; slotIndex++) {
             int entryIndex = slotIndex;
             IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY,
-                            MATERIAL_X + slotIndex * MATERIAL_STEP, materialY)
-                    .setStandardSlotBackground();
+                            MATERIAL_X + slotIndex * MATERIAL_STEP, materialY);
             if (entryIndex < summary.entries().size()) {
                 slot.add(summary.entries().get(entryIndex).stack());
             }
@@ -104,8 +103,8 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
-        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), display.defaultSchema(),
-                PREVIEW_X, PREVIEW_Y, previewWidth(), previewHeight());
+        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), PREVIEW_X, PREVIEW_Y,
+                previewWidth(), previewHeight());
         JeiPreviewLifecycle.registerActive(preview);
         builder.addWidget(preview);
         builder.addInputHandler(preview);

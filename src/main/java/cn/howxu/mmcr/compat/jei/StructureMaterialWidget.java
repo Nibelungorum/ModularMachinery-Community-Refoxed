@@ -48,7 +48,7 @@ public final class StructureMaterialWidget implements IRecipeWidget {
 
     @Override
     public ScreenPosition getPosition() {
-        return new ScreenPosition(0, 0);
+        return new ScreenPosition(x, y);
     }
 
     @Override
@@ -72,7 +72,7 @@ public final class StructureMaterialWidget implements IRecipeWidget {
             String quantity = MachineRecipeCategory.itemQuantityText(summary.entries().get(entryIndex).count());
             if (!quantity.isEmpty()) {
                 new JeiSlotOverlayDrawable("", quantity).draw(graphics,
-                        x + slotIndex * SLOT_STEP, y);
+                        slotIndex * SLOT_STEP, 0);
             }
         }
     }

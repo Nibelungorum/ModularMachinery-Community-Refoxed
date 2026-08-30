@@ -112,7 +112,6 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         pictureInPicture.prepare(new PreviewSceneRenderState(scene, context.camera(),
                 absoluteViewport.x(), absoluteViewport.y(), absoluteViewport.x() + absoluteViewport.width(), absoluteViewport.y() + absoluteViewport.height(),
                 context.partialTick(), context.graphics().peekScissorStack(),
-                interactive ? 0.5F : 1.0F,
                 this),
                 graphics.mmcr$getGuiRenderState(), guiScale);
     }

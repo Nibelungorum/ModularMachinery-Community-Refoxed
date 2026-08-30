@@ -68,21 +68,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         this(machine, StructurePreviewCompilationCache.instance().acquire(machine), x, y, width, height);
     }
 
-    public JeiStructurePreviewWidget(Machine machine, StructurePreviewSchema schema,
-            int x, int y, int width, int height) {
-        this.preview = createPreview(schema);
-        this.schema = schema;
-        this.machine = machine;
-        this.compilation = null;
-        this.stages = machine.structureStages();
-        this.stageSchemas = List.of();
-        this.previewFactory = this::createPreview;
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-    }
-
     private JeiStructurePreviewWidget(Machine machine, StructurePreviewCompilation compilation, int x, int y, int width, int height) {
         this.preview = null;
         this.schema = null;

@@ -59,11 +59,8 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
 
     @Override
     public void prepare(PreviewSceneRenderState state, GuiRenderState guiRenderState, int guiScale) {
-        int logicalWidth = Math.max(1, state.x1() - state.x0());
-        int logicalHeight = Math.max(1, state.y1() - state.y0());
-        float pixelScale = guiScale * state.renderScale();
-        int width = Math.max(1, Math.round(logicalWidth * pixelScale));
-        int height = Math.max(1, Math.round(logicalHeight * pixelScale));
+        int width = Math.max(1, state.x1() - state.x0()) * guiScale;
+        int height = Math.max(1, state.y1() - state.y0()) * guiScale;
         ensureTargets(width, height);
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
@@ -76,7 +73,8 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
             RenderSystem.setProjectionMatrix(projectionMatrixBuffer.getBuffer(projection), ProjectionType.ORTHOGRAPHIC);
             PoseStack poseStack = new PoseStack();
             poseStack.translate(width / 2.0F, height, 0.0F);
-            poseStack.scale(pixelScale, pixelScale, -pixelScale);
+            float scale = guiScale * state.scale();
+            poseStack.scale(scale, scale, -scale);
             renderToTexture(state, poseStack);
             bufferSource.endBatch();
             blitTexture(state, guiRenderState);
