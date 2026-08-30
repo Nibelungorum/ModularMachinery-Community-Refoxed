@@ -18,12 +18,18 @@ import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -266,6 +272,23 @@ class ContentRegistrationCoordinatorTest {
                 definitions -> definitions.registerMachine(machineId, builder -> builder),
                 structures -> assertThat(ModBlocks.BLOCKS.containsKey(machineId.getPath() + "_controller")).isTrue(),
                 recipes -> { })).doesNotThrowAnyException();
+    }
+
+    @Test
+    void binds_item_components_before_structure_subscribers_run() throws Exception {
+        Holder.Reference<?> holder = Items.DIAMOND_BLOCK.builtInRegistryHolder();
+        Field components = Holder.Reference.class.getDeclaredField("components");
+        components.setAccessible(true);
+        Object previous = components.get(holder);
+        components.set(holder, null);
+        try {
+            assertThatCode(() -> StartupContentRegistration.registerForTesting(
+                    definitions -> { },
+                    structures -> new ItemStack(Items.DIAMOND_BLOCK),
+                    recipes -> { })).doesNotThrowAnyException();
+        } finally {
+            components.set(holder, previous == null ? DataComponentMap.EMPTY : previous);
+        }
     }
 
     @Test

@@ -60,6 +60,7 @@ public final class StartupContentRegistration {
         if (pendingProductionDefinitions == null) return;
         boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
                 && !Plugin.startupScriptsLoaded();
+        bindVanillaItemComponents();
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(
                 pendingProductionDefinitions.definitions().keySet());
         registerGameTestBuiltins("registerMachineStructures",
@@ -70,7 +71,6 @@ public final class StartupContentRegistration {
             structures.freeze();
             ContentRegistrationCoordinator.collectStructures(structures);
         }
-        bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         registerGameTestBuiltins("registerRecipes",
                 new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
@@ -194,6 +194,7 @@ public final class StartupContentRegistration {
         definitions.freeze();
         ContentRegistrationCoordinator.collectMachines(definitions);
 
+        bindVanillaItemComponents();
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
         eventBus.post(structures);
@@ -202,7 +203,6 @@ public final class StartupContentRegistration {
             structures.freeze();
             ContentRegistrationCoordinator.collectStructures(structures);
         }
-        bindVanillaItemComponents();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
         recipesSource.accept(recipes);
         eventBus.post(recipes);
