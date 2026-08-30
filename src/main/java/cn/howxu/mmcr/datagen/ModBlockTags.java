@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.PackOutput;
@@ -23,6 +24,9 @@ public final class ModBlockTags extends BlockTagsProvider {
 
     @Override
     protected void addTags(HolderLookup.Provider provider) {
-        tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream().map(holder -> holder.get()).toArray(Block[]::new));
+        tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream()
+                .map(holder -> holder.get())
+                .filter(block -> !(block instanceof MachineControllerBlock))
+                .toArray(Block[]::new));
     }
 }
