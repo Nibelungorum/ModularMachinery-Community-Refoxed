@@ -46,7 +46,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int LAYER_TEXT_Y_OFFSET = -24;
     private static final int CANDIDATE_SIZE = 16;
     private static final int CANDIDATE_STEP = 18;
-    private static final int MAX_VISIBLE_CANDIDATES = 8;
     private static final int LAYOUT_WIDTH = 168;
     private Preview preview;
     private final int x;
@@ -192,7 +191,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
         List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
         if (candidates.isEmpty()) return;
-        int visibleCount = Math.min(MAX_VISIBLE_CANDIDATES, candidates.size());
+        int visibleCount = Math.min(maxVisibleCandidates(), candidates.size());
         int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
         for (int index = 0; index < visibleCount; index++) {
             graphics.item(candidates.get((index + offset) % candidates.size()), 0, index * CANDIDATE_STEP, 0);
@@ -256,6 +255,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         int button = input.getKey().getValue();
         if (button != 0) return false;
         if (preview == null) return false;
+        if (!input.isSimulate() && previewDragActive) {
+            previewDragActive = false;
+            boolean inside = insidePreview(mouseX, mouseY);
+            boolean handled = preview.mouseReleased(previewMouseX(mouseX), previewMouseY(mouseY), button);
+            return inside || handled;
+        }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
             if (input.isSimulate()) return true;
@@ -273,12 +278,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (candidateAt(mouseX, mouseY) >= 0) {
             previewDragActive = false;
             return true;
-        }
-        if (!input.isSimulate() && previewDragActive) {
-            previewDragActive = false;
-            boolean inside = insidePreview(mouseX, mouseY);
-            if (insidePreview(mouseX, mouseY)) preview.mouseReleased(mouseX, mouseY, button);
-            return inside;
         }
         if (input.isSimulate()) {
             return insidePreview(mouseX, mouseY);
@@ -305,10 +304,19 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     private int candidateAt(double mouseX, double mouseY) {
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return -1;
-        int count = Math.min(MAX_VISIBLE_CANDIDATES, displayedCandidates(hit.getBlockPos()).size());
+        int count = Math.min(maxVisibleCandidates(), displayedCandidates(hit.getBlockPos()).size());
         if (mouseX < 0 || mouseX >= CANDIDATE_SIZE || mouseY < 0) return -1;
         int index = (int) Math.floor(mouseY / CANDIDATE_STEP);
         return index < count && mouseY < index * CANDIDATE_STEP + CANDIDATE_SIZE ? index : -1;
+    }
+
+    private static int maxVisibleCandidates() {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+            case 1 -> 12;
+            case 2 -> 10;
+            case 3 -> 8;
+            default -> 4;
+        };
     }
 
     private boolean insidePreview(double mouseX, double mouseY) {

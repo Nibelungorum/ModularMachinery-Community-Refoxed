@@ -59,8 +59,11 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
 
     @Override
     public void prepare(PreviewSceneRenderState state, GuiRenderState guiRenderState, int guiScale) {
-        int width = Math.max(1, state.x1() - state.x0()) * guiScale;
-        int height = Math.max(1, state.y1() - state.y0()) * guiScale;
+        int logicalWidth = Math.max(1, state.x1() - state.x0());
+        int logicalHeight = Math.max(1, state.y1() - state.y0());
+        float pixelScale = guiScale * state.renderScale();
+        int width = Math.max(1, Math.round(logicalWidth * pixelScale));
+        int height = Math.max(1, Math.round(logicalHeight * pixelScale));
         ensureTargets(width, height);
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
@@ -73,8 +76,7 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
             RenderSystem.setProjectionMatrix(projectionMatrixBuffer.getBuffer(projection), ProjectionType.ORTHOGRAPHIC);
             PoseStack poseStack = new PoseStack();
             poseStack.translate(width / 2.0F, height, 0.0F);
-            float scale = guiScale * state.scale();
-            poseStack.scale(scale, scale, -scale);
+            poseStack.scale(pixelScale, pixelScale, -pixelScale);
             renderToTexture(state, poseStack);
             bufferSource.endBatch();
             blitTexture(state, guiRenderState);
@@ -147,8 +149,9 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
 
     @Override
     protected void renderToTexture(PreviewSceneRenderState state, PoseStack poseStack) {
-        PreviewSceneCamera camera = PreviewSceneCamera.from(state.camera(),
-                Math.max(1, state.x1() - state.x0()), Math.max(1, state.y1() - state.y0()));
+        int logicalWidth = Math.max(1, state.x1() - state.x0());
+        int logicalHeight = Math.max(1, state.y1() - state.y0());
+        PreviewSceneCamera camera = PreviewSceneCamera.from(state.camera(), logicalWidth, logicalHeight);
         Minecraft minecraft = Minecraft.getInstance();
         CameraRenderState cameraState = new CameraRenderState();
         cameraState.pos = new Vec3(camera.eye());

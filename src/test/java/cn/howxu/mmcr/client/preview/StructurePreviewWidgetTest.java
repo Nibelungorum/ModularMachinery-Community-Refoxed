@@ -91,6 +91,29 @@ class StructurePreviewWidgetTest {
     }
 
     @Test
+    void drag_enters_interactive_mode_and_release_restores_full_quality() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        widget.setViewport(new PreviewViewport(0, 0, 20, 20));
+
+        assertThat(widget.mouseClicked(10, 10, 0)).isTrue();
+        assertThat(renderer.interactive()).isTrue();
+        assertThat(widget.mouseReleased(10, 10, 0)).isTrue();
+        assertThat(renderer.interactive()).isFalse();
+        assertThat(renderer.interactiveChanges()).isEqualTo(2);
+    }
+
+    @Test
+    void scroll_enters_interactive_mode_for_the_current_zoom_update() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        widget.setViewport(new PreviewViewport(0, 0, 20, 20));
+
+        assertThat(widget.mouseScrolled(10, 10, 1.0D)).isTrue();
+        assertThat(renderer.interactive()).isTrue();
+    }
+
+    @Test
     void widget_orbits_horizontally_opposite_and_vertically_with_left_drag_delta() {
         RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
         StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
@@ -153,6 +176,8 @@ class StructurePreviewWidgetTest {
         private PreviewVisibility visibility = PreviewVisibility.ALL;
         private int resetCameraCalls;
         private int closeCalls;
+        private boolean interactive;
+        private int interactiveChanges;
         private Object hitResult;
         private Object selectedHit;
 
@@ -173,6 +198,12 @@ class StructurePreviewWidgetTest {
         @Override
         public void resetCamera() {
             resetCameraCalls++;
+        }
+
+        @Override
+        public void setInteractive(boolean interactive) {
+            this.interactive = interactive;
+            interactiveChanges++;
         }
 
         @Override
@@ -204,6 +235,14 @@ class StructurePreviewWidgetTest {
 
         private int closeCalls() {
             return closeCalls;
+        }
+
+        private boolean interactive() {
+            return interactive;
+        }
+
+        private int interactiveChanges() {
+            return interactiveChanges;
         }
     }
 }

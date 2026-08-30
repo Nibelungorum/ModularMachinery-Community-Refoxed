@@ -24,6 +24,7 @@ public final class PreviewSceneCamera {
     private final Vector3f lookAt;
     private final Vector3f up;
     private final long rotationVersion;
+    private final Matrix4f inverseViewProjection;
     private final Matrix4f view;
     private final Matrix4f projection;
 
@@ -34,6 +35,7 @@ public final class PreviewSceneCamera {
         this.rotationVersion = rotationVersion;
         this.view = new Matrix4f().lookAt(this.eye, this.lookAt, up);
         this.projection = new Matrix4f().perspective(FIELD_OF_VIEW, (float) width / height, NEAR_PLANE, FAR_PLANE);
+        this.inverseViewProjection = new Matrix4f(projection).mul(view).invert();
     }
 
     public static PreviewSceneCamera from(PreviewCamera camera, int width, int height) {
@@ -57,6 +59,10 @@ public final class PreviewSceneCamera {
 
     public long rotationVersion() {
         return rotationVersion;
+    }
+
+    public Matrix4f inverseViewProjection() {
+        return new Matrix4f(inverseViewProjection);
     }
 
     public Matrix4f view() {

@@ -68,4 +68,23 @@ class PreviewCameraTest {
 
         assertThat(camera.rotationVersion()).isEqualTo(afterOrbit + 1);
     }
+
+    @Test
+    void version_changes_for_orbit_pan_and_zoom_but_not_for_noop_orbit() {
+        PreviewCamera camera = new PreviewCamera();
+        camera.reset(new Vector3f(), 8.0F);
+        long before = camera.version();
+
+        camera.orbit(0.1F, 0.0F);
+        long afterOrbit = camera.version();
+        camera.orbit(0.0F, 0.0F);
+        camera.pan(1.0F, 0.0F);
+        long afterPan = camera.version();
+        camera.zoom(0.9F);
+
+        assertThat(afterOrbit).isGreaterThan(before);
+        assertThat(camera.version()).isGreaterThan(afterPan);
+        assertThat(afterPan).isGreaterThan(afterOrbit);
+        assertThat(camera.version()).isEqualTo(afterPan + 1);
+    }
 }

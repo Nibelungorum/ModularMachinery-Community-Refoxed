@@ -1,33 +1,64 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.registry.ModBlocks;
-import net.minecraft.world.item.Item;
+import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
+import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * Immutable JEI display metadata for one machine's multiblock structure.
+ * JEI display data and lazy default-stage structure material cache.
  *
  * @author howxu <dev@howxu.cn>
  */
-public record MachineStructureDisplay(Machine machine, List<ItemStack> ingredients) {
-    public MachineStructureDisplay {
-        machine = Objects.requireNonNull(machine, "machine");
-        ingredients = List.copyOf(ingredients.stream().map(ItemStack::copy).toList());
-    }
+public final class MachineStructureDisplay {
+    private final Machine machine;
+    private volatile StructurePreviewSchema defaultSchema;
+    private volatile StructureMaterialSummary materials;
 
-    @Override
-    public List<ItemStack> ingredients() {
-        return ingredients.stream().map(ItemStack::copy).toList();
+    private MachineStructureDisplay(Machine machine) {
+        this.machine = Objects.requireNonNull(machine, "machine");
     }
 
     public static MachineStructureDisplay from(Machine machine) {
-        LinkedHashSet<Item> items = new LinkedHashSet<>();
-        items.add(ModBlocks.controllerFor(machine.registryName()).get().asItem());
-        return new MachineStructureDisplay(machine, items.stream().map(ItemStack::new).toList());
+        return new MachineStructureDisplay(machine);
+    }
+
+    public Machine machine() {
+        return machine;
+    }
+
+    public StructurePreviewSchema defaultSchema() {
+        StructurePreviewSchema result = defaultSchema;
+        if (result == null) {
+            synchronized (this) {
+                result = defaultSchema;
+                if (result == null) {
+                    result = new StructurePreviewSchemaFactory().create(machine);
+                    defaultSchema = result;
+                }
+            }
+        }
+        return result;
+    }
+
+    public StructureMaterialSummary materials() {
+        StructureMaterialSummary result = materials;
+        if (result == null) {
+            synchronized (this) {
+                result = materials;
+                if (result == null) {
+                    result = StructureMaterialSummary.from(defaultSchema());
+                    materials = result;
+                }
+            }
+        }
+        return result;
+    }
+
+    public List<ItemStack> ingredients() {
+        return materials().transferStacks();
     }
 }

@@ -26,6 +26,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
     private int pressButton = -1;
     private boolean dragged;
     private boolean closed;
+    private long interactiveUntilNanos;
     private int selectedLayer = -1;
     private Object selectedHit;
 
@@ -36,6 +37,10 @@ public final class StructurePreviewWidget implements AutoCloseable {
 
     public void render(PreviewRenderContext context) {
         if (closed) return;
+        if (interactiveUntilNanos != 0L && System.nanoTime() >= interactiveUntilNanos) {
+            interactiveUntilNanos = 0L;
+            renderer.setInteractive(false);
+        }
         viewport = context.viewport();
         renderer.render(context);
     }
@@ -76,6 +81,8 @@ public final class StructurePreviewWidget implements AutoCloseable {
         pressY = mouseY;
         pressButton = button;
         dragged = false;
+        interactiveUntilNanos = 0L;
+        renderer.setInteractive(true);
         return true;
     }
 
@@ -88,6 +95,8 @@ public final class StructurePreviewWidget implements AutoCloseable {
                 && movementX * movementX + movementY * movementY <= DRAG_THRESHOLD_SQUARED;
         pressButton = -1;
         dragged = false;
+        interactiveUntilNanos = 0L;
+        renderer.setInteractive(false);
         if (click) {
             Object hitResult = renderer.hitResult();
             if (hitResult != null) {
@@ -116,6 +125,8 @@ public final class StructurePreviewWidget implements AutoCloseable {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) {
         if (closed || !viewport.contains(mouseX, mouseY)) return false;
         camera.zoom((float) Math.pow(0.9F, scrollDelta));
+        renderer.setInteractive(true);
+        interactiveUntilNanos = System.nanoTime() + 150_000_000L;
         return true;
     }
 

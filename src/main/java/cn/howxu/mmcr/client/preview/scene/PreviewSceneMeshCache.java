@@ -6,8 +6,10 @@
  */
 package cn.howxu.mmcr.client.preview.scene;
 
+import cn.howxu.mmcr.MMCR;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 
@@ -38,7 +40,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
     void publish(FullCache next) {
         FullCache previous = current;
         current = next;
-        if (previous != null) closeOnce(previous);
+        if (previous != null && previous != next) closeOnce(previous);
     }
 
     void reject(AutoCloseable result) {
@@ -67,7 +69,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         try {
             owner.close();
         } catch (Exception exception) {
-            throw new IllegalStateException("cannot close preview mesh result", exception);
+            MMCR.LOG.error("Cannot close preview mesh result", exception);
         }
     }
 
@@ -85,6 +87,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         private final Map<ChunkSectionLayer, List<MeshData>> layers;
         private final Set<BlockPos> blockEntities;
         private final MeshData.SortState translucentSortState;
+        private final PreviewSceneGpuMesh gpuMesh;
         private TranslucentOrder translucentOrder;
 
         Meshes(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, List<MeshData>> layers,
@@ -93,6 +96,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
             this.layers = layers;
             this.blockEntities = blockEntities;
             this.translucentSortState = translucentSortState;
+            this.gpuMesh = PreviewSceneGpuMesh.upload(layers);
         }
 
         SectionBufferBuilderPack builders() { return builders; }
@@ -100,10 +104,18 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         Set<BlockPos> blockEntities() { return blockEntities; }
         MeshData.SortState translucentSortState() { return translucentSortState; }
         TranslucentOrder translucentOrder() { return translucentOrder; }
+        VertexFormat.IndexType translucentIndexType() {
+            List<MeshData> translucent = layers.get(ChunkSectionLayer.TRANSLUCENT);
+            return translucent == null || translucent.isEmpty()
+                    ? null : translucent.getFirst().drawState().indexType();
+        }
+
+        void draw(ChunkSectionLayer layer) { gpuMesh.draw(layer); }
 
         @Override
         public TranslucentCache replaceTranslucent(TranslucentCache result) {
             TranslucentOrder replacement = (TranslucentOrder) result;
+            gpuMesh.replaceTranslucent(replacement.indexBuffer(), replacement.indexType());
             TranslucentOrder previous = translucentOrder;
             translucentOrder = replacement;
             return previous;
@@ -111,20 +123,54 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
 
         @Override
         public void close() {
-            if (translucentOrder != null) translucentOrder.close();
-            layers.values().forEach(meshes -> meshes.forEach(MeshData::close));
-            builders.close();
+            RuntimeException failure = null;
+            try {
+                gpuMesh.close();
+            } catch (RuntimeException exception) {
+                failure = exception;
+            }
+            if (translucentOrder != null) {
+                try {
+                    translucentOrder.close();
+                } catch (RuntimeException exception) {
+                    failure = appendFailure(failure, exception);
+                }
+            }
+            for (List<MeshData> meshes : layers.values()) {
+                for (MeshData mesh : meshes) {
+                    try {
+                        mesh.close();
+                    } catch (RuntimeException exception) {
+                        failure = appendFailure(failure, exception);
+                    }
+                }
+            }
+            try {
+                builders.close();
+            } catch (RuntimeException exception) {
+                failure = appendFailure(failure, exception);
+            }
+            if (failure != null) throw failure;
+        }
+
+        private static RuntimeException appendFailure(RuntimeException failure, RuntimeException next) {
+            if (failure == null) return next;
+            failure.addSuppressed(next);
+            return failure;
         }
     }
 
     static final class TranslucentOrder implements TranslucentCache {
         private final ByteBufferBuilder.Result indexBuffer;
+        private final VertexFormat.IndexType indexType;
 
-        TranslucentOrder(ByteBufferBuilder.Result indexBuffer) {
+        TranslucentOrder(ByteBufferBuilder.Result indexBuffer, VertexFormat.IndexType indexType) {
             this.indexBuffer = indexBuffer;
+            this.indexType = indexType;
         }
 
         ByteBufferBuilder.Result indexBuffer() { return indexBuffer; }
+        VertexFormat.IndexType indexType() { return indexType; }
 
         @Override
         public void close() {

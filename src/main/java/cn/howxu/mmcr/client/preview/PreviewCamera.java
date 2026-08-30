@@ -20,10 +20,15 @@ public final class PreviewCamera {
     private float yaw = INITIAL_YAW;
     private float pitch = INITIAL_PITCH;
     private long rotationVersion;
+    private long version;
 
     public void reset(Vector3f center, float radius) {
+        float updatedDistance = clamp(radius, MIN_DISTANCE, MAX_DISTANCE);
+        boolean changed = !lookAt.equals(center) || distance != updatedDistance
+                || yaw != INITIAL_YAW || pitch != INITIAL_PITCH;
+        if (changed) version++;
         lookAt.set(center);
-        distance = clamp(radius, MIN_DISTANCE, MAX_DISTANCE);
+        distance = updatedDistance;
         if (yaw != INITIAL_YAW || pitch != INITIAL_PITCH) rotationVersion++;
         yaw = INITIAL_YAW;
         pitch = INITIAL_PITCH;
@@ -36,16 +41,25 @@ public final class PreviewCamera {
         yaw = updatedYaw;
         pitch = updatedPitch;
         rotationVersion++;
+        version++;
     }
 
     public void pan(float x, float y) {
         float horizontalX = (float) Math.cos(yaw);
         float horizontalZ = (float) -Math.sin(yaw);
-        lookAt.add(horizontalX * x, -y, horizontalZ * x);
+        float offsetX = horizontalX * x;
+        float offsetY = -y;
+        float offsetZ = horizontalZ * x;
+        if (offsetX == 0.0F && offsetY == 0.0F && offsetZ == 0.0F) return;
+        lookAt.add(offsetX, offsetY, offsetZ);
+        version++;
     }
 
     public void zoom(float factor) {
-        distance = clamp(distance * factor, MIN_DISTANCE, MAX_DISTANCE);
+        float updatedDistance = clamp(distance * factor, MIN_DISTANCE, MAX_DISTANCE);
+        if (distance == updatedDistance) return;
+        distance = updatedDistance;
+        version++;
     }
 
     public Vector3f position() {
@@ -74,6 +88,10 @@ public final class PreviewCamera {
 
     public long rotationVersion() {
         return rotationVersion;
+    }
+
+    public long version() {
+        return version;
     }
 
     private static float clamp(float value, float minimum, float maximum) {

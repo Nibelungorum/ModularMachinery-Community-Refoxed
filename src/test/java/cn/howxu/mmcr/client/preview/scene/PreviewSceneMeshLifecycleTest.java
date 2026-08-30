@@ -2,11 +2,6 @@ package cn.howxu.mmcr.client.preview.scene;
 
 import org.junit.jupiter.api.Test;
 
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-
-import java.nio.ByteBuffer;
-
-import org.lwjgl.system.MemoryUtil;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -22,6 +17,20 @@ class PreviewSceneMeshLifecycleTest {
         RecordingFull nextCache = new RecordingFull("next", "next-index");
         PreviewSceneMeshCache cache = new PreviewSceneMeshCache(oldCache);
 
+        cache.publish(nextCache);
+
+        assertThat(cache.current()).isSameAs(nextCache);
+        assertThat(oldCache.closeCalls()).isEqualTo(1);
+        assertThat(nextCache.closeCalls()).isZero();
+    }
+
+    @Test
+    void republishing_the_same_full_cache_does_not_close_the_published_owner() {
+        RecordingFull oldCache = new RecordingFull("old", "old-index");
+        RecordingFull nextCache = new RecordingFull("next", "next-index");
+        PreviewSceneMeshCache cache = new PreviewSceneMeshCache(oldCache);
+
+        cache.publish(nextCache);
         cache.publish(nextCache);
 
         assertThat(cache.current()).isSameAs(nextCache);
@@ -110,27 +119,6 @@ class PreviewSceneMeshLifecycleTest {
 
         assertThat(current.translucentOrder()).isEqualTo("current-index");
         assertThat(stale.closeCalls()).isEqualTo(1);
-    }
-
-    @Test
-    void draw_index_copy_does_not_close_published_translucent_order() {
-        try (ByteBufferBuilder publishedBuilder = new ByteBufferBuilder(4);
-             ByteBufferBuilder drawBuilder = new ByteBufferBuilder(4)) {
-            long address = publishedBuilder.reserve(4);
-            MemoryUtil.memPutInt(address, 0x12345678);
-            ByteBufferBuilder.Result published = publishedBuilder.build();
-
-            ByteBufferBuilder.Result draw = PreviewSceneRenderer.copyIndexForDraw(published, drawBuilder);
-            draw.close();
-
-            assertThat(published.byteBuffer().getInt(0)).isEqualTo(0x12345678);
-            published.close();
-        }
-    }
-
-    @Test
-    void first_translucent_draw_uses_cached_mesh_index_without_creating_a_sort_result() {
-        assertThat(PreviewSceneRenderer.translucentDrawIndex(null, null)).isNull();
     }
 
     private static final class RecordingFull implements PreviewSceneMeshCache.FullCache {

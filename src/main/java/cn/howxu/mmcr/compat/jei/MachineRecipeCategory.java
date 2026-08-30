@@ -361,17 +361,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {
         if (!chanceText.isEmpty() || !quantityText.isEmpty()) {
-            jeiSlot.setOverlay(new SlotOverlayDrawable(chanceText, quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            jeiSlot.setOverlay(new JeiSlotOverlayDrawable(chanceText, quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
         }
     }
 
     private static void setQuantityOverlay(IRecipeSlotBuilder jeiSlot, String quantityText) {
         if (!quantityText.isEmpty()) {
-            jeiSlot.setOverlay(new SlotOverlayDrawable("", quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            jeiSlot.setOverlay(new JeiSlotOverlayDrawable("", quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
         }
     }
 
-    static String itemQuantityText(int count) {
+    static String itemQuantityText(long count) {
         return count > 1 ? ReadableNumber.formatForSlot(count, 0, "") : "";
     }
 
@@ -499,32 +499,4 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Optional.empty();
     }
 
-    private record SlotOverlayDrawable(String chanceText, String quantityText) implements IDrawable {
-        @Override
-        public int getWidth() {
-            return 16;
-        }
-
-        @Override
-        public int getHeight() {
-            return 16;
-        }
-
-        @Override
-        public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
-            var font = Minecraft.getInstance().font;
-            guiGraphics.pose().pushMatrix();
-            guiGraphics.pose().translate(xOffset, yOffset);
-            guiGraphics.pose().scale(ITEM_OVERLAY_SCALE, ITEM_OVERLAY_SCALE);
-            if (!chanceText.isEmpty()) {
-                guiGraphics.text(font, chanceText, 0, 0, 0xFFFF4040, false);
-            }
-            if (!quantityText.isEmpty()) {
-                int x = Math.max(0, (int) (16 / ITEM_OVERLAY_SCALE) - font.width(quantityText)) + 1;
-                int y = (int) (16 / ITEM_OVERLAY_SCALE) - font.lineHeight + 1;
-                guiGraphics.text(font, quantityText, x, y, 0xFFFFFFFF, true);
-            }
-            guiGraphics.pose().popMatrix();
-        }
-    }
 }

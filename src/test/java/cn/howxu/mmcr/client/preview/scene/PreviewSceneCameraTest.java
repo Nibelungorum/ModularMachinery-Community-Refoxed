@@ -34,6 +34,18 @@ class PreviewSceneCameraTest {
     }
 
     @Test
+    void scene_camera_exposes_the_inverse_view_projection_matrix() {
+        PreviewCamera preview = new PreviewCamera();
+        preview.reset(new Vector3f(2.0F, 3.0F, 4.0F), 10.0F);
+        PreviewSceneCamera scene = PreviewSceneCamera.from(preview, 160, 92);
+
+        Matrix4f expected = new Matrix4f(scene.projection()).mul(scene.view()).invert();
+
+        assertThat(scene.inverseViewProjection()).isNotEqualTo(new Matrix4f());
+        assertThat(scene.inverseViewProjection()).isEqualTo(expected);
+    }
+
+    @Test
     void scene_camera_context_clears_after_scoped_failure() {
         Matrix4f view = new Matrix4f().rotateY(0.25F);
         Matrix4f projection = new Matrix4f().perspective(1.0F, 1.5F, 0.1F, 100.0F);

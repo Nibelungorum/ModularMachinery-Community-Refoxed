@@ -11,12 +11,10 @@ import cn.howxu.mmcr.client.preview.PreviewCamera;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
-import cn.howxu.mmcr.mixin.client.preview.MeshDataAccessor;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
@@ -41,10 +39,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
-import org.lwjgl.system.MemoryUtil;
 
-import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -81,7 +76,8 @@ public final class PreviewSceneRenderer {
         if (!closed) requestedGeneration = compileState.requestFullRebuild();
     }
 
-    public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit, BlockHitResult selectedHit) {
+    public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit,
+                       BlockHitResult selectedHit, boolean fullQuality) {
         assertRenderThread();
         if (closed) return;
         PreviewSceneCamera sceneCamera = PreviewSceneCamera.from(camera, 1, 1);
@@ -94,13 +90,15 @@ public final class PreviewSceneRenderer {
         }
         PreviewSceneMeshCache.FullCache owner = meshes.current();
         if (owner instanceof PreviewSceneMeshCache.Meshes cache) {
-            if (compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
+            if (fullQuality && compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
                 compileTranslucent(cache, sceneCamera);
             }
-            draw(cache, ChunkSectionLayer.SOLID, RenderTypes.solidMovingBlock());
-            draw(cache, ChunkSectionLayer.CUTOUT, RenderTypes.cutoutMovingBlock());
-            drawTranslucent(cache, sceneCamera);
-            submitBlockEntities(cache, context, sceneCamera);
+            draw(cache, ChunkSectionLayer.SOLID);
+            draw(cache, ChunkSectionLayer.CUTOUT);
+            if (fullQuality) {
+                drawTranslucent(cache);
+                submitBlockEntities(cache, context, sceneCamera);
+            }
             drawOutlines(context, hoverHit, selectedHit);
         }
     }
@@ -123,7 +121,7 @@ public final class PreviewSceneRenderer {
         }
         float ndcX = (float) (2.0D * (mouseX + 0.5D) / width - 1.0D);
         float ndcY = (float) (1.0D - 2.0D * (mouseY + 0.5D) / height);
-        Matrix4f inverse = camera.projection().mul(camera.view(), new Matrix4f()).invert();
+        Matrix4f inverse = camera.inverseViewProjection();
         Vector4f near = inverse.transform(new Vector4f(ndcX, ndcY, -1.0F, 1.0F));
         Vector4f far = inverse.transform(new Vector4f(ndcX, ndcY, 1.0F, 1.0F));
         Vec3 from = new Vec3(near.x / near.w, near.y / near.w, near.z / near.w);
@@ -168,7 +166,7 @@ public final class PreviewSceneRenderer {
             ByteBufferBuilder.Result indexBuffer = sortState.buildSortedIndexBuffer(
                     cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting);
             if (indexBuffer == null) return;
-            result = new PreviewSceneMeshCache.TranslucentOrder(indexBuffer);
+            result = new PreviewSceneMeshCache.TranslucentOrder(indexBuffer, cache.translucentIndexType());
             if (!compileState.accepts(generation, SceneCompileKind.TRANSLUCENT_ONLY)
                     || meshes.current() != cache || closed) return;
             meshes.publishTranslucent(result);
@@ -179,23 +177,12 @@ public final class PreviewSceneRenderer {
         }
     }
 
-    private void draw(PreviewSceneMeshCache.Meshes cache, ChunkSectionLayer layer, RenderType renderType) {
-        List<MeshData> layerMeshes = cache.layers().get(layer);
-        if (layerMeshes == null) return;
-        for (MeshData mesh : layerMeshes) {
-            drawCopy(renderType, mesh);
-        }
+    private static void draw(PreviewSceneMeshCache.Meshes cache, ChunkSectionLayer layer) {
+        cache.draw(layer);
     }
 
-    private static void drawTranslucent(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {
-        List<MeshData> translucent = cache.layers().get(ChunkSectionLayer.TRANSLUCENT);
-        if (translucent == null) return;
-        for (MeshData mesh : translucent) {
-            ByteBufferBuilder.Result order = translucentDrawIndex(
-                    cache.translucentOrder() == null ? null : cache.translucentOrder().indexBuffer(),
-                    ((MeshDataAccessor) (Object) mesh).mmcr$getIndexBuffer());
-            drawCopy(RenderTypes.translucentMovingBlock(), mesh, order);
-        }
+    private static void drawTranslucent(PreviewSceneMeshCache.Meshes cache) {
+        cache.draw(ChunkSectionLayer.TRANSLUCENT);
     }
 
     private void submitBlockEntities(PreviewSceneMeshCache.Meshes cache, PreviewSceneRenderContext context,
@@ -256,47 +243,6 @@ public final class PreviewSceneRenderer {
         float nx = (float) (x1 - x0), ny = (float) (y1 - y0), nz = (float) (z1 - z0);
         vertices.addVertex(pose, (float) x0, (float) y0, (float) z0).setColor(color).setNormal(pose, nx, ny, nz).setLineWidth(width);
         vertices.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, -nx, -ny, -nz).setLineWidth(width);
-    }
-
-    private static void drawCopy(RenderType renderType, MeshData cached) {
-        drawCopy(renderType, cached, null);
-    }
-
-    private static void drawCopy(RenderType renderType, MeshData cached, ByteBufferBuilder.Result sortedIndices) {
-        ByteBuffer vertices = cached.vertexBuffer();
-        ByteBuffer indices = cached.indexBuffer();
-        if (vertices == null || !vertices.hasRemaining()) return;
-        try (ByteBufferBuilder vertexBuilder = new ByteBufferBuilder(vertices.remaining());
-             ByteBufferBuilder indexBuilder = indices == null ? null : new ByteBufferBuilder(indices.remaining())) {
-            MeshData drawMesh = new MeshData(copy(vertices, vertexBuilder), cached.drawState());
-            if (sortedIndices != null && indexBuilder != null) {
-                ((MeshDataAccessor) (Object) drawMesh).mmcr$setIndexBuffer(copyIndexForDraw(sortedIndices, indexBuilder));
-            } else if (indices != null && indexBuilder != null) {
-                ((MeshDataAccessor) (Object) drawMesh).mmcr$setIndexBuffer(copy(indices, indexBuilder));
-            }
-            try {
-                renderType.draw(drawMesh);
-            } finally {
-                drawMesh.close();
-            }
-        }
-    }
-
-    private static ByteBufferBuilder.Result copy(ByteBuffer source, ByteBufferBuilder destination) {
-        ByteBuffer duplicate = source.duplicate();
-        int size = duplicate.remaining();
-        long pointer = destination.reserve(size);
-        MemoryUtil.memCopy(MemoryUtil.memAddress(duplicate), pointer, size);
-        return destination.build();
-    }
-
-    static ByteBufferBuilder.Result copyIndexForDraw(ByteBufferBuilder.Result source, ByteBufferBuilder destination) {
-        return copy(source.byteBuffer(), destination);
-    }
-
-    static ByteBufferBuilder.Result translucentDrawIndex(ByteBufferBuilder.Result publishedOrder,
-                                                         ByteBufferBuilder.Result cachedMeshIndex) {
-        return publishedOrder != null ? publishedOrder : cachedMeshIndex;
     }
 
     private void assertRenderThread() {

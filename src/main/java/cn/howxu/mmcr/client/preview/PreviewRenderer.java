@@ -14,6 +14,8 @@ interface PreviewRenderer {
 
     void render(PreviewRenderContext context);
 
+    default void setInteractive(boolean interactive) { }
+
     Object hitResult();
 
     void selectHit(Object hitResult);

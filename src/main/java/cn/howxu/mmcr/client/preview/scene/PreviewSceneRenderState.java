@@ -17,9 +17,10 @@ import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
  * @author howxu <dev@howxu.cn>
  */
 public record PreviewSceneRenderState(PreviewSceneRenderer scene, PreviewCamera camera,
-                                       int x0, int y0, int x1, int y1, float partialTick,
-                                       ScreenRectangle scissorArea,
-                                       StructurePreviewRenderer owner) implements PictureInPictureRenderState {
+                                        int x0, int y0, int x1, int y1, float partialTick,
+                                        ScreenRectangle scissorArea,
+                                        float renderScale,
+                                        StructurePreviewRenderer owner) implements PictureInPictureRenderState {
     @Override
     public float scale() {
         return 1.0F;

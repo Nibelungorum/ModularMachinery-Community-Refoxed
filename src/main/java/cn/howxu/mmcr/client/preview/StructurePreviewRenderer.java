@@ -28,7 +28,17 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     private final AtomicBoolean releaseScheduled = new AtomicBoolean();
     private BlockHitResult hoverHit;
     private BlockHitResult selectedHit;
+    private volatile boolean interactive;
     private volatile boolean closed;
+    private long visibilityVersion;
+    private long lastHoverCameraVersion = Long.MIN_VALUE;
+    private int lastHoverMouseX;
+    private int lastHoverMouseY;
+    private int lastHoverViewportX;
+    private int lastHoverViewportY;
+    private int lastHoverWidth;
+    private int lastHoverHeight;
+    private long lastHoverVisibilityVersion = Long.MIN_VALUE;
 
     public StructurePreviewRenderer(StructurePreviewSchema schema) {
         this.schema = Objects.requireNonNull(schema, "schema");
@@ -47,11 +57,19 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     @Override
     public void setVisibility(PreviewVisibility visibility) {
         if (closed) return;
+        visibilityVersion++;
+        invalidateHoverInputs();
         scene.setVisibility(visibility);
     }
 
     @Override
     public void resetCamera() {
+        invalidateHoverInputs();
+    }
+
+    @Override
+    public void setInteractive(boolean interactive) {
+        this.interactive = interactive;
     }
 
     @Override
@@ -62,19 +80,39 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         int mouseY = graphics.mmcr$getMouseY();
         PreviewViewport absoluteViewport = context.absoluteViewport();
         if (absoluteViewport.contains(mouseX, mouseY)) {
-            double localMouseX = mouseX - absoluteViewport.x();
-            double localMouseY = mouseY - absoluteViewport.y();
-            PreviewSceneCamera camera = PreviewSceneCamera.from(context.camera(),
-                    absoluteViewport.width(), absoluteViewport.height());
-            hoverHit = scene.rayTrace(camera, localMouseX, localMouseY,
-                    absoluteViewport.width(), absoluteViewport.height());
+            boolean changed = lastHoverCameraVersion != context.camera().version()
+                    || lastHoverMouseX != mouseX
+                    || lastHoverMouseY != mouseY
+                    || lastHoverViewportX != absoluteViewport.x()
+                    || lastHoverViewportY != absoluteViewport.y()
+                    || lastHoverWidth != absoluteViewport.width()
+                    || lastHoverHeight != absoluteViewport.height()
+                    || lastHoverVisibilityVersion != visibilityVersion;
+            if (changed) {
+                double localMouseX = mouseX - absoluteViewport.x();
+                double localMouseY = mouseY - absoluteViewport.y();
+                PreviewSceneCamera camera = PreviewSceneCamera.from(context.camera(),
+                        absoluteViewport.width(), absoluteViewport.height());
+                hoverHit = scene.rayTrace(camera, localMouseX, localMouseY,
+                        absoluteViewport.width(), absoluteViewport.height());
+                lastHoverCameraVersion = context.camera().version();
+                lastHoverMouseX = mouseX;
+                lastHoverMouseY = mouseY;
+                lastHoverViewportX = absoluteViewport.x();
+                lastHoverViewportY = absoluteViewport.y();
+                lastHoverWidth = absoluteViewport.width();
+                lastHoverHeight = absoluteViewport.height();
+                lastHoverVisibilityVersion = visibilityVersion;
+            }
         } else {
             hoverHit = null;
+            invalidateHoverInputs();
         }
         int guiScale = Minecraft.getInstance().getWindow().getGuiScale();
         pictureInPicture.prepare(new PreviewSceneRenderState(scene, context.camera(),
                 absoluteViewport.x(), absoluteViewport.y(), absoluteViewport.x() + absoluteViewport.width(), absoluteViewport.y() + absoluteViewport.height(),
                 context.partialTick(), context.graphics().peekScissorStack(),
+                interactive ? 0.5F : 1.0F,
                 this),
                 graphics.mmcr$getGuiRenderState(), guiScale);
     }
@@ -92,7 +130,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     public void renderScene(PreviewSceneRenderContext context, PreviewCamera camera) {
-        scene.render(context, camera, hoverHit, selectedHit);
+        scene.render(context, camera, hoverHit, selectedHit, !interactive);
     }
 
     void markDirty() {
@@ -126,5 +164,11 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         closed = true;
         pictureInPicture.close();
         scene.dispose();
+    }
+
+    private void invalidateHoverInputs() {
+        hoverHit = null;
+        lastHoverCameraVersion = Long.MIN_VALUE;
+        lastHoverVisibilityVersion = Long.MIN_VALUE;
     }
 }
