@@ -63,6 +63,26 @@ class MachineStructureDisplayTest {
         assertThat(display.materials().entries().getFirst().stack().getCount()).isOne();
     }
 
+    @Test
+    void materialsDoNotBuildTheFullDefaultPreviewSchema() {
+        Machine machine = new Machine() {
+            @Override public Identifier registryName() { return MMCR.id("test_materials_only"); }
+            @Override public BlockArray pattern() {
+                Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+                pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE));
+                pattern.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.COBBLESTONE));
+                return new BlockArray(pattern);
+            }
+            @Override public MachineControllerSpec controller() {
+                throw new AssertionError("material extraction must not build the preview schema");
+            }
+        };
+
+        assertThat(MachineStructureDisplay.from(machine).materials().entries())
+                .extracting(entry -> entry.stack().getItem())
+                .containsExactly(Blocks.STONE.asItem(), Blocks.COBBLESTONE.asItem());
+    }
+
     private static Machine testMachineWithBlocks() {
         return new Machine() {
             @Override public Identifier registryName() { return MMCR.id("test_cube"); }

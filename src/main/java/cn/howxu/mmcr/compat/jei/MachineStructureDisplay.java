@@ -50,7 +50,7 @@ public final class MachineStructureDisplay {
             synchronized (this) {
                 result = materials;
                 if (result == null) {
-                    result = StructureMaterialSummary.from(defaultSchema());
+                    result = StructureMaterialSummary.from(machine);
                     materials = result;
                 }
             }
