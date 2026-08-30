@@ -37,8 +37,13 @@ import java.util.function.LongSupplier;
  * @author howxu <dev@howxu.cn>
  */
 public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInputHandler, AutoCloseable {
-    private static final int CONTROL_SIZE = 15;
+    private static final float CONTROL_SCALE = 0.9F;
+    private static final int CONTROL_SIZE = Math.round(15 * CONTROL_SCALE);
     private static final int CONTROL_STEP = CONTROL_SIZE + 4;
+    private static final int UI_X_OFFSET = -3;
+    private static final int CONTROL_Y_OFFSET = -13;
+    private static final float LAYER_TEXT_SCALE = 0.9F;
+    private static final int LAYER_TEXT_Y_OFFSET = -24;
     private static final int LAYOUT_WIDTH = 168;
     private Preview preview;
     private final int x;
@@ -149,21 +154,33 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         preview.render(graphics, 0, 0, width, height, origin.x(), origin.y());
         String[] labels = hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
         for (int index = 0; index < labels.length; index++) {
-            int controlX = index * CONTROL_STEP;
-            int controlY = height + 14;
+            int controlX = UI_X_OFFSET + index * CONTROL_STEP;
+            int controlY = height + CONTROL_Y_OFFSET;
             graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, 0xFF808080);
-            graphics.text(Minecraft.getInstance().font, Component.literal(labels[index]), controlX + 4, controlY + 4, 0xFFFFFFFF, false);
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(controlX + CONTROL_SIZE / 2.0F, controlY + CONTROL_SIZE / 2.0F);
+            graphics.pose().scale(CONTROL_SCALE, CONTROL_SCALE);
+            int labelWidth = Minecraft.getInstance().font.width(labels[index]);
+            graphics.text(Minecraft.getInstance().font, Component.literal(labels[index]),
+                    -labelWidth / 2, -Minecraft.getInstance().font.lineHeight / 2, 0xFFFFFFFF, false);
+            graphics.pose().popMatrix();
         }
         int selectedLayer = preview.selectedLayer();
         List<Integer> layers = schema == null ? List.of() : schema.layers();
         Component layerText = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
-        graphics.text(Minecraft.getInstance().font, layerText, 0, height + 4, 0xFF404040, false);
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(LAYER_TEXT_SCALE, LAYER_TEXT_SCALE);
+        int layerTextY = (int) ((height + LAYER_TEXT_Y_OFFSET) / LAYER_TEXT_SCALE);
+        int layerTextX = (int) (UI_X_OFFSET / LAYER_TEXT_SCALE);
+        graphics.text(Minecraft.getInstance().font, layerText, layerTextX, layerTextY, 0xFFFFFFFF, false);
         if (stages.size() > 1) {
+            int levelTextX = Minecraft.getInstance().font.width(layerText) + 4;
             graphics.text(Minecraft.getInstance().font, Component.literal("Level=" + stages.get(selectedStage).number()),
-                    Minecraft.getInstance().font.width(layerText) + 4, height + 4, 0xFF404040, false);
+                    (int) ((UI_X_OFFSET + levelTextX) / LAYER_TEXT_SCALE), layerTextY, 0xFFFFFFFF, false);
         }
+        graphics.pose().popMatrix();
         renderCandidates(graphics);
     }
 
@@ -240,12 +257,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         int button = input.getKey().getValue();
         if (button != 0) return false;
         if (preview == null) return false;
-        if (!input.isSimulate() && previewDragActive) {
-            previewDragActive = false;
-            boolean inside = insidePreview(mouseX, mouseY);
-            if (insidePreview(mouseX, mouseY)) preview.mouseReleased(mouseX, mouseY, button);
-            return inside;
-        }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
             if (input.isSimulate()) return true;
@@ -257,7 +268,14 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 case 4 -> selectNextStage();
                 default -> { }
             }
+            previewDragActive = false;
             return true;
+        }
+        if (!input.isSimulate() && previewDragActive) {
+            previewDragActive = false;
+            boolean inside = insidePreview(mouseX, mouseY);
+            if (insidePreview(mouseX, mouseY)) preview.mouseReleased(mouseX, mouseY, button);
+            return inside;
         }
         if (input.isSimulate()) {
             return insidePreview(mouseX, mouseY);
@@ -270,13 +288,14 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return previewDragActive && insidePreview(mouseX, mouseY) && mouseKey.getType() == InputConstants.Type.MOUSE
+        return previewDragActive && controlAt(mouseX, mouseY) < 0 && insidePreview(mouseX, mouseY)
+                && mouseKey.getType() == InputConstants.Type.MOUSE
                 && preview.mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
     }
 
     @Override
     public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
-        return insidePreview(mouseX, mouseY)
+        return controlAt(mouseX, mouseY) < 0 && insidePreview(mouseX, mouseY)
                 && preview.mouseScrolled(previewMouseX(mouseX), previewMouseY(mouseY), scrollDeltaY);
     }
 
@@ -286,10 +305,13 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private double previewMouseX(double mouseX) { return mouseX; }
     private double previewMouseY(double mouseY) { return mouseY; }
     private int controlAt(double mouseX, double mouseY) {
-        if (mouseX < 0 || mouseY < height + 14 || mouseY >= height + 14 + CONTROL_SIZE) return -1;
-        int column = (int) mouseX / CONTROL_STEP;
+        if (mouseX < 0 || mouseY < height + CONTROL_Y_OFFSET || mouseY >= height + CONTROL_Y_OFFSET + CONTROL_SIZE) return -1;
+        int relativeX = (int) Math.floor(mouseX - UI_X_OFFSET);
+        if (relativeX < 0) return -1;
+        int column = relativeX / CONTROL_STEP;
         int controls = hasMultipleStages() ? 5 : 4;
-        return column >= 0 && column < controls && mouseX < column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
+        return column >= 0 && column < controls
+                && mouseX < UI_X_OFFSET + column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
     }
 
     @Override

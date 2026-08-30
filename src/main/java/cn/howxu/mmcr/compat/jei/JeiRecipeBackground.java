@@ -14,16 +14,20 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public final class JeiRecipeBackground implements IScalableDrawable {
-    public static final JeiRecipeBackground INSTANCE = new JeiRecipeBackground();
+    public static final JeiRecipeBackground INSTANCE = new JeiRecipeBackground("recipe");
+    public static final JeiRecipeBackground PREVIEW = new JeiRecipeBackground("preview");
 
-    private JeiRecipeBackground() {
+    private final String textureDirectory;
+
+    private JeiRecipeBackground(String textureDirectory) {
+        this.textureDirectory = textureDirectory;
     }
 
     @Override
     public void draw(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height) {
         int scale = (int) Math.round(Minecraft.getInstance().getWindow().getGuiScale());
         scale = Math.max(1, Math.min(4, scale));
-        Identifier texture = MMCR.id("textures/gui/jei/recipe/" + scale + "x.png");
+        Identifier texture = MMCR.id("textures/gui/jei/" + textureDirectory + "/" + scale + "x.png");
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0.0F, 0.0F, width, height, width, height);
         ((GuiGraphicsExtractorAccessor) guiGraphics).mmcr$getGuiRenderState().nextStratum();
     }

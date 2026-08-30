@@ -3,11 +3,13 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
+import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -16,8 +18,13 @@ import net.minecraft.network.chat.Component;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineStructureCategory implements IRecipeCategory<MachineStructureDisplay> {
-    private static final int PREVIEW_X = 2;
-    private static final int PREVIEW_Y = 4;
+    private static final int MACHINE_NAME_X = 5;
+    private static final int MACHINE_NAME_Y = 5;
+    private static final int MACHINE_NAME_WIDTH = 160;
+    private static final int MACHINE_NAME_HEIGHT = 16;
+    private static final float MACHINE_NAME_SCALE = 1.3F;
+    private static final int PREVIEW_X = 4;
+    private static final int PREVIEW_Y = 23;
 
     private final IDrawable icon;
     public MachineStructureCategory(IGuiHelper guiHelper) {
@@ -54,7 +61,6 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
-        builder.addText(display.machine().displayName(), PREVIEW_X, 4);
         JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), PREVIEW_X, PREVIEW_Y,
                 previewWidth(), previewHeight());
         JeiPreviewLifecycle.registerActive(preview);
@@ -62,21 +68,37 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         builder.addInputHandler(preview);
     }
 
+    @Override
+    public void draw(MachineStructureDisplay display, IRecipeSlotsView recipeSlotsView,
+            GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
+        Component machineName = display.machine().displayName();
+        int textWidth = Minecraft.getInstance().font.width(machineName);
+        if (textWidth <= 0) return;
+
+        float scale = Math.min(MACHINE_NAME_SCALE, Math.min(
+                (float) MACHINE_NAME_WIDTH / textWidth,
+                (float) MACHINE_NAME_HEIGHT / Minecraft.getInstance().font.lineHeight));
+        float scaledWidth = textWidth * scale;
+        float scaledHeight = Minecraft.getInstance().font.lineHeight * scale;
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(
+                MACHINE_NAME_X + (MACHINE_NAME_WIDTH - scaledWidth) / 2.0F,
+                MACHINE_NAME_Y + (MACHINE_NAME_HEIGHT - scaledHeight) / 2.0F);
+        graphics.pose().scale(scale, scale);
+        graphics.text(Minecraft.getInstance().font, machineName, 0, 0, 0xFFFFFFFF, false);
+        graphics.pose().popMatrix();
+    }
+
     private static int previewWidth() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 164;
-            case 2 -> 164;
-            case 3 -> 164;
-            default -> 164;
-        };
+        return 161;
     }
 
     private static int previewHeight() {
         return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 245;
-            case 2 -> 224;
-            case 3 -> 166;
-            default -> 96;
+            case 1 -> 253;
+            case 2 -> 233;
+            case 3 -> 173;
+            default -> 103;
         };
     }
 }

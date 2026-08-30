@@ -2,6 +2,7 @@ package cn.howxu.mmcr.mixin.compat.jei;
 
 import cn.howxu.mmcr.compat.jei.JeiRecipeBackground;
 import cn.howxu.mmcr.compat.jei.MachineRecipeCategory;
+import cn.howxu.mmcr.compat.jei.MachineStructureCategory;
 import mezz.jei.api.gui.drawable.IScalableDrawable;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.category.IRecipeCategory;
@@ -28,8 +29,7 @@ abstract class JeiRecipeManagerMixin {
             IRecipeCategory<?> recipeCategory,
             Object recipe,
             IFocusGroup focusGroup) {
-        return recipeCategory instanceof MachineRecipeCategory
-                ? JeiRecipeBackground.INSTANCE
-                : original;
+        if (recipeCategory instanceof MachineStructureCategory) return JeiRecipeBackground.PREVIEW;
+        return recipeCategory instanceof MachineRecipeCategory ? JeiRecipeBackground.INSTANCE : original;
     }
 }
