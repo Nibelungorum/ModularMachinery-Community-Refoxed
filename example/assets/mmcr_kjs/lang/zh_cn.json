@@ -13,7 +13,6 @@
     "block.mmcr.kubejs_recipe_ticker_controller": "配方Tick测试控制器",
     "block.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick测试控制器",
     
-
     "item.mmcr.kubejs_alloy_furnace_controller": "合金炉控制器",
     "item.mmcr.kubejs_blast_furnace_controller": "高炉控制器",
     "item.mmcr.kubejs_cracker_controller": "裂化器控制器",
@@ -42,8 +41,8 @@
     "machine.mmcr_kubejs.kubejs_recipe_ticker": "配方Tick测试",
     "machine.mmcr_kubejs.kubejs_pure_tick_machine": "Pure Tick测试",
 
-    "block.mmcr.mmcr_kubejs.kubejs_data_storage_machine_machine": "Data Storage测试控制器",
-    "item.mmcr.mmcr_kubejs.kubejs_data_storage_machine_machine": "Data Storage测试控制器",
+    "block.mmcr.kubejs_data_storage_machine_controller": "Data Storage测试控制器",
+    "item.mmcr.kubejs_data_storage_machine_controller": "Data Storage测试控制器",
     "machine.mmcr_kubejs.kubejs_data_storage_machine": "Data Storage测试",
 
     "level.mmcr_kubejs.thermal_smelting_coil": "线圈等级",

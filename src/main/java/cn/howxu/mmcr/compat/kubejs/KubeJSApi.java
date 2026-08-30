@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
@@ -192,6 +193,11 @@ public final class KubeJSApi {
     public MachineIngredient energyInput(int fePerTick) { return new MachineIngredient.EnergyIngredient(fePerTick); }
     public MachineIngredient energyOutput(int fePerTick) {
         return new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, fePerTick);
+    }
+
+    public MachineRequirement energyRequirement(RecipeIo io, int fePerTick) {
+        return new EnergyRequirement(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT,
+                fePerTick);
     }
 
     public RecipeModifier modifier(String target, String io, float value, String operation, boolean chance) {

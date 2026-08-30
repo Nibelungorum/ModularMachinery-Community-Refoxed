@@ -8,10 +8,8 @@ MMCREvents.startup(event => {
     // Some lib we will use
     // see what, big integer
     const BigInteger = Java.loadClass("java.math.BigInteger")
+    const ReadableNumber = Java.loadClass("cn.howxu.mmcr.api.publicapi.ReadableNumber")
     const DataValue = Java.loadClass("cn.howxu.mmcr.api.data.DataValue")
-    const EnergyRequirement = Java.loadClass(
-        "cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement"
-    )
     const api = MMCR.getAPI()
     const RecipeIO = api.recipeIO()
     const OutputPolicy = api.outputPolicy()
@@ -21,12 +19,12 @@ MMCREvents.startup(event => {
     machine
         .tickBehavior(behavior => behavior
             .serverTick(ctx => {
-                const storage = ctx.dataStorage()
+                var storage = ctx.dataStorage()
                 if (storage == null) return
 
                 // get big integer data from data storage
-                let stored = BigInteger.ZERO
-                const saved = storage.get("energy")
+                var stored = BigInteger.ZERO
+                var saved = storage.get("energy")
 
                 if (saved.isPresent()) {
                     stored = saved.get()
@@ -38,18 +36,18 @@ MMCREvents.startup(event => {
                 if (ctx.isDue(5)) {
                     // because of the neoforge limit
                     // 2.1G is the biggest input and output value
-                    const available = ctx.ioView().energyInput()
-                    const maxRequest = Math.min(available, INT_MAX)
+                    var available = ctx.ioView().energyInput()
+                    var maxRequest = Math.min(available, INT_MAX)
 
-                    let low = 0
-                    let high = maxRequest
+                    var low = 0
+                    var high = maxRequest
 
                     // a binary search for every input hatch for transferLimit
                     while (low < high) {
-                        const candidate = low + Math.ceil((high - low) / 2)
+                        var candidate = low + Math.ceil((high - low) / 2)
 
-                        const probe = ctx.ioPlan()
-                        probe.addInput(new EnergyRequirement(candidate))
+                        var probe = ctx.ioPlan()
+                        probe.addInput(api.energyRequirement(RecipeIO.INPUT, candidate))
 
                         if (probe.simulate().energySatisfied()) {
                             low = candidate
@@ -59,12 +57,13 @@ MMCREvents.startup(event => {
                     }
 
                     if (low > 0) {
-                        const inputPlan = ctx.ioPlan()
-                        inputPlan.addInput(new EnergyRequirement(low))
+                        var inputPlan = ctx.ioPlan()
+                        inputPlan.addInput(api.energyRequirement(RecipeIO.INPUT, low))
 
-                        const next = stored.add(BigInteger.valueOf(low))
+                        var next = stored.add(BigInteger.valueOf(low))
+                        var inputSimulation = inputPlan.simulate()
 
-                        if (inputPlan.commit(transaction => {
+                        if (inputSimulation.energySatisfied() && inputPlan.commit(transaction => {
                             // update the data storage value
                             storage.set("energy", DataValue.of(next), transaction)
                         }).successful()) {
@@ -77,32 +76,32 @@ MMCREvents.startup(event => {
                 if (ctx.isDue(5)) {
 
                     // get output capability
-                    const outputCapacity = ctx.ioView().energyOutputCapacity()
+                    var outputCapacity = ctx.ioView().energyOutputCapacity()
 
                     if (outputCapacity > 0 && stored.signum() > 0) {
                         // limit 2.1G
-                        const requestedBig = stored.min(
+                        var requestedBig = stored.min(
                             BigInteger.valueOf(Math.min(outputCapacity, INT_MAX))
                         )
-                        const requested = requestedBig.intValue()
+                        var requested = requestedBig.intValue()
 
                         if (requested > 0) {
-                            const outputPlan = ctx.ioPlan()
+                            var outputPlan = ctx.ioPlan()
 
                             // some output hatches have transformer limit, so OutputPolicy.ALLOW_PARTIAL
                             outputPlan.addOutput(
-                                new EnergyRequirement(RecipeIO.OUTPUT, requested),
+                                api.energyRequirement(RecipeIO.OUTPUT, requested),
                                 OutputPolicy.ALLOW_PARTIAL
                             )
 
-                            const simulation = outputPlan.simulate()
-                            const outputs = simulation.outputs()
+                            var simulation = outputPlan.simulate()
+                            var outputs = simulation.outputs()
 
                             if (!outputs.isEmpty()) {
-                                const accepted = outputs.get(0).accepted()
+                                var accepted = outputs.get(0).accepted()
 
                                 if (accepted > 0) {
-                                    const next = stored.subtract(
+                                    var next = stored.subtract(
                                         BigInteger.valueOf(accepted)
                                     )
 
@@ -118,28 +117,23 @@ MMCREvents.startup(event => {
                     }
                 }
 
-                ctx.screenText().replace(
+                if (stored.signum() === 0){
+                    ctx.screenText().append(
+                        api.screenScope().OPERATION,
+                        api.id("mmcr_kubejs:fe_storage_status"),
+                        Text.literal("No FE stored.")
+                    )
+                    return
+                }
+                ctx.screenText().append(
+                    api.screenScope().OPERATION,
                     api.id("mmcr_kubejs:fe_storage_status"),
-                    Text.literal("FE stored: " + stored.toString())
+                    Text.literal("FE stored: " + ReadableNumber.formatCompact(stored))
                 )
 
             })
         )
 
     machine.register()
-    
-    // add one text to display the energy storage
-    event.registerControllerScreenText(
-        "mmcr_kubejs:kubejs_data_storage_machine",
-        text => {
-            text.append(
-                "controller",
-                "mmcr_kubejs:fe_storage_status",
-                Text.literal("No FE storaged!")
-            )
-        }
-    )
-
-
 
 })

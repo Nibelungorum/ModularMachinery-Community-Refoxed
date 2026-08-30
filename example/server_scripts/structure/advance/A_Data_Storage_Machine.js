@@ -14,7 +14,7 @@ MMCREvents.server(event => {
         .pattern("         ", "         ", "         ", "   AAA   ", "   ACA   ", "   AAA   ", "         ", "         ", "         ")
         .set('X', api.block('minecraft:redstone_block'))
         .set('A', api.block('minecraft:crying_obsidian'))
-        .set('B', api.any(
+        .set('B', api.anyOf(
             api.anyOfEnergyInput(),
             api.anyOfEnergyOutput()
         ))

@@ -12,7 +12,7 @@
     "block.mmcr.gzr_controller": "Four Mete Regret Building Site Controller",
     "block.mmcr.kubejs_recipe_ticker_controller": "Recipe Tick Test Controller",
     "block.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick Test Controller",
-    "block.mmcr.mmcr_kubejs.kubejs_data_storage_machine_machine": "Data Storage Test Controller",
+    "block.mmcr.kubejs_data_storage_machine_machine_controller": "Data Storage Test Controller",
 
     "item.mmcr.kubejs_alloy_furnace_controller": "Alloy Furnace Controller",
     "item.mmcr.kubejs_blast_furnace_controller": "Blast Furnace Controller",
@@ -27,7 +27,7 @@
     "item.mmcr.gzr_controller": "Four Mete Regret Building Site Controller",
     "item.mmcr.kubejs_recipe_ticker_controller": "Recipe Tick Test Controller",
     "item.mmcr.kubejs_pure_tick_machine_controller": "Pure Tick Test Controller",
-    "item.mmcr.mmcr_kubejs.kubejs_data_storage_machine_machine": "Data Storage Test Controller",
+    "item.mmcr.kubejs_data_storage_machine_machine_controller": "Data Storage Test Controller",
 
     "machine.mmcr_kubejs.kubejs_alloy_furnace": "Alloy Furnace",
     "machine.mmcr_kubejs.kubejs_blast_furnace": "Blast Furnace",

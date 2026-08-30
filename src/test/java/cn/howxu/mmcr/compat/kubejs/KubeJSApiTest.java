@@ -147,14 +147,14 @@ class KubeJSApiTest {
         assertThat(api.recipeIO().OUTPUT).isSameAs(RecipeIo.OUTPUT);
         assertThat(api.outputPolicy().REQUIRE_FULL).isSameAs(OutputPolicy.REQUIRE_FULL);
         assertThat(api.outputPolicy().ALLOW_PARTIAL).isSameAs(OutputPolicy.ALLOW_PARTIAL);
-        assertThat(new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(api.recipeIO().OUTPUT, 1).io())
-                .isEqualTo(RecipeModifier.IOType.OUTPUT);
+        assertThat(api.energyRequirement(RecipeIo.OUTPUT, 1).io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
 
         var context = new ContextFactory().enter();
         var scope = context.initStandardObjects();
         ScriptableObject.putProperty(scope, "api", api, context);
         assertThat(context.evaluateString(scope,
-                "api.recipeIO().OUTPUT.name() === 'OUTPUT' && api.outputPolicy().ALLOW_PARTIAL.name() === 'ALLOW_PARTIAL'",
+                "api.recipeIO().OUTPUT.name() === 'OUTPUT' && api.outputPolicy().ALLOW_PARTIAL.name() === 'ALLOW_PARTIAL'"
+                        + " && api.energyRequirement(api.recipeIO().OUTPUT, 1).io().name() === 'OUTPUT'",
                 "io-policy-test", 1, null)).isEqualTo(true);
     }
 
