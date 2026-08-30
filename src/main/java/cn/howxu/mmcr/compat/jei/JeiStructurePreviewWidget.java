@@ -44,6 +44,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int CONTROL_Y_OFFSET = -13;
     private static final float LAYER_TEXT_SCALE = 0.9F;
     private static final int LAYER_TEXT_Y_OFFSET = -24;
+    private static final int CANDIDATE_SIZE = 16;
+    private static final int CANDIDATE_STEP = 18;
+    private static final int MAX_VISIBLE_CANDIDATES = 8;
     private static final int LAYOUT_WIDTH = 168;
     private Preview preview;
     private final int x;
@@ -189,16 +192,11 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return;
         List<ItemStack> candidates = displayedStacks(hit.getBlockPos());
         if (candidates.isEmpty()) return;
+        int visibleCount = Math.min(MAX_VISIBLE_CANDIDATES, candidates.size());
         int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
-        int itemY = height + 33;
-        for (int index = 0; index < candidates.size() && index * 18 + 16 <= width; index++) {
-            graphics.item(candidates.get((index + offset) % candidates.size()), index * 18, itemY, 0);
+        for (int index = 0; index < visibleCount; index++) {
+            graphics.item(candidates.get((index + offset) % candidates.size()), 0, index * CANDIDATE_STEP, 0);
         }
-    }
-
-    private Object candidateHit() {
-        Object selected = preview.selectedHit();
-        return selected == null ? preview.hoverHit() : selected;
     }
 
     private List<ItemStack> displayedStacks(BlockPos position) {
@@ -272,6 +270,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             previewDragActive = false;
             return true;
         }
+        if (candidateAt(mouseX, mouseY) >= 0) {
+            previewDragActive = false;
+            return true;
+        }
         if (!input.isSimulate() && previewDragActive) {
             previewDragActive = false;
             boolean inside = insidePreview(mouseX, mouseY);
@@ -289,15 +291,24 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return previewDragActive && controlAt(mouseX, mouseY) < 0 && insidePreview(mouseX, mouseY)
+        return previewDragActive && controlAt(mouseX, mouseY) < 0 && candidateAt(mouseX, mouseY) < 0
+                && insidePreview(mouseX, mouseY)
                 && mouseKey.getType() == InputConstants.Type.MOUSE
                 && preview.mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
     }
 
     @Override
     public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
-        return controlAt(mouseX, mouseY) < 0 && insidePreview(mouseX, mouseY)
+        return controlAt(mouseX, mouseY) < 0 && candidateAt(mouseX, mouseY) < 0 && insidePreview(mouseX, mouseY)
                 && preview.mouseScrolled(previewMouseX(mouseX), previewMouseY(mouseY), scrollDeltaY);
+    }
+
+    private int candidateAt(double mouseX, double mouseY) {
+        if (schema == null || !(preview.selectedHit() instanceof BlockHitResult hit)) return -1;
+        int count = Math.min(MAX_VISIBLE_CANDIDATES, displayedCandidates(hit.getBlockPos()).size());
+        if (mouseX < 0 || mouseX >= CANDIDATE_SIZE || mouseY < 0) return -1;
+        int index = (int) Math.floor(mouseY / CANDIDATE_STEP);
+        return index < count && mouseY < index * CANDIDATE_STEP + CANDIDATE_SIZE ? index : -1;
     }
 
     private boolean insidePreview(double mouseX, double mouseY) {
@@ -323,17 +334,16 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             tooltip.add(Component.translatable("jei.mmcr.structure_preview." + keys[control]));
             return;
         }
-        if (schema == null || !(candidateHit() instanceof BlockHitResult hit)) return;
-        List<StructurePreviewSchema.Candidate> candidates = displayedCandidates(hit.getBlockPos());
-        int itemY = height + 33;
-        int itemIndex = (int) (mouseX / 18);
-        if (mouseY >= itemY && mouseY < itemY + 16 && itemIndex >= 0 && itemIndex < candidates.size()) {
+        int candidateIndex = candidateAt(mouseX, mouseY);
+        if (candidateIndex >= 0 && preview.selectedHit() instanceof BlockHitResult hit) {
+            List<StructurePreviewSchema.Candidate> candidates = displayedCandidates(hit.getBlockPos());
             int offset = (int) Math.floorDiv(clock.getAsLong(), 1000) % candidates.size();
-            StructurePreviewSchema.Candidate candidate = candidates.get((itemIndex + offset) % candidates.size());
+            StructurePreviewSchema.Candidate candidate = candidates.get((candidateIndex + offset) % candidates.size());
             ItemStack stack = candidate.stack();
             tooltip.add(stack.getHoverName());
             if (candidate.modifier()) tooltip.add(Component.translatable("jei.mmcr.structure_preview.modifier"));
             tooltip.setIngredient(new ItemStackIngredient(stack));
+            return;
         }
     }
 

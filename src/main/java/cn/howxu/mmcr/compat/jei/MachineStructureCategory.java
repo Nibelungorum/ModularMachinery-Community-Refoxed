@@ -22,7 +22,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final int MACHINE_NAME_Y = 5;
     private static final int MACHINE_NAME_WIDTH = 160;
     private static final int MACHINE_NAME_HEIGHT = 16;
-    private static final float MACHINE_NAME_SCALE = 1.15F;
+    private static final float MACHINE_NAME_SCALE = 1.1F;
     private static final int PREVIEW_X = 4;
     private static final int PREVIEW_Y = 23;
 
