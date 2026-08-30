@@ -121,11 +121,17 @@ jobs:
               "${{ steps.version.outputs.version }}" "$generated" "$full_list")"
           fi
 
+          summary="$(printf '%s\n' "$generated" | awk 'index($0, "<details>") { exit } { print }')"
+
           {
-            delimiter="release_notes_${RANDOM}_${RANDOM}"
-            echo "body<<$delimiter"
+            body_delimiter="release_body_${RANDOM}_${RANDOM}"
+            echo "body<<$body_delimiter"
             printf '%s\n' "$generated"
-            echo "$delimiter"
+            echo "$body_delimiter"
+            summary_delimiter="release_summary_${RANDOM}_${RANDOM}"
+            echo "summary<<$summary_delimiter"
+            printf '%s\n' "$summary"
+            echo "$summary_delimiter"
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish release artifacts
@@ -136,7 +142,9 @@ jobs:
           name: ${{ steps.version.outputs.version }}
           version: ${{ steps.version.outputs.version }}
           version-type: release
-          changelog: ${{ steps.notes.outputs.body }}
+          github-changelog: ${{ steps.notes.outputs.body }}
+          modrinth-changelog: ${{ steps.notes.outputs.summary }}
+          curseforge-changelog: ${{ steps.notes.outputs.summary }}
           files: build/libs/!(*-@(dev|sources|javadoc|api)).jar
           loaders: neoforge
           environment: client | server
