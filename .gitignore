@@ -55,3 +55,8 @@ example/client_scripts/*
 example/config/*
 example/data/*
 example/README.txt
+
+### Wiki ignore
+wiki/node_modules/
+wiki/.vitepress/dist/
+wiki/.vitepress/cache/
