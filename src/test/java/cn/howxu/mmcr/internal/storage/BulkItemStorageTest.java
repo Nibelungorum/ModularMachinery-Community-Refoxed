@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.storage;
 
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -16,6 +17,8 @@ class BulkItemStorageTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
+        bindItemComponents(Items.IRON_INGOT);
+        bindItemComponents(Items.GOLD_INGOT);
     }
 
     @Test
@@ -40,13 +43,13 @@ class BulkItemStorageTest {
     }
 
     @Test
-    void supports_requests_above_integer_maximum() {
-        long requested = (long) Integer.MAX_VALUE + 10L;
+    void caps_requests_at_resource_maximum() {
+        long requested = 100L;
         BulkItemStorage storage = new BulkItemStorage(requested + 1L, () -> {});
         ItemResource iron = resource(Items.IRON_INGOT);
 
-        assertThat(storage.insert(iron, requested, false)).isEqualTo(requested);
-        assertThat(storage.extract(iron, requested, false)).isEqualTo(requested);
+        assertThat(storage.insert(iron, requested, false)).isEqualTo(64L);
+        assertThat(storage.extract(iron, requested, false)).isEqualTo(64L);
         assertThat(storage.amount(0)).isZero();
     }
 
@@ -91,25 +94,30 @@ class BulkItemStorageTest {
     }
 
     @Test
-    void capacity_and_transaction_insert_use_storage_capacity() {
+    void capacity_and_transaction_insert_use_resource_stack_limit() {
         ItemStack stack = Items.IRON_INGOT.getDefaultInstance();
         stack.set(DataComponents.MAX_STACK_SIZE, 16);
         ItemResource resource = ItemResource.of(stack);
         BulkItemStorage storage = new BulkItemStorage(100L, () -> {});
 
-        assertThat(storage.capacity(0, resource)).isEqualTo(100L);
-        assertThat(storage.insert(resource, 32L, true)).isEqualTo(32L);
+        assertThat(storage.capacity(0, resource)).isEqualTo(16L);
+        assertThat(storage.insert(resource, 32L, true)).isEqualTo(16L);
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, resource, 32L, transaction)).isEqualTo(32L);
+            assertThat(storage.insert(0, resource, 32L, transaction)).isEqualTo(16L);
             transaction.commit();
         }
 
-        assertThat(storage.amount(0)).isEqualTo(32L);
+        assertThat(storage.amount(0)).isEqualTo(16L);
     }
 
     private static ItemResource resource(Item item) {
         ItemStack stack = item.getDefaultInstance();
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return ItemResource.of(stack);
+    }
+
+    private static void bindItemComponents(Item item) {
+        item.builtInRegistryHolder().bindComponents(
+                DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
 }

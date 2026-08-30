@@ -55,7 +55,7 @@ public final class UpgradeBusBlock extends Block implements EntityBlock {
         return new SimpleMenuProvider(
                 (containerId, playerInventory, player) -> new UpgradeBusMenu(containerId, playerInventory,
                         level.getBlockEntity(pos) instanceof UpgradeBusBlockEntity bus ? bus : null),
-                Component.translatable("container.mmcr.upgrade_bus_" + size.id()));
+                Component.empty());
     }
 
     @Override

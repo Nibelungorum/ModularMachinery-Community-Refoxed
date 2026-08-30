@@ -28,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
@@ -2138,9 +2139,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             long previousCapabilityVersion = previousSnapshot.capabilityVersion();
             refreshModuleConnectionState();
-            runtime.setModifiersAllowed(allowsModifiers(matchedMachine));
+            boolean modifiersAllowed = allowsModifiers(matchedMachine);
+            runtime.setModifiersAllowed(modifiersAllowed);
+            LOG.info("[modifier-debug] structure formed: controller={} machine={} facing={} rollFacing={} stage={} "
+                            + "modifiersAllowed={} replacementPositions={} replacements={}",
+                    getBlockPos(), matchedMachine.registryName(), facing, rollFacing,
+                    compiledPattern == null ? 1 : compiledPattern.stageNumber(), modifiersAllowed,
+                    replacements.size(), describeReplacements(replacements));
             Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
             runtime.publishComponentState(runtime.components(), foundModifiers, levels, previousLinkedPortPositions);
+            LOG.info("[modifier-debug] modifier state: controller={} foundModifierIds={} flattenedModifiers={}",
+                    getBlockPos(), runtime.componentRuntime().foundModifiers().keySet(),
+                    describeModifiers(runtime.componentRuntime().modifierList()));
             refreshCriticalStructureChunks(rotatedPattern, compiledPattern, facing);
             if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
             boolean componentsChanged = componentsNeedRefresh(rotatedPattern, compiledPattern, facing);
@@ -2208,13 +2218,37 @@ public class MachineControllerBlockEntity extends BlockEntity {
             for (var entry : replacements.entrySet()) {
                 BlockState actual = level.getBlockState(getBlockPos().offset(entry.getKey()));
                 for (SingleBlockModifierReplacement replacement : entry.getValue()) {
-                    if (replacement.getReplacement().matches(actual)) {
+                    boolean matched = replacement.getReplacement().matches(actual);
+                    var registeredDefinition = ModifierRegistry.get(replacement.getModifierId());
+                    LOG.info("[modifier-debug] replacement check: controller={} relativePos={} worldPos={} actualBlock={} "
+                                    + "modifierId={} replacement={} matched={} replacementModifierCount={} "
+                                    + "registeredDefinition={} registeredModifierCount={}",
+                            getBlockPos(), entry.getKey(), getBlockPos().offset(entry.getKey()),
+                            actual.getBlock().builtInRegistryHolder().key().identifier(), replacement.getModifierName(),
+                            replacement.getReplacement(), matched, replacement.getModifiers().size(),
+                            registeredDefinition != null,
+                            registeredDefinition == null ? 0 : registeredDefinition.modifiers().size());
+                    if (matched) {
                         nextModifiers.putIfAbsent(replacement.getModifierName(), replacement.getModifiers());
                     }
                 }
             }
         }
         return nextModifiers;
+    }
+
+    private static String describeReplacements(
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+        List<String> descriptions = new ArrayList<>();
+        replacements.forEach((position, values) -> values.forEach(replacement -> descriptions.add(
+                position + "=" + replacement.getModifierName() + "->" + replacement.getReplacement())));
+        return descriptions.toString();
+    }
+
+    private static String describeModifiers(List<RecipeModifier> modifiers) {
+        return modifiers.stream().map(modifier -> modifier.getTarget() + "/" + modifier.getIOTarget()
+                + "/" + modifier.getOperation() + "/" + modifier.getModifier()
+                + "/chance=" + modifier.affectsChance()).toList().toString();
     }
 
     private static boolean allowsModifiers(@Nullable Machine machine) {

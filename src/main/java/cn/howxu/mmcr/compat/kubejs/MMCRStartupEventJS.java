@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
@@ -50,12 +51,15 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public void registerModifier(String id, ModifierDefinition definition) {
-        MMCRMachineStructuresEvent.current().registerModifier(
-                ControllerScreenTextEventJS.parseIdentifier(id, "modifierId"), definition);
+        Identifier modifierId = ControllerScreenTextEventJS.parseIdentifier(id, "modifierId");
+        MMCR.LOG.info("[modifier-debug] KubeJS register modifier: id={} modifierCount={}", modifierId,
+                definition == null ? 0 : definition.modifiers().size());
+        MMCRMachineStructuresEvent.current().registerModifier(modifierId, definition);
     }
 
     public void registerModifierItem(ItemStack stack, String modifierId) {
-        MMCRMachineStructuresEvent.current().registerModifierItem(stack,
-                ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId"));
+        Identifier parsedModifierId = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
+        MMCR.LOG.info("[modifier-debug] KubeJS register modifier item: item={} modifierId={}", stack, parsedModifierId);
+        MMCRMachineStructuresEvent.current().registerModifierItem(stack, parsedModifierId);
     }
 }

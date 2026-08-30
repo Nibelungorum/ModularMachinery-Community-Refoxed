@@ -3,7 +3,7 @@ ServerEvents.recipes( event => {
     event.custom({
         type: 'mmcr:machine_recipe',
         machine: 'mmcr_kubejs:kubejs_alloy_furnace', // Use the machine's registered identifier.
-        tick_time: 10,
+        tick_time: 300,
         parallelized: true,
         requirements: [
             {
@@ -16,7 +16,7 @@ ServerEvents.recipes( event => {
                     }
                 },
                 count: 1,
-                consume_chance: 0.5 // Set the consumption chance; 0 keeps the input intact.
+                // consume_chance: 0.5 // Set the consumption chance; 0 keeps the input intact.
             },
             {
                 type: 'item',
@@ -33,7 +33,7 @@ ServerEvents.recipes( event => {
                         }
                     }
                 },
-                chance: 0.5 // Outputs can have a chance as well.
+                // chance: 0.5 // Outputs can have a chance as well.
             },
             {
                 type: 'energy',

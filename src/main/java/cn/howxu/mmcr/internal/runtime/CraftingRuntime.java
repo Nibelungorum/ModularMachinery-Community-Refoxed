@@ -87,8 +87,13 @@ public final class CraftingRuntime {
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return fail("recipe_behavior");
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers(runtime));
-        List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers(runtime));
+        List<RecipeModifier> contextModifiers = contextModifiers(runtime);
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers);
+        List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers);
+        MMCR.LOG.info("[modifier-debug] recipe start: controller={} machine={} recipe={} baseModifiers={} "
+                        + "contextModifiers={} baseDuration={} effectiveDuration={} requirements={} outputs={}",
+                controller.getBlockPos(), runtime.machineId(), recipe.id(), describeModifiers(recipe.modifiers()),
+                describeModifiers(contextModifiers), recipe.tickTime(), duration(recipe, runtime), requirements, outputs);
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, duration(recipe, runtime), requirements, outputs);
@@ -553,6 +558,12 @@ public final class CraftingRuntime {
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
         return components.modifierList();
+    }
+
+    private static String describeModifiers(List<RecipeModifier> modifiers) {
+        return modifiers.stream().map(modifier -> modifier.getTarget() + "/" + modifier.getIOTarget()
+                + "/" + modifier.getOperation() + "/" + modifier.getModifier()
+                + "/chance=" + modifier.affectsChance()).toList().toString();
     }
 
     private @Nullable HolderLookup.Provider registryAccess() {

@@ -61,6 +61,38 @@ class ItemBusBlockEntityTest {
     }
 
     @Test
+    void resource_insertion_keeps_default_stack_items_within_one_ui_slot() {
+        var bus = itemInputBus();
+        ItemResource resource = ItemResource.of(ironStack(1));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(bus.itemStorage().insert(0, resource, 1L, transaction)).isEqualTo(1L);
+            assertThat(bus.itemStorage().insert(0, resource, 64L, transaction)).isEqualTo(63L);
+            assertThat(bus.itemStorage().insert(1, resource, 1L, transaction)).isEqualTo(1L);
+            transaction.commit();
+        }
+
+        assertThat(bus.itemStorage().amount(0)).isEqualTo(64L);
+        assertThat(bus.itemStorage().amount(1)).isEqualTo(1L);
+    }
+
+    @Test
+    void resource_insertion_does_not_stack_non_stackable_items_in_a_ui_slot() {
+        var bus = itemInputBus();
+        ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+        sword.set(DataComponents.CUSTOM_NAME, Component.literal("Sharpness II"));
+        ItemResource resource = ItemResource.of(sword);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(bus.itemStorage().insert(0, resource, 2L, transaction)).isEqualTo(1L);
+            transaction.commit();
+        }
+
+        assertThat(bus.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(bus.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+    }
+
+    @Test
     void setter_rejects_over_capacity_without_clearing_existing_contents() {
         var handler = itemInputBus().getItemStackHandler(null);
         ItemStack existing = ironStack(5);

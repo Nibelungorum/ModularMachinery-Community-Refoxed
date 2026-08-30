@@ -168,12 +168,14 @@ public final class RuntimeMachineModelRegistry {
                     DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/overlay_data_storage")));
         }
         if (block instanceof UpgradeBusBlock) {
+            UpgradeBusBlock upgradeBus = (UpgradeBusBlock) block;
             return new RuntimeBlockModelDefinition(
                     block,
                     blockName,
                     DynamicOverlayBakedModel.Kind.PORT,
                     portStyleDefinition(block),
-                    DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/overlay_data_storage")));
+                    DynamicOverlayItemModel.Description.portOverlay(
+                            MMCR.id("block/overlay_upgrade_bus_" + upgradeBus.size().id())));
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock
                 || block instanceof SmartInterfaceBlock || block instanceof ModuleCouplerBlock) {
