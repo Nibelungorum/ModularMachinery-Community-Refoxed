@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
@@ -281,6 +282,13 @@ public final class ModRecipeProvider extends RecipeProvider {
                     .define('C', Tags.Items.INGOTS_NETHERITE)
                     .define('D', ModBlocks.BASIC_CASING.get())
                     .save(output);
+            previous = result;
+        }
+
+        previous = ModBlocks.BASIC_CASING.get();
+        for (UpgradeBusSize size : UpgradeBusSize.values()) {
+            ItemLike result = ModItems.ITEMS.get("upgrade_bus_" + size.id()).get();
+            upgradeRecipe(result, previous);
             previous = result;
         }
     }

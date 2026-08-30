@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -88,7 +89,8 @@ public final class ModelGen extends ModelProvider {
         return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && !"smart_interface".equals(name) && !"module_bridge".equals(name)
                 && !(block.get() instanceof MachineControllerBlock)
-                && !(block.get() instanceof DataStorageBlock);
+                && !(block.get() instanceof DataStorageBlock)
+                && !(block.get() instanceof UpgradeBusBlock);
     }
 
     @FunctionalInterface

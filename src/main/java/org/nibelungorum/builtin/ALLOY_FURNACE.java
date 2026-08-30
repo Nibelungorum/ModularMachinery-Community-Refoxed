@@ -7,9 +7,11 @@ import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -18,7 +20,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import static cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.id;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.api.publicapi.machine.ModifierUse.of;
 
 /**
  * @description: TODO
@@ -55,6 +56,7 @@ public class ALLOY_FURNACE {
                         "multiply",
                         false
                 ));
+        event.registerModifierItem(new ItemStack(Items.DIAMOND_BLOCK), id("alloy_furnace_diamond_speedup"));
 
         event.registerModifier(
                 id("alloy_furnace_gold_doubling"),
@@ -65,6 +67,7 @@ public class ALLOY_FURNACE {
                         "multiply",
                         false
                 ));
+        event.registerModifierItem(new ItemStack(Items.GOLD_BLOCK), id("alloy_furnace_gold_doubling"));
 
 
         if (!event.structures().containsKey(ALLOY_FURNACE)) {
@@ -84,8 +87,10 @@ public class ALLOY_FURNACE {
                                     .where('M', block(Blocks.BLAST_FURNACE))
                                     .controller('C'))
                             .requirements(r -> r
-                                    .modifier('M', of(id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK)))
-                                    .modifier('M', of(id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK)))
+                                    .modifier('M', ModifierUse.of(
+                                            id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK)))
+                                    .modifier('M', ModifierUse.of(
+                                            id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK)))
                             ))
                     .build(ALLOY_FURNACE);
             event.registerStructure(structure);
