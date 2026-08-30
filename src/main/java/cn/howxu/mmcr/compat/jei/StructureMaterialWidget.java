@@ -57,6 +57,12 @@ public final class StructureMaterialWidget implements IRecipeWidget {
         if (page != displayedPage) applyPage(page);
     }
 
+    static void refreshPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, long timeMillis) {
+        if (slots.size() != SLOT_COUNT) throw new IllegalArgumentException("nine material slots required");
+        int page = pageFor(timeMillis, summary.entries().size());
+        applyPage(summary, slots, page);
+    }
+
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
         int first = displayedPage * SLOT_COUNT;
@@ -78,6 +84,10 @@ public final class StructureMaterialWidget implements IRecipeWidget {
 
     private void applyPage(int page) {
         displayedPage = page;
+        applyPage(summary, slots, page);
+    }
+
+    private static void applyPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, int page) {
         int first = page * SLOT_COUNT;
         for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
             int entryIndex = first + slotIndex;
