@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.publicapi.controller.JadeText;
+import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
@@ -261,6 +263,28 @@ class MachineBehaviorTest {
         assertThatThrownBy(() -> context.upgradeItems().clear()).isInstanceOf(UnsupportedOperationException.class);
         context.upgradeItems().getFirst().setCount(1);
         assertThat(context.upgradeItems()).singleElement().extracting(ItemStack::getCount).isEqualTo(3);
+    }
+
+    @Test
+    void machine_behavior_context_preserves_the_jade_text_handle() {
+        JadeText jadeText = new JadeTextState();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("jade_context_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(), jadeText);
+
+        assertThat(context.jadeText()).isSameAs(jadeText);
+    }
+
+    @Test
+    void tick_behavior_context_preserves_the_base_jade_text_handle() {
+        JadeText jadeText = new JadeTextState();
+        MachineBehaviorContext base = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("jade_tick_context_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(), jadeText);
+
+        TickBehaviorContext tickContext = new TickBehaviorContext(base, new CapabilitySnapshot(List.of()));
+
+        assertThat(tickContext.jadeText()).isSameAs(jadeText);
     }
 
     @Test

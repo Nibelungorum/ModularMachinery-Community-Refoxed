@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.controller.JadeText;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -30,30 +31,42 @@ public class MachineBehaviorContext {
     private final @Nullable DataStorage dataStorage;
     private final MachineIoView ioView;
     private final List<ItemStack> upgradeItems;
+    private final JadeText jadeText;
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText) {
-        this(controller, level, controllerPos, machineId, gameTime, screenText, null, emptyIoView());
+        this(controller, level, controllerPos, machineId, gameTime, screenText, null, emptyIoView(), List.of(),
+                JadeText.noop());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage) {
-        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, emptyIoView());
+        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, emptyIoView(), List.of(),
+                JadeText.noop());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView) {
-        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, ioView, List.of());
+        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, ioView, List.of(),
+                JadeText.noop());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView, List<ItemStack> upgradeItems) {
+        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, ioView, upgradeItems,
+                JadeText.noop());
+    }
+
+    public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
+                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  ControllerScreenText screenText, @Nullable DataStorage dataStorage,
+                                  MachineIoView ioView, List<ItemStack> upgradeItems, JadeText jadeText) {
         this.controller = controller;
         this.level = level;
         this.controllerPos = Objects.requireNonNull(controllerPos, "controllerPos").immutable();
@@ -63,6 +76,7 @@ public class MachineBehaviorContext {
         this.dataStorage = dataStorage;
         this.ioView = Objects.requireNonNull(ioView, "ioView");
         this.upgradeItems = copyStacks(upgradeItems);
+        this.jadeText = Objects.requireNonNull(jadeText, "jadeText");
     }
 
     public MachineControllerBlockEntity controller() {
@@ -104,6 +118,10 @@ public class MachineBehaviorContext {
 
     public List<ItemStack> upgradeItems() {
         return copyStacks(upgradeItems);
+    }
+
+    public JadeText jadeText() {
+        return jadeText;
     }
 
     static MachineBehaviorContext empty(Identifier machineId) {

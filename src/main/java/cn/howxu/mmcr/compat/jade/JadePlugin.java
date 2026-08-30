@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.runtime.JadeTextSupport;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import snownee.jade.api.IWailaClientRegistration;
 import snownee.jade.api.IWailaCommonRegistration;
@@ -16,6 +17,7 @@ public final class JadePlugin implements IWailaPlugin {
 
     @Override
     public void register(IWailaCommonRegistration registration) {
+        JadeTextSupport.enable();
         registration.registerBlockDataProvider(MachineControllerDataProvider.INSTANCE, MachineControllerBlockEntity.class);
     }
 

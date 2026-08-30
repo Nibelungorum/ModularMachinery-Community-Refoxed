@@ -77,6 +77,7 @@ import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryTickResult;
+import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.StructureRuntime.StructureWorkSnapshot;
@@ -227,6 +228,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineBehaviorContext behaviorContext(ControllerScreenText screenText) {
         return runtime.behaviorContext(screenText);
+    }
+
+    public JadeTextSnapshot jadeTextSnapshot() {
+        return runtime.jadeTextSnapshot();
     }
 
     public ControllerScreenTextState recipeScreenText(String laneId) {

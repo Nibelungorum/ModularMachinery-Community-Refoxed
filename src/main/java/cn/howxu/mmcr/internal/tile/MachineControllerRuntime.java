@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.controller.JadeText;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
@@ -26,6 +27,8 @@ import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
+import cn.howxu.mmcr.internal.runtime.JadeTextSupport;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import net.minecraft.core.BlockPos;
@@ -53,6 +56,7 @@ public final class MachineControllerRuntime {
     private final CraftingRuntime craftingRuntime;
     private final FactoryRuntime factoryRuntime;
     private final ControllerScreenTextState screenText = new ControllerScreenTextState();
+    private final JadeText jadeText = JadeTextSupport.create();
     private final Map<String, ControllerScreenTextState> recipeScreenTexts = new LinkedHashMap<>();
     private Map<BlockPos, DataStorage> dataStorages = Map.of();
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
@@ -115,6 +119,10 @@ public final class MachineControllerRuntime {
         return screenText;
     }
 
+    public JadeTextSnapshot jadeTextSnapshot() {
+        return JadeTextSupport.snapshot(jadeText);
+    }
+
     public ControllerRuntimeContext runtimeContext() {
         Machine configuredMachine = structure.snapshot().configuredMachine();
         if (configuredMachine == null) {
@@ -157,7 +165,7 @@ public final class MachineControllerRuntime {
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
                 screenText, dataStorages.values().stream().findFirst().orElse(null),
-                new MachineIoView(capabilitySnapshot), components.upgradeItems());
+                new MachineIoView(capabilitySnapshot), components.upgradeItems(), jadeText);
     }
 
     public ControllerScreenTextState recipeScreenText(String laneId) {
