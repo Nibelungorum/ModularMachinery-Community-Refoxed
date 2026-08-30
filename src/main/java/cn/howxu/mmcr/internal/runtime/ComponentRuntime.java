@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
@@ -347,16 +348,25 @@ public final class ComponentRuntime {
         List<ItemStack> items = new ArrayList<>();
         Map<Identifier, Long> units = new LinkedHashMap<>();
         for (UpgradeBusSnapshot bus : next) {
-            for (ItemStack stack : bus.stacks()) {
+            List<ItemStack> stacks = bus.stacks();
+            for (int slot = 0; slot < stacks.size(); slot++) {
+                ItemStack stack = stacks.get(slot);
                 if (stack.isEmpty()) continue;
                 items.add(stack.copy());
                 Identifier modifierId = ModifierRegistry.modifierFor(stack);
+                MMCR.LOG.info("[upgrade-bus-debug] item: busPos={} slot={} stack={} modifierId={} "
+                                + "definitionPresent={} count={}",
+                        bus.position(), slot, stack, modifierId,
+                        modifierId != null && ModifierRegistry.get(modifierId) != null, stack.getCount());
                 if (modifierId != null) units.merge(modifierId, (long) stack.getCount(), Long::sum);
             }
         }
         upgradeItems = List.copyOf(items);
         upgradeModifierUnits = immutableMap(units);
         upgradeModifiers = upgradeModifiers(units);
+        MMCR.LOG.info("[upgrade-bus-debug] aggregate: busCount={} itemCount={} modifierUnits={} "
+                        + "modifierCount={} registeredBindings={}",
+                next.size(), items.size(), units, upgradeModifiers.size(), ModifierRegistry.modifierItems());
         upgradeContentRevision++;
         rebuildModifierList();
         modifierVersion++;

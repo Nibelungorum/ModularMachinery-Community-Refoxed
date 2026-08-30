@@ -12,6 +12,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
@@ -26,6 +27,9 @@ import java.util.function.Consumer;
  * @author howxu &lt;dev@howxu.cn&gt;
  */
 public final class StartupContentRegistration {
+    private static final DataComponentMap STARTUP_ITEM_COMPONENTS = DataComponentMap.builder()
+            .set(DataComponents.MAX_STACK_SIZE, Item.DEFAULT_MAX_STACK_SIZE)
+            .build();
     private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
     private static boolean structureCollectionDeferred;
     private static MMCRMachineDefinationsEvent pendingProductionDefinitions;
@@ -234,7 +238,7 @@ public final class StartupContentRegistration {
             try {
                 holder.components();
             } catch (NullPointerException ignored) {
-                holder.bindComponents(DataComponentMap.EMPTY);
+                holder.bindComponents(STARTUP_ITEM_COMPONENTS);
             }
         }
     }

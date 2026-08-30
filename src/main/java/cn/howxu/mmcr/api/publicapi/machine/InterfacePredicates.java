@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
@@ -63,6 +64,18 @@ public final class InterfacePredicates {
 
     public static BlockPredicate anyEnergyOutput() {
         return anyOfEnergyOutput();
+    }
+
+    public static BlockPredicate anyOfUpgradeBus() {
+        List<BlockPredicate> predicates = new ArrayList<>();
+        for (UpgradeBusSize size : UpgradeBusSize.values()) {
+            predicates.add(port("upgrade_bus_" + size.id()));
+        }
+        return BlockPredicate.anyOf(predicates);
+    }
+
+    public static BlockPredicate anyUpgradeBus() {
+        return anyOfUpgradeBus();
     }
 
     public static BlockPredicate ports() {

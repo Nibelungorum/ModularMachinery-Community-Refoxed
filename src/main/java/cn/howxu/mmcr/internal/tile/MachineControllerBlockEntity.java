@@ -2141,16 +2141,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             refreshModuleConnectionState();
             boolean modifiersAllowed = allowsModifiers(matchedMachine);
             runtime.setModifiersAllowed(modifiersAllowed);
-            LOG.info("[modifier-debug] structure formed: controller={} machine={} facing={} rollFacing={} stage={} "
-                            + "modifiersAllowed={} replacementPositions={} replacements={}",
-                    getBlockPos(), matchedMachine.registryName(), facing, rollFacing,
-                    compiledPattern == null ? 1 : compiledPattern.stageNumber(), modifiersAllowed,
-                    replacements.size(), describeReplacements(replacements));
             Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
             runtime.publishComponentState(runtime.components(), foundModifiers, levels, previousLinkedPortPositions);
-            LOG.info("[modifier-debug] modifier state: controller={} foundModifierIds={} flattenedModifiers={}",
-                    getBlockPos(), runtime.componentRuntime().foundModifiers().keySet(),
-                    describeModifiers(runtime.componentRuntime().modifierList()));
             refreshCriticalStructureChunks(rotatedPattern, compiledPattern, facing);
             if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
             boolean componentsChanged = componentsNeedRefresh(rotatedPattern, compiledPattern, facing);
@@ -2220,35 +2212,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 for (SingleBlockModifierReplacement replacement : entry.getValue()) {
                     boolean matched = replacement.getReplacement().matches(actual);
                     var registeredDefinition = ModifierRegistry.get(replacement.getModifierId());
-                    LOG.info("[modifier-debug] replacement check: controller={} relativePos={} worldPos={} actualBlock={} "
-                                    + "modifierId={} replacement={} matched={} replacementModifierCount={} "
-                                    + "registeredDefinition={} registeredModifierCount={}",
-                            getBlockPos(), entry.getKey(), getBlockPos().offset(entry.getKey()),
-                            actual.getBlock().builtInRegistryHolder().key().identifier(), replacement.getModifierName(),
-                            replacement.getReplacement(), matched, replacement.getModifiers().size(),
-                            registeredDefinition != null,
-                            registeredDefinition == null ? 0 : registeredDefinition.modifiers().size());
+                    List<RecipeModifier> modifiers = replacement.getModifiers();
+                    if (modifiers.isEmpty() && registeredDefinition != null) {
+                        modifiers = registeredDefinition.modifiers();
+                    }
                     if (matched) {
-                        nextModifiers.putIfAbsent(replacement.getModifierName(), replacement.getModifiers());
+                        nextModifiers.putIfAbsent(replacement.getModifierName(), modifiers);
                     }
                 }
             }
         }
         return nextModifiers;
-    }
-
-    private static String describeReplacements(
-            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
-        List<String> descriptions = new ArrayList<>();
-        replacements.forEach((position, values) -> values.forEach(replacement -> descriptions.add(
-                position + "=" + replacement.getModifierName() + "->" + replacement.getReplacement())));
-        return descriptions.toString();
-    }
-
-    private static String describeModifiers(List<RecipeModifier> modifiers) {
-        return modifiers.stream().map(modifier -> modifier.getTarget() + "/" + modifier.getIOTarget()
-                + "/" + modifier.getOperation() + "/" + modifier.getModifier()
-                + "/chance=" + modifier.affectsChance()).toList().toString();
     }
 
     private static boolean allowsModifiers(@Nullable Machine machine) {
@@ -2299,6 +2273,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         runtime.publishDataStorages(boundDataStorages);
         List<UpgradeBusBlockEntity> upgradeBuses = upgradeBusComponents(matchedPattern);
+        Identifier formedTexture = matchedMachine.appearance().formedPortBaseTexture();
+        for (UpgradeBusBlockEntity bus : upgradeBuses) {
+            bus.linkControllerAppearance(getBlockPos(), formedTexture);
+        }
         bindUpgradeBuses(upgradeBuses);
         runtime.publishUpgradeBusState(upgradeBusSnapshots(upgradeBuses));
         List<ProcessingComponent> nextComponents = new ArrayList<>();
@@ -2345,7 +2323,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             if (tile instanceof IOPortBlockEntity port) {
-                Identifier formedTexture = matchedMachine.appearance().formedPortBaseTexture();
                 port.linkControllerAppearance(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
             }

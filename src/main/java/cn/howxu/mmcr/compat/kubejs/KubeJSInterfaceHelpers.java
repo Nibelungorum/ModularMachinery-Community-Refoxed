@@ -21,6 +21,7 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfFluidOutput() { return convert(InterfacePredicates.anyOfFluidOutput()); }
     public static BlockPredicate anyOfEnergyInput() { return convert(InterfacePredicates.anyOfEnergyInput()); }
     public static BlockPredicate anyOfEnergyOutput() { return convert(InterfacePredicates.anyOfEnergyOutput()); }
+    public static BlockPredicate anyOfUpgradeBus() { return convert(InterfacePredicates.anyOfUpgradeBus()); }
 
     public static BlockPredicate anyOfPort(String... ids) {
         if (ids == null || ids.length == 0) throw new IllegalArgumentException("At least one port is required");
