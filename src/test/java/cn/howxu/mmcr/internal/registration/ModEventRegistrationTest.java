@@ -3,8 +3,10 @@ package cn.howxu.mmcr.internal.registration;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -196,6 +198,25 @@ class ModEventRegistrationTest {
                     .findFirst().orElseThrow();
             assertThat(kind.families()).isNotEmpty().allSatisfy(family ->
                     assertThat(family.countAliases()).doesNotContain(id));
+        }
+    }
+
+    @Test
+    void registers_standalone_upgrade_buses_without_port_kinds() {
+        List<String> ids = List.of(
+                "upgrade_bus_normal", "upgrade_bus_reinforced", "upgrade_bus_elite",
+                "upgrade_bus_super", "upgrade_bus_ultimate");
+
+        assertThat(ModBlocks.BLOCKS.keySet()).containsAll(ids);
+        assertThat(ModBlockEntities.BES.keySet()).containsAll(ids);
+        assertThat(ModItems.ITEMS.keySet()).containsAll(ids);
+        assertThat(PortKinds.all().stream().map(IOPortKind::id).toList()).doesNotContainAnyElementsOf(ids);
+
+        for (String id : ids) {
+            Block block = ModBlocks.BLOCKS.get(id).get();
+            assertThat(block).isInstanceOf(UpgradeBusBlock.class);
+            assertThat(ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, block.defaultBlockState()))
+                    .isInstanceOf(UpgradeBusBlockEntity.class);
         }
     }
 

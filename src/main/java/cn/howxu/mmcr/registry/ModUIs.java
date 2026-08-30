@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.SmartInterfaceMenu;
+import cn.howxu.mmcr.internal.menu.UpgradeBusMenu;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -58,6 +59,9 @@ public final class ModUIs {
 
     public static final DeferredHolder<MenuType<?>, MenuType<SmartInterfaceMenu>> SMART_INTERFACE =
             REGISTER.register("smart_interface", () -> new MenuType<>((IContainerFactory<SmartInterfaceMenu>) SmartInterfaceMenu::clientOpen, FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<UpgradeBusMenu>> UPGRADE_BUS =
+            REGISTER.register("upgrade_bus", () -> new MenuType<>((IContainerFactory<UpgradeBusMenu>) UpgradeBusMenu::clientOpen, FeatureFlags.VANILLA_SET));
 
     public static void register(IEventBus bus) {
         REGISTER.register(bus);

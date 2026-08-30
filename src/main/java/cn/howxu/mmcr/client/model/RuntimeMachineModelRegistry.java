@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -159,6 +160,14 @@ public final class RuntimeMachineModelRegistry {
                     DynamicOverlayItemModel.Description.port(port.kind()));
         }
         if (block instanceof DataStorageBlock) {
+            return new RuntimeBlockModelDefinition(
+                    block,
+                    blockName,
+                    DynamicOverlayBakedModel.Kind.PORT,
+                    portStyleDefinition(block),
+                    DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/overlay_data_storage")));
+        }
+        if (block instanceof UpgradeBusBlock) {
             return new RuntimeBlockModelDefinition(
                     block,
                     blockName,

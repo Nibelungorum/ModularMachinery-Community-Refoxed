@@ -11,7 +11,9 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -37,6 +39,7 @@ public final class ModBlocks {
         registerSmartInterface();
         registerDataStorage();
         registerModuleCoupler();
+        for (UpgradeBusSize size : UpgradeBusSize.values()) registerUpgradeBus(size);
     }
 
     public static final DeferredHolder<Block, Block> BASIC_CASING = BLOCKS.get("basic_casing");
@@ -123,6 +126,13 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.MODULE_BRIDGE.get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new ModuleCouplerBlock(beTypeSupplier, properties)));
+    }
+
+    private static void registerUpgradeBus(UpgradeBusSize size) {
+        String name = "upgrade_bus_" + size.id();
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.BES.get(name).get();
+        BLOCKS.put(name, REGISTER.registerBlock(name,
+                properties -> new UpgradeBusBlock(size, beTypeSupplier, properties)));
     }
 
     public static void register(IEventBus bus) {

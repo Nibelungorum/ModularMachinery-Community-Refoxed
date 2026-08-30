@@ -21,6 +21,7 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
@@ -30,6 +31,8 @@ import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
+import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
@@ -123,6 +126,7 @@ public final class TestBootstrap {
         bindSmartInterface();
         bindDataStorage();
         bindModuleBridge();
+        bindUpgradeBuses();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         registerTestEvents();
         registerRuntimeTestContent();
@@ -412,6 +416,37 @@ public final class TestBootstrap {
         blockEntities.freeze();
         blocks.freeze();
         bind(ModBlockEntities.DATA_STORAGE, blockEntityType);
+    }
+
+    private static void bindUpgradeBuses() throws Exception {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
+        for (UpgradeBusSize size : UpgradeBusSize.values()) {
+            String name = "upgrade_bus_" + size.id();
+            UpgradeBusBlock block = new UpgradeBusBlock(size,
+                    () -> ModBlockEntities.BES.get(name).get(), Blocks.IRON_BLOCK.properties());
+            if (!BuiltInRegistries.BLOCK.containsKey(MMCR.id(name))) {
+                Registry.register(BuiltInRegistries.BLOCK, MMCR.id(name), block);
+            }
+            bind(ModBlocks.BLOCKS.get(name), block);
+            DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(name);
+            Item item = registerItem(itemHolder);
+            bind(itemHolder, item);
+            Item.BY_BLOCK.put(block, item);
+
+            BlockEntityType<?> blockEntityType;
+            if (BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(MMCR.id(name))) {
+                blockEntityType = BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(MMCR.id(name));
+            } else {
+                blockEntityType = new BlockEntityType<>((pos, state) -> new UpgradeBusBlockEntity(size, pos, state), block);
+                Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(name), blockEntityType);
+            }
+            bind(ModBlockEntities.BES.get(name), blockEntityType);
+        }
+        blockEntities.freeze();
+        blocks.freeze();
     }
 
     private static void bind(Object deferredHolder, Object value) throws Exception {

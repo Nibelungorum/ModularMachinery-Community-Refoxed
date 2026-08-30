@@ -11,6 +11,7 @@ import cn.howxu.mmcr.client.gui.FluidHatchScreen;
 import cn.howxu.mmcr.client.gui.ItemBusScreen;
 import cn.howxu.mmcr.client.gui.MachineControllerScreen;
 import cn.howxu.mmcr.client.gui.SmartInterfaceScreen;
+import cn.howxu.mmcr.client.gui.UpgradeBusScreen;
 import cn.howxu.mmcr.client.controller.ControllerModelInvalidator;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
@@ -94,6 +95,7 @@ public class Client {
         event.register(ModUIs.EXTENDED_FLUID.get(), ExtendedFluidScreen::new);
         event.register(ModUIs.COMBINED.get(), CombinedPortScreen::new);
         event.register(ModUIs.EXTENDED_COMBINED.get(), ExtendedCombinedScreen::new);
+        event.register(ModUIs.UPGRADE_BUS.get(), UpgradeBusScreen::new);
     }
 
     private static void registerModelLoaders(RegisterBlockStateModels event) {
