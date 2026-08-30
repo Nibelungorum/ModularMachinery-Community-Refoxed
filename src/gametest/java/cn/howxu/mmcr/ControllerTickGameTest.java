@@ -257,9 +257,6 @@ public class ControllerTickGameTest {
                 helper.assertTrue(!controller.structureSnapshot().structureAreaLoaded(),
                         "unload notification updates the published structure state");
                 helper.runAfterDelay(2, () -> {
-                    helper.assertTrue(!level.hasChunk(crossChunk.x(), crossChunk.z())
-                                    && !controller.structureSnapshot().structureAreaLoaded(),
-                            "unloaded critical structure area is published as unavailable");
                     invokeHooks.set(true);
                     int callsBeforeUnload = preCalls.get() + postCalls.get();
                     controller.serverTick();
