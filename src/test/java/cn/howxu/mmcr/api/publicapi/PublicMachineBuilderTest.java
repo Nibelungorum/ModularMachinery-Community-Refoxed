@@ -14,13 +14,41 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.datagen.ModRecipeProvider;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.advancements.Advancement;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.tags.TagLoader;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.common.conditions.ICondition;
+import net.neoforged.neoforge.common.Tags;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
+
+import net.minecraft.data.recipes.RecipeOutput;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -128,6 +156,99 @@ class PublicMachineBuilderTest {
         assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("bad_factory"))
                 .factory(factory -> factory.threadLimit(0)).build())
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("threadLimit");
+    }
+
+    @Test
+    void alloy_furnace_builtin_registers_modifier_items_and_base_replacements() {
+        Identifier machineId = MMCR.id("alloy_furnace");
+        var definitions = new MMCRMachineDefinationsEvent();
+        org.nibelungorum.builtin.ALLOY_FURNACE.registerDefinitions(definitions);
+
+        var structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        org.nibelungorum.builtin.ALLOY_FURNACE.registerStructures(structures);
+
+        Identifier diamondId = MMCR.id("alloy_furnace_diamond_speedup");
+        Identifier goldId = MMCR.id("alloy_furnace_gold_doubling");
+        assertThat(definitions.definitions()).containsKey(machineId);
+        assertThat(structures.modifierItems().get(diamondId)).singleElement()
+                .satisfies(stack -> assertThat(stack.is(Items.DIAMOND_BLOCK)).isTrue());
+        assertThat(structures.modifierItems().get(goldId)).singleElement()
+                .satisfies(stack -> assertThat(stack.is(Items.GOLD_BLOCK)).isTrue());
+
+        var stage = structures.structures().get(machineId).stages().getFirst();
+        assertThat(stage.pattern().predicates().get('M').block()).contains(Blocks.BLAST_FURNACE);
+        assertThat(stage.requirements().modifierReplacements().get('M'))
+                .extracting(ModifierUse::modifierId)
+                .containsExactly(diamondId, goldId);
+        assertThat(stage.requirements().modifierReplacements().get('M'))
+                .extracting(ModifierUse::replacement)
+                .allSatisfy(replacement -> assertThat(replacement).isNotNull());
+    }
+
+    @Test
+    void recipe_provider_generates_all_upgrade_bus_tiers_and_model_entries() throws Exception {
+        Method registerItem = TestBootstrap.class.getDeclaredMethod("registerItem", DeferredHolder.class);
+        registerItem.setAccessible(true);
+        Item modularium = (Item) registerItem.invoke(null, ModItems.MODULARIUM);
+        Method bind = TestBootstrap.class.getDeclaredMethod("bind", Object.class, Object.class);
+        bind.setAccessible(true);
+        bind.invoke(null, ModItems.MODULARIUM, modularium);
+        installRecipeTestTags();
+
+        Map<Identifier, Recipe<?>> recipes = new LinkedHashMap<>();
+        RecipeOutput output = new RecipeOutput() {
+            @Override
+            public void accept(ResourceKey<Recipe<?>> id, Recipe<?> recipe, AdvancementHolder advancement,
+                               ICondition... conditions) {
+                recipes.put(id.identifier(), recipe);
+            }
+
+            @Override
+            public Advancement.Builder advancement() {
+                return Advancement.Builder.recipeAdvancement();
+            }
+
+            @Override
+            public void includeRootAdvancement() {
+            }
+        };
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.of(BuiltInRegistries.ITEM));
+        assertThat(lookup.lookupOrThrow(Registries.ITEM).get(Tags.Items.INGOTS_COPPER)).isPresent();
+        ModRecipeProvider provider = new ModRecipeProvider(lookup, output);
+        Method buildRecipes = ModRecipeProvider.class.getDeclaredMethod("buildRecipes");
+        buildRecipes.setAccessible(true);
+        buildRecipes.invoke(provider);
+
+        for (UpgradeBusSize size : UpgradeBusSize.values()) {
+            String id = "upgrade_bus_" + size.id();
+            assertThat(recipes).containsKey(MMCR.id(id));
+            assertThat(PublicMachineBuilderTest.class.getResource("/assets/mmcr/models/block/" + id + ".json"))
+                    .as("block model %s", id).isNotNull();
+            assertThat(PublicMachineBuilderTest.class.getResource("/assets/mmcr/models/item/" + id + ".json"))
+                    .as("item model %s", id).isNotNull();
+            assertThat(ModItems.ITEMS).containsKey(id);
+        }
+    }
+
+    private static void installRecipeTestTags() {
+        Map<TagKey<Item>, List<Holder<Item>>> tags = new LinkedHashMap<>();
+        tags.put(Tags.Items.INGOTS_COPPER, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.COPPER_INGOT)));
+        tags.put(Tags.Items.INGOTS_IRON, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.IRON_INGOT)));
+        tags.put(Tags.Items.DUSTS_REDSTONE, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.REDSTONE)));
+        tags.put(Tags.Items.DUSTS_GLOWSTONE, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.GLOWSTONE_DUST)));
+        tags.put(Tags.Items.STORAGE_BLOCKS_REDSTONE,
+                List.of(BuiltInRegistries.ITEM.wrapAsHolder(Blocks.REDSTONE_BLOCK.asItem())));
+        tags.put(Tags.Items.GEMS_DIAMOND, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.DIAMOND)));
+        tags.put(Tags.Items.CHESTS, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.CHEST)));
+        tags.put(Tags.Items.GLASS_PANES, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.GLASS_PANE)));
+        tags.put(Tags.Items.GEMS_LAPIS, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.LAPIS_LAZULI)));
+        tags.put(Tags.Items.GEMS_AMETHYST, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.AMETHYST_SHARD)));
+        tags.put(Tags.Items.INGOTS_GOLD, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.GOLD_INGOT)));
+        tags.put(Tags.Items.INGOTS_NETHERITE, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.NETHERITE_INGOT)));
+        tags.put(ItemTags.create(Identifier.withDefaultNamespace("bookshelf_books")),
+                List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.BOOK)));
+        BuiltInRegistries.ITEM.prepareTagReload(new TagLoader.LoadResult<>(Registries.ITEM, tags)).apply();
+        assertThat(BuiltInRegistries.ITEM.get(Tags.Items.INGOTS_COPPER)).isPresent();
     }
 
     @Test

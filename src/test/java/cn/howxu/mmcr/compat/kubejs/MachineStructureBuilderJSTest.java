@@ -179,21 +179,27 @@ class MachineStructureBuilderJSTest {
     void chained_builder_modifier_use_creates_an_optional_id_only_replacement() {
         ModifierUse use = new KubeJSApi().modifierUse("mmcr:diamond_speedup",
                 new KubeJSApi().block("minecraft:diamond_block"));
+        ModifierUse goldUse = new KubeJSApi().modifierUse("mmcr:gold_doubling",
+                new KubeJSApi().block("minecraft:gold_block"));
 
         var definition = new MachineStructureBuilderJS("test:pattern_entry")
                 .pattern("MM")
                 .set("M", Blocks.BLAST_FURNACE)
                 .modifier("M", use)
+                .modifier("M", goldUse)
                 .createObject();
 
         assertThat(definition.pattern().pattern())
                 .containsEntry(new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))
                 .containsEntry(new BlockPos(0, 0, 0), new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
         var replacements = definition.requirements().modifierReplacements().get('M');
-        assertThat(replacements).hasSize(1);
+        assertThat(replacements).hasSize(2);
         assertThat(replacements.getFirst().getModifierId()).isEqualTo(Identifier.parse("mmcr:diamond_speedup"));
         assertThat(replacements.getFirst().getReplacement().matches(Blocks.DIAMOND_BLOCK.defaultBlockState())).isTrue();
         assertThat(replacements.getFirst().getModifiers()).isEmpty();
+        assertThat(replacements.get(1).getModifierId()).isEqualTo(Identifier.parse("mmcr:gold_doubling"));
+        assertThat(replacements.get(1).getReplacement().matches(Blocks.GOLD_BLOCK.defaultBlockState())).isTrue();
+        assertThat(replacements.get(1).getModifiers()).isEmpty();
     }
 
     @Test
