@@ -40,6 +40,8 @@ import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -395,6 +397,57 @@ class CraftingRuntimeTest {
         RuntimeTestFixtures.republish(controller);
         runtime.tick();
         assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+    }
+
+    @Test
+    void upgrade_bus_mutation_invalidates_active_recipe_without_rollback_or_output() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        UpgradeBusBlockEntity bus = new UpgradeBusBlockEntity(UpgradeBusSize.NORMAL, new BlockPos(3, 0, 0),
+                ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
+        AtomicReference<List<ItemStack>> observedUpgradeItems = new AtomicReference<>();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> observedUpgradeItems.set(context.machineContext().upgradeItems())).build()));
+        bus.itemStackHandler().setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        refreshUpgradeBus(controller, bus);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_upgrade_bus_invalidation", 1, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(observedUpgradeItems.get()).singleElement()
+                .satisfies(item -> assertThat(item.getItem()).isEqualTo(Items.IRON_INGOT));
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(saved);
+        assertThat(saved.buildResult().get("upgrade_content_revision")).isNotNull();
+
+        bus.itemStackHandler().setStackInSlot(0, stack(Items.GOLD_INGOT, 1));
+        refreshUpgradeBus(controller, bus);
+        ItemStack changedComponent = stack(Items.IRON_INGOT, 1);
+        changedComponent.set(DataComponents.MAX_STACK_SIZE, 16);
+        bus.itemStackHandler().setStackInSlot(0, changedComponent);
+        refreshUpgradeBus(controller, bus);
+        bus.itemStackHandler().setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        refreshUpgradeBus(controller, bus);
+
+        assertThat(runtime.versionsCurrent()).isFalse();
+        runtime.tick();
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+
+        bus.itemStackHandler().setStackInSlot(0, stack(Items.GOLD_INGOT, 1));
+        refreshUpgradeBus(controller, bus);
+        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(observedUpgradeItems.get()).singleElement()
+                .satisfies(item -> assertThat(item.getItem()).isEqualTo(Items.GOLD_INGOT));
     }
 
     @Test
@@ -1130,6 +1183,12 @@ class CraftingRuntimeTest {
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {
         return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), duration,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), new java.util.ArrayList<>(requirements));
+    }
+
+    private static void refreshUpgradeBus(MachineControllerBlockEntity controller, UpgradeBusBlockEntity bus) {
+        controller.componentRuntime().refreshUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(
+                bus.getBlockPos().subtract(controller.getBlockPos()), bus.itemSnapshot())));
+        RuntimeTestFixtures.republish(controller);
     }
 
     private static void assertFinishRetryGate(MachineBehavior behavior, AtomicInteger callbacks) {

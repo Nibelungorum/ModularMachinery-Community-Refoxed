@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
@@ -45,6 +47,8 @@ public final class GameTestRegistry {
         });
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
+        register(event, "upgrade_bus_invalidation", 100,
+                helper -> new UpgradeBusGameTest().optionalBusesInvalidateActiveRecipe(helper));
         register(event, "controller_tick_recipe_hooks", 100,
                 helper -> new ControllerTickGameTest().recipeMachineHooksPublishTextAndRespectRedstone(helper));
         register(event, "controller_tick_partial_io", 100,
@@ -126,7 +130,7 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
-        for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "iron_compressor",
+        for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
@@ -148,6 +152,9 @@ public final class GameTestRegistry {
             if (name.equals("expandable_structure_vertical_roll")) {
                 builder.controller(controller -> controller.allowVerticalFacing());
             }
+            if (name.equals("upgrade_bus_test")) {
+                builder.allowModifiers();
+            }
             MachineDefinition definition = builder.build();
             if (name.equals("distillation_tower_test") || name.equals("expandable_structure_stages")
                     || name.equals("expandable_structure_vertical_roll")) {
@@ -163,12 +170,27 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
-        for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "iron_compressor",
+        Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
+        event.registerModifier(upgradeBusModifierId,
+                ModifierDefinition.of("", "input", 0.0F, "add", false));
+        for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
             event.registerStructure(id, structure -> {
                 BlockPredicate casing = BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get());
                 BlockPredicate controller = BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get());
+                if (name.equals("upgrade_bus_test")) {
+                    structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("BICOB")
+                            .where('B', casing)
+                            .where('I', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_input_bus").get()))
+                            .where('C', controller)
+                            .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_output_bus").get()))
+                            .controller('C'))
+                            .modifier('B', ModifierUse.of(upgradeBusModifierId,
+                                    BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))));
+                    return structure;
+                }
                 if (name.equals("task7_tick_io")) {
                     structure.fullStructure(stage -> stage.pattern(pattern -> pattern
                             .layer("IICOO")

@@ -57,6 +57,7 @@ public final class CraftingRuntime {
     private long capabilityVersion = Long.MIN_VALUE;
     private long modifierVersion = Long.MIN_VALUE;
     private long componentStateVersion = Long.MIN_VALUE;
+    private long upgradeContentRevision = Long.MIN_VALUE;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private CraftingStatus status = CraftingStatus.IDLE;
     private boolean finishCommitInProgress;
@@ -326,7 +327,8 @@ public final class CraftingRuntime {
         return structureVersion == runtime.structure().version()
                 && capabilityVersion == runtime.capabilityVersion()
                 && modifierVersion == runtime.modifierVersion()
-                && componentStateVersion == runtime.stateVersion();
+                && componentStateVersion == runtime.stateVersion()
+                && upgradeContentRevision == runtime.upgradeContentRevision();
     }
 
     public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
@@ -391,6 +393,7 @@ public final class CraftingRuntime {
         capabilityVersion = restoredCapabilityVersion;
         modifierVersion = restoredModifierVersion;
         componentStateVersion = restoredComponentStateVersion;
+        upgradeContentRevision = runtime.upgradeContentRevision();
         effectiveRequirements = MachineRequirement.copyList(requirements);
         effectiveOutputs = MachineOutput.copyList(outputs);
         Set<Integer> consumed = new HashSet<>();
@@ -429,6 +432,7 @@ public final class CraftingRuntime {
             output.putLong("capability_version", capabilityVersion);
             output.putLong("modifier_version", modifierVersion);
             output.putLong("component_state_version", componentStateVersion);
+            output.putLong("upgrade_content_revision", upgradeContentRevision);
             activeRecipe.serialize(output.child("recipe"), registryAccess());
         }
     }
@@ -447,12 +451,18 @@ public final class CraftingRuntime {
             failLoad();
             return;
         }
+        long restoredUpgradeContentRevision = input.getLongOr("upgrade_content_revision", Long.MIN_VALUE);
         restore(loaded.recipe(), domain,
                 input.getLongOr("structure_version", Long.MIN_VALUE),
                 input.getLongOr("capability_version", Long.MIN_VALUE),
                 input.getLongOr("modifier_version", Long.MIN_VALUE),
                 input.getLongOr("component_state_version", Long.MIN_VALUE));
-        if (active()) restoreFailure(hasFailure, failureReason);
+        if (active()) {
+            if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
+                upgradeContentRevision = restoredUpgradeContentRevision;
+            }
+            restoreFailure(hasFailure, failureReason);
+        }
     }
 
     private void failLoad() {
@@ -554,6 +564,7 @@ public final class CraftingRuntime {
         capabilityVersion = runtime.capabilityVersion();
         modifierVersion = runtime.modifierVersion();
         componentStateVersion = runtime.stateVersion();
+        upgradeContentRevision = runtime.upgradeContentRevision();
         resourceDomain = controller.resourceDomain();
     }
 
