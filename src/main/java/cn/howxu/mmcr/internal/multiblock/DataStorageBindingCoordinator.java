@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -16,10 +17,17 @@ public final class DataStorageBindingCoordinator {
         Machine machine = controller.currentRuntimeSnapshot().structure().machine();
         if (machine == null) machine = controller.currentRuntimeSnapshot().structure().configuredMachine();
         if (machine == null) return;
-        for (DataStorageBlockEntity storage : found) {
-            if (storage.claimController(controller.getBlockPos(), machine.registryName())) {
-                storage.linkControllerAppearance(controller.getBlockPos(), machine.appearance().formedPortBaseTexture());
+        boolean selected = false;
+        for (DataStorageBlockEntity storage : found.stream()
+                .sorted(Comparator.comparing(DataStorageBlockEntity::getBlockPos))
+                .toList()) {
+            if (!storage.claimController(controller.getBlockPos(), machine.registryName())) continue;
+            if (selected) {
+                storage.releaseController(controller.getBlockPos());
+                continue;
             }
+            storage.linkControllerAppearance(controller.getBlockPos(), machine.appearance().formedPortBaseTexture());
+            selected = true;
         }
     }
 

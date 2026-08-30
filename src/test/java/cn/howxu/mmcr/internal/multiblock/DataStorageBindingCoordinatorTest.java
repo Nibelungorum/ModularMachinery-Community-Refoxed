@@ -90,6 +90,21 @@ class DataStorageBindingCoordinatorTest {
         assertThat(removed.controllerPosition()).isEmpty();
     }
 
+    @Test
+    void reconcile_binds_only_the_first_storage_by_position() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
+                MMCR.id("test_cube"), BlockPos.ZERO);
+        DataStorageBlockEntity lower = storage(new BlockPos(-1, 0, 0));
+        DataStorageBlockEntity higher = storage(new BlockPos(1, 0, 0));
+
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine(), higher, lower);
+
+        assertThat(lower.controllerPosition()).contains(BlockPos.ZERO);
+        assertThat(higher.controllerPosition()).isEmpty();
+        assertThat(controller.behaviorContext().dataStorages())
+                .containsOnlyKeys(lower.getBlockPos());
+    }
+
     private static DataStorageBlockEntity storage(BlockPos pos) {
         return (DataStorageBlockEntity) ModBlockEntities.DATA_STORAGE.get().create(
                 pos, ModBlocks.DATA_STORAGE.get().defaultBlockState());
