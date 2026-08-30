@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
@@ -17,7 +16,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record StructureRequirements(
-        Map<Character, List<ModifierReplacement>> modifierReplacements,
+        Map<Character, List<ModifierUse>> modifierReplacements,
         Map<Character, Identifier> levelSlots) {
 
     public static final StructureRequirements EMPTY = new StructureRequirements(Map.of(), Map.of());
@@ -35,39 +34,22 @@ public record StructureRequirements(
         return new Builder();
     }
 
-    public record ModifierReplacement(
-            Identifier modifierId,
-            BlockPredicate replacement,
-            ItemStack descriptiveStack) {
-
-        public ModifierReplacement {
-            Objects.requireNonNull(modifierId, "modifierId");
-            Objects.requireNonNull(replacement, "replacement");
-            descriptiveStack = descriptiveStack == null ? ItemStack.EMPTY : descriptiveStack.copy();
-        }
-
-        @Override
-        public ItemStack descriptiveStack() {
-            return descriptiveStack.copy();
-        }
-    }
-
     /**
      * Builder for level slot and modifier declarations.
      *
      * @author howxu <dev@howxu.cn>
      */
     public static final class Builder {
-        private final Map<Character, List<ModifierReplacement>> modifiers = new LinkedHashMap<>();
+        private final Map<Character, List<ModifierUse>> modifiers = new LinkedHashMap<>();
         private final Map<Character, Identifier> levelSlots = new LinkedHashMap<>();
 
         public Builder modifier(char symbol, Identifier modifierId) {
-            return modifier(symbol, modifierId, BlockPredicate.block(Blocks.AIR), ItemStack.EMPTY);
+            return modifier(symbol, ModifierUse.of(modifierId, BlockPredicate.block(Blocks.AIR)));
         }
 
-        public Builder modifier(char symbol, Identifier modifierId, BlockPredicate replacement, ItemStack descriptiveStack) {
+        public Builder modifier(char symbol, ModifierUse use) {
             this.modifiers.computeIfAbsent(symbol, ignored -> new ArrayList<>())
-                    .add(new ModifierReplacement(modifierId, replacement, descriptiveStack));
+                    .add(Objects.requireNonNull(use, "modifier use"));
             return this;
         }
 
@@ -85,8 +67,8 @@ public record StructureRequirements(
         }
     }
 
-    private static Map<Character, List<ModifierReplacement>> copyModifierMap(Map<Character, List<ModifierReplacement>> source) {
-        Map<Character, List<ModifierReplacement>> copy = new LinkedHashMap<>();
+    private static Map<Character, List<ModifierUse>> copyModifierMap(Map<Character, List<ModifierUse>> source) {
+        Map<Character, List<ModifierUse>> copy = new LinkedHashMap<>();
         source.forEach((symbol, replacements) -> {
             Objects.requireNonNull(symbol, "modifier symbol");
             copy.put(symbol, List.copyOf(replacements));

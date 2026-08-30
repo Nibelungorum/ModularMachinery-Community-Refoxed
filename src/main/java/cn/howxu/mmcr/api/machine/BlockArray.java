@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 
 import java.util.ArrayList;
@@ -186,6 +187,16 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
             return this;
         }
 
+        public Builder set(char symbol, BlockPredicate predicate, ModifierUse... modifiers) {
+            set(symbol, predicate);
+            if (modifiers != null) {
+                for (ModifierUse modifier : modifiers) {
+                    requirements.modifier(symbol, modifier.modifierId(), toBlockPredicate(modifier.replacement()));
+                }
+            }
+            return this;
+        }
+
         public MachineStructureRequirements requirements() {
             return requirements.build(build());
         }
@@ -250,6 +261,25 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
                 symbolsByPosition.putAll(normalizedSymbols);
             }
             return new BlockArray(entries, Map.of(), symbolsByPosition);
+        }
+
+        private static BlockPredicate toBlockPredicate(
+                cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+            if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();
+            if (predicate.blockState().isPresent()) {
+                return new BlockPredicate.OfBlockState(predicate.blockState().get());
+            }
+            if (predicate.block().isPresent()) {
+                return new BlockPredicate.OfBlock(predicate.block().get());
+            }
+            if (predicate.blockSupplier().isPresent()) {
+                return new BlockPredicate.DeferredBlock(predicate.blockSupplier().get());
+            }
+            if (predicate.tag().isPresent()) {
+                return new BlockPredicate.OfTag(predicate.tag().get());
+            }
+            return new BlockPredicate.AnyOf(predicate.alternatives().stream()
+                    .map(Builder::toBlockPredicate).toList());
         }
     }
 }

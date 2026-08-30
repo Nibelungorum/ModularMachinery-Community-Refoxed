@@ -3,7 +3,6 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
@@ -11,12 +10,12 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -160,8 +159,8 @@ class PublicMachineBuilderTest {
                                 .minEnergyInput(PortTiers.EnergyTier.NORMAL))
                         .requirements(requirements -> requirements
                                 .levelSlot('C', MMCR.id("coil"))
-                                 .modifier('C', MMCR.id("gold_modifier"), BlockPredicate.block(Blocks.GOLD_BLOCK),
-                                         new ItemStack(Blocks.GOLD_BLOCK))))
+                                 .modifier('C', ModifierUse.of(MMCR.id("gold_modifier"),
+                                         BlockPredicate.block(Blocks.GOLD_BLOCK)))))
                 .build(machineId);
 
         var stage = structure.stages().getFirst();

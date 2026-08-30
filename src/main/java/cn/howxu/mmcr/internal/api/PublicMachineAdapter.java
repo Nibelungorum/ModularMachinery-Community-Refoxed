@@ -29,7 +29,6 @@ import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
-import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
@@ -171,25 +170,19 @@ public final class PublicMachineAdapter {
 
     public static MachineStructureDefinition toStructureDefinition(
             cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure,
-            Map<Identifier, ModifierDefinition> modifiers) {
+            Map<Identifier, ModifierDefinition> ignoredModifiers) {
         return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
-                .map(stage -> toDeclaration(stage, modifiers, structure.stateSensitive())).toList());
+                .map(stage -> toDeclaration(stage, structure.stateSensitive())).toList());
     }
 
     public static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage) {
-        return toDeclaration(stage, Map.of());
+        return toDeclaration(stage, false);
     }
 
-    private static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage,
-            Map<Identifier, ModifierDefinition> modifiers) {
-        return toDeclaration(stage, modifiers, false);
-    }
-
-    private static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage,
-            Map<Identifier, ModifierDefinition> modifiers, boolean stateSensitive) {
+    private static MachineStructureDefinition.Declaration toDeclaration(StructureStage stage, boolean stateSensitive) {
         return new MachineStructureDefinition.Declaration(toDeclarationKind(stage.kind()), toBlockArray(stage.pattern()),
                 toPortRequirementSpec(stage.portRequirements()), toPortTierRequirementSpec(stage.portTiers()),
-                List.of(), toStructureRequirements(stage.requirements(), modifiers), stateSensitive);
+                List.of(), toStructureRequirements(stage.requirements()), stateSensitive);
     }
 
     private static cn.howxu.mmcr.api.machine.BlockPredicate toBlockPredicate(BlockPredicate predicate) {
@@ -256,16 +249,11 @@ public final class PublicMachineAdapter {
                 .toList());
     }
 
-    private static MachineStructureRequirements toStructureRequirements(StructureRequirements requirements,
-            Map<Identifier, ModifierDefinition> modifiers) {
+    private static MachineStructureRequirements toStructureRequirements(StructureRequirements requirements) {
         MachineStructureRequirements.Builder builder = MachineStructureRequirements.builder();
         requirements.levelSlots().forEach(builder::levelSlot);
-        requirements.modifierReplacements().forEach((symbol, replacements) -> replacements.forEach(replacement -> {
-            ModifierDefinition definition = modifiers.get(replacement.modifierId());
-            if (definition == null) throw new ApiRegistrationException("Unknown machine modifier " + replacement.modifierId());
-            builder.modifier(symbol, new SingleBlockModifierReplacement(replacement.modifierId().toString(),
-                    toBlockPredicate(replacement.replacement()), definition.modifiers(), replacement.descriptiveStack()));
-        }));
+        requirements.modifierReplacements().forEach((symbol, uses) -> uses.forEach(use ->
+                builder.modifier(symbol, use.modifierId(), toBlockPredicate(use.replacement()))));
         return builder.build();
     }
 

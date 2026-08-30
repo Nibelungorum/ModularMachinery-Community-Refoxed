@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -9,6 +10,15 @@ import java.util.Objects;
 public class SingleBlockModifierReplacement extends AbstractModifierReplacement {
 
     private final BlockPredicate replacement;
+
+    public SingleBlockModifierReplacement(String modifierName, BlockPredicate replacement) {
+        super(modifierName, List.of(), List.of(), ItemStack.EMPTY);
+        this.replacement = Objects.requireNonNull(replacement, "replacement");
+    }
+
+    public SingleBlockModifierReplacement(Identifier modifierId, BlockPredicate replacement) {
+        this(Objects.requireNonNull(modifierId, "modifierId").toString(), replacement);
+    }
 
     public SingleBlockModifierReplacement(
             String modifierName,
@@ -21,6 +31,10 @@ public class SingleBlockModifierReplacement extends AbstractModifierReplacement 
 
     public BlockPredicate getReplacement() {
         return replacement;
+    }
+
+    public Identifier getModifierId() {
+        return Identifier.parse(getModifierName());
     }
 
     @Override

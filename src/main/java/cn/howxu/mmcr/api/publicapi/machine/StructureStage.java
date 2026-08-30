@@ -43,7 +43,7 @@ public record StructureStage(
         private PatternDefinition pattern;
         private PortRequirements portRequirements = PortRequirements.none();
         private PortTiers portTiers = PortTiers.none();
-        private StructureRequirements requirements = StructureRequirements.EMPTY;
+        private final StructureRequirements.Builder requirements = StructureRequirements.builder();
 
         public Builder full() {
             kind = Kind.FULL;
@@ -76,12 +76,17 @@ public record StructureStage(
         }
 
         public Builder requirements(UnaryOperator<StructureRequirements.Builder> builder) {
-            requirements = Objects.requireNonNull(builder, "builder").apply(StructureRequirements.builder()).build();
+            Objects.requireNonNull(builder, "builder").apply(requirements);
+            return this;
+        }
+
+        public Builder modifier(char symbol, ModifierUse use) {
+            requirements.modifier(symbol, use);
             return this;
         }
 
         public StructureStage build() {
-            return new StructureStage(kind, pattern, portRequirements, portTiers, requirements);
+            return new StructureStage(kind, pattern, portRequirements, portTiers, requirements.build());
         }
     }
 }

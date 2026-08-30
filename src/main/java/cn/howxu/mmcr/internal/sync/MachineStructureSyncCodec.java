@@ -7,18 +7,15 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -47,9 +44,7 @@ public final class MachineStructureSyncCodec {
     private static final int MAX_REPLACEMENTS = 1024;
     private static final int MAX_SYMBOL_REQUIREMENTS = 256;
     private static final int MAX_CHILD_PREDICATES = 1024;
-    private static final int MAX_MODIFIERS = 1024;
     private static final int MAX_FACES = Direction.values().length;
-    private static final int MAX_STACK_COUNT = 65536;
 
     private MachineStructureSyncCodec() {
     }
@@ -356,58 +351,13 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeReplacement(RegistryFriendlyByteBuf buf, SingleBlockModifierReplacement replacement) {
-        ByteBufCodecs.STRING_UTF8.encode(buf, replacement.getModifierName());
+        Identifier.STREAM_CODEC.encode(buf, replacement.getModifierId());
         writeBlockPredicate(buf, replacement.getReplacement());
-        writeRecipeModifiers(buf, replacement.getModifiers());
-        writeItemStack(buf, replacement.getDescriptiveStack());
     }
 
     private static SingleBlockModifierReplacement readReplacement(RegistryFriendlyByteBuf buf) {
-        return new SingleBlockModifierReplacement(ByteBufCodecs.STRING_UTF8.decode(buf),
-                readBlockPredicate(buf), readRecipeModifiers(buf), readItemStack(buf));
-    }
-
-    private static void writeItemStack(RegistryFriendlyByteBuf buf, ItemStack stack) {
-        if (stack.isEmpty()) {
-            buf.writeVarInt(0);
-            return;
-        }
-        buf.writeVarInt(stack.getCount());
-        Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.ITEM.getKey(stack.getItem()));
-        DataComponentPatch.STREAM_CODEC.encode(buf, stack.getComponentsPatch());
-    }
-
-    private static ItemStack readItemStack(RegistryFriendlyByteBuf buf) {
-        int count = buf.readVarInt();
-        if (count < 0 || count > MAX_STACK_COUNT) {
-            throw new IllegalArgumentException("Invalid item stack count: " + count);
-        }
-        if (count == 0) return ItemStack.EMPTY;
-        var item = BuiltInRegistries.ITEM.getValue(Identifier.STREAM_CODEC.decode(buf));
-        return new ItemStack(item.builtInRegistryHolder(), count, DataComponentPatch.STREAM_CODEC.decode(buf));
-    }
-
-    private static void writeRecipeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {
-        checkSize(values.size(), MAX_MODIFIERS, "recipe modifier");
-        buf.writeVarInt(values.size());
-        for (RecipeModifier value : values) {
-            ByteBufCodecs.STRING_UTF8.encode(buf, value.getTarget());
-            buf.writeEnum(value.getIOTarget());
-            buf.writeFloat(value.getModifier());
-            buf.writeEnum(value.getOperation());
-            buf.writeBoolean(value.affectsChance());
-        }
-    }
-
-    private static List<RecipeModifier> readRecipeModifiers(RegistryFriendlyByteBuf buf) {
-        int count = buf.readVarInt();
-        checkSize(count, MAX_MODIFIERS, "recipe modifier");
-        List<RecipeModifier> values = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-            values.add(new RecipeModifier(ByteBufCodecs.STRING_UTF8.decode(buf), buf.readEnum(RecipeModifier.IOType.class),
-                    buf.readFloat(), buf.readEnum(RecipeModifier.Operation.class), buf.readBoolean()));
-        }
-        return List.copyOf(values);
+        return new SingleBlockModifierReplacement(Identifier.STREAM_CODEC.decode(buf),
+                readBlockPredicate(buf));
     }
 
     private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<Character, Identifier> values) {

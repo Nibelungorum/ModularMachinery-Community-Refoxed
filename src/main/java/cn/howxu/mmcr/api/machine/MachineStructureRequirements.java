@@ -93,6 +93,10 @@ public record MachineStructureRequirements(
             return this;
         }
 
+        public Builder modifier(char symbol, Identifier modifierId, BlockPredicate replacement) {
+            return modifier(symbol, new SingleBlockModifierReplacement(modifierId, replacement));
+        }
+
         public Builder levelSlot(char symbol, Identifier typeId) {
             Objects.requireNonNull(typeId, "typeId");
             Identifier existing = levelSlots.putIfAbsent(symbol, typeId);

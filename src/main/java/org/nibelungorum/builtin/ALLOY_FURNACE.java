@@ -8,10 +8,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
@@ -21,6 +18,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import static cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.id;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
+import static cn.howxu.mmcr.api.publicapi.machine.ModifierUse.of;
 
 /**
  * @description: TODO
@@ -86,8 +84,8 @@ public class ALLOY_FURNACE {
                                     .where('M', block(Blocks.BLAST_FURNACE))
                                     .controller('C'))
                             .requirements(r -> r
-                                    .modifier('M', id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK), new ItemStack(Holder.direct(Items.DIAMOND_BLOCK, DataComponentMap.EMPTY)))
-                                    .modifier('M', id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK), new ItemStack(Holder.direct(Items.GOLD_BLOCK, DataComponentMap.EMPTY)))
+                                    .modifier('M', of(id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK)))
+                                    .modifier('M', of(id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK)))
                             ))
                     .build(ALLOY_FURNACE);
             event.registerStructure(structure);

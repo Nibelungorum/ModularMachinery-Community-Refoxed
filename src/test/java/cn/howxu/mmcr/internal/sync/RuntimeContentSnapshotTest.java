@@ -133,14 +133,12 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void structureSyncCodecRoundTripsModifierReplacementDescriptiveStack() {
+    void structureSyncCodecRoundTripsModifierReplacementIdAndPredicate() {
         BlockArray blockArray = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
                 Map.of(), Map.of(BlockPos.ZERO, 'M'));
         MachineStructureRequirements requirements = MachineStructureRequirements.builder()
-                .modifier('M', new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
-                        List.of(new RecipeModifier("input_bus", RecipeModifier.IOType.INPUT, 2F,
-                                RecipeModifier.Operation.MULTIPLY, false)),
-                        new ItemStack(Items.DIAMOND_BLOCK)))
+                .modifier('M', new SingleBlockModifierReplacement(MMCR.id("speed"),
+                        new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK)))
                 .build(blockArray);
         MachineStructureDefinition original = new MachineStructureDefinition(MMCR.id("modifier_sync"), blockArray,
                 PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), requirements);
@@ -151,7 +149,9 @@ class RuntimeContentSnapshotTest {
 
         SingleBlockModifierReplacement decodedReplacement = decoded.declarations().getFirst()
                 .requirements().modifierReplacements().get('M').getFirst();
-        assertThat(decodedReplacement.getDescriptiveStack().getItem()).isEqualTo(Items.DIAMOND_BLOCK);
+        assertThat(decodedReplacement.getModifierId()).isEqualTo(MMCR.id("speed"));
+        assertThat(decodedReplacement.getModifiers()).isEmpty();
+        assertThat(decodedReplacement.getDescriptiveStack().isEmpty()).isTrue();
         assertThat(decodedReplacement.getReplacement()).isEqualTo(new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK));
     }
 
@@ -544,11 +544,8 @@ class RuntimeContentSnapshotTest {
                 BlockPos.ZERO.east(), 'L', BlockPos.ZERO.north(), 'M'));
         MachineStructureRequirements requirements = MachineStructureRequirements.builder()
                 .levelSlot('L', MMCR.id("coil"))
-                .modifier('M', new SingleBlockModifierReplacement(
-                        "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK),
-                        List.of(new RecipeModifier("input_bus", RecipeModifier.IOType.INPUT, 2F,
-                                RecipeModifier.Operation.MULTIPLY, false)),
-                        new ItemStack(Items.DIAMOND_BLOCK)))
+                .modifier('M', new SingleBlockModifierReplacement(MMCR.id("speed"),
+                        new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK)))
                 .build(blockArray);
         return new MachineStructureDefinition(id, blockArray, PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), requirements);
