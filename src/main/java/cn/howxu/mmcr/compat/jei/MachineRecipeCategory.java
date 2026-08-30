@@ -322,7 +322,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static ItemStack jeiItemStack(ItemStack stack) {
-        return stack.copyWithCount(1);
+        return stack.copy();
     }
 
     static String describeAddedItemStack(ItemStack stack) {
@@ -347,14 +347,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid -> {
                 setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
                 jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                        .add(fluid.value(), FLUID_SLOT_CAPACITY);
+                        .add(fluid.value(), amount);
                 jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
             });
         } else {
             var stack = recipe.fluidOutputs().get(entry.index());
             setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                    .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
+                    .add(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, stack.getAmount()));
         }
     }

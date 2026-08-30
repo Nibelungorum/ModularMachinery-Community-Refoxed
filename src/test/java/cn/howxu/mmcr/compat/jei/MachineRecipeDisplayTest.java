@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -44,9 +45,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.Dynamic;
@@ -103,14 +107,58 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void jeiItemStackUsesOneAsDisplayCountAndPreservesSourceStack() {
+    void jeiItemStackPreservesRecipeCountAndSourceStack() {
         ItemStack source = new ItemStack(Items.IRON_INGOT, 1_234);
 
         ItemStack jeiStack = MachineRecipeCategory.jeiItemStack(source);
 
         assertThat(source.getCount()).isEqualTo(1_234);
         assertThat(jeiStack.getItem()).isSameAs(source.getItem());
-        assertThat(jeiStack.getCount()).isEqualTo(1);
+        assertThat(jeiStack.getCount()).isEqualTo(1_234);
+    }
+
+    @Test
+    void fluidSlotsUseRecipeAmountsForInputAndOutput() throws Exception {
+        MachineRecipe recipe = new MachineRecipe(
+                MMCR.id("jei_fluid_slot_amount"),
+                MMCR.id("blast_furnace"),
+                20,
+                List.of(new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 500)),
+                List.of(),
+                List.of(),
+                0,
+                1,
+                false,
+                List.of(new FluidStack(Fluids.WATER.builtInRegistryHolder(), 750)));
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        List<Long> amounts = new ArrayList<>();
+        Method addFluid = MachineRecipeCategory.class.getDeclaredMethod(
+                "addFluid", IRecipeSlotBuilder.class, MachineRecipeDisplay.class,
+                MachineRecipeLayout.EntryPlan.class, boolean.class);
+        addFluid.setAccessible(true);
+
+        addFluid.invoke(null, recordingSlot(amounts), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 0), true);
+        addFluid.invoke(null, recordingSlot(amounts), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 0), false);
+
+        assertThat(amounts).containsExactly(500L, 750L);
+    }
+
+    private static IRecipeSlotBuilder recordingSlot(List<Long> amounts) {
+        return (IRecipeSlotBuilder) Proxy.newProxyInstance(
+                IRecipeSlotBuilder.class.getClassLoader(),
+                new Class<?>[]{IRecipeSlotBuilder.class},
+                (proxy, method, args) -> {
+                    if ("add".equals(method.getName()) && args != null && args.length >= 2
+                            && args[1] instanceof Long amount) {
+                        amounts.add(amount);
+                    }
+                    if (method.getReturnType().isInstance(proxy)) return proxy;
+                    if (method.getReturnType() == boolean.class) return false;
+                    if (method.getReturnType() == int.class) return 0;
+                    return null;
+                });
     }
 
     @Test

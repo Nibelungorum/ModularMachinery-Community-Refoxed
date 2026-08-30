@@ -42,7 +42,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final int MATERIAL_Y_1X = 279;
     private static final int MATERIAL_STEP = 18;
     private static final int MATERIAL_SLOT_COUNT = 9;
-    private static final int TRANSFER_BUTTON_X = 171;
+    static final int TRANSFER_BUTTON_X = 152;
     private static final int TRANSFER_BUTTON_Y = 129;
 
     private final IDrawable icon;
