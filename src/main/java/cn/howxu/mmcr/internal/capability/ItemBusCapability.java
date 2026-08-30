@@ -55,6 +55,11 @@ public final class ItemBusCapability implements MachineCapability {
         return port == null ? BlockPos.ZERO : port.getBlockPos();
     }
 
+    public boolean supportsLargeStacks() {
+        return port != null && (port.kind().extendedItemBusSize().isPresent()
+                || port.kind().extendedCombinedPortSize().isPresent());
+    }
+
     public int transferLimit() {
         return 64;
     }

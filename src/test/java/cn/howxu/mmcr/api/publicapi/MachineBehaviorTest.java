@@ -176,7 +176,7 @@ class MachineBehaviorTest {
         };
         TickBehavior behavior = TickBehavior.builder().serverTick(callback).build();
         MachineBehaviorContext base = new MachineBehaviorContext(null, null, BlockPos.ZERO,
-                MMCR.id("tick_machine"), 0L, SCREEN_TEXT, Map.of(),
+                MMCR.id("tick_machine"), 0L, SCREEN_TEXT, null,
                 new MachineIoView(new CapabilitySnapshot(List.of())));
         TickBehaviorContext tickContext = new TickBehaviorContext(base, new CapabilitySnapshot(List.of()));
 
@@ -236,6 +236,14 @@ class MachineBehaviorTest {
         assertThat(new MachineBehaviorContext(null, null, BlockPos.ZERO, MMCR.id("due_machine"),
                 41L, SCREEN_TEXT).isDue(20)).isFalse();
         assertThatThrownBy(() -> context.isDue(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void machine_behavior_context_returns_null_without_bound_storage() {
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("empty_storage_machine"), 0L, SCREEN_TEXT);
+
+        assertThat(context.dataStorage()).isNull();
     }
 
     @Test

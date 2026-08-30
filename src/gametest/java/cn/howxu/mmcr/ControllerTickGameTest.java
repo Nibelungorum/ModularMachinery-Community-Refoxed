@@ -381,7 +381,7 @@ public class ControllerTickGameTest {
                 List.of(), registeredMachine.failureAction(),
                 TickBehavior.builder().serverTick(context -> {
                     if (!executed.compareAndSet(false, true)) return;
-                    helper.assertTrue(context.dataStorage(context.controllerPos().south(2)).orElse(null) == storage.storage(),
+                    helper.assertTrue(context.dataStorage() == storage.storage(),
                             "Tick callback resolves the formed DataStorage");
                     MachineIoPlan plan = context.ioPlan()
                             .addInput(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(

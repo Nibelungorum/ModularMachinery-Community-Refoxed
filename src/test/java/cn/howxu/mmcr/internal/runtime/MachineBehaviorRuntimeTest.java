@@ -409,7 +409,7 @@ class MachineBehaviorRuntimeTest {
                     calls.incrementAndGet();
                     assertThat(context).isInstanceOf(TickBehaviorContext.class);
                     assertThat(context.ioView().itemAmount(Ingredient.of(Items.IRON_INGOT))).isEqualTo(2L);
-                    assertThat(context.dataStorage(storagePos)).contains(dataStorage.storage());
+                    assertThat(context.dataStorage()).isSameAs(dataStorage.storage());
                     assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(0L));
                     ItemStack outputStack = new ItemStack(Items.GOLD_NUGGET, 3);
                     outputStack.set(DataComponents.MAX_STACK_SIZE, 64);

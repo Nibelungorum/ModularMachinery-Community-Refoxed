@@ -83,7 +83,7 @@ public final class DataStorageGameTest {
             helper.assertTrue(controller.structureSnapshot().formed(), "Pure-tick structure formed");
             helper.assertTrue(controller.structureSnapshot().machine().behavior().kind() == MachineBehavior.Kind.TICK,
                     "Pure-tick machine keeps its TickBehavior");
-            helper.assertTrue(controller.behaviorContext().dataStorages().containsKey(storage.getBlockPos()),
+            helper.assertTrue(controller.behaviorContext().dataStorage() == storage.storage(),
                     "Pure-tick behavior context exposes the bound storage");
             long ticks = storage.storage().get("ticks").flatMap(DataValue::asLong).orElse(-1L);
             helper.assertTrue(ticks >= 1L && ticks <= 5L,

@@ -580,6 +580,33 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void active_runtime_persists_finish_failure_reason() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
+            output.getItemStackHandler(null).setStackInSlot(slot, stack(Items.COBBLESTONE, 64));
+        }
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        MachineRecipe recipe = recipe("runtime_persisted_finish_failure", 1,
+                List.of(output(Items.IRON_NUGGET, 1)));
+        RecipeRegistry.register(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        runtime.finish();
+
+        assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(outputTag);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP,
+                outputTag.buildResult()), null);
+
+        assertThat(restored.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
+    }
+
+    @Test
     void active_runtime_persists_the_start_effective_snapshot_and_consumption_plan() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));

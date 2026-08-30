@@ -134,7 +134,7 @@ public final class GameTestRegistry {
             if (name.equals("data_storage_tick")) {
                 builder.tickBehavior(tick -> tick.serverTick(context -> {
                     if (!context.isDue(20)) return;
-                    DataStorage storage = context.dataStorage(context.controllerPos().west()).orElse(null);
+                    DataStorage storage = context.dataStorage();
                     if (storage == null) return;
                     long ticks = storage.get("ticks").map(DataValue::longValue).orElse(0L);
                     var plan = context.ioPlan();

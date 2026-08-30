@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,7 +52,7 @@ class MachineBehaviorBuilderJSTest {
 
         assertThat(registration.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
         MachineBehaviorContext base = new MachineBehaviorContext(null, null, BlockPos.ZERO,
-                MMCR.id("kubejs_tick_machine"), 0L, new ControllerScreenTextState(), Map.of(),
+                MMCR.id("kubejs_tick_machine"), 0L, new ControllerScreenTextState(), null,
                 new MachineIoView(new CapabilitySnapshot(List.of())));
         ((TickBehavior) registration.behavior()).serverTick()
                 .accept(new TickBehaviorContext(base, new CapabilitySnapshot(List.of())));
@@ -67,7 +66,7 @@ class MachineBehaviorBuilderJSTest {
         DataStorage storage = new DataStorage();
         ControllerScreenTextState screenText = new ControllerScreenTextState();
         MachineBehaviorContext machineContext = new MachineBehaviorContext(null, null, BlockPos.ZERO,
-                storagePosId, 0L, screenText, Map.of(storagePos, storage));
+                storagePosId, 0L, screenText, storage);
         AtomicInteger starts = new AtomicInteger();
         AtomicInteger ticks = new AtomicInteger();
         AtomicInteger finishes = new AtomicInteger();
@@ -79,7 +78,7 @@ class MachineBehaviorBuilderJSTest {
                             starts.incrementAndGet();
                         })
                         .recipeTick(context -> {
-                            assertThat(context.machineContext().dataStorages()).containsEntry(storagePos, storage);
+                            assertThat(context.machineContext().dataStorage()).isSameAs(storage);
                             context.machineContext().screenText().append(ControllerScreenTextScope.OPERATION,
                                     MMCR.id("kubejs_recipe_tick_status"), Component.literal("running"));
                             ticks.incrementAndGet();

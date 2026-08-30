@@ -42,6 +42,10 @@
     "machine.mmcr_kubejs.kubejs_recipe_ticker": "配方Tick测试",
     "machine.mmcr_kubejs.kubejs_pure_tick_machine": "Pure Tick测试",
 
+    "block.mmcr.mmcr_kubejs.kubejs_data_storage_machine_machine": "Data Storage测试控制器",
+    "item.mmcr.mmcr_kubejs.kubejs_data_storage_machine_machine": "Data Storage测试控制器",
+    "machine.mmcr_kubejs.kubejs_data_storage_machine": "Data Storage测试",
+
     "level.mmcr_kubejs.thermal_smelting_coil": "线圈等级",
     
     "mmcr.smart_interface.type.kubejs_conversation": "转化率",

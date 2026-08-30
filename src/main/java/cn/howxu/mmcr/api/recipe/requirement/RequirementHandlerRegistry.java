@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -290,7 +291,10 @@ public final class RequirementHandlerRegistry {
                 Object current = storage.resource(slot);
                 if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
-                long slotCapacity = Math.min(storage.capacityResource(slot, resource), stack.getMaxStackSize());
+                long slotCapacity = storage.capacityResource(slot, resource);
+                if (!(capability instanceof ItemBusCapability itemBus) || !itemBus.supportsLargeStacks()) {
+                    slotCapacity = Math.min(slotCapacity, stack.getMaxStackSize());
+                }
                 long room = Math.max(0L, slotCapacity - storage.amount(slot));
                 capacity = saturatingAdd(capacity, room);
             }
@@ -378,7 +382,10 @@ public final class RequirementHandlerRegistry {
                     if (current instanceof ItemResource resource && !resource.isEmpty()
                             && !resource.equals(requestedResource)) continue;
                     if (!storage.isValidResource(slot, requestedResource)) continue;
-                    long capacity = Math.min(storage.capacityResource(slot, requestedResource), stackLimit);
+                    long capacity = storage.capacityResource(slot, requestedResource);
+                    if (!(capability instanceof ItemBusCapability itemBus) || !itemBus.supportsLargeStacks()) {
+                        capacity = Math.min(capacity, stackLimit);
+                    }
                     long moved = Math.min(remaining, Math.max(0L, capacity - currentAmount));
                     if (moved > 0L && reservations.reserveInsert(storage, slot, requestedResource, moved)) {
                         actions.add(new CapabilityRequests.ResourceAction<>(slot, requestedResource, moved, true));

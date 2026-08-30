@@ -37,6 +37,7 @@ import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -54,7 +55,9 @@ import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
+import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import org.junit.jupiter.api.Test;
@@ -478,6 +481,25 @@ class RequirementPlannerTest {
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(2);
+    }
+
+    @Test
+    void extended_item_bus_output_accepts_a_data_bearing_stack_above_vanilla_stack_size() {
+        ExtendedItemBusBlockEntity bus = (ExtendedItemBusBlockEntity) ModBlockEntities.BES
+                .get("extended_item_output_bus_basic").get().create(
+                        BlockPos.ZERO, ModBlocks.BLOCKS.get("extended_item_output_bus_basic").get().defaultBlockState());
+        ItemStack output = new ItemStack(Items.IRON_INGOT, 96);
+        output.set(DataComponents.CUSTOM_NAME, Component.literal("data output"));
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
+
+        var result = new CraftingContext(bus.capabilitySnapshot())
+                .planOutputRequirements(List.of(requirement), 1, false);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(bus.itemStorage().amount(0)).isEqualTo(96L);
+        assertThat(bus.itemStorage().resource(0).toStack(96).get(DataComponents.CUSTOM_NAME))
+                .isEqualTo(Component.literal("data output"));
     }
 
     @Test

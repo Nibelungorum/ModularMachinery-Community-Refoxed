@@ -22,9 +22,14 @@ import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -150,6 +155,20 @@ class MachineIoPlanTest {
 
         assertThat(view.itemOutputCapacity(gold)).isEqualTo(54L);
         assertThat(view.itemOutputCapacity(iron)).isZero();
+    }
+
+    @Test
+    void extended_item_output_capacity_ignores_vanilla_stack_size_for_data_bearing_items() {
+        ExtendedItemBusBlockEntity bus = (ExtendedItemBusBlockEntity) ModBlockEntities.BES
+                .get("extended_item_output_bus_basic").get().create(
+                        BlockPos.ZERO,
+                        ModBlocks.BLOCKS.get("extended_item_output_bus_basic").get().defaultBlockState());
+        ItemStack output = new ItemStack(Items.IRON_INGOT, 96);
+        output.set(DataComponents.CUSTOM_NAME, Component.literal("data output"));
+
+        MachineIoView view = new MachineIoView(bus.capabilitySnapshot());
+
+        assertThat(view.itemOutputCapacity(output)).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test

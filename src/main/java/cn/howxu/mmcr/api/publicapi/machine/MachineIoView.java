@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -134,7 +135,10 @@ public final class MachineIoView {
                 long amount = storage.amount(slot);
                 if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
-                long slotCapacity = Math.min(storage.capacityResource(slot, resource), resource.getMaxStackSize());
+                long slotCapacity = storage.capacityResource(slot, resource);
+                if (!(capability instanceof ItemBusCapability itemBus) || !itemBus.supportsLargeStacks()) {
+                    slotCapacity = Math.min(slotCapacity, resource.getMaxStackSize());
+                }
                 capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - amount));
             }
         }

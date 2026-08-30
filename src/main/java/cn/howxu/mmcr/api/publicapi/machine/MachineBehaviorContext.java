@@ -9,12 +9,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 /**
  * Server-authoritative context supplied to machine behavior callbacks.
@@ -28,24 +26,24 @@ public class MachineBehaviorContext {
     private final Identifier machineId;
     private final long gameTime;
     private final ControllerScreenText screenText;
-    private final Map<BlockPos, DataStorage> dataStorages;
+    private final @Nullable DataStorage dataStorage;
     private final MachineIoView ioView;
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
                                   ControllerScreenText screenText) {
-        this(controller, level, controllerPos, machineId, gameTime, screenText, Map.of(), emptyIoView());
+        this(controller, level, controllerPos, machineId, gameTime, screenText, null, emptyIoView());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
-                                  ControllerScreenText screenText, Map<BlockPos, DataStorage> dataStorages) {
-        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorages, emptyIoView());
+                                  ControllerScreenText screenText, @Nullable DataStorage dataStorage) {
+        this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, emptyIoView());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
                                   BlockPos controllerPos, Identifier machineId, long gameTime,
-                                  ControllerScreenText screenText, Map<BlockPos, DataStorage> dataStorages,
+                                  ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView) {
         this.controller = controller;
         this.level = level;
@@ -53,12 +51,7 @@ public class MachineBehaviorContext {
         this.machineId = Objects.requireNonNull(machineId, "machineId");
         this.gameTime = gameTime;
         this.screenText = Objects.requireNonNull(screenText, "screenText");
-        Map<BlockPos, DataStorage> copy = new LinkedHashMap<>();
-        if (dataStorages != null) {
-            dataStorages.forEach((pos, storage) -> copy.put(Objects.requireNonNull(pos, "data storage position").immutable(),
-                    Objects.requireNonNull(storage, "data storage")));
-        }
-        this.dataStorages = Map.copyOf(copy);
+        this.dataStorage = dataStorage;
         this.ioView = Objects.requireNonNull(ioView, "ioView");
     }
 
@@ -91,12 +84,8 @@ public class MachineBehaviorContext {
         return screenText;
     }
 
-    public Map<BlockPos, DataStorage> dataStorages() {
-        return dataStorages;
-    }
-
-    public Optional<DataStorage> dataStorage(BlockPos pos) {
-        return pos == null ? Optional.empty() : Optional.ofNullable(dataStorages.get(pos));
+    public @Nullable DataStorage dataStorage() {
+        return dataStorage;
     }
 
     public MachineIoView ioView() {

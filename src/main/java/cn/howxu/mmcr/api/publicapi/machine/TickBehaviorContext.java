@@ -22,7 +22,7 @@ public final class TickBehaviorContext extends MachineBehaviorContext {
     public TickBehaviorContext(MachineBehaviorContext base, CapabilitySnapshot snapshot,
                                int factoryThreadCount, long parallelism) {
         super(base.controller(), base.level(), base.controllerPos(), base.machineId(), base.gameTime(),
-                base.screenText(), base.dataStorages(), base.ioView());
+                base.screenText(), base.dataStorage(), base.ioView());
         capabilitySnapshot = Objects.requireNonNull(snapshot, "snapshot");
         if (factoryThreadCount < 1) throw new IllegalArgumentException("factoryThreadCount must be positive");
         if (parallelism < 1L) throw new IllegalArgumentException("parallelism must be positive");

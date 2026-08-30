@@ -156,7 +156,8 @@ public final class MachineControllerRuntime {
         ServerLevel level = currentLevel instanceof ServerLevel serverLevel ? serverLevel : null;
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
-                screenText, dataStorages, new MachineIoView(capabilitySnapshot));
+                screenText, dataStorages.values().stream().findFirst().orElse(null),
+                new MachineIoView(capabilitySnapshot));
     }
 
     public ControllerScreenTextState recipeScreenText(String laneId) {

@@ -420,6 +420,10 @@ public final class CraftingRuntime {
     public void save(ValueOutput output) {
         boolean present = activeRecipe != null && activeRecipe.getRecipe() != null;
         output.putBoolean("active", present);
+        output.putBoolean("has_failure", failure != null);
+        if (failure != null) {
+            output.putString("failure_reason", failure.details().getOrDefault("reason", ""));
+        }
         if (present) {
             output.putLong("structure_version", structureVersion);
             output.putLong("capability_version", capabilityVersion);
@@ -431,8 +435,11 @@ public final class CraftingRuntime {
 
     public void load(ValueInput input, @Nullable StructureClaimRegistry.ResourceDomain domain) {
         boolean active = input.getBooleanOr("active", false);
+        boolean hasFailure = input.getBooleanOr("has_failure", false);
+        String failureReason = input.getStringOr("failure_reason", "");
         if (!active) {
             invalidate();
+            restoreFailure(hasFailure, failureReason);
             return;
         }
         ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(input.childOrEmpty("recipe"));
@@ -445,11 +452,18 @@ public final class CraftingRuntime {
                 input.getLongOr("capability_version", Long.MIN_VALUE),
                 input.getLongOr("modifier_version", Long.MIN_VALUE),
                 input.getLongOr("component_state_version", Long.MIN_VALUE));
+        if (active()) restoreFailure(hasFailure, failureReason);
     }
 
     private void failLoad() {
         invalidate();
         failure = failure("recipe_load");
+        status = CraftingStatus.failure(failureUnloc(failure));
+    }
+
+    private void restoreFailure(boolean present, String reason) {
+        if (!present) return;
+        failure = failure(reason);
         status = CraftingStatus.failure(failureUnloc(failure));
     }
 
