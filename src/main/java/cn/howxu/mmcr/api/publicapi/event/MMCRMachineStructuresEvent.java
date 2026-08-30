@@ -4,15 +4,19 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierItemKey;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.Event;
+import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
@@ -28,6 +32,8 @@ public class MMCRMachineStructuresEvent extends Event {
     protected final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
     protected final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
     protected final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
+    protected final Map<Identifier, List<ItemStack>> modifierItems = new LinkedHashMap<>();
+    private final Map<ModifierItemKey, Identifier> modifierItemKeys = new LinkedHashMap<>();
     private boolean frozen;
     private Snapshot snapshot;
 
@@ -41,6 +47,8 @@ public class MMCRMachineStructuresEvent extends Event {
             prepared.levelTypes.putAll(current.levelTypes);
             prepared.levels.putAll(current.levels);
             prepared.modifiers.putAll(current.modifiers);
+            current.modifierItems().forEach((modifierId, stacks) -> stacks.forEach(stack ->
+                    prepared.registerModifierItem(stack, modifierId)));
         }
         current = prepared;
         return prepared;
@@ -126,6 +134,18 @@ public class MMCRMachineStructuresEvent extends Event {
         }
     }
 
+    public void registerModifierItem(ItemStack stack, Identifier modifierId) {
+        requireOpen();
+        require(stack, "modifier item");
+        require(modifierId, "modifier id");
+        ItemStack normalized = stack.copyWithCount(1);
+        ModifierItemKey key = ModifierItemKey.of(normalized);
+        if (modifierItemKeys.putIfAbsent(key, modifierId) != null) {
+            throw new ApiRegistrationException("Duplicate machine modifier item binding");
+        }
+        modifierItems.computeIfAbsent(modifierId, ignored -> new ArrayList<>()).add(normalized);
+    }
+
     public Map<Identifier, MachineStructureDefinition> structures() {
         return snapshot == null ? immutable(structures) : snapshot.structures();
     }
@@ -142,6 +162,10 @@ public class MMCRMachineStructuresEvent extends Event {
         return snapshot == null ? immutable(modifiers) : snapshot.modifiers();
     }
 
+    public Map<Identifier, List<ItemStack>> modifierItems() {
+        return snapshot == null ? immutableItemBindings(modifierItems) : snapshot.modifierItems();
+    }
+
     public Snapshot freeze() {
         if (frozen) return snapshot;
         structures.values().forEach(structure -> structure.stages().forEach(stage -> {
@@ -154,10 +178,14 @@ public class MMCRMachineStructuresEvent extends Event {
                         if (!modifiers.containsKey(replacement.modifierId())) throw new ApiRegistrationException(
                                 "Structure " + structure.machineId() + " refers to unknown machine modifier "
                                         + replacement.modifierId());
-                    });
+                });
         }));
+        modifierItems.keySet().forEach(modifierId -> {
+            if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
+                    "Modifier item binding refers to unknown machine modifier " + modifierId);
+        });
         frozen = true;
-        snapshot = new Snapshot(structures, levelTypes, levels, modifiers);
+        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems);
         return snapshot;
     }
 
@@ -174,14 +202,35 @@ public class MMCRMachineStructuresEvent extends Event {
         return Collections.unmodifiableMap(new LinkedHashMap<>(source));
     }
 
+    private static Map<Identifier, List<ItemStack>> immutableItemBindings(
+            Map<Identifier, List<ItemStack>> source) {
+        Map<Identifier, List<ItemStack>> copy = new LinkedHashMap<>();
+        source.forEach((modifierId, stacks) -> copy.put(modifierId,
+                List.copyOf(stacks.stream().map(ItemStack::copy).toList())));
+        return Collections.unmodifiableMap(copy);
+    }
+
     public record Snapshot(Map<Identifier, MachineStructureDefinition> structures,
             Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
-            Map<Identifier, ModifierDefinition> modifiers) {
+            Map<Identifier, ModifierDefinition> modifiers,
+            Map<Identifier, List<ItemStack>> modifierItems) {
+        public Snapshot(Map<Identifier, MachineStructureDefinition> structures,
+                Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
+                Map<Identifier, ModifierDefinition> modifiers) {
+            this(structures, levelTypes, levels, modifiers, Map.of());
+        }
+
         public Snapshot {
             structures = immutable(structures);
             levelTypes = immutable(levelTypes);
             levels = immutable(levels);
             modifiers = immutable(modifiers);
+            modifierItems = immutableItemBindings(modifierItems);
+        }
+
+        @Override
+        public Map<Identifier, List<ItemStack>> modifierItems() {
+            return immutableItemBindings(modifierItems);
         }
     }
 }

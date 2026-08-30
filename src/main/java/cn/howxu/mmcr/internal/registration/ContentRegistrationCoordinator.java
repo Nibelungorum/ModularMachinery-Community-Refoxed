@@ -93,7 +93,7 @@ public final class ContentRegistrationCoordinator {
         // Prepare and publish recipes before any other registry is changed. The batch validates the
         // complete candidate first, so a recipe failure leaves startup registries untouched.
         RecipeRegistry.registerStaticBatch(recipes.values());
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers());
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.modifierItems());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
                 MachineDefinitions.replace(registration);

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
 import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
@@ -24,6 +25,9 @@ import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.resources.Identifier;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -33,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -53,6 +58,7 @@ class PublicApiLifecycleTest {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
+        ModifierRegistry.installSnapshot(Map.of());
     }
 
     @AfterEach
@@ -61,6 +67,7 @@ class PublicApiLifecycleTest {
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
         RecipeRegistry.clearForTesting();
+        ModifierRegistry.installSnapshot(Map.of());
     }
 
     @Test
@@ -232,6 +239,24 @@ class PublicApiLifecycleTest {
         assertThatThrownBy(event::freeze)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("unknown_modifier");
+    }
+
+    @Test
+    void coordinator_commit_installs_modifier_item_bindings_after_collection() {
+        PublicApiBootstrap.begin();
+        Identifier modifierId = id("lifecycle_modifier");
+        ItemStack stack = new ItemStack(Items.EMERALD, 1);
+        stack.set(DataComponents.MAX_STACK_SIZE, 32);
+        MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
+        event.registerModifier(modifierId, new ModifierDefinition(List.of()));
+        event.registerModifierItem(stack, modifierId);
+        event.freeze();
+
+        ContentRegistrationCoordinator.collectStructures(event);
+        ContentRegistrationCoordinator.commitStartup();
+
+        assertThat(ModifierRegistry.get(modifierId)).isNotNull();
+        assertThat(ModifierRegistry.modifierFor(stack.copyWithCount(32))).isEqualTo(modifierId);
     }
 
     @Test
