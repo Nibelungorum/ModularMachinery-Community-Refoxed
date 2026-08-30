@@ -14,27 +14,27 @@ MMCREvents.startup(event => {
     builder.register()
 
     event.registerModifier(
-        "mmcr_kubejs:alloy_furnace_diamond_speedup",
+        "mmcr_kubejs:alloy_furnace_emerald_speedup",
         api.modifierDefinition([
             api.modifier("duration", "input", 0.5, "multiply", false)
         ])
     )
 
     event.registerModifierItem(
-        Item.of("minecraft:diamond_block"),
-        "mmcr_kubejs:alloy_furnace_diamond_speedup"
+        Item.of("minecraft:emerald_block"),
+        "mmcr_kubejs:alloy_furnace_emerald_speedup"
     )
 
     event.registerModifier(
-        "mmcr_kubejs:alloy_furnace_gold_doubling",
+        "mmcr_kubejs:alloy_furnace_lapis_doubling",
         api.modifierDefinition([
             api.modifier("item", "output", 2, "multiply", false)
         ])
     )
 
     event.registerModifierItem(
-        Item.of("minecraft:gold_block"),
-        "mmcr_kubejs:alloy_furnace_gold_doubling"
+        Item.of("minecraft:lapis_block"),
+        "mmcr_kubejs:alloy_furnace_lapis_doubling"
     )
 
     // See server_scripts/structure/A_Modifier_Machine.js for the modifier structure.

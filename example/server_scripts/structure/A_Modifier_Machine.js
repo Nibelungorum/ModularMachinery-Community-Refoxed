@@ -12,12 +12,12 @@ MMCREvents.server(event => {
             .set('X',api.block('minecraft:bricks'))
             .set('M',api.block('minecraft:blast_furnace'))
             .modifier('M', api.modifierUse(
-                'mmcr_kubejs:alloy_furnace_diamond_speedup',
-                api.block('minecraft:diamond_block')
+                'mmcr_kubejs:alloy_furnace_emerald_speedup',
+                api.block('minecraft:emerald_block')
             ))
             .modifier('M', api.modifierUse(
-                'mmcr_kubejs:alloy_furnace_gold_doubling',
-                api.block('minecraft:gold_block')
+                'mmcr_kubejs:alloy_furnace_lapis_doubling',
+                api.block('minecraft:lapis_block')
             ))
             .set('I',api.anyOf(api.block('mmcr:item_input_bus'),api.block('mmcr:item_output_bus'),api.block('mmcr:energy_input_hatch')))
             .controller('C')

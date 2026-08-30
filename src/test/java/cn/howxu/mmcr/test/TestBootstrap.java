@@ -93,6 +93,9 @@ public final class TestBootstrap {
 
     public static synchronized void bootstrap() throws Exception {
         if (initialized) {
+            if (MachineDefinitions.getRegistration(id("test_cube")) == null) {
+                restoreMachineDefinitions();
+            }
             return;
         }
 
