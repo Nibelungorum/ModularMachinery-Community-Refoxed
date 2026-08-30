@@ -16,8 +16,10 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.datagen.ModRecipeProvider;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.advancements.Advancement;
@@ -222,10 +224,8 @@ class PublicMachineBuilderTest {
         for (UpgradeBusSize size : UpgradeBusSize.values()) {
             String id = "upgrade_bus_" + size.id();
             assertThat(recipes).containsKey(MMCR.id(id));
-            assertThat(PublicMachineBuilderTest.class.getResource("/assets/mmcr/models/block/" + id + ".json"))
-                    .as("block model %s", id).isNotNull();
-            assertThat(PublicMachineBuilderTest.class.getResource("/assets/mmcr/models/item/" + id + ".json"))
-                    .as("item model %s", id).isNotNull();
+            assertThat(RuntimeMachineModelRegistry.dynamicBlockState(ModBlocks.BLOCKS.get(id).get()).variants())
+                    .as("runtime block model %s", id).isNotEmpty();
             assertThat(ModItems.ITEMS).containsKey(id);
         }
     }

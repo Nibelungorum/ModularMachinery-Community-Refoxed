@@ -128,6 +128,7 @@ public final class TestBootstrap {
         bindModuleBridge();
         bindUpgradeBuses();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
+        bind(ModItems.TERMINAL, registerItem(ModItems.TERMINAL));
         registerTestEvents();
         registerRuntimeTestContent();
         initialized = true;
@@ -194,7 +195,11 @@ public final class TestBootstrap {
     public static void registerTestMachineDefinitions(MMCRMachineDefinationsEvent event) {
         for (String name : testMachineNames()) {
             Identifier id = id(name);
-            event.registerMachine(id, builder -> builder.displayNameKey("machine.mmcr_test." + name));
+            event.registerMachine(id, builder -> {
+                builder.displayNameKey("machine.mmcr_test." + name);
+                if (name.equals("test_cube")) builder.allowModifiers();
+                return builder;
+            });
         }
     }
 

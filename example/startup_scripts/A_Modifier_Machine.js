@@ -2,6 +2,8 @@
 
 MMCREvents.startup(event => {
 
+    const api = event.getAPI()
+
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_alloy_furnace") // Create the machine definition.
         .displayNameKey("machine.mmcr_kubejs.kubejs_alloy_furnace") // Translation key for the display name.
