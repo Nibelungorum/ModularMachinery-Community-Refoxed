@@ -1,7 +1,17 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -13,12 +23,14 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,12 +41,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MachineControllerScreenTest {
     private static final BlockPos CONTROLLER_POS = new BlockPos(11, 22, 33);
+    private static final Identifier TICK_MACHINE_ID = Identifier.parse("mmcr:screen_tick_machine");
+    private static final ExecutionStatus FAILURE = new ExecutionStatus(
+            MMCR.id("screen_tick_failure"), StatusSeverity.BLOCKED, MMCR.id("screen_tick_controller"),
+            Map.of("reason", "insufficient_energy"));
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         bind(ModUIs.MACHINE_CONTROLLER,
                 new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
+        MachineRegistry.register(screenTickMachine());
     }
 
     @AfterEach
@@ -77,6 +94,33 @@ class MachineControllerScreenTest {
     }
 
     @Test
+    void pure_tick_controller_hides_recipe_runtime_details() {
+        MachineControllerMenu menu = menuWithState(TICK_MACHINE_ID);
+
+        assertThat(menu.isTickMachine()).isTrue();
+        assertThat(MachineControllerScreen.detailLines(menu))
+                .extracting(ControllerTextLine::text)
+                .containsExactly(Component.translatable("gui.mmcr.controller.status_label")
+                        .append(Component.literal(" "))
+                        .append(Component.translatable("gui.mmcr.controller.running")));
+    }
+
+    @Test
+    void recipe_controller_keeps_recipe_runtime_details() {
+        MachineControllerMenu menu = menuWithState(MMCR.id("test_cube"));
+
+        assertThat(menu.isTickMachine()).isFalse();
+        assertThat(MachineControllerScreen.detailLines(menu))
+                .extracting(ControllerTextLine::text)
+                .contains(
+                        Component.translatable("gui.mmcr.controller.last_failure",
+                                Component.translatable("gui.mmcr.controller.failure.missing_energy")),
+                        MachineControllerScreen.parallelSlotLine(2),
+                        MachineControllerScreen.parallelLine(6, 8),
+                        Component.translatable("gui.mmcr.controller.progress", "20%"));
+    }
+
+    @Test
     void ordinary_controller_viewport_wraps_long_external_text() throws Exception {
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS);
         ControllerScreenTextCache.replace(CONTROLLER_POS, 1L,
@@ -96,6 +140,41 @@ class MachineControllerScreenTest {
     private static ControllerScreenTextSnapshot.Line line(String id, String text) {
         return new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
                 Identifier.parse(id), Component.literal(text));
+    }
+
+    private static MachineControllerMenu menuWithState(Identifier machineId) {
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS,
+                machineId, null, 0, true, 0);
+        menu.applyClientSnapshot(new PktMachineStatePayload(
+                CONTROLLER_POS, "mmcr:recipe", true, true, List.of(), true, "mmcr:locked_recipe",
+                machineId.toString(), 0, 0, false, "", CraftingStatus.Status.CRAFTING, "", FAILURE,
+                true, false, 4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
+                FluidStack.EMPTY, FluidStack.EMPTY));
+        return menu;
+    }
+
+    private static Machine screenTickMachine() {
+        return new Machine() {
+            @Override
+            public Identifier registryName() {
+                return TICK_MACHINE_ID;
+            }
+
+            @Override
+            public BlockArray pattern() {
+                return new BlockArray(Map.of());
+            }
+
+            @Override
+            public MachineControllerSpec controller() {
+                return MachineControllerSpec.defaultsFor(TICK_MACHINE_ID);
+            }
+
+            @Override
+            public TickBehavior behavior() {
+                return TickBehavior.defaults();
+            }
+        };
     }
 
     private static void bind(Object deferredHolder, MenuType<MachineControllerMenu> menuType) throws Exception {

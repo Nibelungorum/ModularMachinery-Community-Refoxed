@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
@@ -200,6 +203,13 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.machineId());
         MachineStateSnapshot state = localState();
         return state == null ? clientMachineId : identifierOrNull(state.machineId());
+    }
+
+    public boolean isTickMachine() {
+        Identifier machineId = machineId();
+        if (machineId == null) return false;
+        Machine machine = MachineRegistry.getMachine(machineId);
+        return machine != null && machine.behavior() instanceof TickBehavior;
     }
 
     public boolean isFormed() {

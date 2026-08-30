@@ -99,6 +99,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     static List<ControllerTextLine> detailLines(MachineControllerMenu menu) {
+        boolean tickMachine = menu.isTickMachine();
         List<ControllerTextLine> lines = new ArrayList<>();
         lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
         for (String levelId : menu.foundLevelIds()) {
@@ -106,14 +107,16 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
             if (level == null) continue;
             lines.add(new ControllerTextLine(levelLine(level), STATUS_LABEL_COLOR));
         }
-        String failure = menu.lastFailureMessage();
-        if (failure != null) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
-                    Component.translatable(failure)), STATUS_LABEL_COLOR));
+        if (!tickMachine) {
+            String failure = menu.lastFailureMessage();
+            if (failure != null) {
+                lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
+                        Component.translatable(failure)), STATUS_LABEL_COLOR));
+            }
         }
         lines.addAll(moduleStatusLines(menu.isHostController(), menu.isModuleController(),
                 menu.installedModuleCount(), menu.connectedHostId()));
-        if (menu.isFormed()) {
+        if (!tickMachine && menu.isFormed()) {
             int parallelSlots = menu.parallelControllerCount();
             if (parallelSlots > 0) {
                 lines.add(new ControllerTextLine(parallelSlotLine(parallelSlots), STATUS_LABEL_COLOR));
@@ -122,7 +125,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     STATUS_LABEL_COLOR));
         }
         int totalTick = menu.activeRecipeTotalTick();
-        if (menu.hasActiveRecipe() && totalTick > 0) {
+        if (!tickMachine && menu.hasActiveRecipe() && totalTick > 0) {
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress",
                     progressPercent(menu.activeRecipeTick(), totalTick) + "%"), PROGRESS_STATUS_COLOR));
         }
