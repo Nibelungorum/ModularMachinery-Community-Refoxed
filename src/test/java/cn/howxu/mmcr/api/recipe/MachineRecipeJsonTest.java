@@ -99,6 +99,20 @@ class MachineRecipeJsonTest {
     }
 
     @Test
+    void custom_output_requirement_is_not_duplicated_at_runtime() {
+        try (OutputRegistry.TestScope scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(JsonOutput.TYPE);
+            MachineRecipe recipe = MachineRecipe.fromCanonical(id("custom_output_requirement"), id("test_cube"), 20,
+                    List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 7, List.of())),
+                    List.of(new JsonOutput(7, 1F)), List.of(), 0, 1, false, false,
+                    List.of(), false, Set.of());
+
+            assertThat(recipe.runtimeRequirements()).filteredOn(
+                    requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(1);
+        }
+    }
+
+    @Test
     void parsesComplexInputsOutputsModifiersAndRequirements() {
         var json = recipeJson();
         var input = itemInput("minecraft:iron_ingot", 2);

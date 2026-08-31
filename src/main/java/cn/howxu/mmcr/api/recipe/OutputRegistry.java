@@ -114,7 +114,13 @@ public final class OutputRegistry {
         OutputType<?> type = canonicalType(output.outputType());
         if (type == null || !type.matchesRequirement(requirement)) return false;
         MachineOutput converted = type.fromRequirement(requirement);
-        return converted != null && converted.outputType() == type && output.equals(converted);
+        if (converted != null) return converted.outputType() == type && output.equals(converted);
+        try {
+            MachineRequirement convertedRequirement = type.toRequirement(output, requirement.tags());
+            return convertedRequirement != null && convertedRequirement.equals(requirement);
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
     }
 
     public static void registerBuiltIns() {
