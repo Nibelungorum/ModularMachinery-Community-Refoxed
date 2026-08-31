@@ -32,9 +32,8 @@ class BuiltinCapabilityDefinitionsTest {
     }
 
     @BeforeEach
-    void beginCapabilityRegistration() {
-        PublicApiBootstrap.clearForTesting();
-        PublicApiBootstrap.begin();
+    void beginCapabilityRegistration() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
     }
 
     @AfterEach

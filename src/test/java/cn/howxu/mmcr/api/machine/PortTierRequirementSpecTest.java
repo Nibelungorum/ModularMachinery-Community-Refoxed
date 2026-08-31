@@ -103,7 +103,9 @@ class PortTierRequirementSpecTest {
                 .extracting(PortFamilyDescriptor::familyId)
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
         assertThat(ordinaryCombinedKind(IOType.INPUT).capabilityTypes())
-                .containsExactlyInAnyOrder(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
+                .containsExactly(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
+        assertThat(ordinaryCombinedKind(IOType.OUTPUT).capabilityTypes())
+                .containsExactly(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
     }
 
     @Test

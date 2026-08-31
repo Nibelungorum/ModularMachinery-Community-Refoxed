@@ -29,6 +29,7 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -47,13 +48,18 @@ class CombinedPortBlockEntityTest {
         TestBootstrap.bootstrap();
     }
 
+    @BeforeEach
+    void bootstrapCapabilities() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+    }
+
     @Test
     void ordinaryCombinedHostExposesItemAndFluidCapabilities() {
         CombinedPortBlockEntity port = combined("combined_input_reinforced");
 
         assertThat(port.capabilitySnapshot().capabilities()).hasSize(2)
                 .extracting(MachineCapability::type)
-                .containsExactlyInAnyOrder(
+                .containsExactly(
                         new CapabilityType(PortFamilyIds.ITEM),
                         new CapabilityType(PortFamilyIds.FLUID));
         assertThat(port.itemStorage()).isNotSameAs(port.fluidStorage());
@@ -105,6 +111,14 @@ class CombinedPortBlockEntityTest {
         assertExtendedCombined("extended_combined_input_advanced", 6, 2);
         assertExtendedCombined("extended_combined_input_reinforced", 12, 4);
         assertExtendedCombined("extended_combined_input_ultimate", 18, 6);
+    }
+
+    @Test
+    void combinedCapabilitySnapshotsKeepItemBeforeFluidForBothDirections() {
+        assertCapabilityOrder("combined_input_basic");
+        assertCapabilityOrder("combined_output_basic");
+        assertCapabilityOrder("extended_combined_input_advanced");
+        assertCapabilityOrder("extended_combined_output_advanced");
     }
 
     @Test
@@ -195,6 +209,12 @@ class CombinedPortBlockEntityTest {
             assertThat(items.insert(0, newItem, 1L, transaction)).isZero();
             transaction.commit();
         }
+    }
+
+    private static void assertCapabilityOrder(String id) {
+        assertThat(port(id).capabilitySnapshot().capabilities())
+                .extracting(MachineCapability::type)
+                .containsExactly(new CapabilityType(PortFamilyIds.ITEM), new CapabilityType(PortFamilyIds.FLUID));
     }
 
     private static CombinedPortBlockEntity combined(String id) {

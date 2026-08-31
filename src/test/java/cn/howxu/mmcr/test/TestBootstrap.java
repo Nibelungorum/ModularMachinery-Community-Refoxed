@@ -22,6 +22,7 @@ import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
@@ -80,6 +81,13 @@ public final class TestBootstrap {
         TEST_LEVEL_TYPES.clear();
         TEST_LEVELS.clear();
         MachineLevelRegistry.installSnapshot(List.of(), List.of());
+    }
+
+    /** Resets and reopens the capability registry for tests that create real ports. */
+    public static synchronized void bootstrapCapabilities() throws Exception {
+        bootstrap();
+        PublicApiBootstrap.clearForTesting();
+        PublicApiBootstrap.begin();
     }
 
     public static void freezeRegistration() {

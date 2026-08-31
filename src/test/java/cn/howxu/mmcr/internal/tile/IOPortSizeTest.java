@@ -21,6 +21,7 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,6 +37,11 @@ class IOPortSizeTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void bootstrapCapabilities() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
     }
 
     @Test

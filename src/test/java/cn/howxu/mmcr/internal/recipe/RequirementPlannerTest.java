@@ -62,6 +62,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -89,6 +90,11 @@ class RequirementPlannerTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void bootstrapCapabilities() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
     }
 
     @Test
