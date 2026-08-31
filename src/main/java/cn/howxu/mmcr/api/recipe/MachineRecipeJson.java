@@ -73,22 +73,54 @@ public final class MachineRecipeJson {
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
-        boolean explicitRequirements = object.has("requirements");
+        boolean explicitRequirements = !requirements.isEmpty();
         List<MachineRequirement> canonicalRequirements = explicitRequirements
-                ? requirements : MachineRecipe.legacyInputRequirements(inputs);
+                ? requirements : MachineRecipe.legacyRequirements(inputs, parsedOutputs.legacyItemStacks(), fluidOutputs);
         List<MachineOutput> canonicalOutputs;
         if (explicitRequirements && !parsedOutputs.canonical()) {
-            canonicalOutputs = MachineRecipe.outputsFromRequirements(canonicalRequirements);
+            canonicalOutputs = new ArrayList<>(MachineRecipe.outputsFromRequirements(canonicalRequirements));
+            for (ItemStack output : parsedOutputs.legacyItemStacks()) {
+                MachineOutput itemOutput = new MachineOutput.ItemOutput(output, 1F);
+                if (!canonicalOutputs.contains(itemOutput)) canonicalOutputs.add(itemOutput);
+            }
         } else if (!explicitRequirements && !parsedOutputs.canonical()) {
             canonicalOutputs = new ArrayList<>();
             for (ItemStack output : parsedOutputs.legacyItemStacks()) {
                 canonicalOutputs.add(new MachineOutput.ItemOutput(output, 1F));
             }
-            for (FluidStack output : fluidOutputs) {
-                canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F));
-            }
         } else {
             canonicalOutputs = new ArrayList<>(parsedOutputs.values());
+        }
+        List<MachineOutput> additionalOutputs = new ArrayList<>(fluidOutputs.size() + transitionalOutputs.size());
+        for (FluidStack output : fluidOutputs) {
+            additionalOutputs.add(new MachineOutput.FluidOutput(output, 1F));
+        }
+        additionalOutputs.addAll(transitionalOutputs);
+        for (int index = 0; index < canonicalRequirements.size(); index++) {
+            try {
+                MachineRequirement.copyOf(canonicalRequirements.get(index));
+            } catch (RuntimeException exception) {
+                fail(id, "requirements[" + index + "]", "invalid requirement", exception);
+            }
+        }
+        for (int index = 0; index < canonicalOutputs.size(); index++) {
+            try {
+                MachineOutput.copyOf(canonicalOutputs.get(index));
+            } catch (RuntimeException exception) {
+                fail(id, "outputs[" + index + "]", "invalid output", exception);
+            }
+        }
+        for (int index = 0; index < transitionalOutputs.size(); index++) {
+            try {
+                MachineOutput.copyOf(transitionalOutputs.get(index));
+            } catch (RuntimeException exception) {
+                fail(id, "machine_outputs[" + index + "]", "invalid output", exception);
+            }
+        }
+        try {
+            MachineRecipe.validateLevelRequirements(levels);
+        } catch (RuntimeException exception) {
+            fail(id, "level_requirements", "invalid level requirement", exception);
         }
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, canonicalRequirements,
                 canonicalOutputs,
@@ -96,7 +128,7 @@ public final class MachineRecipeJson {
                 boolField(id, object, "cancelIfPerTickFails", false),
                 boolField(id, object, "parallelized", false), levels,
                 boolField(id, object, "allow_partial_outputs", false), hosts);
-        return MachineRecipe.withAdditionalOutputs(recipe, transitionalOutputs);
+        return MachineRecipe.withAdditionalOutputs(recipe, additionalOutputs);
     }
 
     public static MachineRecipe normalize(Identifier id, Identifier machineId, int tickTime,

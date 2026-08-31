@@ -159,6 +159,10 @@ class MachineRecipeJsonTest {
 
         assertThat(recipe.inputs()).hasSize(2);
         assertThat(recipe.inputs().getLast()).isEqualTo(new MachineIngredient.EnergyIngredient(80));
+        assertThat(recipe.outputs()).singleElement().satisfies(output -> {
+            assertThat(output.getItem()).isEqualTo(Items.IRON_BLOCK);
+            assertThat(output.getCount()).isEqualTo(1);
+        });
         assertThat(recipe.fluidOutputs()).singleElement().satisfies(fluid -> assertThat(fluid.getAmount()).isEqualTo(1000));
         assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof FluidRequirement fluid
                 && fluid.chance() == 0.75F);

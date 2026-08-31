@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
@@ -54,7 +53,9 @@ public final class RuntimeContentCoordinator {
         try {
             MachineStructureRegistry.replaceDynamic(structureReplacement);
             RecipeRegistry.replaceDynamic(recipeReplacement);
-            CraftingContextPool.onGlobalReload();
+            DynamicContentReloadService.ReloadResult result = DynamicContentReloadService.ReloadResult.fromSnapshots(
+                    oldStructures, structureReplacement, oldRecipes, recipeReplacement);
+            return new CommitResult(result, snapshotLocked());
         } catch (RuntimeException | Error failure) {
             try {
                 MachineStructureRegistry.replaceDynamic(oldStructures);
@@ -64,9 +65,6 @@ public final class RuntimeContentCoordinator {
             }
             throw failure;
         }
-        DynamicContentReloadService.ReloadResult result = DynamicContentReloadService.ReloadResult.fromSnapshots(
-                oldStructures, structureReplacement, oldRecipes, recipeReplacement);
-        return new CommitResult(result, snapshotLocked());
     }
 
     public static CommitResult commitDynamicAndSnapshot(
@@ -86,17 +84,45 @@ public final class RuntimeContentCoordinator {
     public static RuntimeContentSnapshot replaceDataPackRecipesAndSnapshot(
             Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-            RecipeRegistry.validateDataPackCandidate(recipes);
-            replaceDataPackLocked(recipes);
-            return snapshotLocked();
+            Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+            boolean published = false;
+            try {
+                RecipeRegistry.validateDataPackCandidate(recipes);
+                replaceDataPackLocked(recipes);
+                published = true;
+                return snapshotLocked();
+            } catch (RuntimeException | Error failure) {
+                if (published) {
+                    try {
+                        replaceDataPackLocked(previous);
+                    } catch (RuntimeException | Error rollbackFailure) {
+                        failure.addSuppressed(rollbackFailure);
+                    }
+                }
+                throw failure;
+            }
         }
     }
 
     public static RuntimeContentSnapshot replaceKubeJSRecipesAndSnapshot(
             Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-            RecipeRegistry.replaceKubeJS(recipes);
-            return snapshotLocked();
+            Map<Identifier, MachineRecipe> previous = RecipeRegistry.kubeJSSnapshot();
+            boolean published = false;
+            try {
+                RecipeRegistry.replaceKubeJS(recipes);
+                published = true;
+                return snapshotLocked();
+            } catch (RuntimeException | Error failure) {
+                if (published) {
+                    try {
+                        RecipeRegistry.replaceKubeJS(previous);
+                    } catch (RuntimeException | Error rollbackFailure) {
+                        failure.addSuppressed(rollbackFailure);
+                    }
+                }
+                throw failure;
+            }
         }
     }
 

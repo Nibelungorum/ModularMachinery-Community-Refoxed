@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
@@ -202,24 +204,68 @@ public final class RecipeRegistry {
     /** Validates a complete data-pack layer without changing any published state. */
     public static void validateDataPackCandidate(Map<Identifier, MachineRecipe> recipes) {
         if (recipes == null) throw new IllegalArgumentException("Data-pack recipes must not be null");
+        validateRecipeTypes(recipes);
+    }
+
+    private static void validateRecipeTypes(Map<Identifier, MachineRecipe> recipes) {
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             Identifier id = entry.getKey();
             MachineRecipe recipe = entry.getValue();
             if (id == null || recipe == null || recipe.id() == null) {
-                throw new IllegalArgumentException("Recipe key or recipe id must not be null: " + id);
+                throw new MachineRecipeJson.RecipeJsonException(
+                        id == null ? MMCR.id("recipe_validation") : id, "$",
+                        "Recipe key or recipe id must not be null", null);
             }
-            for (var requirement : recipe.requirements()) {
-                if (requirement == null || requirement.type() == null
-                        || RequirementHandlerRegistry.canonicalType(requirement.type()) != requirement.type()
-                        || RequirementHandlerRegistry.handlerFor(requirement.type()) == null) {
-                    throw new IllegalArgumentException("Recipe " + id + " contains an unregistered requirement type");
-                }
+            for (int index = 0; index < recipe.requirements().size(); index++) {
+                validateRequirement(id, "requirements[" + index + "]", recipe.requirements().get(index));
             }
-            for (MachineOutput output : recipe.machineOutputs()) {
+            for (int index = 0; index < recipe.machineOutputs().size(); index++) {
+                MachineOutput output = recipe.machineOutputs().get(index);
                 if (!OutputRegistry.isCanonical(output)) {
-                    throw new IllegalArgumentException("Recipe " + id + " contains an unregistered output type");
+                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
+                            "Output type is not registered canonically", null);
+                }
+                MachineRequirement derived;
+                try {
+                    derived = OutputRegistry.toRequirement(output, List.of());
+                } catch (RuntimeException exception) {
+                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
+                            "Output type cannot derive a canonical requirement", exception);
+                }
+                if (derived == null) {
+                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
+                            "Output type must derive a canonical requirement", null);
+                }
+                validateRequirement(id, "outputs[" + index + "]", derived);
+                if (derived.io() != RecipeModifier.IOType.OUTPUT) {
+                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
+                            "Derived requirement must have output direction", null);
                 }
             }
+        }
+    }
+
+    private static void validateRequirement(Identifier recipeId, String path,
+                                            MachineRequirement requirement) {
+        if (requirement == null || requirement.type() == null) {
+            throw new MachineRecipeJson.RecipeJsonException(recipeId, path,
+                    "Requirement type must not be null", null);
+        }
+        if (requirement.io() == null) {
+            throw new MachineRecipeJson.RecipeJsonException(recipeId, path,
+                    "Requirement direction must not be null", null);
+        }
+        try {
+            if (RequirementHandlerRegistry.canonicalType(requirement.type()) != requirement.type()
+                    || RequirementHandlerRegistry.handlerFor(requirement.type()) == null) {
+                throw new MachineRecipeJson.RecipeJsonException(recipeId, path,
+                        "Requirement type is not registered canonically", null);
+            }
+        } catch (MachineRecipeJson.RecipeJsonException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new MachineRecipeJsonException(recipeId, path,
+                    "Requirement type validation failed", exception);
         }
     }
 
@@ -250,6 +296,34 @@ public final class RecipeRegistry {
                                 Map<Identifier, MachineRecipe> kubeJS,
                                 Map<Identifier, MachineRecipe> dynamic,
                                 List<String> warnings) {
+        State previous = STATE;
+        long previousCatalogGeneration = catalogGeneration;
+        State next;
+        try {
+            validateRecipeTypes(staticRecipes);
+            validateRecipeTypes(dataPack);
+            validateRecipeTypes(kubeJS);
+            validateRecipeTypes(dynamic);
+            next = buildState(staticRecipes, dataPack, kubeJS, dynamic, warnings);
+        } catch (RuntimeException | Error failure) {
+            catalogGeneration = previousCatalogGeneration;
+            throw failure;
+        }
+        STATE = next;
+        try {
+            CraftingContextPool.onGlobalReload();
+        } catch (RuntimeException | Error failure) {
+            STATE = previous;
+            catalogGeneration = previousCatalogGeneration;
+            throw failure;
+        }
+    }
+
+    private static State buildState(Map<Identifier, MachineRecipe> staticRecipes,
+                                    Map<Identifier, MachineRecipe> dataPack,
+                                    Map<Identifier, MachineRecipe> kubeJS,
+                                    Map<Identifier, MachineRecipe> dynamic,
+                                    List<String> warnings) {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(staticRecipes);
         recipes.putAll(kubeJS);
         recipes.putAll(dataPack);
@@ -277,26 +351,43 @@ public final class RecipeRegistry {
             long version = previous != null && previous.orderedRecipes().equals(orderedRecipes)
                     ? previous.version() : ++catalogGeneration;
             catalogs.put(machineId, new MachineRecipeCatalog(version, machineRecipes, orderedRecipes,
-                    RecipeCandidateIndex.build(orderedRecipes)));
+                    orderedRecipes.isEmpty() ? RecipeCandidateIndex.empty() : RecipeCandidateIndex.build(orderedRecipes)));
         }
-        STATE = new State(immutable(staticRecipes), immutable(dataPack), immutable(kubeJS), immutable(dynamic),
+        return new State(immutable(staticRecipes), immutable(dataPack), immutable(kubeJS), immutable(dynamic),
                 immutable(recipes), immutable(catalogs), List.copyOf(warnings));
-        CraftingContextPool.onGlobalReload();
     }
 
     public static void clearAll() {
         synchronized (RuntimeContentVersion.lock()) {
+        State previous = STATE;
+        Map<Identifier, MachineRecipe> previousStatic = new LinkedHashMap<>(STATIC_RECIPES);
+        long previousCatalogGeneration = catalogGeneration;
         Map<Identifier, MachineRecipeCatalog> emptyCatalogs = new LinkedHashMap<>();
-        for (Identifier machineId : STATE.catalogs().keySet()) {
-            emptyCatalogs.put(machineId, new MachineRecipeCatalog(++catalogGeneration,
-                    List.of(), List.of(), RecipeCandidateIndex.empty()));
+        State next;
+        try {
+            for (Identifier machineId : STATE.catalogs().keySet()) {
+                emptyCatalogs.put(machineId, new MachineRecipeCatalog(++catalogGeneration,
+                        List.of(), List.of(), RecipeCandidateIndex.empty()));
+            }
+            next = State.empty(emptyCatalogs);
+        } catch (RuntimeException | Error failure) {
+            catalogGeneration = previousCatalogGeneration;
+            throw failure;
         }
-        STATIC_RECIPES.clear();
-        STATE = State.empty(emptyCatalogs);
-        CraftingContextPool.onGlobalReload();
-        reloadVersion++;
-        registryVersion++;
-        RuntimeContentVersion.advance();
+        try {
+            STATIC_RECIPES.clear();
+            STATE = next;
+            CraftingContextPool.onGlobalReload();
+            reloadVersion++;
+            registryVersion++;
+            RuntimeContentVersion.advance();
+        } catch (RuntimeException | Error failure) {
+            STATIC_RECIPES.clear();
+            STATIC_RECIPES.putAll(previousStatic);
+            STATE = previous;
+            catalogGeneration = previousCatalogGeneration;
+            throw failure;
+        }
         }
     }
 

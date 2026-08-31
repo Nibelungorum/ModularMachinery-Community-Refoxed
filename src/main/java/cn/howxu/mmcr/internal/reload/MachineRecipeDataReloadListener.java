@@ -67,8 +67,11 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
             RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(candidate.recipes());
             snapshot = candidate.recipes();
             errors = List.of();
+        } catch (MachineRecipeJson.RecipeJsonException exception) {
+            errors = List.of(exception);
+            MMCR.LOG.error("Failed to publish machine recipe data-pack snapshot", exception);
         } catch (RuntimeException exception) {
-            errors = List.of(validationError(candidate.recipes(), exception));
+            errors = List.of(validationError(exception));
             MMCR.LOG.error("Failed to publish machine recipe data-pack snapshot", exception);
         }
     }
@@ -103,8 +106,10 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
             try {
                 validateCandidate(recipes);
                 RecipeRegistry.validateDataPackCandidate(recipes);
+            } catch (MachineRecipeJson.RecipeJsonException exception) {
+                errors.add(exception);
             } catch (RuntimeException exception) {
-                errors.add(validationError(recipes, exception));
+                errors.add(validationError(exception));
             }
         }
         return new PreparedRecipes(Map.copyOf(recipes), List.copyOf(errors));
@@ -123,8 +128,27 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
 
     void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes,
                                            Consumer<RuntimeContentSnapshot> sync) {
-        var committed = publishSnapshot(recipes);
-        sync.accept(committed);
+        Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+        boolean published = false;
+        try {
+            var committed = publishSnapshot(recipes);
+            published = true;
+            sync.accept(committed);
+        } catch (RuntimeException | Error failure) {
+            if (published) {
+                boolean rolledBack = false;
+                try {
+                    RecipeRegistry.replaceDataPack(previous);
+                    rolledBack = true;
+                } catch (RuntimeException | Error rollbackFailure) {
+                    failure.addSuppressed(rollbackFailure);
+                }
+                snapshot = rolledBack ? previous : RecipeRegistry.dataPackSnapshot();
+            } else {
+                snapshot = previous;
+            }
+            throw failure;
+        }
     }
 
     private RuntimeContentSnapshot publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
@@ -140,17 +164,15 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
             MachineRecipe recipe = entry.getValue();
             if (MachineRegistry.getMachine(recipe.machineId()) == null
                     && !MachineDefinitions.containsStatic(recipe.machineId())) {
-                throw new IllegalArgumentException("Recipe " + entry.getKey()
-                        + " at machine: unknown machine " + recipe.machineId());
+                throw new MachineRecipeJson.RecipeJsonException(entry.getKey(), "machine",
+                        "unknown machine " + recipe.machineId(), null);
             }
         }
     }
 
-    private static MachineRecipeJson.RecipeJsonException validationError(Map<Identifier, MachineRecipe> recipes,
-                                                                          RuntimeException exception) {
-        Identifier id = recipes.keySet().stream().findFirst().orElse(MMCR.id("machine_recipe_reload"));
+    private static MachineRecipeJson.RecipeJsonException validationError(RuntimeException exception) {
         String message = exception.getMessage() == null ? "candidate validation failed" : exception.getMessage();
-        return new MachineRecipeJson.RecipeJsonException(id, "$", message, exception);
+        return new MachineRecipeJson.RecipeJsonException(MMCR.id("machine_recipe_reload"), "$", message, exception);
     }
 
     record PreparedRecipes(Map<Identifier, MachineRecipe> recipes,

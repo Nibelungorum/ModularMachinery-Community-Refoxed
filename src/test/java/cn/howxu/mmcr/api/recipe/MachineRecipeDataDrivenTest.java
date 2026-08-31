@@ -96,7 +96,7 @@ class MachineRecipeDataDrivenTest {
         MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:legacy"), json,
                 registries, ignored -> true);
 
-        assertThat(recipe.requirements()).hasSize(2);
+        assertThat(recipe.requirements()).hasSize(4);
         assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof EnergyRequirement energy
                 && energy.fePerTick() == 40);
         assertThat(recipe.machineOutputs()).hasSize(2);
@@ -106,6 +106,78 @@ class MachineRecipeDataDrivenTest {
         });
         assertThat(recipe.fluidOutputs()).singleElement()
                 .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+    }
+
+    @Test
+    void empty_canonical_requirements_preserve_legacy_recipe_fields() {
+        JsonObject json = recipeJson();
+        JsonObject input = new JsonObject();
+        input.addProperty("type", "item");
+        input.add("item", arrayValue("minecraft:iron_ingot"));
+        input.addProperty("count", 2);
+        json.add("inputs", array(input));
+        json.add("requirements", new JsonArray());
+        json.add("outputs", array(stack(Items.IRON_NUGGET, 3)));
+        json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
+        json.addProperty("energy_per_tick", 40);
+
+        MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:empty_requirements"), json,
+                registries, ignored -> true);
+
+        assertThat(recipe.inputs()).hasSize(2);
+        assertThat(recipe.outputs()).singleElement().satisfies(output -> {
+            assertThat(output.getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(output.getCount()).isEqualTo(3);
+        });
+        assertThat(recipe.fluidOutputs()).singleElement()
+                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+        assertThat(recipe.requirements()).hasSize(4);
+        assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof EnergyRequirement energy
+                && energy.fePerTick() == 40);
+    }
+
+    @Test
+    void canonical_outputs_merge_legacy_fluid_outputs_without_loss() {
+        JsonObject json = recipeJson();
+        JsonObject canonicalOutput = new JsonObject();
+        canonicalOutput.addProperty("type", "mmcr:item");
+        canonicalOutput.add("stack", stack(Items.IRON_NUGGET, 3));
+        canonicalOutput.addProperty("chance", 1F);
+        json.add("outputs", array(canonicalOutput));
+        json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
+
+        MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:canonical_and_fluid"), json,
+                registries, ignored -> true);
+
+        assertThat(recipe.machineOutputs()).hasSize(2);
+        assertThat(recipe.outputs()).singleElement().satisfies(output ->
+                assertThat(output.getCount()).isEqualTo(3));
+        assertThat(recipe.fluidOutputs()).singleElement()
+                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+    }
+
+    @Test
+    void codec_and_serializer_retain_legacy_fluid_outputs_with_canonical_outputs() {
+        var ops = registries.createSerializationContext(JsonOps.INSTANCE);
+        JsonObject json = recipeJson();
+        JsonArray outputs = new JsonArray();
+        outputs.add(MachineOutput.CODEC.encodeStart(ops,
+                new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET, 3), 1F)).getOrThrow());
+        json.add("outputs", outputs);
+        json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
+        json.add("requirements", new JsonArray());
+
+        MachineRecipe decoded = MachineRecipe.CODEC.codec().parse(ops, json).getOrThrow();
+        JsonElement serialized = MachineRecipeSerializer.INSTANCE.codec().codec()
+                .encodeStart(ops, decoded).getOrThrow();
+        MachineRecipe roundTrip = MachineRecipeSerializer.INSTANCE.codec().codec()
+                .parse(ops, serialized).getOrThrow();
+
+        assertThat(decoded.machineOutputs()).hasSize(2);
+        assertThat(roundTrip.machineOutputs()).hasSize(2);
+        assertThat(roundTrip.fluidOutputs()).singleElement()
+                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+        assertThat(serialized.getAsJsonObject().has("fluid_outputs")).isFalse();
     }
 
     @Test

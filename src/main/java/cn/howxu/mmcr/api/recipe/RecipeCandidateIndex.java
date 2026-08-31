@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Immutable conservative lookup index for machine recipe input items.
@@ -23,6 +24,7 @@ import java.util.Collections;
 public final class RecipeCandidateIndex {
 
     private static final RecipeCandidateIndex EMPTY = new RecipeCandidateIndex(Map.of(), Set.of(), List.of());
+    private static final AtomicInteger BUILD_COUNT_FOR_TESTING = new AtomicInteger();
 
     private final Map<Item, Set<MachineRecipe>> exactItemCandidates;
     private final Set<MachineRecipe> fallbackCandidates;
@@ -41,13 +43,20 @@ public final class RecipeCandidateIndex {
     }
 
     public static RecipeCandidateIndex build(List<MachineRecipe> recipes) {
+        BUILD_COUNT_FOR_TESTING.incrementAndGet();
         if (recipes == null || recipes.isEmpty()) return EMPTY;
 
         Map<Item, Set<MachineRecipe>> exactItemCandidates = new LinkedHashMap<>();
         Set<MachineRecipe> fallbackCandidates = new LinkedHashSet<>();
         List<MachineRecipe> allCandidates = List.copyOf(recipes);
         for (MachineRecipe recipe : allCandidates) {
-            Set<Item> requiredItems = exactInputItems(recipe);
+            Set<Item> requiredItems;
+            try {
+                requiredItems = exactInputItems(recipe);
+            } catch (RuntimeException exception) {
+                throw new MachineRecipeJson.RecipeJsonException(recipe.id(), "requirements",
+                        "Candidate index could not inspect recipe requirements", exception);
+            }
             if (requiredItems == null) {
                 fallbackCandidates.add(recipe);
                 continue;
@@ -75,6 +84,14 @@ public final class RecipeCandidateIndex {
 
     public List<MachineRecipe> allCandidates() {
         return allCandidates;
+    }
+
+    public static void resetBuildCountForTesting() {
+        BUILD_COUNT_FOR_TESTING.set(0);
+    }
+
+    public static int buildCountForTesting() {
+        return BUILD_COUNT_FOR_TESTING.get();
     }
 
     private static Set<Item> exactInputItems(MachineRecipe recipe) {

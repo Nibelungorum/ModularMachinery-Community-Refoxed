@@ -367,7 +367,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         List<MachineRequirement> canonicalRequirements = explicitRequirements
                 ? requirements : deriveRequirements(inputs, outputs.legacyItemStacks(), fluidOutputs);
         List<MachineOutput> canonicalOutputs = explicitRequirements && !outputs.canonical()
-                ? deriveOutputs(canonicalRequirements) : outputs.values();
+                ? appendOutputs(deriveOutputs(canonicalRequirements), outputs.values()) : outputs.values();
+        canonicalOutputs = appendOutputs(canonicalOutputs, canonicalFluidOutputs(fluidOutputs));
         canonicalOutputs = appendOutputs(canonicalOutputs, machineOutputs);
         return fromCanonical(id, machineId, tickTime, canonicalRequirements, canonicalOutputs, modifiers,
                 priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
@@ -393,7 +394,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                                      List<ItemStack> outputs,
                                                      List<FluidStack> fluidOutputs) {
         if (requirements != null && !(deriveEmptyRequirements && requirements.isEmpty()) && !requirements.isEmpty()) {
-            return deriveOutputs(requirements);
+            List<MachineOutput> result = appendOutputs(deriveOutputs(requirements), canonicalItemOutputs(outputs));
+            return appendOutputs(result, canonicalFluidOutputs(fluidOutputs));
         }
         List<MachineOutput> result = new ArrayList<>();
         if (outputs != null) {
@@ -401,6 +403,24 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         }
         if (fluidOutputs != null) {
             for (FluidStack output : fluidOutputs) result.add(new MachineOutput.FluidOutput(output, 1F));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<MachineOutput> canonicalFluidOutputs(List<FluidStack> fluidOutputs) {
+        if (fluidOutputs == null || fluidOutputs.isEmpty()) return List.of();
+        List<MachineOutput> result = new ArrayList<>(fluidOutputs.size());
+        for (FluidStack output : fluidOutputs) {
+            result.add(new MachineOutput.FluidOutput(output, 1F));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<MachineOutput> canonicalItemOutputs(List<ItemStack> outputs) {
+        if (outputs == null || outputs.isEmpty()) return List.of();
+        List<MachineOutput> result = new ArrayList<>(outputs.size());
+        for (ItemStack output : outputs) {
+            result.add(new MachineOutput.ItemOutput(output, 1F));
         }
         return List.copyOf(result);
     }
@@ -453,7 +473,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return List.copyOf(requirements);
     }
 
-    private static List<LevelRequirement> validateLevelRequirements(List<LevelRequirement> levelRequirements) {
+    static List<LevelRequirement> validateLevelRequirements(List<LevelRequirement> levelRequirements) {
         if (levelRequirements == null || levelRequirements.isEmpty()) return Collections.emptyList();
         var typeIds = new HashSet<Identifier>();
         for (LevelRequirement requirement : levelRequirements) {

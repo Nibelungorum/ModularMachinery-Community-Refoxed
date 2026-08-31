@@ -1,9 +1,15 @@
 package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
+import cn.howxu.mmcr.api.recipe.CustomOutput;
+import cn.howxu.mmcr.api.recipe.RecipeCandidateIndex;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
@@ -17,6 +23,7 @@ import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Proxy;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.io.IOException;
@@ -113,13 +120,56 @@ class MachineRecipeDataReloadListenerTest {
         var candidate = listener.prepare(resources(Map.of(
                 Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()))), null);
 
+        RecipeCandidateIndex.resetBuildCountForTesting();
         listener.apply(candidate, null, null);
 
         assertThat(listener.errors()).isEmpty();
+        assertThat(RecipeCandidateIndex.buildCountForTesting()).isEqualTo(1);
         var published = RecipeRegistry.catalog(machineId);
         assertThat(published.version()).isEqualTo(before.version() + 1);
         assertThat(published.inputIndex().allCandidates()).containsExactlyElementsOf(published.orderedRecipes());
         RecipeRegistry.replaceDataPack(Map.of());
+    }
+
+    @Test
+    void candidate_validation_reports_the_offending_recipe_id_and_json_path() {
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(INVALID_OUTPUT_TYPE);
+            var listener = new MachineRecipeDataReloadListener(registries);
+            var oldId = Identifier.parse("mmcr_test:old_recipe");
+            listener.applySnapshot(Map.of(oldId, recipe()));
+            Map<Identifier, Resource> resourceMap = new LinkedHashMap<>();
+            resourceMap.put(Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()));
+            resourceMap.put(Identifier.parse("mmcr_test:recipes/invalid.json"), resource(invalidOutputRecipeJson()));
+
+            var candidate = listener.prepare(resources(resourceMap), null);
+            listener.apply(candidate, null, null);
+
+            assertThat(listener.errors()).singleElement().satisfies(error -> {
+                assertThat(error.recipeId()).isEqualTo(Identifier.parse("mmcr_test:invalid"));
+                assertThat(error.path()).isEqualTo("outputs[0]");
+            });
+            assertThat(RecipeRegistry.getRecipe(oldId)).isNotNull();
+            assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr_test:valid"))).isNull();
+        }
+    }
+
+    @Test
+    void sync_failure_after_publication_restores_previous_data_pack_snapshot() {
+        var listener = new MachineRecipeDataReloadListener(registries);
+        var oldId = Identifier.parse("mmcr_test:old_snapshot");
+        var newId = Identifier.parse("mmcr_test:new_snapshot");
+        listener.applySnapshot(Map.of(oldId, recipe()));
+        Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+
+        assertThatThrownBy(() -> listener.applySnapshotFromServerReloadHook(Map.of(newId, recipe()), committed -> {
+            throw new IllegalStateException("sync failed");
+        })).isInstanceOf(IllegalStateException.class);
+
+        assertThat(listener.snapshot()).isEqualTo(previous);
+        assertThat(RecipeRegistry.dataPackSnapshot()).isEqualTo(previous);
+        assertThat(RecipeRegistry.getRecipe(oldId)).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(newId)).isNull();
     }
 
     @Test
@@ -212,8 +262,31 @@ class MachineRecipeDataReloadListenerTest {
         return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\",\"tick_time\":20}";
     }
 
+    private static String invalidOutputRecipeJson() {
+        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\","
+                + "\"tick_time\":20,\"outputs\":[{\"type\":\"" + INVALID_OUTPUT_ID + "\"}]}";
+    }
+
     private static MachineRecipe recipe() {
         return new MachineRecipe(Identifier.parse("mmcr_test:placeholder"), Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
+    }
+
+    private static final Identifier INVALID_OUTPUT_ID = Identifier.parse("mmcr_test:invalid_output");
+    private static final OutputType<InvalidOutput> INVALID_OUTPUT_TYPE = new OutputType.Definition<>(
+            INVALID_OUTPUT_ID, MapCodec.unit(() -> new InvalidOutput(7, 1F)),
+            (output, chance) -> new InvalidOutput(output.value(), chance),
+            (output, modifiers) -> output,
+            output -> new InvalidOutput(output.value(), output.chance()));
+
+    private record InvalidOutput(int value, float chance) implements CustomOutput {
+        private InvalidOutput {
+            chance = MachineOutput.clampChance(chance);
+        }
+
+        @Override
+        public OutputType<InvalidOutput> outputType() {
+            return INVALID_OUTPUT_TYPE;
+        }
     }
 }

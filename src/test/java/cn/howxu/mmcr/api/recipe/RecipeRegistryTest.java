@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -235,6 +236,27 @@ class RecipeRegistryTest {
     }
 
     @Test
+    void dataPackRejectsOutputWithoutCanonicalDerivedRequirement() {
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(INVALID_OUTPUT_TYPE);
+            Identifier previousId = Identifier.parse("mmcr:valid_output_recipe");
+            RecipeRegistry.replaceDataPack(Map.of(previousId, recipe(previousId.toString(), "mmcr:test_machine_name")));
+            Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+            Identifier invalidId = Identifier.parse("mmcr:invalid_output_recipe");
+            MachineRecipe invalid = MachineRecipe.fromCanonical(invalidId, Identifier.parse("mmcr:test_machine_name"),
+                    20, List.of(), List.of(new InvalidOutput(7, 1F)), List.of(), 0, 1, false, false,
+                    List.of(), false, Set.of());
+
+            assertThatThrownBy(() -> RecipeRegistry.replaceDataPack(Map.of(invalidId, invalid)))
+                    .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                        assertThat(error.recipeId()).isEqualTo(invalidId);
+                        assertThat(error.path()).isEqualTo("outputs[0]");
+                    });
+            assertThat(RecipeRegistry.dataPackSnapshot()).isSameAs(previous);
+        }
+    }
+
+    @Test
     void recipe_layer_publish_discards_pooled_planning_contexts() {
         Identifier recipeId = Identifier.parse("mmcr:pool_reload_recipe");
         CraftingContextPool pool = CraftingContextPool.global();
@@ -254,5 +276,23 @@ class RecipeRegistryTest {
 
     private static MachineRecipe recipe(String id, String machineId, int tickTime) {
         return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), tickTime, List.of(), List.of());
+    }
+
+    private static final Identifier INVALID_OUTPUT_ID = Identifier.parse("mmcr_test:invalid_output");
+    private static final OutputType<InvalidOutput> INVALID_OUTPUT_TYPE = new OutputType.Definition<>(
+            INVALID_OUTPUT_ID, MapCodec.unit(() -> new InvalidOutput(7, 1F)),
+            (output, chance) -> new InvalidOutput(output.value(), chance),
+            (output, modifiers) -> output,
+            output -> new InvalidOutput(output.value(), output.chance()));
+
+    private record InvalidOutput(int value, float chance) implements CustomOutput {
+        private InvalidOutput {
+            chance = MachineOutput.clampChance(chance);
+        }
+
+        @Override
+        public OutputType<InvalidOutput> outputType() {
+            return INVALID_OUTPUT_TYPE;
+        }
     }
 }
