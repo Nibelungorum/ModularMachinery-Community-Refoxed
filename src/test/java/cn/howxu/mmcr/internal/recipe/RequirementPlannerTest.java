@@ -1235,8 +1235,9 @@ class RequirementPlannerTest {
     @Test
     void item_planning_supports_parallelism_above_integer_maximum() {
         long parallelism = (long) Integer.MAX_VALUE + 1L;
-        BulkItemStorage storage = new BulkItemStorage(Long.MAX_VALUE, null);
-        storage.insert(ironResource(), Long.MAX_VALUE, false);
+        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 1, Long.MAX_VALUE, ItemResource::isEmpty, null);
+        storage.setContents(0, ironResource(), Long.MAX_VALUE);
 
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,

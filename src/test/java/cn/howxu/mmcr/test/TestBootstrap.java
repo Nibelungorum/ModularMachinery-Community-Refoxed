@@ -41,10 +41,14 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponentInitializers;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -96,6 +100,7 @@ public final class TestBootstrap {
             if (MachineDefinitions.getRegistration(id("test_cube")) == null) {
                 restoreMachineDefinitions();
             }
+            bindAllVanillaItemComponents();
             return;
         }
 
@@ -476,15 +481,41 @@ public final class TestBootstrap {
     }
 
     private static void bindAllVanillaItemComponents() {
-        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        for (Item item : BuiltInRegistries.ITEM) {
-            Holder.Reference<Item> holder = item.builtInRegistryHolder();
-            try {
-                holder.components();
-            } catch (NullPointerException ignored) {
-                holder.bindComponents(DataComponentMap.EMPTY);
+        try {
+            Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+            Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+            Field initializersField = DataComponentInitializers.class.getDeclaredField("initializers");
+            initializersField.setAccessible(true);
+            Field keyField = null;
+            Field initializerField = null;
+            RegistryAccess registryAccess = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+            for (Object entry : (List<?>) initializersField.get(BuiltInRegistries.DATA_COMPONENT_INITIALIZERS)) {
+                if (keyField == null) {
+                    keyField = entry.getClass().getDeclaredField("key");
+                    keyField.setAccessible(true);
+                    initializerField = entry.getClass().getDeclaredField("initializer");
+                    initializerField.setAccessible(true);
+                }
+                ResourceKey<?> key = (ResourceKey<?>) keyField.get(entry);
+                if (!key.isFor(Registries.ITEM)) continue;
+                @SuppressWarnings("unchecked")
+                ResourceKey<Item> itemKey = (ResourceKey<Item>) key;
+                Item item = BuiltInRegistries.ITEM.getValue(itemKey);
+                if (item == null) continue;
+
+                DataComponentMap.Builder builder = DataComponentMap.builder();
+                @SuppressWarnings("unchecked")
+                DataComponentInitializers.Initializer<Item> initializer =
+                        (DataComponentInitializers.Initializer<Item>) initializerField.get(entry);
+                try {
+                    initializer.run(builder, registryAccess, itemKey);
+                } catch (IllegalStateException ignored) {
+                    // The test bootstrap has no loaded tags for delayed components.
+                }
+                item.builtInRegistryHolder().bindComponents(builder.build());
             }
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to bind vanilla item components", exception);
         }
     }
 

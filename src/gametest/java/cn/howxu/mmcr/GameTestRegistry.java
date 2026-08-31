@@ -65,6 +65,8 @@ public final class GameTestRegistry {
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
         register(event, "fluid_hatch_bucket_interaction", 100, helper -> new FluidHatchCapabilityGameTest().bucketInteractionRespectsHatchDirection(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
+        register(event, "item_bus_non_stackable_limit", 100,
+                ItemBusCapabilityGameTest::itemBusDoesNotStackNonStackableItems);
         register(event, "item_bus_capability_cache_auto_io_side", 100, ItemBusCapabilityGameTest::itemBusCapabilityCacheFollowsAutoIOSideConfig);
         register(event, "item_bus_drops_contents", 100, ItemBusCapabilityGameTest::itemBusDropsStoredItemsWhenRemoved);
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);

@@ -7,6 +7,8 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -70,6 +72,24 @@ public class ItemBusCapabilityGameTest {
             tx.commit();
         }
 
+        helper.succeed();
+    }
+
+    public static void itemBusDoesNotStackNonStackableItems(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
+        ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+        sword.set(DataComponents.CUSTOM_NAME, Component.literal("Sharpness II"));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            long inserted = bus.itemStorage().insert(0, ItemResource.of(sword), 2L, transaction);
+            helper.assertTrue(inserted == 1L, "Non-stackable items are limited to one item per UI slot");
+            transaction.commit();
+        }
+
+        helper.assertTrue(bus.itemStorage().amount(0) == 1L,
+                "Non-stackable item storage does not exceed the item stack limit");
         helper.succeed();
     }
 

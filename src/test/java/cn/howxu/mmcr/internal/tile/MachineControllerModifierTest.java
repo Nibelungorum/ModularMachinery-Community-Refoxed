@@ -62,12 +62,13 @@ class MachineControllerModifierTest {
     @Test
     void formed_upgrade_bus_uses_the_machine_appearance_base_texture() {
         var machineId = MMCR.id("upgrade_bus_appearance_machine");
-        var busPos = new BlockPos(1, 0, 0);
+        var busPatternPos = new BlockPos(1, 0, 0);
+        var busPos = new BlockPos(-1, 0, 0);
         Block busBlock = ModBlocks.BLOCKS.get("upgrade_bus_normal").get();
         var appearance = new MachineAppearanceSpec(
                 MMCR.id("basic_casing"), MMCR.id("block/controller"), MMCR.id("block/formed_port"));
         var machine = new DynamicMachine(machineId, "Upgrade Bus Appearance", new BlockArray(
-                Map.of(busPos, new BlockPredicate.OfBlock(busBlock))),
+                Map.of(busPatternPos, new BlockPredicate.OfBlock(busBlock))),
                 MachineControllerSpec.defaultsFor(machineId), appearance,
                 PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(),
                 1, false, false, 1);
