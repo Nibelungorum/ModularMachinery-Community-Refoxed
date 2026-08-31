@@ -39,3 +39,6 @@
 	path = reference/ldlib2
 	url = https://github.com/Low-Drag-MC/LDLib2
 	branch = 26.1
+[submodule "wiki"]
+	path = wiki
+	url = https://github.com/Nibelungorum/mmcr-wiki
