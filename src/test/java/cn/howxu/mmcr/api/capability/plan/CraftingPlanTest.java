@@ -154,7 +154,17 @@ class CraftingPlanTest {
 
     @Test
     void preserves_output_simulation_when_direct_operation_cannot_scale() {
-        CapabilityOperation operation = transaction -> CapabilityResult.successful();
+        CapabilityOperation operation = new CapabilityOperation() {
+            @Override
+            public CapabilityResult commit(TransactionContext transaction) {
+                return CapabilityResult.successful();
+            }
+
+            @Override
+            public CapabilityOperation forParallelism(long parallelism) {
+                return null;
+            }
+        };
         OutputSimulation simulation = new OutputSimulation(4L, 2L, OutputFit.PARTIAL);
         ExecutionStatus unsafeFailure = new ExecutionStatus(
                 Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),

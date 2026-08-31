@@ -60,20 +60,46 @@ public final class CapabilityFactories {
         if (!type.equals(request.type())) throw new IllegalArgumentException("Capability request type does not match");
         if (ioType != request.ioType()) throw new IllegalArgumentException("Capability request IO type does not match");
         if (request.parallelism() <= 0) throw new IllegalArgumentException("parallelism must be positive");
-        if (request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest
-                && storage instanceof ResourceStorage<?> resourceStorage) {
-            return resourceOperation(resourceStorage, resourceRequest);
+        return operationFacet(type, storage).prepare(request);
+    }
+
+    private static OperationFacet operationFacet(CapabilityType type, CapabilityStorage storage) {
+        if (storage instanceof ResourceStorage<?> resourceStorage) {
+            return request -> {
+                if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
+                    return unsupportedOperation(type);
+                }
+                return resourceOperation(resourceStorage, resourceRequest);
+            };
         }
-        if (request instanceof CapabilityRequests.ValueRequest valueRequest
-                && storage instanceof LongValueStorage valueStorage) {
-            return valueOperation(valueStorage, valueRequest);
+        if (storage instanceof LongValueStorage valueStorage) {
+            return request -> {
+                if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
+                    return unsupportedOperation(type);
+                }
+                return valueOperation(valueStorage, valueRequest);
+            };
         }
-        if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
-                && storage instanceof FloatValueStorage valueStorage) {
-            return transaction -> valueStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
-                    ? CapabilityResult.successful() : CapabilityResult.failure(failure(type, "smart_value"));
+        if (storage instanceof FloatValueStorage valueStorage) {
+            return request -> {
+                if (!(request instanceof CapabilityRequests.SmartValueRequest smartRequest)) {
+                    return unsupportedOperation(type);
+                }
+                return transaction -> valueStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
+                        ? CapabilityResult.successful()
+                        : CapabilityResult.failure(failure(type, "smart_value"));
+            };
         }
+        return request -> unsupportedOperation(type);
+    }
+
+    private static CapabilityOperation unsupportedOperation(CapabilityType type) {
         return transaction -> CapabilityResult.failure(failure(type, "unsupported_request"));
+    }
+
+    @FunctionalInterface
+    private interface OperationFacet {
+        CapabilityOperation prepare(CapabilityRequest request);
     }
 
     private static CapabilityOperation resourceOperation(ResourceStorage<?> storage,

@@ -184,8 +184,19 @@ class RequirementPlannerTest {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
+                CapabilityOperation operation = new CapabilityOperation() {
+                    @Override
+                    public CapabilityResult commit(TransactionContext transaction) {
+                        return CapabilityResult.successful();
+                    }
+
+                    @Override
+                    public CapabilityOperation forParallelism(long parallelism) {
+                        return null;
+                    }
+                };
                 return new RequirementPlan(context.requirementIndex(), 1,
-                        List.of(transaction -> CapabilityResult.successful()), null);
+                        List.of(operation), null);
             }
         });
 

@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Applies a prepared capability operation within a transaction.
@@ -17,8 +16,8 @@ public interface CapabilityOperation {
      * @param parallelism the final plan parallelism
      * @return an operation safe for the final parallelism
      */
-    default @Nullable CapabilityOperation forParallelism(long parallelism) {
+    default CapabilityOperation forParallelism(long parallelism) {
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
-        return null;
+        return this;
     }
 }
