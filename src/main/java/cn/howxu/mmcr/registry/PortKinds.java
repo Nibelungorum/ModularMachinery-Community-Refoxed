@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
@@ -205,8 +206,8 @@ public final class PortKinds {
         @Override
         public List<PortFamilyDescriptor> families() {
             return List.of(
-                    new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, itemTier(size), List.of(itemAlias(ioType))),
-                    new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, fluidTier(size), List.of(fluidAlias(ioType))));
+                    new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, size.itemTier(), List.of(itemAlias(ioType))),
+                    new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, size.fluidTier(), List.of(fluidAlias(ioType))));
         }
 
         @Override
@@ -231,9 +232,9 @@ public final class PortKinds {
         public List<PortFamilyDescriptor> families() {
             return List.of(
                     new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType,
-                            ItemBusSize.LUDICROUS.ordinal() + 1, List.of(itemAlias(ioType))),
+                            size.itemTier(), List.of(itemAlias(ioType))),
                     new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType,
-                            FluidHatchSize.VACUUM.ordinal() + 1, List.of(fluidAlias(ioType))));
+                            size.fluidTier(), List.of(fluidAlias(ioType))));
         }
 
         @Override
@@ -284,6 +285,10 @@ public final class PortKinds {
     private static final List<IOPortKind> DEFAULTS = createDefaults();
     private static final List<IOPortKind> REGISTRY = new CopyOnWriteArrayList<>(DEFAULTS);
 
+    static {
+        DEFAULTS.forEach(kind -> PortDefinitionRegistry.register(kind.definition()));
+    }
+
     public static final IOPortKind ITEM_INPUT = byId("item_input_bus");
     public static final IOPortKind ITEM_OUTPUT = byId("item_output_bus");
     public static final IOPortKind FLUID_INPUT = byId("fluid_input_hatch");
@@ -301,7 +306,11 @@ public final class PortKinds {
     public static final IOPortKind EXTENDED_COMBINED_INPUT = byId("extended_combined_input_advanced");
     public static final IOPortKind EXTENDED_COMBINED_OUTPUT = byId("extended_combined_output_advanced");
 
-    public static void register(IOPortKind kind) { REGISTRY.add(kind); }
+    public static void register(IOPortKind kind) {
+        if (kind == null) throw new IllegalArgumentException("kind null");
+        PortDefinitionRegistry.register(kind.definition());
+        REGISTRY.add(kind);
+    }
 
     public static List<IOPortKind> all() { return Collections.unmodifiableList(REGISTRY); }
 
@@ -309,6 +318,8 @@ public final class PortKinds {
     public static void clearForTesting() {
         REGISTRY.clear();
         REGISTRY.addAll(DEFAULTS);
+        PortDefinitionRegistry.clearForTesting();
+        DEFAULTS.forEach(kind -> PortDefinitionRegistry.register(kind.definition()));
     }
 
     private static List<IOPortKind> createDefaults() {
@@ -372,24 +383,6 @@ public final class PortKinds {
                     IOType.OUTPUT, size, ExtendedCombinedPortBlockEntity::new));
         }
         return List.copyOf(defaults);
-    }
-
-    private static int itemTier(CombinedPortSize size) {
-        return switch (size) {
-            case BASIC -> ItemBusSize.NORMAL.ordinal();
-            case ADVANCED -> ItemBusSize.REINFORCED.ordinal();
-            case REINFORCED -> ItemBusSize.BIG.ordinal();
-            case ULTIMATE -> ItemBusSize.HUGE.ordinal();
-        };
-    }
-
-    private static int fluidTier(CombinedPortSize size) {
-        return switch (size) {
-            case BASIC -> FluidHatchSize.BIG.ordinal();
-            case ADVANCED -> FluidHatchSize.HUGE.ordinal();
-            case REINFORCED -> FluidHatchSize.LUDICROUS.ordinal();
-            case ULTIMATE -> FluidHatchSize.VACUUM.ordinal();
-        };
     }
 
     private static String itemAlias(IOType ioType) {

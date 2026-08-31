@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.port;
 
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
 
@@ -32,5 +33,9 @@ public record PortFamilyDescriptor(
             aliases.add(alias);
         }
         countAliases = List.copyOf(aliases);
+    }
+
+    public boolean matches(CapabilityBinding binding) {
+        return binding != null && familyId.equals(binding.type().id()) && ioType == binding.ioType();
     }
 }

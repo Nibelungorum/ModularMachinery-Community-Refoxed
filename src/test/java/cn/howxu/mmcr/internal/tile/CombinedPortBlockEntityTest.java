@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
@@ -122,6 +123,14 @@ class CombinedPortBlockEntityTest {
     }
 
     @Test
+    void combinedDefinitionsKeepItemBeforeFluidAndBindTheirPortDirection() {
+        assertBindingOrder("combined_input_basic", IOType.INPUT);
+        assertBindingOrder("combined_output_basic", IOType.OUTPUT);
+        assertBindingOrder("extended_combined_input_advanced", IOType.INPUT);
+        assertBindingOrder("extended_combined_output_advanced", IOType.OUTPUT);
+    }
+
+    @Test
     void combinedFamiliesUseDirectionSpecificAliases() {
         assertThat(combined("combined_input_basic").kind().families())
                 .extracting(PortFamilyDescriptor::countAliases)
@@ -215,6 +224,16 @@ class CombinedPortBlockEntityTest {
         assertThat(port(id).capabilitySnapshot().capabilities())
                 .extracting(MachineCapability::type)
                 .containsExactly(new CapabilityType(PortFamilyIds.ITEM), new CapabilityType(PortFamilyIds.FLUID));
+    }
+
+    private static void assertBindingOrder(String id, IOType ioType) {
+        List<CapabilityBinding> bindings = port(id).kind().bindings();
+        assertThat(bindings)
+                .extracting(CapabilityBinding::type)
+                .containsExactly(new CapabilityType(PortFamilyIds.ITEM), new CapabilityType(PortFamilyIds.FLUID));
+        assertThat(bindings)
+                .extracting(CapabilityBinding::ioType)
+                .containsExactly(ioType, ioType);
     }
 
     private static CombinedPortBlockEntity combined(String id) {

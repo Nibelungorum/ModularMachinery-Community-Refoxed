@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
@@ -203,9 +204,21 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     protected final MachineCapability createCapability(CapabilityType type) {
         if (type == null) throw new IllegalArgumentException("Capability type must not be null");
-        CapabilityDefinition definition = Optional.ofNullable(CapabilityRegistry.get(type))
-                .orElseThrow(() -> new IllegalStateException("Capability is not registered: " + type.id()));
-        return definition.factory().create(new CapabilityCreationContext() {
+        CapabilityBinding binding = kind().definition().bindings().stream()
+                .filter(candidate -> candidate.type().equals(type))
+                .findFirst()
+                .orElseGet(() -> {
+                    CapabilityDefinition definition = Optional.ofNullable(CapabilityRegistry.get(type))
+                            .orElseThrow(() -> new IllegalStateException("Capability is not registered: " + type.id()));
+                    return new CapabilityBinding(type, ioType(), definition.factory(),
+                            (ignored, tier) -> true);
+                });
+        return createCapability(binding);
+    }
+
+    protected final MachineCapability createCapability(CapabilityBinding binding) {
+        if (binding == null) throw new IllegalArgumentException("Capability binding must not be null");
+        return binding.factory().create(new CapabilityCreationContext() {
             @Override
             public CapabilityHost host() {
                 return IOPortBlockEntity.this;
@@ -213,7 +226,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
             @Override
             public IOType ioType() {
-                return IOPortBlockEntity.this.ioType();
+                return binding.ioType();
             }
 
             @Override

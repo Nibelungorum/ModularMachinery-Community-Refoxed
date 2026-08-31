@@ -86,7 +86,8 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
-            capabilitySnapshot = new CapabilitySnapshot(kind.capabilityTypes().stream()
+            capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
+                    .filter(binding -> binding.ioType() == kind.ioType())
                     .map(this::createCapability)
                     .toList());
         }

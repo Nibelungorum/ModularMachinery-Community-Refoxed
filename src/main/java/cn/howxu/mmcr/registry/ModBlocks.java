@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
+import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -34,6 +35,7 @@ public final class ModBlocks {
     static {
         BLOCKS.put("basic_casing", REGISTER.registerBlock("basic_casing", MachineCasingBlock::new));
         PortKinds.all().forEach(ModBlocks::registerIoPort);
+        PortDefinitionRegistry.freeze();
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
         registerSmartInterface();
