@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -86,16 +87,47 @@ public final class ModCapabilities {
 
     private static List<IOPortKind> nativeCapabilityPorts() {
         return PortKinds.all().stream()
-                .filter(kind -> !kind.families().isEmpty())
+                .filter(kind -> !kind.families().isEmpty() || !externalBindings(kind).isEmpty())
                 .toList();
     }
 
     private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+        List<CapabilityBinding> externalBindings = externalBindings(kind);
+        Set<CapabilityType> externallyExposed = externalBindings.stream()
+                .map(CapabilityBinding::type)
+                .collect(java.util.stream.Collectors.toSet());
+        for (CapabilityBinding binding : externalBindings) {
+            binding.externalExposure().ifPresent(exposure -> registerExternalPort(event, kind, binding, exposure));
+        }
         kind.families().stream()
+                .filter(family -> !externallyExposed.contains(new CapabilityType(family.familyId())))
                 .map(PortFamilyDescriptor::familyId)
                 .map(NATIVE_REGISTRATIONS::get)
                 .filter(registration -> registration != null)
                 .forEach(registration -> registration.accept(event, kind));
+    }
+
+    static List<CapabilityBinding> externalBindings(IOPortKind kind) {
+        if (kind == null) return List.of();
+        return kind.definition().bindings().stream()
+                .filter(binding -> binding.externalExposure().isPresent())
+                .toList();
+    }
+
+    private static <T> void registerExternalPort(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                                  CapabilityBinding binding,
+                                                  CapabilityBinding.ExternalExposure<T> exposure) {
+        BlockCapability<T, Direction> capability = BlockCapability.createSided(exposure.id(), exposure.valueType());
+        event.registerBlockEntity(
+                capability,
+                ModBlockEntities.BES.get(kind.id()).get(),
+                (be, side) -> {
+                    if (!(be instanceof IOPortBlockEntity port)
+                            || port.ioType() != binding.ioType()
+                            || !port.isAutoIOSideExposed(binding.type(), side)
+                            || port.capability(binding.type()) == null) return null;
+                    return exposure.resolver().resolve(port, binding.ioType(), side);
+                });
     }
 
     private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind) {

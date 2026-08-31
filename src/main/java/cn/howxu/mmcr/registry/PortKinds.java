@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
 import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
@@ -14,6 +15,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
+import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
@@ -248,14 +250,51 @@ public final class PortKinds {
             IOType ioType,
             List<PortFamilyDescriptor> families,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
-            List<CapabilityType> capabilityTypes)
+            List<CapabilityType> capabilityTypes,
+            PortDefinition definition)
             implements IOPortKind {
+        public CombinedKind(String id, IOType ioType, List<PortFamilyDescriptor> families,
+                            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
+                            List<CapabilityType> capabilityTypes) {
+            this(id, ioType, families, entityFactory, capabilityTypes, null);
+            LegacyStructureDescriptor.validate(ioType, families, capabilityTypes);
+        }
+
+        public CombinedKind(String id, IOType ioType, List<PortFamilyDescriptor> families,
+                            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
+                            PortDefinition definition) {
+            this(id, ioType, families, entityFactory, definitionTypes(definition), definition);
+        }
+
         public CombinedKind {
+            if (id == null) throw new IllegalArgumentException("id null");
+            if (ioType == null) throw new IllegalArgumentException("ioType null");
+            if (families == null) throw new IllegalArgumentException("families null");
+            if (entityFactory == null) throw new IllegalArgumentException("entityFactory null");
+            if (capabilityTypes == null) throw new IllegalArgumentException("capabilityTypes null");
+            families = List.copyOf(families);
+            capabilityTypes = List.copyOf(capabilityTypes);
+        }
+
+        @Override
+        public PortDefinition definition() {
+            return definition == null ? IOPortKind.super.definition() : definition;
+        }
+
+        private static List<CapabilityType> definitionTypes(PortDefinition definition) {
+            if (definition == null) throw new IllegalArgumentException("definition null");
+            return definition.bindings().stream().map(CapabilityBinding::type).toList();
+        }
+    }
+
+    /** Compatibility descriptor for the pre-binding two-family combined kind constructor. */
+    private static final class LegacyStructureDescriptor {
+        private static void validate(IOType ioType, List<PortFamilyDescriptor> families,
+                                     List<CapabilityType> capabilityTypes) {
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (families == null || families.size() != 2) {
                 throw new IllegalArgumentException("combined kind must have exactly two families");
             }
-            families = List.copyOf(families);
             boolean item = false;
             boolean fluid = false;
             for (PortFamilyDescriptor family : families) {
@@ -278,7 +317,6 @@ public final class PortKinds {
                     || !capabilityTypes.contains(BuiltinCapabilityDefinitions.FLUID_TYPE)) {
                 throw new IllegalArgumentException("combined kind must expose item and fluid capabilities only");
             }
-            capabilityTypes = List.copyOf(capabilityTypes);
         }
     }
 

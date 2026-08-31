@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.port;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityFactory;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding.ExternalExposure;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -74,6 +76,42 @@ class PortDefinitionRegistryTest {
 
         assertThat(PortDefinitionRegistry.resolve(id("two"), IOType.INPUT, 0))
                 .containsExactly(item, fluid);
+    }
+
+    @Test
+    void retains_a_custom_binding_factory_and_typed_external_exposure() {
+        AtomicBoolean factoryCalled = new AtomicBoolean();
+        CapabilityFactory factory = context -> {
+            factoryCalled.set(true);
+            return null;
+        };
+        ExternalExposure<String> exposure = new ExternalExposure<>(id("native"), String.class,
+                (host, ioType, side) -> "exposed");
+        CapabilityBinding binding = new CapabilityBinding(
+                new CapabilityType(MMCR.id("custom")), IOType.INPUT, factory, PortTierPolicy.always(), exposure);
+        PortDefinitionRegistry.register(PortDefinition.of(id("custom"), binding));
+
+        CapabilityBinding resolved = PortDefinitionRegistry.resolve(id("custom"), IOType.INPUT, 0).getFirst();
+        assertThat(resolved.externalExposure()).hasValue(exposure);
+        resolved.factory().create(null);
+        assertThat(factoryCalled).isTrue();
+    }
+
+    @Test
+    void generic_combined_kind_accepts_a_third_definition_binding() {
+        CapabilityBinding item = binding("generic_item", IOType.INPUT, PortTierPolicy.always());
+        CapabilityBinding fluid = binding("generic_fluid", IOType.INPUT, PortTierPolicy.always());
+        CapabilityBinding gas = binding("generic_gas", IOType.INPUT, PortTierPolicy.always());
+        PortDefinition definition = PortDefinition.of(id("generic_combined"), List.of(item, fluid, gas));
+        IOPortKind kind = new PortKinds.CombinedKind("generic_combined", IOType.INPUT,
+                List.of(
+                        new PortFamilyDescriptor(MMCR.id("generic_item"), IOType.INPUT, 0, List.of("item")),
+                        new PortFamilyDescriptor(MMCR.id("generic_fluid"), IOType.INPUT, 0, List.of("fluid")),
+                        new PortFamilyDescriptor(MMCR.id("generic_gas"), IOType.INPUT, 0, List.of("gas"))),
+                PortKinds.ITEM_INPUT.entityFactory(), definition);
+
+        assertThat(kind.definition()).isSameAs(definition);
+        assertThat(kind.capabilityTypes()).containsExactly(item.type(), fluid.type(), gas.type());
     }
 
     @Test
