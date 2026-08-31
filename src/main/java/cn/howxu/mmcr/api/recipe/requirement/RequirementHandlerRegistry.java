@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -35,36 +36,55 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class RequirementHandlerRegistry {
     private static final Map<RequirementType<?>, RequirementHandler<?>> HANDLERS = new ConcurrentHashMap<>();
 
-    static {
-        registerBuiltIns();
-    }
-
     private RequirementHandlerRegistry() {
     }
 
-    public static <R extends MachineRequirement> void register(RequirementHandler<R> handler) {
-        if (handler == null) throw new IllegalArgumentException("handler must not be null");
-        RequirementType<R> type = handler.type();
-        if (type == null) throw new IllegalArgumentException("handler type must not be null");
-        if (HANDLERS.putIfAbsent(type, handler) != null) {
+    public static <R extends MachineRequirement> void register(RequirementType<R> type) {
+        if (type == null) throw new IllegalArgumentException("type must not be null");
+        if (type.handler() == null) throw new IllegalArgumentException("type handler must not be null");
+        if (HANDLERS.putIfAbsent(type, type.handler()) != null) {
             throw new IllegalArgumentException("Duplicate requirement handler type: " + type.id());
         }
     }
 
     public static RequirementHandler<?> handlerFor(RequirementType<?> type) {
         if (type == null) throw new IllegalArgumentException("type must not be null");
-        return HANDLERS.get(type);
+        RequirementHandler<?> handler = HANDLERS.get(type);
+        if (handler == null && isBuiltIn(type.id())) {
+            registerBuiltIns();
+            handler = HANDLERS.get(type);
+        }
+        return handler;
+    }
+
+    public static RequirementType<?> typeFor(Identifier id) {
+        if (id == null) throw new IllegalArgumentException("id must not be null");
+        RequirementType<?> type = HANDLERS.keySet().stream()
+                .filter(candidate -> candidate.id().equals(id)).findFirst().orElse(null);
+        if (type == null && isBuiltIn(id)) {
+            registerBuiltIns();
+            type = HANDLERS.keySet().stream()
+                    .filter(candidate -> candidate.id().equals(id)).findFirst().orElse(null);
+        }
+        return type;
     }
 
     public static void registerBuiltIns() {
-        registerBuiltIn(new ItemHandler());
-        registerBuiltIn(new FluidHandler());
-        registerBuiltIn(new EnergyHandler());
-        registerBuiltIn(new SmartInterfaceHandler());
+        registerBuiltIn(ItemRequirement.TYPE);
+        registerBuiltIn(FluidRequirement.TYPE);
+        registerBuiltIn(EnergyRequirement.TYPE);
+        registerBuiltIn(SmartInterfaceRequirement.TYPE);
     }
 
-    private static void registerBuiltIn(RequirementHandler<?> handler) {
-        HANDLERS.putIfAbsent(handler.type(), handler);
+    private static void registerBuiltIn(RequirementType<?> type) {
+        HANDLERS.putIfAbsent(type, type.handler());
+    }
+
+    private static boolean isBuiltIn(Identifier id) {
+        return id.equals(Identifier.fromNamespaceAndPath("mmcr", "item"))
+                || id.equals(Identifier.fromNamespaceAndPath("mmcr", "fluid"))
+                || id.equals(Identifier.fromNamespaceAndPath("mmcr", "energy"))
+                || id.equals(Identifier.fromNamespaceAndPath("mmcr", "smart_interface"));
     }
 
     private static ExecutionStatus blocked(MachineRequirement requirement, String reason) {
@@ -159,9 +179,9 @@ public final class RequirementHandlerRegistry {
         }
     }
 
-    private static RequirementPlan planEnergy(EnergyRequirement requirement,
-                                               List<MachineCapability> capabilities,
-                                               PlanningContext context) {
+    static RequirementPlan planEnergy(EnergyRequirement requirement,
+                                      List<MachineCapability> capabilities,
+                                      PlanningContext context) {
         if (requirement.fePerTick() <= 0) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
@@ -185,9 +205,9 @@ public final class RequirementHandlerRegistry {
                         allowPartialOutput, false)));
     }
 
-    private static RequirementPlan planItem(ItemRequirement requirement,
-                                             List<MachineCapability> capabilities,
-                                             PlanningContext context) {
+    static RequirementPlan planItem(ItemRequirement requirement,
+                                    List<MachineCapability> capabilities,
+                                    PlanningContext context) {
         long parallelism = context.requestedParallelism();
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && !shouldProduce(requirement.chance())) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
@@ -221,9 +241,9 @@ public final class RequirementHandlerRegistry {
                         allowPartialOutput, false)));
     }
 
-    private static RequirementPlan planFluid(FluidRequirement requirement,
-                                              List<MachineCapability> capabilities,
-                                              PlanningContext context) {
+    static RequirementPlan planFluid(FluidRequirement requirement,
+                                     List<MachineCapability> capabilities,
+                                     PlanningContext context) {
         long parallelism = context.requestedParallelism();
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && !shouldProduce(requirement.chance())) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
@@ -249,9 +269,9 @@ public final class RequirementHandlerRegistry {
                         allowPartialOutput, false)));
     }
 
-    private static RequirementPlan planSmartInterface(SmartInterfaceRequirement requirement,
-                                                        List<MachineCapability> capabilities,
-                                                        PlanningContext context) {
+    static RequirementPlan planSmartInterface(SmartInterfaceRequirement requirement,
+                                               List<MachineCapability> capabilities,
+                                               PlanningContext context) {
         for (MachineCapability capability : capabilities) {
             if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
@@ -615,59 +635,4 @@ public final class RequirementHandlerRegistry {
         return chance >= 1F || chance > 0F && Math.random() < chance;
     }
 
-    private static final class ItemHandler implements RequirementHandler<ItemRequirement> {
-        @Override
-        public RequirementType<ItemRequirement> type() {
-            return ItemRequirement.TYPE;
-        }
-
-        @Override
-        public RequirementPlan plan(ItemRequirement requirement, List<MachineCapability> capabilities,
-                                    PlanningContext context) {
-            return planItem(requirement, capabilities, context);
-        }
-
-    }
-
-    private static final class FluidHandler implements RequirementHandler<FluidRequirement> {
-        @Override
-        public RequirementType<FluidRequirement> type() {
-            return FluidRequirement.TYPE;
-        }
-
-        @Override
-        public RequirementPlan plan(FluidRequirement requirement, List<MachineCapability> capabilities,
-                                    PlanningContext context) {
-            return planFluid(requirement, capabilities, context);
-        }
-
-    }
-
-    private static final class EnergyHandler implements RequirementHandler<EnergyRequirement> {
-        @Override
-        public RequirementType<EnergyRequirement> type() {
-            return EnergyRequirement.TYPE;
-        }
-
-        @Override
-        public RequirementPlan plan(EnergyRequirement requirement, List<MachineCapability> capabilities,
-                                    PlanningContext context) {
-            return planEnergy(requirement, capabilities, context);
-        }
-
-    }
-
-    private static final class SmartInterfaceHandler implements RequirementHandler<SmartInterfaceRequirement> {
-        @Override
-        public RequirementType<SmartInterfaceRequirement> type() {
-            return SmartInterfaceRequirement.TYPE;
-        }
-
-        @Override
-        public RequirementPlan plan(SmartInterfaceRequirement requirement, List<MachineCapability> capabilities,
-                                    PlanningContext context) {
-            return planSmartInterface(requirement, capabilities, context);
-        }
-
-    }
 }

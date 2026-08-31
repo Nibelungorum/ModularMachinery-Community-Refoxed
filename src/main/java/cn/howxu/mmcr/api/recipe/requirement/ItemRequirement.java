@@ -4,19 +4,42 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.serialization.DynamicOps;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author howxu <dev@howxu.cn>
  */
 public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, float chance, List<String> tags,
                               DataComponentPredicateSet components, float consumeChance) implements MachineRequirement {
-    public static final RequirementType<ItemRequirement> TYPE = new RequirementType<>(MMCR.id("item"));
+    private static final Identifier TYPE_ID = MMCR.id("item");
+    public static final MapCodec<ItemRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+            Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
+            RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
+                    .forGetter(ItemRequirement::io),
+            Ingredient.CODEC.optionalFieldOf("item").forGetter(value -> Optional.ofNullable(value.item())),
+            Codec.INT.optionalFieldOf("count", 0).forGetter(ItemRequirement::count),
+            ItemStack.CODEC.optionalFieldOf("stack", ItemStack.EMPTY).forGetter(ItemRequirement::stack),
+            Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(ItemRequirement::chance),
+            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(ItemRequirement::tags),
+            DataComponentPredicateSet.CODEC.optionalFieldOf("components", DataComponentPredicateSet.EMPTY)
+                    .forGetter(ItemRequirement::components),
+            Codec.FLOAT.optionalFieldOf("consume_chance", 1F)
+                    .forGetter(ItemRequirement::consumeChance)
+    ).apply(instance, (ignored, io, item, count, stack, chance, tags, components, consumeChance) ->
+            new ItemRequirement(io, item.orElse(null), count, stack, chance, tags, components, consumeChance)));
+    private static final RequirementHandler<ItemRequirement> HANDLER = RequirementHandlerRegistry::planItem;
+    public static final RequirementType<ItemRequirement> TYPE =
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
 
     public ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack) {
         this(io, item, count, stack, 1F, List.of(), DataComponentPredicateSet.EMPTY, 1F);

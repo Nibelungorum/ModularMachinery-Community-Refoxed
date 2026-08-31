@@ -3,6 +3,10 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.resources.Identifier;
 
 import java.util.List;
 
@@ -10,7 +14,17 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<String> tags) implements MachineRequirement {
-    public static final RequirementType<EnergyRequirement> TYPE = new RequirementType<>(MMCR.id("energy"));
+    private static final Identifier TYPE_ID = MMCR.id("energy");
+    public static final MapCodec<EnergyRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+            Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
+            RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
+                    .forGetter(EnergyRequirement::io),
+            Codec.INT.fieldOf("fe_per_tick").forGetter(EnergyRequirement::fePerTick),
+            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(EnergyRequirement::tags)
+    ).apply(instance, (ignored, io, fePerTick, tags) -> new EnergyRequirement(io, fePerTick, tags)));
+    private static final RequirementHandler<EnergyRequirement> HANDLER = RequirementHandlerRegistry::planEnergy;
+    public static final RequirementType<EnergyRequirement> TYPE =
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
 
     public EnergyRequirement(int fePerTick) {
         this(RecipeModifier.IOType.INPUT, fePerTick, List.of());

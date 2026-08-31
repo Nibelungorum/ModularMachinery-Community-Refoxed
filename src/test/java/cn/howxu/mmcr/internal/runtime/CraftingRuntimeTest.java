@@ -58,6 +58,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -886,23 +887,7 @@ class CraftingRuntimeTest {
 
     @Test
     void active_runtime_round_trips_a_registered_custom_requirement_handler() {
-        RequirementHandlerRegistry.register(new RequirementHandler<CustomRequirement>() {
-            @Override
-            public RequirementType<CustomRequirement> type() {
-                return CustomRequirement.TYPE;
-            }
-
-            @Override
-            public Codec<CustomRequirement> codec() {
-                return CustomRequirement.CODEC;
-            }
-
-            @Override
-            public RequirementPlan plan(CustomRequirement requirement, List<MachineCapability> capabilities,
-                                        cn.howxu.mmcr.api.capability.plan.PlanningContext context) {
-                return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
-            }
-        });
+        RequirementHandlerRegistry.register(CustomRequirement.TYPE);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
@@ -1184,13 +1169,18 @@ class CraftingRuntimeTest {
     }
 
     private record CustomRequirement(RecipeModifier.IOType io, int value) implements MachineRequirement {
-        private static final RequirementType<CustomRequirement> TYPE = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "runtime_custom_requirement"));
-        private static final Codec<CustomRequirement> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.STRING.fieldOf("type").forGetter(value -> TYPE.id().toString()),
+        private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath(
+                "mmcr_test", "runtime_custom_requirement");
+        private static final MapCodec<CustomRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
                 RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(CustomRequirement::io),
                 Codec.INT.fieldOf("value").forGetter(CustomRequirement::value)
         ).apply(instance, (ignored, io, value) -> new CustomRequirement(io, value)));
+        private static final RequirementHandler<CustomRequirement> HANDLER =
+                (requirement, capabilities, context) -> new RequirementPlan(
+                        context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+        private static final RequirementType<CustomRequirement> TYPE = new RequirementType.Definition<>(
+                TYPE_ID, CODEC, HANDLER);
 
         @Override
         public RequirementType<CustomRequirement> type() {

@@ -461,13 +461,13 @@ public final class FactoryRecipeThread extends RecipeThread {
                         Predicate<Object> matcher = outputFluidMatcher(fluid);
                         if (matcher != null) addMatcher(matchers, ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, matcher);
                     }
-                } else if (requirement instanceof EnergyRequirement energy
-                         && energy.io() == RecipeModifier.IOType.INPUT
+                } else if (EnergyRequirement.TYPE.equals(requirement.type())
+                         && requirement.io() == RecipeModifier.IOType.INPUT
                          && lastSearchFailureReason.equals("insufficient_energy")) {
                     CapabilityType type = new CapabilityType(EnergyRequirement.TYPE.id());
                     addMatcher(matchers, ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE, type::equals);
-                } else if (requirement instanceof EnergyRequirement energy
-                        && energy.io() == RecipeModifier.IOType.OUTPUT
+                } else if (EnergyRequirement.TYPE.equals(requirement.type())
+                        && requirement.io() == RecipeModifier.IOType.OUTPUT
                         && lastSearchFailureReason.equals("no_output_capacity")) {
                     CapabilityType type = new CapabilityType(EnergyRequirement.TYPE.id());
                     addMatcher(matchers, ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, type::equals);

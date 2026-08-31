@@ -3,17 +3,36 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author howxu <dev@howxu.cn>
  */
 public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags) implements MachineRequirement {
-    public static final RequirementType<FluidRequirement> TYPE = new RequirementType<>(MMCR.id("fluid"));
+    private static final Identifier TYPE_ID = MMCR.id("fluid");
+    public static final MapCodec<FluidRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+            Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
+            RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
+                    .forGetter(FluidRequirement::io),
+            FluidIngredient.CODEC.optionalFieldOf("fluid").forGetter(value -> Optional.ofNullable(value.fluid())),
+            Codec.INT.optionalFieldOf("amount", 0).forGetter(FluidRequirement::amount),
+            FluidStack.CODEC.optionalFieldOf("stack", FluidStack.EMPTY).forGetter(FluidRequirement::stack),
+            Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(FluidRequirement::chance),
+            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(FluidRequirement::tags)
+    ).apply(instance, (ignored, io, fluid, amount, stack, chance, tags) ->
+            new FluidRequirement(io, fluid.orElse(null), amount, stack, chance, tags)));
+    private static final RequirementHandler<FluidRequirement> HANDLER = RequirementHandlerRegistry::planFluid;
+    public static final RequirementType<FluidRequirement> TYPE =
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
 
     public FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack) {
         this(io, fluid, amount, stack, 1F, List.of());

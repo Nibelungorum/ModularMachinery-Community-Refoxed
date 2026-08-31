@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import com.mojang.serialization.MapCodec;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
@@ -38,7 +39,7 @@ class CapabilityOperationTest {
             StatusSeverity.BLOCKED,
             Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
             Map.of("reason", "opaque_failure"));
-    private static final RequirementType<OpaqueRequirement> TYPE = new RequirementType<>(
+    private static final OpaqueType TYPE = new OpaqueType(
             Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation_requirement"));
 
     @Test
@@ -57,12 +58,7 @@ class CapabilityOperationTest {
         AtomicInteger materializationCalls = new AtomicInteger();
         OpaqueCapability capability = new OpaqueCapability(storage);
 
-        RequirementHandlerRegistry.register(new RequirementHandler<OpaqueRequirement>() {
-            @Override
-            public RequirementType<OpaqueRequirement> type() {
-                return TYPE;
-            }
-
+        TYPE.handler = new RequirementHandler<OpaqueRequirement>() {
             @Override
             public RequirementPlan plan(OpaqueRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -78,7 +74,8 @@ class CapabilityOperationTest {
                         (parallelism, reservations) -> reservations.reserveValue(storage, parallelism, false)
                                 ? null : TYPED_FAILURE);
             }
-        });
+        };
+        RequirementHandlerRegistry.register(TYPE);
 
         PlanningResult result = new RequirementPlanner().plan(
                 List.of(new OpaqueRequirement(TYPE, RecipeModifier.IOType.INPUT)),
@@ -126,6 +123,37 @@ class CapabilityOperationTest {
 
     private record OpaqueRequirement(RequirementType<OpaqueRequirement> type, RecipeModifier.IOType io)
             implements MachineRequirement {
+    }
+
+    private static final class OpaqueType implements RequirementType<OpaqueRequirement> {
+        private final Identifier id;
+        private final MapCodec<OpaqueRequirement> codec;
+        private RequirementHandler<OpaqueRequirement> handler;
+
+        private OpaqueType(Identifier id) {
+            this.id = id;
+            this.codec = MapCodec.unit(() -> new OpaqueRequirement(this, RecipeModifier.IOType.INPUT));
+        }
+
+        @Override
+        public Identifier id() {
+            return id;
+        }
+
+        @Override
+        public MapCodec<OpaqueRequirement> codec() {
+            return codec;
+        }
+
+        @Override
+        public RequirementHandler<OpaqueRequirement> handler() {
+            return handler;
+        }
+
+        @Override
+        public RequirementType.Presentation presentation() {
+            return RequirementType.Presentation.defaults(id);
+        }
     }
 
     private record OpaqueRequest(long parallelism, String value) implements CapabilityRequest {

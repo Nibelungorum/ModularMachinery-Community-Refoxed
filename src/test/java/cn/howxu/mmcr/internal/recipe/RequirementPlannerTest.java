@@ -35,6 +35,7 @@ import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -82,10 +83,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class RequirementPlannerTest {
-    private static final RequirementType<TestRequirement> TYPE = new RequirementType<>(
-            Identifier.fromNamespaceAndPath("mmcr_test", "planner_requirement"));
-    private static final RequirementType<TestRequirement> ROLLBACK_FAILURE_TYPE = new RequirementType<>(
-            Identifier.fromNamespaceAndPath("mmcr_test", "rollback_failure"));
+    private static final TestType TYPE = type("planner_requirement");
+    private static final TestType ROLLBACK_FAILURE_TYPE = type("rollback_failure");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -99,12 +98,7 @@ class RequirementPlannerTest {
 
     @Test
     void looks_up_handler_filters_capabilities_and_limits_parallelism() {
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return TYPE;
-            }
-
+        register(TYPE, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -134,9 +128,8 @@ class RequirementPlannerTest {
 
     @Test
     void supports_mixed_requirements_and_custom_handlers_without_planner_changes() {
-        RequirementType<TestRequirement> secondType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "planner_second_requirement"));
-        RequirementHandlerRegistry.register(new SimpleHandler(secondType));
+        TestType secondType = type("planner_second_requirement");
+        register(secondType, new SimpleHandler(secondType));
 
         var result = new RequirementPlanner().plan(
                 List.of(new TestRequirement(TYPE, RecipeModifier.IOType.INPUT), new TestRequirement(secondType, RecipeModifier.IOType.OUTPUT)),
@@ -151,14 +144,12 @@ class RequirementPlannerTest {
 
     @Test
     void calls_each_handler_once_and_normalizes_every_requirement_to_final_parallelism() {
-        RequirementType<TestRequirement> firstType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "planner_once_first"));
-        RequirementType<TestRequirement> secondType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "planner_once_second"));
+        TestType firstType = type("planner_once_first");
+        TestType secondType = type("planner_once_second");
         AtomicInteger firstCalls = new AtomicInteger();
         AtomicInteger secondCalls = new AtomicInteger();
-        RequirementHandlerRegistry.register(new LimitedHandler(firstType, 4, firstCalls));
-        RequirementHandlerRegistry.register(new LimitedHandler(secondType, 2, secondCalls));
+        register(firstType, new LimitedHandler(firstType, 4, firstCalls));
+        register(secondType, new LimitedHandler(secondType, 2, secondCalls));
 
         var result = new RequirementPlanner().plan(
                 List.of(new TestRequirement(firstType, RecipeModifier.IOType.INPUT),
@@ -179,14 +170,8 @@ class RequirementPlannerTest {
 
     @Test
     void rejects_opaque_direct_operations_when_global_parallelism_is_lowered() {
-        RequirementType<TestRequirement> unsafeType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_direct_operation"));
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return unsafeType;
-            }
-
+        TestType unsafeType = type("unsafe_direct_operation");
+        register(unsafeType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -217,17 +202,11 @@ class RequirementPlannerTest {
 
     @Test
     void materializes_a_custom_operation_factory_once_after_reservation_selection() {
-        RequirementType<TestRequirement> factoryType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "single_operation_factory"));
+        TestType factoryType = type("single_operation_factory");
         AtomicInteger factoryCalls = new AtomicInteger();
         AtomicLong operationParallelism = new AtomicLong();
         TestCapability capability = new TestCapability(factoryType.id(), IOType.INPUT, 2);
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return factoryType;
-            }
-
+        register(factoryType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -259,18 +238,12 @@ class RequirementPlannerTest {
 
     @Test
     void does_not_retry_lower_candidates_after_materialization_failure() {
-        RequirementType<TestRequirement> failureType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "materialization_failure"));
+        TestType failureType = type("materialization_failure");
         AtomicInteger factoryCalls = new AtomicInteger();
         ExecutionStatus materializationFailure = new ExecutionStatus(
                 failureType.id(), StatusSeverity.FAILURE, failureType.id(), java.util.Map.of("reason", "factory"));
         TestCapability capability = new TestCapability(failureType.id(), IOType.INPUT, 2);
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return failureType;
-            }
-
+        register(failureType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -296,19 +269,13 @@ class RequirementPlannerTest {
 
     @Test
     void shares_and_rolls_back_reservations_between_candidate_and_final_materialization() {
-        RequirementType<TestRequirement> reservationType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "shared_reservation_lifecycle"));
+        TestType reservationType = type("shared_reservation_lifecycle");
         BulkItemStorage storage = new BulkItemStorage(2, null);
         storage.insert(ironResource(), 2, false);
         StorageCapability capability = new StorageCapability(reservationType.id(), IOType.INPUT, storage);
         PlanningReservations shared = new PlanningReservations();
         AtomicInteger factories = new AtomicInteger();
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return reservationType;
-            }
-
+        register(reservationType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -349,15 +316,9 @@ class RequirementPlannerTest {
 
     @Test
     void carries_a_structured_handler_failure() {
-        RequirementType<TestRequirement> failureType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "planner_failure_requirement"));
+        TestType failureType = type("planner_failure_requirement");
         ExecutionStatus failure = new ExecutionStatus(failureType.id(), StatusSeverity.FAILURE, failureType.id(), java.util.Map.of());
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return failureType;
-            }
-
+        register(failureType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -374,17 +335,10 @@ class RequirementPlannerTest {
 
     @Test
     void reports_the_actual_zero_parallelism_requirement_and_original_index() {
-        RequirementType<TestRequirement> firstType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "positive_parallelism_requirement"));
-        RequirementType<TestRequirement> blockedType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "zero_parallelism_requirement"));
-        RequirementHandlerRegistry.register(new SimpleHandler(firstType));
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return blockedType;
-            }
-
+        TestType firstType = type("positive_parallelism_requirement");
+        TestType blockedType = type("zero_parallelism_requirement");
+        register(firstType, new SimpleHandler(firstType));
+        register(blockedType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -804,14 +758,8 @@ class RequirementPlannerTest {
 
     @Test
     void generic_matching_filters_tags_and_keeps_untagged_capabilities_matchable() {
-        RequirementType<TestRequirement> taggedType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "tagged_requirement"));
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return taggedType;
-            }
-
+        TestType taggedType = type("tagged_requirement");
+        register(taggedType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -832,15 +780,9 @@ class RequirementPlannerTest {
 
     @Test
     void default_requirement_indexes_are_assigned_in_ascending_order() {
-        RequirementType<TestRequirement> indexedType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "ascending_requirement_indexes"));
+        TestType indexedType = type("ascending_requirement_indexes");
         List<Integer> indexes = new ArrayList<>();
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return indexedType;
-            }
-
+        register(indexedType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -1358,12 +1300,7 @@ class RequirementPlannerTest {
         }
         ((LongFluidStorage) fluid.storage()).setFluid(new FluidStack(Fluids.WATER, 1_000));
         energy.storage().setAmount(4);
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return ROLLBACK_FAILURE_TYPE;
-            }
-
+        register(ROLLBACK_FAILURE_TYPE, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -1420,15 +1357,9 @@ class RequirementPlannerTest {
     void output_replacement_preserves_the_original_requirement_tags_and_index() {
         BulkItemStorage untaggedStorage = new BulkItemStorage(1, null);
         BulkItemStorage taggedStorage = new BulkItemStorage(1, null);
-        RequirementType<TestRequirement> trailingType = new RequirementType<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", "trailing_output_requirement"));
+        TestType trailingType = type("trailing_output_requirement");
         AtomicInteger trailingIndex = new AtomicInteger(-1);
-        RequirementHandlerRegistry.register(new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementType<TestRequirement> type() {
-                return trailingType;
-            }
-
+        register(trailingType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -1495,6 +1426,15 @@ class RequirementPlannerTest {
         return Ingredient.of(Items.IRON_INGOT);
     }
 
+    private static TestType type(String path) {
+        return new TestType(Identifier.fromNamespaceAndPath("mmcr_test", path));
+    }
+
+    private static void register(TestType type, RequirementHandler<TestRequirement> handler) {
+        type.handler = handler;
+        RequirementHandlerRegistry.register(type);
+    }
+
     private static final class ZeroQuantityItemStorage extends LongResourceStorage<ItemResource> {
         private final ItemResource slotResource;
 
@@ -1530,6 +1470,37 @@ class RequirementPlannerTest {
         @Override
         public boolean isValid(int slot, FluidResource resource) {
             return true;
+        }
+    }
+
+    private static final class TestType implements RequirementType<TestRequirement> {
+        private final Identifier id;
+        private final MapCodec<TestRequirement> codec;
+        private RequirementHandler<TestRequirement> handler;
+
+        private TestType(Identifier id) {
+            this.id = id;
+            this.codec = MapCodec.unit(() -> new TestRequirement(this, RecipeModifier.IOType.INPUT));
+        }
+
+        @Override
+        public Identifier id() {
+            return id;
+        }
+
+        @Override
+        public MapCodec<TestRequirement> codec() {
+            return codec;
+        }
+
+        @Override
+        public RequirementHandler<TestRequirement> handler() {
+            return handler;
+        }
+
+        @Override
+        public RequirementType.Presentation presentation() {
+            return RequirementType.Presentation.defaults(id);
         }
     }
 
