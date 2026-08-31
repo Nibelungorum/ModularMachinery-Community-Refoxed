@@ -12,6 +12,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.HolderLookup;
@@ -78,6 +79,23 @@ class MachineRecipeJsonTest {
         assertThat(recipe.isParallelized()).isFalse();
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isFalse();
         assertThat(recipe.allowPartialOutputs()).isFalse();
+    }
+
+    @Test
+    void retains_registered_custom_outputs_from_machine_outputs_json() {
+        try (OutputRegistry.TestScope scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(JsonOutput.TYPE);
+            var json = recipeJson();
+            var output = new JsonObject();
+            output.addProperty("type", JsonOutput.TYPE.serializedId());
+            json.add("machine_outputs", array(output));
+
+            var recipe = MachineRecipeJson.parse(id("custom_output"), json, registries);
+
+            assertThat(recipe.machineOutputs()).containsExactly(new JsonOutput(7, 1F));
+            assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof EnergyRequirement energy
+                    && energy.io() == RecipeModifier.IOType.OUTPUT && energy.fePerTick() == 7);
+        }
     }
 
     @Test
@@ -304,6 +322,27 @@ class MachineRecipeJsonTest {
         json.addProperty("machine", "mmcr:test_cube");
         json.addProperty("tick_time", 20);
         return json;
+    }
+
+    private record JsonOutput(int value, float chance) implements CustomOutput {
+        private static final OutputType<JsonOutput> TYPE = new OutputType.Definition<>(
+                id("json_output"), MapCodec.unit(() -> new JsonOutput(7, 1F)),
+                (output, chance) -> new JsonOutput(output.value(), chance),
+                (output, modifiers) -> output,
+                output -> new JsonOutput(output.value(), output.chance()),
+                OutputType.Presentation.defaults(id("json_output")), id("json_output").toString(),
+                (output, tags) -> new EnergyRequirement(RecipeModifier.IOType.OUTPUT, output.value(), tags),
+                requirement -> requirement instanceof EnergyRequirement energy
+                        && energy.io() == RecipeModifier.IOType.OUTPUT);
+
+        private JsonOutput {
+            chance = MachineOutput.clampChance(chance);
+        }
+
+        @Override
+        public OutputType<JsonOutput> outputType() {
+            return TYPE;
+        }
     }
 
     private static JsonObject itemInput(String item, int count) {

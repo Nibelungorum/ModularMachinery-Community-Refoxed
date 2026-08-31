@@ -8,11 +8,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -69,7 +65,7 @@ public final class CraftingContext {
 
     public PlanningResult planOutputs(MachineRecipe recipe, List<MachineOutput> outputs, long parallelism) {
         if (recipe == null) throw new IllegalArgumentException("recipe must not be null");
-        IndexedRequirements replacement = replacePhysicalOutputs(recipe.runtimeRequirements(modifiers), outputs);
+        IndexedRequirements replacement = replaceOutputs(recipe.runtimeRequirements(modifiers), outputs);
         List<MachineRequirement> requirements = new ArrayList<>();
         List<Integer> requirementIndexes = new ArrayList<>();
         for (int index = 0; index < replacement.requirements().size(); index++) {
@@ -130,7 +126,7 @@ public final class CraftingContext {
 
     public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, List<MachineOutput> outputs,
                                                   long parallelism, boolean allowPartialOutputs) {
-        IndexedRequirements replacement = replacePhysicalOutputs(requirements, outputs);
+        IndexedRequirements replacement = replaceOutputs(requirements, outputs);
         return planSelected(replacement.requirements(), replacement.indexes(), parallelism,
                 RecipeModifier.IOType.OUTPUT,
                 outputPoliciesForIndexes(replacement.indexes(), allowPartialOutputs));
@@ -226,8 +222,8 @@ public final class CraftingContext {
         return Map.copyOf(policies);
     }
 
-    private static IndexedRequirements replacePhysicalOutputs(List<MachineRequirement> base,
-                                                              List<MachineOutput> outputs) {
+    private static IndexedRequirements replaceOutputs(List<MachineRequirement> base,
+                                                     List<MachineOutput> outputs) {
         if (base == null) throw new IllegalArgumentException("requirements must not be null");
         List<MachineOutput> copiedOutputs = MachineOutput.copyList(
                 Objects.requireNonNull(outputs, "outputs"));
@@ -237,7 +233,7 @@ public final class CraftingContext {
         int extraOutputIndex = 0;
         for (int index = 0; index < base.size(); index++) {
             MachineRequirement requirement = base.get(index);
-            if (!isItemOrFluidOutput(requirement)) {
+            if (!OutputRegistry.matchesOutputRequirement(requirement)) {
                 result.add(requirement);
                 indexes.add(index);
                 continue;
@@ -261,28 +257,14 @@ public final class CraftingContext {
             throw new IllegalArgumentException("outputs must contain finite, non-null values");
         }
         List<String> tags = template == null ? List.of() : template.tags();
-        if (output instanceof MachineOutput.ItemOutput item) {
-            ItemStack stack = item.stack();
-            if (stack == null || stack.isEmpty() || stack.getCount() < 0) {
-                throw new IllegalArgumentException("item outputs must contain a non-empty stack");
-            }
-            return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, item.stack(), item.chance(), tags);
+        MachineRequirement requirement = OutputRegistry.toRequirement(output, tags);
+        if (requirement == null || requirement.io() != RecipeModifier.IOType.OUTPUT) {
+            throw new IllegalArgumentException("Output type must produce an output requirement: " + output.outputType().id());
         }
-        if (!(output instanceof MachineOutput.FluidOutput fluid)) {
-            throw new IllegalArgumentException("Unknown machine output: " + output);
-        }
-        FluidStack stack = fluid.stack();
-        if (stack == null || stack.isEmpty() || stack.getAmount() < 0) {
-            throw new IllegalArgumentException("fluid outputs must contain a non-empty stack");
-        }
-        return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, fluid.stack(), fluid.chance(), tags);
+        return requirement;
     }
 
     private record IndexedRequirements(List<MachineRequirement> requirements, List<Integer> indexes) {
     }
 
-    private static boolean isItemOrFluidOutput(MachineRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT
-                && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement);
-    }
 }

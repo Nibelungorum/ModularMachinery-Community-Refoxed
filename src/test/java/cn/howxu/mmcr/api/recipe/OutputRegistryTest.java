@@ -72,6 +72,20 @@ class OutputRegistryTest {
         assertThat(OutputRegistry.typeFor(TEST_ID)).isNull();
     }
 
+    @Test
+    void rejects_null_results_from_type_owned_copiers() {
+        OutputType<TestOutput> type = new OutputType.Definition<>(TEST_ID,
+                MapCodec.unit(() -> new TestOutput(null, 3, 1F)),
+                (output, chance) -> new TestOutput(output.outputType(), output.value(), chance),
+                (output, modifiers) -> output,
+                output -> null);
+        OutputRegistry.register(type);
+
+        assertThatThrownBy(() -> MachineOutput.copyOf(new TestOutput(type, 3, 1F)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Copied output does not match registered type");
+    }
+
     private static OutputType<TestOutput> type(Identifier id) {
         MapCodec<TestOutput> codec = MapCodec.unit(() -> new TestOutput(null, 3, 1F));
         return new OutputType.Definition<>(id, codec,

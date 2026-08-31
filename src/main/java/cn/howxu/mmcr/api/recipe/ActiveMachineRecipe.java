@@ -465,14 +465,9 @@ public final class ActiveMachineRecipe {
     private static boolean validOutputs(List<MachineOutput> outputs) {
         if (outputs == null) return false;
         for (MachineOutput output : outputs) {
-            if (output == null || !validChance(output.chance())) return false;
-            if (output instanceof MachineOutput.ItemOutput item) {
-                if (!validItemStack(item.stack())) return false;
-            } else if (output instanceof MachineOutput.FluidOutput fluid) {
-                if (!validFluidStack(fluid.stack())) return false;
-            } else {
-                return false;
-            }
+            if (!OutputRegistry.isCanonical(output) || !validChance(output.chance())) return false;
+            if (output instanceof MachineOutput.ItemOutput item && !validItemStack(item.stack())) return false;
+            if (output instanceof MachineOutput.FluidOutput fluid && !validFluidStack(fluid.stack())) return false;
         }
         return true;
     }

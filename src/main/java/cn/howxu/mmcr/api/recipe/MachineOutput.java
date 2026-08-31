@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -39,7 +41,11 @@ public interface MachineOutput {
         Objects.requireNonNull(output, "output");
         OutputType<?> type = OutputRegistry.canonicalType(output.outputType());
         if (type == null) throw new IllegalArgumentException("Output type is not registered canonically: " + output.outputType().id());
-        return copy(type, output);
+        MachineOutput copy = copy(type, output);
+        if (copy == null || copy.getClass() != output.getClass() || copy.outputType() != type) {
+            throw new IllegalArgumentException("Copied output does not match registered type: " + type.id());
+        }
+        return copy;
     }
 
     static List<MachineOutput> copyList(List<MachineOutput> outputs) {
@@ -78,7 +84,11 @@ public interface MachineOutput {
                     return new ItemOutput(derived, IntegrationTypeHelper.applyItemOutputChance(modifiers, output.chance()));
                 },
                 output -> new ItemOutput(output.stack(), output.chance()), OutputType.Presentation.defaults(
-                Identifier.fromNamespaceAndPath("mmcr", "item")), "item");
+                Identifier.fromNamespaceAndPath("mmcr", "item")), "item",
+                (output, tags) -> new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        output.stack(), output.chance(), tags),
+                requirement -> requirement instanceof ItemRequirement item
+                        && item.io() == RecipeModifier.IOType.OUTPUT);
 
         public ItemOutput {
             stack = stack == null ? ItemStack.EMPTY : stack.copy();
@@ -116,7 +126,11 @@ public interface MachineOutput {
                     return new FluidOutput(derived, IntegrationTypeHelper.applyFluidOutputChance(modifiers, output.chance()));
                 },
                 output -> new FluidOutput(output.stack(), output.chance()), OutputType.Presentation.defaults(
-                Identifier.fromNamespaceAndPath("mmcr", "fluid")), "fluid");
+                Identifier.fromNamespaceAndPath("mmcr", "fluid")), "fluid",
+                (output, tags) -> new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        output.stack(), output.chance(), tags),
+                requirement -> requirement instanceof FluidRequirement fluid
+                        && fluid.io() == RecipeModifier.IOType.OUTPUT);
 
         public FluidOutput {
             stack = stack == null ? FluidStack.EMPTY : stack.copy();

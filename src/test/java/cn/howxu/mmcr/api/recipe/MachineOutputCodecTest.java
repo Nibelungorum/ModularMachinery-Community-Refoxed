@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -40,9 +41,13 @@ class MachineOutputCodecTest {
     private static final OutputType<TestOutput> TEST_TYPE = new OutputType.Definition<>(
             TEST_ID,
             TEST_CODEC,
-            (output, chance) -> new TestOutput(output.value(), chance),
-            (output, modifiers) -> new TestOutput(output.value() + modifierAmount(modifiers), output.chance()),
-            output -> new TestOutput(output.value(), output.chance()));
+             (output, chance) -> new TestOutput(output.value(), chance),
+             (output, modifiers) -> new TestOutput(output.value() + modifierAmount(modifiers), output.chance()),
+            output -> new TestOutput(output.value(), output.chance()), OutputType.Presentation.defaults(TEST_ID),
+            TEST_ID.toString(),
+            (output, tags) -> new EnergyRequirement(RecipeModifier.IOType.OUTPUT, output.value(), tags),
+            requirement -> requirement instanceof EnergyRequirement energy
+                    && energy.io() == RecipeModifier.IOType.OUTPUT);
 
     private OutputRegistry.TestScope scope;
 

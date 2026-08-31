@@ -4,6 +4,7 @@ import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.resources.Identifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,23 @@ public final class OutputRegistry {
         if (type == null) throw new IllegalArgumentException("type must not be null");
         OutputType<?> canonical = typeFor(type.id());
         return canonical == type ? canonical : null;
+    }
+
+    public static boolean isCanonical(MachineOutput output) {
+        return output != null && output.outputType() != null && canonicalType(output.outputType()) != null;
+    }
+
+    public static MachineRequirement toRequirement(MachineOutput output, List<String> tags) {
+        if (!isCanonical(output)) {
+            throw new IllegalArgumentException("Output type is not registered canonically");
+        }
+        return toRequirement(canonicalType(output.outputType()), output, tags == null ? List.of() : List.copyOf(tags));
+    }
+
+    public static boolean matchesOutputRequirement(MachineRequirement requirement) {
+        if (requirement == null) return false;
+        registerBuiltIns();
+        return TYPES.values().stream().anyMatch(type -> type.matchesRequirement(requirement));
     }
 
     public static void registerBuiltIns() {
@@ -122,6 +140,12 @@ public final class OutputRegistry {
     @SuppressWarnings("unchecked")
     private static <O extends MachineOutput, T> DataResult<O> decode(OutputType<?> type, DynamicOps<T> ops, T input) {
         return ((OutputType<O>) type).codec().codec().parse(ops, input);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <O extends MachineOutput> MachineRequirement toRequirement(OutputType<?> type, MachineOutput output,
+                                                                               List<String> tags) {
+        return ((OutputType<O>) type).toRequirement((O) output, tags);
     }
 
     public static final class TestScope implements AutoCloseable {

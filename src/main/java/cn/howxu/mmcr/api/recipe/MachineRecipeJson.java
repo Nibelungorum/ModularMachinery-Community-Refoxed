@@ -65,6 +65,7 @@ public final class MachineRecipeJson {
         List<ItemStack> outputs = parseList(id, object, "outputs",
                 ItemStack.CODEC, ops);
         List<FluidStack> fluidOutputs = parseList(id, object, "fluid_outputs", FluidStack.CODEC, ops);
+        List<MachineOutput> additionalOutputs = parseList(id, object, "machine_outputs", MachineOutput.CODEC, ops);
         List<RecipeModifier> modifiers = parseList(id, object, "modifiers", RecipeModifier.CODEC, ops);
         List<MachineRequirement> requirements = parseList(id, object, "requirements", MachineRequirement.CODEC, ops);
         if (!object.has("requirements")) requirements = List.of();
@@ -74,17 +75,17 @@ public final class MachineRecipeJson {
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
         if (object.has("requirements") && !requirements.isEmpty()) {
-            return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
+            return MachineRecipe.withAdditionalOutputs(new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
                     intField(id, object, "priority", false, 0), maxThreads,
                     boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, requirements,
                     boolField(id, object, "parallelized", false), levels,
-                    boolField(id, object, "allow_partial_outputs", false), hosts, false);
+                    boolField(id, object, "allow_partial_outputs", false), hosts, false), additionalOutputs);
         }
-        return new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
+        return MachineRecipe.withAdditionalOutputs(new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
                 intField(id, object, "priority", false, 0), maxThreads,
                 boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, Collections.emptyList(),
                 boolField(id, object, "parallelized", false), levels,
-                boolField(id, object, "allow_partial_outputs", false), hosts, true);
+                boolField(id, object, "allow_partial_outputs", false), hosts, true), additionalOutputs);
     }
 
     public static MachineRecipe normalize(Identifier id, Identifier machineId, int tickTime,

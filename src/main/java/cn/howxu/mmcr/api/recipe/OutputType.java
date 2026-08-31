@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
@@ -9,6 +10,7 @@ import net.minecraft.resources.Identifier;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
@@ -24,6 +26,10 @@ public interface OutputType<O extends MachineOutput> {
     O withChance(O output, float chance);
 
     O applyModifiers(O output, List<RecipeModifier> modifiers);
+
+    MachineRequirement toRequirement(O output, List<String> tags);
+
+    boolean matchesRequirement(MachineRequirement requirement);
 
     default O copy(O output) {
         Codec<O> codec = codec().codec();
@@ -66,34 +72,49 @@ public interface OutputType<O extends MachineOutput> {
         private final BiFunction<O, Float, O> chanceTransformer;
         private final BiFunction<O, List<RecipeModifier>, O> modifierTransformer;
         private final UnaryOperator<O> copier;
+        private final BiFunction<O, List<String>, MachineRequirement> requirementFactory;
+        private final Predicate<MachineRequirement> requirementMatcher;
         private final Presentation presentation;
         private final String serializedId;
 
         public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier) {
-            this(id, codec, chanceTransformer, modifierTransformer, copier, Presentation.defaults(id));
+            this(id, codec, chanceTransformer, modifierTransformer, copier, Presentation.defaults(id), id.toString(),
+                    (output, tags) -> {
+                        throw new IllegalStateException("Output type does not support execution requirements: " + id);
+                    }, requirement -> false);
         }
 
         public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation) {
-            this.id = Objects.requireNonNull(id, "id");
-            this.codec = Objects.requireNonNull(codec, "codec");
-            this.chanceTransformer = Objects.requireNonNull(chanceTransformer, "chanceTransformer");
-            this.modifierTransformer = Objects.requireNonNull(modifierTransformer, "modifierTransformer");
-            this.copier = Objects.requireNonNull(copier, "copier");
-            this.presentation = Objects.requireNonNull(presentation, "presentation");
-            this.serializedId = id.toString();
+            this(id, codec, chanceTransformer, modifierTransformer, copier, presentation, id.toString(),
+                    (output, tags) -> {
+                        throw new IllegalStateException("Output type does not support execution requirements: " + id);
+                    }, requirement -> false);
         }
 
         public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation, String serializedId) {
+            this(id, codec, chanceTransformer, modifierTransformer, copier, presentation, serializedId,
+                    (output, tags) -> {
+                        throw new IllegalStateException("Output type does not support execution requirements: " + id);
+                    }, requirement -> false);
+        }
+
+        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+                          BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
+                          Presentation presentation, String serializedId,
+                          BiFunction<O, List<String>, MachineRequirement> requirementFactory,
+                          Predicate<MachineRequirement> requirementMatcher) {
             this.id = Objects.requireNonNull(id, "id");
             this.codec = Objects.requireNonNull(codec, "codec");
             this.chanceTransformer = Objects.requireNonNull(chanceTransformer, "chanceTransformer");
             this.modifierTransformer = Objects.requireNonNull(modifierTransformer, "modifierTransformer");
             this.copier = Objects.requireNonNull(copier, "copier");
+            this.requirementFactory = Objects.requireNonNull(requirementFactory, "requirementFactory");
+            this.requirementMatcher = Objects.requireNonNull(requirementMatcher, "requirementMatcher");
             this.presentation = Objects.requireNonNull(presentation, "presentation");
             if (serializedId == null || serializedId.isBlank()) throw new IllegalArgumentException("serializedId must not be blank");
             this.serializedId = serializedId;
@@ -122,6 +143,16 @@ public interface OutputType<O extends MachineOutput> {
         @Override
         public O copy(O output) {
             return copier.apply(output);
+        }
+
+        @Override
+        public MachineRequirement toRequirement(O output, List<String> tags) {
+            return requirementFactory.apply(output, tags);
+        }
+
+        @Override
+        public boolean matchesRequirement(MachineRequirement requirement) {
+            return requirementMatcher.test(requirement);
         }
 
         @Override

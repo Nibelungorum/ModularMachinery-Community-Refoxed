@@ -3,8 +3,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
@@ -85,6 +84,10 @@ public final class RecipeStartContext {
     }
 
     public void setRequirements(List<MachineRequirement> requirements) {
+        if (outputs.stream().anyMatch(output -> !(output instanceof MachineOutput.ItemOutput)
+                && !(output instanceof MachineOutput.FluidOutput))) {
+            throw new IllegalStateException("RecipeStartContext cannot derive registered custom outputs from requirements");
+        }
         this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
         this.outputs = outputsFromRequirements(this.requirements);
     }
@@ -99,7 +102,7 @@ public final class RecipeStartContext {
         List<MachineRequirement> nextRequirements = new ArrayList<>();
         int outputIndex = 0;
         for (MachineRequirement requirement : requirements) {
-            if (!isItemOrFluidOutput(requirement)) {
+            if (!OutputRegistry.matchesOutputRequirement(requirement)) {
                 nextRequirements.add(requirement);
                 continue;
             }
@@ -126,9 +129,10 @@ public final class RecipeStartContext {
     private static List<MachineOutput> outputsFromRequirements(List<MachineRequirement> requirements) {
         List<MachineOutput> result = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
-            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
+            if (requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement item
+                    && item.io() == RecipeModifier.IOType.OUTPUT) {
                 result.add(new MachineOutput.ItemOutput(item.resolvedStack(), item.chance()));
-            } else if (requirement instanceof FluidRequirement fluid
+            } else if (requirement instanceof cn.howxu.mmcr.api.recipe.requirement.FluidRequirement fluid
                     && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 result.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
             }
@@ -144,26 +148,19 @@ public final class RecipeStartContext {
             MachineRequirement template = null;
             while (templateIndex < templates.size()) {
                 MachineRequirement candidate = templates.get(templateIndex++);
-                if (isItemOrFluidOutput(candidate)) {
+                if (OutputRegistry.matchesOutputRequirement(candidate)) {
                     template = candidate;
                     break;
                 }
             }
             List<String> tags = template == null ? List.of() : template.tags();
-            if (output instanceof MachineOutput.ItemOutput item) {
-                result.add(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        item.stack(), item.chance(), tags));
-            } else if (output instanceof MachineOutput.FluidOutput fluid) {
-                result.add(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        fluid.stack(), fluid.chance(), tags));
+            MachineRequirement requirement = OutputRegistry.toRequirement(output, tags);
+            if (requirement == null || requirement.io() != RecipeModifier.IOType.OUTPUT) {
+                throw new IllegalArgumentException("Output type must produce an output requirement: " + output.outputType().id());
             }
+            result.add(requirement);
         }
         return result;
-    }
-
-    private static boolean isItemOrFluidOutput(MachineRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT
-                && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement);
     }
 
     public record ExecutionSnapshot(int duration, List<MachineRequirement> requirements,

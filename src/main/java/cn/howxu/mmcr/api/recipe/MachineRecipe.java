@@ -63,6 +63,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final List<LevelRequirement> levelRequirements;
     private final boolean allowPartialOutputs;
     private final Set<Identifier> requiredHostIds;
+    private final List<MachineOutput> additionalOutputs;
 
     public MachineRecipe(Identifier id,
                          Identifier machineId,
@@ -249,6 +250,52 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.levelRequirements = validateLevelRequirements(levelRequirements);
         this.allowPartialOutputs = allowPartialOutputs;
         this.requiredHostIds = copyHostIds(requiredHostIds);
+        this.additionalOutputs = List.of();
+    }
+
+    private MachineRecipe(MachineRecipe recipe, List<MachineOutput> additionalOutputs) {
+        this.id = recipe.id;
+        this.machineId = recipe.machineId;
+        this.tickTime = recipe.tickTime;
+        this.modifiers = recipe.modifiers;
+        this.priority = recipe.priority;
+        this.maxThreads = recipe.maxThreads;
+        this.cancelRecipeOnPerTickFailure = recipe.cancelRecipeOnPerTickFailure;
+        this.parallelized = recipe.parallelized;
+        this.levelRequirements = recipe.levelRequirements;
+        this.allowPartialOutputs = recipe.allowPartialOutputs;
+        this.requiredHostIds = recipe.requiredHostIds;
+        this.additionalOutputs = MachineOutput.copyList(additionalOutputs);
+        List<MachineRequirement> nextRequirements = new ArrayList<>(recipe.requirements);
+        for (MachineOutput output : this.additionalOutputs) {
+            nextRequirements.add(OutputRegistry.toRequirement(output, List.of()));
+        }
+        this.requirements = List.copyOf(nextRequirements);
+    }
+
+    private MachineRecipe(Identifier id, MachineRecipe recipe) {
+        this.id = Objects.requireNonNull(id, "id");
+        this.machineId = recipe.machineId;
+        this.tickTime = recipe.tickTime;
+        this.requirements = recipe.requirements;
+        this.modifiers = recipe.modifiers;
+        this.priority = recipe.priority;
+        this.maxThreads = recipe.maxThreads;
+        this.cancelRecipeOnPerTickFailure = recipe.cancelRecipeOnPerTickFailure;
+        this.parallelized = recipe.parallelized;
+        this.levelRequirements = recipe.levelRequirements;
+        this.allowPartialOutputs = recipe.allowPartialOutputs;
+        this.requiredHostIds = recipe.requiredHostIds;
+        this.additionalOutputs = recipe.additionalOutputs;
+    }
+
+    /**
+     * Adds registered extension outputs while preserving the legacy item/fluid constructor contract.
+     */
+    public static MachineRecipe withAdditionalOutputs(MachineRecipe recipe, List<MachineOutput> additionalOutputs) {
+        Objects.requireNonNull(recipe, "recipe");
+        Objects.requireNonNull(additionalOutputs, "additionalOutputs");
+        return additionalOutputs.isEmpty() ? recipe : new MachineRecipe(recipe, additionalOutputs);
     }
 
     private static MachineRecipe create(Identifier id,
@@ -370,7 +417,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 outputs.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
             }
         }
-        return List.copyOf(outputs);
+        outputs.addAll(additionalOutputs);
+        return MachineOutput.copyList(outputs);
     }
 
     public List<Integer> energyOutputs() {
@@ -495,9 +543,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public MachineRecipe withId(Identifier id) {
-        return new MachineRecipe(id, machineId, tickTime, List.of(), List.of(), modifiers, priority, maxThreads,
-                cancelRecipeOnPerTickFailure, List.of(), requirements, parallelized, levelRequirements,
-                allowPartialOutputs, requiredHostIds, false);
+        return new MachineRecipe(id, this);
     }
 
     public List<LevelRequirement> levelRequirements() {
