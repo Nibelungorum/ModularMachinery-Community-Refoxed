@@ -56,7 +56,6 @@ public final class PublicApiBootstrap {
     /** Resets the public API lifecycle without recursively resetting the coordinator. */
     public static synchronized void resetStateForTesting() {
         MachineStructureRegistry.clearForTesting();
-        CapabilityRegistry.clearForTesting();
         begun = false;
         ApiRuntime.uninstall();
     }

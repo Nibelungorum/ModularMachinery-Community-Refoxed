@@ -12,6 +12,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,6 +58,14 @@ class CapabilityRegistryTest {
         assertThat(CapabilityRegistry.values())
                 .extracting(definition -> definition.type().id())
                 .containsExactly(MMCR.id("item"), MMCR.id("fluid"), MMCR.id("energy"));
+    }
+
+    @Test
+    void exposes_only_registry_operations_as_public_methods() {
+        assertThat(Arrays.stream(CapabilityRegistry.class.getDeclaredMethods())
+                .filter(method -> Modifier.isPublic(method.getModifiers()))
+                .map(Method::getName))
+                .containsExactlyInAnyOrder("register", "get", "values", "freeze");
     }
 
     @Test
