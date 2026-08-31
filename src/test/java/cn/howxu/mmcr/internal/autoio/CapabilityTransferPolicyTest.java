@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.transfer.TransferContext;
+import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
@@ -97,8 +99,8 @@ class CapabilityTransferPolicyTest {
         var inputPolicy = CapabilityTransferPolicies.policyFor(inputCapability).orElseThrow();
         var outputPolicy = CapabilityTransferPolicies.policyFor(outputCapability).orElseThrow();
 
-        TransferResult noTarget = inputPolicy.transfer(inputCapability, Direction.NORTH);
-        TransferResult noWork = outputPolicy.transfer(outputCapability, Direction.NORTH);
+        TransferResult noTarget = simulate(inputPolicy, inputCapability, Direction.NORTH);
+        TransferResult noWork = simulate(outputPolicy, outputCapability, Direction.NORTH);
 
         assertThat(noTarget.successful()).isFalse();
         assertThat(noTarget.amount()).isZero();
@@ -119,43 +121,43 @@ class CapabilityTransferPolicyTest {
         ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(2));
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
                 itemHandler(ports.itemOutput, false, true));
-        assertThat(CapabilityTransferPolicies.policyFor(itemInput).orElseThrow()
-                .transfer(itemInput, Direction.EAST).amount()).isEqualTo(2);
+        assertThat(transfer(CapabilityTransferPolicies.policyFor(itemInput).orElseThrow(), itemInput,
+                Direction.EAST).amount()).isEqualTo(2);
         assertThat(ports.itemInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
 
         ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(3));
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemInput.getBlockPos(),
                 itemHandler(ports.itemInput, true, false));
-        assertThat(CapabilityTransferPolicies.policyFor(itemOutput).orElseThrow()
-                .eject(itemOutput, Direction.WEST).amount()).isEqualTo(3);
+        assertThat(eject(CapabilityTransferPolicies.policyFor(itemOutput).orElseThrow(), itemOutput,
+                Direction.WEST).amount()).isEqualTo(3);
         assertThat(ports.itemInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(5);
 
         ports.fluidOutput.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 400));
         LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidOutput.getBlockPos(),
                 ports.fluidOutput.getResourceHandler(null));
-        assertThat(CapabilityTransferPolicies.policyFor(fluidInput).orElseThrow()
-                .transfer(fluidInput, Direction.EAST).amount()).isEqualTo(400);
+        assertThat(transfer(CapabilityTransferPolicies.policyFor(fluidInput).orElseThrow(), fluidInput,
+                Direction.EAST).amount()).isEqualTo(400);
         assertThat(ports.fluidInput.fluidStorage().getAmountAsLong()).isEqualTo(400);
 
         ports.fluidOutput.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 500));
         LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidInput.getBlockPos(),
                 ports.fluidInput.getResourceHandler(null));
-        assertThat(CapabilityTransferPolicies.policyFor(fluidOutput).orElseThrow()
-                .eject(fluidOutput, Direction.WEST).amount()).isEqualTo(500);
+        assertThat(eject(CapabilityTransferPolicies.policyFor(fluidOutput).orElseThrow(), fluidOutput,
+                Direction.WEST).amount()).isEqualTo(500);
         assertThat(ports.fluidInput.fluidStorage().getAmountAsLong()).isEqualTo(900);
 
         ports.energyOutput.energyStorage().setAmount(600);
         LevelStub.setCapability(ports.level, ModCapabilities.ENERGY_BLOCK, ports.energyOutput.getBlockPos(),
                 ports.energyOutput.getEnergyHandler(null));
-        assertThat(CapabilityTransferPolicies.policyFor(energyInput).orElseThrow()
-                .transfer(energyInput, Direction.EAST).amount()).isEqualTo(600);
+        assertThat(transfer(CapabilityTransferPolicies.policyFor(energyInput).orElseThrow(), energyInput,
+                Direction.EAST).amount()).isEqualTo(600);
         assertThat(ports.energyInput.energyStorage().getAmountAsLong()).isEqualTo(600);
 
         ports.energyOutput.energyStorage().setAmount(700);
         LevelStub.setCapability(ports.level, ModCapabilities.ENERGY_BLOCK, ports.energyInput.getBlockPos(),
                 ports.energyInput.getEnergyHandler(null));
-        assertThat(CapabilityTransferPolicies.policyFor(energyOutput).orElseThrow()
-                .eject(energyOutput, Direction.WEST).amount()).isEqualTo(700);
+        assertThat(eject(CapabilityTransferPolicies.policyFor(energyOutput).orElseThrow(), energyOutput,
+                Direction.WEST).amount()).isEqualTo(700);
         assertThat(ports.energyInput.energyStorage().getAmountAsLong()).isEqualTo(1_300);
     }
 
@@ -173,8 +175,8 @@ class CapabilityTransferPolicyTest {
         LevelStub.setCapability(level, ModCapabilities.ENERGY_BLOCK, output.getBlockPos(), output.getEnergyHandler(null));
 
         var capability = input.capabilitySnapshot().capabilities().getFirst();
-        TransferResult result = CapabilityTransferPolicies.policyFor(capability).orElseThrow()
-                .transfer(capability, Direction.EAST);
+        TransferResult result = transfer(CapabilityTransferPolicies.policyFor(capability).orElseThrow(), capability,
+                Direction.EAST);
 
         assertThat(result.amount()).isEqualTo(amount);
         assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(amount);
@@ -189,8 +191,8 @@ class CapabilityTransferPolicyTest {
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
                 itemHandler(ports.itemOutput, false, true));
 
-        TransferResult blocked = CapabilityTransferPolicies.policyFor(input).orElseThrow()
-                .transfer(input, Direction.WEST);
+        TransferResult blocked = simulate(CapabilityTransferPolicies.policyFor(input).orElseThrow(), input,
+                Direction.WEST);
 
         assertThat(blocked.successful()).isFalse();
         assertThat(blocked.failure().details()).containsEntry("reason", "no_target");
@@ -254,7 +256,7 @@ class CapabilityTransferPolicyTest {
         var policy = CapabilityTransferPolicies.policyFor(capability).orElseThrow();
 
         assertThatCode(() -> policy.hasWork(capability)).doesNotThrowAnyException();
-        TransferResult result = policy.transfer(capability, Direction.EAST);
+        TransferResult result = transfer(policy, capability, Direction.EAST);
 
         assertThat(result.successful()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(2L);
@@ -278,8 +280,8 @@ class CapabilityTransferPolicyTest {
         LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidInput.getBlockPos(),
                 ports.fluidInput.getResourceHandler(null));
 
-        TransferResult result = CapabilityTransferPolicies.policyFor(output).orElseThrow()
-                .eject(output, Direction.WEST);
+        TransferResult result = eject(CapabilityTransferPolicies.policyFor(output).orElseThrow(), output,
+                Direction.WEST);
 
         assertThat(result.successful()).isTrue();
         assertThat(result.amount()).isEqualTo(40L);
@@ -298,6 +300,26 @@ class CapabilityTransferPolicyTest {
                 energyInput, energyOutput));
         ports.forEach(port -> port.setLevel(level));
         return new Ports(level, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput);
+    }
+
+    private static TransferResult simulate(TransferPolicy policy, MachineCapability capability, Direction side) {
+        return policy.transfer(TransferContext.simulate(capability, side, 1L));
+    }
+
+    private static TransferResult transfer(TransferPolicy policy, MachineCapability capability, Direction side) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            TransferResult result = policy.transfer(TransferContext.commit(capability, side, 1L, transaction));
+            if (result.successful()) transaction.commit();
+            return result;
+        }
+    }
+
+    private static TransferResult eject(TransferPolicy policy, MachineCapability capability, Direction side) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            TransferResult result = policy.eject(TransferContext.commit(capability, side, 1L, transaction));
+            if (result.successful()) transaction.commit();
+            return result;
+        }
     }
 
     private static ExtendedEnergyHatchBlockEntity extendedEnergy(String id, BlockPos position) {

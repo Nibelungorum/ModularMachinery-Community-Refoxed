@@ -10,10 +10,13 @@ import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.transfer.TransferContext;
+import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
+import cn.howxu.mmcr.api.capability.transfer.TransferResult;
+import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
-import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -36,6 +39,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.TreeMap;
 import java.util.EnumSet;
@@ -288,7 +292,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     protected boolean hasAutoIOTransferWork() {
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-            TransferPolicy policy = CapabilityTransferPolicies.policyFor(capability).orElse(null);
+            TransferPolicy policy = transferPolicy(capability).orElse(null);
             if (policy != null && policy.hasWork(capability)) return true;
         }
         return false;
@@ -400,7 +404,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         boolean rebuiltCandidates = consumeAutoIOCacheDirty();
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             AutoIOConfig config = autoIOConfig(capability.type());
-            TransferPolicy policy = CapabilityTransferPolicies.policyFor(capability).orElse(null);
+            TransferPolicy policy = transferPolicy(capability).orElse(null);
             if (!config.enabled() || config.enabledSides().isEmpty() || policy == null) continue;
             AutoIOState state = autoIOStates.computeIfAbsent(capability.type(), ignored -> new AutoIOState());
             if (rebuiltCandidates) rebuildAutoIOCandidates(capability, policy, config, state);
@@ -424,7 +428,12 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
             boolean moved = false;
             for (Direction side : state.candidateSides) {
-                moved |= policy.transfer(capability, side).successful();
+                TransferResult result;
+                try (Transaction transaction = Transaction.openRoot()) {
+                    result = policy.transfer(TransferContext.commit(capability, side, 1L, transaction));
+                    if (result.successful()) transaction.commit();
+                }
+                moved |= result.successful();
             }
             if (moved) incrementAutoIOSuccess(state);
             else decrementAutoIOSuccess(state);
@@ -443,7 +452,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private @Nullable MachineCapability autoIOCapability() {
         List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
         for (MachineCapability capability : capabilities) {
-            if (CapabilityTransferPolicies.policyFor(capability).isPresent()) return capability;
+            if (transferPolicy(capability).isPresent()) return capability;
         }
         return capabilities.size() == 1 ? capabilities.getFirst() : null;
     }
@@ -462,7 +471,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (level == null || level.isClientSide() || ioType() != IOType.INPUT || isUsedByActiveRecipe()) return false;
         MachineCapability capability = capability(type);
         if (capability == null || capability.ioType() != IOType.INPUT) return false;
-        TransferPolicy policy = capability == null ? null : CapabilityTransferPolicies.policyFor(capability).orElse(null);
+        TransferPolicy policy = capability == null ? null : transferPolicy(capability).orElse(null);
         if (capability == null || policy == null) return false;
         List<Direction> sides = new ArrayList<>(List.of(Direction.values()));
         for (int index = sides.size() - 1; index > 0; index--) {
@@ -473,9 +482,20 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         }
         boolean moved = false;
         for (Direction side : sides) {
-            moved |= policy.eject(capability, side).successful();
+            TransferResult result;
+            try (Transaction transaction = Transaction.openRoot()) {
+                result = policy.eject(TransferContext.commit(capability, side, 1L, transaction));
+                if (result.successful()) transaction.commit();
+            }
+            moved |= result.successful();
         }
         return moved;
+    }
+
+    private static Optional<TransferPolicy> transferPolicy(MachineCapability capability) {
+        if (capability == null || capability.type() == null) return Optional.empty();
+        CapabilityTransferPolicies.ensureRegistered();
+        return TransferStrategyRegistry.policyFor(capability.type());
     }
 
     protected boolean isUsedByActiveRecipe() {

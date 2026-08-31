@@ -16,4 +16,12 @@ public record TransferResult(boolean successful, long amount, @Nullable Executio
         if (amount < 0L) throw new IllegalArgumentException("amount must not be negative");
         if (successful != (amount > 0L)) throw new IllegalArgumentException("successful must match amount");
     }
+
+    public static TransferResult moved(long amount) {
+        return new TransferResult(amount > 0L, amount, null);
+    }
+
+    public static TransferResult blocked(ExecutionStatus failure) {
+        return new TransferResult(false, 0L, failure);
+    }
 }

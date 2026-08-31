@@ -8,12 +8,19 @@ import net.minecraft.core.Direction;
  *
  * @author howxu <dev@howxu.cn>
  */
+@FunctionalInterface
 public interface TransferPolicy {
-    boolean hasWork(MachineCapability capability);
+    TransferResult transfer(TransferContext context);
 
-    boolean hasAdjacentTarget(MachineCapability capability, Direction side);
+    default boolean hasWork(MachineCapability capability) {
+        return true;
+    }
 
-    TransferResult transfer(MachineCapability capability, Direction side);
+    default boolean hasAdjacentTarget(MachineCapability capability, Direction side) {
+        return true;
+    }
 
-    TransferResult eject(MachineCapability capability, Direction side);
+    default TransferResult eject(TransferContext context) {
+        return transfer(context.asEjection());
+    }
 }

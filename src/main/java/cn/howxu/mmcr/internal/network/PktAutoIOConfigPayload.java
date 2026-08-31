@@ -2,7 +2,9 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -56,9 +58,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
             if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
             if (!ownsMenu(player.containerMenu, port)) return;
             CapabilityType type = new CapabilityType(capabilityId);
-            if (action == AutoIOAction.SET_ENABLED) port.setAutoIOEnabled(type, enabled);
-            else if (action == AutoIOAction.SET_SIDE) port.setAutoIOSide(type, side, enabled);
-            else if (action == AutoIOAction.SET_ALL_SIDES) port.setAllAutoIOSides(type, enabled);
+            action.apply(port, type, side, enabled);
         });
     }
 
@@ -73,7 +73,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
                 || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos)
                 || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos);
         if (!portMenu) return false;
-        return menu.stillValid(player) && (action != AutoIOAction.SET_SIDE || side != null);
+        return menu.stillValid(player) && (!action.requiresSide() || side != null);
     }
 
     public static boolean canUpdate(ServerPlayer player, BlockPos pos, Identifier capabilityId,
@@ -82,7 +82,9 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
         if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return false;
         CapabilityType type = new CapabilityType(capabilityId);
         var capability = port.capability(type);
-        return capability != null && capability.ioType() == port.ioType();
+        CapabilityTransferPolicies.ensureRegistered();
+        return capability != null && capability.ioType() == port.ioType()
+                && TransferStrategyRegistry.policyFor(type).isPresent();
     }
 
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {

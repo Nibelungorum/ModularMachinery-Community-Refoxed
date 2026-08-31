@@ -6,8 +6,11 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.transfer.TransferContext;
 import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
+import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -16,7 +19,6 @@ import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
@@ -32,32 +34,33 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Built-in automatic IO policies selected by capability identity.
+ * Built-in automatic IO policies registered by capability identity.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class CapabilityTransferPolicies {
-    private static final Identifier ITEM_ID = MMCR.id("item");
-    private static final Identifier FLUID_ID = MMCR.id("fluid");
-    private static final Identifier ENERGY_ID = MMCR.id("energy");
-    private static final Map<Identifier, TransferPolicy> POLICIES = Map.of(
-            ITEM_ID, new ItemPolicy(),
-            FLUID_ID, new FluidPolicy(),
-            ENERGY_ID, new EnergyPolicy());
+    static {
+        TransferStrategyRegistry.register(BuiltinCapabilityDefinitions.ITEM_TYPE, new ItemPolicy());
+        TransferStrategyRegistry.register(BuiltinCapabilityDefinitions.FLUID_TYPE, new FluidPolicy());
+        TransferStrategyRegistry.register(BuiltinCapabilityDefinitions.ENERGY_TYPE, new EnergyPolicy());
+    }
 
-    private CapabilityTransferPolicies() {}
+    private CapabilityTransferPolicies() {
+    }
+
+    /**
+     * Forces class initialization before generic callers query the registry.
+     */
+    public static void ensureRegistered() {
+    }
 
     public static Optional<TransferPolicy> policyFor(MachineCapability capability) {
         if (capability == null || capability.type() == null) return Optional.empty();
-        return Optional.ofNullable(POLICIES.get(capability.type().id()));
-    }
-
-    private static TransferResult moved(long amount) {
-        return new TransferResult(amount > 0L, amount, null);
+        return TransferStrategyRegistry.policyFor(capability.type());
     }
 
     private static TransferResult blocked(String reason) {
-        return new TransferResult(false, 0L,
+        return TransferResult.blocked(
                 new ExecutionStatus(MMCR.id("auto_io"), StatusSeverity.BLOCKED,
                         MMCR.id("auto_io"), Map.of("reason", reason)));
     }
@@ -94,29 +97,20 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
-        public TransferResult transfer(MachineCapability capability, Direction side) {
+        public TransferResult transfer(TransferContext context) {
+            MachineCapability capability = context.capability();
             if (!(capability instanceof ItemBusCapability item)) return blocked("unsupported_capability");
-            if (!hasWork(item)) return blocked("no_work");
-            ResourceHandler<ItemResource> adjacent = adjacentItem(item, side);
+            if (context.eject() ? !hasStoredContents(item) : !hasWork(item)) return blocked("no_work");
+            ResourceHandler<ItemResource> adjacent = adjacentItem(item, context.side());
             if (adjacent == null) return blocked("no_target");
             ResourceHandler<ItemResource> internal = resourceHandler(item.storage());
             int limit = item.transferLimit();
-            long moved = item.ioType() == IOType.INPUT
-                    ? ResourceHandlerUtil.move(adjacent, internal, resource -> true, limit, null)
-                    : ResourceHandlerUtil.move(internal, adjacent, resource -> true, limit, null);
-            return moved(moved);
-        }
-
-        @Override
-        public TransferResult eject(MachineCapability capability, Direction side) {
-            if (!(capability instanceof ItemBusCapability item)) return blocked("unsupported_capability");
-            if (!hasStoredContents(item)) return blocked("no_work");
-            ResourceHandler<ItemResource> adjacent = adjacentItem(item, side);
-            if (adjacent == null) return blocked("no_target");
-            int limit = item.transferLimit();
-            long moved = ResourceHandlerUtil.move(resourceHandler(item.storage()), adjacent,
-                    resource -> true, limit, null);
-            return moved(moved);
+            long moved = context.eject()
+                    ? moveResource(internal, adjacent, limit, context)
+                    : item.ioType() == IOType.INPUT
+                    ? moveResource(adjacent, internal, limit, context)
+                    : moveResource(internal, adjacent, limit, context);
+            return TransferResult.moved(moved);
         }
 
         private static boolean hasStoredContents(ItemBusCapability item) {
@@ -152,29 +146,20 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
-        public TransferResult transfer(MachineCapability capability, Direction side) {
+        public TransferResult transfer(TransferContext context) {
+            MachineCapability capability = context.capability();
             if (!(capability instanceof FluidHatchCapability fluid)) return blocked("unsupported_capability");
-            if (!hasWork(fluid)) return blocked("no_work");
-            ResourceHandler<FluidResource> adjacent = adjacentFluid(fluid, side);
+            if (context.eject() ? !hasStoredContents(fluid.storage()) : !hasWork(fluid)) return blocked("no_work");
+            ResourceHandler<FluidResource> adjacent = adjacentFluid(fluid, context.side());
             if (adjacent == null) return blocked("no_target");
             ResourceHandler<FluidResource> internal = resourceHandler(fluid.storage());
             int limit = fluid.transferLimit();
-            long moved = fluid.ioType() == IOType.INPUT
-                    ? ResourceHandlerUtil.move(adjacent, internal, resource -> true, limit, null)
-                    : ResourceHandlerUtil.move(internal, adjacent, resource -> true, limit, null);
-            return moved(moved);
-        }
-
-        @Override
-        public TransferResult eject(MachineCapability capability, Direction side) {
-            if (!(capability instanceof FluidHatchCapability fluid)) return blocked("unsupported_capability");
-            if (!hasStoredContents(fluid.storage())) return blocked("no_work");
-            ResourceHandler<FluidResource> adjacent = adjacentFluid(fluid, side);
-            if (adjacent == null) return blocked("no_target");
-            int limit = fluid.transferLimit();
-            long moved = ResourceHandlerUtil.move(resourceHandler(fluid.storage()), adjacent,
-                    resource -> true, limit, null);
-            return moved(moved);
+            long moved = context.eject()
+                    ? moveResource(internal, adjacent, limit, context)
+                    : fluid.ioType() == IOType.INPUT
+                    ? moveResource(adjacent, internal, limit, context)
+                    : moveResource(internal, adjacent, limit, context);
+            return TransferResult.moved(moved);
         }
 
         private static boolean hasStoredContents(ResourceStorage<FluidResource> storage) {
@@ -206,32 +191,35 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
-        public TransferResult transfer(MachineCapability capability, Direction side) {
+        public TransferResult transfer(TransferContext context) {
+            MachineCapability capability = context.capability();
             if (!(capability instanceof EnergyHatchCapability energy)) return blocked("unsupported_capability");
-            if (!hasWork(energy)) return blocked("no_work");
-            EnergyHandler adjacent = adjacentEnergy(energy, side);
+            if (context.eject() ? energy.storage().amount() <= 0L : !hasWork(energy)) return blocked("no_work");
+            EnergyHandler adjacent = adjacentEnergy(energy, context.side());
             if (adjacent == null) return blocked("no_target");
             EnergyHandler internal = energyHandler(energy.storage());
             long limit = energy.storage().transferLimit();
-            long moved = energy.ioType() == IOType.INPUT
-                    ? moveEnergy(adjacent, internal, limit)
-                    : moveEnergy(internal, adjacent, limit);
-            return moved(moved);
-        }
-
-        @Override
-        public TransferResult eject(MachineCapability capability, Direction side) {
-            if (!(capability instanceof EnergyHatchCapability energy)) return blocked("unsupported_capability");
-            if (energy.storage().amount() <= 0L) return blocked("no_work");
-            EnergyHandler adjacent = adjacentEnergy(energy, side);
-            if (adjacent == null) return blocked("no_target");
-            long moved = moveEnergy(energyHandler(energy.storage()), adjacent, energy.storage().transferLimit());
-            return moved(moved);
+            long moved = context.eject()
+                    ? moveEnergy(internal, adjacent, limit, context)
+                    : energy.ioType() == IOType.INPUT
+                    ? moveEnergy(adjacent, internal, limit, context)
+                    : moveEnergy(internal, adjacent, limit, context);
+            return TransferResult.moved(moved);
         }
 
         private static EnergyHandler adjacentEnergy(MachineCapability capability, Direction side) {
             if (!(capability instanceof EnergyHatchCapability energy) || !canWork(energy.level(), side)) return null;
             return energy.level().getCapability(ModCapabilities.ENERGY_BLOCK, adjacent(energy.position(), side), side.getOpposite());
+        }
+    }
+
+    private static <R extends Resource> long moveResource(ResourceHandler<R> from, ResourceHandler<R> to,
+                                                          int limit, TransferContext context) {
+        if (!context.simulate()) {
+            return ResourceHandlerUtil.move(from, to, resource -> true, limit, context.transaction());
+        }
+        try (Transaction transaction = Transaction.open(context.transaction())) {
+            return ResourceHandlerUtil.move(from, to, resource -> true, limit, transaction);
         }
     }
 
@@ -290,28 +278,36 @@ public final class CapabilityTransferPolicies {
         };
     }
 
-    private static long moveEnergy(EnergyHandler from, EnergyHandler to, long requested) {
+    private static long moveEnergy(EnergyHandler from, EnergyHandler to, long requested, TransferContext context) {
         if (requested <= 0L) return 0L;
         if (from instanceof LongEnergyHandler longFrom && to instanceof LongEnergyHandler longTo) {
-            return moveLongEnergy(longFrom, longTo, requested);
+            return moveLongEnergy(longFrom, longTo, requested, context);
         }
         // EnergyHandler exposes int-sized transfers; continue long-backed transfers on later ticks.
         long boundedRequest = Math.min(requested, Integer.MAX_VALUE);
+        if (!context.simulate()) {
+            return moveIntEnergy(from, to, boundedRequest, context.transaction());
+        }
+        try (Transaction transaction = Transaction.open(context.transaction())) {
+            return moveIntEnergy(from, to, boundedRequest, transaction);
+        }
+    }
+
+    private static long moveIntEnergy(EnergyHandler from, EnergyHandler to, long requested,
+                                      TransactionContext transaction) {
         long moved = 0L;
-        try (Transaction transaction = Transaction.openRoot()) {
-            while (moved < boundedRequest) {
-                int chunk = (int) (boundedRequest - moved);
-                int chunkMoved = EnergyHandlerUtil.move(from, to, chunk, transaction);
-                if (chunkMoved <= 0) break;
-                moved += chunkMoved;
-                if (chunkMoved < chunk) break;
-            }
-            transaction.commit();
+        while (moved < requested) {
+            int chunk = (int) (requested - moved);
+            int chunkMoved = EnergyHandlerUtil.move(from, to, chunk, transaction);
+            if (chunkMoved <= 0) break;
+            moved += chunkMoved;
+            if (chunkMoved < chunk) break;
         }
         return moved;
     }
 
-    private static long moveLongEnergy(LongEnergyHandler from, LongEnergyHandler to, long requested) {
+    private static long moveLongEnergy(LongEnergyHandler from, LongEnergyHandler to, long requested,
+                                       TransferContext context) {
         long targetSpace = to.getAmountAsLong() >= to.getCapacityAsLong()
                 ? 0L
                 : to.getCapacityAsLong() - to.getAmountAsLong();
@@ -319,12 +315,12 @@ public final class CapabilityTransferPolicies {
         amount = Math.min(amount, Math.min(from.getTransferLimit(), to.getTransferLimit()));
         if (amount <= 0L) return 0L;
 
-        try (Transaction transaction = Transaction.openRoot()) {
+        try (Transaction transaction = Transaction.open(context.transaction())) {
             long extracted = from.extractLong(amount, transaction);
             if (extracted != amount) return 0L;
             long inserted = to.insertLong(extracted, transaction);
             if (inserted != extracted) return 0L;
-            transaction.commit();
+            if (!context.simulate()) transaction.commit();
             return inserted;
         }
     }
