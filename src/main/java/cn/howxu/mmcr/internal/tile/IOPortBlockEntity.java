@@ -484,7 +484,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         for (Direction side : sides) {
             TransferResult result;
             try (Transaction transaction = Transaction.openRoot()) {
-                result = policy.eject(TransferContext.commit(capability, side, 1L, transaction));
+                result = policy.eject(TransferContext.commit(capability, side, 1L, transaction).asEjection());
                 if (result.successful()) transaction.commit();
             }
             moved |= result.successful();

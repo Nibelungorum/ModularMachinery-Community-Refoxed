@@ -19,7 +19,7 @@ public final class TransferStrategyRegistry {
     private TransferStrategyRegistry() {
     }
 
-    public static void register(CapabilityType type, TransferPolicy policy) {
+    public static synchronized void register(CapabilityType type, TransferPolicy policy) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(policy, "policy");
         if (FROZEN) throw new IllegalStateException("Transfer strategy registry is frozen");
@@ -32,7 +32,7 @@ public final class TransferStrategyRegistry {
         return type == null ? Optional.empty() : Optional.ofNullable(POLICIES.get(type));
     }
 
-    public static void freeze() {
+    public static synchronized void freeze() {
         FROZEN = true;
     }
 }

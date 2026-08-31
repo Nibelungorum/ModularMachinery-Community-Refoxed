@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.api;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.publicapi.ApiRuntime;
+import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
+import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 
@@ -33,7 +35,9 @@ public final class PublicApiBootstrap {
 
     /** Closes capability registration before world content registration starts. */
     public static synchronized void freeze() {
+        CapabilityTransferPolicies.ensureRegistered();
         CapabilityRegistry.freeze();
+        TransferStrategyRegistry.freeze();
     }
 
     public static synchronized boolean isRegistrationOpen() {
