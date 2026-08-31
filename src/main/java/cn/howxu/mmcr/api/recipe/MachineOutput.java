@@ -88,7 +88,10 @@ public interface MachineOutput {
                 (output, tags) -> new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         output.stack(), output.chance(), tags),
                 requirement -> requirement instanceof ItemRequirement item
-                        && item.io() == RecipeModifier.IOType.OUTPUT);
+                        && item.io() == RecipeModifier.IOType.OUTPUT,
+                requirement -> requirement instanceof ItemRequirement item
+                        && item.io() == RecipeModifier.IOType.OUTPUT
+                        ? new ItemOutput(item.resolvedStack(), item.chance()) : null);
 
         public ItemOutput {
             stack = stack == null ? ItemStack.EMPTY : stack.copy();
@@ -130,7 +133,10 @@ public interface MachineOutput {
                 (output, tags) -> new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         output.stack(), output.chance(), tags),
                 requirement -> requirement instanceof FluidRequirement fluid
-                        && fluid.io() == RecipeModifier.IOType.OUTPUT);
+                        && fluid.io() == RecipeModifier.IOType.OUTPUT,
+                requirement -> requirement instanceof FluidRequirement fluid
+                        && fluid.io() == RecipeModifier.IOType.OUTPUT
+                        ? new FluidOutput(fluid.stack(), fluid.chance()) : null);
 
         public FluidOutput {
             stack = stack == null ? FluidStack.EMPTY : stack.copy();

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
@@ -16,7 +17,6 @@ import net.neoforged.neoforge.fluids.FluidStack;
 
 import net.minecraft.world.item.ItemStack;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
@@ -44,6 +44,7 @@ public final class MachineRecipeJson {
                                       Predicate<Identifier> machineExists) {
         if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
         if (json == null || !json.isJsonObject()) fail(id, "$", "recipe must be an object", null);
+        if (registries == null) fail(id, "$", "registry lookup must not be null", null);
         var object = json.getAsJsonObject();
         requireType(id, object);
 
@@ -62,30 +63,40 @@ public final class MachineRecipeJson {
             inputs = List.copyOf(withEnergy);
         }
 
-        List<ItemStack> outputs = parseList(id, object, "outputs",
-                ItemStack.CODEC, ops);
+        ParsedOutputs parsedOutputs = parseOutputs(id, object, ops);
         List<FluidStack> fluidOutputs = parseList(id, object, "fluid_outputs", FluidStack.CODEC, ops);
-        List<MachineOutput> additionalOutputs = parseList(id, object, "machine_outputs", MachineOutput.CODEC, ops);
+        List<MachineOutput> transitionalOutputs = parseList(id, object, "machine_outputs", MachineOutput.CODEC, ops);
         List<RecipeModifier> modifiers = parseList(id, object, "modifiers", RecipeModifier.CODEC, ops);
         List<MachineRequirement> requirements = parseList(id, object, "requirements", MachineRequirement.CODEC, ops);
-        if (!object.has("requirements")) requirements = List.of();
         List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC, ops);
         Set<Identifier> hosts = new LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
-        if (object.has("requirements") && !requirements.isEmpty()) {
-            return MachineRecipe.withAdditionalOutputs(new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
-                    intField(id, object, "priority", false, 0), maxThreads,
-                    boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, requirements,
-                    boolField(id, object, "parallelized", false), levels,
-                    boolField(id, object, "allow_partial_outputs", false), hosts, false), additionalOutputs);
+        boolean explicitRequirements = object.has("requirements");
+        List<MachineRequirement> canonicalRequirements = explicitRequirements
+                ? requirements : MachineRecipe.legacyInputRequirements(inputs);
+        List<MachineOutput> canonicalOutputs;
+        if (explicitRequirements && !parsedOutputs.canonical()) {
+            canonicalOutputs = MachineRecipe.outputsFromRequirements(canonicalRequirements);
+        } else if (!explicitRequirements && !parsedOutputs.canonical()) {
+            canonicalOutputs = new ArrayList<>();
+            for (ItemStack output : parsedOutputs.legacyItemStacks()) {
+                canonicalOutputs.add(new MachineOutput.ItemOutput(output, 1F));
+            }
+            for (FluidStack output : fluidOutputs) {
+                canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F));
+            }
+        } else {
+            canonicalOutputs = new ArrayList<>(parsedOutputs.values());
         }
-        return MachineRecipe.withAdditionalOutputs(new MachineRecipe(id, machineId, tickTime, inputs, outputs, modifiers,
-                intField(id, object, "priority", false, 0), maxThreads,
-                boolField(id, object, "cancelIfPerTickFails", false), fluidOutputs, Collections.emptyList(),
+        MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, canonicalRequirements,
+                canonicalOutputs,
+                modifiers, intField(id, object, "priority", false, 0), maxThreads,
+                boolField(id, object, "cancelIfPerTickFails", false),
                 boolField(id, object, "parallelized", false), levels,
-                boolField(id, object, "allow_partial_outputs", false), hosts, true), additionalOutputs);
+                boolField(id, object, "allow_partial_outputs", false), hosts);
+        return MachineRecipe.withAdditionalOutputs(recipe, transitionalOutputs);
     }
 
     public static MachineRecipe normalize(Identifier id, Identifier machineId, int tickTime,
@@ -173,14 +184,18 @@ public final class MachineRecipeJson {
     }
 
     private static <T> List<T> parseList(Identifier id, JsonObject object, String field, Codec<T> codec,
-                                        DynamicOps<JsonElement> ops) {
+                                         DynamicOps<JsonElement> ops) {
         if (!object.has(field)) return List.of();
         try {
             if (!object.get(field).isJsonArray()) fail(id, field, "must be an array", new IllegalArgumentException("expected array"));
             var values = new ArrayList<T>();
             var array = object.getAsJsonArray(field);
+            enforceListBounds(id, field, array);
             for (int index = 0; index < array.size(); index++) {
                 int elementIndex = index;
+                if (array.get(index).toString().length() > MAX_CHILD_PAYLOAD) {
+                    fail(id, field + "[" + index + "]", "payload exceeds limit", null);
+                }
                 values.add(codec.parse(ops, array.get(index)).getOrThrow(error ->
                         new RecipeJsonException(id, field + "[" + elementIndex + "]" + errorPath(error), error, new IllegalArgumentException(error))));
             }
@@ -203,6 +218,50 @@ public final class MachineRecipeJson {
     private static String errorPath(String error) {
         int separator = error.indexOf(": ");
         return separator < 0 ? "" : "." + error.substring(0, separator);
+    }
+
+    private static ParsedOutputs parseOutputs(Identifier id, JsonObject object,
+                                              DynamicOps<JsonElement> ops) {
+        if (!object.has("outputs")) return ParsedOutputs.legacy(List.of());
+        JsonElement value = object.get("outputs");
+        if (!value.isJsonArray()) fail(id, "outputs", "must be an array", new IllegalArgumentException("expected array"));
+        JsonArray array = value.getAsJsonArray();
+        enforceListBounds(id, "outputs", array);
+        boolean canonical = array.size() == 0;
+        for (int index = 0; index < array.size(); index++) {
+            JsonElement child = array.get(index);
+            boolean hasType = child.isJsonObject() && child.getAsJsonObject().has("type");
+            if (index == 0) canonical = hasType;
+            if (canonical != hasType) {
+                fail(id, "outputs[" + index + "]", "cannot mix canonical and legacy output shapes", null);
+            }
+        }
+        if (canonical) return ParsedOutputs.canonical(parseList(id, object, "outputs", MachineOutput.CODEC, ops));
+        return ParsedOutputs.legacy(parseList(id, object, "outputs", ItemStack.CODEC, ops));
+    }
+
+    private static void enforceListBounds(Identifier id, String field, JsonArray array) {
+        if (array.size() > MAX_LIST_ENTRIES) {
+            fail(id, field, "contains too many entries", null);
+        }
+    }
+
+    private static final int MAX_LIST_ENTRIES = MachineRecipe.MAX_LIST_ENTRIES;
+    private static final int MAX_CHILD_PAYLOAD = MachineRecipe.MAX_CHILD_PAYLOAD;
+
+    private record ParsedOutputs(List<MachineOutput> values, List<ItemStack> legacyItemStacks, boolean canonical) {
+        private ParsedOutputs {
+            values = List.copyOf(values == null ? List.of() : values);
+            legacyItemStacks = List.copyOf(legacyItemStacks == null ? List.of() : legacyItemStacks);
+        }
+
+        private static ParsedOutputs canonical(List<MachineOutput> values) {
+            return new ParsedOutputs(values, List.of(), true);
+        }
+
+        private static ParsedOutputs legacy(List<ItemStack> values) {
+            return new ParsedOutputs(List.of(), values, false);
+        }
     }
 
     /** Structured error raised while decoding a machine recipe JSON document. */

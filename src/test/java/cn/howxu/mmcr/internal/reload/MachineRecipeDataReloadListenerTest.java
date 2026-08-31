@@ -81,6 +81,48 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     @Test
+    void failed_candidate_keeps_previous_snapshot_and_reports_structured_error() {
+        var oldId = Identifier.parse("mmcr_test:previous_recipe");
+        var listener = new MachineRecipeDataReloadListener(registries);
+        listener.applySnapshot(Map.of(oldId, recipe()));
+        var previous = RecipeRegistry.dataPackSnapshot();
+
+        String invalid = "{"
+                + "\"type\":\"mmcr:machine_recipe\","
+                + "\"machine\":\"mmcr:test_machine_name\","
+                + "\"tick_time\":20,"
+                + "\"requirements\":[{\"type\":\"mmcr_test:missing\"}]}";
+        var candidate = listener.prepare(resources(Map.of(
+                Identifier.parse("mmcr_test:recipes/invalid.json"), resource(invalid),
+                Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()))), null);
+
+        listener.apply(candidate, null, null);
+
+        assertThat(listener.errors()).singleElement()
+                .satisfies(error -> assertThat(error.path()).isEqualTo("requirements[0]"));
+        assertThat(RecipeRegistry.dataPackSnapshot()).isSameAs(previous);
+        assertThat(RecipeRegistry.getRecipe(oldId)).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr_test:valid"))).isNull();
+    }
+
+    @Test
+    void successful_candidate_rebuilds_the_machine_catalog_once() {
+        var listener = new MachineRecipeDataReloadListener(registries);
+        var machineId = Identifier.parse("mmcr:test_machine_name");
+        var before = RecipeRegistry.catalog(machineId);
+        var candidate = listener.prepare(resources(Map.of(
+                Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()))), null);
+
+        listener.apply(candidate, null, null);
+
+        assertThat(listener.errors()).isEmpty();
+        var published = RecipeRegistry.catalog(machineId);
+        assertThat(published.version()).isEqualTo(before.version() + 1);
+        assertThat(published.inputIndex().allCandidates()).containsExactlyElementsOf(published.orderedRecipes());
+        RecipeRegistry.replaceDataPack(Map.of());
+    }
+
+    @Test
     void coordinatorDataPackReplacementPreservesStaticAndDynamicLayers() {
         var staticId = Identifier.parse("mmcr_test:static_layer_recipe");
         var dynamicId = Identifier.parse("mmcr_test:dynamic_layer_recipe");

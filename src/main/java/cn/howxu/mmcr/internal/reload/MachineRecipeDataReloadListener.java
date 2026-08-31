@@ -1,8 +1,11 @@
 package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import com.google.gson.JsonElement;
@@ -18,6 +21,7 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 import java.io.Reader;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -26,9 +30,10 @@ import java.util.function.Consumer;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class MachineRecipeDataReloadListener extends SimplePreparableReloadListener<Map<Identifier, MachineRecipe>> {
+public final class MachineRecipeDataReloadListener extends SimplePreparableReloadListener<MachineRecipeDataReloadListener.PreparedRecipes> {
     private final HolderLookup.Provider registries;
-    private Map<Identifier, MachineRecipe> snapshot = Map.of();
+    private volatile Map<Identifier, MachineRecipe> snapshot = Map.of();
+    private volatile List<MachineRecipeJson.RecipeJsonException> errors = List.of();
 
     public MachineRecipeDataReloadListener(HolderLookup.Provider registries) {
         this.registries = registries;
@@ -42,20 +47,39 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
         return snapshot;
     }
 
-    @Override
-    protected Map<Identifier, MachineRecipe> prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
-        return load(resourceManager, registries);
+    public List<MachineRecipeJson.RecipeJsonException> errors() {
+        return errors;
     }
 
     @Override
-    protected void apply(Map<Identifier, MachineRecipe> recipes, ResourceManager resourceManager, ProfilerFiller profiler) {
-        // Vanilla data-pack reload does not expose MinecraftServer to this listener apply hook.
-        // Call applySnapshotFromServerReloadHook when a server-aware reload integration is available.
-        applySnapshot(recipes);
+    protected PreparedRecipes prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
+        return loadCandidate(resourceManager, registries);
+    }
+
+    @Override
+    protected void apply(PreparedRecipes candidate, ResourceManager resourceManager, ProfilerFiller profiler) {
+        if (!candidate.errors().isEmpty()) {
+            errors = candidate.errors();
+            candidate.errors().forEach(error -> MMCR.LOG.error("Failed to load machine recipe {}", error.recipeId(), error));
+            return;
+        }
+        try {
+            RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(candidate.recipes());
+            snapshot = candidate.recipes();
+            errors = List.of();
+        } catch (RuntimeException exception) {
+            errors = List.of(validationError(candidate.recipes(), exception));
+            MMCR.LOG.error("Failed to publish machine recipe data-pack snapshot", exception);
+        }
     }
 
     static Map<Identifier, MachineRecipe> load(ResourceManager resourceManager, HolderLookup.Provider registries) {
+        return loadCandidate(resourceManager, registries).recipes();
+    }
+
+    static PreparedRecipes loadCandidate(ResourceManager resourceManager, HolderLookup.Provider registries) {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        List<MachineRecipeJson.RecipeJsonException> errors = new java.util.ArrayList<>();
         for (Map.Entry<Identifier, Resource> entry : resourceManager.listResources("recipes", path -> path.getPath().endsWith(".json")).entrySet()) {
             Identifier resourceLocation = entry.getKey();
             Identifier recipeId = Identifier.fromNamespaceAndPath(resourceLocation.getNamespace(),
@@ -68,11 +92,22 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
                         || !object.get("type").getAsJsonPrimitive().isString()
                         || !MachineRecipeJson.TYPE.toString().equals(object.get("type").getAsString())) continue;
                 recipes.put(recipeId, MachineRecipeJson.parse(recipeId, object, registries));
+            } catch (MachineRecipeJson.RecipeJsonException exception) {
+                errors.add(exception);
             } catch (Exception exception) {
-                MMCR.LOG.error("Failed to load machine recipe {} from {}", recipeId, resourceLocation, exception);
+                errors.add(new MachineRecipeJson.RecipeJsonException(recipeId, "$",
+                        exception.getMessage() == null ? "invalid recipe" : exception.getMessage(), exception));
             }
         }
-        return Map.copyOf(recipes);
+        if (errors.isEmpty()) {
+            try {
+                validateCandidate(recipes);
+                RecipeRegistry.validateDataPackCandidate(recipes);
+            } catch (RuntimeException exception) {
+                errors.add(validationError(recipes, exception));
+            }
+        }
+        return new PreparedRecipes(Map.copyOf(recipes), List.copyOf(errors));
     }
 
     void applySnapshot(Map<Identifier, MachineRecipe> recipes) {
@@ -88,14 +123,41 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
 
     void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes,
                                            Consumer<RuntimeContentSnapshot> sync) {
-        var committed = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(recipes);
-        snapshot = Map.copyOf(recipes);
+        var committed = publishSnapshot(recipes);
         sync.accept(committed);
     }
 
-    private void publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
+    private RuntimeContentSnapshot publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
-        RuntimeContentCoordinator.replaceDataPackRecipes(replacement);
+        validateCandidate(replacement);
+        RuntimeContentSnapshot committed = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(replacement);
         snapshot = replacement;
+        return committed;
+    }
+
+    private static void validateCandidate(Map<Identifier, MachineRecipe> recipes) {
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            MachineRecipe recipe = entry.getValue();
+            if (MachineRegistry.getMachine(recipe.machineId()) == null
+                    && !MachineDefinitions.containsStatic(recipe.machineId())) {
+                throw new IllegalArgumentException("Recipe " + entry.getKey()
+                        + " at machine: unknown machine " + recipe.machineId());
+            }
+        }
+    }
+
+    private static MachineRecipeJson.RecipeJsonException validationError(Map<Identifier, MachineRecipe> recipes,
+                                                                          RuntimeException exception) {
+        Identifier id = recipes.keySet().stream().findFirst().orElse(MMCR.id("machine_recipe_reload"));
+        String message = exception.getMessage() == null ? "candidate validation failed" : exception.getMessage();
+        return new MachineRecipeJson.RecipeJsonException(id, "$", message, exception);
+    }
+
+    record PreparedRecipes(Map<Identifier, MachineRecipe> recipes,
+                           List<MachineRecipeJson.RecipeJsonException> errors) {
+        PreparedRecipes {
+            recipes = Map.copyOf(recipes == null ? Map.of() : recipes);
+            errors = List.copyOf(errors == null ? List.of() : errors);
+        }
     }
 }

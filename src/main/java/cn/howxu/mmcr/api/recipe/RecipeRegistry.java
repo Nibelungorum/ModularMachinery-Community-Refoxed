@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
@@ -178,6 +179,7 @@ public final class RecipeRegistry {
 
     public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
+        validateDataPackCandidate(recipes);
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
@@ -194,6 +196,30 @@ public final class RecipeRegistry {
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
+        }
+    }
+
+    /** Validates a complete data-pack layer without changing any published state. */
+    public static void validateDataPackCandidate(Map<Identifier, MachineRecipe> recipes) {
+        if (recipes == null) throw new IllegalArgumentException("Data-pack recipes must not be null");
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            Identifier id = entry.getKey();
+            MachineRecipe recipe = entry.getValue();
+            if (id == null || recipe == null || recipe.id() == null) {
+                throw new IllegalArgumentException("Recipe key or recipe id must not be null: " + id);
+            }
+            for (var requirement : recipe.requirements()) {
+                if (requirement == null || requirement.type() == null
+                        || RequirementHandlerRegistry.canonicalType(requirement.type()) != requirement.type()
+                        || RequirementHandlerRegistry.handlerFor(requirement.type()) == null) {
+                    throw new IllegalArgumentException("Recipe " + id + " contains an unregistered requirement type");
+                }
+            }
+            for (MachineOutput output : recipe.machineOutputs()) {
+                if (!OutputRegistry.isCanonical(output)) {
+                    throw new IllegalArgumentException("Recipe " + id + " contains an unregistered output type");
+                }
+            }
         }
     }
 

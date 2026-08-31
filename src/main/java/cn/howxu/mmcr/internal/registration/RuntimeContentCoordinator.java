@@ -86,6 +86,7 @@ public final class RuntimeContentCoordinator {
     public static RuntimeContentSnapshot replaceDataPackRecipesAndSnapshot(
             Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
+            RecipeRegistry.validateDataPackCandidate(recipes);
             replaceDataPackLocked(recipes);
             return snapshotLocked();
         }

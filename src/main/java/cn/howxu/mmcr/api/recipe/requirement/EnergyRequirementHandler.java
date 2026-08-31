@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +23,36 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class EnergyRequirementHandler implements RequirementHandler<EnergyRequirement> {
+    @Override
+    public EnergyRequirement applyModifiers(EnergyRequirement requirement, List<RecipeModifier> modifiers) {
+        return new EnergyRequirement(requirement.io(),
+                IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyEnergy(modifiers, requirement.fePerTick())),
+                requirement.tags());
+    }
+
+    @Override
+    public EnergyRequirement applyLevelModifiers(EnergyRequirement requirement, double energyMultiplier,
+                                                 double outputMultiplier) {
+        return new EnergyRequirement(requirement.io(), floorNonNegative(requirement.fePerTick() * energyMultiplier),
+                requirement.tags());
+    }
+
+    @Override
+    public MachineIngredient legacyInput(EnergyRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.INPUT
+                ? new MachineIngredient.EnergyIngredient(requirement.fePerTick()) : null;
+    }
+
+    @Override
+    public Integer legacyEnergyOutput(EnergyRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.fePerTick() : null;
+    }
+
+    private static int floorNonNegative(double value) {
+        if (value <= 0D) return 0;
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.floor(value);
+    }
+
     @Override
     public RequirementPlan plan(EnergyRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {

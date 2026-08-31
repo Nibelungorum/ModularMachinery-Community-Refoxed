@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.List;
 import java.util.Map;
@@ -73,6 +77,38 @@ public final class RequirementHandlerRegistry {
         return resourceWakeups(canonical, requirement);
     }
 
+    public static MachineRequirement applyModifiers(MachineRequirement requirement,
+                                                    List<RecipeModifier> modifiers) {
+        return dispatch(requirement, (handler, value) -> handler.applyModifiers(value, modifiers));
+    }
+
+    public static MachineRequirement applyLevelModifiers(MachineRequirement requirement,
+                                                         double energyMultiplier, double outputMultiplier) {
+        return dispatch(requirement, (handler, value) ->
+                handler.applyLevelModifiers(value, energyMultiplier, outputMultiplier));
+    }
+
+    public static boolean overlaps(MachineRequirement requirement, MachineRequirement other) {
+        if (requirement == null || other == null) return false;
+        return dispatch(requirement, (handler, value) -> handler.overlaps(value, other));
+    }
+
+    public static MachineIngredient legacyInput(MachineRequirement requirement) {
+        return dispatch(requirement, (handler, value) -> handler.legacyInput(value));
+    }
+
+    public static ItemStack legacyItemOutput(MachineRequirement requirement) {
+        return dispatch(requirement, (handler, value) -> handler.legacyItemOutput(value));
+    }
+
+    public static FluidStack legacyFluidOutput(MachineRequirement requirement) {
+        return dispatch(requirement, (handler, value) -> handler.legacyFluidOutput(value));
+    }
+
+    public static Integer legacyEnergyOutput(MachineRequirement requirement) {
+        return dispatch(requirement, (handler, value) -> handler.legacyEnergyOutput(value));
+    }
+
     public static void registerBuiltIns() {
         registerBuiltIn(ItemRequirement.TYPE);
         registerBuiltIn(FluidRequirement.TYPE);
@@ -126,6 +162,18 @@ public final class RequirementHandlerRegistry {
 
     private static boolean isBuiltIn(Identifier id) {
         return BUILT_IN_IDS.contains(id);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T> T dispatch(MachineRequirement requirement, HandlerCall<T> call) {
+        if (requirement == null || requirement.type() == null) return null;
+        RequirementHandler<?> handler = handlerFor(requirement.type());
+        return handler == null ? null : call.apply((RequirementHandler) handler, requirement);
+    }
+
+    @FunctionalInterface
+    private interface HandlerCall<T> {
+        T apply(RequirementHandler handler, MachineRequirement requirement);
     }
 
     @SuppressWarnings("unchecked")

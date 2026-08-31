@@ -4,6 +4,8 @@ import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 
 import java.util.List;
@@ -61,10 +63,56 @@ public final class OutputRegistry {
         return toRequirement(canonicalType(output.outputType()), output, tags == null ? List.of() : List.copyOf(tags));
     }
 
+    /** Returns an execution requirement when the registered output type supports one. */
+    public static MachineRequirement tryToRequirement(MachineOutput output, List<String> tags) {
+        try {
+            return toRequirement(output, tags);
+        } catch (IllegalStateException exception) {
+            return null;
+        }
+    }
+
+    /** Converts a requirement to an output through the registered output type that owns it. */
+    public static MachineOutput fromRequirement(MachineRequirement requirement) {
+        if (requirement == null) return null;
+        registerBuiltIns();
+        for (OutputType<?> type : TYPES.values()) {
+            MachineOutput output = type.fromRequirement(requirement);
+            if (output == null) continue;
+            if (output.outputType() != type) {
+                throw new IllegalArgumentException("Output factory returned a different type: " + type.id());
+            }
+            return output;
+        }
+        return null;
+    }
+
+    public static List<ItemStack> itemStacks(List<MachineOutput> outputs) {
+        return outputs.stream()
+                .filter(MachineOutput.ItemOutput.class::isInstance)
+                .map(MachineOutput.ItemOutput.class::cast)
+                .map(output -> output.stack().copy())
+                .toList();
+    }
+
+    public static List<FluidStack> fluidStacks(List<MachineOutput> outputs) {
+        return outputs.stream()
+                .filter(MachineOutput.FluidOutput.class::isInstance)
+                .map(MachineOutput.FluidOutput.class::cast)
+                .map(output -> output.stack().copy())
+                .toList();
+    }
+
     public static boolean matchesOutputRequirement(MachineRequirement requirement) {
         if (requirement == null) return false;
         registerBuiltIns();
         return TYPES.values().stream().anyMatch(type -> type.matchesRequirement(requirement));
+    }
+
+    public static boolean matchesOutputRequirement(MachineOutput output, MachineRequirement requirement) {
+        if (output == null || requirement == null) return false;
+        OutputType<?> type = canonicalType(output.outputType());
+        return type != null && type.matchesRequirement(requirement);
     }
 
     public static void registerBuiltIns() {

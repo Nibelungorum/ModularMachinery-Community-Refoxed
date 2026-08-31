@@ -4,6 +4,10 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 
+/** Codec-backed serializer for canonical machine recipes.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
 public final class MachineRecipeSerializer {
 
     public static final RecipeSerializer<MachineRecipe> INSTANCE = new RecipeSerializer<>(
@@ -19,6 +23,6 @@ public final class MachineRecipeSerializer {
     }
 
     private static MachineRecipe read(RegistryFriendlyByteBuf buf) {
-        return buf.readLenientJsonWithCodec(MachineRecipe.CODEC.codec());
+        return buf.readJsonWithCodec(MachineRecipe.CODEC.codec());
     }
 }

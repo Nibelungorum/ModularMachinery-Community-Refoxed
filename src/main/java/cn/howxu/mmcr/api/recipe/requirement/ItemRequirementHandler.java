@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import net.minecraft.world.item.ItemStack;
@@ -25,6 +27,65 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class ItemRequirementHandler implements RequirementHandler<ItemRequirement> {
+    @Override
+    public ItemRequirement applyModifiers(ItemRequirement requirement, List<RecipeModifier> modifiers) {
+        if (requirement.io() == RecipeModifier.IOType.INPUT) {
+            int count = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemInput(modifiers, requirement.count()));
+            float consumeChance = IntegrationTypeHelper.applyItemInputChance(modifiers, requirement.consumeChance());
+            return new ItemRequirement(requirement.io(), requirement.item(), count, requirement.stack(),
+                    requirement.chance(), requirement.tags(), requirement.components(), consumeChance);
+        }
+        ItemStack stack = requirement.stack().copy();
+        stack.setCount(IntegrationTypeHelper.asInt(
+                IntegrationTypeHelper.applyItemOutput(modifiers, stack.getCount())));
+        float chance = IntegrationTypeHelper.applyItemOutputChance(modifiers, requirement.chance());
+        return new ItemRequirement(requirement.io(), requirement.item(), requirement.count(), stack, chance,
+                requirement.tags(), requirement.components(), requirement.consumeChance());
+    }
+
+    @Override
+    public ItemRequirement applyLevelModifiers(ItemRequirement requirement, double energyMultiplier,
+                                               double outputMultiplier) {
+        if (requirement.io() != RecipeModifier.IOType.OUTPUT) return requirement;
+        ItemStack stack = requirement.stack().copy();
+        stack.setCount(levelOutputCount(stack.getCount(), outputMultiplier));
+        return new ItemRequirement(requirement.io(), requirement.item(), requirement.count(), stack,
+                requirement.chance(), requirement.tags(), requirement.components(), requirement.consumeChance());
+    }
+
+    @Override
+    public boolean overlaps(ItemRequirement requirement, MachineRequirement other) {
+        if (!(other instanceof ItemRequirement right)
+                || requirement.io() != RecipeModifier.IOType.INPUT
+                || right.io() != RecipeModifier.IOType.INPUT
+                || requirement.item() == null || right.item() == null) return false;
+        try {
+            return requirement.item().items().anyMatch(leftItem ->
+                    right.item().items().anyMatch(rightItem -> leftItem.equals(rightItem)));
+        } catch (UnsupportedOperationException ignored) {
+            return true;
+        }
+    }
+
+    @Override
+    public MachineIngredient legacyInput(ItemRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.INPUT
+                ? new MachineIngredient.ItemIngredient(requirement.item(), requirement.count(),
+                requirement.components(), requirement.consumeChance()) : null;
+    }
+
+    @Override
+    public ItemStack legacyItemOutput(ItemRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.resolvedStack() : null;
+    }
+
+    private static int levelOutputCount(int original, double multiplier) {
+        if (multiplier <= 0D) return 0;
+        if (multiplier >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        int result = (int) Math.floor(original * multiplier);
+        return original > 0 ? Math.max(1, result) : result;
+    }
+
     @Override
     public RequirementPlan plan(ItemRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {

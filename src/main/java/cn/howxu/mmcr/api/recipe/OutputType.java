@@ -10,6 +10,7 @@ import net.minecraft.resources.Identifier;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
@@ -30,6 +31,10 @@ public interface OutputType<O extends MachineOutput> {
     MachineRequirement toRequirement(O output, List<String> tags);
 
     boolean matchesRequirement(MachineRequirement requirement);
+
+    default MachineOutput fromRequirement(MachineRequirement requirement) {
+        return null;
+    }
 
     default O copy(O output) {
         Codec<O> codec = codec().codec();
@@ -74,6 +79,7 @@ public interface OutputType<O extends MachineOutput> {
         private final UnaryOperator<O> copier;
         private final BiFunction<O, List<String>, MachineRequirement> requirementFactory;
         private final Predicate<MachineRequirement> requirementMatcher;
+        private final Function<MachineRequirement, MachineOutput> outputFactory;
         private final Presentation presentation;
         private final String serializedId;
 
@@ -108,6 +114,16 @@ public interface OutputType<O extends MachineOutput> {
                           Presentation presentation, String serializedId,
                           BiFunction<O, List<String>, MachineRequirement> requirementFactory,
                           Predicate<MachineRequirement> requirementMatcher) {
+            this(id, codec, chanceTransformer, modifierTransformer, copier, presentation, serializedId,
+                    requirementFactory, requirementMatcher, ignored -> null);
+        }
+
+        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+                          BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
+                          Presentation presentation, String serializedId,
+                          BiFunction<O, List<String>, MachineRequirement> requirementFactory,
+                          Predicate<MachineRequirement> requirementMatcher,
+                          Function<MachineRequirement, MachineOutput> outputFactory) {
             this.id = Objects.requireNonNull(id, "id");
             this.codec = Objects.requireNonNull(codec, "codec");
             this.chanceTransformer = Objects.requireNonNull(chanceTransformer, "chanceTransformer");
@@ -115,6 +131,7 @@ public interface OutputType<O extends MachineOutput> {
             this.copier = Objects.requireNonNull(copier, "copier");
             this.requirementFactory = Objects.requireNonNull(requirementFactory, "requirementFactory");
             this.requirementMatcher = Objects.requireNonNull(requirementMatcher, "requirementMatcher");
+            this.outputFactory = Objects.requireNonNull(outputFactory, "outputFactory");
             this.presentation = Objects.requireNonNull(presentation, "presentation");
             if (serializedId == null || serializedId.isBlank()) throw new IllegalArgumentException("serializedId must not be blank");
             this.serializedId = serializedId;
@@ -153,6 +170,11 @@ public interface OutputType<O extends MachineOutput> {
         @Override
         public boolean matchesRequirement(MachineRequirement requirement) {
             return requirementMatcher.test(requirement);
+        }
+
+        @Override
+        public MachineOutput fromRequirement(MachineRequirement requirement) {
+            return outputFactory.apply(requirement);
         }
 
         @Override

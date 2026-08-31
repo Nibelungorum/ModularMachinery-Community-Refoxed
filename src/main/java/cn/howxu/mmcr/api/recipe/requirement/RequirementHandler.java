@@ -3,6 +3,10 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.List;
 import java.util.Objects;
@@ -17,6 +21,41 @@ import java.util.function.Predicate;
  */
 public interface RequirementHandler<R extends MachineRequirement> {
     RequirementPlan plan(R requirement, List<MachineCapability> capabilities, PlanningContext context);
+
+    /** Applies recipe modifiers to the handler-owned requirement representation. */
+    default R applyModifiers(R requirement, List<RecipeModifier> modifiers) {
+        return requirement;
+    }
+
+    /** Applies machine-level multipliers before ordinary recipe modifiers. */
+    default R applyLevelModifiers(R requirement, double energyMultiplier, double outputMultiplier) {
+        return requirement;
+    }
+
+    /** Reports input overlap without making recipe code depend on a concrete requirement type. */
+    default boolean overlaps(R requirement, MachineRequirement other) {
+        return false;
+    }
+
+    /** Projects a built-in input to the legacy accessor shape when one exists. */
+    default MachineIngredient legacyInput(R requirement) {
+        return null;
+    }
+
+    /** Projects an item output requirement to the legacy accessor shape when one exists. */
+    default ItemStack legacyItemOutput(R requirement) {
+        return null;
+    }
+
+    /** Projects a fluid output requirement to the legacy accessor shape when one exists. */
+    default FluidStack legacyFluidOutput(R requirement) {
+        return null;
+    }
+
+    /** Projects an energy output requirement to the legacy accessor shape when one exists. */
+    default Integer legacyEnergyOutput(R requirement) {
+        return null;
+    }
 
     /**
      * Supplies resource wakeups for a failed requirement without exposing concrete requirement types to callers.

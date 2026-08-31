@@ -5,6 +5,8 @@ import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -19,6 +21,18 @@ public interface RequirementType<R extends MachineRequirement> {
     MapCodec<R> codec();
 
     RequirementHandler<R> handler();
+
+    default R applyModifiers(R requirement, List<RecipeModifier> modifiers) {
+        return handler().applyModifiers(requirement, modifiers);
+    }
+
+    default R applyLevelModifiers(R requirement, double energyMultiplier, double outputMultiplier) {
+        return handler().applyLevelModifiers(requirement, energyMultiplier, outputMultiplier);
+    }
+
+    default boolean overlaps(R requirement, MachineRequirement other) {
+        return handler().overlaps(requirement, other);
+    }
 
     /**
      * Copies a requirement using this canonical type's codec by default.

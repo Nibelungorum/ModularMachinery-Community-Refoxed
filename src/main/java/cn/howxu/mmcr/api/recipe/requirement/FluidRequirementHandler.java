@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -24,6 +26,50 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class FluidRequirementHandler implements RequirementHandler<FluidRequirement> {
+    @Override
+    public FluidRequirement applyModifiers(FluidRequirement requirement, List<RecipeModifier> modifiers) {
+        if (requirement.io() == RecipeModifier.IOType.INPUT) {
+            int amount = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidInput(modifiers, requirement.amount()));
+            float chance = IntegrationTypeHelper.applyFluidInputChance(modifiers, requirement.chance());
+            return new FluidRequirement(requirement.io(), requirement.fluid(), amount, requirement.stack(), chance,
+                    requirement.tags());
+        }
+        FluidStack stack = requirement.stack().copy();
+        stack.setAmount(IntegrationTypeHelper.asInt(
+                IntegrationTypeHelper.applyFluidOutput(modifiers, stack.getAmount())));
+        float chance = IntegrationTypeHelper.applyFluidOutputChance(modifiers, requirement.chance());
+        return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), stack, chance,
+                requirement.tags());
+    }
+
+    @Override
+    public FluidRequirement applyLevelModifiers(FluidRequirement requirement, double energyMultiplier,
+                                                double outputMultiplier) {
+        if (requirement.io() != RecipeModifier.IOType.OUTPUT) return requirement;
+        FluidStack stack = requirement.stack().copy();
+        stack.setAmount(levelOutputAmount(stack.getAmount(), outputMultiplier));
+        return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), stack,
+                requirement.chance(), requirement.tags());
+    }
+
+    @Override
+    public MachineIngredient legacyInput(FluidRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.INPUT
+                ? new MachineIngredient.FluidIngredient(requirement.fluid(), requirement.amount()) : null;
+    }
+
+    @Override
+    public FluidStack legacyFluidOutput(FluidRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.stack().copy() : null;
+    }
+
+    private static int levelOutputAmount(int original, double multiplier) {
+        if (multiplier <= 0D) return 0;
+        if (multiplier >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        int result = (int) Math.floor(original * multiplier);
+        return original > 0 ? Math.max(1, result) : result;
+    }
+
     @Override
     public RequirementPlan plan(FluidRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
