@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -170,7 +171,8 @@ public final class MachinePatternCompiler {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
                     || of.block() instanceof ParallelControllerBlock
                     || of.block() instanceof FactorySchedulerBlock
-                    || of.block() instanceof DataStorageBlock;
+                    || of.block() instanceof DataStorageBlock
+                    || of.block() instanceof UpgradeBusBlock;
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
         };

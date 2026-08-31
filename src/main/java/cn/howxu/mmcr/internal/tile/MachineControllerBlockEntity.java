@@ -2273,12 +2273,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         runtime.publishDataStorages(boundDataStorages);
         List<UpgradeBusBlockEntity> upgradeBuses = upgradeBusComponents(matchedPattern);
-        Identifier formedTexture = matchedMachine.appearance().formedPortBaseTexture();
-        for (UpgradeBusBlockEntity bus : upgradeBuses) {
-            bus.linkControllerAppearance(getBlockPos(), formedTexture);
-        }
         bindUpgradeBuses(upgradeBuses);
         runtime.publishUpgradeBusState(upgradeBusSnapshots(upgradeBuses));
+        Identifier formedTexture = matchedMachine.appearance().formedPortBaseTexture();
         List<ProcessingComponent> nextComponents = new ArrayList<>();
         Set<BlockPos> nextLinkedPortPositions = new HashSet<>();
         nextLinkedPortPositions.addAll(boundDataStorages.keySet());
@@ -2300,6 +2297,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
+            if (level.getBlockEntity(worldPos) instanceof UpgradeBusBlockEntity bus) {
+                bus.linkControllerAppearance(getBlockPos(), formedTexture);
+                nextLinkedPortPositions.add(worldPos.immutable());
+                continue;
+            }
             if (level.getBlockEntity(worldPos) instanceof SmartInterfaceBlockEntity smartInterface) {
                 if (smartInterface.hasController(getBlockPos())) {
                     nextLinkedPortPositions.add(worldPos.immutable());
