@@ -27,7 +27,7 @@ import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -1196,7 +1196,7 @@ class MachineControllerBlockEntityTest {
                         List.of(ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus")),
                 new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, 2,
                         List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch"))),
-                CombinedPort::new, List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH));
+                CombinedPort::new, List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE));
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

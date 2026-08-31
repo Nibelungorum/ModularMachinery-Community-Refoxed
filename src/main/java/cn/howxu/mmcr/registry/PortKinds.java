@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.registry;
 
+import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
 import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
@@ -11,8 +12,7 @@ import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories.CapabilityFactory;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
@@ -41,7 +41,7 @@ public final class PortKinds {
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
+        public List<CapabilityType> capabilityTypes() {
             return List.of();
         }
     }
@@ -65,8 +65,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.ITEM_BUS);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE);
         }
     }
 
@@ -89,8 +89,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.FLUID_HATCH);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE);
         }
     }
 
@@ -113,8 +113,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.ENERGY_HATCH);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE);
         }
     }
 
@@ -137,8 +137,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.ITEM_BUS);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE);
         }
     }
 
@@ -161,8 +161,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.FLUID_HATCH);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE);
         }
     }
 
@@ -185,8 +185,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.ENERGY_HATCH);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE);
         }
     }
 
@@ -210,8 +210,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
         }
     }
 
@@ -237,8 +237,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityFactory> capabilityFactories() {
-            return List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH);
+        public List<CapabilityType> capabilityTypes() {
+            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
         }
     }
 
@@ -247,7 +247,7 @@ public final class PortKinds {
             IOType ioType,
             List<PortFamilyDescriptor> families,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
-            List<CapabilityFactory> capabilityFactories)
+            List<CapabilityType> capabilityTypes)
             implements IOPortKind {
         public CombinedKind {
             if (ioType == null) throw new IllegalArgumentException("ioType null");
@@ -272,12 +272,12 @@ public final class PortKinds {
                 }
             }
             if (!item || !fluid) throw new IllegalArgumentException("combined kind must include item and fluid families");
-            if (capabilityFactories == null || capabilityFactories.size() != 2
-                    || !capabilityFactories.contains(CapabilityFactories.ITEM_BUS)
-                    || !capabilityFactories.contains(CapabilityFactories.FLUID_HATCH)) {
+            if (capabilityTypes == null || capabilityTypes.size() != 2
+                    || !capabilityTypes.contains(BuiltinCapabilityDefinitions.ITEM_TYPE)
+                    || !capabilityTypes.contains(BuiltinCapabilityDefinitions.FLUID_TYPE)) {
                 throw new IllegalArgumentException("combined kind must expose item and fluid capabilities only");
             }
-            capabilityFactories = List.copyOf(capabilityFactories);
+            capabilityTypes = List.copyOf(capabilityTypes);
         }
     }
 

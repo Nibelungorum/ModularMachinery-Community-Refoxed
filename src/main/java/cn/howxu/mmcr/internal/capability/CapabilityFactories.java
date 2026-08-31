@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.capability;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -8,30 +7,17 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.Set;
 
 /**
- * Built-in capability factories and shared capability contract helpers.
+ * Compatibility helpers for built-in capability consumers and shared contract helpers.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class CapabilityFactories {
-    public static final CapabilityFactory ITEM_BUS = port -> new ItemBusCapability(port, port.itemStorage(), port.ioType());
-    public static final CapabilityFactory FLUID_HATCH = port -> new FluidHatchCapability(port, port.fluidStorage(), port.ioType());
-    public static final CapabilityFactory ENERGY_HATCH = port -> new EnergyHatchCapability(port, port.getEnergyStorage(), port.ioType());
-
-    static final CapabilityType ITEM_TYPE = new CapabilityType(MMCR.id("item"));
-    static final CapabilityType FLUID_TYPE = new CapabilityType(MMCR.id("fluid"));
-    static final CapabilityType ENERGY_TYPE = new CapabilityType(MMCR.id("energy"));
-
     private CapabilityFactories() {}
-
-    public interface CapabilityFactory {
-        MachineCapability create(IOPortBlockEntity port);
-    }
 
     static CapabilityView view(CapabilityType type, IOType ioType) {
         return view(type, ioType, Set.of());

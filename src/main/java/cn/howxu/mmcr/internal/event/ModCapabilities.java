@@ -4,10 +4,11 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -17,6 +18,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -36,7 +38,9 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 public final class ModCapabilities {
     public static final BlockCapability<ResourceHandler<ItemResource>, Direction> ITEM_BLOCK =
@@ -45,9 +49,14 @@ public final class ModCapabilities {
             Capabilities.Fluid.BLOCK;
     public static final BlockCapability<EnergyHandler, Direction> ENERGY_BLOCK =
             Capabilities.Energy.BLOCK;
-    private static final CapabilityType ITEM_TYPE = new CapabilityType(PortFamilyIds.ITEM);
-    private static final CapabilityType FLUID_TYPE = new CapabilityType(PortFamilyIds.FLUID);
-    private static final CapabilityType ENERGY_TYPE = new CapabilityType(PortFamilyIds.ENERGY);
+    private static final CapabilityType ITEM_TYPE = BuiltinCapabilityDefinitions.ITEM_TYPE;
+    private static final CapabilityType FLUID_TYPE = BuiltinCapabilityDefinitions.FLUID_TYPE;
+    private static final CapabilityType ENERGY_TYPE = BuiltinCapabilityDefinitions.ENERGY_TYPE;
+    private static final Map<Identifier, BiConsumer<RegisterCapabilitiesEvent, IOPortKind>> NATIVE_REGISTRATIONS =
+            Map.of(
+                    PortFamilyIds.ITEM, ModCapabilities::registerItemPort,
+                    PortFamilyIds.FLUID, ModCapabilities::registerFluidPort,
+                    PortFamilyIds.ENERGY, ModCapabilities::registerEnergyPort);
 
     private ModCapabilities() {}
 
@@ -77,20 +86,16 @@ public final class ModCapabilities {
 
     private static List<IOPortKind> nativeCapabilityPorts() {
         return PortKinds.all().stream()
-                .filter(kind -> !kind.capabilityFactories().isEmpty())
+                .filter(kind -> !kind.families().isEmpty())
                 .toList();
     }
 
     private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
-        if (kind.capabilityFactories().contains(CapabilityFactories.ITEM_BUS)) {
-            registerItemPort(event, kind);
-        }
-        if (kind.capabilityFactories().contains(CapabilityFactories.FLUID_HATCH)) {
-            registerFluidPort(event, kind);
-        }
-        if (kind.capabilityFactories().contains(CapabilityFactories.ENERGY_HATCH)) {
-            registerEnergyPort(event, kind);
-        }
+        kind.families().stream()
+                .map(PortFamilyDescriptor::familyId)
+                .map(NATIVE_REGISTRATIONS::get)
+                .filter(registration -> registration != null)
+                .forEach(registration -> registration.accept(event, kind));
     }
 
     private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind) {

@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.port;
 
-import cn.howxu.mmcr.internal.capability.CapabilityFactories.CapabilityFactory;
+import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -22,7 +22,7 @@ public interface IOPortKind {
     /** 该 kind 对应的 BlockEntity 工厂。Block 注册时由这里创建对应实体。 */
     BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory();
 
-    List<CapabilityFactory> capabilityFactories();
+    List<CapabilityType> capabilityTypes();
 
     default Optional<ItemBusSize> itemBusSize() { return Optional.empty(); }
 

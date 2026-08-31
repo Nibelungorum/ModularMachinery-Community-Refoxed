@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -27,7 +28,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ItemBusCapability implements MachineCapability, OperationFacet {
+public final class ItemBusCapability implements MachineCapability, ResourceFacet<ItemResource>, OperationFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<ItemResource> storage;
@@ -43,7 +44,7 @@ public final class ItemBusCapability implements MachineCapability, OperationFace
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(OperationFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class));
     }
 
     public ItemBusCapability(ItemBusBlockEntity port) {
@@ -52,6 +53,11 @@ public final class ItemBusCapability implements MachineCapability, OperationFace
 
     public ResourceStorage<ItemResource> storage() {
         return storage;
+    }
+
+    @Override
+    public Class<ItemResource> resourceType() {
+        return ItemResource.class;
     }
 
     @Nullable
@@ -74,7 +80,7 @@ public final class ItemBusCapability implements MachineCapability, OperationFace
 
     @Override
     public CapabilityType type() {
-        return CapabilityFactories.ITEM_TYPE;
+        return BuiltinCapabilityDefinitions.ITEM_TYPE;
     }
 
     @Override

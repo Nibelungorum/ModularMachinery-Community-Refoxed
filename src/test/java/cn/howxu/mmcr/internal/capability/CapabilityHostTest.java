@@ -5,11 +5,15 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
+import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
+import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
@@ -46,6 +50,7 @@ class CapabilityHostTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        PublicApiBootstrap.begin();
     }
 
     @Test
@@ -119,12 +124,12 @@ class CapabilityHostTest {
     }
 
     @Test
-    void capability_factories_use_storage_protocols_from_the_host() {
+    void capability_definitions_use_storage_protocols_from_the_host() {
         StorageHost host = new StorageHost();
 
-        ItemBusCapability item = (ItemBusCapability) CapabilityFactories.ITEM_BUS.create(host);
-        FluidHatchCapability fluid = (FluidHatchCapability) CapabilityFactories.FLUID_HATCH.create(host);
-        EnergyHatchCapability energy = (EnergyHatchCapability) CapabilityFactories.ENERGY_HATCH.create(host);
+        ItemBusCapability item = (ItemBusCapability) definition("item").factory().create(context(host));
+        FluidHatchCapability fluid = (FluidHatchCapability) definition("fluid").factory().create(context(host));
+        EnergyHatchCapability energy = (EnergyHatchCapability) definition("energy").factory().create(context(host));
 
         assertThat(item.storage()).isSameAs(host.itemStorage());
         assertThat(fluid.storage()).isSameAs(host.fluidStorage());
@@ -165,8 +170,8 @@ class CapabilityHostTest {
             @Override public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
                 return MixedPort::new;
             }
-            @Override public List<CapabilityFactories.CapabilityFactory> capabilityFactories() {
-                return List.of(port -> new TestCapability("first"), port -> new TestCapability("second"));
+            @Override public List<CapabilityType> capabilityTypes() {
+                return List.of();
             }
         };
 
@@ -181,12 +186,25 @@ class CapabilityHostTest {
         @Override public IOPortKind kind() { return KIND; }
         @Override public CapabilitySnapshot capabilitySnapshot() {
             if (capabilitySnapshot == null) {
-                capabilitySnapshot = new CapabilitySnapshot(kind().capabilityFactories().stream()
-                        .map(factory -> factory.create(this))
-                        .toList());
+                capabilitySnapshot = new CapabilitySnapshot(List.of(new TestCapability("first"), new TestCapability("second")));
             }
             return capabilitySnapshot;
         }
+    }
+
+    private static CapabilityDefinition definition(String path) {
+        return CapabilityRegistry.get(new CapabilityType(cn.howxu.mmcr.MMCR.id(path)));
+    }
+
+    private static CapabilityCreationContext context(CapabilityHost host) {
+        return new CapabilityCreationContext() {
+            @Override public CapabilityHost host() { return host; }
+            @Override public IOType ioType() { return IOType.INPUT; }
+            @Override public <T> java.util.Optional<T> service(Class<T> serviceType) {
+                return serviceType.isInstance(host) ? java.util.Optional.of(serviceType.cast(host)) : java.util.Optional.empty();
+            }
+            @Override public Runnable onChanged() { return () -> {}; }
+        };
     }
 
     private static final class StorageHost extends IOPortBlockEntity {

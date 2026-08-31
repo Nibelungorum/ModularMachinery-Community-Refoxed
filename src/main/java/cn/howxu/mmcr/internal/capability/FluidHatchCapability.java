@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -27,7 +28,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FluidHatchCapability implements MachineCapability, OperationFacet {
+public final class FluidHatchCapability implements MachineCapability, ResourceFacet<FluidResource>, OperationFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<FluidResource> storage;
@@ -43,7 +44,7 @@ public final class FluidHatchCapability implements MachineCapability, OperationF
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(OperationFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class));
     }
 
     public FluidHatchCapability(FluidHatchBlockEntity port) {
@@ -52,6 +53,11 @@ public final class FluidHatchCapability implements MachineCapability, OperationF
 
     public ResourceStorage<FluidResource> storage() {
         return storage;
+    }
+
+    @Override
+    public Class<FluidResource> resourceType() {
+        return FluidResource.class;
     }
 
     @Nullable
@@ -69,7 +75,7 @@ public final class FluidHatchCapability implements MachineCapability, OperationF
 
     @Override
     public CapabilityType type() {
-        return CapabilityFactories.FLUID_TYPE;
+        return BuiltinCapabilityDefinitions.FLUID_TYPE;
     }
 
     @Override

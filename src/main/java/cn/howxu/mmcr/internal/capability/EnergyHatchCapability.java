@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -26,7 +27,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class EnergyHatchCapability implements MachineCapability, OperationFacet {
+public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, OperationFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final LongValueStorage storage;
@@ -42,7 +43,7 @@ public final class EnergyHatchCapability implements MachineCapability, Operation
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(OperationFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType, Set.of(ScalarFacet.class, OperationFacet.class));
     }
 
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
@@ -64,7 +65,7 @@ public final class EnergyHatchCapability implements MachineCapability, Operation
 
     @Override
     public CapabilityType type() {
-        return CapabilityFactories.ENERGY_TYPE;
+        return BuiltinCapabilityDefinitions.ENERGY_TYPE;
     }
 
     @Override
@@ -94,6 +95,11 @@ public final class EnergyHatchCapability implements MachineCapability, Operation
             return moved == valueRequest.amount()
                     ? CapabilityResult.successful() : failure("insufficient_value");
         };
+    }
+
+    @Override
+    public CapabilityOperation prepareScalar(CapabilityRequest request) {
+        return prepareOperation(request);
     }
 
     private CapabilityResult failure(String reason) {

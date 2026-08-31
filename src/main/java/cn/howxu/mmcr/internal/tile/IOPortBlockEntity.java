@@ -4,6 +4,9 @@ import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
+import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
+import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -197,6 +200,34 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     @Override
     public abstract CapabilitySnapshot capabilitySnapshot();
+
+    protected final MachineCapability createCapability(CapabilityType type) {
+        if (type == null) throw new IllegalArgumentException("Capability type must not be null");
+        CapabilityDefinition definition = Optional.ofNullable(CapabilityRegistry.get(type))
+                .orElseThrow(() -> new IllegalStateException("Capability is not registered: " + type.id()));
+        return definition.factory().create(new CapabilityCreationContext() {
+            @Override
+            public CapabilityHost host() {
+                return IOPortBlockEntity.this;
+            }
+
+            @Override
+            public IOType ioType() {
+                return IOPortBlockEntity.this.ioType();
+            }
+
+            @Override
+            public <T> Optional<T> service(Class<T> serviceType) {
+                return serviceType.isInstance(IOPortBlockEntity.this)
+                        ? Optional.of(serviceType.cast(IOPortBlockEntity.this)) : Optional.empty();
+            }
+
+            @Override
+            public Runnable onChanged() {
+                return IOPortBlockEntity.this::markAutoIOCacheDirty;
+            }
+        });
+    }
 
     public ResourceStorage<ItemResource> itemStorage() {
         throw new IllegalStateException("Port does not expose item storage: " + kind().id());

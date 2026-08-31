@@ -1,13 +1,13 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories.CapabilityFactory;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import org.junit.jupiter.api.Test;
@@ -102,8 +102,8 @@ class PortTierRequirementSpecTest {
         assertThat(ordinaryCombinedKind(IOType.OUTPUT).families())
                 .extracting(PortFamilyDescriptor::familyId)
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
-        assertThat(ordinaryCombinedKind(IOType.INPUT).capabilityFactories())
-                .containsExactlyInAnyOrder(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH);
+        assertThat(ordinaryCombinedKind(IOType.INPUT).capabilityTypes())
+                .containsExactlyInAnyOrder(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
     }
 
     @Test
@@ -117,15 +117,16 @@ class PortTierRequirementSpecTest {
     }
 
     @Test
-    void combined_kind_rejects_an_energy_capability_factory() {
+    void combined_kind_rejects_an_energy_capability_type() {
         assertInvalidCombined(List.of(itemFamily(IOType.INPUT), fluidFamily(IOType.INPUT)),
-                List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.ENERGY_HATCH));
+                List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.ENERGY_TYPE));
     }
 
     @Test
-    void combined_kind_rejects_a_third_capability_factory() {
+    void combined_kind_rejects_a_third_capability_type() {
         assertInvalidCombined(List.of(itemFamily(IOType.INPUT), fluidFamily(IOType.INPUT)),
-                List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH, customFactory()));
+                List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE,
+                        new CapabilityType(cn.howxu.mmcr.MMCR.id("custom"))));
     }
 
     @Test
@@ -185,20 +186,17 @@ class PortTierRequirementSpecTest {
 
     private static IOPortKind combinedKind(IOType ioType, List<PortFamilyDescriptor> families) {
         return new PortKinds.CombinedKind("combined_" + ioType.getSerializedName() + "_test", ioType, families,
-                PortKinds.ITEM_INPUT.entityFactory(), List.of(CapabilityFactories.ITEM_BUS, CapabilityFactories.FLUID_HATCH));
+                PortKinds.ITEM_INPUT.entityFactory(), List.of(BuiltinCapabilityDefinitions.ITEM_TYPE,
+                        BuiltinCapabilityDefinitions.FLUID_TYPE));
     }
 
     private static void assertInvalidCombined(List<PortFamilyDescriptor> families) {
         assertThatIllegalArgumentException().isThrownBy(() -> combinedKind(IOType.INPUT, families));
     }
 
-    private static void assertInvalidCombined(List<PortFamilyDescriptor> families, List<CapabilityFactory> factories) {
+    private static void assertInvalidCombined(List<PortFamilyDescriptor> families, List<CapabilityType> types) {
         assertThatIllegalArgumentException().isThrownBy(() -> new PortKinds.CombinedKind("combined_invalid_test",
-                IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(), factories));
-    }
-
-    private static CapabilityFactory customFactory() {
-        return ignored -> null;
+                IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(), types));
     }
 
     private static PortFamilyDescriptor itemFamily(IOType ioType) {
