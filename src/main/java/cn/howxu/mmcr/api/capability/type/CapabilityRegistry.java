@@ -19,7 +19,7 @@ public final class CapabilityRegistry {
      *
      * @param definition the definition to register
      */
-    public static synchronized void register(CapabilityDefinition definition) {
+    public static void register(CapabilityDefinition definition) {
         ApiRuntime.registerCapability(definition);
     }
 
@@ -29,7 +29,7 @@ public final class CapabilityRegistry {
      * @param type the capability identity
      * @return the definition, or {@code null} when it is not registered
      */
-    public static synchronized CapabilityDefinition get(CapabilityType type) {
+    public static CapabilityDefinition get(CapabilityType type) {
         return ApiRuntime.capability(type);
     }
 
@@ -38,14 +38,14 @@ public final class CapabilityRegistry {
      *
      * @return the registered definitions
      */
-    public static synchronized List<CapabilityDefinition> values() {
+    public static List<CapabilityDefinition> values() {
         return ApiRuntime.capabilityValues();
     }
 
     /**
      * Closes capability registration for the current startup lifecycle.
      */
-    public static synchronized void freeze() {
+    public static void freeze() {
         ApiRuntime.freezeCapabilities();
     }
 }

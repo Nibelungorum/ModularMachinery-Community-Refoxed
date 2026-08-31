@@ -14,7 +14,7 @@ import java.util.Objects;
  */
 public final class ApiRuntime {
     private static final Map<Identifier, CapabilityDefinition> CAPABILITY_DEFINITIONS = new LinkedHashMap<>();
-    private static Hook hook;
+    private static volatile Hook hook;
     private static boolean capabilitiesFrozen;
 
     private ApiRuntime() {
@@ -30,21 +30,27 @@ public final class ApiRuntime {
         capabilitiesFrozen = false;
     }
 
-    public static synchronized boolean isRegistrationOpen() {
-        return hook != null && hook.isRegistrationOpen();
+    public static boolean isRegistrationOpen() {
+        Hook current = hook;
+        return current != null && current.isRegistrationOpen();
     }
 
-    public static synchronized void registerCapability(CapabilityDefinition definition) {
+    public static void registerCapability(CapabilityDefinition definition) {
         Objects.requireNonNull(definition, "definition");
-        if (capabilitiesFrozen) {
-            throw new IllegalStateException("Capability registration rejected: registry is frozen");
-        }
         if (!isRegistrationOpen()) {
             throw new IllegalStateException("Capability registration rejected: startup registration is closed");
         }
-        Identifier id = definition.type().id();
-        if (CAPABILITY_DEFINITIONS.putIfAbsent(id, definition) != null) {
-            throw new IllegalStateException("Capability already registered: " + id);
+        synchronized (ApiRuntime.class) {
+            if (capabilitiesFrozen) {
+                throw new IllegalStateException("Capability registration rejected: registry is frozen");
+            }
+            if (hook == null) {
+                throw new IllegalStateException("Capability registration rejected: startup registration is closed");
+            }
+            Identifier id = definition.type().id();
+            if (CAPABILITY_DEFINITIONS.putIfAbsent(id, definition) != null) {
+                throw new IllegalStateException("Capability already registered: " + id);
+            }
         }
     }
 

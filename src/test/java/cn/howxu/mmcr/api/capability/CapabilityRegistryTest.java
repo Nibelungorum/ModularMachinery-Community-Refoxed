@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityFactory;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
+import cn.howxu.mmcr.api.publicapi.ApiRuntime;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.AfterEach;
@@ -66,6 +67,20 @@ class CapabilityRegistryTest {
                 .filter(method -> Modifier.isPublic(method.getModifiers()))
                 .map(Method::getName))
                 .containsExactlyInAnyOrder("register", "get", "values", "freeze");
+    }
+
+    @Test
+    void capability_registration_checks_the_hook_without_holding_registry_monitors() {
+        ApiRuntime.install(new ApiRuntime.Hook() {
+            @Override
+            public boolean isRegistrationOpen() {
+                assertThat(Thread.holdsLock(CapabilityRegistry.class)).isFalse();
+                assertThat(Thread.holdsLock(ApiRuntime.class)).isFalse();
+                return true;
+            }
+        });
+
+        CapabilityRegistry.register(definition("lock_boundary"));
     }
 
     @Test
