@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
@@ -150,7 +151,14 @@ public final class OutputRegistry {
 
     private static OutputType<?> typeForSerializedId(String serializedId) {
         registerBuiltIns();
-        return SERIALIZED_TYPES.get(serializedId);
+        OutputType<?> type = SERIALIZED_TYPES.get(serializedId);
+        if (type != null) return type;
+        try {
+            Identifier id = serializedId.contains(":") ? Identifier.parse(serializedId) : MMCR.id(serializedId);
+            return TYPES.get(id);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private static void validate(OutputType<?> type) {
