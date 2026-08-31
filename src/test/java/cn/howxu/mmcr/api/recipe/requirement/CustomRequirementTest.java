@@ -72,26 +72,28 @@ class CustomRequirementTest {
 
     @Test
     void custom_requirement_registers_plans_commits_copies_and_round_trips() {
-        RequirementHandlerRegistry.register(TYPE);
-        TestRequirement requirement = new TestRequirement(RecipeModifier.IOType.INPUT, 3,
-                List.of("virtual"));
-        VirtualScalarCapability capability = new VirtualScalarCapability(2);
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(TYPE);
+            TestRequirement requirement = new TestRequirement(RecipeModifier.IOType.INPUT, 3,
+                    List.of("virtual"));
+            VirtualScalarCapability capability = new VirtualScalarCapability(2);
 
-        JsonElement encoded = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow();
-        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow())
-                .isEqualTo(requirement);
-        assertThat(TYPE.presentation().translationKey()).isEqualTo("test.virtual_scalar");
+            JsonElement encoded = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow();
+            assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow())
+                    .isEqualTo(requirement);
+            assertThat(TYPE.presentation().translationKey()).isEqualTo("test.virtual_scalar");
 
-        MachineRequirement copy = MachineRequirement.copyOf(requirement);
-        assertThat(copy).isEqualTo(requirement).isNotSameAs(requirement);
+            MachineRequirement copy = MachineRequirement.copyOf(requirement);
+            assertThat(copy).isEqualTo(requirement).isNotSameAs(requirement);
 
-        var result = new RequirementPlanner().plan(List.of(requirement), List.of(capability),
-                new PlanningContext(3, 0));
+            var result = new RequirementPlanner().plan(List.of(requirement), List.of(capability),
+                    new PlanningContext(3, 0));
 
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().parallelism()).isEqualTo(2);
-        assertThat(result.plan().commit()).isTrue();
-        assertThat(capability.storage.amount()).isZero();
+            assertThat(result.successful()).isTrue();
+            assertThat(result.plan().parallelism()).isEqualTo(2);
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(capability.storage.amount()).isZero();
+        }
     }
 
     private record TestRequirement(RecipeModifier.IOType io, long amount, List<String> tags)

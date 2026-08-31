@@ -3,14 +3,13 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
-import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import net.minecraft.resources.Identifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.datafixers.util.Pair;
-import com.mojang.serialization.JsonOps;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -35,15 +34,11 @@ public interface MachineRequirement {
 
     static MachineRequirement copyOf(MachineRequirement requirement) {
         Objects.requireNonNull(requirement, "requirement");
-        if (requirement instanceof ItemRequirement item) {
-            return new ItemRequirement(item.io(), item.item(), item.count(), item.stack(), item.chance(),
-                    item.tags(), item.components(), item.consumeChance());
+        RequirementType<?> canonical = RequirementHandlerRegistry.canonicalType(requirement.type());
+        if (canonical == null || canonical != requirement.type()) {
+            throw new IllegalArgumentException("Requirement type is not registered canonically: " + requirement.type().id());
         }
-        if (requirement instanceof FluidRequirement fluid) {
-            return new FluidRequirement(fluid.io(), fluid.fluid(), fluid.amount(), fluid.stack(), fluid.chance(),
-                    fluid.tags());
-        }
-        return copyThroughCodec(requirement);
+        return copyThroughCanonicalType(canonical, requirement);
     }
 
     static List<MachineRequirement> copyList(List<MachineRequirement> requirements) {
@@ -85,9 +80,12 @@ public interface MachineRequirement {
         if (requirement == null || requirement.type() == null) {
             return DataResult.error(() -> "Requirement type must not be null");
         }
-        RequirementType<?> type = requirement.type();
-        if (RequirementHandlerRegistry.handlerFor(type) == null) {
-            return DataResult.error(() -> "Unknown requirement type: " + type.id());
+        RequirementType<?> type = RequirementHandlerRegistry.canonicalType(requirement.type());
+        if (type == null) {
+            return DataResult.error(() -> "Unknown requirement type: " + requirement.type().id());
+        }
+        if (type != requirement.type()) {
+            return DataResult.error(() -> "Requirement type is not registered canonically: " + requirement.type().id());
         }
         return encodeByType(type, requirement, ops, prefix);
     }
@@ -110,7 +108,7 @@ public interface MachineRequirement {
         if (type == null || RequirementHandlerRegistry.handlerFor(type) == null) {
             return DataResult.error(() -> "Unknown requirement type: " + serializedType);
         }
-        return decodeByType(type, ops, input, serializedType);
+        return decodeByType(type, ops, input);
     }
 
     @SuppressWarnings("unchecked")
@@ -122,19 +120,19 @@ public interface MachineRequirement {
 
     @SuppressWarnings("unchecked")
     private static <T> DataResult<MachineRequirement> decodeByType(RequirementType<?> type, DynamicOps<T> ops,
-                                                                    T input, String serializedType) {
+                                                                    T input) {
         Codec<? extends MachineRequirement> codec = (Codec<? extends MachineRequirement>) type.codec().codec();
         return codec.parse(ops, input).flatMap(requirement -> {
-            if (requirement == null || !type.equals(requirement.type()) || requirement.io() == null) {
+            if (requirement == null || type != requirement.type() || requirement.io() == null) {
                 return DataResult.error(() -> "Decoded requirement does not match registered type: " + type.id());
             }
             return DataResult.success(requirement);
         });
     }
 
-    private static MachineRequirement copyThroughCodec(MachineRequirement requirement) {
-        @SuppressWarnings("unchecked") Codec<MachineRequirement> codec =
-                (Codec<MachineRequirement>) (Codec<?>) requirement.type().codec().codec();
-        return codec.parse(JsonOps.INSTANCE, codec.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow()).getOrThrow();
+    @SuppressWarnings("unchecked")
+    private static MachineRequirement copyThroughCanonicalType(RequirementType<?> type,
+                                                               MachineRequirement requirement) {
+        return ((RequirementType<MachineRequirement>) type).copy(requirement);
     }
 }

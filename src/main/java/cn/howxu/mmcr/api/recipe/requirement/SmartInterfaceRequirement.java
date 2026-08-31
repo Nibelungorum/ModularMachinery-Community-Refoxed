@@ -22,10 +22,9 @@ public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfa
             Codec.FLOAT.fieldOf("max_value").forGetter(SmartInterfaceRequirement::maxValue)
     ).apply(instance, (ignored, io, interfaceType, minValue, maxValue) ->
             new SmartInterfaceRequirement(io, interfaceType, minValue, maxValue)));
-    private static final RequirementHandler<SmartInterfaceRequirement> HANDLER =
-            RequirementHandlerRegistry::planSmartInterface;
+    private static final RequirementHandler<SmartInterfaceRequirement> HANDLER = new SmartInterfaceRequirementHandler();
     public static final RequirementType<SmartInterfaceRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, SmartInterfaceRequirement::copy);
 
     public SmartInterfaceRequirement {
         if (io == null) throw new IllegalArgumentException("io null");
@@ -33,6 +32,11 @@ public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfa
         if (!Float.isFinite(minValue) || !Float.isFinite(maxValue) || minValue > maxValue) {
             throw new IllegalArgumentException("invalid smart interface value range");
         }
+    }
+
+    private static SmartInterfaceRequirement copy(SmartInterfaceRequirement requirement) {
+        return new SmartInterfaceRequirement(requirement.io(), requirement.interfaceType(),
+                requirement.minValue(), requirement.maxValue());
     }
 
     @Override

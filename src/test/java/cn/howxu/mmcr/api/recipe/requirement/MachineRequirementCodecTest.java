@@ -60,4 +60,19 @@ class MachineRequirementCodecTest {
 
         assertThat(result.error()).isPresent();
     }
+
+    @Test
+    void test_scope_preserves_builtin_requirement_registrations() {
+        RequirementHandlerRegistry.registerBuiltIns();
+
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            assertThat(RequirementHandlerRegistry.typeFor(ItemRequirement.TYPE.id()))
+                    .isSameAs(ItemRequirement.TYPE);
+            assertThat(RequirementHandlerRegistry.typeFor(EnergyRequirement.TYPE.id()))
+                    .isSameAs(EnergyRequirement.TYPE);
+        }
+
+        assertThat(RequirementHandlerRegistry.typeFor(ItemRequirement.TYPE.id()))
+                .isSameAs(ItemRequirement.TYPE);
+    }
 }

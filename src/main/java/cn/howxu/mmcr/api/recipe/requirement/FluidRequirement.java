@@ -30,9 +30,9 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(FluidRequirement::tags)
     ).apply(instance, (ignored, io, fluid, amount, stack, chance, tags) ->
             new FluidRequirement(io, fluid.orElse(null), amount, stack, chance, tags)));
-    private static final RequirementHandler<FluidRequirement> HANDLER = RequirementHandlerRegistry::planFluid;
+    private static final RequirementHandler<FluidRequirement> HANDLER = new FluidRequirementHandler();
     public static final RequirementType<FluidRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, FluidRequirement::copy);
 
     public FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack) {
         this(io, fluid, amount, stack, 1F, List.of());
@@ -46,6 +46,11 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
         stack = stack == null ? FluidStack.EMPTY : stack.copy();
         chance = MachineOutput.clampChance(chance);
         tags = tags == null ? List.of() : List.copyOf(tags);
+    }
+
+    private static FluidRequirement copy(FluidRequirement requirement) {
+        return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), requirement.stack(),
+                requirement.chance(), requirement.tags());
     }
 
     @Override

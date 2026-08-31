@@ -53,12 +53,13 @@ class CapabilityOperationTest {
 
     @Test
     void opaque_operation_is_reserved_then_materialized_once_and_commits_transactionally() {
-        LongValueStorage storage = new LongValueStorage(4L, 4L, null);
-        storage.setAmount(1L);
-        AtomicInteger materializationCalls = new AtomicInteger();
-        OpaqueCapability capability = new OpaqueCapability(storage);
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            LongValueStorage storage = new LongValueStorage(4L, 4L, null);
+            storage.setAmount(1L);
+            AtomicInteger materializationCalls = new AtomicInteger();
+            OpaqueCapability capability = new OpaqueCapability(storage);
 
-        TYPE.handler = new RequirementHandler<OpaqueRequirement>() {
+            TYPE.handler = new RequirementHandler<OpaqueRequirement>() {
             @Override
             public RequirementPlan plan(OpaqueRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
@@ -74,20 +75,21 @@ class CapabilityOperationTest {
                         (parallelism, reservations) -> reservations.reserveValue(storage, parallelism, false)
                                 ? null : TYPED_FAILURE);
             }
-        };
-        RequirementHandlerRegistry.register(TYPE);
+            };
+            RequirementHandlerRegistry.register(TYPE);
 
-        PlanningResult result = new RequirementPlanner().plan(
-                List.of(new OpaqueRequirement(TYPE, RecipeModifier.IOType.INPUT)),
-                List.of(capability), new PlanningContext(2L, 0));
+            PlanningResult result = new RequirementPlanner().plan(
+                    List.of(new OpaqueRequirement(TYPE, RecipeModifier.IOType.INPUT)),
+                    List.of(capability), new PlanningContext(2L, 0));
 
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().parallelism()).isEqualTo(1L);
-        assertThat(materializationCalls).hasValue(1);
-        assertThat(capability.requests).containsExactly(new OpaqueRequest(1L, "custom-value"));
-        assertThat(storage.amount()).isEqualTo(1L);
-        assertThat(result.plan().commit()).isTrue();
-        assertThat(storage.amount()).isZero();
+            assertThat(result.successful()).isTrue();
+            assertThat(result.plan().parallelism()).isEqualTo(1L);
+            assertThat(materializationCalls).hasValue(1);
+            assertThat(capability.requests).containsExactly(new OpaqueRequest(1L, "custom-value"));
+            assertThat(storage.amount()).isEqualTo(1L);
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(storage.amount()).isZero();
+        }
     }
 
     @Test

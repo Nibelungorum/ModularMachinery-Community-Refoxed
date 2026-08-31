@@ -4,11 +4,8 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -16,11 +13,8 @@ import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -436,42 +430,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
         for (MachineRecipe recipe : candidates) {
             for (MachineRequirement requirement : recipe.runtimeRequirements()) {
-                if (requirement instanceof ItemRequirement item) {
-                    if (item.io() == RecipeModifier.IOType.INPUT
-                            && (lastSearchFailureReason.equals("insufficient_resource")
-                            || lastSearchFailureReason.equals("per_tick"))) {
-                        addMatcher(matchers, ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, itemMatcher(item));
-                    } else if (item.io() == RecipeModifier.IOType.OUTPUT
-                            && (lastSearchFailureReason.equals("insufficient_resource")
-                            || lastSearchFailureReason.equals("no_output_capacity")
-                            || lastSearchFailureReason.equals("finish"))) {
-                        Predicate<Object> matcher = outputItemMatcher(item);
-                        if (matcher != null) addMatcher(matchers, ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, matcher);
-                    }
-                } else if (requirement instanceof FluidRequirement fluid) {
-                    if (fluid.io() == RecipeModifier.IOType.INPUT
-                            && (lastSearchFailureReason.equals("insufficient_resource")
-                            || lastSearchFailureReason.equals("per_tick"))) {
-                        Predicate<Object> matcher = fluidMatcher(fluid);
-                        if (matcher != null) addMatcher(matchers, ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, matcher);
-                    } else if (fluid.io() == RecipeModifier.IOType.OUTPUT
-                            && (lastSearchFailureReason.equals("insufficient_resource")
-                            || lastSearchFailureReason.equals("no_output_capacity")
-                            || lastSearchFailureReason.equals("finish"))) {
-                        Predicate<Object> matcher = outputFluidMatcher(fluid);
-                        if (matcher != null) addMatcher(matchers, ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, matcher);
-                    }
-                } else if (EnergyRequirement.TYPE.equals(requirement.type())
-                         && requirement.io() == RecipeModifier.IOType.INPUT
-                         && lastSearchFailureReason.equals("insufficient_energy")) {
-                    CapabilityType type = new CapabilityType(EnergyRequirement.TYPE.id());
-                    addMatcher(matchers, ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE, type::equals);
-                } else if (EnergyRequirement.TYPE.equals(requirement.type())
-                        && requirement.io() == RecipeModifier.IOType.OUTPUT
-                        && lastSearchFailureReason.equals("no_output_capacity")) {
-                    CapabilityType type = new CapabilityType(EnergyRequirement.TYPE.id());
-                    addMatcher(matchers, ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, type::equals);
-                }
+                addRequirementMatchers(matchers, requirement, lastSearchFailureReason);
             }
         }
         failureResourceMatchers = matchers.entrySet().stream()
@@ -479,35 +438,19 @@ public final class FactoryRecipeThread extends RecipeThread {
                         entry -> List.copyOf(entry.getValue())));
     }
 
+    static void addRequirementMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
+                                       MachineRequirement requirement, String failureReason) {
+        for (RequirementHandler.ResourceWakeup wakeup : RequirementHandlerRegistry.resourceWakeupsFor(requirement)) {
+            if (!wakeup.matches(failureReason)) continue;
+            ResourceAvailabilityNotifier.Reason reason = ResourceAvailabilityNotifier.Reason.valueOf(
+                    wakeup.reason().name());
+            addMatcher(matchers, reason, wakeup.matcher());
+        }
+    }
+
     private static void addMatcher(Map<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
                                    ResourceAvailabilityNotifier.Reason reason, Predicate<Object> matcher) {
         matchers.computeIfAbsent(reason, ignored -> new java.util.ArrayList<>()).add(matcher);
-    }
-
-    private static Predicate<Object> itemMatcher(ItemRequirement requirement) {
-        return resource -> resource instanceof ItemResource item
-                && requirement.item() != null
-                && requirement.item().test(item.toStack(Math.min(item.getMaxStackSize(), Integer.MAX_VALUE)))
-                && requirement.components().matches(item.toStack(Math.min(item.getMaxStackSize(), Integer.MAX_VALUE)));
-    }
-
-    private static @Nullable Predicate<Object> outputItemMatcher(ItemRequirement requirement) {
-        ItemStack stack = requirement.stack(null);
-        if (stack.isEmpty()) return null;
-        ItemResource expected = ItemResource.of(stack);
-        return expected::equals;
-    }
-
-    private static @Nullable Predicate<Object> fluidMatcher(FluidRequirement requirement) {
-        if (requirement.fluid() == null) return null;
-        return resource -> resource instanceof FluidResource fluid
-                && requirement.fluid().test(fluid.toStack(1));
-    }
-
-    private static @Nullable Predicate<Object> outputFluidMatcher(FluidRequirement requirement) {
-        if (requirement.stack().isEmpty()) return null;
-        FluidResource expected = FluidResource.of(requirement.stack());
-        return expected::equals;
     }
 
     private RecipeSearchContextKey currentSearchContextKey() {

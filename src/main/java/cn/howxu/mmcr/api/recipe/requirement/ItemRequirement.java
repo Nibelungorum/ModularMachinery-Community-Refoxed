@@ -37,9 +37,9 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
                     .forGetter(ItemRequirement::consumeChance)
     ).apply(instance, (ignored, io, item, count, stack, chance, tags, components, consumeChance) ->
             new ItemRequirement(io, item.orElse(null), count, stack, chance, tags, components, consumeChance)));
-    private static final RequirementHandler<ItemRequirement> HANDLER = RequirementHandlerRegistry::planItem;
+    private static final RequirementHandler<ItemRequirement> HANDLER = new ItemRequirementHandler();
     public static final RequirementType<ItemRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, ItemRequirement::copy);
 
     public ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack) {
         this(io, item, count, stack, 1F, List.of(), DataComponentPredicateSet.EMPTY, 1F);
@@ -77,6 +77,11 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
 
     public ItemStack resolvedStack() {
         return stack(null);
+    }
+
+    private static ItemRequirement copy(ItemRequirement requirement) {
+        return new ItemRequirement(requirement.io(), requirement.item(), requirement.count(), requirement.stack(),
+                requirement.chance(), requirement.tags(), requirement.components(), requirement.consumeChance());
     }
 
 }

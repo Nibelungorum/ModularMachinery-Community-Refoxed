@@ -887,27 +887,29 @@ class CraftingRuntimeTest {
 
     @Test
     void active_runtime_round_trips_a_registered_custom_requirement_handler() {
-        RequirementHandlerRegistry.register(CustomRequirement.TYPE);
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
-                List.of(new CustomRequirement(RecipeModifier.IOType.INPUT, 7)));
-        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(CustomRequirement.TYPE);
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
+                    List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                    List.of(new CustomRequirement(RecipeModifier.IOType.INPUT, 7)));
+            CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
-        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
+            assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+            saved.save(output);
 
-        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+            CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+            restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                    RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
 
-        assertThat(restored.active()).isTrue();
-        assertThat(restored.activeRecipe().effectiveRequirements()).singleElement()
-                .isEqualTo(new CustomRequirement(RecipeModifier.IOType.INPUT, 7));
-        restored.tick();
-        restored.tick();
-        assertThat(restored.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+            assertThat(restored.active()).isTrue();
+            assertThat(restored.activeRecipe().effectiveRequirements()).singleElement()
+                    .isEqualTo(new CustomRequirement(RecipeModifier.IOType.INPUT, 7));
+            restored.tick();
+            restored.tick();
+            assertThat(restored.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        }
     }
 
     @Test

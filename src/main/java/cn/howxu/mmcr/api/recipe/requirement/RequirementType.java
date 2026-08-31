@@ -1,9 +1,12 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /**
  * Identifies a machine requirement and owns its serialization, planning and presentation contracts.
@@ -16,6 +19,18 @@ public interface RequirementType<R extends MachineRequirement> {
     MapCodec<R> codec();
 
     RequirementHandler<R> handler();
+
+    /**
+     * Copies a requirement using this canonical type's codec by default.
+     */
+    default R copy(R requirement) {
+        Codec<R> codec = codec().codec();
+        R copy = codec.parse(JsonOps.INSTANCE, codec.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow()).getOrThrow();
+        if (copy == null || copy.type() != this) {
+            throw new IllegalArgumentException("Copied requirement does not match registered type: " + id());
+        }
+        return copy;
+    }
 
     default Presentation presentation() {
         return Presentation.defaults(id());
@@ -59,17 +74,29 @@ public interface RequirementType<R extends MachineRequirement> {
         private final MapCodec<R> codec;
         private final RequirementHandler<R> handler;
         private final Presentation presentation;
+        private final UnaryOperator<R> copier;
 
         public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler) {
-            this(id, codec, handler, Presentation.defaults(id));
+            this(id, codec, handler, Presentation.defaults(id), null);
+        }
+
+        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+                          UnaryOperator<R> copier) {
+            this(id, codec, handler, Presentation.defaults(id), copier);
         }
 
         public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
                           Presentation presentation) {
+            this(id, codec, handler, presentation, null);
+        }
+
+        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+                          Presentation presentation, UnaryOperator<R> copier) {
             this.id = Objects.requireNonNull(id, "id");
             this.codec = Objects.requireNonNull(codec, "codec");
             this.handler = Objects.requireNonNull(handler, "handler");
             this.presentation = Objects.requireNonNull(presentation, "presentation");
+            this.copier = copier;
         }
 
         @Override
@@ -90,6 +117,11 @@ public interface RequirementType<R extends MachineRequirement> {
         @Override
         public Presentation presentation() {
             return presentation;
+        }
+
+        @Override
+        public R copy(R requirement) {
+            return copier == null ? RequirementType.super.copy(requirement) : copier.apply(requirement);
         }
 
         @Override

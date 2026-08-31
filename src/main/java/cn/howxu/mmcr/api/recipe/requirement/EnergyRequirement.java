@@ -22,9 +22,9 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
             Codec.INT.fieldOf("fe_per_tick").forGetter(EnergyRequirement::fePerTick),
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(EnergyRequirement::tags)
     ).apply(instance, (ignored, io, fePerTick, tags) -> new EnergyRequirement(io, fePerTick, tags)));
-    private static final RequirementHandler<EnergyRequirement> HANDLER = RequirementHandlerRegistry::planEnergy;
+    private static final RequirementHandler<EnergyRequirement> HANDLER = new EnergyRequirementHandler();
     public static final RequirementType<EnergyRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, EnergyRequirement::copy);
 
     public EnergyRequirement(int fePerTick) {
         this(RecipeModifier.IOType.INPUT, fePerTick, List.of());
@@ -45,6 +45,10 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
     public EnergyRequirement {
         if (io == null) io = RecipeModifier.IOType.INPUT;
         tags = tags == null ? List.of() : List.copyOf(tags);
+    }
+
+    private static EnergyRequirement copy(EnergyRequirement requirement) {
+        return new EnergyRequirement(requirement.io(), requirement.fePerTick(), requirement.tags());
     }
 
     @Override

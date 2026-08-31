@@ -64,6 +64,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -85,6 +86,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RequirementPlannerTest {
     private static final TestType TYPE = type("planner_requirement");
     private static final TestType ROLLBACK_FAILURE_TYPE = type("rollback_failure");
+    private RequirementHandlerRegistry.TestScope registryScope;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -93,7 +95,13 @@ class RequirementPlannerTest {
 
     @BeforeEach
     void bootstrapCapabilities() throws Exception {
+        registryScope = RequirementHandlerRegistry.openTestScope();
         TestBootstrap.bootstrapCapabilities();
+    }
+
+    @AfterEach
+    void closeRegistryScope() {
+        registryScope.close();
     }
 
     @Test
@@ -128,6 +136,7 @@ class RequirementPlannerTest {
 
     @Test
     void supports_mixed_requirements_and_custom_handlers_without_planner_changes() {
+        register(TYPE, new SimpleHandler(TYPE));
         TestType secondType = type("planner_second_requirement");
         register(secondType, new SimpleHandler(secondType));
 
