@@ -112,7 +112,9 @@ public final class OutputRegistry {
     public static boolean matchesOutputRequirement(MachineOutput output, MachineRequirement requirement) {
         if (output == null || requirement == null) return false;
         OutputType<?> type = canonicalType(output.outputType());
-        return type != null && type.matchesRequirement(requirement);
+        if (type == null || !type.matchesRequirement(requirement)) return false;
+        MachineOutput converted = type.fromRequirement(requirement);
+        return converted != null && converted.outputType() == type && output.equals(converted);
     }
 
     public static void registerBuiltIns() {

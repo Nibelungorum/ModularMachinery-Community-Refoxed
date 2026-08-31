@@ -232,6 +232,20 @@ class MachineRecipeDataDrivenTest {
                 requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(1);
     }
 
+    @Test
+    void different_canonical_builtin_outputs_remain_distinct_runtime_requirements() {
+        MachineRecipe recipe = MachineRecipe.fromCanonical(
+                Identifier.parse("mmcr_test:distinct_output_requirements"),
+                Identifier.parse("mmcr:test_machine_name"), 20,
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new ItemStack(Items.IRON_NUGGET, 1), 1F, List.of())),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET, 1), 1F)),
+                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+
+        assertThat(recipe.runtimeRequirements()).filteredOn(
+                requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(2);
+    }
+
     private static final RequirementHandler<TestRequirement> TEST_REQUIREMENT_HANDLER =
             (requirement, capabilities, context) -> null;
     private static final RequirementType<TestRequirement> TEST_REQUIREMENT_TYPE = new RequirementType.Definition<>(
