@@ -6,7 +6,7 @@ export default defineConfig({
   title: 'MMCR Wiki',
   description: 'Documentation for Modular Machinery Community: Refoxed.',
   head: [
-    ['link', { rel: 'icon', type: 'image/png', href: '/logo.png' }],
+    ['link', { rel: 'icon', type: 'image/png', href: '/logo.svg' }],
   ],
   locales: {
     'en-us': {
@@ -25,7 +25,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: {
-      src: '/logo.png',
+      src: '/logo.svg',
       alt: 'MMCR',
     },
     siteTitle: 'MMCR Wiki',
