@@ -31,6 +31,7 @@ public class MMCR {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
+        PublicApiBootstrap.freeze();
         ModEventRegistration.register(modBus, modContainer);
         modBus.addListener((FMLConstructModEvent event) ->
                 StartupContentRegistration.registerProductionForModStartup(NeoForge.EVENT_BUS));

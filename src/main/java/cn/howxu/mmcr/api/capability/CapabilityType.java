@@ -3,7 +3,9 @@ package cn.howxu.mmcr.api.capability;
 import net.minecraft.resources.Identifier;
 
 /**
- * Identifies a machine capability.
+ * Identifies a machine capability by its immutable {@link Identifier}.
+ * Equality and hash code are derived from that identifier, which is the
+ * canonical key used by capability registries.
  *
  * @param id the capability identifier
  * @author howxu <dev@howxu.cn>

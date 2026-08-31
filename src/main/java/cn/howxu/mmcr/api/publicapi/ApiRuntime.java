@@ -17,7 +17,7 @@ public final class ApiRuntime {
         hook = null;
     }
 
-    static synchronized boolean isRegistrationOpen() {
+    public static synchronized boolean isRegistrationOpen() {
         return hook != null && hook.isRegistrationOpen();
     }
 
