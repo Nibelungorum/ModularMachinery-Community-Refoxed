@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -38,6 +40,7 @@ public class UpgradeBusGameTest {
         BlockPos inputPos = controllerPos.west();
         BlockPos outputPos = controllerPos.east();
         BlockPos secondBusPos = controllerPos.east(2);
+        Identifier structureModifierId = MMCR.id("upgrade_bus_test_block_modifier");
 
         helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
@@ -49,6 +52,7 @@ public class UpgradeBusGameTest {
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         helper.assertTrue(registeredMachine != null, "Upgrade Bus test machine is registered");
         AtomicReference<List<ItemStack>> observedUpgradeItems = new AtomicReference<>();
+        AtomicReference<List<MachineRequirement>> observedRequirements = new AtomicReference<>();
         Machine machine = new DynamicMachine(registeredMachine.registryName(), registeredMachine.displayNameKey(),
                 registeredMachine.pattern(), registeredMachine.controller(), registeredMachine.appearance(),
                 registeredMachine.portRequirements(), registeredMachine.portTierRequirements(),
@@ -57,7 +61,10 @@ public class UpgradeBusGameTest {
                 registeredMachine.factoryThreadLimit(), registeredMachine.factoryThreads(), registeredMachine.role(),
                 registeredMachine.acceptedModuleIds(), registeredMachine.structureStages(), registeredMachine.failureAction(),
                 RecipeBehavior.builder().beforeStart(context ->
-                        observedUpgradeItems.set(context.machineContext().upgradeItems())).build());
+                        {
+                            observedUpgradeItems.set(context.machineContext().upgradeItems());
+                            observedRequirements.set(context.requirements());
+                        }).build());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
         controller.serverTick();
@@ -79,14 +86,19 @@ public class UpgradeBusGameTest {
             controller.serverTick();
 
             helper.assertTrue(controller.structureSnapshot().formed(), "Replacement Upgrade Bus blocks form the machine");
-            helper.assertTrue(controller.runtimeSnapshot().foundModifiers().containsKey(modifierId.toString()),
+            helper.assertTrue(controller.runtimeSnapshot().foundModifiers().containsKey(structureModifierId.toString()),
                     "Replacement block exposes its registered modifier");
             helper.assertTrue(controller.runtimeSnapshot().upgradeItems().size() == 2,
                     "Both Upgrade Bus contents are published to the controller");
+            helper.assertTrue(controller.componentRuntime().upgradeModifierUnits().get(modifierId) == 2L,
+                    "Both Upgrade Bus items resolve to two modifier units");
+            helper.assertTrue(controller.componentRuntime().modifierList().stream()
+                            .anyMatch(modifier -> modifier.getModifier() == 2.0F),
+                    "Upgrade Bus items rebuild the aggregated input modifier");
 
             ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
             ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-            input.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+            input.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false);
             Identifier recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
             RecipeRegistry.register(new MachineRecipe(recipeId, machineId, 20,
                     List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
@@ -98,6 +110,11 @@ public class UpgradeBusGameTest {
             helper.assertTrue(observedUpgradeItems.get() != null && observedUpgradeItems.get().size() == 2
                             && observedUpgradeItems.get().stream().allMatch(stack -> stack.is(Items.NETHER_STAR)),
                     "Recipe start callback receives both Upgrade Bus items");
+            helper.assertTrue(observedRequirements.get() != null
+                            && observedRequirements.get().stream()
+                            .anyMatch(requirement -> requirement instanceof ItemRequirement item && item.count() == 3),
+                    "Recipe start callback receives the input quantity after Upgrade Bus modifiers: "
+                            + observedRequirements.get());
 
             firstBus.itemStackHandler().setStackInSlot(0, new ItemStack(Items.DIAMOND));
             controller.serverTick();

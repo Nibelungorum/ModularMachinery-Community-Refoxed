@@ -3,9 +3,6 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.MachineRegistration;
-import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
@@ -36,11 +33,6 @@ public class SmartInterfaceGameTest {
 
         String type = "temperature";
         var machineId = MMCR.id("smart_interface_test");
-        MachineDefinitions.clearForTesting();
-        MachineDefinitions.register(MachineRegistration.builder(machineId)
-                .localizedName("Smart Interface Test")
-                .smartInterfaceType(new SmartInterfaceType(type, 12F, 0))
-                .build());
         DynamicMachine machine = new DynamicMachine(MMCR.id("smart_interface_test"), "Smart Interface Test",
                 new BlockArray(Map.of(interfacePos.subtract(controllerPos),
                         new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get()))));

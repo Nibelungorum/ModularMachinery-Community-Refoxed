@@ -365,10 +365,11 @@ public final class ComponentRuntime {
         upgradeModifierUnits = immutableMap(units);
         upgradeModifiers = upgradeModifiers(units);
         MMCR.LOG.info("[upgrade-bus-debug] aggregate: busCount={} itemCount={} modifierUnits={} "
-                        + "modifierCount={} registeredBindings={}",
-                next.size(), items.size(), units, upgradeModifiers.size(), ModifierRegistry.modifierItems());
+                        + "upgradeModifiers={} registeredBindings={}",
+                next.size(), items.size(), units, describeModifiers(upgradeModifiers), ModifierRegistry.modifierItems());
         upgradeContentRevision++;
         rebuildModifierList();
+        MMCR.LOG.info("[upgrade-bus-debug] rebuilt modifiers: {}", describeModifiers(flattenedModifiers));
         modifierVersion++;
         stateVersion++;
         return true;
@@ -384,6 +385,13 @@ public final class ComponentRuntime {
             }
         }
         return List.copyOf(result);
+    }
+
+    private static List<String> describeModifiers(List<RecipeModifier> modifiers) {
+        return modifiers.stream()
+                .map(modifier -> modifier.getTarget() + "/" + modifier.getIOTarget() + "/"
+                        + modifier.getOperation() + "/" + modifier.getModifier())
+                .toList();
     }
 
     private void rebuildModifierList() {

@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
@@ -23,6 +24,7 @@ import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Rotation;
@@ -132,7 +134,7 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
-        for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
+        for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
@@ -157,6 +159,9 @@ public final class GameTestRegistry {
             if (name.equals("upgrade_bus_test")) {
                 builder.allowModifiers();
             }
+            if (name.equals("smart_interface_test")) {
+                builder.smartInterface(new SmartInterfaceType("temperature", 12F, 20F, 0));
+            }
             MachineDefinition definition = builder.build();
             if (name.equals("distillation_tower_test") || name.equals("expandable_structure_stages")
                     || name.equals("expandable_structure_vertical_roll")) {
@@ -172,9 +177,13 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
+        Identifier upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
+        event.registerModifier(upgradeBusBlockModifierId,
+                ModifierDefinition.of("item", "input", 0.0F, "add", false));
         Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
         event.registerModifier(upgradeBusModifierId,
-                ModifierDefinition.of("", "input", 0.0F, "add", false));
+                ModifierDefinition.of("item", "input", 1.0F, "add", false));
+        event.registerModifierItem(new ItemStack(Items.NETHER_STAR), upgradeBusModifierId);
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
             Identifier id = MMCR.id(name);
@@ -189,7 +198,7 @@ public final class GameTestRegistry {
                             .where('C', controller)
                             .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_output_bus").get()))
                             .controller('C'))
-                            .modifier('B', ModifierUse.of(upgradeBusModifierId,
+                            .modifier('B', ModifierUse.of(upgradeBusBlockModifierId,
                                     BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))));
                     return structure;
                 }

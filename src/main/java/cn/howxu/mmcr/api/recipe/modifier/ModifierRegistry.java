@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import net.minecraft.resources.Identifier;
@@ -85,7 +86,14 @@ public final class ModifierRegistry {
     }
 
     public static @Nullable Identifier modifierFor(ItemStack stack) {
-        return stack == null ? null : ITEM_BINDINGS.get(ModifierItemKey.of(stack));
+        if (stack == null) return null;
+        ModifierItemKey key = ModifierItemKey.of(stack);
+        Identifier modifierId = ITEM_BINDINGS.get(key);
+        if (modifierId == null) {
+            MMCR.LOG.info("[upgrade-bus-debug] binding miss: item={} patch={} registeredKeys={}",
+                    stack.getItem(), key.patch(), ITEM_BINDINGS.keySet());
+        }
+        return modifierId;
     }
 
     public static Map<Identifier, List<ItemStack>> modifierItems() {
