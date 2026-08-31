@@ -5,16 +5,13 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
-import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
-import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
-import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+
+import java.util.Set;
 
 /**
  * Built-in capability factories and shared capability contract helpers.
@@ -37,6 +34,11 @@ public final class CapabilityFactories {
     }
 
     static CapabilityView view(CapabilityType type, IOType ioType) {
+        return view(type, ioType, Set.of());
+    }
+
+    static CapabilityView view(CapabilityType type, IOType ioType,
+                               Set<Class<? extends CapabilityFacet>> facets) {
         return new CapabilityView() {
             @Override
             public CapabilityType type() {
@@ -47,91 +49,27 @@ public final class CapabilityFactories {
             public IOType ioType() {
                 return ioType;
             }
-        };
-    }
 
-    static CapabilityOperation operation(CapabilityType type, IOType ioType, CapabilityRequest request) {
-        return operation(type, ioType, request, null);
-    }
-
-    static CapabilityOperation operation(CapabilityType type, IOType ioType, CapabilityRequest request,
-                                         CapabilityStorage storage) {
-        if (request == null) throw new IllegalArgumentException("request must not be null");
-        if (!type.equals(request.type())) throw new IllegalArgumentException("Capability request type does not match");
-        if (ioType != request.ioType()) throw new IllegalArgumentException("Capability request IO type does not match");
-        if (request.parallelism() <= 0) throw new IllegalArgumentException("parallelism must be positive");
-        return operationFacet(type, storage).prepare(request);
-    }
-
-    private static OperationFacet operationFacet(CapabilityType type, CapabilityStorage storage) {
-        if (storage instanceof ResourceStorage<?> resourceStorage) {
-            return request -> {
-                if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
-                    return unsupportedOperation(type);
-                }
-                return resourceOperation(resourceStorage, resourceRequest);
-            };
-        }
-        if (storage instanceof LongValueStorage valueStorage) {
-            return request -> {
-                if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
-                    return unsupportedOperation(type);
-                }
-                return valueOperation(valueStorage, valueRequest);
-            };
-        }
-        if (storage instanceof FloatValueStorage valueStorage) {
-            return request -> {
-                if (!(request instanceof CapabilityRequests.SmartValueRequest smartRequest)) {
-                    return unsupportedOperation(type);
-                }
-                return transaction -> valueStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
-                        ? CapabilityResult.successful()
-                        : CapabilityResult.failure(failure(type, "smart_value"));
-            };
-        }
-        return request -> unsupportedOperation(type);
-    }
-
-    private static CapabilityOperation unsupportedOperation(CapabilityType type) {
-        return transaction -> CapabilityResult.failure(failure(type, "unsupported_request"));
-    }
-
-    @FunctionalInterface
-    private interface OperationFacet {
-        CapabilityOperation prepare(CapabilityRequest request);
-    }
-
-    private static CapabilityOperation resourceOperation(ResourceStorage<?> storage,
-                                                         CapabilityRequests.ResourceRequest<?> request) {
-        return transaction -> {
-            for (CapabilityRequests.ResourceAction<?> action : request.actions()) {
-                if (!storage.resourceType().isInstance(action.resource())) {
-                    return CapabilityResult.failure(failure(request.type(), "wrong_resource_type"));
-                }
-                long moved = action.insert()
-                        ? storage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
-                        : storage.extractResource(action.slot(), action.resource(), action.amount(), transaction);
-                if (moved != action.amount()) return CapabilityResult.failure(failure(request.type(), "insufficient_resource"));
+            @Override
+            public Set<Class<? extends CapabilityFacet>> facets() {
+                return facets;
             }
-            return CapabilityResult.successful();
         };
     }
 
-    private static CapabilityOperation valueOperation(LongValueStorage storage, CapabilityRequests.ValueRequest request) {
-        return transaction -> {
-            long moved = request.insert()
-                    ? storage.insert(request.amount(), transaction)
-                    : storage.extract(request.amount(), transaction);
-            return moved == request.amount()
-                    ? CapabilityResult.successful()
-                    : CapabilityResult.failure(failure(request.type(), "insufficient_value"));
-        };
-    }
-
-    private static cn.howxu.mmcr.api.capability.status.ExecutionStatus failure(CapabilityType type, String reason) {
-        return new cn.howxu.mmcr.api.capability.status.ExecutionStatus(type.id(),
-                cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED, type.id(), java.util.Map.of("reason", reason));
+    static CapabilityOperation operation(MachineCapability capability, CapabilityRequest request) {
+        if (capability == null) throw new IllegalArgumentException("capability must not be null");
+        if (request == null) throw new IllegalArgumentException("request must not be null");
+        if (!capability.type().equals(request.type())) {
+            throw new IllegalArgumentException("Capability request type does not match");
+        }
+        if (capability.ioType() != request.ioType()) {
+            throw new IllegalArgumentException("Capability request IO type does not match");
+        }
+        if (request.parallelism() <= 0) throw new IllegalArgumentException("parallelism must be positive");
+        return capability.facet(OperationFacet.class)
+                .orElseThrow(() -> new IllegalStateException("Capability does not declare an operation facet"))
+                .prepareOperation(request);
     }
 
 }

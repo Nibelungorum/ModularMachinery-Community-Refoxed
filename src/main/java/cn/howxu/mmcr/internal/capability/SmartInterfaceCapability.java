@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -14,13 +15,14 @@ import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Bidirectional named-float capability backed by a smart interface.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class SmartInterfaceCapability implements MachineCapability {
+public final class SmartInterfaceCapability implements MachineCapability, OperationFacet {
     private static final CapabilityType TYPE = new CapabilityType(MMCR.id("smart_interface"));
     private final FloatValueStorage storage;
     private final IOType ioType;
@@ -31,7 +33,7 @@ public final class SmartInterfaceCapability implements MachineCapability {
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.storage = storage;
         this.ioType = ioType;
-        this.view = CapabilityFactories.view(TYPE, ioType);
+        this.view = CapabilityFactories.view(TYPE, ioType, Set.of(OperationFacet.class));
     }
 
     @Override
@@ -56,15 +58,26 @@ public final class SmartInterfaceCapability implements MachineCapability {
 
     @Override
     public CapabilityOperation prepare(CapabilityRequest request) {
-        if (!(request instanceof CapabilityRequests.SmartValueRequest smart)
+        if (!(request instanceof CapabilityRequests.SmartValueRequest)
                 || !TYPE.equals(request.type())
-                || smart.ioType() != ioType) {
-            return ignored -> CapabilityResult.failure(new ExecutionStatus(TYPE.id(), StatusSeverity.BLOCKED,
-                    TYPE.id(), Map.of("reason", "unsupported_request")));
+                || request.ioType() != ioType) {
+            return ignored -> failure("unsupported_request");
+        }
+        return CapabilityFactories.operation(this, request);
+    }
+
+    @Override
+    public CapabilityOperation prepareOperation(CapabilityRequest request) {
+        if (!(request instanceof CapabilityRequests.SmartValueRequest smart)) {
+            return ignored -> failure("unsupported_request");
         }
         return transaction -> storage.set(smart.interfaceType(), smart.value(), transaction)
                 ? CapabilityResult.successful()
-                : CapabilityResult.failure(new ExecutionStatus(TYPE.id(), StatusSeverity.BLOCKED,
-                        TYPE.id(), Map.of("reason", "smart_value")));
+                : failure("smart_value");
+    }
+
+    private CapabilityResult failure(String reason) {
+        return CapabilityResult.failure(new ExecutionStatus(TYPE.id(), StatusSeverity.BLOCKED,
+                TYPE.id(), Map.of("reason", reason)));
     }
 }

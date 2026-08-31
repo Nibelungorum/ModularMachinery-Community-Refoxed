@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
@@ -12,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
@@ -93,12 +95,33 @@ class CapabilityOperationTest {
 
     @Test
     void opaque_operation_reports_its_typed_failure_without_planner_dispatch() {
-        CapabilityOperation operation = transaction -> CapabilityResult.failure(TYPED_FAILURE);
+        LongValueStorage priorStorage = new LongValueStorage(4L, 4L, null);
+        LongValueStorage failedStorage = new LongValueStorage(4L, 4L, null);
+        priorStorage.setAmount(1L);
+        failedStorage.setAmount(1L);
+        CapabilityOperation priorOperation = transaction -> {
+            priorStorage.insert(1L, transaction);
+            return CapabilityResult.successful();
+        };
+        CapabilityOperation operation = transaction -> {
+            failedStorage.insert(1L, transaction);
+            return CapabilityResult.failure(TYPED_FAILURE);
+        };
         CraftingPlan plan = new CraftingPlan(
-                List.of(new RequirementPlan(0, 1L, List.of(operation), null)), 1L);
+                List.of(new RequirementPlan(0, 1L, List.of(priorOperation, operation), null)), 1L);
 
         assertThat(plan.commit()).isFalse();
+        assertThat(priorStorage.amount()).isEqualTo(1L);
+        assertThat(failedStorage.amount()).isEqualTo(1L);
         assertThat(plan.failure()).isSameAs(TYPED_FAILURE);
+    }
+
+    @Test
+    void built_in_capability_exposes_a_typed_operation_facet() {
+        EnergyHatchCapability capability = new EnergyHatchCapability(
+                new LongValueStorage(4L, 4L, null), IOType.INPUT);
+
+        assertThat(capability.facet(OperationFacet.class)).contains(capability);
     }
 
     private record OpaqueRequirement(RequirementType<OpaqueRequirement> type, RecipeModifier.IOType io)
