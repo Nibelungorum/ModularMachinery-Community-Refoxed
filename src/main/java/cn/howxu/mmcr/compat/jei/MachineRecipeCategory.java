@@ -325,6 +325,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
             slot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER);
         }
+        if (entry.ingredient() instanceof List<?> ingredients) {
+            slot.addIngredients((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), ingredients);
+            return;
+        }
         slot.add((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), entry.ingredient());
     }
 

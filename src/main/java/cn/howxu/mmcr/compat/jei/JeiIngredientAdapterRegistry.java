@@ -13,6 +13,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -74,11 +75,16 @@ public final class JeiIngredientAdapterRegistry {
             if (entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT && item.item() == null) {
                 return Optional.empty();
             }
-            ItemStack stack = entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT
-                    ? item.item().items().findFirst().map(holder -> new ItemStack(holder.value())).orElse(ItemStack.EMPTY)
-                    : item.resolvedStack();
+            if (entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT) {
+                List<ItemStack> stacks = item.item().items()
+                        .map(holder -> new ItemStack(holder.value()))
+                        .toList();
+                return stacks.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), ingredientType(),
+                        stacks, boundedCount(entry.amount()), true));
+            }
+            ItemStack stack = item.resolvedStack();
             return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), ingredientType(),
-                    stack.copyWithCount(1), boundedCount(entry.amount()), entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT));
+                    stack.copyWithCount(1), boundedCount(entry.amount()), false));
         }
 
         @Override
