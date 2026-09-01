@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -75,7 +76,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().capabilityTypes().stream()
                     .map(this::createCapability)
-                    .toList());
+                    .toList(), java.util.List.of(new InventoryPersistenceFacet()));
         }
         return capabilitySnapshot;
     }
@@ -146,7 +147,8 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         normalizeItemHolders();
-        handler.serialize(output.child("inventory"));
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.save(output.child(facet.stateKey())));
     }
 
     private void normalizeItemHolders() {
@@ -163,7 +165,25 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        handler.deserialize(input.childOrEmpty("inventory"));
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.load(input.childOrEmpty(facet.stateKey())));
+    }
+
+    private final class InventoryPersistenceFacet implements PersistenceFacet {
+        @Override
+        public String stateKey() {
+            return "inventory";
+        }
+
+        @Override
+        public void save(ValueOutput output) {
+            handler.serialize(output);
+        }
+
+        @Override
+        public void load(ValueInput input) {
+            handler.deserialize(input);
+        }
     }
 
     /**

@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.sync.CapabilitySyncEntry;
+import cn.howxu.mmcr.api.capability.sync.CapabilitySyncRegistry;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
@@ -33,9 +35,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktPortStorageSyncPayload(BlockPos pos, String kind,
-                                        List<ItemStorageEntry> itemEntries,
-                                        List<FluidStorageEntry> fluidEntries)
+public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<CapabilitySyncEntry> entries)
         implements CustomPacketPayload {
     public static final int MAX_ENTRIES = 1024;
     private static final int MAX_KIND_LENGTH = 256;
@@ -64,8 +64,10 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
         pos = pos == null ? BlockPos.ZERO : pos.immutable();
         IOPortKindView kindView = requireKind(kind);
         kind = kindView.id();
-        itemEntries = validateEntries(itemEntries, "item", kindView.itemSlotCount(), kindView.allowsItems());
-        fluidEntries = validateEntries(fluidEntries, "fluid", kindView.fluidTankCount(), kindView.allowsFluids());
+        if (entries == null || entries.size() > MAX_ENTRIES) {
+            throw new IllegalArgumentException("Invalid capability sync entry count");
+        }
+        entries = List.copyOf(entries);
     }
 
     public record ItemStorageEntry(int slot, ItemResource resource, long amount, long capacity) {
@@ -97,9 +99,10 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
 
     public static PktPortStorageSyncPayload from(IOPortBlockEntity port) {
         if (port == null) throw new IllegalArgumentException("Port must not be null");
-        List<ItemStorageEntry> items = itemEntries(port);
-        List<FluidStorageEntry> fluids = fluidEntries(port);
-        return new PktPortStorageSyncPayload(port.getBlockPos(), port.kind().id(), items, fluids);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+                port.getLevel().registryAccess());
+        return new PktPortStorageSyncPayload(port.getBlockPos(), port.kind().id(),
+                CapabilitySyncRegistry.encode(port.capabilitySnapshot(), buffer));
     }
 
     public static void sendTo(ServerPlayer player, IOPortBlockEntity port) {
@@ -148,37 +151,31 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
     private static void write(RegistryFriendlyByteBuf buffer, PktPortStorageSyncPayload payload) {
         buffer.writeBlockPos(payload.pos);
         buffer.writeUtf(payload.kind, MAX_KIND_LENGTH);
-        writeItems(buffer, payload.itemEntries);
-        writeFluids(buffer, payload.fluidEntries);
+        writeEntries(buffer, payload.entries);
     }
 
     private static PktPortStorageSyncPayload read(RegistryFriendlyByteBuf buffer) {
         BlockPos pos = buffer.readBlockPos();
         String kind = buffer.readUtf(MAX_KIND_LENGTH);
-        return new PktPortStorageSyncPayload(pos, kind, readItems(buffer), readFluids(buffer));
+        return new PktPortStorageSyncPayload(pos, kind, readEntries(buffer));
     }
 
-    private static void writeItems(RegistryFriendlyByteBuf buffer, List<ItemStorageEntry> entries) {
-        writeCount(buffer, entries.size(), "item");
-        for (ItemStorageEntry entry : entries) ITEM_ENTRY_CODEC.encode(buffer, entry);
+    private static void writeEntries(RegistryFriendlyByteBuf buffer, List<CapabilitySyncEntry> entries) {
+        writeCount(buffer, entries.size(), "capability");
+        for (CapabilitySyncEntry entry : entries) {
+            buffer.writeResourceLocation(entry.typeId());
+            buffer.writeVarInt(entry.capabilityIndex());
+            buffer.writeByteArray(entry.payload());
+        }
     }
 
-    private static void writeFluids(RegistryFriendlyByteBuf buffer, List<FluidStorageEntry> entries) {
-        writeCount(buffer, entries.size(), "fluid");
-        for (FluidStorageEntry entry : entries) FLUID_ENTRY_CODEC.encode(buffer, entry);
-    }
-
-    private static List<ItemStorageEntry> readItems(RegistryFriendlyByteBuf buffer) {
-        int count = readCount(buffer, "item");
-        List<ItemStorageEntry> entries = new ArrayList<>(count);
-        for (int slot = 0; slot < count; slot++) entries.add(ITEM_ENTRY_CODEC.decode(buffer));
-        return entries;
-    }
-
-    private static List<FluidStorageEntry> readFluids(RegistryFriendlyByteBuf buffer) {
-        int count = readCount(buffer, "fluid");
-        List<FluidStorageEntry> entries = new ArrayList<>(count);
-        for (int slot = 0; slot < count; slot++) entries.add(FLUID_ENTRY_CODEC.decode(buffer));
+    private static List<CapabilitySyncEntry> readEntries(RegistryFriendlyByteBuf buffer) {
+        int count = readCount(buffer, "capability");
+        List<CapabilitySyncEntry> entries = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            entries.add(new CapabilitySyncEntry(buffer.readResourceLocation(), buffer.readVarInt(),
+                    buffer.readByteArray(CapabilitySyncEntry.MAX_PAYLOAD_BYTES)));
+        }
         return entries;
     }
 
@@ -191,6 +188,36 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind,
         int count = buffer.readVarInt();
         if (count < 0 || count > MAX_ENTRIES) throw new IllegalArgumentException("Invalid " + name + " entry count");
         return count;
+    }
+
+    public List<ItemStorageEntry> itemEntries() {
+        return entries.stream().filter(entry -> entry.typeId().equals(MMCR.id("item")))
+                .findFirst().map(PktPortStorageSyncPayload::decodeItemEntries).orElseGet(List::of);
+    }
+
+    public List<FluidStorageEntry> fluidEntries() {
+        return entries.stream().filter(entry -> entry.typeId().equals(MMCR.id("fluid")))
+                .findFirst().map(PktPortStorageSyncPayload::decodeFluidEntries).orElseGet(List::of);
+    }
+
+    private static List<ItemStorageEntry> decodeItemEntries(CapabilitySyncEntry entry) {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(entry.payload()),
+                net.minecraft.core.RegistryAccess.EMPTY);
+        int count = readCount(buffer, "item");
+        List<ItemStorageEntry> values = new ArrayList<>(count);
+        for (int slot = 0; slot < count; slot++) values.add(new ItemStorageEntry(slot, ItemResource.STREAM_CODEC.decode(buffer),
+                buffer.readLong(), buffer.readLong()));
+        return List.copyOf(values);
+    }
+
+    private static List<FluidStorageEntry> decodeFluidEntries(CapabilitySyncEntry entry) {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(entry.payload()),
+                net.minecraft.core.RegistryAccess.EMPTY);
+        int count = readCount(buffer, "fluid");
+        List<FluidStorageEntry> values = new ArrayList<>(count);
+        for (int slot = 0; slot < count; slot++) values.add(new FluidStorageEntry(slot, FluidResource.STREAM_CODEC.decode(buffer),
+                buffer.readLong(), buffer.readLong()));
+        return List.copyOf(values);
     }
 
     private static List<ItemStorageEntry> itemEntries(IOPortBlockEntity port) {

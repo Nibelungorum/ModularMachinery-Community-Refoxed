@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -18,6 +19,8 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -28,7 +31,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ItemBusCapability implements MachineCapability, ResourceFacet<ItemResource>, OperationFacet {
+public final class ItemBusCapability implements MachineCapability, ResourceFacet<ItemResource>, OperationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<ItemResource> storage;
@@ -44,7 +47,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class, SyncFacet.class));
     }
 
     public ItemBusCapability(ItemBusBlockEntity port) {
@@ -118,5 +121,38 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     private CapabilityResult failure(String reason) {
         return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.BLOCKED,
                 type().id(), Map.of("reason", reason)));
+    }
+
+    @Override
+    public void encode(RegistryFriendlyByteBuf buffer) {
+        buffer.writeVarInt(storage.size());
+        for (int slot = 0; slot < storage.size(); slot++) {
+            ItemResource resource = storage.resource(slot);
+            ItemResource.STREAM_CODEC.encode(buffer, resource == null ? ItemResource.EMPTY : resource);
+            buffer.writeLong(storage.amount(slot));
+            buffer.writeLong(storage.capacity(slot, resource));
+        }
+    }
+
+    @Override
+    public void decode(RegistryFriendlyByteBuf buffer) {
+        int count = buffer.readVarInt();
+        if (count < 0 || count > 1024 || count != storage.size()) throw new IllegalArgumentException("Invalid item sync state");
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (int slot = 0; slot < count; slot++) {
+                ItemResource resource = ItemResource.STREAM_CODEC.decode(buffer);
+                long amount = buffer.readLong();
+                long capacity = buffer.readLong();
+                if (amount < 0 || capacity < amount || capacity != storage.capacity(slot, resource)) {
+                    throw new IllegalArgumentException("Invalid item sync amount");
+                }
+                ItemResource current = storage.resource(slot);
+                if (current != null && !current.isEmpty()) storage.extract(slot, current, Long.MAX_VALUE, transaction);
+                if (!resource.isEmpty() && storage.insert(slot, resource, amount, transaction) != amount) {
+                    throw new IllegalArgumentException("Item sync state does not fit");
+                }
+            }
+            transaction.commit();
+        }
     }
 }

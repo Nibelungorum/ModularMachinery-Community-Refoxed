@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
@@ -89,7 +90,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
             capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
                     .filter(binding -> binding.ioType() == kind.ioType())
                     .map(this::createCapability)
-                    .toList());
+                    .toList(), java.util.List.of(new InventoryPersistenceFacet(), new FluidPersistenceFacet()));
         }
         return capabilitySnapshot;
     }
@@ -105,15 +106,20 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        itemHandler.serialize(output.child("inventory"));
-        saveFluids(output);
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.save(output.child(facet.stateKey())));
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        itemHandler.deserialize(input.childOrEmpty("inventory"));
-        loadFluids(input);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            if (facet.stateKey().equals("fluid") && input.child("fluid").isEmpty()) {
+                loadFluids(input);
+            } else {
+                facet.load(input.childOrEmpty(facet.stateKey()));
+            }
+        });
     }
 
     private void saveFluids(ValueOutput output) {
@@ -145,6 +151,40 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
         markAutoIOCacheDirty();
         notifyStorageChanged();
         notifyControllerOfInputChange();
+    }
+
+    private final class InventoryPersistenceFacet implements PersistenceFacet {
+        @Override
+        public String stateKey() {
+            return "inventory";
+        }
+
+        @Override
+        public void save(ValueOutput output) {
+            itemHandler.serialize(output);
+        }
+
+        @Override
+        public void load(ValueInput input) {
+            itemHandler.deserialize(input);
+        }
+    }
+
+    private final class FluidPersistenceFacet implements PersistenceFacet {
+        @Override
+        public String stateKey() {
+            return "fluid";
+        }
+
+        @Override
+        public void save(ValueOutput output) {
+            saveFluids(output);
+        }
+
+        @Override
+        public void load(ValueInput input) {
+            loadFluids(input);
+        }
     }
 
     private static IOPortKind fallback(BlockState state) {

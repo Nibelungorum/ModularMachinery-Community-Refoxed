@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -18,6 +19,8 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -28,7 +31,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FluidHatchCapability implements MachineCapability, ResourceFacet<FluidResource>, OperationFacet {
+public final class FluidHatchCapability implements MachineCapability, ResourceFacet<FluidResource>, OperationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<FluidResource> storage;
@@ -44,7 +47,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class, SyncFacet.class));
     }
 
     public FluidHatchCapability(FluidHatchBlockEntity port) {
@@ -113,5 +116,38 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     private CapabilityResult failure(String reason) {
         return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.BLOCKED,
                 type().id(), Map.of("reason", reason)));
+    }
+
+    @Override
+    public void encode(RegistryFriendlyByteBuf buffer) {
+        buffer.writeVarInt(storage.size());
+        for (int slot = 0; slot < storage.size(); slot++) {
+            FluidResource resource = storage.resource(slot);
+            FluidResource.STREAM_CODEC.encode(buffer, resource == null ? FluidResource.EMPTY : resource);
+            buffer.writeLong(storage.amount(slot));
+            buffer.writeLong(storage.capacity(slot, resource));
+        }
+    }
+
+    @Override
+    public void decode(RegistryFriendlyByteBuf buffer) {
+        int count = buffer.readVarInt();
+        if (count < 0 || count > 1024 || count != storage.size()) throw new IllegalArgumentException("Invalid fluid sync state");
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (int slot = 0; slot < count; slot++) {
+                FluidResource resource = FluidResource.STREAM_CODEC.decode(buffer);
+                long amount = buffer.readLong();
+                long capacity = buffer.readLong();
+                if (amount < 0 || capacity < amount || capacity != storage.capacity(slot, resource)) {
+                    throw new IllegalArgumentException("Invalid fluid sync amount");
+                }
+                FluidResource current = storage.resource(slot);
+                if (current != null && !current.isEmpty()) storage.extract(slot, current, Long.MAX_VALUE, transaction);
+                if (!resource.isEmpty() && storage.insert(slot, resource, amount, transaction) != amount) {
+                    throw new IllegalArgumentException("Fluid sync state does not fit");
+                }
+            }
+            transaction.commit();
+        }
     }
 }

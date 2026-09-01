@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
@@ -46,7 +47,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().capabilityTypes().stream()
                     .map(this::createCapability)
-                    .toList());
+                    .toList(), java.util.List.of(new FluidPersistenceFacet()));
         }
         return capabilitySnapshot;
     }
@@ -81,6 +82,11 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    }
+
+    private void saveLegacyFluids(ValueOutput output) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
             FluidResource resource = storage.resource(slot);
@@ -95,6 +101,12 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
+        input.child("fluid").ifPresentOrElse(
+                child -> capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> facet.load(child)),
+                () -> loadLegacyFluids(input));
+    }
+
+    private void loadLegacyFluids(ValueInput input) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
             if (input.getBooleanOr("tankHasFluid" + suffix, false)) {
@@ -105,6 +117,23 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
             } else {
                 storage.setContents(slot, FluidResource.EMPTY, 0L);
             }
+        }
+    }
+
+    private final class FluidPersistenceFacet implements PersistenceFacet {
+        @Override
+        public String stateKey() {
+            return "fluid";
+        }
+
+        @Override
+        public void save(ValueOutput output) {
+            saveLegacyFluids(output);
+        }
+
+        @Override
+        public void load(ValueInput input) {
+            loadLegacyFluids(input);
         }
     }
 }

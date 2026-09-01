@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -50,7 +51,7 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().capabilityTypes().stream()
                     .map(this::createCapability)
-                    .toList());
+                    .toList(), java.util.List.of(new EnergyPersistenceFacet()));
         }
         return capabilitySnapshot;
     }
@@ -77,12 +78,32 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        output.putLong("storage", storage.getAmountAsLong());
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.save(output.child(facet.stateKey())));
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        storage.setAmount(input.getLong("storage").orElse(0L));
+        input.child("energy").ifPresentOrElse(
+                child -> capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> facet.load(child)),
+                () -> storage.setAmount(input.getLong("storage").orElse(0L)));
+    }
+
+    private final class EnergyPersistenceFacet implements PersistenceFacet {
+        @Override
+        public String stateKey() {
+            return "energy";
+        }
+
+        @Override
+        public void save(ValueOutput output) {
+            output.putLong("amount", storage.getAmountAsLong());
+        }
+
+        @Override
+        public void load(ValueInput input) {
+            storage.setAmount(input.getLong("amount").orElse(0L));
+        }
     }
 }

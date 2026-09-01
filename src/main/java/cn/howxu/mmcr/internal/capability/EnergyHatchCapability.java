@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
+import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -16,6 +17,7 @@ import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,7 +29,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, OperationFacet {
+public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, OperationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final LongValueStorage storage;
@@ -43,7 +45,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(ScalarFacet.class, OperationFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType, Set.of(ScalarFacet.class, OperationFacet.class, SyncFacet.class));
     }
 
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
@@ -105,5 +107,21 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     private CapabilityResult failure(String reason) {
         return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.BLOCKED,
                 type().id(), Map.of("reason", reason)));
+    }
+
+    @Override
+    public void encode(RegistryFriendlyByteBuf buffer) {
+        buffer.writeLong(storage.amount());
+        buffer.writeLong(storage.capacity());
+    }
+
+    @Override
+    public void decode(RegistryFriendlyByteBuf buffer) {
+        long amount = buffer.readLong();
+        long capacity = buffer.readLong();
+        if (amount < 0L || amount > capacity || capacity != storage.capacity()) {
+            throw new IllegalArgumentException("Invalid energy sync state");
+        }
+        storage.setAmount(amount);
     }
 }
