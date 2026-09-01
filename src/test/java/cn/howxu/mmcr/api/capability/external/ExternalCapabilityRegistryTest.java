@@ -79,6 +79,38 @@ class ExternalCapabilityRegistryTest {
         assertThat(context.bindings(TYPE)).hasSize(1);
     }
 
+    @Test
+    void rejects_handlers_for_types_not_declared_by_the_adapter() {
+        ExternalCapabilityRegistry registry = new ExternalCapabilityRegistry();
+        CapabilityType unsupportedType = new CapabilityType(MMCR.id("unsupported_external_adapter_test"));
+        registry.register(new ExternalCapabilityAdapter() {
+            @Override
+            public net.minecraft.resources.Identifier id() {
+                return MMCR.id("unsupported_handler");
+            }
+
+            @Override
+            public Set<CapabilityType> capabilityTypes() {
+                return Set.of(TYPE);
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public void register(ExternalCapabilityContext context) {
+                context.bind(unsupportedType, new CapabilityBinding.ExternalExposure<>(
+                        MMCR.id("unsupported_handler_native"), String.class,
+                        (host, ioType, side) -> "handler"));
+            }
+        });
+
+        assertThatIllegalArgumentException().isThrownBy(() -> registry.freeze(new ExternalCapabilityContext()))
+                .withMessageContaining("does not support capability type");
+    }
+
     private static ExternalCapabilityAdapter adapter(String id, boolean available, AtomicInteger calls) {
         return new ExternalCapabilityAdapter() {
             @Override

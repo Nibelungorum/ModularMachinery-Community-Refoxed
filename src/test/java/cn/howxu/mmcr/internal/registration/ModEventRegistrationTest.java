@@ -1,10 +1,12 @@
 package cn.howxu.mmcr.internal.registration;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
@@ -167,9 +169,17 @@ class ModEventRegistrationTest {
     }
 
     @Test
-    void production_capability_handler_uses_the_external_adapter_registry() {
-        assertThat(ExternalCapabilityRegistry.global()).isNotNull();
-        assertThat(ModEventRegistration.EventHandlers.production().capabilities()).isNotNull();
+    void production_capability_handler_installs_builtin_adapter_before_freezing_and_registers_providers() {
+        ModCapabilities.initializeExternalAdapters();
+        assertThat(ExternalCapabilityRegistry.global().isRegistered(MMCR.id("neoforge"))).isTrue();
+        assertThat(ExternalCapabilityRegistry.global().isFrozen()).isFalse();
+        RegisterCapabilitiesEvent event = capabilityEvent();
+
+        ModEventRegistration.EventHandlers.production().capabilities().accept(event);
+
+        assertThat(ExternalCapabilityRegistry.global().isFrozen()).isTrue();
+        assertThat(event.isBlockRegistered(ModCapabilities.ITEM_BLOCK,
+                ModBlocks.BLOCKS.get("item_input_bus_basic").get())).isTrue();
     }
 
     @Test
@@ -248,6 +258,16 @@ class ModEventRegistrationTest {
 
     private static <T> Consumer<T> recording(List<Class<?>> invoked, Class<?> eventType) {
         return ignored -> invoked.add(eventType);
+    }
+
+    private static RegisterCapabilitiesEvent capabilityEvent() {
+        try {
+            var constructor = RegisterCapabilitiesEvent.class.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return constructor.newInstance();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to create capability registration event", exception);
+        }
     }
 
     private static final class RecordingBus implements ModEventRegistration.ListenerRegistrar {
