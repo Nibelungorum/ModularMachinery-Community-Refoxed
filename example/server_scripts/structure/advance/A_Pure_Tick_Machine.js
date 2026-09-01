@@ -16,7 +16,6 @@ MMCREvents.server(event => {
             api.factoryController(),
             api.block('minecraft:green_wool')
         ))
-        .set('D', api.block('minecraft:reinforced_deepslate'))
         .controller('C')
         .build()
 })

@@ -14,7 +14,6 @@ MMCREvents.server(event => {
             api.parallelControllers(), // this is all parallel controller
             api.block('minecraft:green_wool')
         ))
-        .set('D', api.block('minecraft:reinforced_deepslate'))
         .controller('C')
         .build()
 })
