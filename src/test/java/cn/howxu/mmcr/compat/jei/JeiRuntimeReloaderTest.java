@@ -23,6 +23,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
@@ -60,12 +61,18 @@ class JeiRuntimeReloaderTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         Items.IRON_NUGGET.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        JeiRuntimeReloader.setClientExecutorForTesting(Runnable::run);
     }
 
     @AfterEach
     void clearRuntime() {
         JeiRuntimeReloader.clearRuntimeForTesting();
         RecipeRegistry.clearForTesting();
+    }
+
+    @BeforeEach
+    void useDirectClientExecutor() {
+        JeiRuntimeReloader.setClientExecutorForTesting(Runnable::run);
     }
 
     @Test
@@ -91,6 +98,23 @@ class JeiRuntimeReloaderTest {
         assertThat(manager.addedRecipeIds()).contains(MMCR.id("jei_synced_recipe"));
         assertThat(manager.hiddenTypes()).contains(JeiMachineRecipeTypes.forMachine(machineId));
         assertThat(manager.addedRecipeIds()).hasSize(1);
+    }
+
+    @Test
+    void reloadMutatesJeiOnlyAfterTheInjectedClientExecutorRuns() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("test_machine_name");
+        List<Runnable> queued = new ArrayList<>();
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+        JeiRuntimeReloader.setClientExecutorForTesting(queued::add);
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, MMCR.id("jei_executor_recipe")));
+
+        assertThat(queued).singleElement();
+        assertThat(manager.addedTypes()).isEmpty();
+        queued.getFirst().run();
+        assertThat(manager.addedRecipeIds()).containsExactly(MMCR.id("jei_executor_recipe"));
     }
 
     @Test

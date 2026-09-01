@@ -181,8 +181,8 @@ public record MachineRecipeDisplay(
                         requirement.io() == RecipeModifier.IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
                         requirement.type().id(), requirement, requirementAmount(requirement), requirementChance(requirement)))
-                .flatMap(entry -> JeiIngredientAdapterRegistry.get(entry.typeId())
-                        .map(adapter -> adapter.display(entry).stream())
+                .flatMap(entry -> JeiIngredientAdapterRegistry.display(entry)
+                        .map(Stream::of)
                         .orElseGet(() -> Stream.of(JeiIngredientAdapterRegistry.textEntry(entry))))
                 .toList();
     }
@@ -199,7 +199,9 @@ public record MachineRecipeDisplay(
     }
 
     private static float requirementChance(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) return item.chance();
+        if (requirement instanceof ItemRequirement item) {
+            return item.io() == RecipeModifier.IOType.INPUT ? item.consumeChance() : item.chance();
+        }
         if (requirement instanceof FluidRequirement fluid) return fluid.chance();
         return 1F;
     }

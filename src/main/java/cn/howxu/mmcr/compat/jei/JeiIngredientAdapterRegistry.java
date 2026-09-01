@@ -50,8 +50,14 @@ public final class JeiIngredientAdapterRegistry {
     }
 
     static JeiDisplayEntry textEntry(RecipeIoEntry entry) {
-        return new JeiDisplayEntry(entry.role(), null,
-                Component.literal(entry.typeId().toString()), boundedCount(entry.amount()), false);
+        return new JeiDisplayEntry(entry.role(), entry.typeId(), null,
+                Component.literal(entry.typeId().toString()), boundedCount(entry.amount()), entry.chance(), null, false);
+    }
+
+    static Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
+        return get(entry.typeId()).flatMap(adapter -> adapter.display(entry).map(display -> new JeiDisplayEntry(
+                display.role(), entry.typeId(), display.ingredientType(), display.ingredient(), display.count(),
+                entry.chance(), adapter.renderer(entry).orElse(null), display.transferable())));
     }
 
     private static int boundedCount(long amount) {
@@ -79,12 +85,12 @@ public final class JeiIngredientAdapterRegistry {
                 List<ItemStack> stacks = item.item().items()
                         .map(holder -> new ItemStack(holder.value()))
                         .toList();
-                return stacks.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), ingredientType(),
-                        stacks, boundedCount(entry.amount()), true));
+                return stacks.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
+                        stacks, boundedCount(entry.amount()), entry.chance(), null, true));
             }
             ItemStack stack = item.resolvedStack();
-            return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), ingredientType(),
-                    stack.copyWithCount(1), boundedCount(entry.amount()), false));
+            return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
+                    stack.copyWithCount(1), boundedCount(entry.amount()), entry.chance(), null, false));
         }
 
         @Override
@@ -113,8 +119,8 @@ public final class JeiIngredientAdapterRegistry {
             FluidStack stack = entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT
                     ? fluid.fluid().fluids().findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
                     : fluid.stack().copyWithAmount(1);
-            return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), ingredientType(),
-                    stack, boundedCount(entry.amount()), false));
+            return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
+                    stack, boundedCount(entry.amount()), entry.chance(), null, false));
         }
 
         @Override

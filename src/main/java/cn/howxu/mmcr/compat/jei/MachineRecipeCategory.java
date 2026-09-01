@@ -301,10 +301,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static Optional<JeiDisplayEntry> displayEntry(MachineRecipeDisplay recipe,
             MachineRecipeLayout.EntryPlan plan, boolean input) {
+        if (plan.displayEntry() != null) return Optional.of(plan.displayEntry());
         var type = switch (plan.kind()) {
             case ITEM -> VanillaTypes.ITEM_STACK;
             case FLUID -> NeoForgeTypes.FLUID_STACK;
-            case TEXT -> null;
+            case GENERIC, TEXT -> null;
         };
         return recipe.entries().stream()
                 .filter(entry -> entry.role() == (input ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT))
@@ -314,14 +315,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void addGeneric(IRecipeSlotBuilder slot, JeiDisplayEntry entry) {
+    static void addGeneric(IRecipeSlotBuilder slot, JeiDisplayEntry entry) {
         if (entry.isTextOnly()) {
             slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
             return;
         }
         String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK
                 ? itemQuantityText(entry.count()) : fluidQuantityText(entry.count());
-        setQuantityOverlay(slot, quantity);
+        if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
+            String chance = entry.role() == RecipeIngredientRole.INPUT
+                    ? inputOverlayText(entry.chance(), Minecraft.getInstance().getLanguageManager().getSelected())
+                    : outputOverlayText(entry.chance());
+            setItemOverlay(slot, chance, quantity);
+        } else {
+            setQuantityOverlay(slot, quantity);
+        }
+        if (entry.renderer() != null) {
+            slot.setCustomRenderer((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), entry.renderer());
+        }
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
             slot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER);
         }
@@ -482,7 +493,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     ItemStack stack = output.stack();
                     tooltip.add(overflowEntry(stack.getCount(), outputStackName(stack)));
                 }
-            } else {
+            } else if (entry.kind() == MachineRecipeLayout.Kind.FLUID) {
                 if (input) {
                     int amount = recipe.fluidInputAmounts().get(entry.index());
                     Component displayName = recipe.fluidInputs().get(entry.index()).fluids().stream()
@@ -494,6 +505,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     var fluidStack = recipe.fluidOutputs().get(entry.index());
                     tooltip.add(overflowEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
                 }
+            } else if (entry.displayEntry() != null) {
+                Object ingredient = entry.displayEntry().ingredient();
+                Component name = ingredient instanceof Component component
+                        ? component
+                        : Component.literal(String.valueOf(ingredient));
+                tooltip.add(overflowEntry(entry.displayEntry().count(), name));
             }
         }
     }

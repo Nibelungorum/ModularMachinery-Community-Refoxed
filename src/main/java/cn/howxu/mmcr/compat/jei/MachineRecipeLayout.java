@@ -117,11 +117,13 @@ public record MachineRecipeLayout(
                 .sorted(Comparator.comparingInt(MachineRecipeLayout::kindOrder))
                 .toList()) {
             if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
-                entries.add(new EntryPlan(Kind.ITEM, itemIndex++));
+                entries.add(new EntryPlan(Kind.ITEM, itemIndex++, entry));
             } else if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
-                entries.add(new EntryPlan(Kind.FLUID, fluidIndex++));
+                entries.add(new EntryPlan(Kind.FLUID, fluidIndex++, entry));
+            } else if (!entry.isTextOnly()) {
+                entries.add(new EntryPlan(Kind.GENERIC, textIndex++, entry));
             } else {
-                entries.add(new EntryPlan(Kind.TEXT, textIndex++));
+                entries.add(new EntryPlan(Kind.TEXT, textIndex++, entry));
             }
         }
 
@@ -144,6 +146,10 @@ public record MachineRecipeLayout(
                 : List.of();
         OverflowSlotPlan overflowSlot = overflowing ? overflowSlot(startX, rightAlign, maxVisible) : null;
         return new RegionPlan(List.copyOf(slots), overflowSlot, List.copyOf(hiddenEntries));
+    }
+
+    static RegionPlan regionForEntries(List<JeiDisplayEntry> entries, RecipeIngredientRole role, int guiScale) {
+        return region(entries, role, 12, false, guiScale);
     }
 
     private static int kindOrder(JeiDisplayEntry entry) {
@@ -189,9 +195,13 @@ public record MachineRecipeLayout(
                 + display.smartInterfaceOutputs().size());
     }
 
-    public enum Kind { ITEM, FLUID, TEXT }
+    public enum Kind { ITEM, FLUID, GENERIC, TEXT }
 
-    public record EntryPlan(Kind kind, int index) {}
+    public record EntryPlan(Kind kind, int index, @Nullable JeiDisplayEntry displayEntry) {
+        public EntryPlan(Kind kind, int index) {
+            this(kind, index, null);
+        }
+    }
 
     public record SlotPlan(EntryPlan entry, int x, int y) {}
 

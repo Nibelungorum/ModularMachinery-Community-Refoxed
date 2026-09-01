@@ -61,10 +61,25 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
         List<JeiDisplayEntry> inputs = recipe.entries().stream()
                 .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
                 .toList();
-        Optional<JeiDisplayEntry> unsupported = inputs.stream().filter(entry -> !entry.transferable()).findFirst();
+        for (JeiDisplayEntry entry : inputs) {
+            Optional<mezz.jei.api.recipe.transfer.IRecipeTransferHandler<?, ?>> adapterHandler = JeiIngredientAdapterRegistry
+                    .get(entry.typeId()).flatMap(JeiIngredientAdapter::transferHandler);
+            if (adapterHandler.isPresent()) {
+                @SuppressWarnings("rawtypes")
+                IRecipeTransferHandler handler = adapterHandler.get();
+                return handler.transferRecipe(container, recipe, recipeSlots, player, maxTransfer, doTransfer);
+            }
+        }
+        Optional<JeiDisplayEntry> unsupported = inputs.stream()
+                .filter(entry -> entry.ingredientType() != VanillaTypes.ITEM_STACK || !entry.transferable())
+                .findFirst();
         if (unsupported.isPresent()) {
-            return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.unsupported",
-                    unsupported.get().ingredientType() == null ? unsupported.get().ingredient() : unsupported.get().ingredientType()));
+            JeiDisplayEntry entry = unsupported.get();
+            RecipeIoEntry ioEntry = new RecipeIoEntry(entry.role(), entry.typeId(), entry.ingredient(), entry.count(), entry.chance());
+            Component error = JeiIngredientAdapterRegistry.get(entry.typeId())
+                    .map(adapter -> adapter.transferError(ioEntry))
+                    .orElseGet(() -> Component.translatable("jei.mmcr.transfer.unsupported", entry.typeId()));
+            return helper.createUserErrorWithTooltip(error);
         }
         List<JeiDisplayEntry> transferEntries = inputs.stream().filter(JeiDisplayEntry::transferable).toList();
         if (transferEntries.isEmpty()) {

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import mezz.jei.api.ingredients.IIngredientType;
+import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -18,6 +19,10 @@ public interface JeiIngredientAdapter {
     IIngredientType<?> ingredientType();
 
     Optional<JeiDisplayEntry> display(RecipeIoEntry entry);
+
+    default Optional<IIngredientRenderer<?>> renderer(RecipeIoEntry entry) {
+        return Optional.empty();
+    }
 
     Optional<IRecipeTransferHandler<?, ?>> transferHandler();
 

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * Runtime JEI reload bridge. Safe to call before JEI has initialized or when JEI is absent.
@@ -28,6 +29,7 @@ public final class JeiRuntimeReloader {
     private static volatile IJeiRuntime runtime;
     private static volatile long lastReloadedVersion = Long.MIN_VALUE;
     private static volatile long scheduledReloadVersion = Long.MIN_VALUE;
+    private static volatile Consumer<Runnable> clientExecutor = JeiRuntimeReloader::executeOnClient;
 
     private JeiRuntimeReloader() {
     }
@@ -55,6 +57,11 @@ public final class JeiRuntimeReloader {
         categoriesCaptured = false;
         lastReloadedVersion = Long.MIN_VALUE;
         scheduledReloadVersion = Long.MIN_VALUE;
+        clientExecutor = JeiRuntimeReloader::executeOnClient;
+    }
+
+    static void setClientExecutorForTesting(Consumer<Runnable> executor) {
+        clientExecutor = executor;
     }
 
     public static void reloadIfAvailable(RuntimeContentSnapshot snapshot) {
@@ -88,9 +95,15 @@ public final class JeiRuntimeReloader {
                 scheduledReloadVersion = Long.MIN_VALUE;
             }
         };
+        clientExecutor.accept(reload);
+    }
+
+    private static void executeOnClient(Runnable runnable) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null) reload.run();
-        else minecraft.execute(reload);
+        if (minecraft == null) {
+            throw new IllegalStateException("JEI reload requires the Minecraft client executor");
+        }
+        minecraft.execute(runnable);
     }
 
     private static Map<Identifier, List<MachineRecipeDisplay>> copyDisplays(
