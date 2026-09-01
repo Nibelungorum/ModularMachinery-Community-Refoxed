@@ -682,7 +682,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void active_runtime_loads_the_legacy_effective_execution_snapshot_alias() {
+    void active_runtime_rejects_the_legacy_effective_execution_snapshot_alias() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         AtomicInteger starts = new AtomicInteger();
@@ -711,14 +711,12 @@ class CraftingRuntimeTest {
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
                 RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
 
-        assertThat(restored.active()).isTrue();
-        assertThat(starts).hasValue(1);
-        assertThat(restored.totalTick()).isEqualTo(2);
-        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
     }
 
     @Test
-    void active_runtime_rejects_conflicting_effective_snapshot_aliases() {
+    void active_runtime_ignores_legacy_effective_snapshot_aliases() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("runtime_conflicting_effective_snapshot", 20, List.of());
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -734,9 +732,7 @@ class CraftingRuntimeTest {
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
 
-        assertThat(restored.active()).isFalse();
-        assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.active()).isTrue();
     }
 
     @Test

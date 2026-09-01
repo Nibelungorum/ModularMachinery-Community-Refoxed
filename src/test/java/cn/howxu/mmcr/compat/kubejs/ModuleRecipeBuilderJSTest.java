@@ -128,7 +128,7 @@ class ModuleRecipeBuilderJSTest {
         assertThat(recipe.priority()).isEqualTo(7);
         assertThat(recipe.maxThreads()).isEqualTo(3);
         assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
-                .hasSize(2);
+                .hasSize(3);
         assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT)
                 .anySatisfy(requirement -> assertThat(requirement)
                         .isInstanceOfSatisfying(EnergyRequirement.class, energy -> assertThat(energy.fePerTick()).isEqualTo(20)));

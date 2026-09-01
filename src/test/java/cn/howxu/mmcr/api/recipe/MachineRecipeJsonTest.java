@@ -83,13 +83,18 @@ class MachineRecipeJsonTest {
     }
 
     @Test
-    void retains_registered_custom_outputs_from_machine_outputs_json() {
+    void retains_registered_custom_outputs_from_outputs_json() {
         try (OutputRegistry.TestScope scope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(JsonOutput.TYPE);
             var json = recipeJson();
             var output = new JsonObject();
             output.addProperty("type", JsonOutput.TYPE.serializedId());
-            json.add("machine_outputs", array(output));
+            json.add("outputs", array(output));
+            var outputRequirement = new JsonObject();
+            outputRequirement.addProperty("type", "energy");
+            outputRequirement.addProperty("io", "output");
+            outputRequirement.addProperty("fe_per_tick", 7);
+            json.add("requirements", array(outputRequirement));
 
             var recipe = MachineRecipeJson.parse(id("custom_output"), json, registries);
 
@@ -250,8 +255,7 @@ class MachineRecipeJsonTest {
         assertThat(decoded.isParallelized()).isTrue();
         assertThat(decoded.allowPartialOutputs()).isTrue();
         assertThat(decoded.requiredHostIds()).containsExactly(id("factory_controller"));
-        assertThat(decoded.requirements()).containsExactlyElementsOf(recipe.requirements());
-        assertThat(decoded.machineOutputs()).isEmpty();
+        assertThat(decoded.machineOutputs()).hasSize(2);
         assertThat(decoded.modifiers()).as("modifiers").isEqualTo(recipe.modifiers());
         assertThat(decoded.levelRequirements()).as("level requirements").isEqualTo(recipe.levelRequirements());
         assertThat(decoded.requiredHostIds()).as("required host ids").isEqualTo(recipe.requiredHostIds());

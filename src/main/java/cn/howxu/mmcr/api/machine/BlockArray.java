@@ -169,6 +169,10 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
             return this;
         }
 
+        public boolean containsSymbol(char symbol) {
+            return slices.stream().flatMap(List::stream).anyMatch(row -> row.indexOf(symbol) >= 0);
+        }
+
         public Builder set(char symbol, BlockPredicate predicate) {
             if (symbol == ' ') {
                 throw new IllegalArgumentException("Use clear() or a dedicated air predicate for air, ' ' is reserved as default skip");

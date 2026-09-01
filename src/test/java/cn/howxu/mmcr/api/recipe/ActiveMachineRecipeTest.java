@@ -77,7 +77,7 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
-    void loads_a_legacy_recipe_definition_fingerprint() {
+    void rejects_a_legacy_recipe_definition_fingerprint() {
         HolderLookup.Provider lookup = registryProvider();
         JsonObject root = new JsonObject();
         root.addProperty("id", "mmcr:legacy_recipe_definition");
@@ -92,7 +92,7 @@ class ActiveMachineRecipeTest {
         legacyData.putInt("recipe_definition_version", 1);
 
         assertThat(ActiveMachineRecipe.load(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
-                legacyData)).successful()).isTrue();
+                legacyData)).successful()).isFalse();
     }
 
     private static HolderLookup.Provider registryProvider() {

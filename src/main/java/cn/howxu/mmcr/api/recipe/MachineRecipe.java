@@ -157,8 +157,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public static MachineRecipe fromCanonical(Identifier id,
-                                       Identifier machineId,
-                                       int tickTime,
+                                        Identifier machineId,
+                                        int tickTime,
                                        List<MachineRequirement> requirements,
                                        List<MachineOutput> outputs,
                                        List<RecipeModifier> modifiers,
@@ -166,11 +166,20 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                        int maxThreads,
                                        boolean cancelRecipeOnPerTickFailure,
                                        boolean parallelized,
-                                       List<LevelRequirement> levelRequirements,
-                                       boolean allowPartialOutputs,
-                                       Set<Identifier> requiredHostIds) {
-        return new MachineRecipe(id, machineId, tickTime, requirements, outputs, modifiers, priority, maxThreads,
+                                        List<LevelRequirement> levelRequirements,
+                                        boolean allowPartialOutputs,
+                                        Set<Identifier> requiredHostIds) {
+        List<MachineOutput> effectiveOutputs = appendOutputs(outputs, outputsFromRequirements(requirements));
+        return new MachineRecipe(id, machineId, tickTime, requirements, effectiveOutputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, levelRequirements, allowPartialOutputs, requiredHostIds);
+    }
+
+    private static List<MachineOutput> outputsFromRequirements(List<MachineRequirement> requirements) {
+        if (requirements == null || requirements.isEmpty()) return List.of();
+        return requirements.stream()
+                .map(OutputRegistry::fromRequirement)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private static MachineRecipe create(Identifier id,

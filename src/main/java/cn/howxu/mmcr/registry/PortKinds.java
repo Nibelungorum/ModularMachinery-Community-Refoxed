@@ -29,11 +29,14 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class PortKinds {
@@ -263,12 +266,44 @@ public final class PortKinds {
             this.definition = definition;
             if (id == null) throw new IllegalArgumentException("id null");
             if (ioType == null) throw new IllegalArgumentException("ioType null");
-            if (families == null || families.size() != 2) {
-                throw new IllegalArgumentException("combined kind must have exactly two families");
-            }
+            if (families == null || families.isEmpty()) throw new IllegalArgumentException("combined kind families empty");
             if (entityFactory == null) throw new IllegalArgumentException("entityFactory null");
             if (definition == null) throw new IllegalArgumentException("definition null");
-            this.families = List.copyOf(families);
+            List<PortFamilyDescriptor> copiedFamilies = List.copyOf(families);
+            Set<Identifier> familyIds = new HashSet<>();
+            for (PortFamilyDescriptor family : copiedFamilies) {
+                if (family.ioType() != ioType) {
+                    throw new IllegalArgumentException("combined kind families must use the kind IO direction");
+                }
+                if (!familyIds.add(family.familyId())) {
+                    throw new IllegalArgumentException("duplicate combined kind family: " + family.familyId());
+                }
+                if (family.familyId().equals(PortFamilyIds.ENERGY)) {
+                    throw new IllegalArgumentException("combined kind cannot expose the energy family");
+                }
+            }
+            Set<Identifier> builtInFamilies = Set.of(
+                    PortFamilyIds.ITEM, PortFamilyIds.FLUID, PortFamilyIds.ENERGY);
+            if (familyIds.stream().anyMatch(builtInFamilies::contains)
+                    && !familyIds.equals(Set.of(PortFamilyIds.ITEM, PortFamilyIds.FLUID))) {
+                throw new IllegalArgumentException("combined kind must expose exactly item and fluid families");
+            }
+            if (definition.bindings().size() != copiedFamilies.size()) {
+                throw new IllegalArgumentException("combined kind family and binding counts must match");
+            }
+            Set<Identifier> bindingIds = new HashSet<>();
+            definition.bindings().forEach(binding -> {
+                if (binding.ioType() != ioType) {
+                    throw new IllegalArgumentException("combined kind bindings must use the kind IO direction");
+                }
+                if (!familyIds.contains(binding.type().id()) || !bindingIds.add(binding.type().id())) {
+                    throw new IllegalArgumentException("combined kind binding does not match its families");
+                }
+            });
+            if (!bindingIds.equals(familyIds)) {
+                throw new IllegalArgumentException("combined kind bindings must match its families");
+            }
+            this.families = copiedFamilies;
         }
     }
 

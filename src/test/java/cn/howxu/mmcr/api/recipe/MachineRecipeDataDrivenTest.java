@@ -345,6 +345,7 @@ class MachineRecipeDataDrivenTest {
         json.addProperty("type", "mmcr:machine_recipe");
         json.addProperty("machine", "mmcr:test_machine_name");
         json.addProperty("tick_time", 20);
+        json.add("requirements", new JsonArray());
         return json;
     }
 

@@ -258,12 +258,12 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     private static String recipeJson() {
-        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\",\"tick_time\":20}";
+        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\",\"tick_time\":20,\"requirements\":[]}";
     }
 
     private static String invalidOutputRecipeJson() {
         return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\","
-                + "\"tick_time\":20,\"outputs\":[{\"type\":\"" + INVALID_OUTPUT_ID + "\"}]}";
+                + "\"tick_time\":20,\"requirements\":[],\"outputs\":[{\"type\":\"" + INVALID_OUTPUT_ID + "\"}]}";
     }
 
     private static MachineRecipe recipe() {

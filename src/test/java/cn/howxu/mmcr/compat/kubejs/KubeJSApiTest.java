@@ -359,18 +359,11 @@ class KubeJSApiTest {
     }
 
     @Test
-    void pattern_and_slice_pattern_apis_cannot_be_mixed() {
+    void pattern_rejects_binding_a_symbol_absent_from_the_pattern() {
         assertThatThrownBy(() -> new MachineStructureBuilderJS("test:legacy_then_slice")
                 .pattern("B")
                 .set("B", api.block("minecraft:bricks"))
                 .set("X", api.block("minecraft:stone")))
-                .isInstanceOf(IllegalStateException.class);
-
-        var builder = new MachineStructureBuilderJS("test:slice_then_legacy")
-                .pattern(List.of("C"))
-                .set("C", api.block("minecraft:blast_furnace"));
-
-        assertThatThrownBy(() -> builder.pattern("B"))
                 .isInstanceOf(IllegalStateException.class);
     }
 

@@ -88,18 +88,17 @@ class MachineRecipeSchemaTest {
     }
 
     @Test
-    void schema_preserves_raw_requirements_and_level_requirements_for_custom_recipes() {
+    void schema_requires_raw_requirements_and_preserves_level_requirements_for_custom_recipes() {
         assertThat(MachineRecipeSchema.SCHEMA.keys).contains(
                 MachineRecipeSchema.REQUIREMENTS, MachineRecipeSchema.LEVEL_REQUIREMENTS);
-        assertThat(MachineRecipeSchema.SCHEMA.includedKeys).doesNotContain(
-                MachineRecipeSchema.REQUIREMENTS, MachineRecipeSchema.LEVEL_REQUIREMENTS);
-        assertThat(MachineRecipeSchema.REQUIREMENTS.excluded).isTrue();
+        assertThat(MachineRecipeSchema.SCHEMA.includedKeys).contains(MachineRecipeSchema.REQUIREMENTS);
+        assertThat(MachineRecipeSchema.REQUIREMENTS.excluded).isFalse();
         assertThat(MachineRecipeSchema.LEVEL_REQUIREMENTS.excluded).isTrue();
     }
 
     @Test
     void schema_allows_empty_recipe_lists() {
-        assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.INPUTS.component).allowEmpty()).isTrue();
+        assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.REQUIREMENTS.component).allowEmpty()).isTrue();
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.OUTPUTS.component).allowEmpty()).isTrue();
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.MODIFIERS.component).allowEmpty()).isTrue();
     }
@@ -280,7 +279,7 @@ class MachineRecipeSchemaTest {
                 schemaRecipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(input);
         assertThat(schemaRecipe.json.getAsJsonArray("requirements")).hasSize(1);
         assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
-                schemaRecipe.json.getAsJsonArray("machine_outputs").get(0)).getOrThrow())
+                schemaRecipe.json.getAsJsonArray("outputs").get(0)).getOrThrow())
                 .isInstanceOfSatisfying(MachineOutput.ItemOutput.class, parsed ->
                         assertThat(ItemStack.isSameItemSameComponents(parsed.stack(), output.stack())).isTrue());
         assertThat(builder.requirements).containsExactly(input);
@@ -313,7 +312,7 @@ class MachineRecipeSchemaTest {
             assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                     recipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(requirement);
             assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
-                    recipe.json.getAsJsonArray("machine_outputs").get(0)).getOrThrow()).isEqualTo(output);
+                    recipe.json.getAsJsonArray("outputs").get(0)).getOrThrow()).isEqualTo(output);
             assertThat(builder.requirements).containsExactly(requirement);
             assertThat(builder.customOutputs).containsExactly(output);
         }

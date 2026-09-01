@@ -49,13 +49,6 @@ public final class MachineRecipeSchema {
     public static final RecipeKey<Integer> TICK_TIME =
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "tick_time", ComponentRole.OTHER);
 
-    public static final RecipeKey<List<JsonElement>> INPUTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "inputs", ComponentRole.INPUT)
-                    .optional(List.of()).exclude();
-
-    public static final RecipeKey<Integer> ENERGY_PER_TICK =
-            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "energy_per_tick", ComponentRole.OTHER).optional(0);
-
     public static final RecipeKey<List<JsonElement>> OUTPUTS =
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "outputs", ComponentRole.OUTPUT)
                     .optional(List.of()).exclude();
@@ -65,8 +58,7 @@ public final class MachineRecipeSchema {
                     .optional(List.of()).exclude();
 
     public static final RecipeKey<List<JsonElement>> REQUIREMENTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "requirements", ComponentRole.OTHER)
-                    .optional(List.of()).exclude();
+            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "requirements", ComponentRole.OTHER);
 
     public static final RecipeKey<List<JsonElement>> LEVEL_REQUIREMENTS =
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "level_requirements", ComponentRole.OTHER)
@@ -84,8 +76,9 @@ public final class MachineRecipeSchema {
     public static final RecipeKey<Boolean> ALLOW_PARTIAL_OUTPUTS =
             new RecipeKey<>(BooleanComponent.BOOLEAN, "allow_partial_outputs", ComponentRole.OTHER).optional(false);
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, INPUTS, ENERGY_PER_TICK, OUTPUTS,
-            MODIFIERS, REQUIREMENTS, LEVEL_REQUIREMENTS, MAX_THREADS, PARALLELIZED, CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
+    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, REQUIREMENTS, OUTPUTS, MODIFIERS,
+            LEVEL_REQUIREMENTS, MAX_THREADS, PARALLELIZED,
+            CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
             .factory(MachineRecipeFactory.INSTANCE)
             .function(new RecipeFunctionInstance("allowPartialOutputs", List.of(),
                     new ResolvedRecipeSchemaFunction() {
@@ -226,10 +219,10 @@ public final class MachineRecipeSchema {
     }
 
     private static void appendOutput(KubeRecipe recipe, cn.howxu.mmcr.api.recipe.MachineOutput output) {
-        JsonArray outputs = recipe.json.getAsJsonArray("machine_outputs");
+        JsonArray outputs = recipe.json.getAsJsonArray("outputs");
         if (outputs == null) {
             outputs = new JsonArray();
-            recipe.json.add("machine_outputs", outputs);
+            recipe.json.add("outputs", outputs);
         }
         outputs.add(cn.howxu.mmcr.api.recipe.MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow());
         recipe.save();

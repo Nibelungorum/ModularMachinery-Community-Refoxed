@@ -66,6 +66,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS pattern(String... rows) {
+        selectTopLevelStructureApi();
         sliceBuilder.pattern(rows);
         slicePatternPending = true;
         return this;
@@ -87,10 +88,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS set(String symbol, Object value) {
+        selectTopLevelStructureApi();
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
         }
         char key = symbol.charAt(0);
+        if (!sliceBuilder.containsSymbol(key)) {
+            throw new IllegalStateException("Pattern symbol is absent from the current pattern: " + key);
+        }
         PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(key, entry.base());
         if (value instanceof LevelSlot levelSlot) {
@@ -100,6 +105,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS modifier(String symbol, ModifierUse use) {
+        selectTopLevelStructureApi();
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
         }
@@ -109,6 +115,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS controller(String symbol) {
+        selectTopLevelStructureApi();
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A controller symbol must be exactly one non-space character");
         }
@@ -141,7 +148,11 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         MachineStructureRequirements combinedRequirements = MachineStructureRequirements.merge(
                 this.requirements, explicitRequirements, 0);
         this.requirements = combinedRequirements;
-        return fullStructure(pattern, ports, tiers, dynamicPatterns, combinedRequirements);
+        declarations.add(new Declaration(Declaration.Kind.FULL, pattern, ports, tiers, dynamicPatterns,
+                combinedRequirements, stateSensitive));
+        patternMetadataPending = false;
+        classMetadataChanged = false;
+        return this;
     }
 
     public MachineStructureBuilderJS fullStructure(BlockArray pattern) {
@@ -153,6 +164,8 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {
         selectTopLevelStructureApi();
+        syncSlicePattern();
+        appendPendingPatternDeclaration();
         applyPendingPatternMetadata();
         BlockArray fullPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.FULL, fullPattern, ports, tiers,
@@ -195,8 +208,10 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public MachineStructureBuilderJS extension(BlockArray pattern, PortRequirementSpec ports,
             PortTierRequirementSpec tiers, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements) {
-        if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
         selectTopLevelStructureApi();
+        syncSlicePattern();
+        appendPendingPatternDeclaration();
+        if (declarations.isEmpty()) throw new IllegalStateException("extension requires a full structure first");
         applyPendingPatternMetadata();
         BlockArray extensionPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.EXTENSION, extensionPattern, ports, tiers,
@@ -320,6 +335,14 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         Declaration first = declarations.getFirst();
         declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
                 dynamicPatterns, requirements));
+        classMetadataChanged = false;
+    }
+
+    private void appendPendingPatternDeclaration() {
+        if (!patternMetadataPending || !declarations.isEmpty()) return;
+        declarations.add(new Declaration(Declaration.Kind.FULL, pattern, portRequirements,
+                portTierRequirements, dynamicPatterns, requirements, stateSensitive));
+        patternMetadataPending = false;
         classMetadataChanged = false;
     }
 

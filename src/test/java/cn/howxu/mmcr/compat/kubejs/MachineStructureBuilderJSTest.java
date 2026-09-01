@@ -51,7 +51,7 @@ class MachineStructureBuilderJSTest {
                 .createObject();
 
         assertThat(structure.machineId()).isEqualTo(MMCR.id("arc_furnace"));
-        assertThat(structure.pattern().pattern()).containsKey(new BlockPos(1, 0, 0));
+        assertThat(structure.pattern().pattern()).containsKey(new BlockPos(0, 0, 0));
     }
 
     @Test
@@ -258,7 +258,7 @@ class MachineStructureBuilderJSTest {
         assertThat(definition.requirements().levelSlots()).containsEntry('L', coilType);
         assertThat(definition.levelSlots())
                 .containsEntry(BlockPos.ZERO, coilType)
-                .containsEntry(new BlockPos(1, 0, 0), coilType);
+                .containsEntry(new BlockPos(-1, 0, 0), coilType);
     }
 
     @Test

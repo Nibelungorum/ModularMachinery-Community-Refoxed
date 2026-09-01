@@ -135,6 +135,9 @@ class MachineRecipeTest {
         components.add("minecraft:enchantments", enchantments);
         output.add("components", components);
         root.add("outputs", itemOutputs(output));
+        var outputRequirementJson = itemOutputRequirement("minecraft:diamond_sword", 1);
+        outputRequirementJson.add("stack", output.deepCopy());
+        root.add("requirements", requirements(outputRequirementJson));
 
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
 
@@ -157,6 +160,9 @@ class MachineRecipeTest {
         components.add("minecraft:enchantments", enchantments);
         output.add("components", components);
         root.add("outputs", itemOutputs(output));
+        var outputRequirementJson = itemOutputRequirement("minecraft:diamond_sword", 1);
+        outputRequirementJson.add("stack", output.deepCopy());
+        root.add("requirements", requirements(outputRequirementJson));
 
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
 
@@ -519,8 +525,18 @@ class MachineRecipeTest {
         var back = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
 
         assertThat(encoded.get("tick_time").getAsInt()).isEqualTo(100);
-        assertThat(back.requirements()).containsExactlyElementsOf(recipe.requirements());
-        assertThat(back.runtimeMachineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+        assertThat(back.requirements()).hasSize(2);
+        assertThat(back.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .singleElement().isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
+                    assertThat(requirement.count()).isEqualTo(2);
+                    assertThat(requirement.item().test(Items.IRON_INGOT.getDefaultInstance())).isTrue();
+                });
+        assertThat(back.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT)
+                .singleElement().isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
+                    assertThat(requirement.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+                    assertThat(requirement.stack().getCount()).isEqualTo(1);
+                });
+        assertThat(back.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
                 output -> assertThat(output.stack().getCount()).isEqualTo(1));
         assertThat(((ItemRequirement) back.runtimeRequirements().get(0)).count()).isEqualTo(6);
         assertThat(((ItemRequirement) back.runtimeRequirements().get(1)).stack().getCount()).isEqualTo(4);

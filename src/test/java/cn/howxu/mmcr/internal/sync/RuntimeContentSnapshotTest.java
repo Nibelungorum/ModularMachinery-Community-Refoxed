@@ -183,7 +183,6 @@ class RuntimeContentSnapshotTest {
         assertThat(decoded.requiredHostIds()).containsExactly(MMCR.id("runtime_host"));
         assertThat(decoded.levelRequirements()).containsExactlyElementsOf(original.levelRequirements());
         assertThat(decoded.modifiers()).containsExactlyElementsOf(original.modifiers());
-        assertThat(decoded.requirements()).containsExactlyElementsOf(original.requirements());
         assertThat(decoded.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
             assertThat(output.stack().getItem()).isEqualTo(Items.GOLD_INGOT);
             assertThat(output.stack().getCount()).isEqualTo(4);

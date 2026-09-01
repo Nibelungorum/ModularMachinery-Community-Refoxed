@@ -56,7 +56,8 @@ public class E2ERecipeRunGameTest {
                 Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor_recipe"), machineId, 40,
                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                 Ingredient.of(Items.IRON_INGOT), 2)),
-                        MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(80))),
+                        MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(80)),
+                        MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), -100, 1,
                 false, false, List.of(), false, Set.of()));
 
@@ -104,7 +105,8 @@ public class E2ERecipeRunGameTest {
                 Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor_recipe"), machineId, 20,
                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                 Ingredient.of(Items.IRON_INGOT), 1)),
-                        MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(50))),
+                        MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(50)),
+                        MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), 0, 1,
                 false, false, List.of(), false, Set.of()));
 
