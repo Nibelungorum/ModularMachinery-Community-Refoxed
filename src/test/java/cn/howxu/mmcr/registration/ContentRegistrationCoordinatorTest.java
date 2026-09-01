@@ -212,9 +212,9 @@ class ContentRegistrationCoordinatorTest {
         Identifier existingMachineId = id("atomic_existing_machine");
         Identifier existingRecipeId = id("atomic_existing_recipe");
         MachineDefinition existingMachine = MachineBuilder.machine(existingMachineId).build();
-        MachineDefinitions.register(cn.howxu.mmcr.internal.api.PublicMachineAdapter.toStartupRegistration(
+        MachineDefinitions.register(cn.howxu.mmcr.internal.registration.MachineDefinitionConverter.toStartupRegistration(
                 existingMachine, null));
-        RecipeRegistry.registerStatic(cn.howxu.mmcr.internal.api.PublicRecipeAdapter.toRecipe(
+        RecipeRegistry.registerStatic(cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toRecipe(
                 MachineRecipeBuilder.recipe(existingRecipeId, existingMachineId).duration(1).build(),
                 new MMCRMachineStructuresEvent.Snapshot(java.util.Map.of(), java.util.Map.of(),
                         java.util.Map.of(), java.util.Map.of())));

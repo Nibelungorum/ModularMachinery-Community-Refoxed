@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -39,7 +40,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void layoutPlansFluidThenItemInputsAcrossThreeColumns() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_layout"),
                 MMCR.id("blast_furnace"),
                 100,
@@ -78,7 +79,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void inputOverflowUsesLastSlotAsEllipsis() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_layout_wrap"),
                 MMCR.id("large_machine"),
                 200,
@@ -108,7 +109,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void inputOverflowSlotIsOnlyVisualSoJeiFallsBackToCategoryTooltip() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_layout_input_overflow_tooltip"),
                 MMCR.id("large_machine"),
                 200,
@@ -132,7 +133,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void outputOverflowDoesNotChangeInputPlan() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_layout_output_overflow"),
                 MMCR.id("large_machine"),
                 200,
@@ -171,7 +172,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void outputsAreRightAlignedWithinEachRow() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_layout_right_aligned_outputs"),
                 MMCR.id("blast_furnace"),
                 100,
@@ -204,7 +205,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void emptyInputAndOutputRegionsReserveTextSpaceWithoutSlots() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_layout_empty"), MMCR.id("blast_furnace"), 100,
                 List.of(), List.of(), List.of(), 0, 1, true, List.of());
 
@@ -217,7 +218,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void levelRequirementRowsFollowTheEnergyRows() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_level_layout"), MMCR.id("blast_furnace"), 100,
                 List.of(new MachineIngredient.EnergyIngredient(40)), List.of(), List.of(), 0, 1,
                 false, List.of());
@@ -229,7 +230,7 @@ class MachineRecipeLayoutTest {
 
     @Test
     void metadataRowsReserveHostRequirementAfterEnergyRowsAndStayInsideRecipeHeight() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_host_layout"), MMCR.id("hosted_module"), 100,
                 IntStream.range(0, 22)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
@@ -246,14 +247,14 @@ class MachineRecipeLayoutTest {
 
     @Test
     void hostRequirementFollowsEnergyOutputRows() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_host_after_energy"), MMCR.id("hosted_module"), 100,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
-                List.<MachineRequirement>of(
-                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 40),
-                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 80),
-                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 120)),
-                false, List.of(), false, Set.of(MMCR.id("host_a")), false);
+                 List.<MachineRequirement>of(
+                         new EnergyRequirement(RecipeModifier.IOType.INPUT, 40),
+                         new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 80),
+                         new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 120)),
+                 false, List.of(), false, Set.of(MMCR.id("host_a")));
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
 

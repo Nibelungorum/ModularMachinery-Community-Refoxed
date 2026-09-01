@@ -3,6 +3,8 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.component.DataComponents;
@@ -17,6 +19,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -30,12 +33,13 @@ public class TagComponentIngredientGameTest {
                 DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Validated' } }
                         """)).getOrThrow(), 1F);
-        var recipe = new MachineRecipe(Identifier.parse("mmcr:tag_component_input"),
-                MMCR.id("iron_compressor"), 20, List.of(ingredient), List.of());
+        var recipe = MachineRecipe.fromCanonical(Identifier.parse("mmcr:tag_component_input"),
+                MMCR.id("iron_compressor"), 20, List.of(MachineRequirement.fromInput(ingredient)), List.of(),
+                List.of(), 0, 1, false, false, List.of(), false, Set.of());
         var ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         var decoded = MachineRecipe.CODEC.codec().parse(ops,
                 MachineRecipe.CODEC.codec().encodeStart(ops, recipe).getOrThrow()).getOrThrow();
-        var input = (MachineIngredient.ItemIngredient) decoded.inputs().getFirst();
+        var input = (ItemRequirement) decoded.requirements().getFirst();
         var matchingLog = new ItemStack(Items.OAK_LOG);
         matchingLog.set(DataComponents.CUSTOM_NAME, Component.literal("Validated"));
         var unnamedLog = new ItemStack(Items.OAK_LOG);

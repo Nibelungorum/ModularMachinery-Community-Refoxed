@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -54,7 +55,7 @@ class MachineRecipeJsonTest {
     @Test
     void parsesBasicMachineRecipeJson() {
         var json = recipeJson();
-        json.add("inputs", array(itemInput("minecraft:iron_ingot", 2)));
+        json.add("requirements", array(itemRequirement("input", "minecraft:iron_ingot", 2)));
         json.add("outputs", array(itemOutput("minecraft:iron_block", 1)));
 
         var recipe = MachineRecipeJson.parse(id("basic"), json, registries);
@@ -62,11 +63,11 @@ class MachineRecipeJsonTest {
         assertThat(recipe.id()).isEqualTo(id("basic"));
         assertThat(recipe.machineId()).isEqualTo(id("test_cube"));
         assertThat(recipe.tickTime()).isEqualTo(20);
-        assertThat(recipe.inputs()).singleElement().isInstanceOfSatisfying(MachineIngredient.ItemIngredient.class,
+        assertThat(recipe.requirements()).singleElement().isInstanceOfSatisfying(ItemRequirement.class,
                 input -> assertThat(input.count()).isEqualTo(2));
-        assertThat(recipe.outputs()).singleElement().satisfies(machineOutput -> {
-            assertThat(machineOutput.getItem()).isEqualTo(Items.IRON_BLOCK);
-            assertThat(machineOutput.getCount()).isEqualTo(1);
+        assertThat(recipe.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getItem()).isEqualTo(Items.IRON_BLOCK);
+            assertThat(output.stack().getCount()).isEqualTo(1);
         });
     }
 
@@ -74,7 +75,7 @@ class MachineRecipeJsonTest {
     void appliesSchemaDefaultsWhenOptionalFieldsAreMissing() {
         var recipe = MachineRecipeJson.parse(id("defaults"), recipeJson(), registries);
 
-        assertThat(recipe.inputs()).isEmpty();
+        assertThat(recipe.requirements()).isEmpty();
         assertThat(recipe.maxThreads()).isEqualTo(1);
         assertThat(recipe.isParallelized()).isFalse();
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isFalse();
@@ -115,15 +116,10 @@ class MachineRecipeJsonTest {
     @Test
     void parsesComplexInputsOutputsModifiersAndRequirements() {
         var json = recipeJson();
-        var input = itemInput("minecraft:iron_ingot", 2);
+        var input = itemRequirement("input", "minecraft:iron_ingot", 2);
         input.add("components", componentJson());
         input.addProperty("consume_chance", 0.5F);
-        input.add("item", arrayValue("minecraft:iron_ingot"));
-        json.add("inputs", array(input));
         var output = itemOutput("minecraft:iron_block", 1);
-        json.add("outputs", array(output));
-        json.addProperty("energy_per_tick", 80);
-        json.add("fluid_outputs", array(fluidStack("minecraft:water", 1000)));
         var modifier = new JsonObject();
         modifier.addProperty("target", "minecraft:iron_ingot");
         modifier.addProperty("io", "input");
@@ -154,16 +150,22 @@ class MachineRecipeJsonTest {
         fluidRequirement.addProperty("chance", 0.75F);
         requirements.add(fluidRequirement);
         json.add("requirements", requirements);
+        json.add("outputs", array(output, fluidOutput("minecraft:water", 1000, 0.75F)));
 
         var recipe = MachineRecipeJson.parse(id("complex"), json, registries);
 
-        assertThat(recipe.inputs()).hasSize(2);
-        assertThat(recipe.inputs().getLast()).isEqualTo(new MachineIngredient.EnergyIngredient(80));
-        assertThat(recipe.outputs()).singleElement().satisfies(machineOutput -> {
-            assertThat(machineOutput.getItem()).isEqualTo(Items.IRON_BLOCK);
-            assertThat(machineOutput.getCount()).isEqualTo(1);
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(2);
+        assertThat(recipe.requirements()).filteredOn(EnergyRequirement.class::isInstance).singleElement()
+                .isInstanceOfSatisfying(EnergyRequirement.class, energy -> assertThat(energy.fePerTick()).isEqualTo(80));
+        assertThat(recipe.machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
+                .isInstanceOfSatisfying(MachineOutput.ItemOutput.class, outputValue -> {
+            assertThat(outputValue.stack().getItem()).isEqualTo(Items.IRON_BLOCK);
+            assertThat(outputValue.stack().getCount()).isEqualTo(1);
         });
-        assertThat(recipe.fluidOutputs()).singleElement().satisfies(fluid -> assertThat(fluid.getAmount()).isEqualTo(1000));
+        assertThat(recipe.machineOutputs()).filteredOn(MachineOutput.FluidOutput.class::isInstance).singleElement()
+                .isInstanceOfSatisfying(MachineOutput.FluidOutput.class,
+                        fluid -> assertThat(fluid.stack().getAmount()).isEqualTo(1000));
         assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof FluidRequirement fluid
                 && fluid.chance() == 0.75F);
         assertThat(recipe.modifiers()).singleElement().satisfies(modifierValue -> {
@@ -194,7 +196,7 @@ class MachineRecipeJsonTest {
 
     @Test
     void machine_recipe_codec_round_trips_all_active_plan_requirements() {
-        var recipe = new MachineRecipe(id("codec_complete"), id("test_cube"), 40,
+        var recipe = RecipeTestSupport.create(id("codec_complete"), id("test_cube"), 40,
                 List.of(new MachineIngredient.ItemIngredient(
                                 net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2),
                         new MachineIngredient.FluidIngredient(
@@ -233,10 +235,10 @@ class MachineRecipeJsonTest {
                 && item.stack().is(Items.IRON_NUGGET) && item.stack().getCount() == 3);
         assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof FluidRequirement fluid
                 && fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.stack().getAmount() == 500);
-        assertThat(decoded.outputs()).singleElement().satisfies(output ->
-                assertThat(output.getCount()).isEqualTo(3));
-        assertThat(decoded.fluidOutputs()).singleElement().satisfies(output ->
-                assertThat(output.getAmount()).isEqualTo(500));
+        assertThat(decoded.machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
+                .satisfies(output -> assertThat(((MachineOutput.ItemOutput) output).stack().getCount()).isEqualTo(3));
+        assertThat(decoded.machineOutputs()).filteredOn(MachineOutput.FluidOutput.class::isInstance).singleElement()
+                .satisfies(output -> assertThat(((MachineOutput.FluidOutput) output).stack().getAmount()).isEqualTo(500));
         assertThat(decoded.modifiers()).singleElement().satisfies(modifier -> {
             assertThat(modifier.getTarget()).isEqualTo("item");
             assertThat(modifier.getModifier()).isEqualTo(1.5F);
@@ -248,11 +250,8 @@ class MachineRecipeJsonTest {
         assertThat(decoded.isParallelized()).isTrue();
         assertThat(decoded.allowPartialOutputs()).isTrue();
         assertThat(decoded.requiredHostIds()).containsExactly(id("factory_controller"));
-        assertThat(decoded.inputs()).hasSize(recipe.inputs().size());
-        assertThat(decoded.outputs()).singleElement().satisfies(output -> {
-            assertThat(output.is(Items.IRON_NUGGET)).isTrue();
-            assertThat(output.getCount()).isEqualTo(3);
-        });
+        assertThat(decoded.requirements()).containsExactlyElementsOf(recipe.requirements());
+        assertThat(decoded.machineOutputs()).isEmpty();
         assertThat(decoded.modifiers()).as("modifiers").isEqualTo(recipe.modifiers());
         assertThat(decoded.levelRequirements()).as("level requirements").isEqualTo(recipe.levelRequirements());
         assertThat(decoded.requiredHostIds()).as("required host ids").isEqualTo(recipe.requiredHostIds());
@@ -279,7 +278,7 @@ class MachineRecipeJsonTest {
     }
 
     @Test
-    void rejectsInvalidTickTimeAndMalformedIngredient() {
+    void rejectsInvalidTickTimeAndMalformedCanonicalPayload() {
         var invalidTick = recipeJson();
         invalidTick.addProperty("tick_time", 0);
         assertThatThrownBy(() -> MachineRecipeJson.parse(id("bad_tick"), invalidTick, registries))
@@ -297,21 +296,21 @@ class MachineRecipeJsonTest {
                     assertThat(error.getCause()).isNotNull();
                 });
 
-        var overflowingEnergy = recipeJson();
-        overflowingEnergy.addProperty("energy_per_tick", 2147483648L);
-        assertThatThrownBy(() -> MachineRecipeJson.parse(id("overflowing_energy"), overflowingEnergy, registries))
+        var overflowingPriority = recipeJson();
+        overflowingPriority.addProperty("priority", 2147483648L);
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("overflowing_priority"), overflowingPriority, registries))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(id("overflowing_energy"));
-                    assertThat(error.path()).isEqualTo("energy_per_tick");
+                    assertThat(error.recipeId()).isEqualTo(id("overflowing_priority"));
+                    assertThat(error.path()).isEqualTo("priority");
                     assertThat(error.getCause()).isNotNull();
                 });
 
         var malformed = recipeJson();
-        malformed.add("inputs", array(new JsonObject()));
-        assertThatThrownBy(() -> MachineRecipeJson.parse(id("bad_input"), malformed, registries))
+        malformed.add("requirements", array(new JsonObject()));
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("bad_requirement"), malformed, registries))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(id("bad_input"));
-                    assertThat(error.path()).isEqualTo("inputs[0]");
+                    assertThat(error.recipeId()).isEqualTo(id("bad_requirement"));
+                    assertThat(error.path()).isEqualTo("requirements[0]");
                     assertThat(error.getCause()).isNotNull();
                 });
 
@@ -319,11 +318,11 @@ class MachineRecipeJsonTest {
         primitive.addProperty("type", "mmcr:machine_recipe");
         primitive.addProperty("machine", "mmcr:test_cube");
         primitive.addProperty("tick_time", 20);
-        primitive.addProperty("inputs", "not-an-array");
+        primitive.addProperty("requirements", "not-an-array");
         assertThatThrownBy(() -> MachineRecipeJson.parse(id("primitive"), primitive, registries))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
                     assertThat(error.recipeId()).isEqualTo(id("primitive"));
-                    assertThat(error.path()).isEqualTo("inputs");
+                    assertThat(error.path()).isEqualTo("requirements");
                     assertThat(error.getCause()).isNotNull();
                 });
 
@@ -339,6 +338,7 @@ class MachineRecipeJsonTest {
         json.addProperty("type", "mmcr:machine_recipe");
         json.addProperty("machine", "mmcr:test_cube");
         json.addProperty("tick_time", 20);
+        json.add("requirements", new JsonArray());
         return json;
     }
 
@@ -392,8 +392,17 @@ class MachineRecipeJsonTest {
 
     private static JsonObject itemOutput(String item, int count) {
         var output = new JsonObject();
-        output.addProperty("id", item);
-        output.addProperty("count", count);
+        output.addProperty("type", "mmcr:item");
+        output.add("stack", stack(item, count));
+        output.addProperty("chance", 1F);
+        return output;
+    }
+
+    private static JsonObject fluidOutput(String fluid, int amount, float chance) {
+        var output = new JsonObject();
+        output.addProperty("type", "mmcr:fluid");
+        output.add("stack", fluidStack(fluid, amount));
+        output.addProperty("chance", chance);
         return output;
     }
 
@@ -404,9 +413,22 @@ class MachineRecipeJsonTest {
         return stack;
     }
 
+    private static JsonObject stack(String item, int count) {
+        var stack = new JsonObject();
+        stack.addProperty("id", item);
+        stack.addProperty("count", count);
+        return stack;
+    }
+
     private static JsonArray array(JsonObject value) {
         var array = new JsonArray();
         array.add(value);
+        return array;
+    }
+
+    private static JsonArray array(JsonObject... values) {
+        var array = new JsonArray();
+        for (JsonObject value : values) array.add(value);
         return array;
     }
 

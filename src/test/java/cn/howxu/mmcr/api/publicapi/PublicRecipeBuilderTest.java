@@ -15,7 +15,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import com.google.gson.JsonObject;
@@ -160,7 +160,7 @@ class PublicRecipeBuilderTest {
                 .requiredHost(id("host"))
                 .modifier(id("snapshot_modifier"))
                 .build();
-        var recipe = PublicRecipeAdapter.toRecipe(definition, new MMCRMachineStructuresEvent.Snapshot(
+        var recipe = MachineRecipeConverter.toRecipe(definition, new MMCRMachineStructuresEvent.Snapshot(
                 Map.of(),
                 Map.of(),
                  Map.of(TEST_LEVEL, MachineLevelRegistry.getLevel(TEST_LEVEL)),
@@ -177,7 +177,7 @@ class PublicRecipeBuilderTest {
             assertThat(item.consumeChance()).isEqualTo(0.25F);
             assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
         });
-        var smartRecipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart"), id("machine"))
+        var smartRecipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart"), id("machine"))
                 .requirement(SmartInterfaceRequirement.input("Mode", 1F, 2F)).build(),
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
         assertThat(smartRecipe.requirements()).singleElement().satisfies(requirement -> {
@@ -211,7 +211,7 @@ class PublicRecipeBuilderTest {
                 .outputItem(new ItemStack(Items.IRON_SWORD), components())
                 .build();
 
-        var recipe = PublicRecipeAdapter.toRecipe(definition,
+        var recipe = MachineRecipeConverter.toRecipe(definition,
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
 
         assertThat(recipe.requirements()).singleElement().satisfies(requirement -> {
@@ -287,7 +287,7 @@ class PublicRecipeBuilderTest {
                 .custom(new CustomRecipeIo(input.type().id(), RecipeIo.INPUT, inputPayload))
                 .custom(new CustomRecipeIo(output.outputType().id(), RecipeIo.OUTPUT, outputPayload))
                 .build();
-        var recipe = PublicRecipeAdapter.toRecipe(definition,
+        var recipe = MachineRecipeConverter.toRecipe(definition,
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
 
         assertThat(recipe.requirements()).contains(input);
@@ -327,7 +327,7 @@ class PublicRecipeBuilderTest {
             var customOutput = new CustomRecipeIo(TestOutput.TYPE.id(), RecipeIo.OUTPUT, outputPayload);
             customOutput.payload().getAsJsonObject().addProperty("value", 1);
 
-            var recipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("custom_extension"), id("machine"))
+        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("custom_extension"), id("machine"))
                     .custom(new CustomRecipeIo(TestRequirement.TYPE.id(), RecipeIo.INPUT, requirementPayload))
                     .custom(customOutput).build(),
                     new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));

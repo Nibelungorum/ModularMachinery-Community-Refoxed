@@ -112,7 +112,8 @@ class PortDefinitionRegistryTest {
                 PortKinds.ITEM_INPUT.entityFactory(), definition);
 
         assertThat(kind.definition()).isSameAs(definition);
-        assertThat(kind.capabilityTypes()).containsExactly(item.type(), fluid.type(), gas.type());
+        assertThat(kind.bindings()).extracting(binding -> binding.type())
+                .containsExactly(item.type(), fluid.type(), gas.type());
     }
 
     @Test

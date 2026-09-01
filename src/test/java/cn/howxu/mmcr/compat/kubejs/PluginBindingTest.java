@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -27,6 +28,7 @@ import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
@@ -90,7 +92,7 @@ class PluginBindingTest {
 
         var transaction = new KubeJSContentReloadTransaction();
         transaction.registerStructure(structure(machineId));
-        transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        transaction.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         var committed = transaction.commit();
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsKey(machineId);
@@ -106,7 +108,7 @@ class PluginBindingTest {
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
 
         var transaction = new KubeJSContentReloadTransaction();
-        transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        transaction.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         transaction.commit();
 
         assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
@@ -120,14 +122,14 @@ class PluginBindingTest {
 
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
         long previousVersion = cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current();
 
         var invalid = new KubeJSContentReloadTransaction();
-        invalid.registerRecipe(new MachineRecipe(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
+        invalid.registerRecipe(RecipeTestSupport.create(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
 
         assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
@@ -145,13 +147,13 @@ class PluginBindingTest {
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(removedMachineId));
         previous.registerStructure(structure(keptMachineId));
-        previous.registerRecipe(new MachineRecipe(removedRecipeId, removedMachineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(removedRecipeId, removedMachineId, 1, List.of(), List.of()));
         previous.commit();
 
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
         KubeJSContentReloadTransaction.active().registerStructure(structure(keptMachineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(keptRecipeId, keptMachineId, 1, List.of(), List.of()));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(keptRecipeId, keptMachineId, 1, List.of(), List.of()));
         Plugin.completeServerReload(reload, 0);
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
@@ -167,7 +169,7 @@ class PluginBindingTest {
 
         Plugin.beginServerReload(reload, 0);
         KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         Plugin.completeServerReloadForTesting(reload, 0, () -> synced.set(true));
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
@@ -208,7 +210,7 @@ class PluginBindingTest {
 
         Plugin.beginServerReload(reload, 0);
         KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         Plugin.completeServerReload(reload, 0);
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(recipeId);
@@ -248,16 +250,16 @@ class PluginBindingTest {
 
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(removedMachineId));
-        previous.registerRecipe(new MachineRecipe(removedRecipeId, removedMachineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(removedRecipeId, removedMachineId, 1, List.of(), List.of()));
         previous.commit();
         MachineStructureRegistry.replaceDynamic(Map.of(removedMachineId, structure(removedMachineId)));
         RecipeRegistry.replaceDynamic(Map.of(removedRecipeId,
-                new MachineRecipe(removedRecipeId, removedMachineId, 1, List.of(), List.of())));
+                RecipeTestSupport.create(removedRecipeId, removedMachineId, 1, List.of(), List.of())));
 
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
         KubeJSContentReloadTransaction.active().registerStructure(structure(keptMachineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(keptRecipeId, keptMachineId, 1, List.of(), List.of()));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(keptRecipeId, keptMachineId, 1, List.of(), List.of()));
         Plugin.completeServerReload(reload, 0);
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(keptMachineId);
@@ -288,7 +290,7 @@ class PluginBindingTest {
         var recipeId = MMCR.id("kubejs_transaction_empty_reload_removed_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
 
         var reload = new Object();
@@ -305,13 +307,13 @@ class PluginBindingTest {
         var recipeId = MMCR.id("kubejs_transaction_external_takeover_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(recipeId, machineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
         var takeoverStructure = new MachineStructureDefinition(machineId,
                 new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK))),
                 PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, takeoverStructure));
-        RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 2, List.of(), List.of())));
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, RecipeTestSupport.create(recipeId, machineId, 2, List.of(), List.of())));
 
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
@@ -329,14 +331,14 @@ class PluginBindingTest {
         var conflictId = MMCR.id("kubejs_datapack_conflict");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(previousId, machineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(previousId, machineId, 1, List.of(), List.of()));
         previous.commit();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
         RecipeRegistry.replaceDataPack(Map.of(conflictId,
-                new MachineRecipe(conflictId, machineId, 2, List.of(), List.of())));
+                RecipeTestSupport.create(conflictId, machineId, 2, List.of(), List.of())));
 
         var invalid = new KubeJSContentReloadTransaction();
-        invalid.registerRecipe(new MachineRecipe(conflictId, machineId, 3, List.of(), List.of()));
+        invalid.registerRecipe(RecipeTestSupport.create(conflictId, machineId, 3, List.of(), List.of()));
 
         assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("data-pack");
@@ -349,10 +351,10 @@ class PluginBindingTest {
         var machineId = MMCR.id("kubejs_datapack_conflict_structure");
         var recipeId = MMCR.id("kubejs_datapack_conflict_structure_recipe");
         RecipeRegistry.replaceDataPack(Map.of(recipeId,
-                new MachineRecipe(recipeId, MMCR.id("test_machine_name"), 2, List.of(), List.of())));
+                RecipeTestSupport.create(recipeId, MMCR.id("test_machine_name"), 2, List.of(), List.of())));
         var transaction = new KubeJSContentReloadTransaction();
         transaction.registerStructure(structure(machineId));
-        transaction.registerRecipe(new MachineRecipe(recipeId, machineId, 3, List.of(), List.of()));
+        transaction.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 3, List.of(), List.of()));
 
         assertThatThrownBy(transaction::commit).isInstanceOf(IllegalStateException.class);
         assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(machineId);
@@ -364,10 +366,10 @@ class PluginBindingTest {
         var id = MMCR.id("kubejs_duplicate_recipe");
         var transaction = new KubeJSContentReloadTransaction();
         transaction.registerStructure(structure(MMCR.id("test_machine_name")));
-        transaction.registerRecipe(new MachineRecipe(id, MMCR.id("test_machine_name"), 1, List.of(), List.of()));
+        transaction.registerRecipe(RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of()));
 
         assertThatThrownBy(() -> transaction.registerRecipe(
-                new MachineRecipe(id, MMCR.id("test_machine_name"), 2, List.of(), List.of())))
+                RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 2, List.of(), List.of())))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(id.toString());
         transaction.commit();
@@ -380,7 +382,7 @@ class PluginBindingTest {
         var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(previousRecipeId, machineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(previousRecipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
@@ -388,7 +390,7 @@ class PluginBindingTest {
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
         KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
                 MMCR.id("kubejs_transaction_error_recipe"), machineId, 1, List.of(), List.of()));
         Plugin.completeServerReload(reload, 1);
 
@@ -402,7 +404,7 @@ class PluginBindingTest {
         var previousRecipeId = MMCR.id("kubejs_transaction_interrupted_previous_recipe");
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
-        previous.registerRecipe(new MachineRecipe(previousRecipeId, machineId, 1, List.of(), List.of()));
+        previous.registerRecipe(RecipeTestSupport.create(previousRecipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
@@ -410,7 +412,7 @@ class PluginBindingTest {
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
         KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(new MachineRecipe(
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
                 MMCR.id("kubejs_transaction_interrupted_recipe"), machineId, 1, List.of(), List.of()));
 
         Plugin.abortServerReload(reload);
@@ -441,7 +443,7 @@ class PluginBindingTest {
         var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("non_script_dynamic_recipe");
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
-        RecipeRegistry.replaceDynamic(Map.of(recipeId, new MachineRecipe(recipeId, machineId, 1, List.of(), List.of())));
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of())));
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
 
@@ -594,7 +596,7 @@ class PluginBindingTest {
             assertThat(registration).isNotNull();
             assertThat(registration.behavior()).isInstanceOf(RecipeBehavior.class);
             ((RecipeBehavior) registration.behavior()).recipeTick().accept(new RecipeTickContext(
-                    new MachineRecipe(MMCR.id("kubejs_registered_behavior_recipe"), machineId, 1, List.of(), List.of()),
+                    RecipeTestSupport.create(MMCR.id("kubejs_registered_behavior_recipe"), machineId, 1, List.of(), List.of()),
                     0, 1, 1));
             assertThat(ticks).hasValue(1);
         } finally {
@@ -712,10 +714,11 @@ class PluginBindingTest {
         setField(event, "ops", new RegistryOpsContainer(null, ops, null));
         ScopedValue.where(RecipesKubeEvent.INSTANCE, event).run(builder::build);
 
-        assertThat(RecipeRegistry.getRecipe(MMCR.id("sharp_sword")).outputs()).singleElement().satisfies(output -> {
-            assertThat(output.getItem()).isSameAs(Items.DIAMOND_SWORD);
-            assertThat(output.getCount()).isEqualTo(1);
-        });
+        assertThat(RecipeRegistry.getRecipe(MMCR.id("sharp_sword")).machineOutputs()).singleElement()
+                .isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+                    assertThat(output.stack().getItem()).isSameAs(Items.DIAMOND_SWORD);
+                    assertThat(output.stack().getCount()).isEqualTo(1);
+                });
     }
 
     @Test
@@ -731,7 +734,8 @@ class PluginBindingTest {
 
         MachineRecipe recipe = createInRecipeEvent(builder);
 
-        assertThat(recipe.outputs()).singleElement().satisfies(output -> assertThat(output.getItem()).isSameAs(Items.DIAMOND));
+        assertThat(recipe.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                output -> assertThat(output.stack().getItem()).isSameAs(Items.DIAMOND));
     }
 
     @Test
@@ -755,9 +759,9 @@ class PluginBindingTest {
 
         MachineRecipe recipe = createInRecipeEvent(builder);
 
-        assertThat(recipe.outputs()).hasSize(2);
-        assertThat(recipe.outputs().get(0).getItem()).isSameAs(Items.DIAMOND);
-        assertThat(recipe.outputs().get(1).getItem()).isSameAs(Items.DIAMOND_SWORD);
+        assertThat(recipe.machineOutputs()).hasSize(2);
+        assertThat(((MachineOutput.ItemOutput) recipe.machineOutputs().get(0)).stack().getItem()).isSameAs(Items.DIAMOND);
+        assertThat(((MachineOutput.ItemOutput) recipe.machineOutputs().get(1)).stack().getItem()).isSameAs(Items.DIAMOND_SWORD);
     }
 
     @Test

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
@@ -62,7 +63,7 @@ class ModuleRecipeHostRequirementTest {
     }
 
     private static MachineRecipe recipe(String path, Set<Identifier> requiredHostIds) {
-        return new MachineRecipe(MMCR.id(path), MODULE_ID, 20, List.of(), List.of(), List.of(), 0, 1,
+        return RecipeTestSupport.create(MMCR.id(path), MODULE_ID, 20, List.of(), List.of(), List.of(), 0, 1,
                 false, List.of(), List.of(), false, List.of(), requiredHostIds);
     }
 }

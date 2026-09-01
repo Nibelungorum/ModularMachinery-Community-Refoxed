@@ -53,11 +53,9 @@ import java.util.Optional;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost {
-    private static final String AUTO_IO_KEY = "auto_io";
     private static final String AUTO_IO_CAPABILITIES_KEY = "auto_io_capabilities";
     private static final int AUTO_IO_MIN_DELAY = 5;
     private static final int AUTO_IO_MAX_DELAY = 60;
-    private final AutoIOConfig legacyAutoIOConfig = new AutoIOConfig();
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;
     private final Map<CapabilityType, AutoIOState> autoIOStates = new LinkedHashMap<>();
@@ -263,7 +261,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public AutoIOConfig autoIOConfig() {
         List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
-        return capabilities.isEmpty() ? legacyAutoIOConfig : autoIOConfig(capabilities.getFirst().type());
+        return capabilities.isEmpty() ? new AutoIOConfig() : autoIOConfig(capabilities.getFirst().type());
     }
 
     public AutoIOConfig autoIOConfig(CapabilityType type) {
@@ -528,7 +526,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        autoIOConfig().save(output.child(AUTO_IO_KEY));
         ValueOutput profiles = output.child(AUTO_IO_CAPABILITIES_KEY);
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             autoIOConfig(capability.type()).save(profiles.child(capability.type().id().toString()));
@@ -538,21 +535,15 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        legacyAutoIOConfig.loadInto(input.childOrEmpty(AUTO_IO_KEY));
         autoIOConfigs.clear();
-        boolean loadedProfile = false;
         Optional<ValueInput> profiles = input.child(AUTO_IO_CAPABILITIES_KEY);
         if (profiles.isPresent()) {
             for (MachineCapability capability : capabilitySnapshot().capabilities()) {
                 Optional<ValueInput> profile = profiles.get().child(capability.type().id().toString());
                 if (profile.isPresent()) {
                     autoIOConfig(capability.type()).loadInto(profile.get());
-                    loadedProfile = true;
                 }
             }
-        }
-        if (!loadedProfile && capabilitySnapshot().capabilities().size() == 1) {
-            autoIOConfigs.put(capabilitySnapshot().capabilities().getFirst().type(), legacyAutoIOConfig);
         }
         markAutoIOCacheDirty();
     }

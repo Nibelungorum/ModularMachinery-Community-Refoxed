@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -8,6 +9,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public final class PreparedRecipe {
 
@@ -181,21 +183,15 @@ public final class PreparedRecipe {
     }
 
     public MachineRecipe toMachineRecipe() {
-        return new MachineRecipe(
-                Identifier.parse(registryName),
-                Identifier.parse(machineId),
-                tickTime,
-                inputs,
-                outputs,
-                modifiers,
-                priority,
-                maxThreads,
-                cancelRecipeOnPerTickFailure,
-                fluidOutputs,
-                Collections.emptyList(),
-                parallelized,
-                Collections.emptyList(),
-                allowPartialOutputs
-        );
+        List<MachineRequirement> requirements = new java.util.ArrayList<>();
+        inputs.stream().map(MachineRequirement::fromInput).forEach(requirements::add);
+        outputs.stream().map(output -> MachineRequirement.itemOutput(output, 1F)).forEach(requirements::add);
+        fluidOutputs.stream().map(output -> MachineRequirement.fluidOutput(output, 1F)).forEach(requirements::add);
+        List<MachineOutput> canonicalOutputs = new java.util.ArrayList<>();
+        outputs.forEach(output -> canonicalOutputs.add(new MachineOutput.ItemOutput(output, 1F)));
+        fluidOutputs.forEach(output -> canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F)));
+        return MachineRecipe.fromCanonical(Identifier.parse(registryName), Identifier.parse(machineId), tickTime,
+                requirements, canonicalOutputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
+                parallelized, List.of(), allowPartialOutputs, Set.of());
     }
 }

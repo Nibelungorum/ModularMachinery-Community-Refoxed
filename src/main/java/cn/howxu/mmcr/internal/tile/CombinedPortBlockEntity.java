@@ -113,13 +113,8 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
-            if (facet.stateKey().equals("fluid") && input.child("fluid").isEmpty()) {
-                loadFluids(input);
-            } else {
-                facet.load(input.childOrEmpty(facet.stateKey()));
-            }
-        });
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> input.child(facet.stateKey()).ifPresent(facet::load));
     }
 
     private void saveFluids(ValueOutput output) {

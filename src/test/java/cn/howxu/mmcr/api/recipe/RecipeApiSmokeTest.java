@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
@@ -61,7 +62,7 @@ class RecipeApiSmokeTest {
                 new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false),
                 new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2.0F, RecipeModifier.Operation.ADD, false)
         );
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 id, machineId, 100,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
                 List.of(),
@@ -88,7 +89,7 @@ class RecipeApiSmokeTest {
 
         var machineId = Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_machine");
 
-        var emptyRecipe = new MachineRecipe(
+        var emptyRecipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_empty"),
                 machineId, 20,
                 List.of(),
@@ -96,7 +97,7 @@ class RecipeApiSmokeTest {
                 List.of(), 0, 1, false, List.of()
         );
 
-        var oneRecipe = new MachineRecipe(
+        var oneRecipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_one"),
                 machineId, 20,
                 List.of(),
@@ -110,14 +111,15 @@ class RecipeApiSmokeTest {
         var emptyJson = MachineRecipe.CODEC.codec().encodeStart(ops, emptyRecipe).getOrThrow();
         assertThat(emptyJson.getAsJsonObject().has("fluid_outputs")).isFalse();
         var emptyBack = MachineRecipe.CODEC.codec().parse(ops, emptyJson).getOrThrow();
-        assertThat(emptyBack.fluidOutputs()).isEmpty();
+        assertThat(emptyBack.runtimeMachineOutputs()).noneMatch(MachineOutput.FluidOutput.class::isInstance);
         assertThat(emptyBack).isEqualTo(emptyRecipe);
 
         var oneJson = MachineRecipe.CODEC.codec().encodeStart(ops, oneRecipe).getOrThrow();
         var oneBack = MachineRecipe.CODEC.codec().parse(ops, oneJson).getOrThrow();
-        assertThat(oneBack.fluidOutputs()).hasSize(1);
-        assertThat(oneBack.fluidOutputs().getFirst().getFluid()).isEqualTo(Fluids.WATER);
-        assertThat(oneBack.fluidOutputs().getFirst().getAmount()).isEqualTo(250);
+        assertThat(oneBack.runtimeMachineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.FluidOutput.class, output -> {
+            assertThat(output.stack().getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(output.stack().getAmount()).isEqualTo(250);
+        });
         assertThat(oneBack.id()).isEqualTo(oneRecipe.id());
         assertThat(oneBack.machineId()).isEqualTo(oneRecipe.machineId());
         assertThat(oneBack.tickTime()).isEqualTo(oneRecipe.tickTime());
@@ -135,7 +137,7 @@ class RecipeApiSmokeTest {
 
     @Test
     void recipe_codec_optional_fields_have_defaults() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "minimal"),
                 Identifier.fromNamespaceAndPath("mmcr", "minimal_machine"),
                 20, List.of(), List.of()
@@ -215,7 +217,7 @@ class RecipeApiSmokeTest {
 
     @Test
     void active_recipe_uses_derived_duration_but_recipe_tick_time_stays_raw() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "duration_runtime"),
                 Identifier.fromNamespaceAndPath("mmcr", "duration_machine"),
                 100,
@@ -236,7 +238,7 @@ class RecipeApiSmokeTest {
     void runtime_requirements_apply_all_supported_modifier_targets() {
         bindFluidComponents(Fluids.WATER);
         bindItemComponents(Items.IRON_NUGGET);
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "runtime_modifiers"),
                 Identifier.fromNamespaceAndPath("mmcr", "runtime_machine"),
                 100,
@@ -262,8 +264,13 @@ class RecipeApiSmokeTest {
             assertThat(((EnergyRequirement) requirements.get(2)).fePerTick()).isEqualTo(80);
             assertThat(((ItemRequirement) requirements.get(3)).stack().getCount()).isEqualTo(3);
         });
-        assertThat(recipe.inputs()).contains(new MachineIngredient.EnergyIngredient(40));
-        assertThat(recipe.outputs().getFirst().getCount()).isEqualTo(1);
+        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement)
+                .isInstanceOfSatisfying(EnergyRequirement.class, energy -> {
+                    assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+                    assertThat(energy.fePerTick()).isEqualTo(40);
+                }));
+        assertThat(recipe.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                output -> assertThat(output.stack().getCount()).isEqualTo(1));
     }
 
     @Test
@@ -271,9 +278,9 @@ class RecipeApiSmokeTest {
         var machineA = Identifier.fromNamespaceAndPath("mmcr", "machine_a");
         var machineB = Identifier.fromNamespaceAndPath("mmcr", "machine_b");
 
-        var recipe1 = new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", "r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
-        var recipe2 = new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
-        var recipe3 = new MachineRecipe(Identifier.fromNamespaceAndPath("mmcr", "r3"), machineB, 30, List.of(), List.of(), List.of(), 0, 1);
+        var recipe1 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
+        var recipe2 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
+        var recipe3 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r3"), machineB, 30, List.of(), List.of(), List.of(), 0, 1);
 
         RecipeRegistry.register(recipe1);
         RecipeRegistry.register(recipe2);
@@ -288,7 +295,7 @@ class RecipeApiSmokeTest {
 
     @Test
     void active_recipe_nbt_roundtrip() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "active_test"),
                 Identifier.fromNamespaceAndPath("mmcr", "active_test_machine"),
                 100, List.of(), List.of()
@@ -318,7 +325,7 @@ class RecipeApiSmokeTest {
 
     @Test
     void active_recipe_marks_completed_when_tick_reaches_total() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "done_test"),
                 Identifier.fromNamespaceAndPath("mmcr", "done_test_machine"),
                 10, List.of(), List.of()
@@ -331,7 +338,7 @@ class RecipeApiSmokeTest {
 
     @Test
     void active_recipe_does_not_recheck_started_inputs_mid_process() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "vanishing_input"),
                 Identifier.fromNamespaceAndPath("mmcr", "vanishing_input_machine"),
                 10,
@@ -364,8 +371,9 @@ class RecipeApiSmokeTest {
         assertThat(recipe.priority()).isEqualTo(3);
         assertThat(recipe.maxThreads()).isEqualTo(2);
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isFalse();
-        assertThat(recipe.inputs()).hasSize(1);
-        assertThat(recipe.outputs()).isEmpty();
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(1);
+        assertThat(recipe.machineOutputs()).isEmpty();
         assertThat(recipe.modifiers()).isEqualTo(prepared.getModifiers());
         assertThat(recipe.getRecipeTotalTickTime()).isEqualTo(50);
     }

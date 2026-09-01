@@ -1,12 +1,11 @@
 package cn.howxu.mmcr.internal.registration;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
-import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
@@ -169,10 +168,7 @@ class ModEventRegistrationTest {
     }
 
     @Test
-    void production_capability_handler_installs_builtin_adapter_before_freezing_and_registers_providers() {
-        ModCapabilities.initializeExternalAdapters();
-        assertThat(ExternalCapabilityRegistry.global().isRegistered(MMCR.id("neoforge"))).isTrue();
-        assertThat(ExternalCapabilityRegistry.global().isFrozen()).isFalse();
+    void production_capability_handler_freezes_external_registry_and_registers_providers() {
         RegisterCapabilitiesEvent event = capabilityEvent();
 
         ModEventRegistration.EventHandlers.production().capabilities().accept(event);

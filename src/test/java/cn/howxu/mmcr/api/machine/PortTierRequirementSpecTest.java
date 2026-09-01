@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -102,9 +103,11 @@ class PortTierRequirementSpecTest {
         assertThat(ordinaryCombinedKind(IOType.OUTPUT).families())
                 .extracting(PortFamilyDescriptor::familyId)
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
-        assertThat(ordinaryCombinedKind(IOType.INPUT).capabilityTypes())
+        assertThat(ordinaryCombinedKind(IOType.INPUT).bindings())
+                .extracting(binding -> binding.type())
                 .containsExactly(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
-        assertThat(ordinaryCombinedKind(IOType.OUTPUT).capabilityTypes())
+        assertThat(ordinaryCombinedKind(IOType.OUTPUT).bindings())
+                .extracting(binding -> binding.type())
                 .containsExactly(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
     }
 
@@ -188,8 +191,13 @@ class PortTierRequirementSpecTest {
 
     private static IOPortKind combinedKind(IOType ioType, List<PortFamilyDescriptor> families) {
         return new PortKinds.CombinedKind("combined_" + ioType.getSerializedName() + "_test", ioType, families,
-                PortKinds.ITEM_INPUT.entityFactory(), List.of(BuiltinCapabilityDefinitions.ITEM_TYPE,
-                        BuiltinCapabilityDefinitions.FLUID_TYPE));
+                PortKinds.ITEM_INPUT.entityFactory(), PortDefinition.of(
+                        cn.howxu.mmcr.MMCR.id("combined_" + ioType.getSerializedName() + "_test"),
+                        families.stream().map(family -> IOPortKind.binding(
+                                family.familyId().equals(PortFamilyIds.ITEM)
+                                        ? BuiltinCapabilityDefinitions.ITEM_TYPE
+                                        : BuiltinCapabilityDefinitions.FLUID_TYPE,
+                                ioType, families)).toList()));
     }
 
     private static void assertInvalidCombined(List<PortFamilyDescriptor> families) {
@@ -198,7 +206,9 @@ class PortTierRequirementSpecTest {
 
     private static void assertInvalidCombined(List<PortFamilyDescriptor> families, List<CapabilityType> types) {
         assertThatIllegalArgumentException().isThrownBy(() -> new PortKinds.CombinedKind("combined_invalid_test",
-                IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(), types));
+                IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(), PortDefinition.of(
+                        cn.howxu.mmcr.MMCR.id("combined_invalid_test"), types.stream()
+                                .map(type -> IOPortKind.binding(type, IOType.INPUT, families)).toList())));
     }
 
     private static PortFamilyDescriptor itemFamily(IOType ioType) {

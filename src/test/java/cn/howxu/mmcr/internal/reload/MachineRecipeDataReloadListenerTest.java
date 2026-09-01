@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.CustomOutput;
 import cn.howxu.mmcr.api.recipe.RecipeCandidateIndex;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -76,7 +77,7 @@ class MachineRecipeDataReloadListenerTest {
     @Test
     void applyingSnapshotPublishesDataPackLayerToRecipeRegistry() {
         var id = Identifier.parse("mmcr_test:published_recipe");
-        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:test_machine_name"), 1,
+        var recipe = RecipeTestSupport.create(id, Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
 
@@ -175,9 +176,9 @@ class MachineRecipeDataReloadListenerTest {
         var staticId = Identifier.parse("mmcr_test:static_layer_recipe");
         var dynamicId = Identifier.parse("mmcr_test:dynamic_layer_recipe");
         var dataPackId = Identifier.parse("mmcr_test:datapack_layer_recipe");
-        var staticRecipe = new MachineRecipe(staticId, Identifier.parse("mmcr:test_machine_name"), 1, List.of(), List.of());
-        var dynamicRecipe = new MachineRecipe(dynamicId, Identifier.parse("mmcr:test_machine_name"), 2, List.of(), List.of());
-        var dataPackRecipe = new MachineRecipe(dataPackId, Identifier.parse("mmcr:test_machine_name"), 3, List.of(), List.of());
+        var staticRecipe = RecipeTestSupport.create(staticId, Identifier.parse("mmcr:test_machine_name"), 1, List.of(), List.of());
+        var dynamicRecipe = RecipeTestSupport.create(dynamicId, Identifier.parse("mmcr:test_machine_name"), 2, List.of(), List.of());
+        var dataPackRecipe = RecipeTestSupport.create(dataPackId, Identifier.parse("mmcr:test_machine_name"), 3, List.of(), List.of());
         RecipeRegistry.registerStatic(staticRecipe);
         RecipeRegistry.replaceDynamic(Map.of(dynamicId, dynamicRecipe));
 
@@ -192,7 +193,7 @@ class MachineRecipeDataReloadListenerTest {
     @Test
     void serverReloadHookAppliesSnapshotAndRunsSyncAfterPublishingDataPackLayer() {
         var id = Identifier.parse("mmcr_test:published_sync_recipe");
-        var recipe = new MachineRecipe(id, Identifier.parse("mmcr:test_machine_name"), 1,
+        var recipe = RecipeTestSupport.create(id, Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
         var listener = new MachineRecipeDataReloadListener(registries);
         AtomicBoolean synced = new AtomicBoolean();
@@ -266,7 +267,7 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     private static MachineRecipe recipe() {
-        return new MachineRecipe(Identifier.parse("mmcr_test:placeholder"), Identifier.parse("mmcr:test_machine_name"), 1,
+        return RecipeTestSupport.create(Identifier.parse("mmcr_test:placeholder"), Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
     }
 

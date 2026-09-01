@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -92,7 +93,7 @@ class MachineBehaviorBuilderJSTest {
 
         assertThat(registration.behavior().kind()).isEqualTo(MachineBehavior.Kind.RECIPE);
         RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("kubejs_recipe_context"), storagePosId, 1,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("kubejs_recipe_context"), storagePosId, 1,
                 List.of(), List.of());
         behavior.beforeStart().accept(new RecipeStartContext(machineContext, recipe, 1, 1, 1,
                 List.of(), List.of()));

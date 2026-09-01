@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.internal.api;
+package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -41,8 +41,8 @@ import java.util.Map;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class PublicMachineAdapter {
-    private PublicMachineAdapter() {
+public final class MachineDefinitionConverter {
+    private MachineDefinitionConverter() {
     }
 
     public static cn.howxu.mmcr.api.machine.level.LevelType toLevelType(LevelType type) {
@@ -145,9 +145,9 @@ public final class PublicMachineAdapter {
                 .allowMultithreading(definition.allowMultithreading())
                 .shareSmartInterfaces(definition.shareSmartInterfaces())
                 .behavior(definition.behavior());
-        definition.smartInterfaceTypes().values().stream().map(PublicMachineAdapter::toInternalSmartInterfaceType)
+        definition.smartInterfaceTypes().values().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceType)
                 .forEach(builder::smartInterfaceType);
-        definition.smartInterfaceModifiers().stream().map(PublicMachineAdapter::toInternalSmartInterfaceModifier)
+        definition.smartInterfaceModifiers().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceModifier)
                 .forEach(builder::smartInterfaceModifier);
         builder.runningSound(definition.runningSoundId()).finishSound(definition.finishSoundId());
         if (structure != null) {
@@ -200,7 +200,7 @@ public final class PublicMachineAdapter {
             return new cn.howxu.mmcr.api.machine.BlockPredicate.OfTag(predicate.tag().get());
         }
         return new cn.howxu.mmcr.api.machine.BlockPredicate.AnyOf(
-                predicate.alternatives().stream().map(PublicMachineAdapter::toBlockPredicate).toList());
+                predicate.alternatives().stream().map(MachineDefinitionConverter::toBlockPredicate).toList());
     }
 
     private static MachineControllerSpec toControllerSpec(Identifier machineId, ControllerSpec spec) {

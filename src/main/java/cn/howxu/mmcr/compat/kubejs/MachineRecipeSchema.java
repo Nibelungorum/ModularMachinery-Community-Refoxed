@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
 import dev.latvian.mods.kubejs.recipe.RecipeKey;
@@ -157,8 +157,8 @@ public final class MachineRecipeSchema {
                             var custom = RecipeApi.custom(Identifier.parse((String) args.get(0)), io,
                                     (JsonElement) args.get(2));
                             if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
-                                appendRequirement(cx.recipe(), PublicRecipeAdapter.toRequirement(custom));
-                            } else appendOutput(cx.recipe(), PublicRecipeAdapter.toOutput(custom));
+                                 appendRequirement(cx.recipe(), MachineRecipeConverter.toRequirement(custom));
+                             } else appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
                         }
                     }))
             .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),

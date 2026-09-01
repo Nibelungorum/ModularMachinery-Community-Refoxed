@@ -49,7 +49,7 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
-            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityTypes().stream()
+            capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()
                     .map(this::createCapability)
                     .toList(), java.util.List.of(new EnergyPersistenceFacet()));
         }
@@ -85,9 +85,8 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        input.child("energy").ifPresentOrElse(
-                child -> capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> facet.load(child)),
-                () -> storage.setAmount(input.getLong("storage").orElse(0L)));
+        input.child("energy").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.load(child)));
     }
 
     private final class EnergyPersistenceFacet implements PersistenceFacet {

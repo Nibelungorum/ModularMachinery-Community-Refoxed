@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -24,6 +25,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -100,9 +102,13 @@ public class UpgradeBusGameTest {
             ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
             input.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false);
             Identifier recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
-            RecipeRegistry.register(new MachineRecipe(recipeId, machineId, 20,
-                    List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                    List.of(new ItemStack(Items.GOLD_NUGGET))));
+            ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
+            RecipeRegistry.register(MachineRecipe.fromCanonical(recipeId, machineId, 20,
+                    List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
+                                    Ingredient.of(Items.IRON_INGOT), 1)),
+                            MachineRequirement.itemOutput(goldNugget)),
+                    List.of(new MachineOutput.ItemOutput(goldNugget, 1F)), List.of(), 0, 1, false, false, List.of(),
+                    false, Set.of()));
 
             controller.serverTick();
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() != null,

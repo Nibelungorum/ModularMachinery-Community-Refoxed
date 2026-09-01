@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.mojang.serialization.JsonOps;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
@@ -168,7 +169,7 @@ class MachineIngredientCodecTest {
     }
 
     @Test void machineRecipe_inputs_excludes_output_energy_and_energyOutputs_exposes_it() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.parse("mmcr:test_energy_output"),
                 Identifier.parse("mmcr:test_machine"),
                 20,
@@ -176,8 +177,12 @@ class MachineIngredientCodecTest {
                 List.of()
         );
 
-        assertThat(recipe.inputs()).isEmpty();
-        assertThat(recipe.energyOutputs()).containsExactly(100);
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .isEmpty();
+        assertThat(recipe.requirements()).singleElement().isInstanceOfSatisfying(EnergyRequirement.class, energy -> {
+            assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+            assertThat(energy.fePerTick()).isEqualTo(100);
+        });
     }
 
     private static DynamicOps<JsonElement> jsonOps() {

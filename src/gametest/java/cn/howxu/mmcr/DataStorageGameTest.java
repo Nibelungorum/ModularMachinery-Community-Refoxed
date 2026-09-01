@@ -56,6 +56,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -184,8 +185,10 @@ public final class DataStorageGameTest {
                         })
                         .build());
 
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_tick_effective_snapshot"), machineId, 20,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1)), List.of());
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("controller_tick_effective_snapshot"), machineId, 20,
+                List.of(MachineRequirement.fromInput(
+                        new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1))), List.of(), List.of(),
+                0, 1, false, false, List.of(), false, Set.of());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(recipeMachine);
         helper.runAtTickTime(20, () -> {

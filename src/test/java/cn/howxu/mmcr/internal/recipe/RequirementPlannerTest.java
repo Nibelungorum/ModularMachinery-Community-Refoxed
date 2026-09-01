@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -1252,7 +1253,7 @@ class RequirementPlannerTest {
     @Test
     void full_context_plan_start_honors_partial_outputs() {
         BulkItemStorage storage = new BulkItemStorage(2, null);
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr_test", "partial_context_start"),
                 Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
@@ -1351,7 +1352,7 @@ class RequirementPlannerTest {
                 ironIngredient(), 1, ItemStack.EMPTY);
         BulkItemStorage storage = new BulkItemStorage(64, null);
         storage.insert(ironResource(), 1, false);
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr_test", "indexed_requirements"),
                 Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output, input), true);

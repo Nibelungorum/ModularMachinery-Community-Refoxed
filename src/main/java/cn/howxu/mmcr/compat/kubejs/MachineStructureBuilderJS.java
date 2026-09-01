@@ -20,8 +20,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,10 +40,9 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     private final List<Declaration> declarations = new ArrayList<>();
     private final BlockArray.Builder sliceBuilder = new BlockArray.Builder();
     private final MachineStructureRequirements.Builder sliceRequirements = MachineStructureRequirements.builder();
-    private boolean patternDeclaration;
+    private boolean patternMetadataPending;
     private boolean classMetadataChanged;
     private boolean slicePatternPending;
-    private PatternApiMode patternApiMode;
     private StructureApiMode structureApiMode;
     private boolean stateSensitive;
 
@@ -68,53 +65,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return this;
     }
 
-    public MachineStructureBuilderJS pattern(String grid, Map<String, Object> keys) {
-        selectPatternApi(PatternApiMode.LEGACY);
-        var blocks = new HashMap<BlockPos, BlockPredicate>();
-        var symbolsByPosition = new HashMap<BlockPos, Character>();
-        var requirementBuilder = MachineStructureRequirements.builder();
-        var requirementKeys = new HashSet<Character>();
-        var rows = grid.trim().split("\\s+");
-
-        for (int y = 0; y < rows.length; y++) {
-            var row = rows[y];
-
-            for (int x = 0; x < row.length(); x++) {
-                var key = row.charAt(x);
-
-                if (key == '_' || key == '.') {
-                    continue;
-                }
-
-                var value = keys.get(String.valueOf(key));
-
-                if (value == null) {
-                    continue;
-                }
-
-                BlockPos pos = new BlockPos(x, y, 0);
-                PatternEntry entry = toPatternEntry(value);
-                blocks.put(pos, entry.base());
-                symbolsByPosition.put(pos, key);
-                if (requirementKeys.add(key)) {
-                    if (value instanceof LevelSlot levelSlot) {
-                        requirementBuilder.levelSlot(key, validateLevelType(levelSlot.typeId()));
-                    }
-                }
-            }
-        }
-
-        pattern = new BlockArray(Map.copyOf(blocks), Map.of(), Map.copyOf(symbolsByPosition));
-        requirements = requirementBuilder.build(pattern);
-        declarations.clear();
-        patternDeclaration = true;
-        declarations.add(new Declaration(Declaration.Kind.FULL, pattern, portRequirements,
-                portTierRequirements, dynamicPatterns, requirements));
-        return this;
-    }
-
     public MachineStructureBuilderJS pattern(String... rows) {
-        selectPatternApi(PatternApiMode.CHAINED);
         sliceBuilder.pattern(rows);
         slicePatternPending = true;
         return this;
@@ -136,7 +87,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS set(String symbol, Object value) {
-        selectPatternApi(PatternApiMode.CHAINED);
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
         }
@@ -150,7 +100,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS modifier(String symbol, ModifierUse use) {
-        selectPatternApi(PatternApiMode.CHAINED);
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A pattern symbol must be exactly one non-space character");
         }
@@ -160,21 +109,12 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     public MachineStructureBuilderJS controller(String symbol) {
-        selectPatternApi(PatternApiMode.CHAINED);
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A controller symbol must be exactly one non-space character");
         }
         sliceBuilder.set(symbol.charAt(0), new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()));
         sliceBuilder.controller(symbol.charAt(0));
         return this;
-    }
-
-    private void selectPatternApi(PatternApiMode requested) {
-        selectTopLevelStructureApi();
-        if (patternApiMode != null && patternApiMode != requested) {
-            throw new IllegalStateException("Legacy and chained pattern APIs cannot be mixed");
-        }
-        patternApiMode = requested;
     }
 
     private void selectTopLevelStructureApi() {
@@ -217,7 +157,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         BlockArray fullPattern = Objects.requireNonNull(pattern);
         declarations.add(new Declaration(Declaration.Kind.FULL, fullPattern, ports, tiers,
                 dynamicPatterns, requirements));
-        patternDeclaration = false;
+        patternMetadataPending = false;
         classMetadataChanged = false;
         return this;
     }
@@ -376,7 +316,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     private void applyPendingPatternMetadata() {
-        if (!patternDeclaration || !classMetadataChanged || declarations.isEmpty()) return;
+        if (!patternMetadataPending || !classMetadataChanged || declarations.isEmpty()) return;
         Declaration first = declarations.getFirst();
         declarations.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,
                 dynamicPatterns, requirements));
@@ -389,7 +329,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         requirements = sliceRequirements.build(pattern);
         slicePatternPending = false;
         declarations.clear();
-        patternDeclaration = true;
+        patternMetadataPending = true;
     }
 
     private Declaration stageDeclaration(Consumer<MachineStructureStageBuilderJS> consumer,
@@ -417,11 +357,6 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
         return typeId;
-    }
-
-    private enum PatternApiMode {
-        LEGACY,
-        CHAINED
     }
 
     private enum StructureApiMode {

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -128,7 +129,7 @@ class SmartInterfaceBlockEntityTest {
                 "mode", new SmartInterfaceType("mode", 1F, 0)), false)).isTrue();
         CraftingRuntime runtime = controllerRuntime(controller);
 
-        assertThat(runtime.start(new MachineRecipe(MMCR.id("smart_change_controller_runtime"),
+        assertThat(runtime.start(RecipeTestSupport.create(MMCR.id("smart_change_controller_runtime"),
                 MMCR.id("test_cube"), 20, List.of(), List.of()), 1).isCrafting()).isTrue();
 
         assertThat(owner.setValue("mode", 2F)).isTrue();

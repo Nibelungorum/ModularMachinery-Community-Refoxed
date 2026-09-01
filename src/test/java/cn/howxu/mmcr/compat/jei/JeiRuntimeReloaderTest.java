@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.types.IRecipeType;
 import mezz.jei.api.runtime.IJeiRuntime;
@@ -122,7 +123,7 @@ class JeiRuntimeReloaderTest {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
         Identifier recipeId = MMCR.id("initial_kubejs_recipe");
-        MachineRecipe recipe = new MachineRecipe(recipeId, machineId, 20, List.of(),
+        MachineRecipe recipe = RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
         JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
@@ -204,7 +205,7 @@ class JeiRuntimeReloaderTest {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
         Identifier staticRecipeId = MMCR.id("pre_existing_static_recipe");
-        RecipeRegistry.register(new MachineRecipe(staticRecipeId, machineId, 20, List.of(),
+        RecipeRegistry.register(RecipeTestSupport.create(staticRecipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))));
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
@@ -222,7 +223,7 @@ class JeiRuntimeReloaderTest {
                         machineId,
                         new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))),
                         PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY)),
-                Map.of(recipeId, new MachineRecipe(recipeId, machineId, 20, List.of(),
+                Map.of(recipeId, RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
                         List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)))),
                 Map.of(), Map.of(), 1L);
     }

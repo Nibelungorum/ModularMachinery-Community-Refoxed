@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -176,8 +177,8 @@ class CapabilityHostTest {
             @Override public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
                 return MixedPort::new;
             }
-            @Override public List<CapabilityType> capabilityTypes() {
-                return List.of();
+            @Override public PortDefinition definition() {
+                return PortDefinition.of(cn.howxu.mmcr.MMCR.id("mixed_test"));
             }
         };
 

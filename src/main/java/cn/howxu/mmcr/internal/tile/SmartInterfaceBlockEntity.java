@@ -36,7 +36,6 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity implements CapabilityHost {
-    private static final String BINDINGS_KEY = "bindings";
     private static final String MACHINE_ID_KEY = "machineId";
     private static final String VALUES_KEY = "values";
     private static final String CONTROLLERS_KEY = "controllers";
@@ -173,7 +172,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        input.child("state").ifPresentOrElse(this::loadState, () -> loadState(input));
+        input.child("state").ifPresent(this::loadState);
     }
 
     private void loadState(ValueInput input) {
@@ -186,19 +185,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
             }
         });
         input.listOrEmpty(CONTROLLERS_KEY, ControllerEntry.CODEC).forEach(entry -> controllers.add(entry.pos().immutable()));
-        if (values.isEmpty()) loadLegacyBindings(input);
         capabilityStorage.replace(values);
-    }
-
-    private void loadLegacyBindings(ValueInput input) {
-        input.listOrEmpty(BINDINGS_KEY, Binding.CODEC).forEach(binding -> {
-            if (!Float.isFinite(binding.value()) || binding.type() == null || binding.type().isBlank()
-                    || values.containsKey(binding.type())) return;
-            if (machineId == null) machineId = binding.machineId();
-            if (!machineId.equals(binding.machineId())) return;
-            values.put(binding.type(), binding.value());
-            controllers.add(binding.controllerPos().immutable());
-        });
     }
 
     private void changed() {

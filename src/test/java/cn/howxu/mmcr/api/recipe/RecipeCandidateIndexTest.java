@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.Holder;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.HolderSet;
@@ -46,7 +47,7 @@ class RecipeCandidateIndexTest {
     void candidatesIncludeMatchingExactItemsAndFallbackRecipesInOriginalOrder() {
         MachineRecipe iron = itemRecipe("iron", Ingredient.of(Items.IRON_INGOT));
         MachineRecipe gold = itemRecipe("gold", Ingredient.of(Items.GOLD_INGOT));
-        MachineRecipe noItemInput = new MachineRecipe(id("no_item"), MACHINE, 20,
+        MachineRecipe noItemInput = RecipeTestSupport.create(id("no_item"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1);
 
         RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(iron, gold, noItemInput));
@@ -122,7 +123,7 @@ class RecipeCandidateIndexTest {
 
     @Test
     void unknown_ingredient_falls_back_when_recipe_also_has_an_exact_item_input() {
-        MachineRecipe unknown = new MachineRecipe(id("unknown_with_exact_item"), MACHINE, 20,
+        MachineRecipe unknown = RecipeTestSupport.create(id("unknown_with_exact_item"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY),
@@ -135,7 +136,7 @@ class RecipeCandidateIndexTest {
 
     @Test
     void non_item_inputs_fall_back_when_recipe_also_has_an_exact_item_input() {
-        MachineRecipe mixed = new MachineRecipe(id("mixed_exact_item_and_energy"), MACHINE, 20,
+        MachineRecipe mixed = RecipeTestSupport.create(id("mixed_exact_item_and_energy"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY),
@@ -148,7 +149,7 @@ class RecipeCandidateIndexTest {
 
     @Test
     void capability_tagged_inputs_fall_back_when_recipe_also_has_an_exact_item_input() {
-        MachineRecipe tagged = new MachineRecipe(id("tagged_exact_item"), MACHINE, 20,
+        MachineRecipe tagged = RecipeTestSupport.create(id("tagged_exact_item"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY, List.of("north_buses"))), false);
@@ -160,7 +161,7 @@ class RecipeCandidateIndexTest {
 
     @Test
     void tagged_non_item_requirements_also_fall_back_when_recipe_has_an_exact_item_input() {
-        MachineRecipe tagged = new MachineRecipe(id("tagged_energy_with_exact_item"), MACHINE, 20,
+        MachineRecipe tagged = RecipeTestSupport.create(id("tagged_energy_with_exact_item"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY),
@@ -182,11 +183,11 @@ class RecipeCandidateIndexTest {
 
     @Test
     void preordered_candidates_preserve_supplied_order_and_lock_singleton() {
-        MachineRecipe highPriority = new MachineRecipe(id("high_priority"), MACHINE, 20,
+        MachineRecipe highPriority = RecipeTestSupport.create(id("high_priority"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1);
-        MachineRecipe moreInputs = new MachineRecipe(id("more_inputs"), MACHINE, 20,
+        MachineRecipe moreInputs = RecipeTestSupport.create(id("more_inputs"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 1, 1);
-        MachineRecipe idTieBreaker = new MachineRecipe(id("id_tie_breaker"), MACHINE, 20,
+        MachineRecipe idTieBreaker = RecipeTestSupport.create(id("id_tie_breaker"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 2, 1);
         List<MachineRecipe> supplied = List.of(idTieBreaker, highPriority, moreInputs);
         RecipeSearchResult existing = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1,
@@ -213,7 +214,7 @@ class RecipeCandidateIndexTest {
     }
 
     private static MachineRecipe itemRecipe(String path, Ingredient ingredient) {
-        return new MachineRecipe(id(path), MACHINE, 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+        return RecipeTestSupport.create(id(path), MACHINE, 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ingredient, 1, ItemStack.EMPTY)), false);
     }
 

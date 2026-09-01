@@ -12,7 +12,6 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
-import cn.howxu.mmcr.api.recipe.MachineIngredient;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,17 +35,6 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                                                  double outputMultiplier) {
         return new EnergyRequirement(requirement.io(), floorNonNegative(requirement.fePerTick() * energyMultiplier),
                 requirement.tags());
-    }
-
-    @Override
-    public MachineIngredient legacyInput(EnergyRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.INPUT
-                ? new MachineIngredient.EnergyIngredient(requirement.fePerTick()) : null;
-    }
-
-    @Override
-    public Integer legacyEnergyOutput(EnergyRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.fePerTick() : null;
     }
 
     private static int floorNonNegative(double value) {

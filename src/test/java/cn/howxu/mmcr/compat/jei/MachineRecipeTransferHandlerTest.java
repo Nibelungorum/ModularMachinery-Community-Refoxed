@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
@@ -41,7 +42,7 @@ class MachineRecipeTransferHandlerTest {
 
     @Test
     void transferViewRestoresRealCountForAllItemVariants() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_transfer_count"),
                 MMCR.id("blast_furnace"),
                 20,
@@ -65,7 +66,7 @@ class MachineRecipeTransferHandlerTest {
 
     @Test
     void transferViewSkipsFluidInputSlotsWhenRestoringItemCounts() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_transfer_mixed_inputs"),
                 MMCR.id("blast_furnace"),
                 20,

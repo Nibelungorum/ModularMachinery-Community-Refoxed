@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.internal.event;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.external.ExternalCapabilityAdapter;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
@@ -18,7 +16,6 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -48,20 +45,11 @@ public final class ModCapabilities {
             Capabilities.Fluid.BLOCK;
     public static final BlockCapability<EnergyHandler, Direction> ENERGY_BLOCK =
             Capabilities.Energy.BLOCK;
-    private static boolean externalAdaptersInitialized;
-
     private ModCapabilities() {}
 
-    /** Ensures built-in capability adapters are installed before event listeners are exposed. */
-    public static synchronized void initializeExternalAdapters() {
-        if (externalAdaptersInitialized) return;
-        ExternalCapabilityRegistry.global().register(new NeoForgeCapabilityAdapter());
-        externalAdaptersInitialized = true;
-    }
-
     public static void register(RegisterCapabilitiesEvent event) {
-        initializeExternalAdapters();
         ExternalCapabilityContext context = new ExternalCapabilityContext();
+        bindNativeExposures(context);
         ExternalCapabilityRegistry.global().freeze(context);
         for (IOPortKind kind : nativeCapabilityPorts()) {
             registerNativePort(event, kind, context);
@@ -115,11 +103,14 @@ public final class ModCapabilities {
                 .toList();
     }
 
-    private static Map<CapabilityType, CapabilityBinding.ExternalExposure<?>> externalExposuresByType() {
-        Map<CapabilityType, CapabilityBinding.ExternalExposure<?>> exposures = new java.util.LinkedHashMap<>();
-        PortKinds.all().forEach(kind -> externalBindings(kind).forEach(binding ->
-                binding.externalExposure().ifPresent(exposure -> exposures.putIfAbsent(binding.type(), exposure))));
-        return Map.copyOf(exposures);
+    private static void bindNativeExposures(ExternalCapabilityContext context) {
+        PortKinds.all().forEach(kind -> kind.definition().bindings().forEach(binding ->
+                binding.externalExposure().ifPresent(exposure -> bindExposure(context, binding.type(), exposure))));
+    }
+
+    private static <T> void bindExposure(ExternalCapabilityContext context, CapabilityType type,
+                                         CapabilityBinding.ExternalExposure<T> exposure) {
+        context.bind(type, exposure);
     }
 
     private static <T> void registerExternalPort(RegisterCapabilitiesEvent event, IOPortKind kind,
@@ -136,31 +127,6 @@ public final class ModCapabilities {
                             || port.capability(binding.type()) == null) return null;
                     return exposure.resolver().resolve(port, binding.ioType(), side);
                 });
-    }
-
-    /** Bridges the generic MMCR external exposure declaration to NeoForge block capabilities.
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class NeoForgeCapabilityAdapter implements ExternalCapabilityAdapter {
-        @Override
-        public Identifier id() {
-            return MMCR.id("neoforge");
-        }
-
-        @Override
-        public Set<CapabilityType> capabilityTypes() {
-            return externalExposuresByType().keySet();
-        }
-
-        @Override
-        public boolean isAvailable() {
-            return true;
-        }
-
-        @Override
-        public void register(ExternalCapabilityContext context) {
-            externalExposuresByType().forEach(context::bind);
-        }
     }
 
     private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind,

@@ -40,13 +40,10 @@ public final class ActiveMachineRecipe {
 
     private static final Logger LOG = LoggerFactory.getLogger(ActiveMachineRecipe.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
-    private static final int LEGACY_RECIPE_DEFINITION_VERSION = 1;
     private static final int RECIPE_DEFINITION_VERSION = 2;
     private static final int EFFECTIVE_EXECUTION_SNAPSHOT_VERSION = 1;
     private static final String EFFECTIVE_DEFINITION_MARKER = "has_effective_definition";
     private static final String EFFECTIVE_DEFINITION_VERSION = "effective_definition_version";
-    private static final String LEGACY_EFFECTIVE_SNAPSHOT_MARKER = "has_effective_execution_snapshot";
-    private static final String LEGACY_EFFECTIVE_SNAPSHOT_VERSION = "effective_execution_snapshot_version";
 
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
 
@@ -270,11 +267,10 @@ public final class ActiveMachineRecipe {
         MachineRecipe recipe;
         if (input.getBooleanOr("has_recipe_definition", false)) {
             int definitionVersion = input.getIntOr("recipe_definition_version", -1);
-            if (definitionVersion != LEGACY_RECIPE_DEFINITION_VERSION
-                    && definitionVersion != RECIPE_DEFINITION_VERSION) {
+            if (definitionVersion != RECIPE_DEFINITION_VERSION) {
                 return new LoadResult(null);
             }
-            if (definitionVersion == RECIPE_DEFINITION_VERSION && registries == null) {
+            if (registries == null) {
                 return new LoadResult(null);
             }
             try {
@@ -288,8 +284,7 @@ public final class ActiveMachineRecipe {
             String expectedFingerprint = input.getStringOr("recipe_definition_fingerprint", "");
             String actualFingerprint;
             try {
-                actualFingerprint = definitionFingerprint(recipe,
-                        definitionVersion == LEGACY_RECIPE_DEFINITION_VERSION ? null : registries);
+                actualFingerprint = definitionFingerprint(recipe, registries);
             } catch (IllegalStateException exception) {
                 return new LoadResult(null);
             }
@@ -303,43 +298,20 @@ public final class ActiveMachineRecipe {
         List<MachineRequirement> effectiveRequirements = null;
         List<MachineOutput> effectiveOutputs = null;
         int effectiveDuration = -1;
-        boolean hasCurrentSnapshotMarker = hasField(input, EFFECTIVE_DEFINITION_MARKER);
-        boolean hasLegacySnapshotMarker = hasField(input, LEGACY_EFFECTIVE_SNAPSHOT_MARKER);
-        boolean currentSnapshotMarker = input.getBooleanOr(EFFECTIVE_DEFINITION_MARKER, false);
-        boolean legacySnapshotMarker = input.getBooleanOr(LEGACY_EFFECTIVE_SNAPSHOT_MARKER, false);
-        boolean hasCurrentSnapshotVersion = hasField(input, EFFECTIVE_DEFINITION_VERSION);
-        boolean hasLegacySnapshotVersion = hasField(input, LEGACY_EFFECTIVE_SNAPSHOT_VERSION);
+        boolean hasSnapshotMarker = hasField(input, EFFECTIVE_DEFINITION_MARKER);
+        boolean snapshotMarker = input.getBooleanOr(EFFECTIVE_DEFINITION_MARKER, false);
+        boolean hasSnapshotVersion = hasField(input, EFFECTIVE_DEFINITION_VERSION);
         boolean hasEffectivePayload = hasField(input, "effective_duration")
                 || hasField(input, "effective_requirements")
                 || hasField(input, "effective_outputs")
-                || hasCurrentSnapshotVersion
-                || hasLegacySnapshotVersion;
-        if (hasCurrentSnapshotMarker && hasLegacySnapshotMarker
-                && currentSnapshotMarker != legacySnapshotMarker) {
+                || hasSnapshotVersion;
+        if (!snapshotMarker && hasEffectivePayload) {
             return new LoadResult(null);
         }
-        if (hasCurrentSnapshotVersion && hasLegacySnapshotVersion
-                && input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
-                != input.getIntOr(LEGACY_EFFECTIVE_SNAPSHOT_VERSION, -1)) {
-            return new LoadResult(null);
-        }
-        boolean hasEffectiveExecutionSnapshot = currentSnapshotMarker || legacySnapshotMarker;
-        if (!hasEffectiveExecutionSnapshot && hasEffectivePayload) {
-            return new LoadResult(null);
-        }
-        if (currentSnapshotMarker && hasLegacySnapshotVersion && !hasLegacySnapshotMarker) {
-            return new LoadResult(null);
-        }
-        if (legacySnapshotMarker && hasCurrentSnapshotVersion && !hasCurrentSnapshotMarker) {
-            return new LoadResult(null);
-        }
-        if (hasEffectiveExecutionSnapshot) {
-            if ((currentSnapshotMarker && (!hasCurrentSnapshotVersion
+        if (snapshotMarker) {
+            if (!hasSnapshotVersion
                     || input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
-                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION))
-                    || (legacySnapshotMarker && (!hasLegacySnapshotVersion
-                    || input.getIntOr(LEGACY_EFFECTIVE_SNAPSHOT_VERSION, -1)
-                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION))) {
+                    != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION) {
                 return new LoadResult(null);
             }
             try {
@@ -358,7 +330,7 @@ public final class ActiveMachineRecipe {
         InputConsumptionPlan inputPlan = null;
         boolean hasInputConsumptionPlan = hasField(input, "has_input_consumption_plan")
                 || hasField(input, "inputConsumptionPlan");
-        if (hasEffectiveExecutionSnapshot && !hasInputConsumptionPlan) {
+        if (snapshotMarker && !hasInputConsumptionPlan) {
             return new LoadResult(null);
         }
         if (hasInputConsumptionPlan) {
@@ -368,7 +340,7 @@ public final class ActiveMachineRecipe {
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
-            if (inputPlan == null || (hasEffectiveExecutionSnapshot
+            if (inputPlan == null || (snapshotMarker
                     && !inputPlan.isValidFor(effectiveRequirements))) return new LoadResult(null);
         }
         long maxParallelism = input.getLongOr("maxParallelism", 1L);
@@ -376,12 +348,12 @@ public final class ActiveMachineRecipe {
         int serializedTotalTick = input.getIntOr("totalTick", -1);
         int tick = input.getIntOr("tick", 0);
         boolean finishPending = input.getBooleanOr("finishPending", false);
-        int totalTick = hasEffectiveExecutionSnapshot ? effectiveDuration : serializedTotalTick;
+        int totalTick = snapshotMarker ? effectiveDuration : serializedTotalTick;
         if (serializedTotalTick < 1 || !validRuntimeState(tick, totalTick, maxParallelism, parallelism,
                 finishPending)) {
             return new LoadResult(null);
         }
-        ActiveMachineRecipe result = hasEffectiveExecutionSnapshot
+        ActiveMachineRecipe result = snapshotMarker
                 ? new ActiveMachineRecipe(recipe, maxParallelism,
                 new RecipeStartContext.ExecutionSnapshot(effectiveDuration, effectiveRequirements, effectiveOutputs))
                 : new ActiveMachineRecipe(recipe, maxParallelism, false);
@@ -425,7 +397,7 @@ public final class ActiveMachineRecipe {
     }
 
     /**
-     * Promotes a legacy active recipe to the effective runtime definition selected during restore.
+     * Publishes the effective runtime definition selected during restore.
      */
     public void setEffectiveExecutionSnapshot(RecipeStartContext.ExecutionSnapshot execution) {
         Objects.requireNonNull(execution, "execution");
@@ -523,9 +495,6 @@ public final class ActiveMachineRecipe {
         var ops = registries == null ? NbtOps.INSTANCE : RegistryOps.create(NbtOps.INSTANCE, registries);
         CompoundTag encoded = (CompoundTag) MachineRecipe.CODEC.codec()
                 .encodeStart(ops, recipe).getOrThrow();
-        encoded.remove("inputs");
-        encoded.remove("outputs");
-        encoded.remove("fluid_outputs");
         MessageDigest digest;
         try {
             digest = MessageDigest.getInstance("SHA-256");

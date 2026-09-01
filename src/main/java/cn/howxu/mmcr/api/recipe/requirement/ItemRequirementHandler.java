@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
-import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -65,18 +64,6 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         } catch (UnsupportedOperationException ignored) {
             return true;
         }
-    }
-
-    @Override
-    public MachineIngredient legacyInput(ItemRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.INPUT
-                ? new MachineIngredient.ItemIngredient(requirement.item(), requirement.count(),
-                requirement.components(), requirement.consumeChance()) : null;
-    }
-
-    @Override
-    public ItemStack legacyItemOutput(ItemRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.resolvedStack() : null;
     }
 
     private static int levelOutputCount(int original, double multiplier) {

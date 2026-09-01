@@ -41,6 +41,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
@@ -216,7 +217,7 @@ class MachineBehaviorRuntimeTest {
                     ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(64);
                 }).build()));
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("behavior_start_snapshot"), TEST_MACHINE_ID, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("behavior_start_snapshot"), TEST_MACHINE_ID, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 input(Items.IRON_INGOT), output(Items.IRON_NUGGET)));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -281,7 +282,7 @@ class MachineBehaviorRuntimeTest {
                     ((MachineOutput.FluidOutput) context.outputs().get(1)).stack().setAmount(2_000);
                 }).build()));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("behavior_tick_stack_isolation"), TEST_MACHINE_ID,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("behavior_tick_stack_isolation"), TEST_MACHINE_ID,
                 1, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 output(Items.IRON_NUGGET),
                 new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
@@ -732,7 +733,7 @@ class MachineBehaviorRuntimeTest {
     }
 
     private static MachineRecipe recipe(String path, Identifier machineId, ItemRequirement... requirements) {
-        return new MachineRecipe(MMCR.id(path), machineId, 1, List.of(), List.of(),
+        return RecipeTestSupport.create(MMCR.id(path), machineId, 1, List.of(), List.of(),
                 List.of(), 0, 1, false, List.of(), List.of(requirements));
     }
 

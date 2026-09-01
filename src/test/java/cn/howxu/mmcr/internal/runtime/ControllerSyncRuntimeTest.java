@@ -28,6 +28,7 @@ import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -158,7 +159,7 @@ class ControllerSyncRuntimeTest {
         controller.componentRuntime().replaceComponents(List.of(
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
         controller.setFormed(true);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
 
@@ -198,7 +199,7 @@ class ControllerSyncRuntimeTest {
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_immediate_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_immediate_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
 
@@ -234,7 +235,7 @@ class ControllerSyncRuntimeTest {
                 ItemStack.EMPTY, new LevelModifier(1D, 1D, 1D, 2, 0))));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_level_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_level_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
 
@@ -299,7 +300,7 @@ class ControllerSyncRuntimeTest {
                 new ProcessingComponent(null, input, input.getBlockPos(), BlockPos.ZERO, (String) null)));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_initial_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_initial_recipe"), machineId, 20,
                 List.of(), List.of(), List.of(), 0, 4, false, List.of(), List.of(
                         new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                                 ItemStack.EMPTY)));
@@ -328,7 +329,7 @@ class ControllerSyncRuntimeTest {
         controller.componentRuntime().replaceComponents(List.of(
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
         controller.setFormed(true);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_factory_reform_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_reform_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
 
@@ -358,7 +359,7 @@ class ControllerSyncRuntimeTest {
                 MachineControllerSpec.defaultsFor(machineId));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, machine);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("sync_failure_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_failure_recipe"), machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY)));

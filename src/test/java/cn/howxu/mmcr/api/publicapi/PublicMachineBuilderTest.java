@@ -13,7 +13,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
@@ -366,7 +366,7 @@ class PublicMachineBuilderTest {
                         .where('C', BlockPredicate.machineCoupler()).controller('C')))
                 .build(machineId);
 
-        assertThat(PublicMachineAdapter.toStructureDefinition(structure).declarations())
+        assertThat(MachineDefinitionConverter.toStructureDefinition(structure).declarations())
                 .extracting(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration::kind)
                 .containsExactly(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.FULL,
                         cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.EXTENSION);

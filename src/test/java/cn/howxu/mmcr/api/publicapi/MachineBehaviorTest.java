@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -220,7 +221,7 @@ class MachineBehaviorTest {
 
     @Test
     void compatibility_start_constructor_applies_recipe_duration_modifier() {
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("compatibility_duration"), MMCR.id("compatibility_machine"), 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("compatibility_duration"), MMCR.id("compatibility_machine"), 20,
                 List.of(), List.of(), List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION,
                         RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)), 0, 1);
 
@@ -294,7 +295,7 @@ class MachineBehaviorTest {
     }
 
     private static MachineRecipe recipe() {
-        return new MachineRecipe(MMCR.id("behavior_recipe"), MMCR.id("behavior_machine"), 20,
+        return RecipeTestSupport.create(MMCR.id("behavior_recipe"), MMCR.id("behavior_machine"), 20,
                 List.of(), List.of());
     }
 }

@@ -15,7 +15,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -97,19 +96,16 @@ class CustomRecipeContractTest {
                     .custom(customInput)
                     .custom(customOutput)
                     .build();
-            var recipe = PublicRecipeAdapter.toRecipe(definition,
+            var recipe = MachineRecipeConverter.toRecipe(definition,
                     new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
 
             assertThat(recipe.requirements()).containsExactly(input);
-            assertThat(recipe.inputs()).containsExactly(new MachineIngredient.EnergyIngredient(input.value()));
             assertThat(recipe.machineOutputs()).containsExactly(output);
-            assertThat(LEGACY_INPUT_CALLS.get()).isGreaterThan(0);
         }
     }
 
     private static final Identifier TEST_REQUIREMENT_ID = id("custom_contract_requirement");
     private static final Identifier TEST_OUTPUT_ID = id("custom_contract_output");
-    private static final AtomicInteger LEGACY_INPUT_CALLS = new AtomicInteger();
     private static final MapCodec<TestRequirement> TEST_REQUIREMENT_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> TEST_REQUIREMENT_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(TestRequirement::io),
@@ -122,11 +118,6 @@ class CustomRecipeContractTest {
             return null;
         }
 
-        @Override
-        public MachineIngredient legacyInput(TestRequirement requirement) {
-            LEGACY_INPUT_CALLS.incrementAndGet();
-            return new MachineIngredient.EnergyIngredient(requirement.value());
-        }
     };
     private static final RequirementType<TestRequirement> TEST_REQUIREMENT_TYPE = new RequirementType.Definition<>(
             TEST_REQUIREMENT_ID, TEST_REQUIREMENT_CODEC, TEST_HANDLER);

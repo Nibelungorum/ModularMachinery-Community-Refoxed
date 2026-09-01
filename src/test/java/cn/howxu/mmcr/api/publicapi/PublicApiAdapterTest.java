@@ -10,7 +10,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
-import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -37,9 +37,9 @@ class PublicApiAdapterTest {
                         .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
                 .build(machineId);
 
-        assertThat(PublicMachineAdapter.toRegistration(definition).id()).isEqualTo(machineId);
-        assertThat(PublicMachineAdapter.toStructureDefinition(structure).machineId()).isEqualTo(machineId);
-        assertThat(PublicMachineAdapter.toDynamicMachine(definition, structure).registryName()).isEqualTo(machineId);
+        assertThat(MachineDefinitionConverter.toRegistration(definition).id()).isEqualTo(machineId);
+        assertThat(MachineDefinitionConverter.toStructureDefinition(structure).machineId()).isEqualTo(machineId);
+        assertThat(MachineDefinitionConverter.toDynamicMachine(definition, structure).registryName()).isEqualTo(machineId);
     }
 
     @Test
@@ -54,7 +54,7 @@ class PublicApiAdapterTest {
                         .where('F', predicate).controller('F')))
                 .build(MMCR.id("deferred_predicate_machine"));
 
-        var converted = PublicMachineAdapter.toStructureDefinition(structure);
+        var converted = MachineDefinitionConverter.toStructureDefinition(structure);
 
         assertThat(resolved).isFalse();
         assertThat(converted.declarations().getFirst().pattern().get(net.minecraft.core.BlockPos.ZERO)
@@ -84,7 +84,7 @@ class PublicApiAdapterTest {
                         .requirements(requirements -> requirements.levelSlot('C', MMCR.id("coil"))))
                 .build(machineId);
 
-        var converted = PublicMachineAdapter.toDynamicMachine(definition, structure);
+        var converted = MachineDefinitionConverter.toDynamicMachine(definition, structure);
         assertThat(converted.registryName()).isEqualTo(machineId);
         assertThat(converted.controller().frontTexture()).isEqualTo(MMCR.id("block/front"));
         assertThat(converted.appearance().machineBasicBlock()).isEqualTo(MMCR.id("steel_casing"));
@@ -95,7 +95,7 @@ class PublicApiAdapterTest {
         assertThat(converted.hasFactory()).isTrue();
         assertThat(converted.factoryThreadLimit()).isEqualTo(4);
         assertThat(converted.factoryThreads()).hasSize(1);
-        assertThat(PublicMachineAdapter.toStartupRegistration(definition, structure).maxParallelAmount()).isEqualTo(8);
+        assertThat(MachineDefinitionConverter.toStartupRegistration(definition, structure).maxParallelAmount()).isEqualTo(8);
         assertThat(converted.role()).isEqualTo(cn.howxu.mmcr.api.machine.MachineRole.HOST);
         assertThat(converted.acceptedModuleIds()).containsExactly(moduleId);
         assertThat(converted.structureStages()).hasSize(1);
@@ -113,7 +113,7 @@ class PublicApiAdapterTest {
                         .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
                 .build(machineId);
 
-        var registration = PublicMachineAdapter.toStartupRegistration(definition, structure);
+        var registration = MachineDefinitionConverter.toStartupRegistration(definition, structure);
         assertThat(registration.id()).isEqualTo(machineId);
         assertThat(registration.displayNameKey()).isEqualTo("machine.registered");
         assertThat(registration.pattern().get(net.minecraft.core.BlockPos.ZERO)).isNotNull();
@@ -127,8 +127,8 @@ class PublicApiAdapterTest {
                 .build();
         var structure = structureFor(machineId);
 
-        var registration = PublicMachineAdapter.toStartupRegistration(definition, structure);
-        var machine = PublicMachineAdapter.toDynamicMachine(definition, structure);
+        var registration = MachineDefinitionConverter.toStartupRegistration(definition, structure);
+        var machine = MachineDefinitionConverter.toDynamicMachine(definition, structure);
 
         assertThat(registration.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
         assertThat(machine.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
@@ -144,7 +144,7 @@ class PublicApiAdapterTest {
                         .where('S', BlockPredicate.block(Blocks.STONE)).controller('S')))
                 .build(machineId);
 
-        assertThat(PublicMachineAdapter.toStructureDefinition(structure).declarations())
+        assertThat(MachineDefinitionConverter.toStructureDefinition(structure).declarations())
                 .extracting(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration::kind)
                 .containsExactly(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.FULL,
                         cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.EXTENSION);
@@ -155,7 +155,7 @@ class PublicApiAdapterTest {
         var definition = MachineBuilder.machine(MMCR.id("adapter_definition")).build();
         var structure = structureFor(MMCR.id("other_machine"));
 
-        assertThatThrownBy(() -> PublicMachineAdapter.toDynamicMachine(definition, structure))
+        assertThatThrownBy(() -> MachineDefinitionConverter.toDynamicMachine(definition, structure))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("adapter_definition")
                 .hasMessageContaining("other_machine");
@@ -166,7 +166,7 @@ class PublicApiAdapterTest {
         var definition = MachineBuilder.machine(MMCR.id("registration_definition")).build();
         var structure = structureFor(MMCR.id("other_machine"));
 
-        assertThatThrownBy(() -> PublicMachineAdapter.toStartupRegistration(definition, structure))
+        assertThatThrownBy(() -> MachineDefinitionConverter.toStartupRegistration(definition, structure))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("registration_definition")
                 .hasMessageContaining("other_machine");
@@ -178,7 +178,7 @@ class PublicApiAdapterTest {
                 .factory(factory -> factory.hasFactory(true).threadLimit(2))
                 .build();
 
-        assertThatThrownBy(() -> PublicMachineAdapter.toRegistration(definition))
+        assertThatThrownBy(() -> MachineDefinitionConverter.toRegistration(definition))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("factory settings");
     }

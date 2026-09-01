@@ -46,7 +46,8 @@ class MachineStructureBuilderJSTest {
     @Test
     void server_structure_builder_creates_structure_definition() {
         var structure = new MachineStructureBuilderJS("mmcr:arc_furnace")
-                .pattern("_I", Map.of("I", Blocks.IRON_BLOCK))
+                .pattern("_I")
+                .set("I", Blocks.IRON_BLOCK)
                 .createObject();
 
         assertThat(structure.machineId()).isEqualTo(MMCR.id("arc_furnace"));
@@ -167,7 +168,8 @@ class MachineStructureBuilderJSTest {
                 ItemStack.EMPTY, LevelModifier.IDENTITY));
 
         var definition = new MachineStructureBuilderJS("test:furnace")
-                .pattern("C", Map.of("C", new LevelSlot(coilType)))
+                .pattern("C")
+                .set("C", new LevelSlot(coilType))
                 .createObject();
 
         assertThat(definition.levelSlots()).containsExactly(Map.entry(BlockPos.ZERO, coilType));
@@ -249,7 +251,8 @@ class MachineStructureBuilderJSTest {
                 ItemStack.EMPTY, LevelModifier.IDENTITY));
 
         var definition = new MachineStructureBuilderJS("test:repeated_levels")
-                .pattern("LL", Map.of("L", new LevelSlot(coilType)))
+                .pattern("LL")
+                .set("L", new LevelSlot(coilType))
                 .createObject();
 
         assertThat(definition.requirements().levelSlots()).containsEntry('L', coilType);
@@ -262,7 +265,8 @@ class MachineStructureBuilderJSTest {
     void builder_supports_full_structure_and_extension_declarations() {
         BlockPredicate casingPredicate = new BlockPredicate.OfBlock(Blocks.IRON_BLOCK);
         var definition = new MachineStructureBuilderJS("mmcr:expandable")
-                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .pattern("C")
+                .set("C", Blocks.IRON_BLOCK)
                 .extension(new BlockArray(Map.of(new BlockPos(1, 0, 0), casingPredicate)))
                 .createObject();
 
@@ -275,7 +279,8 @@ class MachineStructureBuilderJSTest {
         BlockArray alternative = new BlockArray(Map.of(new BlockPos(2, 0, 0), new BlockPredicate.Any()));
 
         var definition = new MachineStructureBuilderJS("mmcr:alternatives")
-                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .pattern("C")
+                .set("C", Blocks.IRON_BLOCK)
                 .fullStructure(alternative)
                 .createObject();
 
@@ -434,10 +439,10 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
-    void callback_stage_api_rejects_top_level_pattern_api() {
+    void callback_stage_api_rejects_top_level_structure_api() {
         assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr:test")
                 .mainStructure(stage -> stage.pattern("X").set("X", Blocks.IRON_BLOCK))
-                .pattern("X", Map.of("X", Blocks.IRON_BLOCK)))
+                .set("X", Blocks.IRON_BLOCK))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Callback and top-level structure APIs cannot be mixed");
     }
@@ -536,7 +541,8 @@ class MachineStructureBuilderJSTest {
                 .portRequirements(PortRequirementSpec.builder().min("item_input_bus", 1).build())
                 .portTierRequirements(PortTierRequirementSpec.builder().anyItemInput().build())
                 .dynamicPattern(dynamic)
-                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .pattern("C")
+                .set("C", Blocks.IRON_BLOCK)
                 .createObject();
 
         assertThat(definition.portRequirements().requirements()).containsKey("item_input_bus");
@@ -573,7 +579,8 @@ class MachineStructureBuilderJSTest {
         BlockArray alternative = new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK)));
 
         var definition = new MachineStructureBuilderJS("test:pattern_then_full")
-                .pattern("C", Map.of("C", Blocks.IRON_BLOCK))
+                .pattern("C")
+                .set("C", Blocks.IRON_BLOCK)
                 .portRequirements(PortRequirementSpec.builder().min("item_input_bus", 1).build())
                 .fullStructure(alternative)
                 .createObject();

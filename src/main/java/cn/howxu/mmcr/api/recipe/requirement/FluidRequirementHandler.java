@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
-import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -50,17 +49,6 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         stack.setAmount(levelOutputAmount(stack.getAmount(), outputMultiplier));
         return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), stack,
                 requirement.chance(), requirement.tags());
-    }
-
-    @Override
-    public MachineIngredient legacyInput(FluidRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.INPUT
-                ? new MachineIngredient.FluidIngredient(requirement.fluid(), requirement.amount()) : null;
-    }
-
-    @Override
-    public FluidStack legacyFluidOutput(FluidRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.stack().copy() : null;
     }
 
     private static int levelOutputAmount(int original, double multiplier) {

@@ -16,6 +16,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * End-to-end smart interface binding and recipe write coverage.
@@ -47,9 +48,10 @@ public class SmartInterfaceGameTest {
                 "Smart interface received its default binding");
         helper.assertTrue(smartInterface.setValue(0, 15F), "Smart interface accepts range-compatible input value");
 
-        RecipeRegistry.register(new MachineRecipe(MMCR.id("smart_interface_output"), machine.registryName(), 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
-                SmartInterfaceRequirement.input(type, 10F, 20F), SmartInterfaceRequirement.output(type, 42F))));
+        RecipeRegistry.register(MachineRecipe.fromCanonical(MMCR.id("smart_interface_output"), machine.registryName(), 20,
+                List.of(SmartInterfaceRequirement.input(type, 10F, 20F),
+                        SmartInterfaceRequirement.output(type, 42F)), List.of(), List.of(), 0, 1, false, false,
+                List.of(), false, Set.of()));
         controller.serverTick();
 
         helper.assertTrue(smartInterface.bindingFor(controllerWorldPos).map(binding -> binding.value() == 15F).orElse(false),

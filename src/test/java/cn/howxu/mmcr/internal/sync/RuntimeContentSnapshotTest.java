@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -22,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -157,7 +159,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeSyncCodecRoundTripsRuntimeRecipe() {
-        MachineRecipe original = new MachineRecipe(
+        MachineRecipe original = RecipeTestSupport.create(
                 MMCR.id("sync_recipe"), MMCR.id("runtime_test_machine"), 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(new ItemStack(Items.GOLD_INGOT, 4)),
@@ -181,10 +183,10 @@ class RuntimeContentSnapshotTest {
         assertThat(decoded.requiredHostIds()).containsExactly(MMCR.id("runtime_host"));
         assertThat(decoded.levelRequirements()).containsExactlyElementsOf(original.levelRequirements());
         assertThat(decoded.modifiers()).containsExactlyElementsOf(original.modifiers());
-        assertThat(decoded.inputs()).containsExactlyElementsOf(original.inputs());
-        assertThat(decoded.outputs()).singleElement().satisfies(stack -> {
-            assertThat(stack.getItem()).isEqualTo(Items.GOLD_INGOT);
-            assertThat(stack.getCount()).isEqualTo(4);
+        assertThat(decoded.requirements()).containsExactlyElementsOf(original.requirements());
+        assertThat(decoded.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getItem()).isEqualTo(Items.GOLD_INGOT);
+            assertThat(output.stack().getCount()).isEqualTo(4);
         });
         assertThat(decoded.requirements()).hasSameSizeAs(original.requirements());
         assertThat(decoded.requirements().getFirst()).satisfies(requirement -> {
@@ -419,7 +421,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeCodecRejectsOversizedFluidOutput() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("oversized_fluid_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
@@ -433,7 +435,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeCodecRejectsOversizedRequirementCountOnEncode() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("oversized_requirements_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 Collections.nCopies(4097, new EnergyRequirement(1)));
@@ -446,7 +448,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeCodecRejectsOversizedModifierCountOnEncode() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("oversized_modifiers_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), Collections.nCopies(1025,
                         new RecipeModifier("target", RecipeModifier.IOType.INPUT, 1F,
@@ -474,7 +476,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeCodecRejectsOversizedRequiredHostCountOnEncode() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("oversized_hosts_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
                 List.of(), false, hostIds(1025));
@@ -487,7 +489,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void recipeCodecRejectsOversizedRequirementTagCountOnEncode() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("oversized_tags_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new EnergyRequirement(1, Collections.nCopies(1025, "tag"))));
@@ -552,7 +554,7 @@ class RuntimeContentSnapshotTest {
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {
-        return new MachineRecipe(
+        return RecipeTestSupport.create(
                 id, machineId, 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(new ItemStack(Items.GOLD_INGOT, 4)),

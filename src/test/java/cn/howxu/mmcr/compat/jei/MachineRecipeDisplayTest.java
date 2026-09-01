@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
@@ -184,7 +185,7 @@ class MachineRecipeDisplayTest {
                         RecipeModifier.Operation.MULTIPLY))
                 .build());
         MachineDefinitions.freezeRegistryPhase();
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("jei_smart_modifier_recipe"),
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("jei_smart_modifier_recipe"),
                 MMCR.id("jei_interface_modifier"), 40, List.of(), List.of());
 
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
@@ -218,7 +219,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displaySortsRequiredHostIdsForStableJeiCycling() {
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("jei_required_hosts"), MMCR.id("hosted_module"), 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("jei_required_hosts"), MMCR.id("hosted_module"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), Set.of(
                 MMCR.id("zeta_host"), MMCR.id("alpha_host"), MMCR.id("middle_host")
         ));
@@ -230,7 +231,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void publicConstructorNormalizesMutableUnorderedRequiredHostIds() {
-        MachineRecipeDisplay template = MachineRecipeDisplay.from(new MachineRecipe(
+        MachineRecipeDisplay template = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("direct_constructor_host_recipe"), MMCR.id("hosted_module"), 20, List.of(), List.of()));
         Set<Identifier> requiredHostIds = new LinkedHashSet<>(List.of(
                 MMCR.id("zeta_host"), MMCR.id("alpha_host"), MMCR.id("middle_host")));
@@ -259,7 +260,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void hostRequirementIsEmptyWhenRecipeHasNoRequiredHost() {
-        MachineRecipeDisplay display = MachineRecipeDisplay.from(new MachineRecipe(
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("jei_no_required_host"), MMCR.id("module_without_host"), 20, List.of(), List.of()));
 
         assertThat(MachineRecipeCategory.hostRequirementComponent(display, 0)).satisfies(component -> {
@@ -312,7 +313,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayIncludesItemFluidEnergyAndDuration() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_display"),
                 MMCR.id("blast_furnace"),
                 120,
@@ -350,7 +351,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayUsesRuntimeOutputsAfterModifiers() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_modifier_display"),
                 MMCR.id("blast_furnace"),
                 80,
@@ -371,7 +372,7 @@ class MachineRecipeDisplayTest {
     @Test
     void displayPreservesItemOutputChanceForOverlay() {
         ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1);
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_chanced_output"),
                 MMCR.id("blast_furnace"),
                 80,
@@ -397,7 +398,7 @@ class MachineRecipeDisplayTest {
     void displayPreservesOutputComponents() {
         ItemStack namedSharpnessFourSword = namedSharpnessFourSword();
         namedSharpnessFourSword.setCount(2);
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("component_output_display"),
                 MMCR.id("test_machine_name"),
                 40,
@@ -420,7 +421,7 @@ class MachineRecipeDisplayTest {
                 DataComponents.REPAIR_COST, ComponentPredicate.exact(
                         new Dynamic<>(JsonOps.INSTANCE,
                                 new JsonPrimitive(1)))));
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("explicit_component_output_display"), MMCR.id("test_machine_name"), 40,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_SWORD),
@@ -434,7 +435,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayAppliesTextComponentPredicatesToInputStacks() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("component_input_display"),
                 MMCR.id("test_machine_name"),
                 40,
@@ -453,7 +454,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayFallsBackToBaseStackForRangeComponentPredicates() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("range_component_input_display"),
                 MMCR.id("blast_furnace"),
                 40,
@@ -472,7 +473,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayDoesNotDereferenceUnboundTagInputs() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("tag_input_display"),
                 MMCR.id("blast_furnace"),
                 40,
@@ -493,7 +494,7 @@ class MachineRecipeDisplayTest {
     void displayKeepsEveryResolvedTagItemForJeiCarousel() {
         Ingredient tag = Ingredient.of(HolderSet.direct(
                 Items.OAK_LOG.builtInRegistryHolder(), Items.BIRCH_LOG.builtInRegistryHolder()));
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("resolved_tag_input_display"), MMCR.id("blast_furnace"), 40,
                 List.of(new MachineIngredient.ItemIngredient(tag, 1)), List.of());
 
@@ -527,7 +528,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void layoutPlacesFluidsBeforeItemsAndCapsOverflow() {
-        MachineRecipeDisplay display = MachineRecipeDisplay.from(new MachineRecipe(
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("jei_layout"),
                 MMCR.id("blast_furnace"),
                 20,
@@ -548,7 +549,7 @@ class MachineRecipeDisplayTest {
                 true,
                 List.of(new FluidStack(Fluids.WATER.builtInRegistryHolder(), 100))
         ));
-        MachineRecipeDisplay overflow = MachineRecipeDisplay.from(new MachineRecipe(
+        MachineRecipeDisplay overflow = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("jei_overflow"),
                 MMCR.id("blast_furnace"),
                 20,
@@ -612,7 +613,7 @@ class MachineRecipeDisplayTest {
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {
-        return new MachineRecipe(
+        return RecipeTestSupport.create(
                 MMCR.id(id),
                 MMCR.id(machine),
                 20,
@@ -625,7 +626,7 @@ class MachineRecipeDisplayTest {
     }
 
     private static MachineRecipeDisplay hostDisplay(Set<Identifier> requiredHostIds) {
-        return MachineRecipeDisplay.from(new MachineRecipe(MMCR.id("jei_required_host_recipe"), MMCR.id("hosted_module"), 20,
+        return MachineRecipeDisplay.from(RecipeTestSupport.create(MMCR.id("jei_required_host_recipe"), MMCR.id("hosted_module"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), requiredHostIds));
     }
 
@@ -640,7 +641,7 @@ class MachineRecipeDisplayTest {
     }
 
     private static MachineRecipeDisplay displayFor(SmartInterfaceRequirement requirement, Identifier machineId) {
-        return MachineRecipeDisplay.from(new MachineRecipe(MMCR.id("interface_jei_recipe"), machineId, 20,
+        return MachineRecipeDisplay.from(RecipeTestSupport.create(MMCR.id("interface_jei_recipe"), machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(requirement)));
     }
 

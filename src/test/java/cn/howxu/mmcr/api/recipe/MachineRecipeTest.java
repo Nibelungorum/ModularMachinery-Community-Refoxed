@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -65,7 +66,7 @@ class MachineRecipeTest {
 
     @Test
     void recipe_codec_roundtrip() {
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "iron_compressor"),
                 Identifier.fromNamespaceAndPath("mmcr", "iron_compressor_machine"),
                 40,
@@ -137,7 +138,7 @@ class MachineRecipeTest {
 
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
 
-        ItemStack outputStack = recipe.outputs().getFirst();
+        ItemStack outputStack = ((MachineOutput.ItemOutput) recipe.machineOutputs().getFirst()).stack();
         assertThat(outputStack.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(4);
     }
 
@@ -215,7 +216,7 @@ class MachineRecipeTest {
         root.add("requirements", requirements(output));
 
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(componentJsonOps(), root).getOrThrow();
-        ItemStack actual = recipe.outputs().getFirst();
+        ItemStack actual = ((MachineOutput.ItemOutput) recipe.runtimeMachineOutputs().getFirst()).stack();
 
         assertThat(actual.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(2);
         assertThat(actual.get(DataComponents.REPAIR_COST)).isEqualTo(1);
@@ -229,7 +230,7 @@ class MachineRecipeTest {
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(kanthal, coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.parse("test:levelled"),
                 Identifier.parse("test:machine"),
                 20,
@@ -260,7 +261,7 @@ class MachineRecipeTest {
         TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:nichrome"), coilType, 2,
                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
 
-        assertThatThrownBy(() -> new MachineRecipe(
+        assertThatThrownBy(() -> RecipeTestSupport.create(
                 Identifier.parse("test:duplicate_levels"), Identifier.parse("test:machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
                 List.of(new LevelRequirement(coilType, Identifier.parse("test:kanthal")),
@@ -269,9 +270,9 @@ class MachineRecipeTest {
     }
 
     @Test
-    void recipe_derives_requirements_from_legacy_fields() {
+    void recipe_preserves_canonical_requirements_and_outputs() {
         var nugget = bindItemComponents(Items.IRON_NUGGET);
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "legacy"),
                 Identifier.fromNamespaceAndPath("mmcr", "machine"),
                 20,
@@ -283,13 +284,21 @@ class MachineRecipeTest {
         );
 
         assertThat(recipe.requirements()).hasSize(3);
-        assertThat(recipe.inputs()).containsExactlyElementsOf(List.of(
-                new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
-                new MachineIngredient.EnergyIngredient(40)
-        ));
-        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
-            assertThat(stack.getItem()).isEqualTo(Items.IRON_NUGGET);
-            assertThat(stack.getCount()).isEqualTo(1);
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(2);
+        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement)
+                .isInstanceOfSatisfying(ItemRequirement.class, input -> {
+                    assertThat(input.count()).isEqualTo(2);
+                    assertThat(input.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+                }));
+        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement)
+                .isInstanceOfSatisfying(EnergyRequirement.class, energy -> {
+                    assertThat(energy.fePerTick()).isEqualTo(40);
+                    assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+                }));
+        assertThat(recipe.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(output.stack().getCount()).isEqualTo(1);
         });
     }
 
@@ -299,8 +308,7 @@ class MachineRecipeTest {
         root.addProperty("id", "mmcr:mixed");
         root.addProperty("machine", "mmcr:machine");
         root.addProperty("tick_time", 20);
-        root.add("inputs", legacyItemInputs(itemId(Items.GOLD_INGOT), 8));
-        root.add("outputs", itemOutputs(itemId(Items.GOLD_NUGGET), 1));
+        root.add("outputs", itemOutputs(itemId(Items.IRON_NUGGET), 3));
         root.add("requirements", requirements(
                 itemRequirement("input", itemId(Items.IRON_INGOT), 2),
                 itemOutputRequirement(itemId(Items.IRON_NUGGET), 3),
@@ -311,12 +319,13 @@ class MachineRecipeTest {
         bindItemComponents(Items.GOLD_NUGGET);
 
         var recipe = MachineRecipe.CODEC.codec().parse(jsonOps(), root).getOrThrow();
-        assertThat(recipe.inputs()).hasSize(2);
-        assertThat(recipe.outputs()).singleElement().satisfies(stack -> {
-            assertThat(stack.getItem()).isEqualTo(Items.IRON_NUGGET);
-            assertThat(stack.getCount()).isEqualTo(3);
-        });
         assertThat(recipe.requirements()).hasSize(3);
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(2);
+        assertThat(recipe.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+            assertThat(output.stack().getItem()).isEqualTo(Items.IRON_NUGGET);
+            assertThat(output.stack().getCount()).isEqualTo(3);
+        });
 
         var encoded = MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow().getAsJsonObject();
         assertThat(encoded.has("requirements")).isTrue();
@@ -328,9 +337,9 @@ class MachineRecipeTest {
     @Test
     void registry_filters_recipes_by_machine_and_rejects_null_id() {
         var machineId = Identifier.fromNamespaceAndPath("mmcr", "compressor");
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "iron"), machineId, 20, List.of(), List.of());
-        var other = new MachineRecipe(
+        var other = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "gold"),
                 Identifier.fromNamespaceAndPath("mmcr", "other"), 20, List.of(), List.of());
 
@@ -340,7 +349,7 @@ class MachineRecipeTest {
 
         assertThat(RecipeRegistry.byMachine(machine)).containsExactly(recipe);
         assertThatThrownBy(() -> RecipeRegistry.register(
-                new MachineRecipe(null, machineId, 1, List.of(), List.of())))
+                RecipeTestSupport.create(null, machineId, 1, List.of(), List.of())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -349,7 +358,7 @@ class MachineRecipeTest {
         long before = RecipeRegistry.reloadVersion();
         var machineId = Identifier.fromNamespaceAndPath("mmcr", "versioned_machine");
 
-        RecipeRegistry.register(new MachineRecipe(
+        RecipeRegistry.register(RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "versioned_recipe"),
                 machineId,
                 20,
@@ -365,7 +374,7 @@ class MachineRecipeTest {
     @Test
     void fluidOnlyRequirementRecipeAssemblesEmptyItemStack() {
         bindFluidComponents(Fluids.WATER);
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "fluid_only"),
                 Identifier.fromNamespaceAndPath("mmcr", "machine"),
                 20,
@@ -491,7 +500,7 @@ class MachineRecipeTest {
     @Test
     void codec_preserves_raw_values_when_runtime_modifiers_change_derived_values() {
         bindItemComponents(Items.IRON_NUGGET);
-        var recipe = new MachineRecipe(
+        var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "raw_preserved"),
                 Identifier.fromNamespaceAndPath("mmcr", "machine"),
                 100,
@@ -510,15 +519,16 @@ class MachineRecipeTest {
         var back = MachineRecipe.CODEC.codec().parse(jsonOps(), encoded).getOrThrow();
 
         assertThat(encoded.get("tick_time").getAsInt()).isEqualTo(100);
-        assertThat(back.inputs().getFirst()).isEqualTo(recipe.inputs().getFirst());
-        assertThat(back.outputs().getFirst().getCount()).isEqualTo(1);
+        assertThat(back.requirements()).containsExactlyElementsOf(recipe.requirements());
+        assertThat(back.runtimeMachineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                output -> assertThat(output.stack().getCount()).isEqualTo(1));
         assertThat(((ItemRequirement) back.runtimeRequirements().get(0)).count()).isEqualTo(6);
         assertThat(((ItemRequirement) back.runtimeRequirements().get(1)).stack().getCount()).isEqualTo(4);
     }
 
     @Test
     void runtime_requirements_accept_structure_modifiers_without_mutating_raw_recipe() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "effective_modifiers"),
                 Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
                 20,
@@ -539,7 +549,7 @@ class MachineRecipeTest {
 
     @Test
     void runtime_requirements_apply_item_input_chance_modifiers() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "input_chance_modifier"),
                 Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
                 20,
@@ -565,7 +575,7 @@ class MachineRecipeTest {
 
     @Test
     void runtime_requirements_preserve_energy_output_direction() {
-        MachineRecipe recipe = new MachineRecipe(
+        MachineRecipe recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "energy_output_direction"),
                 Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
                 20,
@@ -596,11 +606,12 @@ class MachineRecipeTest {
         root.addProperty("id", "mmcr:partial_outputs");
         root.addProperty("machine", "mmcr:machine");
         root.addProperty("tick_time", 20);
+        root.add("requirements", new JsonArray());
         return root;
     }
 
     private static MachineRecipe partialOutputRecipe() {
-        return new MachineRecipe(
+        return RecipeTestSupport.create(
                 Identifier.parse("mmcr:partial_outputs"),
                 Identifier.parse("mmcr:machine"),
                 20,
@@ -617,18 +628,6 @@ class MachineRecipeTest {
                 true);
     }
 
-    private static JsonArray legacyItemInputs(String itemId, int count) {
-        var input = new JsonObject();
-        input.addProperty("type", "item");
-        var item = new JsonArray();
-        item.add(itemId);
-        input.add("item", item);
-        input.addProperty("count", count);
-        var inputs = new JsonArray();
-        inputs.add(input);
-        return inputs;
-    }
-
     private static String itemId(Item item) {
         return BuiltInRegistries.ITEM.getKey(item).toString();
     }
@@ -643,14 +642,16 @@ class MachineRecipeTest {
         var output = new JsonObject();
         output.addProperty("id", itemId);
         output.addProperty("count", count);
-        var outputs = new JsonArray();
-        outputs.add(output);
-        return outputs;
+        return itemOutputs(output);
     }
 
     private static JsonArray itemOutputs(JsonObject output) {
+        var canonical = new JsonObject();
+        canonical.addProperty("type", "mmcr:item");
+        canonical.add("stack", output);
+        canonical.addProperty("chance", 1F);
         var outputs = new JsonArray();
-        outputs.add(output);
+        outputs.add(canonical);
         return outputs;
     }
 

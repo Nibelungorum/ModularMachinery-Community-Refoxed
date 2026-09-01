@@ -81,7 +81,7 @@ class MachineRecipeDataDrivenTest {
     }
 
     @Test
-    void legacy_fields_normalize_to_canonical_requirements_and_outputs() {
+    void legacy_fields_are_rejected() {
         JsonObject json = recipeJson();
         JsonObject input = new JsonObject();
         input.addProperty("type", "item");
@@ -94,23 +94,14 @@ class MachineRecipeDataDrivenTest {
         json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
         json.addProperty("energy_per_tick", 40);
 
-        MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:legacy"), json,
-                registries, ignored -> true);
-
-        assertThat(recipe.requirements()).hasSize(4);
-        assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof EnergyRequirement energy
-                && energy.fePerTick() == 40);
-        assertThat(recipe.machineOutputs()).hasSize(2);
-        assertThat(recipe.outputs()).singleElement().satisfies(output -> {
-            assertThat(output.getItem()).isEqualTo(Items.IRON_NUGGET);
-            assertThat(output.getCount()).isEqualTo(3);
-        });
-        assertThat(recipe.fluidOutputs()).singleElement()
-                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:legacy"), json,
+                registries, ignored -> true))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
+                        error -> assertThat(error.path()).isEqualTo("inputs"));
     }
 
     @Test
-    void empty_canonical_requirements_preserve_legacy_recipe_fields() {
+    void empty_canonical_requirements_do_not_enable_legacy_recipe_fields() {
         JsonObject json = recipeJson();
         JsonObject input = new JsonObject();
         input.addProperty("type", "item");
@@ -122,23 +113,14 @@ class MachineRecipeDataDrivenTest {
         json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
         json.addProperty("energy_per_tick", 40);
 
-        MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:empty_requirements"), json,
-                registries, ignored -> true);
-
-        assertThat(recipe.inputs()).hasSize(2);
-        assertThat(recipe.outputs()).singleElement().satisfies(output -> {
-            assertThat(output.getItem()).isEqualTo(Items.IRON_NUGGET);
-            assertThat(output.getCount()).isEqualTo(3);
-        });
-        assertThat(recipe.fluidOutputs()).singleElement()
-                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
-        assertThat(recipe.requirements()).hasSize(4);
-        assertThat(recipe.requirements()).anyMatch(requirement -> requirement instanceof EnergyRequirement energy
-                && energy.fePerTick() == 40);
+        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:empty_requirements"), json,
+                registries, ignored -> true))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
+                        error -> assertThat(error.path()).isEqualTo("inputs"));
     }
 
     @Test
-    void canonical_outputs_merge_legacy_fluid_outputs_without_loss() {
+    void canonical_outputs_reject_legacy_fluid_outputs() {
         JsonObject json = recipeJson();
         JsonObject canonicalOutput = new JsonObject();
         canonicalOutput.addProperty("type", "mmcr:item");
@@ -147,25 +129,23 @@ class MachineRecipeDataDrivenTest {
         json.add("outputs", array(canonicalOutput));
         json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
 
-        MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:canonical_and_fluid"), json,
-                registries, ignored -> true);
-
-        assertThat(recipe.machineOutputs()).hasSize(2);
-        assertThat(recipe.outputs()).singleElement().satisfies(output ->
-                assertThat(output.getCount()).isEqualTo(3));
-        assertThat(recipe.fluidOutputs()).singleElement()
-                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:canonical_and_fluid"), json,
+                registries, ignored -> true))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
+                        error -> assertThat(error.path()).isEqualTo("fluid_outputs"));
     }
 
     @Test
-    void codec_and_serializer_retain_legacy_fluid_outputs_with_canonical_outputs() {
+    void codec_and_serializer_round_trip_canonical_item_and_fluid_outputs() {
         var ops = registries.createSerializationContext(JsonOps.INSTANCE);
         JsonObject json = recipeJson();
         JsonArray outputs = new JsonArray();
         outputs.add(MachineOutput.CODEC.encodeStart(ops,
                 new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET, 3), 1F)).getOrThrow());
+        outputs.add(MachineOutput.CODEC.encodeStart(ops,
+                new MachineOutput.FluidOutput(new net.neoforged.neoforge.fluids.FluidStack(
+                        net.minecraft.world.level.material.Fluids.WATER, 250), 1F)).getOrThrow());
         json.add("outputs", outputs);
-        json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
         json.add("requirements", new JsonArray());
 
         MachineRecipe decoded = MachineRecipe.CODEC.codec().parse(ops, json).getOrThrow();
@@ -176,13 +156,14 @@ class MachineRecipeDataDrivenTest {
 
         assertThat(decoded.machineOutputs()).hasSize(2);
         assertThat(roundTrip.machineOutputs()).hasSize(2);
-        assertThat(roundTrip.fluidOutputs()).singleElement()
-                .satisfies(output -> assertThat(output.getAmount()).isEqualTo(250));
+        assertThat(roundTrip.machineOutputs()).anySatisfy(output -> assertThat(output)
+                .isInstanceOfSatisfying(MachineOutput.FluidOutput.class,
+                        fluid -> assertThat(fluid.stack().getAmount()).isEqualTo(250)));
         assertThat(serialized.getAsJsonObject().has("fluid_outputs")).isFalse();
     }
 
     @Test
-    void transitional_machine_outputs_does_not_duplicate_canonical_builtin_output() {
+    void removed_machine_outputs_field_is_rejected() {
         JsonObject json = recipeJson();
         JsonObject output = new JsonObject();
         output.addProperty("type", "mmcr:item");
@@ -190,10 +171,10 @@ class MachineRecipeDataDrivenTest {
         json.add("outputs", array(output));
         json.add("machine_outputs", array(output.deepCopy()));
 
-        MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:deduplicated"), json,
-                registries, ignored -> true);
-
-        assertThat(recipe.machineOutputs()).hasSize(1);
+        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:deduplicated"), json,
+                registries, ignored -> true))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
+                        error -> assertThat(error.path()).isEqualTo("machine_outputs"));
     }
 
     @Test

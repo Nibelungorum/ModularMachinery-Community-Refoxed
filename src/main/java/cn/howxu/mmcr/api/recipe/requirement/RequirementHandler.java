@@ -3,10 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
-import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.List;
 import java.util.Objects;
@@ -35,26 +32,6 @@ public interface RequirementHandler<R extends MachineRequirement> {
     /** Reports input overlap without making recipe code depend on a concrete requirement type. */
     default boolean overlaps(R requirement, MachineRequirement other) {
         return false;
-    }
-
-    /** Projects a built-in input to the legacy accessor shape when one exists. */
-    default MachineIngredient legacyInput(R requirement) {
-        return null;
-    }
-
-    /** Projects an item output requirement to the legacy accessor shape when one exists. */
-    default ItemStack legacyItemOutput(R requirement) {
-        return null;
-    }
-
-    /** Projects a fluid output requirement to the legacy accessor shape when one exists. */
-    default FluidStack legacyFluidOutput(R requirement) {
-        return null;
-    }
-
-    /** Projects an energy output requirement to the legacy accessor shape when one exists. */
-    default Integer legacyEnergyOutput(R requirement) {
-        return null;
     }
 
     /**

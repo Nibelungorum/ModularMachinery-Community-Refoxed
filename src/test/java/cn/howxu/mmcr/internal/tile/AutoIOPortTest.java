@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -124,7 +125,7 @@ class AutoIOPortTest {
 
         FactoryRuntime factory = factoryRuntime(controller);
         factory.ensureBaseLane(controller);
-        factory.tick(List.of(new MachineRecipe(MMCR.id("factory_port_ownership"), MMCR.id("test_cube"),
+        factory.tick(List.of(RecipeTestSupport.create(MMCR.id("factory_port_ownership"), MMCR.id("test_cube"),
                 20, List.of(), List.of(), List.of(), 0, 1)), 1);
 
         assertThat(controller.isPortUsedByActiveRecipe(source.getBlockPos())).isTrue();

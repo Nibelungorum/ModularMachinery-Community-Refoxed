@@ -74,7 +74,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
-            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityTypes().stream()
+            capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()
                     .map(this::createCapability)
                     .toList(), java.util.List.of(new InventoryPersistenceFacet()));
         }

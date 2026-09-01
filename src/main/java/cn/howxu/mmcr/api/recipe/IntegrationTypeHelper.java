@@ -88,7 +88,7 @@ public final class IntegrationTypeHelper {
     }
 
     public static ItemStack firstItemOutput(MachineRecipe recipe) {
-        if (recipe == null || recipe.outputs().isEmpty()) return ItemStack.EMPTY;
-        return recipe.outputs().getFirst();
+        if (recipe == null) return ItemStack.EMPTY;
+        return OutputRegistry.itemStacks(recipe.machineOutputs()).stream().findFirst().orElse(ItemStack.EMPTY);
     }
 }

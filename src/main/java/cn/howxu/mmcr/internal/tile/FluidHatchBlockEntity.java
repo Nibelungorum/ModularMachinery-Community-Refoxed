@@ -45,7 +45,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
-            capabilitySnapshot = new CapabilitySnapshot(kind().capabilityTypes().stream()
+            capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()
                     .map(this::createCapability)
                     .toList(), java.util.List.of(new FluidPersistenceFacet()));
         }
@@ -86,7 +86,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
                 .forEach(facet -> facet.save(output.child(facet.stateKey())));
     }
 
-    private void saveLegacyFluids(ValueOutput output) {
+    private void saveFluids(ValueOutput output) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
             FluidResource resource = storage.resource(slot);
@@ -101,12 +101,11 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        input.child("fluid").ifPresentOrElse(
-                child -> capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> facet.load(child)),
-                () -> loadLegacyFluids(input));
+        input.child("fluid").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.load(child)));
     }
 
-    private void loadLegacyFluids(ValueInput input) {
+    private void loadFluids(ValueInput input) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
             if (input.getBooleanOr("tankHasFluid" + suffix, false)) {
@@ -128,12 +127,12 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
         @Override
         public void save(ValueOutput output) {
-            saveLegacyFluids(output);
+            saveFluids(output);
         }
 
         @Override
         public void load(ValueInput input) {
-            loadLegacyFluids(input);
+            loadFluids(input);
         }
     }
 }

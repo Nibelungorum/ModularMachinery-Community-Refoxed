@@ -36,6 +36,7 @@ import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import net.minecraft.core.BlockPos;
@@ -262,7 +263,7 @@ class FactoryRuntimeTest {
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
 
-        runtime.tick(List.of(new MachineRecipe(MMCR.id("factory_shared_input"), MMCR.id("test_cube"), 20,
+        runtime.tick(List.of(RecipeTestSupport.create(MMCR.id("factory_shared_input"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 2, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY)))), 1);
@@ -325,7 +326,7 @@ class FactoryRuntimeTest {
         energy.energyStorage().setAmount(2);
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_missing_energy"), MMCR.id("test_cube"), 3,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_missing_energy"), MMCR.id("test_cube"), 3,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
 
         runtime.tick(List.of(recipe), 1);
@@ -345,7 +346,7 @@ class FactoryRuntimeTest {
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
-        MachineRecipe failingRecipe = new MachineRecipe(MMCR.id("factory_isolated_failure"), MMCR.id("test_cube"),
+        MachineRecipe failingRecipe = RecipeTestSupport.create(MMCR.id("factory_isolated_failure"), MMCR.id("test_cube"),
                 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
@@ -494,7 +495,7 @@ class FactoryRuntimeTest {
 
         Identifier recipeId = MMCR.id("factory_reload_pending_recipe");
         MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
-        MachineRecipe newRecipe = new MachineRecipe(recipeId, MMCR.id("factory_reload_pending"), 40,
+        MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, MMCR.id("factory_reload_pending"), 40,
                 List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
@@ -513,9 +514,9 @@ class FactoryRuntimeTest {
     @Test
     void loading_active_embedded_recipe_clears_changed_last_recipe_before_restart_search() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        MachineRecipe oldRecipe = new MachineRecipe(MMCR.id("factory_loaded_old"), MMCR.id("test_cube"), 1,
+        MachineRecipe oldRecipe = RecipeTestSupport.create(MMCR.id("factory_loaded_old"), MMCR.id("test_cube"), 1,
                 List.of(), List.of());
-        MachineRecipe replacement = new MachineRecipe(oldRecipe.id(), oldRecipe.machineId(), 20,
+        MachineRecipe replacement = RecipeTestSupport.create(oldRecipe.id(), oldRecipe.machineId(), 20,
                 List.of(), List.of());
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
@@ -546,9 +547,9 @@ class FactoryRuntimeTest {
     void async_completion_searches_the_current_catalog_after_recipe_reload() {
         Identifier machineId = MMCR.id("factory_reload_completion");
         Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
-        MachineRecipe oldRecipe = new MachineRecipe(recipeId, machineId, 1,
+        MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
-        MachineRecipe newRecipe = new MachineRecipe(recipeId, machineId, 20,
+        MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
 
@@ -638,9 +639,9 @@ class FactoryRuntimeTest {
         Identifier machineId = MMCR.id("shared_finish_release");
         Identifier activeId = MMCR.id("shared_finish_release_active");
         Identifier blockedId = MMCR.id("shared_finish_release_blocked");
-        MachineRecipe active = new MachineRecipe(activeId, machineId, 1,
+        MachineRecipe active = RecipeTestSupport.create(activeId, machineId, 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
-        MachineRecipe blocked = new MachineRecipe(blockedId, machineId, 20,
+        MachineRecipe blocked = RecipeTestSupport.create(blockedId, machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new ItemStack(Items.IRON_NUGGET, 1))), false, List.of(), true);
@@ -809,7 +810,7 @@ class FactoryRuntimeTest {
     @Test
     void stale_async_runtime_request_completes_as_a_failed_lane_and_keeps_backoff() {
         MachineControllerBlockEntity controller = factoryController("factory_async_version_failure");
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("factory_async_version_failure_recipe"),
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_version_failure_recipe"),
                 MMCR.id("factory_async_version_failure"), 20, List.of(), List.of());
         RecipeRegistry.register(recipe);
 
@@ -1433,14 +1434,14 @@ class FactoryRuntimeTest {
     }
 
     private static MachineRecipe inputRecipe(String path) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), 20,
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                  ItemStack.EMPTY)));
     }
 
     private static MachineRecipe itemInputRecipe(String path, net.minecraft.world.item.Item item) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), 20,
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1, ItemStack.EMPTY)));
     }
@@ -1459,20 +1460,20 @@ class FactoryRuntimeTest {
     }
 
     private static MachineRecipe inputEnergyRecipe(String path) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), 20,
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)));
     }
 
     private static MachineRecipe cancellingInputRecipe(String path) {
-        return new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"), 20,
+        return RecipeTestSupport.create(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"), 20,
                  List.of(), List.of(), List.of(), 0, 1, true, List.of(), List.of(
                  new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                  ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
     }
 
     private static MachineRecipe outputEnergyRecipe(String path) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), 20,
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
     }
@@ -1486,7 +1487,7 @@ class FactoryRuntimeTest {
     }
 
     private static MachineRecipe recipe(String path, int duration) {
-        return new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"),
+        return RecipeTestSupport.create(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"),
                 duration, List.of(), List.of(), List.of(), 0, 2);
     }
 }

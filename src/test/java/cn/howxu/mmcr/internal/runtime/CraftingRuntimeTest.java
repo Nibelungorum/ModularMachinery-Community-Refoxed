@@ -33,6 +33,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
@@ -226,7 +227,7 @@ class CraftingRuntimeTest {
         input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
         inputEnergy.energyStorage().setAmount(2);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_discard_outputs"), MMCR.id("test_cube"), 1,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_discard_outputs"), MMCR.id("test_cube"), 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1),
                         output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
@@ -278,7 +279,7 @@ class CraftingRuntimeTest {
                 .beforeFinish(context -> context.setOutputs(List.of(
                         new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)))).build()));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_replace_physical_output"), MMCR.id("test_cube"), 1,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_replace_physical_output"), MMCR.id("test_cube"), 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(output(Items.IRON_NUGGET, 1), new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
 
@@ -384,7 +385,7 @@ class CraftingRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
         energy.energyStorage().setAmount(10);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_energy"), MMCR.id("test_cube"), 3,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_energy"), MMCR.id("test_cube"), 3,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
@@ -401,7 +402,7 @@ class CraftingRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
         energy.energyStorage().setAmount(2);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_missing_energy"), MMCR.id("test_cube"), 3,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_missing_energy"), MMCR.id("test_cube"), 3,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
 
         runtime.start(recipe, 1);
@@ -470,7 +471,7 @@ class CraftingRuntimeTest {
         controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
                 null, smartInterface, smartInterface.getBlockPos(), smartInterface.getBlockPos(), (String) null)));
         CraftingRuntime runtime = controllerRuntime(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_smart_interface_output"), MMCR.id("test_cube"), 1,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_smart_interface_output"), MMCR.id("test_cube"), 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(SmartInterfaceRequirement.output("mode", 9F)));
 
@@ -491,7 +492,7 @@ class CraftingRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_retain_input"), MMCR.id("test_cube"), 2,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_retain_input"), MMCR.id("test_cube"), 2,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY, 1F, List.of(),
@@ -550,7 +551,7 @@ class CraftingRuntimeTest {
         output.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 44));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_partial_output"), MMCR.id("test_cube"), 1,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_partial_output"), MMCR.id("test_cube"), 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(output(Items.IRON_INGOT, 64)), false, List.of(), true);
 
@@ -877,8 +878,9 @@ class CraftingRuntimeTest {
 
         assertThat(restored.recipe()).isNotNull();
         assertThat(restored.recipe().id()).isEqualTo(oldRecipe.id());
-        assertThat(restored.recipe().outputs()).singleElement()
-                .satisfies(recipeOutput -> assertThat(recipeOutput.is(Items.IRON_NUGGET)).isTrue());
+        assertThat(restored.recipe().machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
+                .satisfies(recipeOutput -> assertThat(((MachineOutput.ItemOutput) recipeOutput).stack().is(Items.IRON_NUGGET))
+                        .isTrue());
         restored.tick();
         restored.finish();
 
@@ -921,7 +923,7 @@ class CraftingRuntimeTest {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
             RequirementHandlerRegistry.register(CustomRequirement.TYPE);
             MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-            MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
                     List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                     List.of(new CustomRequirement(RecipeModifier.IOType.INPUT, 7)));
             CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1146,7 +1148,7 @@ class CraftingRuntimeTest {
     }
 
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), duration,
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), duration,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), new java.util.ArrayList<>(requirements));
     }
 

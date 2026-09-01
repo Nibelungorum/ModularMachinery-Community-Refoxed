@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
@@ -38,6 +39,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
@@ -303,7 +305,7 @@ class MachineControllerBlockEntityTest {
         Identifier machineId = MMCR.id("controller_text_operation");
         MachineControllerBlockEntity controller = textController(machineId);
         MachineControllerRuntime runtime = runtimeOf(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_text_operation_recipe"), machineId, 1,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_text_operation_recipe"), machineId, 1,
                 List.of(), List.of());
         assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
         runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
@@ -322,7 +324,7 @@ class MachineControllerBlockEntityTest {
     void failed_operation_clears_operation_text() throws Exception {
         MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_failed_operation"));
         MachineControllerRuntime runtime = runtimeOf(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_text_failed_recipe"),
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_text_failed_recipe"),
                 MMCR.id("controller_text_failed_operation"), 20, List.of(), List.of());
         assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
         runtime.screenText().append(ControllerScreenTextScope.OPERATION,
@@ -353,7 +355,7 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.republish(controller);
         MachineControllerRuntime runtime = runtimeOf(controller);
         energy.energyStorage().setAmount(2);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_text_cancelled_recipe"),
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_text_cancelled_recipe"),
                 machineId, 20, List.of(), List.of(), List.of(), 0, 1, true,
                 List.of(), List.of(new EnergyRequirement(2)));
         assertThat(runtime.craftingRuntime().start(recipe, 1).isCrafting()).isTrue();
@@ -506,7 +508,7 @@ class MachineControllerBlockEntityTest {
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
         controller.invalidateFormedStructure();
-        RecipeRegistry.register(new MachineRecipe(MMCR.id("same_tick_factory_recipe"), machineId, 20,
+        RecipeRegistry.register(RecipeTestSupport.create(MMCR.id("same_tick_factory_recipe"), machineId, 20,
                 List.of(), List.of()));
 
         controller.serverTick();
@@ -553,7 +555,7 @@ class MachineControllerBlockEntityTest {
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
         RuntimeTestFixtures.republish(controller);
-        RecipeRegistry.register(new MachineRecipe(MMCR.id("same_tick_reset_recipe"), machineId, 20,
+        RecipeRegistry.register(RecipeTestSupport.create(MMCR.id("same_tick_reset_recipe"), machineId, 20,
                 List.of(), List.of()));
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -961,7 +963,7 @@ class MachineControllerBlockEntityTest {
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_factory_persistence_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_factory_persistence_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
 
@@ -1006,7 +1008,7 @@ class MachineControllerBlockEntityTest {
         controller.componentRuntime().replaceComponents(List.of(
                 new ProcessingComponent(null, scheduler, schedulerPos, BlockPos.ZERO, (String) null)));
         controller.setFormed(true);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_factory_removed_after_load_recipe"), machineId, 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_factory_removed_after_load_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
         controller.serverTick();
@@ -1061,7 +1063,7 @@ class MachineControllerBlockEntityTest {
         ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(componentPos);
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, first);
         CraftingRuntime crafting = new CraftingRuntime(controller, controller.componentRuntime());
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("controller_component_replacement_recipe"), machine.registryName(),
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_component_replacement_recipe"), machine.registryName(),
                 20, List.of(), List.of(), List.of(), 0, 1);
         assertThat(crafting.start(recipe, 1).isCrafting()).isTrue();
         long capabilityVersion = controller.runtimeSnapshot().capabilityVersion();
@@ -1191,12 +1193,15 @@ class MachineControllerBlockEntityTest {
     }
 
     private static IOPortKind combinedKind(IOType ioType, String id) {
-        return new PortKinds.CombinedKind(id, ioType, List.of(
+        List<PortFamilyDescriptor> families = List.of(
                 new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, 2,
                         List.of(ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus")),
                 new PortFamilyDescriptor(PortFamilyIds.FLUID, ioType, 2,
-                        List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch"))),
-                CombinedPort::new, List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE));
+                        List.of(ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch")));
+        return new PortKinds.CombinedKind(id, ioType, families, CombinedPort::new,
+                PortDefinition.of(MMCR.id(id),
+                        IOPortKind.binding(BuiltinCapabilityDefinitions.ITEM_TYPE, ioType, families),
+                        IOPortKind.binding(BuiltinCapabilityDefinitions.FLUID_TYPE, ioType, families)));
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

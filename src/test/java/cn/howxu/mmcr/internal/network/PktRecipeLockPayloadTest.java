@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -156,7 +157,7 @@ class PktRecipeLockPayloadTest {
         RuntimeTestFixtures.formStructure(controller, machine);
         TestServerLevel level = serverLevel(controller);
         controller.setLevel(level);
-        MachineRecipe recipe = new MachineRecipe(MMCR.id("recipe_lock_success_recipe"), machine.registryName(), 20,
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_lock_success_recipe"), machine.registryName(), 20,
                 List.of(), List.of());
         RecipeRegistry.register(recipe);
         controller.tickRuntimeWork(level, controllerPos);

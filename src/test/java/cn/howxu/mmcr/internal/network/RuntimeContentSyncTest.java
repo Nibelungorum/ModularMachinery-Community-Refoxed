@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -104,6 +105,6 @@ class RuntimeContentSyncTest {
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {
-        return new MachineRecipe(id, machineId, 1, List.of(), List.of());
+        return RecipeTestSupport.create(id, machineId, 1, List.of(), List.of());
     }
 }

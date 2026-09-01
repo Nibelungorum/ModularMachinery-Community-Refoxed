@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -165,6 +166,6 @@ class DynamicModuleReloadValidationTest {
     }
 
     private static MachineRecipe recipe(Identifier id, Identifier machineId) {
-        return new MachineRecipe(id, machineId, 1, List.of(), List.of());
+        return RecipeTestSupport.create(id, machineId, 1, List.of(), List.of());
     }
 }

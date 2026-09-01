@@ -271,7 +271,8 @@ class KubeJSApiTest {
     @Test
     void pattern_accepts_plain_block_predicate_without_modifiers() {
         var definition = new MachineStructureBuilderJS("test:plain_pattern_key")
-                .pattern("B", Map.of("B", api.block("minecraft:bricks")))
+                .pattern("B")
+                .set("B", api.block("minecraft:bricks"))
                 .createObject();
 
         assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
@@ -358,9 +359,10 @@ class KubeJSApiTest {
     }
 
     @Test
-    void legacy_and_slice_pattern_apis_cannot_be_mixed() {
+    void pattern_and_slice_pattern_apis_cannot_be_mixed() {
         assertThatThrownBy(() -> new MachineStructureBuilderJS("test:legacy_then_slice")
-                .pattern("B", Map.of("B", api.block("minecraft:bricks")))
+                .pattern("B")
+                .set("B", api.block("minecraft:bricks"))
                 .set("X", api.block("minecraft:stone")))
                 .isInstanceOf(IllegalStateException.class);
 
@@ -368,7 +370,7 @@ class KubeJSApiTest {
                 .pattern(List.of("C"))
                 .set("C", api.block("minecraft:blast_furnace"));
 
-        assertThatThrownBy(() -> builder.pattern("B", Map.of("B", api.block("minecraft:bricks"))))
+        assertThatThrownBy(() -> builder.pattern("B"))
                 .isInstanceOf(IllegalStateException.class);
     }
 

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.registry;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
 import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
@@ -44,8 +44,8 @@ public final class PortKinds {
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of();
+        public PortDefinition definition() {
+            return PortDefinition.of(MMCR.id(id), List.of());
         }
     }
 
@@ -68,8 +68,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(), List.of(BuiltinCapabilityDefinitions.ITEM_TYPE));
         }
     }
 
@@ -92,8 +92,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(), List.of(BuiltinCapabilityDefinitions.FLUID_TYPE));
         }
     }
 
@@ -116,8 +116,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(), List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE));
         }
     }
 
@@ -140,8 +140,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(), List.of(BuiltinCapabilityDefinitions.ITEM_TYPE));
         }
     }
 
@@ -164,8 +164,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(), List.of(BuiltinCapabilityDefinitions.FLUID_TYPE));
         }
     }
 
@@ -188,8 +188,8 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(), List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE));
         }
     }
 
@@ -213,8 +213,9 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(),
+                    List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE));
         }
     }
 
@@ -240,8 +241,9 @@ public final class PortKinds {
         }
 
         @Override
-        public List<CapabilityType> capabilityTypes() {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE);
+        public PortDefinition definition() {
+            return PortKinds.definition(id, ioType, families(),
+                    List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE));
         }
     }
 
@@ -250,74 +252,30 @@ public final class PortKinds {
             IOType ioType,
             List<PortFamilyDescriptor> families,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
-            List<CapabilityType> capabilityTypes,
             PortDefinition definition)
             implements IOPortKind {
         public CombinedKind(String id, IOType ioType, List<PortFamilyDescriptor> families,
                             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
-                            List<CapabilityType> capabilityTypes) {
-            this(id, ioType, families, entityFactory, capabilityTypes, null);
-            LegacyStructureDescriptor.validate(ioType, families, capabilityTypes);
-        }
-
-        public CombinedKind(String id, IOType ioType, List<PortFamilyDescriptor> families,
-                            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
                             PortDefinition definition) {
-            this(id, ioType, families, entityFactory, definitionTypes(definition), definition);
-        }
-
-        public CombinedKind {
+            this.id = id;
+            this.ioType = ioType;
+            this.entityFactory = entityFactory;
+            this.definition = definition;
             if (id == null) throw new IllegalArgumentException("id null");
-            if (ioType == null) throw new IllegalArgumentException("ioType null");
-            if (families == null) throw new IllegalArgumentException("families null");
-            if (entityFactory == null) throw new IllegalArgumentException("entityFactory null");
-            if (capabilityTypes == null) throw new IllegalArgumentException("capabilityTypes null");
-            families = List.copyOf(families);
-            capabilityTypes = List.copyOf(capabilityTypes);
-        }
-
-        @Override
-        public PortDefinition definition() {
-            return definition == null ? IOPortKind.super.definition() : definition;
-        }
-
-        private static List<CapabilityType> definitionTypes(PortDefinition definition) {
-            if (definition == null) throw new IllegalArgumentException("definition null");
-            return definition.bindings().stream().map(CapabilityBinding::type).toList();
-        }
-    }
-
-    /** Compatibility descriptor for the pre-binding two-family combined kind constructor. */
-    private static final class LegacyStructureDescriptor {
-        private static void validate(IOType ioType, List<PortFamilyDescriptor> families,
-                                     List<CapabilityType> capabilityTypes) {
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (families == null || families.size() != 2) {
                 throw new IllegalArgumentException("combined kind must have exactly two families");
             }
-            boolean item = false;
-            boolean fluid = false;
-            for (PortFamilyDescriptor family : families) {
-                if (family == null || family.ioType() != ioType) {
-                    throw new IllegalArgumentException("combined family direction mismatch");
-                }
-                if (family.familyId().equals(PortFamilyIds.ITEM)) {
-                    if (item) throw new IllegalArgumentException("duplicate item family");
-                    item = true;
-                } else if (family.familyId().equals(PortFamilyIds.FLUID)) {
-                    if (fluid) throw new IllegalArgumentException("duplicate fluid family");
-                    fluid = true;
-                } else {
-                    throw new IllegalArgumentException("combined kind family must be item or fluid");
-                }
-            }
-            if (!item || !fluid) throw new IllegalArgumentException("combined kind must include item and fluid families");
-            if (capabilityTypes == null || capabilityTypes.size() != 2
-                    || !capabilityTypes.contains(BuiltinCapabilityDefinitions.ITEM_TYPE)
-                    || !capabilityTypes.contains(BuiltinCapabilityDefinitions.FLUID_TYPE)) {
-                throw new IllegalArgumentException("combined kind must expose item and fluid capabilities only");
-            }
+            if (entityFactory == null) throw new IllegalArgumentException("entityFactory null");
+            if (definition == null) throw new IllegalArgumentException("definition null");
+            this.families = List.copyOf(families);
         }
+    }
+
+    private static PortDefinition definition(String id, IOType ioType, List<PortFamilyDescriptor> families,
+                                             List<CapabilityType> types) {
+        return PortDefinition.of(MMCR.id(id), types.stream()
+                .map(type -> IOPortKind.binding(type, ioType, families)).toList());
     }
 
     private static final List<IOPortKind> DEFAULTS = createDefaults();

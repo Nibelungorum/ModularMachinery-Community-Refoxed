@@ -7,14 +7,17 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -110,28 +113,34 @@ class ModuleRecipeBuilderJSTest {
         var fluidInput = new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 500);
         var energyOutput = new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 20);
         var fluidOutput = new FluidStack(Fluids.WATER, 250);
-        MachineRequirement requirement = SmartInterfaceRequirement.input("temperature", 25F);
+        MachineRequirement smartRequirement = SmartInterfaceRequirement.input("temperature", 25F);
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:kubejs_full_recipe")
                 .machine(machineId.toString())
                 .inputs(java.util.List.of(itemInput, fluidInput, energyOutput))
                 .outputs(java.util.List.of(new ItemStack(Items.DIAMOND)))
                 .fluidOutputs(java.util.List.of(fluidOutput))
-                .requirements(java.util.List.of(requirement))
+                .requirements(java.util.List.of(smartRequirement))
                 .priority(7).maxThreads(3).cancelIfPerTickFails(true).allowPartialOutputs()
                 .requiredHosts("mmcr:space_elevator")
                 .createObject();
 
         assertThat(recipe.priority()).isEqualTo(7);
         assertThat(recipe.maxThreads()).isEqualTo(3);
-        assertThat(recipe.inputs()).containsExactly(itemInput, fluidInput);
-        assertThat(recipe.energyOutputs()).containsExactly(20);
-        assertThat(recipe.outputs()).singleElement().satisfies(output -> assertThat(output.getItem()).isSameAs(Items.DIAMOND));
-        assertThat(recipe.fluidOutputs()).singleElement().satisfies(output -> {
-            assertThat(output.getFluid()).isSameAs(Fluids.WATER);
-            assertThat(output.getAmount()).isEqualTo(250);
-        });
-        assertThat(recipe.requirements()).contains(requirement);
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .hasSize(2);
+        assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT)
+                .anySatisfy(requirement -> assertThat(requirement)
+                        .isInstanceOfSatisfying(EnergyRequirement.class, energy -> assertThat(energy.fePerTick()).isEqualTo(20)));
+        assertThat(recipe.machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
+                .isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                        output -> assertThat(output.stack().getItem()).isSameAs(Items.DIAMOND));
+        assertThat(recipe.machineOutputs()).filteredOn(MachineOutput.FluidOutput.class::isInstance).singleElement()
+                .isInstanceOfSatisfying(MachineOutput.FluidOutput.class, output -> {
+                    assertThat(output.stack().getFluid()).isSameAs(Fluids.WATER);
+                    assertThat(output.stack().getAmount()).isEqualTo(250);
+                });
+        assertThat(recipe.requirements()).contains(smartRequirement);
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isTrue();
         assertThat(recipe.allowPartialOutputs()).isTrue();
         assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:space_elevator"));
@@ -165,9 +174,8 @@ class ModuleRecipeBuilderJSTest {
         json.addProperty("type", "mmcr:machine_recipe");
         json.addProperty("machine", machineId.toString());
         json.addProperty("tick_time", 20);
-        json.add("inputs", MachineIngredient.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(input)).getOrThrow());
-        json.addProperty("energy_per_tick", 80);
-        json.add("outputs", ItemStack.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(output)).getOrThrow());
+        json.add("outputs", MachineOutput.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
+                List.of(new MachineOutput.ItemOutput(output, 1F))).getOrThrow());
         json.addProperty("priority", 7);
         json.addProperty("max_threads", 3);
         json.addProperty("parallelized", true);
@@ -211,12 +219,14 @@ class ModuleRecipeBuilderJSTest {
                 .machine(machineId.toString())
                 .outputs(java.util.List.of(itemOutput))
                 .createObject()
-                .outputs()).singleElement().satisfies(ItemStack::isEmpty);
+                .machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                        output -> assertThat(output.stack().isEmpty()).isTrue());
         assertThat(new MachineRecipeBuilderJS("mmcr:negative_fluid_output")
                 .machine(machineId.toString())
                 .fluidOutputs(java.util.List.of(fluidOutput))
                 .createObject()
-                .fluidOutputs()).singleElement().satisfies(FluidStack::isEmpty);
+                .machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.FluidOutput.class,
+                        output -> assertThat(output.stack().isEmpty()).isTrue());
     }
 
     @Test
@@ -235,7 +245,11 @@ class ModuleRecipeBuilderJSTest {
                 .addRequirement(new KubeJSApi().fluidOutputRequirement("minecraft:lava", 250, 0.5F))
                 .createObject();
 
-        var input = (MachineIngredient.ItemIngredient) recipe.inputs().getFirst();
+        var input = recipe.requirements().stream()
+                .filter(ItemRequirement.class::isInstance)
+                .map(ItemRequirement.class::cast)
+                .filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .findFirst().orElseThrow();
         assertThat(input.count()).isEqualTo(2);
         assertThat(input.consumeChance()).isEqualTo(0.5F);
         assertThat(input.components().isEmpty()).isFalse();
@@ -266,7 +280,7 @@ class ModuleRecipeBuilderJSTest {
     }
 
     @Test
-    void explicit_requirements_can_disable_automatic_legacy_field_derivation() {
+    void explicit_requirements_can_disable_automatic_input_derivation() {
         Identifier machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
@@ -284,7 +298,7 @@ class ModuleRecipeBuilderJSTest {
     }
 
     @Test
-    void derive_requirements_false_with_empty_requirements_keeps_runtime_requirements_empty() {
+    void derive_requirements_false_with_empty_requirements_keeps_recipe_requirements_empty() {
         Identifier machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
@@ -296,7 +310,6 @@ class ModuleRecipeBuilderJSTest {
                 .createObject();
 
         assertThat(recipe.requirements()).isEmpty();
-        assertThat(recipe.inputs()).isEmpty();
     }
 
     @Test
@@ -316,7 +329,7 @@ class ModuleRecipeBuilderJSTest {
     void machine_recipe_constructor_rejects_zero_tick_time() {
         Identifier machineId = MMCR.id("module_machine");
 
-        assertThatThrownBy(() -> new MachineRecipe(MMCR.id("zero_tick_constructor"), machineId, 0, List.of(), List.of()))
+        assertThatThrownBy(() -> RecipeTestSupport.create(MMCR.id("zero_tick_constructor"), machineId, 0, List.of(), List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("tick time must be >= 1");
     }

@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -143,8 +143,8 @@ public class MachineRecipeBuilderJS {
     public MachineRecipeBuilderJS custom(String typeId, RecipeIo io, JsonElement payload) {
         var custom = RecipeApi.custom(Identifier.parse(typeId), io, payload);
         if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
-            requirements.add(PublicRecipeAdapter.toRequirement(custom));
-        } else customOutputs.add(PublicRecipeAdapter.toOutput(custom));
+            requirements.add(MachineRecipeConverter.toRequirement(custom));
+        } else customOutputs.add(MachineRecipeConverter.toOutput(custom));
         return this;
     }
 
@@ -365,26 +365,17 @@ public class MachineRecipeBuilderJS {
         }
         if (recipeRequirements != null) recipeRequirements.addAll(requirements);
 
-        MachineRecipe recipe;
-        if (outputChances.stream().anyMatch(chance -> chance != 1F)) {
-            List<MachineOutput> canonicalOutputs = new ArrayList<>(recipeOutputs.size() + fluidOutputs.size());
-            for (int index = 0; index < recipeOutputs.size(); index++) {
-                canonicalOutputs.add(new MachineOutput.ItemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
-            }
-            for (FluidStack fluidOutput : fluidOutputs) {
-                canonicalOutputs.add(new MachineOutput.FluidOutput(fluidOutput, 1F));
-            }
-            recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, recipeRequirements, canonicalOutputs,
-                    List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, parallelized,
-                    List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
-        } else {
-            recipe = MachineRecipeJson.normalize(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs),
-                    List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, List.copyOf(fluidOutputs),
-                    recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), parallelized,
-                    List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds),
-                    deriveRequirements,
-                    machine -> MachineRegistry.getMachine(machine) != null || MachineDefinitions.getRegistration(machine) != null);
+        List<MachineOutput> canonicalOutputs = new ArrayList<>(recipeOutputs.size() + fluidOutputs.size());
+        for (int index = 0; index < recipeOutputs.size(); index++) {
+            canonicalOutputs.add(new MachineOutput.ItemOutput(recipeOutputs.get(index), recipeOutputChances.get(index)));
         }
+        for (FluidStack fluidOutput : fluidOutputs) {
+            canonicalOutputs.add(new MachineOutput.FluidOutput(fluidOutput, 1F));
+        }
+        MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime,
+                recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), canonicalOutputs,
+                List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, parallelized,
+                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
         return MachineRecipe.withAdditionalOutputs(recipe, customOutputs);
     }
 

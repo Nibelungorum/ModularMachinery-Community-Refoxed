@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.port;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
@@ -29,32 +28,22 @@ public interface IOPortKind {
     /** 该 kind 对应的 BlockEntity 工厂。Block 注册时由这里创建对应实体。 */
     BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory();
 
-    /**
-     * Legacy capability type view retained for existing port consumers.
-     * New kinds may provide only {@link #definition()} and inherit this adapter.
-     */
-    default List<CapabilityType> capabilityTypes() {
-        return bindings().stream().map(CapabilityBinding::type).toList();
-    }
-
-    /**
-     * Returns the immutable binding view for this legacy port kind.
-     *
-     * <p>The default adapter keeps existing kind implementations source-compatible while
-     * making capability factories and tier policies data-driven.</p>
-     */
-    default PortDefinition definition() {
-        List<CapabilityBinding> bindings = capabilityTypes().stream()
-                .map(type -> new CapabilityBinding(type, ioType(), capabilityFactory(type), tierPolicy(type)))
-                .toList();
-        return PortDefinition.of(MMCR.id(id()), bindings);
-    }
+    /** Returns the immutable capability binding declaration for this port kind. */
+    PortDefinition definition();
 
     default List<CapabilityBinding> bindings() {
         return definition().bindings();
     }
 
-    private CapabilityFactory capabilityFactory(CapabilityType type) {
+    static CapabilityBinding binding(CapabilityType type, IOType ioType, List<PortFamilyDescriptor> families) {
+        return new CapabilityBinding(type, ioType, capabilityFactory(type), (binding, tier) -> families.stream()
+                .filter(family -> family.matches(binding) && family.familyId().equals(type.id()))
+                .findFirst()
+                .map(family -> tier >= family.detectionTier())
+                .orElse(true));
+    }
+
+    private static CapabilityFactory capabilityFactory(CapabilityType type) {
         return context -> {
             CapabilityDefinition definition = CapabilityRegistry.get(type);
             if (definition == null) {
@@ -62,14 +51,6 @@ public interface IOPortKind {
             }
             return definition.factory().create(context);
         };
-    }
-
-    private PortTierPolicy tierPolicy(CapabilityType type) {
-        return (binding, tier) -> families().stream()
-                .filter(family -> family.matches(binding) && family.familyId().equals(type.id()))
-                .findFirst()
-                .map(family -> tier >= family.detectionTier())
-                .orElse(true);
     }
 
     default Optional<ItemBusSize> itemBusSize() { return Optional.empty(); }

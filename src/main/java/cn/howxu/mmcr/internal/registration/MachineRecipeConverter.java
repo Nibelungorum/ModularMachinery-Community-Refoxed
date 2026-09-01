@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.internal.api;
+package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -41,8 +41,8 @@ import net.minecraft.resources.Identifier;
 /** Internal conversion boundary for public recipe declarations.
  * @author howxu <dev@howxu.cn>
  */
-public final class PublicRecipeAdapter {
-    private PublicRecipeAdapter() {
+public final class MachineRecipeConverter {
+    private MachineRecipeConverter() {
     }
 
     public static MachineRecipe toRecipe(MachineRecipeDefinition definition,
@@ -53,9 +53,6 @@ public final class PublicRecipeAdapter {
         for (RecipeRequirement value : definition.requirements()) {
             requirements.add(toRequirement(value));
         }
-        List<MachineIngredient> inputs = requirements.stream().filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
-                .map(PublicRecipeAdapter::toLegacyInput).filter(java.util.Objects::nonNull)
-                .toList();
         List<MachineOutput> outputs = new ArrayList<>(requirements.stream()
                 .map(OutputRegistry::fromRequirement).filter(java.util.Objects::nonNull).toList());
         for (CustomRecipeIo custom : definition.customOutputs()) {
@@ -77,7 +74,7 @@ public final class PublicRecipeAdapter {
         return MachineRecipe.fromCanonical(definition.id(), definition.machineId(), definition.tickTime(), requirements,
                 outputs, recipeModifiers, definition.priority(), definition.maxThreads(),
                 definition.cancelRecipeOnPerTickFailure(), definition.parallelized(), definition.levelRequirements().stream()
-                        .map(PublicRecipeAdapter::toInternalLevel).toList(), definition.allowPartialOutputs(),
+                         .map(MachineRecipeConverter::toInternalLevel).toList(), definition.allowPartialOutputs(),
                 definition.requiredHostIds());
     }
 
@@ -136,7 +133,7 @@ public final class PublicRecipeAdapter {
         }
         if (predicate instanceof ComponentPredicate.ListValue list) {
             return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.list(
-                    list.values().stream().map(PublicRecipeAdapter::toInternalPredicate).toList());
+                    list.values().stream().map(MachineRecipeConverter::toInternalPredicate).toList());
         }
         if (predicate instanceof ComponentPredicate.Range range) {
             return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.range(range.min(), range.max());
@@ -148,10 +145,6 @@ public final class PublicRecipeAdapter {
 
     private static RecipeModifier.IOType toInternalIo(RecipeIo io) {
         return io == RecipeIo.INPUT ? RecipeModifier.IOType.INPUT : RecipeModifier.IOType.OUTPUT;
-    }
-
-    private static MachineIngredient toLegacyInput(MachineRequirement requirement) {
-        return RequirementHandlerRegistry.legacyInput(requirement);
     }
 
     public static MachineOutput toOutput(CustomRecipeIo custom) {

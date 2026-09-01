@@ -16,9 +16,9 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
-import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
-import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import net.minecraft.resources.Identifier;
 
@@ -154,7 +154,7 @@ public final class ContentRegistrationCoordinator {
     private static Map<Identifier, MachineRegistration> validateAndConvertMachines() {
         Map<Identifier, MachineRegistration> registrations = new LinkedHashMap<>();
         MACHINES.forEach((id, definition) -> registrations.put(id,
-                PublicMachineAdapter.toStartupRegistration(definition, STRUCTURES.get(id))));
+                MachineDefinitionConverter.toStartupRegistration(definition, STRUCTURES.get(id))));
         Map<Identifier, MachineRegistration> all = new LinkedHashMap<>();
         MachineDefinitions.allRegistrations().forEach(registration -> all.put(registration.id(), registration));
         all.putAll(registrations);
@@ -172,7 +172,7 @@ public final class ContentRegistrationCoordinator {
             }
             MachineRegistration registration = registrations.get(id);
             if (registration == null) registration = MachineDefinitions.getRegistration(id);
-            MachineStructureDefinition converted = PublicMachineAdapter.toStructureDefinition(structure, snapshot.modifiers());
+            MachineStructureDefinition converted = MachineDefinitionConverter.toStructureDefinition(structure, snapshot.modifiers());
             MachineStructureRegistry.toRuntimeMachine(registration, converted);
             structures.put(id, converted);
         });
@@ -188,7 +188,7 @@ public final class ContentRegistrationCoordinator {
                 throw new ApiRegistrationException("Recipe " + id + " refers to unknown machine "
                         + definition.machineId());
             }
-            recipes.put(id, PublicRecipeAdapter.toRecipe(definition, snapshot));
+            recipes.put(id, MachineRecipeConverter.toRecipe(definition, snapshot));
         });
         return recipes;
     }

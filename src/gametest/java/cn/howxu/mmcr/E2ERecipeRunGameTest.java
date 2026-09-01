@@ -5,8 +5,10 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
@@ -25,6 +27,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class E2ERecipeRunGameTest {
 
@@ -49,11 +52,13 @@ public class E2ERecipeRunGameTest {
 
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor");
         var machine = MachineRegistry.getMachine(machineId);
-        RecipeRegistry.register(new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor_recipe"),
-                machineId, 40,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
-                        new MachineIngredient.EnergyIngredient(80)),
-                List.of(new ItemStack(Items.IRON_NUGGET)), List.of(), -100, 1));
+        RecipeRegistry.register(MachineRecipe.fromCanonical(
+                Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor_recipe"), machineId, 40,
+                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
+                                Ingredient.of(Items.IRON_INGOT), 2)),
+                        MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(80))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), -100, 1,
+                false, false, List.of(), false, Set.of()));
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
@@ -95,11 +100,13 @@ public class E2ERecipeRunGameTest {
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor");
         var machine = new DynamicMachine(machineId, "Wide Compressor", new BlockArray(pattern));
         MachineRegistry.register(machine);
-        RecipeRegistry.register(new MachineRecipe(Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor_recipe"),
-                machineId, 20,
-                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1),
-                        new MachineIngredient.EnergyIngredient(50)),
-                List.of(new ItemStack(Items.IRON_NUGGET))));
+        RecipeRegistry.register(MachineRecipe.fromCanonical(
+                Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor_recipe"), machineId, 20,
+                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
+                                Ingredient.of(Items.IRON_INGOT), 1)),
+                        MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(50))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), 0, 1,
+                false, false, List.of(), false, Set.of()));
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);

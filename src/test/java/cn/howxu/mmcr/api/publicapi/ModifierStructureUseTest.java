@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
-import cn.howxu.mmcr.internal.api.PublicMachineAdapter;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -50,7 +50,7 @@ class ModifierStructureUseTest {
         event.registerStructure(structure(machineId, use));
         var snapshot = event.freeze();
 
-        var runtime = PublicMachineAdapter.toStructureDefinition(snapshot.structures().get(machineId));
+        var runtime = MachineDefinitionConverter.toStructureDefinition(snapshot.structures().get(machineId));
         var declaration = runtime.declarations().getFirst();
         var compiled = MachineStructureRequirementCompiler.compile(declaration.pattern(), declaration.requirements());
         BlockPos position = BlockPos.ZERO;
@@ -92,7 +92,7 @@ class ModifierStructureUseTest {
                                 ModifierUse.of(modifierId, BlockPredicate.block(Blocks.DIAMOND_BLOCK))))
                         .build()));
 
-        assertThatThrownBy(() -> PublicMachineAdapter.toStructureDefinition(structure))
+        assertThatThrownBy(() -> MachineDefinitionConverter.toStructureDefinition(structure))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Requirement symbol X is absent");
     }

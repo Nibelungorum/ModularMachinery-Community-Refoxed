@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
@@ -106,7 +107,7 @@ class RecipeRegistryTest {
     @Test
     void effectiveByMachineIndexMatchesEffectiveSnapshot() {
         var staticRecipe = recipe("mmcr:static_layered", "mmcr:layered_machine");
-        var dataPackRecipe = new MachineRecipe(staticRecipe.id(), staticRecipe.machineId(), 1,
+        var dataPackRecipe = RecipeTestSupport.create(staticRecipe.id(), staticRecipe.machineId(), 1,
                 List.of(), List.of(), List.of(), 5, 1, false, List.of(), List.of(), false, List.of(), false, Set.of());
         var dynamicRecipe = recipe("mmcr:kjs_layered", "mmcr:layered_machine");
         RecipeRegistry.registerStatic(staticRecipe);
@@ -273,7 +274,7 @@ class RecipeRegistryTest {
     }
 
     private static MachineRecipe recipe(String id, String machineId, int tickTime) {
-        return new MachineRecipe(Identifier.parse(id), Identifier.parse(machineId), tickTime, List.of(), List.of());
+        return RecipeTestSupport.create(Identifier.parse(id), Identifier.parse(machineId), tickTime, List.of(), List.of());
     }
 
     private static final Identifier INVALID_OUTPUT_ID = Identifier.parse("mmcr_test:invalid_output");

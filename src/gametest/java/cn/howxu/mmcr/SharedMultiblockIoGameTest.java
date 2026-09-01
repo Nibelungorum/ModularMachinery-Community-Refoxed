@@ -30,6 +30,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -229,13 +230,14 @@ public class SharedMultiblockIoGameTest {
     }
 
     private static MachineRecipe itemRecipe(String path) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), 0, 1,
-                false, List.of(), List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
-                Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), true);
+        return MachineRecipe.fromCanonical(MMCR.id(path), MMCR.id("test_cube"), 20,
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY)), List.of(), List.of(), 0, 1, false, true, List.of(), false, Set.of());
     }
 
     private static MachineRecipe energyRecipe(String path) {
-        return new MachineRecipe(MMCR.id(path), MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), 0, 1,
-                false, List.of(), List.of(new EnergyRequirement(15)));
+        return MachineRecipe.fromCanonical(MMCR.id(path), MMCR.id("test_cube"), 20,
+                List.of(new EnergyRequirement(15)), List.of(), List.of(), 0, 1, false, false, List.of(), false,
+                Set.of());
     }
 }
