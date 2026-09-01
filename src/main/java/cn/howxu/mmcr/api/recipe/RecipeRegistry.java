@@ -226,17 +226,8 @@ public final class RecipeRegistry {
                     throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
                             "Output type is not registered canonically", null);
                 }
-                MachineRequirement derived;
-                try {
-                    derived = OutputRegistry.toRequirement(output, List.of());
-                } catch (RuntimeException exception) {
-                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
-                            "Output type cannot derive a canonical requirement", exception);
-                }
-                if (derived == null) {
-                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
-                            "Output type must derive a canonical requirement", null);
-                }
+                MachineRequirement derived = OutputRegistry.tryToRequirement(output, List.of());
+                if (derived == null) continue;
                 validateRequirement(id, "outputs[" + index + "]", derived);
                 if (derived.io() != RecipeModifier.IOType.OUTPUT) {
                     throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",

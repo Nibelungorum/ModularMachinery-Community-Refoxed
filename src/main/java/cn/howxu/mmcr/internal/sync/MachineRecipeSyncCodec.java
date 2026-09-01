@@ -7,20 +7,29 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.EncoderException;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -40,11 +49,20 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_MODIFIERS = 1024;
     private static final int MAX_LEVEL_REQUIREMENTS = 1024;
     private static final int MAX_REQUIRED_HOSTS = 1024;
+    private static final int MAX_TAGS = 1024;
+    private static final int MAX_STACK_COUNT = 65536;
+    private static final int MAX_ITEM_COUNT = 1_000_000;
+    private static final int MAX_FLUID_AMOUNT = 10_000_000;
+    private static final int MAX_ENERGY_PER_TICK = 10_000_000;
+    private static final int FORMAT_MARKER = -1;
+    private static final int FORMAT_VERSION = 1;
 
     private MachineRecipeSyncCodec() {
     }
 
     public static void encode(RegistryFriendlyByteBuf buf, MachineRecipe value) {
+        buf.writeVarInt(FORMAT_MARKER);
+        buf.writeVarInt(FORMAT_VERSION);
         Identifier.STREAM_CODEC.encode(buf, value.id());
         Identifier.STREAM_CODEC.encode(buf, value.machineId());
         buf.writeVarInt(value.tickTime());
@@ -61,6 +79,18 @@ public final class MachineRecipeSyncCodec {
     }
 
     public static MachineRecipe decode(RegistryFriendlyByteBuf buf) {
+        int start = buf.readerIndex();
+        int marker = buf.readVarInt();
+        if (marker != FORMAT_MARKER) {
+            buf.readerIndex(start);
+            return decodeLegacy(buf);
+        }
+        int version = buf.readVarInt();
+        if (version != FORMAT_VERSION) throw new DecoderException("Unsupported machine recipe sync version: " + version);
+        return decodeCurrent(buf);
+    }
+
+    private static MachineRecipe decodeCurrent(RegistryFriendlyByteBuf buf) {
         Identifier id = Identifier.STREAM_CODEC.decode(buf);
         Identifier machineId = Identifier.STREAM_CODEC.decode(buf);
         int tickTime = buf.readVarInt();
@@ -76,6 +106,26 @@ public final class MachineRecipeSyncCodec {
         Set<Identifier> hosts = readRequiredHosts(buf);
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, requirements, outputs, modifiers,
                 priority, maxThreads, cancelIfPerTickFails, parallelized, levels, allowPartialOutputs, hosts);
+        RecipeRegistry.validateClientSnapshot(java.util.Map.of(id, recipe));
+        return recipe;
+    }
+
+    private static MachineRecipe decodeLegacy(RegistryFriendlyByteBuf buf) {
+        Identifier id = Identifier.STREAM_CODEC.decode(buf);
+        Identifier machineId = Identifier.STREAM_CODEC.decode(buf);
+        int tickTime = buf.readVarInt();
+        List<MachineRequirement> requirements = readLegacyRequirements(buf);
+        List<RecipeModifier> modifiers = readModifiers(buf);
+        int priority = buf.readVarInt();
+        int maxThreads = buf.readVarInt();
+        boolean cancelIfPerTickFails = buf.readBoolean();
+        boolean parallelized = buf.readBoolean();
+        List<LevelRequirement> levels = readLevelRequirements(buf);
+        boolean allowPartialOutputs = buf.readBoolean();
+        Set<Identifier> hosts = readRequiredHosts(buf);
+        MachineRecipe recipe = new MachineRecipe(id, machineId, tickTime, List.of(), List.of(), modifiers, priority,
+                maxThreads, cancelIfPerTickFails, List.of(), requirements, parallelized, levels,
+                allowPartialOutputs, hosts);
         RecipeRegistry.validateClientSnapshot(java.util.Map.of(id, recipe));
         return recipe;
     }
@@ -118,6 +168,58 @@ public final class MachineRecipeSyncCodec {
             throw new DecoderException("Decoded requirement does not match registered type: " + typeId);
         }
         return requirement;
+    }
+
+    private static List<MachineRequirement> readLegacyRequirements(RegistryFriendlyByteBuf buf) {
+        int count = buf.readVarInt();
+        checkSize(count, MAX_REQUIREMENTS, "requirement");
+        List<MachineRequirement> values = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) values.add(readLegacyRequirement(buf));
+        return List.copyOf(values);
+    }
+
+    private static MachineRequirement readLegacyRequirement(RegistryFriendlyByteBuf buf) {
+        return switch (buf.readVarInt()) {
+            case 0 -> {
+                RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
+                List<String> tags = readStringList(buf, MAX_TAGS, "tag");
+                if (io == RecipeModifier.IOType.INPUT) {
+                    Ingredient ingredient = Ingredient.CODEC.parse(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE),
+                            normalizeIngredient(readJson(buf))).getOrThrow(message -> new DecoderException(
+                                    "Failed to decode legacy item ingredient: " + message));
+                    int count = buf.readVarInt();
+                    checkRange(count, 1, MAX_ITEM_COUNT, "item count");
+                    DataComponentPredicateSet components = readJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC);
+                    yield new ItemRequirement(io, ingredient, count, ItemStack.EMPTY, 1F, tags, components, buf.readFloat());
+                }
+                ItemStack stack = readJsonWithRegistryCodec(buf, ItemStack.CODEC);
+                checkStackCount(stack);
+                yield new ItemRequirement(io, null, 0, stack, buf.readFloat(), tags);
+            }
+            case 1 -> {
+                RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
+                List<String> tags = readStringList(buf, MAX_TAGS, "tag");
+                if (io == RecipeModifier.IOType.INPUT) {
+                    FluidIngredient ingredient = readJsonWithRegistryCodec(buf, FluidIngredient.CODEC);
+                    int amount = buf.readVarInt();
+                    checkRange(amount, 1, MAX_FLUID_AMOUNT, "fluid amount");
+                    yield new FluidRequirement(io, ingredient, amount, FluidStack.EMPTY, tags);
+                }
+                FluidStack stack = readJsonWithRegistryCodec(buf, FluidStack.CODEC);
+                checkFluidAmount(stack);
+                yield new FluidRequirement(io, null, 0, stack, buf.readFloat(), tags);
+            }
+            case 2 -> {
+                RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
+                List<String> tags = readStringList(buf, MAX_TAGS, "tag");
+                int fePerTick = buf.readVarInt();
+                checkRange(fePerTick, 1, MAX_ENERGY_PER_TICK, "energy rate");
+                yield new EnergyRequirement(io, fePerTick, tags);
+            }
+            case 3 -> new SmartInterfaceRequirement(buf.readEnum(RecipeModifier.IOType.class),
+                    ByteBufCodecs.STRING_UTF8.decode(buf), buf.readFloat(), buf.readFloat());
+            default -> throw new DecoderException("Unknown legacy machine requirement kind");
+        };
     }
 
     private static void writeOutputs(RegistryFriendlyByteBuf buf, List<MachineOutput> values) {
@@ -266,6 +368,14 @@ public final class MachineRecipeSyncCodec {
         if (size < 0 || size > max) throw new IllegalArgumentException("Invalid " + label + " count: " + size);
     }
 
+    private static List<String> readStringList(RegistryFriendlyByteBuf buf, int max, String label) {
+        int count = buf.readVarInt();
+        checkSize(count, max, label);
+        List<String> values = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) values.add(ByteBufCodecs.STRING_UTF8.decode(buf));
+        return List.copyOf(values);
+    }
+
     private static void writeJson(RegistryFriendlyByteBuf buf, JsonElement value) {
         ByteBufCodecs.STRING_UTF8.encode(buf, value.toString());
     }
@@ -286,6 +396,24 @@ public final class MachineRecipeSyncCodec {
 
     private static JsonElement normalizeIngredient(JsonElement value) {
         return value;
+    }
+
+    private static void checkStackCount(ItemStack stack) {
+        if (stack.getCount() <= 0 || stack.getCount() > MAX_STACK_COUNT) {
+            throw new DecoderException("Invalid item stack count: " + stack.getCount());
+        }
+    }
+
+    private static void checkFluidAmount(FluidStack stack) {
+        if (stack.getAmount() <= 0 || stack.getAmount() > MAX_FLUID_AMOUNT) {
+            throw new DecoderException("Invalid fluid amount: " + stack.getAmount());
+        }
+    }
+
+    private static void checkRange(int value, int minimum, int maximum, String label) {
+        if (value < minimum || value > maximum) {
+            throw new DecoderException("Invalid " + label + ": " + value);
+        }
     }
 
 }

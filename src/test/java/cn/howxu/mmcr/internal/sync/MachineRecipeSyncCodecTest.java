@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
@@ -19,11 +21,13 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
+import io.netty.handler.codec.DecoderException;
 
 import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -55,21 +59,109 @@ class MachineRecipeSyncCodecTest {
     }
 
     @Test
-    void roundTripsLegacyBuiltInRequirementWireFormat() {
-        MachineRecipe original = MachineRecipe.fromCanonical(MMCR.id("legacy_sync"), MMCR.id("machine"), 20,
-                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 40, List.of("legacy"))),
-                List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
-        RegistryFriendlyByteBuf buffer = buffer();
+    void decodesHandWrittenLegacyBuiltInRequirementWireFormats() {
+        assertThat(decodeLegacy(0, buffer -> {
+            buffer.writeEnum(RecipeModifier.IOType.OUTPUT);
+            writeTags(buffer, "item");
+            buffer.writeUtf("{\"id\":\"minecraft:iron_ingot\",\"count\":2}");
+            buffer.writeFloat(0.5F);
+        }).requirements()).singleElement().isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
+            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+            assertThat(requirement.stack().getCount()).isEqualTo(2);
+            assertThat(requirement.tags()).containsExactly("item");
+        });
+        assertThat(decodeLegacy(1, buffer -> {
+            buffer.writeEnum(RecipeModifier.IOType.OUTPUT);
+            writeTags(buffer, "fluid");
+            buffer.writeUtf("{\"id\":\"minecraft:water\",\"amount\":250}");
+            buffer.writeFloat(0.25F);
+        }).requirements()).singleElement().isInstanceOfSatisfying(FluidRequirement.class, requirement -> {
+            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+            assertThat(requirement.stack().getAmount()).isEqualTo(250);
+            assertThat(requirement.tags()).containsExactly("fluid");
+        });
+        assertThat(decodeLegacy(2, buffer -> {
+            buffer.writeEnum(RecipeModifier.IOType.INPUT);
+            writeTags(buffer, "energy");
+            buffer.writeVarInt(40);
+        }).requirements()).containsExactly(new EnergyRequirement(RecipeModifier.IOType.INPUT, 40, List.of("energy")));
+        assertThat(decodeLegacy(3, buffer -> {
+            buffer.writeEnum(RecipeModifier.IOType.OUTPUT);
+            buffer.writeUtf("scalar");
+            buffer.writeFloat(1F);
+            buffer.writeFloat(2F);
+        }).requirements()).singleElement().satisfies(requirement -> {
+            assertThat(requirement.type().id()).isEqualTo(MMCR.id("smart_interface"));
+            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+        });
+    }
 
-        MachineRecipeSyncCodec.encode(buffer, original);
-        MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
-
-        assertThat(decoded.requirements()).containsExactly(new EnergyRequirement(RecipeModifier.IOType.INPUT, 40,
-                List.of("legacy")));
+    @Test
+    void rejectsUnknownOversizedAndResidualNewRequirementPayloads() {
+        RegistryFriendlyByteBuf unsupportedVersion = buffer();
+        unsupportedVersion.writeVarInt(-1);
+        unsupportedVersion.writeVarInt(2);
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(unsupportedVersion)).isInstanceOf(DecoderException.class)
+                .hasMessageContaining("Unsupported machine recipe sync version");
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("unknown"), 0, buffer -> {
+        }))).isInstanceOf(DecoderException.class);
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("energy"),
+                RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE + 1, buffer -> {
+                }))).isInstanceOf(DecoderException.class);
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("energy"), -1, buffer -> {
+            buffer.writeUtf("{\"type\":\"mmcr:energy\",\"io\":\"input\",\"fe_per_tick\":40}");
+            buffer.writeByte(0);
+        }))).isInstanceOf(DecoderException.class).hasMessageContaining("Invalid requirement payload");
     }
 
     private static RegistryFriendlyByteBuf buffer() {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+    }
+
+    private static MachineRecipe decodeLegacy(int kind, java.util.function.Consumer<RegistryFriendlyByteBuf> writer) {
+        RegistryFriendlyByteBuf buffer = buffer();
+        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("legacy"));
+        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("machine"));
+        buffer.writeVarInt(20);
+        buffer.writeVarInt(1);
+        buffer.writeVarInt(kind);
+        writer.accept(buffer);
+        writeLegacyTail(buffer);
+        return MachineRecipeSyncCodec.decode(buffer);
+    }
+
+    private static RegistryFriendlyByteBuf newRequirementBuffer(Identifier type, int size,
+                                                                  java.util.function.Consumer<RegistryFriendlyByteBuf> writer) {
+        RegistryFriendlyByteBuf buffer = buffer();
+        RegistryFriendlyByteBuf payload = buffer();
+        writer.accept(payload);
+        buffer.writeVarInt(-1);
+        buffer.writeVarInt(1);
+        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("new"));
+        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("machine"));
+        buffer.writeVarInt(20);
+        buffer.writeVarInt(1);
+        Identifier.STREAM_CODEC.encode(buffer, type);
+        int payloadSize = size < 0 ? payload.writerIndex() : size;
+        buffer.writeVarInt(payloadSize);
+        if (payloadSize <= payload.writerIndex()) buffer.writeBytes(payload, 0, payloadSize);
+        return buffer;
+    }
+
+    private static void writeLegacyTail(RegistryFriendlyByteBuf buffer) {
+        buffer.writeVarInt(0);
+        buffer.writeVarInt(0);
+        buffer.writeVarInt(1);
+        buffer.writeBoolean(false);
+        buffer.writeBoolean(false);
+        buffer.writeVarInt(0);
+        buffer.writeBoolean(false);
+        buffer.writeVarInt(0);
+    }
+
+    private static void writeTags(RegistryFriendlyByteBuf buffer, String tag) {
+        buffer.writeVarInt(1);
+        buffer.writeUtf(tag);
     }
 
     private record ScalarRequirement(RecipeModifier.IOType io, int value, List<String> tags) implements MachineRequirement {
@@ -111,14 +203,7 @@ class MachineRecipeSyncCodecTest {
     private record ScalarOutput(int value, float chance) implements CustomOutput {
         private static final OutputType<ScalarOutput> TYPE = new OutputType.Definition<>(MMCR.id("scalar_output"),
                 MapCodec.unit(() -> new ScalarOutput(0, 1F)), (output, chance) -> new ScalarOutput(output.value(), chance),
-                (output, modifiers) -> output, output -> output, OutputType.Presentation.defaults(MMCR.id("scalar_output")),
-                MMCR.id("scalar_output").toString(),
-                (output, tags) -> new ScalarRequirement(RecipeModifier.IOType.OUTPUT, output.value(), tags),
-                requirement -> requirement instanceof ScalarRequirement scalar
-                        && scalar.io() == RecipeModifier.IOType.OUTPUT,
-                requirement -> requirement instanceof ScalarRequirement scalar
-                        && scalar.io() == RecipeModifier.IOType.OUTPUT
-                        ? new ScalarOutput(scalar.value(), 1F) : null,
+                (output, modifiers) -> output, output -> output,
                 RecipeSyncCodec.of(8, (buffer, output) -> {
                     buffer.writeVarInt(output.value());
                     buffer.writeFloat(output.chance());
