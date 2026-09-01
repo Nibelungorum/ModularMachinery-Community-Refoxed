@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -32,7 +33,8 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
             new FluidRequirement(io, fluid.orElse(null), amount, stack, chance, tags)));
     private static final RequirementHandler<FluidRequirement> HANDLER = new FluidRequirementHandler();
     public static final RequirementType<FluidRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, FluidRequirement::copy);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, FluidRequirement::copy,
+                    RecipeSyncCodec.json(CODEC.codec(), FluidRequirement::validateSync));
 
     public FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack) {
         this(io, fluid, amount, stack, 1F, List.of());
@@ -51,6 +53,16 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
     private static FluidRequirement copy(FluidRequirement requirement) {
         return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), requirement.stack(),
                 requirement.chance(), requirement.tags());
+    }
+
+    private static void validateSync(FluidRequirement requirement) {
+        int amount = requirement.io() == RecipeModifier.IOType.INPUT ? requirement.amount() : requirement.stack().getAmount();
+        if (amount < 1 || amount > 10_000_000) {
+            throw new IllegalArgumentException("Invalid fluid amount: " + amount);
+        }
+        if (requirement.tags().size() > 1024) {
+            throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
+        }
     }
 
     @Override

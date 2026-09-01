@@ -330,7 +330,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return additionalOutputs.isEmpty() ? recipe : new MachineRecipe(recipe, additionalOutputs);
     }
 
-    static MachineRecipe fromCanonical(Identifier id,
+    public static MachineRecipe fromCanonical(Identifier id,
                                        Identifier machineId,
                                        int tickTime,
                                        List<MachineRequirement> requirements,

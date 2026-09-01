@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -32,6 +33,7 @@ public final class RequirementHandlerRegistry {
         if (type == null) throw new IllegalArgumentException("type must not be null");
         if (type.id() == null) throw new IllegalArgumentException("type id must not be null");
         if (type.codec() == null) throw new IllegalArgumentException("type codec must not be null");
+        validateSyncCodec(type.syncCodec());
         RequirementHandler<R> handler = type.handler();
         if (handler == null) throw new IllegalArgumentException("type handler must not be null");
         if (isBuiltIn(type.id())) throw new IllegalArgumentException("built-in requirement type is reserved: " + type.id());
@@ -162,6 +164,12 @@ public final class RequirementHandlerRegistry {
 
     private static boolean isBuiltIn(Identifier id) {
         return BUILT_IN_IDS.contains(id);
+    }
+
+    private static void validateSyncCodec(RecipeSyncCodec<?> codec) {
+        if (codec == null || codec.maxPayloadSize() < 1 || codec.maxPayloadSize() > RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE) {
+            throw new IllegalArgumentException("type sync codec must define a bounded payload limit");
+        }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

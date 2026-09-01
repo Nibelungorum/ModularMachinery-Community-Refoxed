@@ -173,6 +173,7 @@ public final class RecipeRegistry {
                 throw new IllegalArgumentException("Recipe key does not match recipe id: " + entry.getKey());
             }
         }
+        validateRecipeTypes(recipes);
     }
 
     public static List<String> lastDataPackWarnings() {

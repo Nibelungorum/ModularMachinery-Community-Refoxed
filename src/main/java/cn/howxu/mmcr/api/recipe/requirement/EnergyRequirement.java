@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -24,7 +25,8 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
     ).apply(instance, (ignored, io, fePerTick, tags) -> new EnergyRequirement(io, fePerTick, tags)));
     private static final RequirementHandler<EnergyRequirement> HANDLER = new EnergyRequirementHandler();
     public static final RequirementType<EnergyRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, EnergyRequirement::copy);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, EnergyRequirement::copy,
+                    RecipeSyncCodec.json(CODEC.codec(), EnergyRequirement::validateSync));
 
     public EnergyRequirement(int fePerTick) {
         this(RecipeModifier.IOType.INPUT, fePerTick, List.of());
@@ -49,6 +51,15 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
 
     private static EnergyRequirement copy(EnergyRequirement requirement) {
         return new EnergyRequirement(requirement.io(), requirement.fePerTick(), requirement.tags());
+    }
+
+    private static void validateSync(EnergyRequirement requirement) {
+        if (requirement.fePerTick() < 1 || requirement.fePerTick() > 10_000_000) {
+            throw new IllegalArgumentException("Invalid energy rate: " + requirement.fePerTick());
+        }
+        if (requirement.tags().size() > 1024) {
+            throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
+        }
     }
 
     @Override

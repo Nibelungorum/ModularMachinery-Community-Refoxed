@@ -165,6 +165,11 @@ public final class OutputRegistry {
         if (type == null) throw new IllegalArgumentException("type must not be null");
         if (type.id() == null) throw new IllegalArgumentException("type id must not be null");
         if (type.codec() == null) throw new IllegalArgumentException("type codec must not be null");
+        RecipeSyncCodec<?> syncCodec = type.syncCodec();
+        if (syncCodec == null || syncCodec.maxPayloadSize() < 1
+                || syncCodec.maxPayloadSize() > RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE) {
+            throw new IllegalArgumentException("type sync codec must define a bounded payload limit");
+        }
         if (type.serializedId() == null || type.serializedId().isBlank()) {
             throw new IllegalArgumentException("serialized type id must not be blank");
         }

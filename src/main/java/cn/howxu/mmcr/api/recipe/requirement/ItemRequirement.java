@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -39,7 +40,8 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
             new ItemRequirement(io, item.orElse(null), count, stack, chance, tags, components, consumeChance)));
     private static final RequirementHandler<ItemRequirement> HANDLER = new ItemRequirementHandler();
     public static final RequirementType<ItemRequirement> TYPE =
-            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, ItemRequirement::copy);
+            new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, ItemRequirement::copy,
+                    RecipeSyncCodec.json(CODEC.codec(), ItemRequirement::validateSync));
 
     public ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack) {
         this(io, item, count, stack, 1F, List.of(), DataComponentPredicateSet.EMPTY, 1F);
@@ -82,6 +84,18 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
     private static ItemRequirement copy(ItemRequirement requirement) {
         return new ItemRequirement(requirement.io(), requirement.item(), requirement.count(), requirement.stack(),
                 requirement.chance(), requirement.tags(), requirement.components(), requirement.consumeChance());
+    }
+
+    private static void validateSync(ItemRequirement requirement) {
+        int count = requirement.io() == RecipeModifier.IOType.INPUT ? requirement.count() : requirement.stack().getCount();
+        int maximum = requirement.io() == RecipeModifier.IOType.INPUT ? 1_000_000 : 65536;
+        if (count < 1 || count > maximum) {
+            throw new IllegalArgumentException(requirement.io() == RecipeModifier.IOType.INPUT
+                    ? "Invalid item count: " + count : "Invalid item stack count: " + count);
+        }
+        if (requirement.tags().size() > 1024) {
+            throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
+        }
     }
 
 }

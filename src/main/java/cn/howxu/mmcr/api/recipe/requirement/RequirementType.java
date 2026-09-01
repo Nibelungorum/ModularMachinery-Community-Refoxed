@@ -5,6 +5,7 @@ import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.List;
 import java.util.Objects;
@@ -21,6 +22,10 @@ public interface RequirementType<R extends MachineRequirement> {
     MapCodec<R> codec();
 
     RequirementHandler<R> handler();
+
+    default RecipeSyncCodec<R> syncCodec() {
+        return RecipeSyncCodec.json(codec().codec());
+    }
 
     default R applyModifiers(R requirement, List<RecipeModifier> modifiers) {
         return handler().applyModifiers(requirement, modifiers);
@@ -89,14 +94,20 @@ public interface RequirementType<R extends MachineRequirement> {
         private final RequirementHandler<R> handler;
         private final Presentation presentation;
         private final UnaryOperator<R> copier;
+        private final RecipeSyncCodec<R> syncCodec;
 
         public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler) {
             this(id, codec, handler, Presentation.defaults(id), null);
         }
 
         public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
-                          UnaryOperator<R> copier) {
+                           UnaryOperator<R> copier) {
             this(id, codec, handler, Presentation.defaults(id), copier);
+        }
+
+        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+                          UnaryOperator<R> copier, RecipeSyncCodec<R> syncCodec) {
+            this(id, codec, handler, Presentation.defaults(id), copier, syncCodec);
         }
 
         public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
@@ -105,12 +116,23 @@ public interface RequirementType<R extends MachineRequirement> {
         }
 
         public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
-                          Presentation presentation, UnaryOperator<R> copier) {
+                           Presentation presentation, UnaryOperator<R> copier) {
+            this(id, codec, handler, presentation, copier, null);
+        }
+
+        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+                          RecipeSyncCodec<R> syncCodec) {
+            this(id, codec, handler, Presentation.defaults(id), null, syncCodec);
+        }
+
+        private Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+                           Presentation presentation, UnaryOperator<R> copier, RecipeSyncCodec<R> syncCodec) {
             this.id = Objects.requireNonNull(id, "id");
             this.codec = Objects.requireNonNull(codec, "codec");
             this.handler = Objects.requireNonNull(handler, "handler");
             this.presentation = Objects.requireNonNull(presentation, "presentation");
             this.copier = copier;
+            this.syncCodec = syncCodec;
         }
 
         @Override
@@ -126,6 +148,11 @@ public interface RequirementType<R extends MachineRequirement> {
         @Override
         public RequirementHandler<R> handler() {
             return handler;
+        }
+
+        @Override
+        public RecipeSyncCodec<R> syncCodec() {
+            return syncCodec == null ? RequirementType.super.syncCodec() : syncCodec;
         }
 
         @Override

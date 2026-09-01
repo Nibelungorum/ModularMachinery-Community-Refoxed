@@ -32,6 +32,10 @@ public interface OutputType<O extends MachineOutput> {
 
     boolean matchesRequirement(MachineRequirement requirement);
 
+    default RecipeSyncCodec<O> syncCodec() {
+        return RecipeSyncCodec.json(codec().codec());
+    }
+
     default MachineOutput fromRequirement(MachineRequirement requirement) {
         return null;
     }
@@ -82,6 +86,7 @@ public interface OutputType<O extends MachineOutput> {
         private final Function<MachineRequirement, MachineOutput> outputFactory;
         private final Presentation presentation;
         private final String serializedId;
+        private final RecipeSyncCodec<O> syncCodec;
 
         public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier) {
@@ -120,10 +125,29 @@ public interface OutputType<O extends MachineOutput> {
 
         public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
+                          RecipeSyncCodec<O> syncCodec) {
+            this(id, codec, chanceTransformer, modifierTransformer, copier, Presentation.defaults(id), id.toString(),
+                    (output, tags) -> {
+                        throw new IllegalStateException("Output type does not support execution requirements: " + id);
+                    }, requirement -> false, ignored -> null, syncCodec);
+        }
+
+        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+                          BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation, String serializedId,
                           BiFunction<O, List<String>, MachineRequirement> requirementFactory,
                           Predicate<MachineRequirement> requirementMatcher,
                           Function<MachineRequirement, MachineOutput> outputFactory) {
+            this(id, codec, chanceTransformer, modifierTransformer, copier, presentation, serializedId,
+                    requirementFactory, requirementMatcher, outputFactory, null);
+        }
+
+        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+                          BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
+                          Presentation presentation, String serializedId,
+                          BiFunction<O, List<String>, MachineRequirement> requirementFactory,
+                          Predicate<MachineRequirement> requirementMatcher,
+                          Function<MachineRequirement, MachineOutput> outputFactory, RecipeSyncCodec<O> syncCodec) {
             this.id = Objects.requireNonNull(id, "id");
             this.codec = Objects.requireNonNull(codec, "codec");
             this.chanceTransformer = Objects.requireNonNull(chanceTransformer, "chanceTransformer");
@@ -135,6 +159,7 @@ public interface OutputType<O extends MachineOutput> {
             this.presentation = Objects.requireNonNull(presentation, "presentation");
             if (serializedId == null || serializedId.isBlank()) throw new IllegalArgumentException("serializedId must not be blank");
             this.serializedId = serializedId;
+            this.syncCodec = syncCodec;
         }
 
         @Override
@@ -160,6 +185,11 @@ public interface OutputType<O extends MachineOutput> {
         @Override
         public O copy(O output) {
             return copier.apply(output);
+        }
+
+        @Override
+        public RecipeSyncCodec<O> syncCodec() {
+            return syncCodec == null ? OutputType.super.syncCodec() : syncCodec;
         }
 
         @Override
