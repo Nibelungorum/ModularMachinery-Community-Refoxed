@@ -100,6 +100,18 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void controller_rejects_a_symbol_absent_from_the_pattern() {
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("mmcr_test:iron_compressor")
+                .pattern("X")
+                .controller("C"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new MachineStructureStageBuilderJS("mmcr_test:iron_compressor")
+                .pattern("X")
+                .controller("C"))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void stage_builder_pattern_all_preserves_multiple_slices() {
         var declaration = new MachineStructureStageBuilderJS("mmcr_test:stage_machine")
                 .patternAll(List.of(List.of("XX"), List.of("XX")))

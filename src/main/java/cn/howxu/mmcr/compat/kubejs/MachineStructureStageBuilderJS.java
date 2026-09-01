@@ -89,8 +89,12 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
         if (symbol == null || symbol.length() != 1 || symbol.charAt(0) == ' ') {
             throw new IllegalArgumentException("A controller symbol must be exactly one non-space character");
         }
-        sliceBuilder.set(symbol.charAt(0), new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()));
-        sliceBuilder.controller(symbol.charAt(0));
+        char key = symbol.charAt(0);
+        if (!sliceBuilder.containsSymbol(key)) {
+            throw new IllegalStateException("Pattern symbol is absent from the current pattern: " + key);
+        }
+        sliceBuilder.set(key, new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()));
+        sliceBuilder.controller(key);
         return this;
     }
 
