@@ -195,6 +195,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += SMART_INTERFACE_LINE_SPACING;
         }
         guiGraphics.pose().popMatrix();
+        drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
+        drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
     }
@@ -294,28 +296,52 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.SlotPlan slot, boolean input) {
         IRecipeSlotBuilder jeiSlot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slot.x(), slot.y());
         jeiSlot.setStandardSlotBackground();
-        switch (slot.entry().kind()) {
-            case FLUID -> addFluid(jeiSlot, recipe, slot.entry(), input);
-            case ITEM -> addItem(jeiSlot, recipe, slot.entry(), input);
+        displayEntry(recipe, slot.entry(), input).ifPresent(entry -> addGeneric(jeiSlot, entry));
+    }
+
+    private static Optional<JeiDisplayEntry> displayEntry(MachineRecipeDisplay recipe,
+            MachineRecipeLayout.EntryPlan plan, boolean input) {
+        var type = switch (plan.kind()) {
+            case ITEM -> VanillaTypes.ITEM_STACK;
+            case FLUID -> NeoForgeTypes.FLUID_STACK;
+            case TEXT -> null;
+        };
+        return recipe.entries().stream()
+                .filter(entry -> entry.role() == (input ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT))
+                .filter(entry -> entry.ingredientType() == type)
+                .skip(plan.index())
+                .findFirst();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void addGeneric(IRecipeSlotBuilder slot, JeiDisplayEntry entry) {
+        if (entry.isTextOnly()) {
+            slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
+            return;
+        }
+        String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK
+                ? itemQuantityText(entry.count()) : fluidQuantityText(entry.count());
+        setQuantityOverlay(slot, quantity);
+        if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
+            slot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER);
+        }
+        slot.add((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), entry.ingredient());
+    }
+
+    private static void drawTextEntries(MachineRecipeDisplay recipe, MachineRecipeLayout.RegionPlan region,
+            boolean input, GuiGraphicsExtractor guiGraphics) {
+        for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
+            if (slot.entry().kind() != MachineRecipeLayout.Kind.TEXT) continue;
+            displayEntry(recipe, slot.entry(), input).ifPresent(entry -> guiGraphics.text(Minecraft.getInstance().font,
+                    (Component) entry.ingredient(), slot.x(), slot.y() + 4, 0xFF404040, false));
         }
     }
 
     private static void addTransferSlots(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe) {
-        for (int index = 0; index < recipe.fluidInputs().size(); index++) {
+        for (JeiDisplayEntry entry : recipe.entries()) {
+            if (entry.role() != RecipeIngredientRole.INPUT || !entry.transferable()) continue;
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
-            int amount = recipe.fluidInputAmounts().get(index);
-            recipe.fluidInputs().get(index).fluids().forEach(fluid -> slot.add(fluid.value(), amount));
-        }
-        for (MachineRecipeDisplay.ItemInputDisplay item : recipe.itemInputs()) {
-            IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
-            addActualItem(slot, item);
-        }
-        for (FluidStack fluid : recipe.fluidOutputs()) {
-            builder.addOutputSlot(-1000, -1000)
-                    .add(fluid.getFluid(), fluid.getAmount(), fluid.getComponentsPatch());
-        }
-        for (MachineRecipeDisplay.ItemOutputDisplay output : recipe.itemOutputs()) {
-            builder.addOutputSlot(-1000, -1000).add(output.stack());
+            addGeneric(slot, entry);
         }
     }
 

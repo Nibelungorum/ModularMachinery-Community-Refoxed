@@ -90,6 +90,7 @@ class JeiRuntimeReloaderTest {
         assertThat(manager.addedTypes()).contains(JeiMachineRecipeTypes.forMachine(machineId));
         assertThat(manager.addedRecipeIds()).contains(MMCR.id("jei_synced_recipe"));
         assertThat(manager.hiddenTypes()).contains(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.addedRecipeIds()).hasSize(1);
     }
 
     @Test

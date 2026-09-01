@@ -27,6 +27,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -166,6 +167,41 @@ public record MachineRecipeDisplay(
                                 .map(SmartInterfaceDisplay::tooltip),
                         smartInterfaceModifiers.stream().map(SmartInterfaceModifierDisplay::tooltip))
                 .toList();
+    }
+
+    /**
+     * Converts effective recipe requirements through the registered JEI type adapters.
+     * Unknown types remain visible as text entries so a newly registered requirement
+     * cannot prevent its machine category from loading.
+     */
+    public List<JeiDisplayEntry> entries() {
+        return recipe.runtimeRequirements().stream()
+                .filter(requirement -> !(requirement instanceof EnergyRequirement))
+                .map(requirement -> new RecipeIoEntry(
+                        requirement.io() == RecipeModifier.IOType.INPUT
+                                ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
+                        requirement.type().id(), requirement, requirementAmount(requirement), requirementChance(requirement)))
+                .flatMap(entry -> JeiIngredientAdapterRegistry.get(entry.typeId())
+                        .map(adapter -> adapter.display(entry).stream())
+                        .orElseGet(() -> Stream.of(JeiIngredientAdapterRegistry.textEntry(entry))))
+                .toList();
+    }
+
+    private static long requirementAmount(MachineRequirement requirement) {
+        if (requirement instanceof ItemRequirement item) {
+            return item.io() == RecipeModifier.IOType.INPUT ? item.count() : item.stack().getCount();
+        }
+        if (requirement instanceof FluidRequirement fluid) {
+            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
+        }
+        if (requirement instanceof EnergyRequirement energy) return energy.fePerTick();
+        return 1L;
+    }
+
+    private static float requirementChance(MachineRequirement requirement) {
+        if (requirement instanceof ItemRequirement item) return item.chance();
+        if (requirement instanceof FluidRequirement fluid) return fluid.chance();
+        return 1F;
     }
 
     private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,

@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.world.item.ItemStack;
@@ -71,6 +72,8 @@ class MachineRecipeLayoutTest {
         assertThat(layout.durationTextX()).isEqualTo(8);
         assertThat(layout.durationTextY()).isEqualTo(48);
         assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(slot.x()).isGreaterThan(90));
+        assertThat(MachineRecipeDisplay.from(recipe).entries()).extracting(JeiDisplayEntry::role)
+                .containsOnly(RecipeIngredientRole.INPUT, RecipeIngredientRole.OUTPUT);
     }
 
     @Test

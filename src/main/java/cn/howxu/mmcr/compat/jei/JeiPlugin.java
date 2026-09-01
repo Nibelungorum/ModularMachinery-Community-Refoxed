@@ -34,6 +34,7 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
+        JeiIngredientAdapterRegistry.registerBuiltIns();
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
         Map<Identifier, net.minecraft.network.chat.Component> machineTitles = new LinkedHashMap<>();

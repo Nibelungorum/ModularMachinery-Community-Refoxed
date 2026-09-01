@@ -48,6 +48,7 @@ class MachineRecipeTransferHandlerTest {
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 8)),
                 List.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        assertThat(display.entries()).singleElement().satisfies(entry -> assertThat(entry.transferable()).isTrue());
 
         IRecipeSlotView placeholder = itemSlot(
                 new ItemStack(Items.IRON_INGOT, 1),

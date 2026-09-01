@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -575,6 +576,14 @@ class MachineRecipeDisplayTest {
         ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 3);
 
         assertThat(MachineRecipeCategory.outputStackName(stack).getString()).isNotEmpty();
+    }
+
+    @Test
+    void displayExposesAdapterEntriesWithRecipeRoles() {
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe("jei_generic_entries", "blast_furnace", 0));
+
+        assertThat(display.entries()).extracting(JeiDisplayEntry::role)
+                .containsExactly(RecipeIngredientRole.INPUT, RecipeIngredientRole.OUTPUT);
     }
 
     @Test

@@ -301,6 +301,7 @@
   "jei.mmcr.transfer.fluid_energy_not_supported": "仅支持转移物品输入；流体和能量需要通过对应端口供应。",
   "jei.mmcr.transfer.no_item_inputs": "该配方没有可转移的物品输入。",
   "jei.mmcr.transfer.not_enough_slots": "该配方的物品总线槽位不足",
+  "jei.mmcr.transfer.unsupported": "该配方输入无法由物品总线转移：%s",
 
   "message.mmcr.multiblock_detector.cleared": "[DEBUG MMCR] 检测器选择已清除",
   "message.mmcr.multiblock_detector.controller_set": "[DEBUG MMCR] 检测器控制器已设为 %s, 朝向 %s",

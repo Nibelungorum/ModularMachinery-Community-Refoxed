@@ -301,6 +301,7 @@
   "jei.mmcr.transfer.fluid_energy_not_supported": "Only item inputs can be transferred; fluids and energy must be supplied by their ports.",
   "jei.mmcr.transfer.no_item_inputs": "This recipe has no item inputs to transfer.",
   "jei.mmcr.transfer.not_enough_slots": "Not enough item bus slots for this recipe",
+  "jei.mmcr.transfer.unsupported": "This recipe input cannot be transferred by the item bus: %s",
 
   "message.mmcr.multiblock_detector.cleared": "[DEBUG MMCR] Detector selection cleared",
   "message.mmcr.multiblock_detector.controller_set": "[DEBUG MMCR] Detector controller set to %s, facing %s",

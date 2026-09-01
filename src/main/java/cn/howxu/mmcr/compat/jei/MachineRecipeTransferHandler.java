@@ -58,13 +58,19 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
 
     @Override
     public @Nullable IRecipeTransferError transferRecipe(ItemBusMenu container, MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlots, Player player, boolean maxTransfer, boolean doTransfer) {
-        if (!recipe.fluidInputs().isEmpty() || !recipe.energyInputs().isEmpty()) {
-            return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.fluid_energy_not_supported"));
+        List<JeiDisplayEntry> inputs = recipe.entries().stream()
+                .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
+                .toList();
+        Optional<JeiDisplayEntry> unsupported = inputs.stream().filter(entry -> !entry.transferable()).findFirst();
+        if (unsupported.isPresent()) {
+            return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.unsupported",
+                    unsupported.get().ingredientType() == null ? unsupported.get().ingredient() : unsupported.get().ingredientType()));
         }
-        if (recipe.itemInputs().isEmpty()) {
+        List<JeiDisplayEntry> transferEntries = inputs.stream().filter(JeiDisplayEntry::transferable).toList();
+        if (transferEntries.isEmpty()) {
             return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.no_item_inputs"));
         }
-        if (recipe.itemInputs().size() > container.busSlotCount()) {
+        if (transferEntries.size() > container.busSlotCount()) {
             return helper.createUserErrorWithTooltip(Component.translatable("jei.mmcr.transfer.not_enough_slots"));
         }
         IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> handler = helper.createUnregisteredRecipeTransferHandler(
@@ -84,16 +90,21 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
     static List<IRecipeSlotView> withActualInputCounts(
             IRecipeSlotsView recipeSlots,
             MachineRecipeDisplay recipe) {
+        List<JeiDisplayEntry> itemEntries = recipe.entries().stream()
+                .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
+                .filter(JeiDisplayEntry::transferable)
+                .filter(entry -> entry.ingredientType() == VanillaTypes.ITEM_STACK)
+                .toList();
         int[] itemInputIndex = {0};
         return recipeSlots.getSlotViews().stream()
                 .map(slot -> {
                     if (slot.getRole() != RecipeIngredientRole.INPUT
                             || slot.getAllIngredients().noneMatch(ingredient ->
                             ingredient.getIngredient(VanillaTypes.ITEM_STACK).isPresent())
-                            || itemInputIndex[0] >= recipe.itemInputs().size()) {
+                            || itemInputIndex[0] >= itemEntries.size()) {
                         return slot;
                     }
-                    int count = recipe.itemInputs().get(itemInputIndex[0]++).count();
+                    int count = itemEntries.get(itemInputIndex[0]++).count();
                     return new ActualCountSlotView(slot, count);
                 })
                 .toList();

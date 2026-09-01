@@ -1,9 +1,13 @@
 package cn.howxu.mmcr.compat.jei;
 
 import net.minecraft.client.Minecraft;
+import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.neoforge.NeoForgeTypes;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -39,8 +43,8 @@ public record MachineRecipeLayout(
         return new MachineRecipeLayout(
                 WIDTH,
                 HEIGHT,
-                region(display.fluidInputs().size(), display.itemInputs().size(), 12, false, guiScale),
-                region(display.fluidOutputs().size(), display.itemOutputs().size(), 102, true, guiScale),
+                region(display.entries(), RecipeIngredientRole.INPUT, 12, false, guiScale),
+                region(display.entries(), RecipeIngredientRole.OUTPUT, 102, true, guiScale),
                 8,
                 hostRequirementTextY(display, guiScale),
                 durationTextY(display, guiScale),
@@ -88,8 +92,8 @@ public record MachineRecipeLayout(
     }
 
     private static int baseMetadataTextY(MachineRecipeDisplay display, int guiScale) {
-        int inputRows = visibleRows(display.fluidInputs().size() + display.itemInputs().size(), guiScale);
-        int outputRows = visibleRows(display.fluidOutputs().size() + display.itemOutputs().size(), guiScale);
+        int inputRows = visibleRows(entryCount(display, RecipeIngredientRole.INPUT), guiScale);
+        int outputRows = visibleRows(entryCount(display, RecipeIngredientRole.OUTPUT), guiScale);
         int rowCount = Math.max(1, Math.max(inputRows, outputRows));
         return SLOT_START_Y + rowCount * SLOT_SIZE + TEXT_OFFSET_Y;
     }
@@ -98,13 +102,27 @@ public record MachineRecipeLayout(
         return Math.min(rows(guiScale), (entryCount + COLUMNS - 1) / COLUMNS);
     }
 
-    private static RegionPlan region(int fluidCount, int itemCount, int startX, boolean rightAlign, int guiScale) {
-        List<EntryPlan> entries = new ArrayList<>(fluidCount + itemCount);
-        for (int index = 0; index < fluidCount; index++) {
-            entries.add(new EntryPlan(Kind.FLUID, index));
-        }
-        for (int index = 0; index < itemCount; index++) {
-            entries.add(new EntryPlan(Kind.ITEM, index));
+    private static int entryCount(MachineRecipeDisplay display, RecipeIngredientRole role) {
+        return (int) display.entries().stream().filter(entry -> entry.role() == role).count();
+    }
+
+    private static RegionPlan region(List<JeiDisplayEntry> displayEntries, RecipeIngredientRole role,
+                                     int startX, boolean rightAlign, int guiScale) {
+        List<EntryPlan> entries = new ArrayList<>();
+        int itemIndex = 0;
+        int fluidIndex = 0;
+        int textIndex = 0;
+        for (JeiDisplayEntry entry : displayEntries.stream()
+                .filter(candidate -> candidate.role() == role)
+                .sorted(Comparator.comparingInt(MachineRecipeLayout::kindOrder))
+                .toList()) {
+            if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
+                entries.add(new EntryPlan(Kind.ITEM, itemIndex++));
+            } else if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
+                entries.add(new EntryPlan(Kind.FLUID, fluidIndex++));
+            } else {
+                entries.add(new EntryPlan(Kind.TEXT, textIndex++));
+            }
         }
 
         int maxVisible = maxVisible(guiScale);
@@ -126,6 +144,12 @@ public record MachineRecipeLayout(
                 : List.of();
         OverflowSlotPlan overflowSlot = overflowing ? overflowSlot(startX, rightAlign, maxVisible) : null;
         return new RegionPlan(List.copyOf(slots), overflowSlot, List.copyOf(hiddenEntries));
+    }
+
+    private static int kindOrder(JeiDisplayEntry entry) {
+        if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
+        if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 1;
+        return 2;
     }
 
     private static OverflowSlotPlan overflowSlot(int startX, boolean rightAlign, int maxVisible) {
@@ -165,7 +189,7 @@ public record MachineRecipeLayout(
                 + display.smartInterfaceOutputs().size());
     }
 
-    public enum Kind { ITEM, FLUID }
+    public enum Kind { ITEM, FLUID, TEXT }
 
     public record EntryPlan(Kind kind, int index) {}
 
