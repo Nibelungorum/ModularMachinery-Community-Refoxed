@@ -23,13 +23,15 @@ public final class CapabilitySyncRegistry {
 
     public static List<CapabilitySyncEntry> encode(CapabilitySnapshot snapshot, RegistryFriendlyByteBuf buffer) {
         List<CapabilitySyncEntry> entries = new ArrayList<>();
-        for (MachineCapability capability : snapshot.capabilities()) {
+        for (int capabilityIndex = 0; capabilityIndex < snapshot.capabilities().size(); capabilityIndex++) {
+            MachineCapability capability = snapshot.capabilities().get(capabilityIndex);
+            int index = capabilityIndex;
             capability.facet(SyncFacet.class).ifPresent(facet -> {
                 RegistryFriendlyByteBuf payload = new RegistryFriendlyByteBuf(Unpooled.buffer(), buffer.registryAccess());
                 facet.encode(payload);
                 byte[] bytes = new byte[payload.readableBytes()];
                 payload.readBytes(bytes);
-                entries.add(new CapabilitySyncEntry(capability.type().id(), indexOf(snapshot, capability), bytes));
+                entries.add(new CapabilitySyncEntry(capability.type().id(), index, bytes));
             });
         }
         if (entries.size() > MAX_ENTRIES) throw new IllegalArgumentException("Too many capability sync entries");
@@ -48,7 +50,4 @@ public final class CapabilitySyncRegistry {
         facet.decode(new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(entry.payload()), buffer.registryAccess()));
     }
 
-    private static int indexOf(CapabilitySnapshot snapshot, MachineCapability capability) {
-        return snapshot.capabilities().indexOf(capability);
-    }
 }

@@ -55,9 +55,8 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
             this.itemEntries = List.of();
             this.fluidEntries = List.of();
         } else {
-            PktPortStorageSyncPayload snapshot = PktPortStorageSyncPayload.from(owner);
-            this.itemEntries = snapshot.itemEntries();
-            this.fluidEntries = snapshot.fluidEntries();
+            this.itemEntries = PktPortStorageSyncPayload.itemEntries(owner.itemStorage());
+            this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.fluidStorage());
         }
     }
 
@@ -133,16 +132,18 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload) {
+    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
-        for (ItemStorageEntry entry : payload.itemEntries()) {
+        List<ItemStorageEntry> nextItems = PktPortStorageSyncPayload.itemEntries(port.itemStorage());
+        List<FluidStorageEntry> nextFluids = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());
+        for (ItemStorageEntry entry : nextItems) {
             if (entry.slot() >= itemSlotCount) throw new IllegalArgumentException("Item snapshot slot out of bounds");
         }
-        for (FluidStorageEntry entry : payload.fluidEntries()) {
+        for (FluidStorageEntry entry : nextFluids) {
             if (entry.slot() >= fluidTankCount) throw new IllegalArgumentException("Fluid snapshot slot out of bounds");
         }
-        itemEntries = payload.itemEntries();
-        fluidEntries = payload.fluidEntries();
+        itemEntries = nextItems;
+        fluidEntries = nextFluids;
     }
 
     private void addItemSlots(CombinedPortBlockEntity owner) {

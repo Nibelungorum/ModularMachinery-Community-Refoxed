@@ -33,7 +33,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         this.kind = owner == null ? "extended_fluid_input_hatch_basic" : owner.kind().id();
         this.tankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
                 : owner.fluidStorage().size();
-        this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.from(owner).fluidEntries();
+        this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.fluidEntries(owner.fluidStorage());
         addPlayerSlots(playerInv, 47);
     }
 
@@ -88,12 +88,13 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload) {
+    public void applySnapshot(PktPortStorageSyncPayload payload, cn.howxu.mmcr.internal.tile.IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
-        for (FluidStorageEntry entry : payload.fluidEntries()) {
+        List<FluidStorageEntry> nextEntries = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());
+        for (FluidStorageEntry entry : nextEntries) {
             if (entry.slot() >= tankCount) throw new IllegalArgumentException("Fluid snapshot slot out of bounds");
         }
-        entries = payload.fluidEntries();
+        entries = nextEntries;
     }
 
     @Override

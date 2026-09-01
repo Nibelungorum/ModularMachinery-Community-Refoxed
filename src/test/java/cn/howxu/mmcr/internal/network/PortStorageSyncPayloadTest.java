@@ -6,13 +6,9 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.RegistryOps;
 import net.minecraft.core.RegistryAccess;
 import net.neoforged.neoforge.registries.BaseMappedRegistry;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -54,6 +50,7 @@ class PortStorageSyncPayloadTest {
         assertThat(decoded.entries()).hasSize(2);
         assertThat(decoded.entries().getFirst().typeId()).isEqualTo(payload.entries().getFirst().typeId());
         assertThat(decoded.entries().getFirst().payload()).containsExactly(1, 2, 3);
+        assertThat(decoded.entries()).extracting(CapabilitySyncEntry::capabilityIndex).containsExactly(0, 1);
     }
 
     @Test
@@ -73,6 +70,17 @@ class PortStorageSyncPayloadTest {
     }
 
     @Test
+    void payload_rejects_total_entry_bytes_above_the_packet_budget() {
+        List<CapabilitySyncEntry> entries = new ArrayList<>();
+        for (int index = 0; index < 17; index++) {
+            entries.add(new CapabilitySyncEntry(cn.howxu.mmcr.MMCR.id("item"), index,
+                    new byte[CapabilitySyncEntry.MAX_PAYLOAD_BYTES]));
+        }
+
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
+                PortKinds.EXTENDED_ITEM_INPUT.id(), entries)).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static RegistryFriendlyByteBuf buffer() {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 new RegistryAccess.ImmutableRegistryAccess(
