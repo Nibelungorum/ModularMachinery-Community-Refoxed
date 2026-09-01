@@ -207,7 +207,7 @@ public final class ModCapabilities {
                             || port.ioType() != kind.ioType()) return null;
                     LongValueStorage storage = valueStorage(port, bindings, side);
                     if (storage == null) return null;
-                    return new DirectionalEnergyHandler(new EnergyHandlerAdapter(storage), canInsert, !canInsert);
+                    return new DirectionalEnergyHandler(energyHandler(storage), canInsert, !canInsert);
                 });
     }
 
@@ -301,30 +301,22 @@ public final class ModCapabilities {
         }
     }
 
-    private static final class EnergyHandlerAdapter implements LongEnergyHandler {
-        private final LongValueStorage storage;
-
-        private EnergyHandlerAdapter(LongValueStorage storage) {
-            this.storage = storage;
-        }
-
-        @Override public long getAmountAsLong() { return storage.amount(); }
-        @Override public long getCapacityAsLong() { return storage.capacity(); }
-        @Override public long getTransferLimit() { return storage.transferLimit(); }
-        @Override public int insert(int amount, TransactionContext tx) {
-            return (int) storage.insert(amount, tx);
-        }
-        @Override public int extract(int amount, TransactionContext tx) {
-            return (int) storage.extract(amount, tx);
-        }
-        @Override public long insertLong(long amount, TransactionContext tx) {
-            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-            return storage.insert(amount, tx);
-        }
-        @Override public long extractLong(long amount, TransactionContext tx) {
-            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-            return storage.extract(amount, tx);
-        }
+    private static LongEnergyHandler energyHandler(LongValueStorage storage) {
+        return new LongEnergyHandler() {
+            @Override public long getAmountAsLong() { return storage.amount(); }
+            @Override public long getCapacityAsLong() { return storage.capacity(); }
+            @Override public long getTransferLimit() { return storage.transferLimit(); }
+            @Override public int insert(int amount, TransactionContext tx) { return (int) storage.insert(amount, tx); }
+            @Override public int extract(int amount, TransactionContext tx) { return (int) storage.extract(amount, tx); }
+            @Override public long insertLong(long amount, TransactionContext tx) {
+                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+                return storage.insert(amount, tx);
+            }
+            @Override public long extractLong(long amount, TransactionContext tx) {
+                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+                return storage.extract(amount, tx);
+            }
+        };
     }
 
     private static final class ResourceStorageHandler<R extends Resource> implements ResourceHandler<R> {

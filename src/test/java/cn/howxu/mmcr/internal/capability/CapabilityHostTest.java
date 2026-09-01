@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
@@ -144,10 +146,10 @@ class CapabilityHostTest {
     }
 
     private static CapabilityRequest request(MachineCapability capability) {
-        if (capability.storage() instanceof ResourceStorage<?>) {
+        if (capability.facet(ResourceFacet.class).isPresent()) {
             return new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(), 1, List.of());
         }
-        if (capability.storage() instanceof LongValueStorage) {
+        if (capability.facet(ValueFacet.class).map(ValueFacet::storage).filter(LongValueStorage.class::isInstance).isPresent()) {
             return new CapabilityRequests.ValueRequest(capability.type(), capability.ioType(), 1, 1, false);
         }
         return new TestRequest(capability.type(), capability.ioType(), 1);

@@ -1,30 +1,26 @@
-package cn.howxu.mmcr.api.publicapi;
+package cn.howxu.mmcr.internal.registration;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModBlocks;
-import net.minecraft.resources.Identifier;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.function.Supplier;
 
-/** Public registration adapter used by the optional built-in declarations.
+/**
+ * Internal helpers for MMCR's built-in declarations.
+ *
  * @author howxu <dev@howxu.cn>
  */
-public final class PublicBuiltinRegistration {
-    public static final String MOD_ID = "mmcr";
-    private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+public final class BuiltinRegistration {
+    private static final String MOD_ID = "mmcr";
 
-    private PublicBuiltinRegistration() {
+    private BuiltinRegistration() {
     }
 
     public static Identifier id(String path) {
-        return Identifier.fromNamespaceAndPath(MOD_ID, path);
-    }
-
-    public static Logger logger() {
-        return LOGGER;
+        return MMCR.id(path);
     }
 
     public static Supplier<? extends Block> controller(Identifier machineId) {
@@ -40,5 +36,4 @@ public final class PublicBuiltinRegistration {
         if (MOD_ID.equals(id.getNamespace())) return block(id.getPath());
         return () -> BuiltInRegistries.BLOCK.getValue(id);
     }
-
 }

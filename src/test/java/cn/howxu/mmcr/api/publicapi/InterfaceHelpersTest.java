@@ -166,7 +166,7 @@ class InterfaceHelpersTest {
 
     @Test
     void identifier_lookup_preserves_namespace() {
-        assertThat(cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.block(
+        assertThat(cn.howxu.mmcr.internal.registration.BuiltinRegistration.block(
                 Identifier.parse("minecraft:stone")).get()).isSameAs(Blocks.STONE);
     }
 

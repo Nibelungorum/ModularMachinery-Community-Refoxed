@@ -16,7 +16,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.id;
+import static cn.howxu.mmcr.internal.registration.BuiltinRegistration.id;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
 

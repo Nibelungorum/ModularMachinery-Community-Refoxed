@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration;
+import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
@@ -109,11 +109,11 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate port(String id) {
-        return BlockPredicate.deferredBlock(PublicBuiltinRegistration.block(id));
+        return BlockPredicate.deferredBlock(BuiltinRegistration.block(id));
     }
 
     public static BlockPredicate port(Identifier id) {
-        return BlockPredicate.deferredBlock(PublicBuiltinRegistration.block(id));
+        return BlockPredicate.deferredBlock(BuiltinRegistration.block(id));
     }
 
     public static BlockPredicate parallelControllers() {

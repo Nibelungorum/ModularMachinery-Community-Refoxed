@@ -79,11 +79,9 @@ public final class MachineRecipeSyncCodec {
     }
 
     public static MachineRecipe decode(RegistryFriendlyByteBuf buf) {
-        int start = buf.readerIndex();
         int marker = buf.readVarInt();
         if (marker != FORMAT_MARKER) {
-            buf.readerIndex(start);
-            return decodeLegacy(buf);
+            throw new DecoderException("Unsupported machine recipe sync format");
         }
         int version = buf.readVarInt();
         if (version != FORMAT_VERSION) throw new DecoderException("Unsupported machine recipe sync version: " + version);
@@ -106,26 +104,6 @@ public final class MachineRecipeSyncCodec {
         Set<Identifier> hosts = readRequiredHosts(buf);
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, requirements, outputs, modifiers,
                 priority, maxThreads, cancelIfPerTickFails, parallelized, levels, allowPartialOutputs, hosts);
-        RecipeRegistry.validateClientSnapshot(java.util.Map.of(id, recipe));
-        return recipe;
-    }
-
-    private static MachineRecipe decodeLegacy(RegistryFriendlyByteBuf buf) {
-        Identifier id = Identifier.STREAM_CODEC.decode(buf);
-        Identifier machineId = Identifier.STREAM_CODEC.decode(buf);
-        int tickTime = buf.readVarInt();
-        List<MachineRequirement> requirements = readLegacyRequirements(buf);
-        List<RecipeModifier> modifiers = readModifiers(buf);
-        int priority = buf.readVarInt();
-        int maxThreads = buf.readVarInt();
-        boolean cancelIfPerTickFails = buf.readBoolean();
-        boolean parallelized = buf.readBoolean();
-        List<LevelRequirement> levels = readLevelRequirements(buf);
-        boolean allowPartialOutputs = buf.readBoolean();
-        Set<Identifier> hosts = readRequiredHosts(buf);
-        MachineRecipe recipe = new MachineRecipe(id, machineId, tickTime, List.of(), List.of(), modifiers, priority,
-                maxThreads, cancelIfPerTickFails, List.of(), requirements, parallelized, levels,
-                allowPartialOutputs, hosts);
         RecipeRegistry.validateClientSnapshot(java.util.Map.of(id, recipe));
         return recipe;
     }
@@ -168,58 +146,6 @@ public final class MachineRecipeSyncCodec {
             throw new DecoderException("Decoded requirement does not match registered type: " + typeId);
         }
         return requirement;
-    }
-
-    private static List<MachineRequirement> readLegacyRequirements(RegistryFriendlyByteBuf buf) {
-        int count = buf.readVarInt();
-        checkSize(count, MAX_REQUIREMENTS, "requirement");
-        List<MachineRequirement> values = new ArrayList<>(count);
-        for (int index = 0; index < count; index++) values.add(readLegacyRequirement(buf));
-        return List.copyOf(values);
-    }
-
-    private static MachineRequirement readLegacyRequirement(RegistryFriendlyByteBuf buf) {
-        return switch (buf.readVarInt()) {
-            case 0 -> {
-                RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
-                List<String> tags = readStringList(buf, MAX_TAGS, "tag");
-                if (io == RecipeModifier.IOType.INPUT) {
-                    Ingredient ingredient = Ingredient.CODEC.parse(buf.registryAccess().createSerializationContext(JsonOps.INSTANCE),
-                            normalizeIngredient(readJson(buf))).getOrThrow(message -> new DecoderException(
-                                    "Failed to decode legacy item ingredient: " + message));
-                    int count = buf.readVarInt();
-                    checkRange(count, 1, MAX_ITEM_COUNT, "item count");
-                    DataComponentPredicateSet components = readJsonWithRegistryCodec(buf, DataComponentPredicateSet.CODEC);
-                    yield new ItemRequirement(io, ingredient, count, ItemStack.EMPTY, 1F, tags, components, buf.readFloat());
-                }
-                ItemStack stack = readJsonWithRegistryCodec(buf, ItemStack.CODEC);
-                checkStackCount(stack);
-                yield new ItemRequirement(io, null, 0, stack, buf.readFloat(), tags);
-            }
-            case 1 -> {
-                RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
-                List<String> tags = readStringList(buf, MAX_TAGS, "tag");
-                if (io == RecipeModifier.IOType.INPUT) {
-                    FluidIngredient ingredient = readJsonWithRegistryCodec(buf, FluidIngredient.CODEC);
-                    int amount = buf.readVarInt();
-                    checkRange(amount, 1, MAX_FLUID_AMOUNT, "fluid amount");
-                    yield new FluidRequirement(io, ingredient, amount, FluidStack.EMPTY, tags);
-                }
-                FluidStack stack = readJsonWithRegistryCodec(buf, FluidStack.CODEC);
-                checkFluidAmount(stack);
-                yield new FluidRequirement(io, null, 0, stack, buf.readFloat(), tags);
-            }
-            case 2 -> {
-                RecipeModifier.IOType io = buf.readEnum(RecipeModifier.IOType.class);
-                List<String> tags = readStringList(buf, MAX_TAGS, "tag");
-                int fePerTick = buf.readVarInt();
-                checkRange(fePerTick, 1, MAX_ENERGY_PER_TICK, "energy rate");
-                yield new EnergyRequirement(io, fePerTick, tags);
-            }
-            case 3 -> new SmartInterfaceRequirement(buf.readEnum(RecipeModifier.IOType.class),
-                    ByteBufCodecs.STRING_UTF8.decode(buf), buf.readFloat(), buf.readFloat());
-            default -> throw new DecoderException("Unknown legacy machine requirement kind");
-        };
     }
 
     private static void writeOutputs(RegistryFriendlyByteBuf buf, List<MachineOutput> values) {

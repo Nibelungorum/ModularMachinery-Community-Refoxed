@@ -13,7 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
-import static cn.howxu.mmcr.api.publicapi.PublicBuiltinRegistration.id;
+import static cn.howxu.mmcr.internal.registration.BuiltinRegistration.id;
 import static cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement.input;
 
 /**

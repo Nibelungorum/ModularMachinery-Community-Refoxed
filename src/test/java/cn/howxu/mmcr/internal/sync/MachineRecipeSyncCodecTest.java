@@ -15,12 +15,14 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.MapCodec;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import io.netty.handler.codec.DecoderException;
 
 import java.util.List;
@@ -33,6 +35,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MachineRecipeSyncCodecTest {
+    @BeforeAll
+    static void bootstrap() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
     @Test
     void roundTripsRegisteredCustomRequirementAndOutput() {
         try (RequirementHandlerRegistry.TestScope requirements = RequirementHandlerRegistry.openTestScope();
@@ -59,41 +66,13 @@ class MachineRecipeSyncCodecTest {
     }
 
     @Test
-    void decodesHandWrittenLegacyBuiltInRequirementWireFormats() {
-        assertThat(decodeLegacy(0, buffer -> {
-            buffer.writeEnum(RecipeModifier.IOType.OUTPUT);
-            writeTags(buffer, "item");
-            buffer.writeUtf("{\"id\":\"minecraft:iron_ingot\",\"count\":2}");
-            buffer.writeFloat(0.5F);
-        }).requirements()).singleElement().isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
-            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
-            assertThat(requirement.stack().getCount()).isEqualTo(2);
-            assertThat(requirement.tags()).containsExactly("item");
-        });
-        assertThat(decodeLegacy(1, buffer -> {
-            buffer.writeEnum(RecipeModifier.IOType.OUTPUT);
-            writeTags(buffer, "fluid");
-            buffer.writeUtf("{\"id\":\"minecraft:water\",\"amount\":250}");
-            buffer.writeFloat(0.25F);
-        }).requirements()).singleElement().isInstanceOfSatisfying(FluidRequirement.class, requirement -> {
-            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
-            assertThat(requirement.stack().getAmount()).isEqualTo(250);
-            assertThat(requirement.tags()).containsExactly("fluid");
-        });
-        assertThat(decodeLegacy(2, buffer -> {
-            buffer.writeEnum(RecipeModifier.IOType.INPUT);
-            writeTags(buffer, "energy");
-            buffer.writeVarInt(40);
-        }).requirements()).containsExactly(new EnergyRequirement(RecipeModifier.IOType.INPUT, 40, List.of("energy")));
-        assertThat(decodeLegacy(3, buffer -> {
-            buffer.writeEnum(RecipeModifier.IOType.OUTPUT);
-            buffer.writeUtf("scalar");
-            buffer.writeFloat(1F);
-            buffer.writeFloat(2F);
-        }).requirements()).singleElement().satisfies(requirement -> {
-            assertThat(requirement.type().id()).isEqualTo(MMCR.id("smart_interface"));
-            assertThat(requirement.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
-        });
+    void rejectsLegacyRequirementWireFormats() {
+        RegistryFriendlyByteBuf buffer = buffer();
+        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("legacy"));
+
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(buffer))
+                .isInstanceOf(DecoderException.class)
+                .hasMessageContaining("Unsupported machine recipe sync format");
     }
 
     @Test
