@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidInput;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidOutput;
+import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
@@ -17,11 +18,14 @@ import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -45,23 +49,19 @@ public final class PublicRecipeAdapter {
             MMCRMachineStructuresEvent.Snapshot snapshot) {
         Map<Identifier, ModifierDefinition> modifiers = snapshot.modifiers();
         Map<Identifier, MachineLevel> levels = snapshot.levels();
-        List<MachineIngredient> inputs = new ArrayList<>();
-        for (ItemInput input : definition.itemInputs()) {
-            inputs.add(new MachineIngredient.ItemIngredient(input.ingredient(), input.count(),
-                    toInternalComponents(input.components()), input.consumeChance()));
-        }
-        for (FluidInput input : definition.fluidInputs()) {
-            inputs.add(new MachineIngredient.FluidIngredient(input.ingredient(), input.amount()));
-        }
-        for (var input : definition.energyInputs()) {
-            inputs.add(new MachineIngredient.EnergyIngredient((int) input.fePerTick()));
-        }
-        List<ItemStack> outputs = definition.itemOutputs().stream().map(ItemOutput::stack).toList();
-        List<FluidStack> fluidOutputs = definition.fluidOutputs().stream().map(FluidOutput::stack).toList();
         List<MachineRequirement> requirements = new ArrayList<>();
         for (RecipeRequirement value : definition.requirements()) {
             requirements.add(toRequirement(value));
         }
+        List<MachineIngredient> inputs = requirements.stream().filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
+                .map(PublicRecipeAdapter::toLegacyInput).filter(java.util.Objects::nonNull)
+                .toList();
+        List<ItemStack> outputs = requirements.stream()
+                .map(OutputRegistry::fromRequirement).filter(MachineOutput.ItemOutput.class::isInstance)
+                .map(MachineOutput.ItemOutput.class::cast).map(MachineOutput.ItemOutput::stack).toList();
+        List<FluidStack> fluidOutputs = requirements.stream()
+                .map(OutputRegistry::fromRequirement).filter(MachineOutput.FluidOutput.class::isInstance)
+                .map(MachineOutput.FluidOutput.class::cast).map(MachineOutput.FluidOutput::stack).toList();
         List<RecipeModifier> recipeModifiers = definition.modifierIds().stream().map(id -> {
             ModifierDefinition modifier = modifiers.get(id);
             if (modifier == null) throw new ApiRegistrationException("Recipe " + definition.id()
@@ -78,7 +78,29 @@ public final class PublicRecipeAdapter {
                         .map(PublicRecipeAdapter::toInternalLevel).toList(), definition.allowPartialOutputs(), definition.requiredHostIds());
     }
 
-    private static MachineRequirement toRequirement(RecipeRequirement value) {
+    public static MachineRequirement toRequirement(RecipeRequirement value) {
+        if (value instanceof CustomRecipeIo custom) {
+            if (custom.ioType().isInput()) {
+                MachineRequirement requirement = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
+                if (!custom.typeId().equals(requirement.type().id()) || requirement.io() != RecipeModifier.IOType.INPUT) {
+                    throw new IllegalArgumentException("Custom recipe input does not match registered type: " + custom.typeId());
+                }
+                return requirement;
+            }
+            var outputType = OutputRegistry.typeFor(custom.typeId());
+            if (outputType != null) {
+                MachineOutput output = MachineOutput.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
+                if (output.outputType() != outputType) {
+                    throw new IllegalArgumentException("Custom recipe output does not match registered type: " + custom.typeId());
+                }
+                return OutputRegistry.toRequirement(output, List.of());
+            }
+            MachineRequirement requirement = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
+            if (!custom.typeId().equals(requirement.type().id()) || requirement.io() != RecipeModifier.IOType.OUTPUT) {
+                throw new IllegalArgumentException("Custom recipe output does not match registered type: " + custom.typeId());
+            }
+            return requirement;
+        }
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item) {
             return new ItemRequirement(toInternalIo(item.io()), item.ingredient(), item.count(), item.stack(), item.chance(),
                     List.of(), toInternalComponents(item.components()), item.consumeChance());
@@ -131,6 +153,14 @@ public final class PublicRecipeAdapter {
 
     private static RecipeModifier.IOType toInternalIo(RecipeIo io) {
         return io == RecipeIo.INPUT ? RecipeModifier.IOType.INPUT : RecipeModifier.IOType.OUTPUT;
+    }
+
+    private static MachineIngredient toLegacyInput(MachineRequirement requirement) {
+        try {
+            return MachineRequirement.fromInput(requirement);
+        } catch (IllegalArgumentException ignored) {
+            return RequirementHandlerRegistry.legacyInput(requirement);
+        }
     }
 
     private static cn.howxu.mmcr.api.recipe.LevelRequirement toInternalLevel(LevelRequirement level) {

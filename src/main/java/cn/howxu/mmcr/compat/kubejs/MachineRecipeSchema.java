@@ -4,6 +4,9 @@ import cn.howxu.mmcr.MMCR;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.publicapi.RecipeApi;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
 import dev.latvian.mods.kubejs.recipe.RecipeKey;
@@ -134,6 +137,24 @@ public final class MachineRecipeSchema {
                         public void execute(RecipeScriptContext cx, List<Object> args) {
                             appendRequirement(cx.recipe(), MachineRecipeFactory.smartInterfaceOutput(
                                     (String) args.get(0), ((Number) args.get(1)).floatValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("custom", List.of(StringComponent.ID, StringComponent.ID, JSON_ELEMENT),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, StringComponent.ID, JSON_ELEMENT);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            RecipeIo io = switch ((String) args.get(1)) {
+                                case "input" -> RecipeIo.INPUT;
+                                case "output" -> RecipeIo.OUTPUT;
+                                default -> throw new IllegalArgumentException("Unknown recipe IO: " + args.get(1));
+                            };
+                            appendRequirement(cx.recipe(), PublicRecipeAdapter.toRequirement(RecipeApi.custom(
+                                    Identifier.parse((String) args.get(0)), io, (JsonElement) args.get(2))));
                         }
                     }))
             .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),

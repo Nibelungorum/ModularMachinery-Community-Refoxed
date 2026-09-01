@@ -15,6 +15,8 @@ import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
@@ -158,6 +160,19 @@ class KubeJSApiTest {
                 "api.recipeIO().OUTPUT.name() === 'OUTPUT' && api.outputPolicy().ALLOW_PARTIAL.name() === 'ALLOW_PARTIAL'"
                         + " && api.energyRequirement(api.recipeIO().OUTPUT, 1).io().name() === 'OUTPUT'",
                 "io-policy-test", 1, null)).isEqualTo(true);
+    }
+
+    @Test
+    void custom_recipe_io_factory_uses_registered_type_and_codec_validation() {
+        var input = new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(
+                RecipeModifier.IOType.INPUT, 12);
+        var payload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
+
+        var custom = api.customRecipeIo(input.type().id().toString(), RecipeIo.INPUT, payload);
+
+        assertThat(custom.typeId()).isEqualTo(input.type().id());
+        assertThatThrownBy(() -> api.customRecipeIo("mmcr:missing", RecipeIo.INPUT, payload))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

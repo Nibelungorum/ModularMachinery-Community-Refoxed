@@ -15,6 +15,8 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
+import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 
@@ -202,6 +204,18 @@ public final class KubeJSApi {
     public MachineRequirement energyRequirement(RecipeIo io, int fePerTick) {
         return new EnergyRequirement(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT,
                 fePerTick);
+    }
+
+    /**
+     * Creates a validated custom recipe IO declaration for KubeJS.
+     *
+     * @param typeId registered type identifier
+     * @param io recipe IO direction
+     * @param payload registered codec payload
+     * @return validated custom recipe IO
+     */
+    public CustomRecipeIo customRecipeIo(String typeId, RecipeIo io, JsonElement payload) {
+        return RecipeApi.custom(Identifier.parse(typeId), io, payload);
     }
 
     public RecipeModifier modifier(String target, String io, float value, String operation, boolean chance) {

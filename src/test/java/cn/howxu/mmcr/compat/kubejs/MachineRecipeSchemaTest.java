@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -245,6 +247,32 @@ class MachineRecipeSchemaTest {
         assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 output.json.getAsJsonArray("requirements").get(0)).getOrThrow())
                 .isEqualTo(SmartInterfaceRequirement.output("mode", 2F));
+    }
+
+    @Test
+    void generic_schema_and_builder_paths_decode_registered_requirement_and_output() {
+        var input = new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(
+                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT, 12);
+        var output = new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F);
+        var inputPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
+        var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+
+        MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(schemaRecipe),
+                List.of(input.type().id().toString(), "input", inputPayload));
+        MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(schemaRecipe),
+                List.of(output.outputType().id().toString(), "output", outputPayload));
+        var builder = new MachineRecipeBuilderJS(MMCR.id("generic_builder"))
+                .custom(input.type().id().toString(), RecipeIo.INPUT, inputPayload)
+                .custom(output.outputType().id().toString(), RecipeIo.OUTPUT, outputPayload);
+
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("requirements").getFirst()).getOrThrow()).isEqualTo(input);
+        assertThat(schemaRecipe.json.getAsJsonArray("requirements")).hasSize(2);
+        assertThat(builder.requirements).contains(input).anySatisfy(requirement -> assertThat(requirement)
+                .isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class));
+        assertThatIllegalArgumentException().isThrownBy(() -> builder.custom("mmcr:missing", RecipeIo.INPUT, inputPayload));
     }
 
     private static JsonElement json(String value) {

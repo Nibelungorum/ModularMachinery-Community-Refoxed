@@ -7,6 +7,9 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.publicapi.RecipeApi;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -123,6 +126,19 @@ public class MachineRecipeBuilderJS {
 
     public MachineRecipeBuilderJS addRequirement(MachineRequirement requirement) {
         requirements.add(requirement);
+        return this;
+    }
+
+    /**
+     * Adds a registered codec-backed requirement or output to this recipe.
+     *
+     * @param typeId registered type identifier
+     * @param io recipe IO direction
+     * @param payload registered codec payload
+     * @return this builder
+     */
+    public MachineRecipeBuilderJS custom(String typeId, RecipeIo io, JsonElement payload) {
+        requirements.add(PublicRecipeAdapter.toRequirement(RecipeApi.custom(Identifier.parse(typeId), io, payload)));
         return this;
     }
 

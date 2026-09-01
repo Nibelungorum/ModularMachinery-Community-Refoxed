@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
@@ -17,6 +18,9 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
+import com.google.gson.JsonObject;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -259,6 +263,44 @@ class PublicRecipeBuilderTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad"), id("machine"))
                 .outputChance(new ItemStack(Items.STICK), 2F))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void custom_recipe_io_decodes_registered_requirement_and_output_without_exposing_runtime_types() {
+        var input = new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(
+                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT, 12);
+        var output = new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F);
+        var inputPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
+        var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
+
+        var definition = MachineRecipeBuilder.recipe(id("custom"), id("machine"))
+                .custom(new CustomRecipeIo(input.type().id(), RecipeIo.INPUT, inputPayload))
+                .custom(new CustomRecipeIo(output.outputType().id(), RecipeIo.OUTPUT, outputPayload))
+                .build();
+        var recipe = PublicRecipeAdapter.toRecipe(definition,
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+
+        assertThat(recipe.requirements()).contains(input);
+        assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement)
+                .isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class));
+    }
+
+    @Test
+    void custom_recipe_io_copies_payload_and_rejects_invalid_declarations() {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "energy");
+        payload.addProperty("io", "input");
+        payload.addProperty("fe_per_tick", 12);
+        var custom = new CustomRecipeIo(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.TYPE.id(),
+                RecipeIo.INPUT, payload);
+        payload.addProperty("fe_per_tick", 1);
+
+        assertThat(custom.payload().getAsJsonObject().get("fe_per_tick").getAsInt()).isEqualTo(12);
+        assertThatThrownBy(() -> new CustomRecipeIo(id("energy"), RecipeIo.INPUT,
+                JsonOps.INSTANCE.createInt(1))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("unknown_custom"), id("machine"))
+                .custom(new CustomRecipeIo(id("unknown"), RecipeIo.INPUT, custom.payload())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
