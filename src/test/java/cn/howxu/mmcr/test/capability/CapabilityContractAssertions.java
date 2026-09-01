@@ -18,6 +18,10 @@ public final class CapabilityContractAssertions {
     }
 
     public static CapabilityRequest request(long parallelism) {
+        return request(IOType.INPUT, parallelism);
+    }
+
+    public static CapabilityRequest request(IOType ioType, long parallelism) {
         return new CapabilityRequest() {
             @Override
             public CapabilityType type() {
@@ -26,7 +30,7 @@ public final class CapabilityContractAssertions {
 
             @Override
             public IOType ioType() {
-                return IOType.INPUT;
+                return ioType;
             }
 
             @Override
@@ -42,7 +46,7 @@ public final class CapabilityContractAssertions {
 
     public static void assertRollsBack(TestScalarFacet facet) {
         try (Transaction transaction = Transaction.openRoot()) {
-            assertCommitted(facet.prepareScalar(request(1L)).commit(transaction));
+            assertCommitted(facet.prepareScalar(request(facet.ioType(), 1L)).commit(transaction));
         }
         Assertions.assertThat(facet.amount()).isZero();
     }
