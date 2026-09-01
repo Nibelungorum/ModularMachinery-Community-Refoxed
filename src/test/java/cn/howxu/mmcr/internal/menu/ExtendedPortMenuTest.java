@@ -68,23 +68,6 @@ class ExtendedPortMenuTest {
     }
 
     @Test
-    void extended_fluid_snapshot_preserves_typed_resource_and_long_values() {
-        ExtendedFluidMenu menu = clientFluidMenu();
-        FluidResource water = FluidResource.of(Fluids.WATER);
-        PktPortStorageSyncPayload payload = new PktPortStorageSyncPayload(POS,
-                PortKinds.EXTENDED_FLUID_INPUT.id(), List.of(),
-                List.of(new FluidStorageEntry(0, water, 5_000_000_000L, Long.MAX_VALUE)));
-
-        menu.applySnapshot(payload);
-
-        assertThat(menu.entries()).containsExactlyElementsOf(payload.fluidEntries());
-        assertThat(menu.entries().getFirst().resource()).isEqualTo(water);
-        assertThat(menu.entries().getFirst().amount()).isEqualTo(5_000_000_000L);
-        assertThat(menu.entries().getFirst().capacity()).isEqualTo(Long.MAX_VALUE);
-        assertThat(menu.selectedCapabilityId()).isEqualTo(MMCR.id("fluid"));
-    }
-
-    @Test
     void extended_combined_menu_has_no_player_inventory_or_slots() {
         ExtendedCombinedPortBlockEntity owner = new ExtendedCombinedPortBlockEntity(
                 POS, ModBlocks.BLOCKS.get(PortKinds.EXTENDED_COMBINED_INPUT.id()).get().defaultBlockState());

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.port;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityFactory;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding.ExternalExposure;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;

@@ -58,7 +58,12 @@ public final class PublicRecipeAdapter {
                 .toList();
         List<MachineOutput> outputs = new ArrayList<>(requirements.stream()
                 .map(OutputRegistry::fromRequirement).filter(java.util.Objects::nonNull).toList());
-        definition.customOutputs().forEach(custom -> outputs.add(toOutput(custom)));
+        for (CustomRecipeIo custom : definition.customOutputs()) {
+            MachineOutput output = toOutput(custom);
+            outputs.add(output);
+            MachineRequirement requirement = OutputRegistry.tryToRequirement(output, List.of());
+            if (requirement != null) requirements.add(requirement);
+        }
         List<RecipeModifier> recipeModifiers = definition.modifierIds().stream().map(id -> {
             ModifierDefinition modifier = modifiers.get(id);
             if (modifier == null) throw new ApiRegistrationException("Recipe " + definition.id()
@@ -146,11 +151,7 @@ public final class PublicRecipeAdapter {
     }
 
     private static MachineIngredient toLegacyInput(MachineRequirement requirement) {
-        try {
-            return MachineRequirement.fromInput(requirement);
-        } catch (IllegalArgumentException ignored) {
-            return RequirementHandlerRegistry.legacyInput(requirement);
-        }
+        return RequirementHandlerRegistry.legacyInput(requirement);
     }
 
     public static MachineOutput toOutput(CustomRecipeIo custom) {

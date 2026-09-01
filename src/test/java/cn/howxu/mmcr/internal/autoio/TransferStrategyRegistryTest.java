@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;

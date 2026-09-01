@@ -333,7 +333,8 @@ class PublicApiLifecycleTest {
         }
 
         OutputRegistry.registerBuiltIns();
-        List<OutputType<?>> outputs = List.of(MachineOutput.ItemOutput.TYPE, MachineOutput.FluidOutput.TYPE);
+        List<OutputType<?>> outputs = List.of(OutputRegistry.typeFor(MMCR.id("item")),
+                OutputRegistry.typeFor(MMCR.id("fluid")));
         for (OutputType<?> type : outputs) {
             assertThat(OutputRegistry.canonicalType(type)).isSameAs(type);
             assertThat(type.syncCodec().maxPayloadSize())

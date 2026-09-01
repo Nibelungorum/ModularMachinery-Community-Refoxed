@@ -277,10 +277,10 @@ class MachineRecipeSchemaTest {
                 .custom(output.outputType().id().toString(), RecipeIo.OUTPUT, outputPayload);
 
         assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
-                schemaRecipe.json.getAsJsonArray("requirements").getFirst()).getOrThrow()).isEqualTo(input);
+                schemaRecipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(input);
         assertThat(schemaRecipe.json.getAsJsonArray("requirements")).hasSize(1);
         assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
-                schemaRecipe.json.getAsJsonArray("machine_outputs").getFirst()).getOrThrow()).isEqualTo(output);
+                schemaRecipe.json.getAsJsonArray("machine_outputs").get(0)).getOrThrow()).isEqualTo(output);
         assertThat(builder.requirements).containsExactly(input);
         assertThat(builder.customOutputs).containsExactly(output);
         assertThatIllegalArgumentException().isThrownBy(() -> builder.custom("mmcr:missing", RecipeIo.INPUT, inputPayload));
@@ -308,9 +308,9 @@ class MachineRecipeSchemaTest {
                     .custom(TestOutput.TYPE.id().toString(), RecipeIo.OUTPUT, outputPayload);
 
             assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
-                    recipe.json.getAsJsonArray("requirements").getFirst()).getOrThrow()).isEqualTo(requirement);
+                    recipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(requirement);
             assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
-                    recipe.json.getAsJsonArray("machine_outputs").getFirst()).getOrThrow()).isEqualTo(output);
+                    recipe.json.getAsJsonArray("machine_outputs").get(0)).getOrThrow()).isEqualTo(output);
             assertThat(builder.requirements).containsExactly(requirement);
             assertThat(builder.customOutputs).containsExactly(output);
         }

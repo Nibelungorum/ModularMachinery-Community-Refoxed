@@ -156,7 +156,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
         int totalBytes = 0;
         for (CapabilitySyncEntry entry : entries) {
             totalBytes = checkedPayloadTotal(totalBytes, entry.payload().length);
-            buffer.writeResourceLocation(entry.typeId());
+            buffer.writeIdentifier(entry.typeId());
             buffer.writeVarInt(entry.capabilityIndex());
             buffer.writeByteArray(entry.payload());
         }
@@ -167,7 +167,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
         List<CapabilitySyncEntry> entries = new ArrayList<>(count);
         int totalBytes = 0;
         for (int index = 0; index < count; index++) {
-            Identifier typeId = buffer.readResourceLocation();
+            Identifier typeId = buffer.readIdentifier();
             int capabilityIndex = buffer.readVarInt();
             int payloadLength = buffer.readVarInt();
             totalBytes = checkedPayloadTotal(totalBytes, payloadLength);

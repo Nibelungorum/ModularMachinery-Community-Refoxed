@@ -117,7 +117,7 @@ public final class JeiIngredientAdapterRegistry {
                 return Optional.empty();
             }
             FluidStack stack = entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT
-                    ? fluid.fluid().fluids().findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
+                    ? fluid.fluid().fluids().stream().findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
                     : fluid.stack().copyWithAmount(1);
             return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
                     stack, boundedCount(entry.amount()), entry.chance(), null, false));

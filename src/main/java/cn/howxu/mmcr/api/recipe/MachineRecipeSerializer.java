@@ -23,6 +23,6 @@ public final class MachineRecipeSerializer {
     }
 
     private static MachineRecipe read(RegistryFriendlyByteBuf buf) {
-        return buf.readJsonWithCodec(MachineRecipe.CODEC.codec());
+        return buf.readLenientJsonWithCodec(MachineRecipe.CODEC.codec());
     }
 }

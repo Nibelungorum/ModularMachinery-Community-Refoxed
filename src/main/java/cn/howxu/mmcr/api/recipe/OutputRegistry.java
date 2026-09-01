@@ -117,7 +117,7 @@ public final class OutputRegistry {
         MachineOutput converted = type.fromRequirement(requirement);
         if (converted != null) return converted.outputType() == type && output.equals(converted);
         try {
-            MachineRequirement convertedRequirement = type.toRequirement(output, requirement.tags());
+            MachineRequirement convertedRequirement = toRequirement(type, output, requirement.tags());
             return convertedRequirement != null && convertedRequirement.equals(requirement);
         } catch (IllegalStateException ignored) {
             return false;
@@ -203,6 +203,7 @@ public final class OutputRegistry {
     private static <O extends MachineOutput, T> DataResult<T> encode(OutputType<?> type, MachineOutput output,
                                                                        DynamicOps<T> ops, T prefix) {
         return ((OutputType<O>) type).codec().codec().encodeStart(ops, (O) output)
+                .flatMap(ops::getMap)
                 .flatMap(encoded -> ops.mergeToMap(prefix, encoded));
     }
 

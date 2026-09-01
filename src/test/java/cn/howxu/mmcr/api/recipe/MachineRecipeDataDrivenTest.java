@@ -11,6 +11,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
@@ -113,7 +114,7 @@ class MachineRecipeDataDrivenTest {
         JsonObject json = recipeJson();
         JsonObject input = new JsonObject();
         input.addProperty("type", "item");
-        input.add("item", arrayValue("minecraft:iron_ingot"));
+        input.add("item", new JsonPrimitive("minecraft:iron_ingot"));
         input.addProperty("count", 2);
         json.add("inputs", array(input));
         json.add("requirements", new JsonArray());

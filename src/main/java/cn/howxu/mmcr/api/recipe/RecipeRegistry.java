@@ -256,7 +256,7 @@ public final class RecipeRegistry {
         } catch (MachineRecipeJson.RecipeJsonException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw new MachineRecipeJsonException(recipeId, path,
+            throw new MachineRecipeJson.RecipeJsonException(recipeId, path,
                     "Requirement type validation failed", exception);
         }
     }

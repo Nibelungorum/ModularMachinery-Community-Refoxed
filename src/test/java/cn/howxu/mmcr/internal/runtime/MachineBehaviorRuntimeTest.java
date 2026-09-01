@@ -327,7 +327,7 @@ class MachineBehaviorRuntimeTest {
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
 
         assertThat(phases).hasValue(1);
-        assertThat(callbacks).isZero();
+        assertThat(callbacks).hasValue(0);
         assertThat(controller.runtimeSnapshot().crafting().failure()).isNotNull();
     }
 

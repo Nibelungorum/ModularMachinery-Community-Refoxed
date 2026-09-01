@@ -117,7 +117,7 @@ class CapabilityTickContractTest {
         new RecipeSearchTask(controller.currentRuntimeSnapshot(), controller.machineId(), 0L, 1L,
                 List.of(), null, List.of(capability)).compute();
 
-        assertThat(calls).isZero();
+        assertThat(calls).hasValue(0);
     }
 
     private record TickCapability(TickFacet tickFacet) implements MachineCapability, TickFacet {

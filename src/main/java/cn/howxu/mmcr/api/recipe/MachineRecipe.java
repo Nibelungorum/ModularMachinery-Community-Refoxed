@@ -817,7 +817,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                     }
                     for (int index = 0; index < rawValues.size(); index++) {
                         if (payloadSize(ops, rawValues.get(index)) > MAX_CHILD_PAYLOAD) {
-                            return DataResult.error(() -> field + "[" + index + "] payload exceeds limit");
+                            int payloadIndex = index;
+                            return DataResult.error(() -> field + "[" + payloadIndex + "] payload exceeds limit");
                         }
                     }
                     DataResult<List<E>> decoded = DataResult.success(new ArrayList<>(rawValues.size()));

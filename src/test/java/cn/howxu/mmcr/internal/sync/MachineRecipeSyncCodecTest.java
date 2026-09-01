@@ -167,7 +167,7 @@ class MachineRecipeSyncCodecTest {
     private record ScalarRequirement(RecipeModifier.IOType io, int value, List<String> tags) implements MachineRequirement {
         private static final RequirementType<ScalarRequirement> TYPE = new RequirementType.Definition<>(
                 MMCR.id("scalar_requirement"), MapCodec.unit(() -> new ScalarRequirement(RecipeModifier.IOType.INPUT,
-                0, List.of())), requirement -> (capabilities, context) -> null,
+                0, List.of())), (requirement, capabilities, context) -> null,
                 requirement -> new ScalarRequirement(requirement.io(), requirement.value(), requirement.tags()),
                 RecipeSyncCodec.of(32,
                         (buffer, requirement) -> {
