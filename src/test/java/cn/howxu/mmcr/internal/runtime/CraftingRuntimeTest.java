@@ -25,6 +25,9 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
@@ -130,6 +133,20 @@ class CraftingRuntimeTest {
         runtime.tick();
 
         assertThat(callbacks).hasValue(1);
+    }
+
+    @Test
+    void capability_tick_failure_is_observable_and_a_later_success_clears_it() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        ExecutionStatus failure = new ExecutionStatus(MMCR.id("tick_failure"), StatusSeverity.BLOCKED,
+                MMCR.id("test"), Map.of("reason", "per_tick"));
+
+        runtime.handleCapabilityTickResult(new CapabilityTickResult(List.of(), failure, false));
+        assertThat(runtime.failure()).isSameAs(failure);
+        runtime.handleCapabilityTickResult(CapabilityTickResult.empty());
+
+        assertThat(runtime.failure()).isNull();
     }
 
     @Test

@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -102,6 +104,20 @@ class CapabilityTickContractTest {
                 CapabilityTickPhase.IDLE, CapabilityTickPhase.IDLE);
         assertThat(before.operations()).hasSize(1);
         assertThat(idle.operations()).isEmpty();
+    }
+
+    @Test
+    void recipe_search_does_not_invoke_tick_facets() {
+        AtomicInteger calls = new AtomicInteger();
+        TickCapability capability = new TickCapability(context -> {
+            calls.incrementAndGet();
+            return CapabilityTickResult.empty();
+        });
+        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr_test", "search"));
+        new RecipeSearchTask(controller.currentRuntimeSnapshot(), controller.machineId(), 0L, 1L,
+                List.of(), null, List.of(capability)).compute();
+
+        assertThat(calls).isZero();
     }
 
     private record TickCapability(TickFacet tickFacet) implements MachineCapability, TickFacet {

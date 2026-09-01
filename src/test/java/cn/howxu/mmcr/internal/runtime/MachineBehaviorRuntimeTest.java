@@ -1,6 +1,19 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -43,6 +56,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -51,6 +65,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
@@ -63,6 +78,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -293,6 +309,59 @@ class MachineBehaviorRuntimeTest {
         assertThat(calls).hasValue(1);
         assertThat(controller.currentRuntimeSnapshot().crafting().recipeId()).isNull();
         assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isFalse();
+    }
+
+    @Test
+    void direct_tick_failure_is_published_and_prevents_the_behavior_callback() {
+        AtomicInteger callbacks = new AtomicInteger();
+        AtomicInteger phases = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        Machine tickMachine = machine(controller.machineId(), TickBehavior.builder()
+                .serverTick(context -> callbacks.incrementAndGet()).build());
+        RuntimeTestFixtures.formStructure(controller, tickMachine);
+        installTickCapability(controller, new TickCapability(context -> {
+            phases.incrementAndGet();
+            return new CapabilityTickResult(List.of(), tickFailure(), true);
+        }));
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(phases).hasValue(1);
+        assertThat(callbacks).isZero();
+        assertThat(controller.runtimeSnapshot().crafting().failure()).isNotNull();
+    }
+
+    @Test
+    void ordinary_idle_machine_runs_one_idle_phase_when_no_recipe_is_active() {
+        AtomicInteger idleCalls = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        Machine machine = machine(controller.machineId(), RecipeBehavior.defaults());
+        RuntimeTestFixtures.formStructure(controller, machine);
+        installTickCapability(controller, new TickCapability(context -> {
+            if (context.phase() == CapabilityTickPhase.IDLE) idleCalls.incrementAndGet();
+            return CapabilityTickResult.empty();
+        }));
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(idleCalls).hasValue(1);
+    }
+
+    @Test
+    void factory_idle_phase_propagates_a_blocked_result_to_the_factory_failure() {
+        AtomicInteger idleCalls = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        installTickCapability(controller, new TickCapability(context -> {
+            if (context.phase() == CapabilityTickPhase.IDLE) idleCalls.incrementAndGet();
+            return new CapabilityTickResult(List.of(), tickFailure(), true);
+        }));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+
+        var result = factory.tick(List.of(), 1L, 0L);
+
+        assertThat(idleCalls).hasValue(1);
+        assertThat(result.factoryFailure()).isNotNull();
     }
 
     @Test
@@ -675,5 +744,75 @@ class MachineBehaviorRuntimeTest {
     private static ItemRequirement output(net.minecraft.world.item.Item item) {
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 new ItemStack(item), 1F, List.of());
+    }
+
+    private static void installTickCapability(MachineControllerBlockEntity controller, TickCapability capability) {
+        TickCapabilityHost host = new TickCapabilityHost(capability);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, host, BlockPos.ZERO,
+                BlockPos.ZERO, (String) null)));
+        RuntimeTestFixtures.republish(controller);
+    }
+
+    private static ExecutionStatus tickFailure() {
+        return new ExecutionStatus(MMCR.id("tick_failure"), StatusSeverity.BLOCKED,
+                MMCR.id("test"), Map.of("reason", "per_tick"));
+    }
+
+    private record TickCapability(Function<CapabilityTickContext, CapabilityTickResult> planner)
+            implements MachineCapability, TickFacet {
+        @Override
+        public CapabilityType type() {
+            return new CapabilityType(MMCR.id("test_tick"));
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public CapabilityView view() {
+            return new CapabilityView() {
+                @Override
+                public CapabilityType type() {
+                    return TickCapability.this.type();
+                }
+
+                @Override
+                public IOType ioType() {
+                    return TickCapability.this.ioType();
+                }
+
+                @Override
+                public Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
+                    return Set.of(TickFacet.class);
+                }
+            };
+        }
+
+        @Override
+        public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+            return transaction -> CapabilityResult.successful();
+        }
+
+        @Override
+        public CapabilityTickResult plan(CapabilityTickContext context) {
+            return planner.apply(context);
+        }
+    }
+
+    private static final class TickCapabilityHost extends BlockEntity implements CapabilityHost {
+        private final CapabilitySnapshot snapshot;
+
+        private TickCapabilityHost(MachineCapability capability) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
+                    ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+            snapshot = new CapabilitySnapshot(List.of(capability));
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return snapshot;
+        }
     }
 }

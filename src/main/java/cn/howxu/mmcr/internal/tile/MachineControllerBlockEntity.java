@@ -989,9 +989,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
                             setActiveState(true);
                             try {
                                 TickBehaviorContext context = runtime.tickBehaviorContext();
-                                if (runtime.componentRuntime().executeTickPhase(
-                                        context.capabilityTickContext(tickBehavior.capabilityTickPhase())).failure() == null) {
+                                var tickResult = runtime.craftingRuntime().handleCapabilityTickResult(
+                                        runtime.componentRuntime().executeTickPhase(
+                                                context.capabilityTickContext(tickBehavior.capabilityTickPhase())));
+                                if (tickResult.failure() == null) {
                                     tickBehavior.serverTick().accept(context);
+                                } else {
+                                    setActiveState(false);
                                 }
                             } catch (RuntimeException exception) {
                                 logBehaviorCallbackFailure("serverTick", tickState, null, exception);
@@ -1170,6 +1174,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             startedThisTick = tryStartNewRecipe();
         }
         if (runtime.craftingRuntime().active() && !startedThisTick && tickActiveRecipe()) tryStartNewRecipe();
+        if (!runtime.craftingRuntime().active()) runtime.craftingRuntime().tickIdle();
     }
 
     private FactoryTickResult tickFactoryRecipes() {

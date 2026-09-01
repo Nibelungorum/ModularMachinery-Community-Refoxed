@@ -65,6 +65,7 @@ public final class CraftingRuntime {
     private CraftingStatus status = CraftingStatus.IDLE;
     private boolean finishCommitInProgress;
     private boolean smartInterfaceChangePending;
+    private @Nullable ExecutionStatus capabilityTickFailure;
 
     public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -180,8 +181,23 @@ public final class CraftingRuntime {
 
     public CapabilityTickResult tickIdle() {
         MachineBehaviorContext machineContext = behaviorContext();
-        return components.executeTickPhase(new CapabilityTickContext(currentGameTime(), CapabilityTickPhase.IDLE,
-                null, 1L, new CapabilitySnapshot(components.capabilities()), machineContext));
+        return handleCapabilityTickResult(components.executeTickPhase(new CapabilityTickContext(capabilityGameTime(), CapabilityTickPhase.IDLE,
+                null, 1L, new CapabilitySnapshot(components.capabilities()), machineContext)));
+    }
+
+    public CapabilityTickResult handleCapabilityTickResult(CapabilityTickResult result) {
+        if (result == null) throw new IllegalArgumentException("result must not be null");
+        if (result.failure() != null) {
+            capabilityTickFailure = result.failure();
+            waiting(result.failure());
+        } else if (capabilityTickFailure != null && capabilityTickFailure.equals(failure)) {
+            capabilityTickFailure = null;
+            failure = null;
+            status = active() ? CraftingStatus.working() : CraftingStatus.IDLE;
+        }
+        if (result.failure() != null || result.stateChanged()) controller.syncRecipeRuntimeFailure(this);
+        if (result.stateChanged()) controller.setChanged();
+        return result;
     }
 
     public CraftingStatus finish() {
@@ -274,11 +290,11 @@ public final class CraftingRuntime {
 
     private boolean executeTickPhase(CapabilityTickPhase phase, MachineBehaviorContext machineContext,
                                      RecipeTickContext recipeTickContext) {
-        CapabilityTickResult result = components.executeTickPhase(new CapabilityTickContext(currentGameTime(), phase,
+        CapabilityTickResult result = handleCapabilityTickResult(components.executeTickPhase(new CapabilityTickContext(
+                capabilityGameTime(), phase,
                 recipeTickContext, activeRecipe.getParallelism(), new CapabilitySnapshot(components.capabilities()),
-                machineContext));
+                machineContext)));
         if (result.failure() == null) return true;
-        waiting(result.failure());
         return false;
     }
 
@@ -642,6 +658,10 @@ public final class CraftingRuntime {
         if (controller.getLevel() == null) return 0;
         long gameTime = controller.getLevel().getGameTime();
         return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime));
+    }
+
+    private long capabilityGameTime() {
+        return controller.getLevel() == null ? 0L : controller.getLevel().getGameTime();
     }
 
     private static ExecutionStatus failure(String reason) {
