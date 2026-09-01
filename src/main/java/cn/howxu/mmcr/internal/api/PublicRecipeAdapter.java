@@ -56,12 +56,9 @@ public final class PublicRecipeAdapter {
         List<MachineIngredient> inputs = requirements.stream().filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
                 .map(PublicRecipeAdapter::toLegacyInput).filter(java.util.Objects::nonNull)
                 .toList();
-        List<ItemStack> outputs = requirements.stream()
-                .map(OutputRegistry::fromRequirement).filter(MachineOutput.ItemOutput.class::isInstance)
-                .map(MachineOutput.ItemOutput.class::cast).map(MachineOutput.ItemOutput::stack).toList();
-        List<FluidStack> fluidOutputs = requirements.stream()
-                .map(OutputRegistry::fromRequirement).filter(MachineOutput.FluidOutput.class::isInstance)
-                .map(MachineOutput.FluidOutput.class::cast).map(MachineOutput.FluidOutput::stack).toList();
+        List<MachineOutput> outputs = new ArrayList<>(requirements.stream()
+                .map(OutputRegistry::fromRequirement).filter(java.util.Objects::nonNull).toList());
+        definition.customOutputs().forEach(custom -> outputs.add(toOutput(custom)));
         List<RecipeModifier> recipeModifiers = definition.modifierIds().stream().map(id -> {
             ModifierDefinition modifier = modifiers.get(id);
             if (modifier == null) throw new ApiRegistrationException("Recipe " + definition.id()
@@ -72,10 +69,11 @@ public final class PublicRecipeAdapter {
             if (!levels.containsKey(level.levelId())) throw new ApiRegistrationException("Recipe " + definition.id()
                     + " refers to unknown machine level " + level.levelId());
         });
-        return new MachineRecipe(definition.id(), definition.machineId(), definition.tickTime(), inputs, outputs,
-                recipeModifiers, definition.priority(), definition.maxThreads(), definition.cancelRecipeOnPerTickFailure(),
-                fluidOutputs, requirements, definition.parallelized(), definition.levelRequirements().stream()
-                        .map(PublicRecipeAdapter::toInternalLevel).toList(), definition.allowPartialOutputs(), definition.requiredHostIds());
+        return MachineRecipe.fromCanonical(definition.id(), definition.machineId(), definition.tickTime(), requirements,
+                outputs, recipeModifiers, definition.priority(), definition.maxThreads(),
+                definition.cancelRecipeOnPerTickFailure(), definition.parallelized(), definition.levelRequirements().stream()
+                        .map(PublicRecipeAdapter::toInternalLevel).toList(), definition.allowPartialOutputs(),
+                definition.requiredHostIds());
     }
 
     public static MachineRequirement toRequirement(RecipeRequirement value) {
@@ -86,14 +84,6 @@ public final class PublicRecipeAdapter {
                     throw new IllegalArgumentException("Custom recipe input does not match registered type: " + custom.typeId());
                 }
                 return requirement;
-            }
-            var outputType = OutputRegistry.typeFor(custom.typeId());
-            if (outputType != null) {
-                MachineOutput output = MachineOutput.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
-                if (output.outputType() != outputType) {
-                    throw new IllegalArgumentException("Custom recipe output does not match registered type: " + custom.typeId());
-                }
-                return OutputRegistry.toRequirement(output, List.of());
             }
             MachineRequirement requirement = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
             if (!custom.typeId().equals(requirement.type().id()) || requirement.io() != RecipeModifier.IOType.OUTPUT) {
@@ -161,6 +151,17 @@ public final class PublicRecipeAdapter {
         } catch (IllegalArgumentException ignored) {
             return RequirementHandlerRegistry.legacyInput(requirement);
         }
+    }
+
+    public static MachineOutput toOutput(CustomRecipeIo custom) {
+        if (custom.ioType().isInput()) throw new IllegalArgumentException("Custom recipe input is not an output");
+        var outputType = OutputRegistry.typeFor(custom.typeId());
+        if (outputType == null) throw new IllegalArgumentException("Unknown recipe output type: " + custom.typeId());
+        MachineOutput output = MachineOutput.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
+        if (output.outputType() != outputType) {
+            throw new IllegalArgumentException("Custom recipe output does not match registered type: " + custom.typeId());
+        }
+        return output;
     }
 
     private static cn.howxu.mmcr.api.recipe.LevelRequirement toInternalLevel(LevelRequirement level) {

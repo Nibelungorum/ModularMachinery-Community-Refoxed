@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.internal.api.PublicRecipeAdapter;
@@ -153,8 +154,11 @@ public final class MachineRecipeSchema {
                                 case "output" -> RecipeIo.OUTPUT;
                                 default -> throw new IllegalArgumentException("Unknown recipe IO: " + args.get(1));
                             };
-                            appendRequirement(cx.recipe(), PublicRecipeAdapter.toRequirement(RecipeApi.custom(
-                                    Identifier.parse((String) args.get(0)), io, (JsonElement) args.get(2))));
+                            var custom = RecipeApi.custom(Identifier.parse((String) args.get(0)), io,
+                                    (JsonElement) args.get(2));
+                            if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
+                                appendRequirement(cx.recipe(), PublicRecipeAdapter.toRequirement(custom));
+                            } else appendOutput(cx.recipe(), PublicRecipeAdapter.toOutput(custom));
                         }
                     }))
             .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),
@@ -218,6 +222,16 @@ public final class MachineRecipeSchema {
             recipe.json.add("requirements", requirements);
         }
         requirements.add(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow());
+        recipe.save();
+    }
+
+    private static void appendOutput(KubeRecipe recipe, cn.howxu.mmcr.api.recipe.MachineOutput output) {
+        JsonArray outputs = recipe.json.getAsJsonArray("machine_outputs");
+        if (outputs == null) {
+            outputs = new JsonArray();
+            recipe.json.add("machine_outputs", outputs);
+        }
+        outputs.add(cn.howxu.mmcr.api.recipe.MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow());
         recipe.save();
     }
 

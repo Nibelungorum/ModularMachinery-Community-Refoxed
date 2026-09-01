@@ -7,6 +7,9 @@
 - Validated custom payloads through the registered requirement/output codecs before storage.
 - Converted typed public builder helpers to one `RecipeRequirement` storage path.
 - Added Java and KubeJS tests for registered requirement/output payloads and invalid type errors.
+- Preserved registered `OutputType` payloads as canonical `MachineOutput` values when no requirement factory exists;
+  requirement-backed outputs retain their existing runtime requirement behavior.
+- Added test-only custom requirement/output registrations for Java and KubeJS paths, including payload accessor copy coverage.
 
 ## Static Verification
 

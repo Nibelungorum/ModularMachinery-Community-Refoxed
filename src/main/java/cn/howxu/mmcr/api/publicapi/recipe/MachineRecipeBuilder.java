@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.recipe;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -28,6 +29,7 @@ public final class MachineRecipeBuilder {
     private boolean parallelized;
     private boolean allowPartialOutputs;
     private final List<RecipeRequirement> requirements = new ArrayList<>();
+    private final List<CustomRecipeIo> customOutputs = new ArrayList<>();
     private final List<Identifier> modifierIds = new ArrayList<>();
     private final List<LevelRequirement> levelRequirements = new ArrayList<>();
     private final List<RequiredHost> requiredHosts = new ArrayList<>();
@@ -72,7 +74,14 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { levelRequirements.add(new LevelRequirement(typeId, levelId)); return this; }
     public MachineRecipeBuilder requiredHost(Identifier hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
     public MachineRecipeBuilder requirement(RecipeRequirement requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
-    public MachineRecipeBuilder custom(CustomRecipeIo io) { return requirement(RecipeRequirement.custom(io.typeId(), io.ioType(), io.payload())); }
+    public MachineRecipeBuilder custom(CustomRecipeIo io) {
+        CustomRecipeIo validated = RecipeRequirement.custom(io.typeId(), io.ioType(), io.payload());
+        if (validated.ioType().isInput() || OutputRegistry.typeFor(validated.typeId()) == null) {
+            return requirement(validated);
+        }
+        customOutputs.add(validated);
+        return this;
+    }
     public MachineRecipeBuilder smartInterface(SmartInterfaceRequirement requirement) {
         if (requirement == null) throw new IllegalArgumentException("smart interface requirement null");
         return requirement(requirement);
@@ -102,7 +111,7 @@ public final class MachineRecipeBuilder {
                 .map(requirement -> new EnergyInput(requirement.fePerTick())).toList();
         return new MachineRecipeDefinition(id, machineId, tickTime, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
-                energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, modifierIds,
+                energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, customOutputs, modifierIds,
                 levelRequirements, Set.copyOf(requiredHosts));
     }
 

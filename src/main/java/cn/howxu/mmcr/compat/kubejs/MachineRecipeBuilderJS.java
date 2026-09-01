@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
@@ -52,6 +54,7 @@ public class MachineRecipeBuilderJS {
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
     public final Set<Identifier> requiredHostIds = new LinkedHashSet<>();
     final List<MachineRequirement> requirements = new ArrayList<>();
+    final List<MachineOutput> customOutputs = new ArrayList<>();
     private boolean allowPartialOutputs = false;
 
     private Identifier id;
@@ -138,7 +141,10 @@ public class MachineRecipeBuilderJS {
      * @return this builder
      */
     public MachineRecipeBuilderJS custom(String typeId, RecipeIo io, JsonElement payload) {
-        requirements.add(PublicRecipeAdapter.toRequirement(RecipeApi.custom(Identifier.parse(typeId), io, payload)));
+        var custom = RecipeApi.custom(Identifier.parse(typeId), io, payload);
+        if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
+            requirements.add(PublicRecipeAdapter.toRequirement(custom));
+        } else customOutputs.add(PublicRecipeAdapter.toOutput(custom));
         return this;
     }
 
@@ -359,12 +365,13 @@ public class MachineRecipeBuilderJS {
         }
         if (recipeRequirements != null) recipeRequirements.addAll(requirements);
 
-        return MachineRecipeJson.normalize(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs),
+        MachineRecipe recipe = MachineRecipeJson.normalize(id, machineId, tickTime, List.copyOf(recipeInputs), List.copyOf(recipeOutputs),
                 List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, List.copyOf(fluidOutputs),
                 recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), parallelized,
                 List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds),
                 deriveRequirements,
                 machine -> MachineRegistry.getMachine(machine) != null || MachineDefinitions.getRegistration(machine) != null);
+        return MachineRecipe.withAdditionalOutputs(recipe, customOutputs);
     }
 
     public void build() {

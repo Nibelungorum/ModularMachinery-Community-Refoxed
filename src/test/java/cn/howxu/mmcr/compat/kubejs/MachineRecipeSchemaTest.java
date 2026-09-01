@@ -6,7 +6,14 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.CustomOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -40,6 +47,8 @@ import java.util.Map;
 
 import com.google.gson.JsonArray;
 import com.mojang.serialization.JsonOps;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
@@ -269,10 +278,76 @@ class MachineRecipeSchemaTest {
 
         assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 schemaRecipe.json.getAsJsonArray("requirements").getFirst()).getOrThrow()).isEqualTo(input);
-        assertThat(schemaRecipe.json.getAsJsonArray("requirements")).hasSize(2);
-        assertThat(builder.requirements).contains(input).anySatisfy(requirement -> assertThat(requirement)
-                .isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class));
+        assertThat(schemaRecipe.json.getAsJsonArray("requirements")).hasSize(1);
+        assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("machine_outputs").getFirst()).getOrThrow()).isEqualTo(output);
+        assertThat(builder.requirements).containsExactly(input);
+        assertThat(builder.customOutputs).containsExactly(output);
         assertThatIllegalArgumentException().isThrownBy(() -> builder.custom("mmcr:missing", RecipeIo.INPUT, inputPayload));
+    }
+
+    @Test
+    void generic_kubejs_paths_preserve_registered_output_without_requirement_factory() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var outputs = OutputRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(TestRequirement.TYPE);
+            OutputRegistry.register(TestOutput.TYPE);
+            var requirement = new TestRequirement(3);
+            var output = new TestOutput(7, 1F);
+            var requirementPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow();
+            var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
+            var recipe = new KubeRecipe();
+            recipe.json = new JsonObject();
+
+            MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(recipe),
+                    List.of(TestRequirement.TYPE.id().toString(), "input", requirementPayload));
+            MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(recipe),
+                    List.of(TestOutput.TYPE.id().toString(), "output", outputPayload));
+            var builder = new MachineRecipeBuilderJS(MMCR.id("generic_extension"))
+                    .custom(TestRequirement.TYPE.id().toString(), RecipeIo.INPUT, requirementPayload)
+                    .custom(TestOutput.TYPE.id().toString(), RecipeIo.OUTPUT, outputPayload);
+
+            assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                    recipe.json.getAsJsonArray("requirements").getFirst()).getOrThrow()).isEqualTo(requirement);
+            assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
+                    recipe.json.getAsJsonArray("machine_outputs").getFirst()).getOrThrow()).isEqualTo(output);
+            assertThat(builder.requirements).containsExactly(requirement);
+            assertThat(builder.customOutputs).containsExactly(output);
+        }
+    }
+
+    private record TestRequirement(int value) implements CustomRequirement {
+        private static final RequirementType<TestRequirement> TYPE = new RequirementType.Definition<>(
+                MMCR.id("kubejs_test_requirement"), RecordCodecBuilder.mapCodec(instance -> instance.group(
+                        Codec.STRING.fieldOf("type").forGetter(ignored -> "mmcr:kubejs_test_requirement"),
+                        Codec.INT.fieldOf("value").forGetter(TestRequirement::value)
+                ).apply(instance, (ignored, value) -> new TestRequirement(value))),
+                (requirement, capabilities, context) -> null);
+
+        @Override
+        public RecipeModifier.IOType io() {
+            return RecipeModifier.IOType.INPUT;
+        }
+
+        @Override
+        public RequirementType<TestRequirement> type() {
+            return TYPE;
+        }
+    }
+
+    private record TestOutput(int value, float chance) implements CustomOutput {
+        private static final OutputType<TestOutput> TYPE = new OutputType.Definition<>(
+                MMCR.id("kubejs_test_output"), RecordCodecBuilder.mapCodec(instance -> instance.group(
+                        Codec.STRING.fieldOf("type").forGetter(ignored -> "mmcr:kubejs_test_output"),
+                        Codec.INT.fieldOf("value").forGetter(TestOutput::value),
+                        Codec.FLOAT.fieldOf("chance").forGetter(TestOutput::chance)
+                ).apply(instance, (ignored, value, chance) -> new TestOutput(value, chance))),
+                (output, chance) -> new TestOutput(output.value(), chance), (output, modifiers) -> output, output -> output);
+
+        @Override
+        public OutputType<TestOutput> outputType() {
+            return TYPE;
+        }
     }
 
     private static JsonElement json(String value) {

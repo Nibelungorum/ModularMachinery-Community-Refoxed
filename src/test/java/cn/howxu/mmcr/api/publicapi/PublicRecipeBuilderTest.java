@@ -20,7 +20,16 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import com.google.gson.JsonObject;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.CustomOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -295,6 +304,7 @@ class PublicRecipeBuilderTest {
         var custom = new CustomRecipeIo(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.TYPE.id(),
                 RecipeIo.INPUT, payload);
         payload.addProperty("fe_per_tick", 1);
+        custom.payload().getAsJsonObject().addProperty("fe_per_tick", 2);
 
         assertThat(custom.payload().getAsJsonObject().get("fe_per_tick").getAsInt()).isEqualTo(12);
         assertThatThrownBy(() -> new CustomRecipeIo(id("energy"), RecipeIo.INPUT,
@@ -302,6 +312,64 @@ class PublicRecipeBuilderTest {
         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("unknown_custom"), id("machine"))
                 .custom(new CustomRecipeIo(id("unknown"), RecipeIo.INPUT, custom.payload())))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void custom_recipe_io_preserves_registered_output_without_requirement_factory() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var outputs = OutputRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(TestRequirement.TYPE);
+            OutputRegistry.register(TestOutput.TYPE);
+            var requirement = new TestRequirement(3);
+            var output = new TestOutput(7, 1F);
+            var requirementPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow();
+            var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
+            var customOutput = new CustomRecipeIo(TestOutput.TYPE.id(), RecipeIo.OUTPUT, outputPayload);
+            customOutput.payload().getAsJsonObject().addProperty("value", 1);
+
+            var recipe = PublicRecipeAdapter.toRecipe(MachineRecipeBuilder.recipe(id("custom_extension"), id("machine"))
+                    .custom(new CustomRecipeIo(TestRequirement.TYPE.id(), RecipeIo.INPUT, requirementPayload))
+                    .custom(customOutput).build(),
+                    new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+
+            assertThat(recipe.requirements()).containsExactly(requirement);
+            assertThat(recipe.machineOutputs()).containsExactly(output);
+            assertThat(customOutput.payload().getAsJsonObject().get("value").getAsInt()).isEqualTo(7);
+        }
+    }
+
+    private record TestRequirement(int value) implements CustomRequirement {
+        private static final RequirementType<TestRequirement> TYPE = new RequirementType.Definition<>(
+                id("public_test_requirement"), RecordCodecBuilder.mapCodec(instance -> instance.group(
+                        Codec.STRING.fieldOf("type").forGetter(ignored -> "mmcr:public_test_requirement"),
+                        Codec.INT.fieldOf("value").forGetter(TestRequirement::value)
+                ).apply(instance, (ignored, value) -> new TestRequirement(value))),
+                (requirement, capabilities, context) -> null);
+
+        @Override
+        public RecipeModifier.IOType io() {
+            return RecipeModifier.IOType.INPUT;
+        }
+
+        @Override
+        public RequirementType<TestRequirement> type() {
+            return TYPE;
+        }
+    }
+
+    private record TestOutput(int value, float chance) implements CustomOutput {
+        private static final OutputType<TestOutput> TYPE = new OutputType.Definition<>(
+                id("public_test_output"), RecordCodecBuilder.mapCodec(instance -> instance.group(
+                        Codec.STRING.fieldOf("type").forGetter(ignored -> "mmcr:public_test_output"),
+                        Codec.INT.fieldOf("value").forGetter(TestOutput::value),
+                        Codec.FLOAT.fieldOf("chance").forGetter(TestOutput::chance)
+                ).apply(instance, (ignored, value, chance) -> new TestOutput(value, chance))),
+                (output, chance) -> new TestOutput(output.value(), chance), (output, modifiers) -> output, output -> output);
+
+        @Override
+        public OutputType<TestOutput> outputType() {
+            return TYPE;
+        }
     }
 
     private static Identifier id(String path) {
