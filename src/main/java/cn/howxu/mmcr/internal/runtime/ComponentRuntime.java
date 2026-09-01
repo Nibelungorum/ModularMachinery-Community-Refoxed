@@ -2,8 +2,16 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -22,6 +30,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,6 +48,10 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class ComponentRuntime {
+    private static final ExecutionStatus UNSPECIFIED_TICK_OPERATION_FAILURE = new ExecutionStatus(
+            Identifier.fromNamespaceAndPath("mmcr", "capability_tick_operation_failure"), StatusSeverity.FAILURE,
+            Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
+            Map.of("reason", "operation_failed_without_status"));
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
@@ -96,6 +109,38 @@ public final class ComponentRuntime {
 
     public List<MachineCapability> capabilities() {
         return capabilities;
+    }
+
+    /**
+     * Plans each tick facet in snapshot order and commits the resulting operations atomically.
+     */
+    public CapabilityTickResult executeTickPhase(CapabilityTickContext context) {
+        Objects.requireNonNull(context, "context");
+        List<CapabilityOperation> operations = new ArrayList<>();
+        boolean stateChanged = false;
+        for (MachineCapability capability : context.capabilitySnapshot().capabilities()) {
+            TickFacet facet = capability.facet(TickFacet.class).orElse(null);
+            if (facet == null) continue;
+            CapabilityTickResult result = Objects.requireNonNull(facet.plan(context), "tick facet result");
+            operations.addAll(result.operations());
+            stateChanged |= result.stateChanged();
+            if (result.failure() != null) {
+                return new CapabilityTickResult(operations, result.failure(), stateChanged);
+            }
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (CapabilityOperation operation : operations) {
+                CapabilityResult result = operation.commit(transaction);
+                if (result == null || !result.success()) {
+                    ExecutionStatus failure = result == null || result.status() == null
+                            ? UNSPECIFIED_TICK_OPERATION_FAILURE : result.status();
+                    return new CapabilityTickResult(operations, failure, stateChanged);
+                }
+            }
+            transaction.commit();
+        }
+        if (stateChanged) markCapabilityPresentationChanged();
+        return new CapabilityTickResult(operations, null, stateChanged);
     }
 
     public List<ControllerRuntimeSnapshot.ComponentPresentation> componentPresentations() {

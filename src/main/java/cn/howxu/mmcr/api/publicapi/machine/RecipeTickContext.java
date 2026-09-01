@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 
 import java.util.List;
 import java.util.Objects;
@@ -20,15 +21,24 @@ public final class RecipeTickContext {
     private final long parallelism;
     private final List<MachineRequirement> requirements;
     private final List<MachineOutput> outputs;
+    private final CapabilitySnapshot capabilitySnapshot;
 
     public RecipeTickContext(MachineRecipe recipe, int currentTick, int totalTick, long parallelism) {
         this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
-                currentTick, totalTick, parallelism, recipe.runtimeRequirements(), recipe.runtimeMachineOutputs());
+                currentTick, totalTick, parallelism, recipe.runtimeRequirements(), recipe.runtimeMachineOutputs(),
+                new CapabilitySnapshot(List.of()));
     }
 
     public RecipeTickContext(MachineBehaviorContext machineContext, MachineRecipe recipe, int currentTick,
                              int totalTick, long parallelism, List<MachineRequirement> requirements,
                              List<MachineOutput> outputs) {
+        this(machineContext, recipe, currentTick, totalTick, parallelism, requirements, outputs,
+                new CapabilitySnapshot(List.of()));
+    }
+
+    public RecipeTickContext(MachineBehaviorContext machineContext, MachineRecipe recipe, int currentTick,
+                             int totalTick, long parallelism, List<MachineRequirement> requirements,
+                             List<MachineOutput> outputs, CapabilitySnapshot capabilitySnapshot) {
         this.machineContext = Objects.requireNonNull(machineContext, "machineContext");
         this.recipe = Objects.requireNonNull(recipe, "recipe");
         if (currentTick < 0) throw new IllegalArgumentException("currentTick must not be negative");
@@ -39,6 +49,7 @@ public final class RecipeTickContext {
         this.parallelism = parallelism;
         this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
         this.outputs = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
+        this.capabilitySnapshot = Objects.requireNonNull(capabilitySnapshot, "capabilitySnapshot");
     }
 
     public MachineRecipe recipe() {
@@ -67,5 +78,9 @@ public final class RecipeTickContext {
 
     public List<MachineOutput> outputs() {
         return outputs;
+    }
+
+    public CapabilitySnapshot capabilitySnapshot() {
+        return capabilitySnapshot;
     }
 }

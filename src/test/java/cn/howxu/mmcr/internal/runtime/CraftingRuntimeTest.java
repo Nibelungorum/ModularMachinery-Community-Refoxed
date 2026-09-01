@@ -119,6 +119,20 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void recipe_tick_callback_is_preserved_when_capability_phases_are_enabled() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        AtomicInteger callbacks = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .recipeTick(context -> callbacks.incrementAndGet()).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(recipe("runtime_recipe_tick_callback", 2, List.of()), 1).isCrafting()).isTrue();
+        runtime.tick();
+
+        assertThat(callbacks).hasValue(1);
+    }
+
+    @Test
     void start_plans_inputs_without_requiring_output_capacity() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);

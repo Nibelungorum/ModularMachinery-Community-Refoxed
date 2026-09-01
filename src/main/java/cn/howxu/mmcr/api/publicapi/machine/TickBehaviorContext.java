@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
@@ -48,5 +50,9 @@ public final class TickBehaviorContext extends MachineBehaviorContext {
 
     public MachineIoPlan ioPlan() {
         return new MachineIoPlan(capabilitySnapshot);
+    }
+
+    public CapabilityTickContext capabilityTickContext(CapabilityTickPhase phase) {
+        return new CapabilityTickContext(gameTime(), phase, null, parallelism, capabilitySnapshot, this);
     }
 }

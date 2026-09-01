@@ -2,6 +2,9 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -140,10 +143,12 @@ public final class CraftingRuntime {
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return waiting(failure("recipe_behavior"));
         MachineBehaviorContext machineContext = behaviorContext();
+        RecipeTickContext recipeTickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
+                activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
+                effectiveRequirements(), effectiveOutputs(), new CapabilitySnapshot(components.capabilities()));
+        if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, recipeTickContext)) return status;
         try {
-            behavior.recipeTick().accept(new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
-                    activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
-                    effectiveRequirements(), effectiveOutputs()));
+            behavior.recipeTick().accept(recipeTickContext);
         } catch (RuntimeException exception) {
             logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
         } finally {
@@ -157,17 +162,26 @@ public final class CraftingRuntime {
             return waiting(result.failure());
         }
         if (!tickPlan.commit()) return waiting(tickPlan.failure());
+        if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, machineContext, recipeTickContext)) return status;
 
         int gameTime = currentGameTime();
         if (activeRecipe.needsFinishCommit()) {
+            if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
             activeRecipe.beginFinishCommit();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
+        if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
         status = CraftingStatus.working();
         failure = null;
         return status;
+    }
+
+    public CapabilityTickResult tickIdle() {
+        MachineBehaviorContext machineContext = behaviorContext();
+        return components.executeTickPhase(new CapabilityTickContext(currentGameTime(), CapabilityTickPhase.IDLE,
+                null, 1L, new CapabilitySnapshot(components.capabilities()), machineContext));
     }
 
     public CraftingStatus finish() {
@@ -256,6 +270,16 @@ public final class CraftingRuntime {
 
     public boolean active() {
         return activeRecipe != null;
+    }
+
+    private boolean executeTickPhase(CapabilityTickPhase phase, MachineBehaviorContext machineContext,
+                                     RecipeTickContext recipeTickContext) {
+        CapabilityTickResult result = components.executeTickPhase(new CapabilityTickContext(currentGameTime(), phase,
+                recipeTickContext, activeRecipe.getParallelism(), new CapabilitySnapshot(components.capabilities()),
+                machineContext));
+        if (result.failure() == null) return true;
+        waiting(result.failure());
+        return false;
     }
 
     public void pause() {

@@ -168,6 +168,10 @@ public final class FactoryRuntime {
             lane.tickIdle();
             if (lane.isTimedOut(recipeLockUsed.contains(lane))) removeLane(lane);
         }
+        if (activeLaneCount() == 0) {
+            CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
+            if (baseRuntime != null) baseRuntime.tickIdle();
+        }
         clearFinishedContinuations();
         for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : observations.entrySet()) {
             if (lanes.contains(entry.getKey()) && !entry.getValue().equals(observe(entry.getKey()))) {

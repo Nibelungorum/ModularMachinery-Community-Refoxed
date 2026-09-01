@@ -64,6 +64,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
@@ -987,7 +988,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         if (behavior instanceof TickBehavior tickBehavior) {
                             setActiveState(true);
                             try {
-                                tickBehavior.serverTick().accept(runtime.tickBehaviorContext());
+                                TickBehaviorContext context = runtime.tickBehaviorContext();
+                                if (runtime.componentRuntime().executeTickPhase(
+                                        context.capabilityTickContext(tickBehavior.capabilityTickPhase())).failure() == null) {
+                                    tickBehavior.serverTick().accept(context);
+                                }
                             } catch (RuntimeException exception) {
                                 logBehaviorCallbackFailure("serverTick", tickState, null, exception);
                             }

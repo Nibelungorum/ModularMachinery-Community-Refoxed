@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import java.util.Objects;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
 /**
  * Callback strategy for machines driven directly by server ticks.
@@ -31,6 +32,10 @@ public final class TickBehavior implements MachineBehavior {
 
     public TickCallback serverTick() {
         return serverTick;
+    }
+
+    public CapabilityTickPhase capabilityTickPhase() {
+        return CapabilityTickPhase.IDLE;
     }
 
     public static final class Builder {
