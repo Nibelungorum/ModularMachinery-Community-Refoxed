@@ -229,7 +229,7 @@ public final class MachineRecipeJson {
                     fail(id, field + "[" + index + "]", "payload exceeds limit", null);
                 }
                 values.add(codec.parse(ops, array.get(index)).getOrThrow(error ->
-                        new RecipeJsonException(id, field + "[" + elementIndex + "]" + errorPath(error), error, new IllegalArgumentException(error))));
+                        new RecipeJsonException(id, field + "[" + elementIndex + "]", error, new IllegalArgumentException(error))));
             }
             return List.copyOf(values);
         } catch (RecipeJsonException exception) {
@@ -245,11 +245,6 @@ public final class MachineRecipeJson {
 
     private static void fail(Identifier id, String path, String message, Throwable cause) {
         throw new RecipeJsonException(id, path, message, cause);
-    }
-
-    private static String errorPath(String error) {
-        int separator = error.indexOf(": ");
-        return separator < 0 ? "" : "." + error.substring(0, separator);
     }
 
     private static ParsedOutputs parseOutputs(Identifier id, JsonObject object,

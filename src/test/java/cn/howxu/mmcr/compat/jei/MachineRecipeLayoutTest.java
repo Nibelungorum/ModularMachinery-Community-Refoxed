@@ -99,7 +99,10 @@ class MachineRecipeLayoutTest {
         assertThat(layout.inputs().slots()).allSatisfy(slot -> assertThat(slot.entry()).isNotNull());
         assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(48, 80));
         assertThat(layout.inputs().hiddenEntries())
-                .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 17));
+                .anySatisfy(entry -> {
+                    assertThat(entry.kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM);
+                    assertThat(entry.index()).isEqualTo(17);
+                });
         assertThat(layout.hasInputOverflow()).isTrue();
     }
 
@@ -146,14 +149,19 @@ class MachineRecipeLayoutTest {
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);
 
-        assertThat(layout.inputs().slots())
-                .extracting(MachineRecipeLayout.SlotPlan::entry, MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
-                .containsExactly(tuple(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0), 12, 8));
+        assertThat(layout.inputs().slots()).singleElement().satisfies(slot -> {
+            assertThat(slot.entry().kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM);
+            assertThat(slot.entry().index()).isEqualTo(0);
+            assertThat(slot.x()).isEqualTo(12);
+            assertThat(slot.y()).isEqualTo(8);
+        });
         assertThat(layout.hasInputOverflow()).isFalse();
         assertThat(layout.outputs().slots()).hasSize(14);
         assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(138, 80));
-        assertThat(layout.outputs().hiddenEntries())
-                .contains(new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 14));
+        assertThat(layout.outputs().hiddenEntries()).anySatisfy(entry -> {
+            assertThat(entry.kind()).isEqualTo(MachineRecipeLayout.Kind.FLUID);
+            assertThat(entry.index()).isEqualTo(14);
+        });
         assertThat(layout.hasOutputOverflow()).isTrue();
         assertThat(layout.outputs().slots().subList(12, 14))
                 .extracting(MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)

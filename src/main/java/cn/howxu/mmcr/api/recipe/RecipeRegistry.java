@@ -233,6 +233,11 @@ public final class RecipeRegistry {
                     throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
                             "Derived requirement must have output direction", null);
                 }
+                if (recipe.requirements().stream()
+                        .noneMatch(requirement -> OutputRegistry.matchesOutputRequirement(output, requirement))) {
+                    throw new MachineRecipeJson.RecipeJsonException(id, "outputs[" + index + "]",
+                            "Output has no matching canonical requirement", null);
+                }
             }
         }
     }

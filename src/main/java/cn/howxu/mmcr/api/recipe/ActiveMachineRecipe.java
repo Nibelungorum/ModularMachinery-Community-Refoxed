@@ -368,9 +368,8 @@ public final class ActiveMachineRecipe {
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
-            List<MachineRequirement> validationRequirements = effectiveRequirements == null
-                    ? recipe.requirements() : effectiveRequirements;
-            if (inputPlan == null || !inputPlan.isValidFor(validationRequirements)) return new LoadResult(null);
+            if (inputPlan == null || (hasEffectiveExecutionSnapshot
+                    && !inputPlan.isValidFor(effectiveRequirements))) return new LoadResult(null);
         }
         long maxParallelism = input.getLongOr("maxParallelism", 1L);
         long parallelism = input.getLongOr("parallelism", 1L);

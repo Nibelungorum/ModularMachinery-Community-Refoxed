@@ -36,7 +36,7 @@ public final class RecipeFinishContext {
         if (effectiveParallelism <= 0) throw new IllegalArgumentException("effectiveParallelism must be positive");
         this.requestedParallelism = requestedParallelism;
         this.effectiveParallelism = effectiveParallelism;
-        setOutputs(outputs);
+        this.outputs = new ArrayList<>(MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs")));
     }
 
     public MachineRecipe recipe() {
@@ -64,7 +64,14 @@ public final class RecipeFinishContext {
     }
 
     public void setOutputs(List<MachineOutput> outputs) {
-        this.outputs = new ArrayList<>(MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs")));
+        List<MachineOutput> copies = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
+        for (MachineOutput output : copies) {
+            if (output instanceof MachineOutput.ItemOutput item && item.stack().isEmpty()
+                    || output instanceof MachineOutput.FluidOutput fluid && fluid.stack().isEmpty()) {
+                throw new IllegalArgumentException("Built-in recipe outputs must not be empty");
+            }
+        }
+        this.outputs = new ArrayList<>(copies);
     }
 
     public void discardOutputs() {

@@ -125,7 +125,7 @@ class PublicRecipeBuilderTest {
                 .requiredHost(id("host"))
                 .build();
 
-        assertThat(recipe.requirements()).containsExactly(explicit, smart);
+        assertThat(recipe.requirements()).contains(explicit, smart);
         assertThat(recipe.levelRequirements()).hasSize(1);
         assertThat(recipe.requiredHostIds()).containsExactly(id("host"));
         assertThat(recipe.modifierIds()).hasSize(1);

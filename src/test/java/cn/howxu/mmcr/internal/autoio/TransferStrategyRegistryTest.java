@@ -14,6 +14,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -33,10 +34,17 @@ class TransferStrategyRegistryTest {
         OBSERVED_CONTEXTS.add(context);
         return TransferResult.moved(context.simulate() ? 1L : 2L);
     };
+    private static TransferStrategyRegistry.TestScope scope;
 
     @BeforeAll
     static void registerTestPolicy() {
+        scope = TransferStrategyRegistry.openTestScope();
         TransferStrategyRegistry.register(TEST_TYPE, TEST_POLICY);
+    }
+
+    @AfterAll
+    static void closeScope() {
+        scope.close();
     }
 
     @Test

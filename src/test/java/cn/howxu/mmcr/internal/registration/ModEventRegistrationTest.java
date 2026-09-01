@@ -179,7 +179,7 @@ class ModEventRegistrationTest {
 
         assertThat(ExternalCapabilityRegistry.global().isFrozen()).isTrue();
         assertThat(event.isBlockRegistered(ModCapabilities.ITEM_BLOCK,
-                ModBlocks.BLOCKS.get("item_input_bus_basic").get())).isTrue();
+                ModBlocks.BLOCKS.get("item_input_bus").get())).isTrue();
     }
 
     @Test

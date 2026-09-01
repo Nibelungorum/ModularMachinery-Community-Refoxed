@@ -236,7 +236,7 @@ class RecipeRegistryTest {
     }
 
     @Test
-    void dataPackRejectsOutputWithoutCanonicalDerivedRequirement() {
+    void dataPackAcceptsRegisteredOutputWithoutExecutionRequirement() {
         try (var scope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(INVALID_OUTPUT_TYPE);
             Identifier previousId = Identifier.parse("mmcr:valid_output_recipe");
@@ -247,12 +247,10 @@ class RecipeRegistryTest {
                     20, List.of(), List.of(new InvalidOutput(7, 1F)), List.of(), 0, 1, false, false,
                     List.of(), false, Set.of());
 
-            assertThatThrownBy(() -> RecipeRegistry.replaceDataPack(Map.of(invalidId, invalid)))
-                    .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                        assertThat(error.recipeId()).isEqualTo(invalidId);
-                        assertThat(error.path()).isEqualTo("outputs[0]");
-                    });
-            assertThat(RecipeRegistry.dataPackSnapshot()).isSameAs(previous);
+            RecipeRegistry.replaceDataPack(Map.of(invalidId, invalid));
+
+            assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(invalidId, invalid);
+            RecipeRegistry.replaceDataPack(previous);
         }
     }
 

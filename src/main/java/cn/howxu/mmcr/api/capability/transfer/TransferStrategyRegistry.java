@@ -35,4 +35,37 @@ public final class TransferStrategyRegistry {
     public static synchronized void freeze() {
         FROZEN = true;
     }
+
+    /** Opens an isolated registry scope for tests that declare custom transfer policies. */
+    public static TestScope openTestScope() {
+        synchronized (TransferStrategyRegistry.class) {
+            Map<CapabilityType, TransferPolicy> previousPolicies = Map.copyOf(POLICIES);
+            boolean previousFrozen = FROZEN;
+            POLICIES.clear();
+            FROZEN = false;
+            return new TestScope(previousPolicies, previousFrozen);
+        }
+    }
+
+    public static final class TestScope implements AutoCloseable {
+        private final Map<CapabilityType, TransferPolicy> previousPolicies;
+        private final boolean previousFrozen;
+        private boolean closed;
+
+        private TestScope(Map<CapabilityType, TransferPolicy> previousPolicies, boolean previousFrozen) {
+            this.previousPolicies = previousPolicies;
+            this.previousFrozen = previousFrozen;
+        }
+
+        @Override
+        public void close() {
+            if (closed) return;
+            synchronized (TransferStrategyRegistry.class) {
+                POLICIES.clear();
+                POLICIES.putAll(previousPolicies);
+                FROZEN = previousFrozen;
+                closed = true;
+            }
+        }
+    }
 }

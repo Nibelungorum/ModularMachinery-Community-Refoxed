@@ -92,8 +92,10 @@ class JeiIngredientAdapterRegistryTest {
                     return method.getReturnType().isAssignableFrom(IRecipeSlotBuilder.class) ? proxy : null;
                 });
         MachineRecipeCategory.addGeneric(slot, input);
-        assertThat(added.get()).containsExactly(CUSTOM_TYPE, "custom-ingredient");
-        assertThat(renderer.get()).containsExactly(CUSTOM_TYPE, CUSTOM_RENDERER);
+        assertThat(added.get()[0]).isSameAs(CUSTOM_TYPE);
+        assertThat(added.get()[1]).isEqualTo("custom-ingredient");
+        assertThat(renderer.get()[0]).isSameAs(CUSTOM_TYPE);
+        assertThat(renderer.get()[1]).isSameAs(CUSTOM_RENDERER);
     }
 
     @Test

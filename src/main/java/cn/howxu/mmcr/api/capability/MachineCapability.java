@@ -31,7 +31,7 @@ public interface MachineCapability {
      */
     default <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         Objects.requireNonNull(facetType, "facetType");
-        boolean declared = view().facets().stream().anyMatch(facetType::isAssignableFrom);
+        boolean declared = view().facets().contains(facetType);
         if (!declared || !facetType.isInstance(this)) return Optional.empty();
         return Optional.of(facetType.cast(this));
     }

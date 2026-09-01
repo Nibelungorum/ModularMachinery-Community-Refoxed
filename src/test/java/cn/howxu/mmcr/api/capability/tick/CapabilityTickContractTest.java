@@ -69,7 +69,7 @@ class CapabilityTickContractTest {
                     storage.insert(1L, transaction);
                     return CapabilityResult.successful();
                 }, transaction -> CapabilityResult.failure(blocked)), null, false));
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr_test", "tick"));
+        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
         CapabilityTickContext context = new CapabilityTickContext(0L, CapabilityTickPhase.BEFORE_RECIPE, null, 1L,
                 new CapabilitySnapshot(List.of(capability)), controller.behaviorContext());
 
@@ -91,7 +91,7 @@ class CapabilityTickContractTest {
             phases.add(context.phase());
             return CapabilityTickResult.empty();
         });
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr_test", "order"));
+        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
         ComponentRuntime runtime = new ComponentRuntime();
 
         CapabilityTickResult before = runtime.executeTickPhase(new CapabilityTickContext(0L,
@@ -113,7 +113,7 @@ class CapabilityTickContractTest {
             calls.incrementAndGet();
             return CapabilityTickResult.empty();
         });
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr_test", "search"));
+        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
         new RecipeSearchTask(controller.currentRuntimeSnapshot(), controller.machineId(), 0L, 1L,
                 List.of(), null, List.of(capability)).compute();
 

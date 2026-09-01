@@ -98,12 +98,14 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     public static void sendToViewers(IOPortBlockEntity port) {
         if (port == null || port.getLevel() == null || port.getLevel().isClientSide()) return;
-        PktPortStorageSyncPayload payload = from(port);
-        port.getLevel().players().stream()
+        List<ServerPlayer> viewers = port.getLevel().players().stream()
                 .filter(ServerPlayer.class::isInstance)
                 .map(ServerPlayer.class::cast)
                 .filter(player -> ownsMenu(player, port))
-                .forEach(player -> PacketDistributor.sendToPlayer(player, payload));
+                .toList();
+        if (viewers.isEmpty()) return;
+        PktPortStorageSyncPayload payload = from(port);
+        viewers.forEach(player -> PacketDistributor.sendToPlayer(player, payload));
     }
 
     @Override

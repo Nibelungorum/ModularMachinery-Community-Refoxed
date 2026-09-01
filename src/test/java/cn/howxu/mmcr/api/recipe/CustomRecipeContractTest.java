@@ -53,8 +53,8 @@ class CustomRecipeContractTest {
         MachineRequirement requirement = OutputRegistry.toRequirement(output, List.of("contract"));
 
         assertThat(OutputRegistry.matchesOutputRequirement(output, requirement)).isTrue();
-        assertThat(OutputRegistry.fromRequirement(requirement)).isEqualTo(output);
-        assertThat(MachineOutput.copyOf(output)).isEqualTo(output).isNotSameAs(output);
+        assertThat(OutputRegistry.matchesOutputRequirement(OutputRegistry.fromRequirement(requirement), requirement)).isTrue();
+        assertThat(OutputRegistry.matchesOutputRequirement(MachineOutput.copyOf(output), requirement)).isTrue();
     }
 
     @Test

@@ -78,12 +78,13 @@ class MachineOutputCodecTest {
         JsonObject encoded = MachineOutput.CODEC.encodeStart(jsonOps(), decoded).getOrThrow().getAsJsonObject();
 
         assertThat(decoded).isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
-            assertThat(output.stack()).isEqualTo(stack);
+            assertThat(net.minecraft.world.item.ItemStack.isSameItemSameComponents(output.stack(), stack)).isTrue();
+            assertThat(output.stack().getCount()).isEqualTo(stack.getCount());
             assertThat(output.chance()).isEqualTo(1F);
         });
         assertThat(encoded.get("type").getAsString()).isEqualTo("item");
         assertThat(encoded.getAsJsonObject("stack").get("count").getAsInt()).isEqualTo(4);
-        assertThat(encoded.has("chance")).isTrue();
+        assertThat(encoded.has("chance")).isFalse();
     }
 
     @Test

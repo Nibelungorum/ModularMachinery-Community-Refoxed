@@ -43,6 +43,7 @@ import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.resources.Identifier;
@@ -367,7 +368,7 @@ class PublicApiLifecycleTest {
                 RuntimeTestFixtures.fluidInput(new net.minecraft.core.BlockPos(11, 0, 0)).capabilitySnapshot(),
                 RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(12, 0, 0)).capabilitySnapshot(),
                 new SmartInterfaceBlockEntity(new net.minecraft.core.BlockPos(13, 0, 0),
-                        Blocks.AIR.defaultBlockState()).capabilitySnapshot());
+                        ModBlocks.SMART_INTERFACE.get().defaultBlockState()).capabilitySnapshot());
 
         for (CapabilitySnapshot snapshot : snapshots) {
             for (MachineCapability capability : snapshot.capabilities()) {
@@ -391,7 +392,7 @@ class PublicApiLifecycleTest {
         assertThatThrownBy(() -> CapabilityRegistry.register(new CapabilityDefinition(
                 new CapabilityType(id("late_capability")), Set.of(), ignored -> null)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("frozen");
+                .hasMessageContaining("closed");
 
         assertThat(snapshot.capabilities().getFirst().facet(ResourceFacet.class)).isPresent();
     }

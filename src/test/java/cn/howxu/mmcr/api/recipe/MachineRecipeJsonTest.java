@@ -216,7 +216,7 @@ class MachineRecipeJsonTest {
 
         assertThat(encoded.getAsJsonObject().has("requirements")).isTrue();
         assertThat(encoded.getAsJsonObject().has("inputs")).isFalse();
-        assertThat(encoded.getAsJsonObject().has("outputs")).isTrue();
+        assertThat(encoded.getAsJsonObject().has("outputs")).isFalse();
         assertThat(encoded.getAsJsonObject().has("fluid_outputs")).isFalse();
         assertThat(decoded.id()).isEqualTo(recipe.id());
         assertThat(decoded.machineId()).isEqualTo(recipe.machineId());

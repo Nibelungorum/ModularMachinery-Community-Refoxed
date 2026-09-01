@@ -43,7 +43,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             Identifier.CODEC.fieldOf("machine").forGetter(MachineRecipe::machineId),
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
             boundedList(MachineIngredient.CODEC, "inputs").optionalFieldOf("inputs", Collections.emptyList()).forGetter(recipe -> Collections.emptyList()),
-            OutputField.CODEC.optionalFieldOf("outputs", OutputField.legacyEmpty()).forGetter(recipe -> new OutputField(recipe.outputs, true)),
+            OutputField.CODEC.optionalFieldOf("outputs", OutputField.legacyEmpty()).forGetter(recipe -> {
+                List<MachineOutput> outputs = recipe.outputsWithoutDerivedRequirements();
+                return outputs.isEmpty() ? OutputField.legacyEmpty() : new OutputField(outputs, true);
+            }),
             boundedList(FluidStack.CODEC, "fluid_outputs").optionalFieldOf("fluid_outputs", Collections.emptyList()).forGetter(recipe -> Collections.emptyList()),
             boundedList(MachineOutput.CODEC, "machine_outputs").optionalFieldOf("machine_outputs", Collections.emptyList()).forGetter(recipe -> Collections.emptyList()),
             boundedList(RecipeModifier.CODEC, "modifiers").optionalFieldOf("modifiers", Collections.emptyList()).forGetter(MachineRecipe::modifiers),
@@ -294,13 +297,15 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         List<MachineOutput> copiedAdditionalOutputs = MachineOutput.copyList(additionalOutputs == null
                 ? List.of() : additionalOutputs);
         List<MachineOutput> newOutputs = copiedAdditionalOutputs.stream()
-                .filter(output -> !recipe.outputs.contains(output))
+                .filter(output -> recipe.outputs.stream().noneMatch(existing -> sameOutputResource(existing, output)))
                 .toList();
         this.outputs = appendOutputs(recipe.outputs, newOutputs);
         List<MachineRequirement> newRequirements = new ArrayList<>(recipe.requirements);
         for (MachineOutput output : newOutputs) {
             MachineRequirement requirement = OutputRegistry.tryToRequirement(output, List.of());
-            if (requirement != null && !newRequirements.contains(requirement)) newRequirements.add(requirement);
+            boolean represented = newRequirements.stream()
+                    .anyMatch(existing -> OutputRegistry.matchesOutputRequirement(output, existing));
+            if (requirement != null && !represented) newRequirements.add(requirement);
         }
         this.requirements = List.copyOf(newRequirements);
     }
@@ -366,9 +371,15 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         boolean explicitRequirements = requirements != null && !requirements.isEmpty();
         List<MachineRequirement> canonicalRequirements = explicitRequirements
                 ? requirements : deriveRequirements(inputs, outputs.legacyItemStacks(), fluidOutputs);
-        List<MachineOutput> canonicalOutputs = explicitRequirements && !outputs.canonical()
-                ? appendOutputs(deriveOutputs(canonicalRequirements), outputs.values()) : outputs.values();
-        canonicalOutputs = appendOutputs(canonicalOutputs, canonicalFluidOutputs(fluidOutputs));
+        List<MachineOutput> canonicalOutputs;
+        if (explicitRequirements) {
+            canonicalOutputs = !outputs.canonical() || outputs.values().isEmpty()
+                    ? deriveOutputs(canonicalRequirements)
+                    : appendOutputs(deriveOutputs(canonicalRequirements), outputs.values());
+        } else {
+            canonicalOutputs = outputs.values();
+        }
+        if (!explicitRequirements) canonicalOutputs = appendOutputs(canonicalOutputs, canonicalFluidOutputs(fluidOutputs));
         canonicalOutputs = appendOutputs(canonicalOutputs, machineOutputs);
         return fromCanonical(id, machineId, tickTime, canonicalRequirements, canonicalOutputs, modifiers,
                 priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
@@ -453,10 +464,35 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         List<MachineOutput> result = new ArrayList<>(first == null ? List.of() : first);
         if (second != null) {
             for (MachineOutput output : second) {
-                if (!result.contains(output)) result.add(output);
+                if (result.stream().noneMatch(existing -> sameOutput(existing, output))) result.add(output);
             }
         }
         return List.copyOf(result);
+    }
+
+    private static boolean sameOutput(MachineOutput first, MachineOutput second) {
+        if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
+            return firstItem.chance() == secondItem.chance() && firstItem.stack().getCount() == secondItem.stack().getCount()
+                    && ItemStack.isSameItemSameComponents(firstItem.stack(), secondItem.stack());
+        }
+        if (first instanceof MachineOutput.FluidOutput firstFluid && second instanceof MachineOutput.FluidOutput secondFluid) {
+            return firstFluid.chance() == secondFluid.chance()
+                    && firstFluid.stack().getAmount() == secondFluid.stack().getAmount()
+                    && FluidStack.isSameFluidSameComponents(firstFluid.stack(), secondFluid.stack());
+        }
+        return first.equals(second);
+    }
+
+    private static boolean sameOutputResource(MachineOutput first, MachineOutput second) {
+        if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
+            return firstItem.stack().getCount() == secondItem.stack().getCount()
+                    && ItemStack.isSameItemSameComponents(firstItem.stack(), secondItem.stack());
+        }
+        if (first instanceof MachineOutput.FluidOutput firstFluid && second instanceof MachineOutput.FluidOutput secondFluid) {
+            return firstFluid.stack().getAmount() == secondFluid.stack().getAmount()
+                    && FluidStack.isSameFluidSameComponents(firstFluid.stack(), secondFluid.stack());
+        }
+        return first.equals(second);
     }
 
     private static List<MachineRequirement> deriveRequirements(List<MachineIngredient> inputs, List<ItemStack> outputs, List<FluidStack> fluidOutputs) {
@@ -522,6 +558,13 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public List<MachineOutput> machineOutputs() {
         return outputs;
+    }
+
+    private List<MachineOutput> outputsWithoutDerivedRequirements() {
+        return outputs.stream().filter(output -> requirements.stream()
+                .map(OutputRegistry::fromRequirement)
+                .noneMatch(requirementOutput -> requirementOutput != null && sameOutput(output, requirementOutput)))
+                .toList();
     }
 
     public List<Integer> energyOutputs() {

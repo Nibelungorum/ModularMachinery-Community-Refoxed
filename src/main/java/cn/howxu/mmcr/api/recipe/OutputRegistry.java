@@ -115,7 +115,7 @@ public final class OutputRegistry {
         OutputType<?> type = canonicalType(output.outputType());
         if (type == null || !type.matchesRequirement(requirement)) return false;
         MachineOutput converted = type.fromRequirement(requirement);
-        if (converted != null) return converted.outputType() == type && output.equals(converted);
+        if (converted != null) return converted.outputType() == type && sameOutput(output, converted);
         try {
             MachineRequirement convertedRequirement = toRequirement(type, output, requirement.tags());
             return convertedRequirement != null && convertedRequirement.equals(requirement);
@@ -127,6 +127,19 @@ public final class OutputRegistry {
     public static void registerBuiltIns() {
         registerBuiltIn(MachineOutput.ItemOutput.TYPE);
         registerBuiltIn(MachineOutput.FluidOutput.TYPE);
+    }
+
+    private static boolean sameOutput(MachineOutput first, MachineOutput second) {
+        if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
+            return firstItem.chance() == secondItem.chance() && firstItem.stack().getCount() == secondItem.stack().getCount()
+                    && net.minecraft.world.item.ItemStack.isSameItemSameComponents(firstItem.stack(), secondItem.stack());
+        }
+        if (first instanceof MachineOutput.FluidOutput firstFluid && second instanceof MachineOutput.FluidOutput secondFluid) {
+            return firstFluid.chance() == secondFluid.chance()
+                    && firstFluid.stack().getAmount() == secondFluid.stack().getAmount()
+                    && net.neoforged.neoforge.fluids.FluidStack.isSameFluidSameComponents(firstFluid.stack(), secondFluid.stack());
+        }
+        return first.equals(second);
     }
 
     public static TestScope openTestScope() {
