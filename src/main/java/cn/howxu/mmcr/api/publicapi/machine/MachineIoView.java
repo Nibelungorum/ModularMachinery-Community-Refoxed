@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -57,6 +59,17 @@ public final class MachineIoView {
         return new MachineIoView(new CapabilitySnapshot(snapshot.capabilities().stream()
                 .filter(capability -> capability.view().tags().containsAll(tags))
                 .toList()));
+    }
+
+    /**
+     * Returns the presentation entries for every capability in this view.
+     *
+     * @return immutable capability display entries
+     */
+    public List<CapabilityDisplay> displays() {
+        return snapshot.capabilities().stream()
+                .flatMap(capability -> CapabilityDisplayRegistry.global().displays(capability).stream())
+                .toList();
     }
 
     public List<ResourceAmount<ItemResource>> itemInputs() {

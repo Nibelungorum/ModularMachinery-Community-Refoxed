@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability;
 
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.util.IOType;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,7 +19,8 @@ public interface CapabilityView {
     IOType ioType();
 
     /**
-     * Returns the facet types declared by this capability snapshot.
+     * Returns the facet types declared by this capability snapshot, including
+     * {@link PresentationFacet} when the capability supplies its own display data.
      *
      * @return immutable declared facet types, or an empty set when none are declared
      */

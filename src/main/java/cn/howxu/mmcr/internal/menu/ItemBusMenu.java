@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -167,11 +167,10 @@ public class ItemBusMenu extends AbstractMachineMenu {
 
     private static int slotCount(IOPortBlockEntity owner) {
         if (owner == null) return DEFAULT_BUS_SLOT_COUNT;
-        return owner.capabilitySnapshot().capabilities().stream()
-                .filter(ItemBusCapability.class::isInstance)
-                .map(ItemBusCapability.class::cast)
-                .mapToInt(capability -> capability.storage().size())
-                .findFirst().orElse(DEFAULT_BUS_SLOT_COUNT);
+        long entries = new MachineIoView(owner.capabilitySnapshot()).displays().stream()
+                .filter(display -> display.unit().equals("item"))
+                .count();
+        return entries == 0L ? DEFAULT_BUS_SLOT_COUNT : Math.toIntExact(entries);
     }
 
     private static ItemBusSize size(IOPortBlockEntity owner) {

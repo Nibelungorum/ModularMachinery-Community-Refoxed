@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
@@ -38,16 +40,18 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
     private final List<FluidTankLayout> fluidTankLayouts;
     private List<ItemStorageEntry> itemEntries;
     private List<FluidStorageEntry> fluidEntries;
+    private List<CapabilityDisplay> displayEntries;
 
     public CombinedPortMenu(int containerId, Inventory playerInv, CombinedPortBlockEntity owner) {
         super(ModUIs.COMBINED.get(), containerId);
         this.owner = owner;
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         this.kind = owner == null ? "combined_input_basic" : owner.kind().id();
+        this.displayEntries = owner == null ? List.of() : new MachineIoView(owner.capabilitySnapshot()).displays();
         this.itemSlotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
-                : owner.getItemStackHandler(null).getSlots();
+                : entryCount("item");
         this.fluidTankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
-                : owner.getResourceHandler(null).size();
+                : entryCount("mB");
         this.fluidTankLayouts = layouts(fluidTankCount);
         addItemSlots(owner);
         addPlayerSlots(playerInv);
@@ -78,6 +82,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         addPlayerSlots(playerInv);
         this.itemEntries = List.of();
         this.fluidEntries = List.of();
+        this.displayEntries = List.of();
     }
 
     public static CombinedPortMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {
@@ -100,7 +105,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
 
     public static void writeClientOpenData(FriendlyByteBuf buffer, CombinedPortBlockEntity owner) {
         writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(),
-                owner.getItemStackHandler(null).getSlots(), owner.getResourceHandler(null).size());
+                entryCount(owner, "item"), entryCount(owner, "mB"));
     }
 
     public record FluidTankLayout(int slot, int x, int y) {
@@ -126,6 +131,8 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
 
     public List<FluidStorageEntry> fluidEntries() { return fluidEntries; }
 
+    public List<CapabilityDisplay> displayEntries() { return displayEntries; }
+
     public Identifier selectedCapabilityId() { return MMCR.id("item"); }
 
     public boolean matches(BlockPos targetPos, String targetKind) {
@@ -144,6 +151,16 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         }
         itemEntries = nextItems;
         fluidEntries = nextFluids;
+        displayEntries = new MachineIoView(port.capabilitySnapshot()).displays();
+    }
+
+    private int entryCount(String unit) {
+        return Math.toIntExact(displayEntries.stream().filter(entry -> entry.unit().equals(unit)).count());
+    }
+
+    private static int entryCount(IOPortBlockEntity port, String unit) {
+        return Math.toIntExact(new MachineIoView(port.capabilitySnapshot()).displays().stream()
+                .filter(entry -> entry.unit().equals(unit)).count());
     }
 
     private void addItemSlots(CombinedPortBlockEntity owner) {
