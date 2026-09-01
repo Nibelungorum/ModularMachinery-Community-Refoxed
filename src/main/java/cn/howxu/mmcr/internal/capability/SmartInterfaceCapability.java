@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -15,6 +17,8 @@ import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.Map;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -22,7 +26,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class SmartInterfaceCapability implements MachineCapability, OperationFacet {
+public final class SmartInterfaceCapability implements MachineCapability, OperationFacet, PresentationFacet {
     private static final CapabilityType TYPE = new CapabilityType(MMCR.id("smart_interface"));
     private final FloatValueStorage storage;
     private final IOType ioType;
@@ -33,7 +37,7 @@ public final class SmartInterfaceCapability implements MachineCapability, Operat
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.storage = storage;
         this.ioType = ioType;
-        this.view = CapabilityFactories.view(TYPE, ioType, Set.of(OperationFacet.class));
+        this.view = CapabilityFactories.view(TYPE, ioType, Set.of(OperationFacet.class, PresentationFacet.class));
     }
 
     @Override
@@ -64,6 +68,13 @@ public final class SmartInterfaceCapability implements MachineCapability, Operat
             return ignored -> failure("unsupported_request");
         }
         return CapabilityFactories.operation(this, request);
+    }
+
+    @Override
+    public List<CapabilityDisplay> displays(CapabilityView ignored) {
+        return storage.values().entrySet().stream()
+                .map(entry -> new CapabilityDisplay(entry.getKey(), Float.toString(entry.getValue()), "value", Optional.empty()))
+                .toList();
     }
 
     @Override

@@ -49,9 +49,9 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         this.kind = owner == null ? "combined_input_basic" : owner.kind().id();
         this.displayEntries = owner == null ? List.of() : new MachineIoView(owner.capabilitySnapshot()).displays();
         this.itemSlotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
-                : entryCount("item");
+                : owner.itemStorage().size();
         this.fluidTankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
-                : entryCount("mB");
+                : owner.fluidStorage().size();
         this.fluidTankLayouts = layouts(fluidTankCount);
         addItemSlots(owner);
         addPlayerSlots(playerInv);
@@ -105,7 +105,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
 
     public static void writeClientOpenData(FriendlyByteBuf buffer, CombinedPortBlockEntity owner) {
         writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(),
-                entryCount(owner, "item"), entryCount(owner, "mB"));
+                owner.itemStorage().size(), owner.fluidStorage().size());
     }
 
     public record FluidTankLayout(int slot, int x, int y) {
@@ -152,15 +152,6 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         itemEntries = nextItems;
         fluidEntries = nextFluids;
         displayEntries = new MachineIoView(port.capabilitySnapshot()).displays();
-    }
-
-    private int entryCount(String unit) {
-        return Math.toIntExact(displayEntries.stream().filter(entry -> entry.unit().equals(unit)).count());
-    }
-
-    private static int entryCount(IOPortBlockEntity port, String unit) {
-        return Math.toIntExact(new MachineIoView(port.capabilitySnapshot()).displays().stream()
-                .filter(entry -> entry.unit().equals(unit)).count());
     }
 
     private void addItemSlots(CombinedPortBlockEntity owner) {

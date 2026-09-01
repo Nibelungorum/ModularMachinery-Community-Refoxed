@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
@@ -46,12 +47,14 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
         clearTooltipEntries();
         if (!autoIOPage) graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         if (!autoIOPage && menu.energyCapacity() > 0) {
+            CapabilityDisplay display = menu.displayEntries().stream().findFirst()
+                    .orElse(new CapabilityDisplay("energy", "0", "FE", java.util.Optional.empty()));
             Component amount = Component.literal(ReadableNumber.format(menu.storedEnergy()) + " / "
-                    + ReadableNumber.format(menu.energyCapacity()) + " FE");
+                    + ReadableNumber.format(menu.energyCapacity()) + " " + display.unit());
             int x = leftPos + titleLabelX;
             int y = topPos + titleLabelY + 12;
             graphics.text(font, amount, titleLabelX, titleLabelY + 12, TITLE_COLOR, false);
-            addTooltip(x, y, font.width(amount), 10, tooltipLines(menu.storedEnergy(), menu.energyCapacity()));
+            addTooltip(x, y, font.width(amount), 10, tooltipLines(menu.storedEnergy(), menu.energyCapacity(), display.unit()));
         }
     }
 
@@ -70,8 +73,12 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
     }
 
     static List<Component> tooltipLines(long stored, long capacity) {
+        return tooltipLines(stored, capacity, "FE");
+    }
+
+    static List<Component> tooltipLines(long stored, long capacity, String unit) {
         return List.of(Component.literal(ReadableNumber.formatExact(stored) + " / "
-                + ReadableNumber.formatExact(capacity) + " FE"));
+                + ReadableNumber.formatExact(capacity) + " " + unit));
     }
 
     static int filledHeight(long stored, long capacity) {

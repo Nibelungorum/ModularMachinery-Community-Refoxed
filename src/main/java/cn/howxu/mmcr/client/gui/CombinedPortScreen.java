@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
@@ -130,6 +131,25 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
                     ? List.of(Component.literal("无"))
                     : ExtendedFluidScreen.tooltipLines(entry);
             addTooltip(leftPos + layout.x(), topPos + layout.y(), TANK_WIDTH, TANK_HEIGHT, tooltip);
+        }
+        renderCustomDisplays(graphics);
+    }
+
+    private void renderCustomDisplays(GuiGraphicsExtractor graphics) {
+        int y = CAPABILITY_SELECTOR_Y;
+        for (CapabilityDisplay display : menu.displayEntries()) {
+            if (display.label().equals("item") && display.unit().equals("item")
+                    || display.label().equals("fluid") && display.unit().equals("mB")) continue;
+            int x = CAPABILITY_SELECTOR_X;
+            if (display.icon().isPresent()) {
+                graphics.item(display.icon().get().stack(), x, y, y);
+                x += 18;
+            }
+            Component text = Component.literal(display.label() + ": " + display.value()
+                    + (display.unit().isEmpty() ? "" : " " + display.unit()));
+            graphics.text(font, text, x, y, 0x404040, false);
+            addTooltip(leftPos + x, topPos + y, font.width(text), 10, List.of(text));
+            y += 18;
         }
     }
 

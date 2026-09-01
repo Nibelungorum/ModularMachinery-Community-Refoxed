@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -9,6 +11,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
+
+import java.util.List;
+import java.util.Optional;
 
 public class EnergyHatchMenu extends AbstractMachineMenu {
 
@@ -63,6 +68,15 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
     public long energyCapacity() {
         EnergyHatchBlockEntity hatch = resolvedOwner();
         return hatch == null ? capacity.value() : energyCapacity(hatch);
+    }
+
+    /**
+     * Uses the capability presentation when a server owner is available and a
+     * data-slot-backed fallback after the client menu has opened.
+     */
+    public List<CapabilityDisplay> displayEntries() {
+        if (owner != null) return new MachineIoView(owner.capabilitySnapshot()).displays();
+        return List.of(new CapabilityDisplay("energy", Long.toString(storedEnergy()), "FE", Optional.empty()));
     }
 
     static long energyCapacity(EnergyHatchBlockEntity hatch) {

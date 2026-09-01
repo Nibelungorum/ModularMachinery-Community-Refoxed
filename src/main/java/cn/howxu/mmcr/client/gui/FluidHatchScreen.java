@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.util.IOType;
@@ -55,11 +56,13 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
         }
         if (menu.fluidCapacity() > 0) {
             int textY = titleLabelY + (fluid.isEmpty() ? 12 : 19);
+            CapabilityDisplay display = menu.displayEntries().stream().findFirst()
+                    .orElse(new CapabilityDisplay("fluid", "0", "mB", java.util.Optional.empty()));
             Component amount = Component.literal(ReadableNumber.format(menu.fluidAmount()) + " / "
-                    + ReadableNumber.format(menu.fluidCapacity()) + " mB");
+                    + ReadableNumber.format(menu.fluidCapacity()) + " " + display.unit());
             graphics.text(font, amount, titleLabelX, textY, TITLE_COLOR, false);
             addTooltip(leftPos + titleLabelX, topPos + textY, font.width(amount), 10,
-                    tooltipLines(menu.fluidAmount(), menu.fluidCapacity(), fluid.isEmpty() ? null : fluid.getHoverName()));
+                    tooltipLines(menu.fluidAmount(), menu.fluidCapacity(), fluid.isEmpty() ? null : fluid.getHoverName(), display.unit()));
         }
     }
 
@@ -79,11 +82,15 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
     }
 
     static List<Component> tooltipLines(long stored, long capacity, Component resourceName) {
+        return tooltipLines(stored, capacity, resourceName, "mB");
+    }
+
+    static List<Component> tooltipLines(long stored, long capacity, Component resourceName, String unit) {
         return resourceName == null
                 ? List.of(Component.literal(ReadableNumber.formatExact(stored) + " / "
-                        + ReadableNumber.formatExact(capacity) + " mB"))
+                        + ReadableNumber.formatExact(capacity) + " " + unit))
                 : List.of(resourceName, Component.literal(ReadableNumber.formatExact(stored) + " / "
-                        + ReadableNumber.formatExact(capacity) + " mB"));
+                        + ReadableNumber.formatExact(capacity) + " " + unit));
     }
 
     private FluidStack fluidStack() {

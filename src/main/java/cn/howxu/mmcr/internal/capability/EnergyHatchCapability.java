@@ -5,8 +5,10 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -22,6 +24,8 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -29,7 +33,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, OperationFacet, SyncFacet {
+public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final LongValueStorage storage;
@@ -45,7 +49,8 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(ScalarFacet.class, OperationFacet.class, SyncFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType,
+                Set.of(ScalarFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
     }
 
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
@@ -83,6 +88,11 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     @Override
     public CapabilityOperation prepare(CapabilityRequest request) {
         return CapabilityFactories.operation(this, request);
+    }
+
+    @Override
+    public List<CapabilityDisplay> displays(CapabilityView ignored) {
+        return List.of(new CapabilityDisplay("energy", Long.toString(storage.amount()), "FE", Optional.empty()));
     }
 
     @Override

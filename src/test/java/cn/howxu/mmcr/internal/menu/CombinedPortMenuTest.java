@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
-import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
-import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -15,9 +13,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -62,16 +57,16 @@ class CombinedPortMenuTest {
         CombinedPortMenu.writeClientOpenData(buffer, POS, "combined_input_reinforced", 12, 2);
         CombinedPortMenu clientMenu = CombinedPortMenu.clientOpen(1, emptyInventory(), buffer);
 
+        CombinedPortBlockEntity clientPort = new CombinedPortBlockEntity(
+                POS, ModBlocks.BLOCKS.get("combined_input_reinforced").get().defaultBlockState());
         clientMenu.applySnapshot(new PktPortStorageSyncPayload(POS,
-                "combined_input_reinforced",
-                List.of(new ItemStorageEntry(0, ItemResource.EMPTY, 0L, 64L)),
-                List.of(new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 9_000_000_000L, Long.MAX_VALUE),
-                        new FluidStorageEntry(1, FluidResource.EMPTY, 0L, Long.MAX_VALUE))));
+                "combined_input_reinforced", List.of()), clientPort);
 
         assertThat(clientMenu.owner()).isNull();
         assertThat(clientMenu.pos()).isEqualTo(POS);
-        assertThat(clientMenu.itemEntries()).hasSize(1);
+        assertThat(clientMenu.itemEntries()).hasSize(12);
         assertThat(clientMenu.fluidEntries()).hasSize(2);
+        assertThat(clientMenu.displayEntries()).hasSize(14);
         assertThat(clientMenu.slots).hasSize(12 + 36);
     }
 

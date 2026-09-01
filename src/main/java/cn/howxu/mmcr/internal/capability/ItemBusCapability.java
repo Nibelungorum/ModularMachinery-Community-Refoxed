@@ -6,10 +6,13 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -23,7 +26,9 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -31,7 +36,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ItemBusCapability implements MachineCapability, ResourceFacet<ItemResource>, OperationFacet, SyncFacet {
+public final class ItemBusCapability implements MachineCapability, ResourceFacet<ItemResource>, OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<ItemResource> storage;
@@ -47,7 +52,8 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType, Set.of(ResourceFacet.class, OperationFacet.class, SyncFacet.class));
+        this.view = CapabilityFactories.view(type(), ioType,
+                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
     }
 
     public ItemBusCapability(ItemBusBlockEntity port) {
@@ -99,6 +105,17 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     @Override
     public CapabilityOperation prepare(CapabilityRequest request) {
         return CapabilityFactories.operation(this, request);
+    }
+
+    @Override
+    public List<CapabilityDisplay> displays(CapabilityView ignored) {
+        return java.util.stream.IntStream.range(0, storage.size())
+                .mapToObj(slot -> {
+                    ItemResource resource = storage.resource(slot);
+                    return new CapabilityDisplay("item", Long.toString(storage.amount(slot)), "item",
+                            resource == null ? Optional.empty() : DisplayStack.optional(resource.toStack(1)));
+                })
+                .toList();
     }
 
     @Override
