@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -19,7 +20,8 @@ public final class SmartInterfaceRequirementHandler implements RequirementHandle
     public RequirementPlan plan(SmartInterfaceRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
         for (MachineCapability capability : capabilities) {
-            if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
+            ValueFacet<?> facet = capability.facet(ValueFacet.class).orElse(null);
+            if (facet == null || !(facet.storage() instanceof FloatValueStorage storage)) continue;
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
                 if (storage.value(requirement.interfaceType())
                         .filter(value -> value >= requirement.minValue() && value <= requirement.maxValue()).isPresent()) {

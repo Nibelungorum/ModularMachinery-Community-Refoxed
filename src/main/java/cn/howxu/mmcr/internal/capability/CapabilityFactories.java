@@ -6,7 +6,11 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.Set;
@@ -56,6 +60,37 @@ public final class CapabilityFactories {
         return capability.facet(OperationFacet.class)
                 .orElseThrow(() -> new IllegalStateException("Capability does not declare an operation facet"))
                 .prepareOperation(request);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <R> ResourceStorage<R> resourceStorage(MachineCapability capability, Class<R> resourceType) {
+        if (capability == null || resourceType == null) return null;
+        ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+        if (facet != null) {
+            return resourceType.equals(facet.resourceType()) ? (ResourceStorage<R>) facet.storage() : null;
+        }
+        ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
+        if (valueFacet == null || !(valueFacet.storage() instanceof ResourceStorage<?> storage)
+                || !resourceType.equals(storage.resourceType())) return null;
+        return (ResourceStorage<R>) storage;
+    }
+
+    public static ResourceStorage<?> resourceStorage(MachineCapability capability) {
+        if (capability == null) return null;
+        ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+        if (facet != null) return facet.storage();
+        ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
+        return valueFacet != null && valueFacet.storage() instanceof ResourceStorage<?> storage ? storage : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <S extends CapabilityStorage> S valueStorage(MachineCapability capability, Class<S> storageType) {
+        if (capability == null || storageType == null) return null;
+        ValueFacet<?> facet = capability.facet(ValueFacet.class).orElse(null);
+        if (facet != null && storageType.isInstance(facet.storage())) return (S) facet.storage();
+        ResourceFacet<?> resourceFacet = capability.facet(ResourceFacet.class).orElse(null);
+        if (resourceFacet == null || !storageType.isInstance(resourceFacet.storage())) return null;
+        return (S) resourceFacet.storage();
     }
 
 }

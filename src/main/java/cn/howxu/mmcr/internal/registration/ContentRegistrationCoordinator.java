@@ -103,6 +103,7 @@ public final class ContentRegistrationCoordinator {
         });
         MachineStructureRegistry.replaceStartup(structures);
         MachineDefinitions.freezeRegistryPhase();
+        PublicApiBootstrap.freeze();
         state = State.COMMITTED;
         testCommitCount++;
         lastStartupSnapshot = new StartupSnapshotForTesting(

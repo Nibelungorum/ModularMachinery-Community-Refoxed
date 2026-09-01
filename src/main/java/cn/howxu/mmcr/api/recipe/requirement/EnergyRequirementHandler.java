@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
@@ -140,7 +141,8 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
     private static boolean hasEnergyCapacity(List<MachineCapability> capabilities) {
         PlanningReservations reservations = new PlanningReservations();
         for (MachineCapability capability : capabilities) {
-            if (capability.storage() instanceof LongValueStorage storage
+            LongValueStorage storage = energyStorage(capability);
+            if (storage != null
                     && storage.transferLimit() > 0L
                     && reservations.valueAvailable(storage, true) > 0L) return true;
         }
@@ -153,7 +155,8 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         long required = RequirementHandlerSupport.scaled(perBatch, batches);
         long available = 0L;
         for (MachineCapability capability : capabilities) {
-            if (!(capability.storage() instanceof LongValueStorage storage)) continue;
+            LongValueStorage storage = energyStorage(capability);
+            if (storage == null) continue;
             long transferable = Math.min(reservations.valueAvailable(storage, insert),
                     RequirementHandlerSupport.scaled(storage.transferLimit(), batches));
             available = RequirementHandlerSupport.saturatingAdd(available, transferable);
@@ -168,7 +171,8 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         long remaining = amount;
         List<EnergyAction> actions = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
-            if (!(capability.storage() instanceof LongValueStorage storage)) continue;
+            LongValueStorage storage = energyStorage(capability);
+            if (storage == null) continue;
             long available = reservations.valueAvailable(storage, insert);
             long moved = Math.min(remaining, Math.min(available,
                     RequirementHandlerSupport.scaled(storage.transferLimit(), batches)));
@@ -178,6 +182,11 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             if (remaining == 0L) break;
         }
         return actions;
+    }
+
+    private static LongValueStorage energyStorage(MachineCapability capability) {
+        ValueFacet<?> facet = capability == null ? null : capability.facet(ValueFacet.class).orElse(null);
+        return facet != null && facet.storage() instanceof LongValueStorage storage ? storage : null;
     }
 
     private static long energyAmount(List<EnergyAction> actions) {

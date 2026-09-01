@@ -12,6 +12,8 @@ import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -441,7 +443,8 @@ class MachineIoPlanTest {
         }
     }
 
-    private record TestCapability(Object value, IOType ioType, List<String> tags) implements MachineCapability {
+    private record TestCapability(Object value, IOType ioType, List<String> tags)
+            implements MachineCapability, ValueFacet<CapabilityStorage> {
         private TestCapability {
             tags = List.copyOf(tags);
         }
@@ -467,6 +470,11 @@ class MachineIoPlanTest {
                 @Override
                 public List<String> tags() {
                     return TestCapability.this.tags();
+                }
+
+                @Override
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(ValueFacet.class);
                 }
             };
         }

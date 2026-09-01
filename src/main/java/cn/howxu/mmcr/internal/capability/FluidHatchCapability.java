@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -35,7 +36,8 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FluidHatchCapability implements MachineCapability, ResourceFacet<FluidResource>, OperationFacet, PresentationFacet, SyncFacet {
+public final class FluidHatchCapability implements MachineCapability, ResourceFacet<FluidResource>, TransferFacet,
+        OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final ResourceStorage<FluidResource> storage;
@@ -52,7 +54,8 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         this.ioType = ioType;
         this.storage = storage;
         this.view = CapabilityFactories.view(type(), ioType,
-                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+                Set.of(ResourceFacet.class, TransferFacet.class, OperationFacet.class, PresentationFacet.class,
+                        SyncFacet.class));
     }
 
     public FluidHatchCapability(FluidHatchBlockEntity port) {
@@ -77,7 +80,8 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         return port == null ? BlockPos.ZERO : port.getBlockPos();
     }
 
-    public int transferLimit() {
+    @Override
+    public long transferLimit() {
         return Integer.MAX_VALUE;
     }
 

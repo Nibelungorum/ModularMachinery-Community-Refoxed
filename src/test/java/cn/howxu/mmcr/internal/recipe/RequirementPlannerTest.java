@@ -35,6 +35,8 @@ import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
@@ -72,6 +74,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -1532,7 +1535,7 @@ class RequirementPlannerTest {
         }
     }
 
-    private static class TestCapability implements MachineCapability {
+    private static class TestCapability implements MachineCapability, ValueFacet<CapabilityStorage> {
         private final CapabilityType type;
         private final IOType ioType;
         private final int limit;
@@ -1590,6 +1593,11 @@ class RequirementPlannerTest {
                 public List<String> tags() {
                     return TestCapability.this.tags;
                 }
+
+                @Override
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(ValueFacet.class);
+                }
             };
         }
 
@@ -1620,7 +1628,7 @@ class RequirementPlannerTest {
         }
     }
 
-    private static class StorageCapability implements MachineCapability {
+    private static class StorageCapability implements MachineCapability, ValueFacet<CapabilityStorage> {
         private final CapabilityType type;
         private final IOType ioType;
         private final CapabilityStorage storage;
@@ -1665,6 +1673,11 @@ class RequirementPlannerTest {
                 @Override
                 public List<String> tags() {
                     return StorageCapability.this.tags;
+                }
+
+                @Override
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(ValueFacet.class);
                 }
             };
         }

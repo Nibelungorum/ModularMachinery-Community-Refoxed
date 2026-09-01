@@ -172,6 +172,17 @@ class PublicApiAdapterTest {
                 .hasMessageContaining("other_machine");
     }
 
+    @Test
+    void legacy_registration_adapter_rejects_unrepresentable_factory_settings() {
+        var definition = MachineBuilder.machine(MMCR.id("factory_registration"))
+                .factory(factory -> factory.hasFactory(true).threadLimit(2))
+                .build();
+
+        assertThatThrownBy(() -> PublicMachineAdapter.toRegistration(definition))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("factory settings");
+    }
+
     private static MachineStructureDefinition structureFor(net.minecraft.resources.Identifier machineId) {
         return MachineStructureBuilder.structure()
                 .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")

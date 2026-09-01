@@ -7,6 +7,9 @@ import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
+import cn.howxu.mmcr.api.capability.facet.SyncFacet;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
@@ -30,15 +33,18 @@ public final class BuiltinCapabilityDefinitions {
     public static void register() {
         CapabilityRegistry.register(new CapabilityDefinition(
                 ITEM_TYPE,
-                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class),
+                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                        TransferFacet.class),
                 BuiltinCapabilityDefinitions::createItem));
         CapabilityRegistry.register(new CapabilityDefinition(
                 FLUID_TYPE,
-                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class),
+                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                        TransferFacet.class),
                 BuiltinCapabilityDefinitions::createFluid));
         CapabilityRegistry.register(new CapabilityDefinition(
                 ENERGY_TYPE,
-                Set.of(ScalarFacet.class, OperationFacet.class, PresentationFacet.class),
+                Set.of(ScalarFacet.class, ValueFacet.class, SyncFacet.class, TransferFacet.class,
+                        OperationFacet.class, PresentationFacet.class),
                 BuiltinCapabilityDefinitions::createEnergy));
     }
 

@@ -3,8 +3,27 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
+import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
+import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
 import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
@@ -23,7 +42,9 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
+import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -38,6 +59,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -289,6 +311,88 @@ class PublicApiLifecycleTest {
     void public_readable_number_exposes_compact_and_exact_formats() {
         assertThat(ReadableNumber.formatCompact(1_000)).isEqualTo("1k");
         assertThat(ReadableNumber.formatExact(1_000_000L)).isEqualTo("1,000,000");
+    }
+
+    @Test
+    void built_in_capability_recipe_output_and_port_paths_are_registry_owned() {
+        PublicApiBootstrap.begin();
+
+        for (CapabilityDefinition definition : CapabilityRegistry.values()) {
+            assertThat(CapabilityRegistry.get(definition.type())).isSameAs(definition);
+            assertThat(definition.facets()).isNotEmpty();
+        }
+
+        RequirementHandlerRegistry.registerBuiltIns();
+        List<RequirementType<?>> requirements = List.of(ItemRequirement.TYPE, FluidRequirement.TYPE,
+                EnergyRequirement.TYPE, SmartInterfaceRequirement.TYPE);
+        for (RequirementType<?> type : requirements) {
+            assertThat(RequirementHandlerRegistry.typeFor(type.id())).isSameAs(type);
+            assertThat(RequirementHandlerRegistry.handlerFor(type)).isNotNull();
+            assertThat(type.syncCodec().maxPayloadSize())
+                    .isBetween(1, RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE);
+        }
+
+        OutputRegistry.registerBuiltIns();
+        List<OutputType<?>> outputs = List.of(MachineOutput.ItemOutput.TYPE, MachineOutput.FluidOutput.TYPE);
+        for (OutputType<?> type : outputs) {
+            assertThat(OutputRegistry.canonicalType(type)).isSameAs(type);
+            assertThat(type.syncCodec().maxPayloadSize())
+                    .isBetween(1, RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE);
+        }
+
+        assertThat(PortDefinitionRegistry.values()).isNotEmpty().allSatisfy(definition ->
+                definition.bindings().forEach(binding ->
+                        assertThat(CapabilityRegistry.get(binding.type())).isNotNull()));
+
+        List<MachineCapability> capabilities = List.of(
+                RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(14, 0, 0))
+                        .capabilitySnapshot().capabilities().getFirst(),
+                RuntimeTestFixtures.fluidInput(new net.minecraft.core.BlockPos(15, 0, 0))
+                        .capabilitySnapshot().capabilities().getFirst(),
+                RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(16, 0, 0))
+                        .capabilitySnapshot().capabilities().getFirst());
+        for (MachineCapability capability : capabilities) {
+            CapabilityDefinition definition = CapabilityRegistry.get(capability.type());
+            assertThat(definition).isNotNull();
+            assertThat(definition.facets()).containsAll(capability.view().facets());
+        }
+    }
+
+    @Test
+    void mutable_built_in_capability_facets_have_persistent_port_state() {
+        PublicApiBootstrap.begin();
+        List<CapabilitySnapshot> snapshots = List.of(
+                RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(10, 0, 0)).capabilitySnapshot(),
+                RuntimeTestFixtures.fluidInput(new net.minecraft.core.BlockPos(11, 0, 0)).capabilitySnapshot(),
+                RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(12, 0, 0)).capabilitySnapshot(),
+                new SmartInterfaceBlockEntity(new net.minecraft.core.BlockPos(13, 0, 0),
+                        Blocks.AIR.defaultBlockState()).capabilitySnapshot());
+
+        for (CapabilitySnapshot snapshot : snapshots) {
+            for (MachineCapability capability : snapshot.capabilities()) {
+                ValueFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+                if (facet == null) facet = capability.facet(ValueFacet.class).orElse(null);
+                if (facet == null) continue;
+                assertThat(facet.isStateless() || !snapshot.facets(PersistenceFacet.class).isEmpty())
+                        .as(capability.type().id().toString())
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
+    void capability_registry_rejects_registration_after_runtime_snapshot_creation() {
+        StartupContentRegistration.registerForTesting();
+
+        CapabilitySnapshot snapshot = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(14, 0, 0))
+                .capabilitySnapshot();
+
+        assertThatThrownBy(() -> CapabilityRegistry.register(new CapabilityDefinition(
+                new CapabilityType(id("late_capability")), Set.of(), ignored -> null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("frozen");
+
+        assertThat(snapshot.capabilities().getFirst().facet(ResourceFacet.class)).isPresent();
     }
 
     private static MachineDefinition machine(String path) {

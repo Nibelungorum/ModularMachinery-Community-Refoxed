@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -33,7 +35,8 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, OperationFacet, PresentationFacet, SyncFacet {
+public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, ValueFacet<LongValueStorage>,
+        TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final LongValueStorage storage;
@@ -50,7 +53,8 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         this.ioType = ioType;
         this.storage = storage;
         this.view = CapabilityFactories.view(type(), ioType,
-                Set.of(ScalarFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+                Set.of(ScalarFacet.class, ValueFacet.class, TransferFacet.class, OperationFacet.class,
+                        PresentationFacet.class, SyncFacet.class));
     }
 
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
@@ -68,6 +72,11 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
     public BlockPos position() {
         return port == null ? BlockPos.ZERO : port.getBlockPos();
+    }
+
+    @Override
+    public long transferLimit() {
+        return storage.transferLimit();
     }
 
     @Override

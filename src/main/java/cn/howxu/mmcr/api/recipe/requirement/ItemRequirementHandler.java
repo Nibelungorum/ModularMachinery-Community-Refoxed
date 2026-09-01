@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
@@ -10,7 +11,6 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
@@ -154,7 +154,8 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                 if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 long slotCapacity = storage.capacityResource(slot, resource);
-                if (!(capability instanceof ItemBusCapability itemBus) || !itemBus.supportsLargeStacks()) {
+                ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+                if (facet == null || !facet.supportsLargeStacks()) {
                     slotCapacity = Math.min(slotCapacity, stack.getMaxStackSize());
                 }
                 capacity = RequirementHandlerSupport.saturatingAdd(capacity,
@@ -207,7 +208,8 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                             && !resource.equals(requestedResource)) continue;
                     if (!storage.isValidResource(slot, requestedResource)) continue;
                     long capacity = storage.capacityResource(slot, requestedResource);
-                    if (!(capability instanceof ItemBusCapability itemBus) || !itemBus.supportsLargeStacks()) {
+                    ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+                    if (facet == null || !facet.supportsLargeStacks()) {
                         capacity = Math.min(capacity, stackLimit);
                     }
                     long moved = Math.min(remaining, Math.max(0L, capacity - currentAmount));

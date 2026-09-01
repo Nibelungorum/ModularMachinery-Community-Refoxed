@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
@@ -53,7 +55,11 @@ final class RequirementHandlerSupport {
     }
 
     static ResourceStorage<?> resourceStorage(MachineCapability capability, Class<?> resourceType) {
-        return capability.storage() instanceof ResourceStorage<?> storage
+        if (capability == null) return null;
+        ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+        if (facet != null) return facet.resourceType().equals(resourceType) ? facet.storage() : null;
+        ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
+        return valueFacet != null && valueFacet.storage() instanceof ResourceStorage<?> storage
                 && storage.resourceType().equals(resourceType) ? storage : null;
     }
 

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.capability;
 
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.util.IOType;
@@ -30,7 +31,8 @@ public interface MachineCapability {
      */
     default <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         Objects.requireNonNull(facetType, "facetType");
-        if (!view().facets().contains(facetType) || !facetType.isInstance(this)) return Optional.empty();
+        boolean declared = view().facets().stream().anyMatch(facetType::isAssignableFrom);
+        if (!declared || !facetType.isInstance(this)) return Optional.empty();
         return Optional.of(facetType.cast(this));
     }
 
@@ -38,13 +40,16 @@ public interface MachineCapability {
      * Returns the capability's backing storage protocol for requirement handlers.
      *
      * @return the backing storage, or {@code null} for non-storage capabilities
-     * @deprecated use the typed facet contract instead
+     * @deprecated compatibility boundary for pre-facet consumers; use a declared
+     * typed facet such as {@code ResourceFacet} or {@code ValueFacet} instead
      */
     @Deprecated
     default CapabilityStorage storage() {
-        return facet(ResourceFacet.class)
+        CapabilityStorage resourceStorage = facet(ResourceFacet.class)
                 .map(ResourceFacet::storage)
                 .orElse(null);
+        if (resourceStorage != null) return resourceStorage;
+        return facet(ValueFacet.class).map(ValueFacet::storage).orElse(null);
     }
 
     CapabilityOperation prepare(CapabilityRequest request);

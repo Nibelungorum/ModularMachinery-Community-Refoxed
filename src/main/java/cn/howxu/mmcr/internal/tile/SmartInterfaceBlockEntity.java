@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.compat.kubejs.SmartInterfaceEvents;
 import cn.howxu.mmcr.compat.kubejs.SmartInterfaceUpdateEventJS;
@@ -58,7 +59,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
 
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
-        return new CapabilitySnapshot(List.of(inputCapability, outputCapability));
+        return new CapabilitySnapshot(List.of(inputCapability, outputCapability), List.of(new StatePersistenceFacet()));
     }
 
     public Set<BlockPos> controllerPositions() {
@@ -157,6 +158,11 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        capabilitySnapshot().facets(PersistenceFacet.class)
+                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    }
+
+    private void saveState(ValueOutput output) {
         if (machineId != null) output.putString(MACHINE_ID_KEY, machineId.toString());
         ValueOutput.TypedOutputList<ValueEntry> serializedValues = output.list(VALUES_KEY, ValueEntry.CODEC);
         values.forEach((type, value) -> serializedValues.add(new ValueEntry(type, value)));
@@ -167,6 +173,10 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
+        input.child("state").ifPresentOrElse(this::loadState, () -> loadState(input));
+    }
+
+    private void loadState(ValueInput input) {
         machineId = input.getString(MACHINE_ID_KEY).map(Identifier::parse).orElse(null);
         values.clear();
         controllers.clear();
@@ -220,6 +230,23 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
             if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
                 controller.onSmartInterfaceValueChanged();
             }
+        }
+    }
+
+    private final class StatePersistenceFacet implements PersistenceFacet {
+        @Override
+        public String stateKey() {
+            return "state";
+        }
+
+        @Override
+        public void save(ValueOutput output) {
+            saveState(output);
+        }
+
+        @Override
+        public void load(ValueInput input) {
+            loadState(input);
         }
     }
 

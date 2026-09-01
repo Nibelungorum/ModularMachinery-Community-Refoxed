@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
@@ -163,12 +164,13 @@ public final class ComponentRuntime {
         if (cachedCapabilityPresentationEpoch == capabilityPresentationEpoch) return cachedCapabilityPresentations;
         List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(capabilities.size());
         for (MachineCapability capability : capabilities) {
-            CapabilityStorage storage = capability.storage();
-            if (storage instanceof LongValueStorage value) {
+            LongValueStorage value = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
+            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
+            if (value != null) {
                 snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
                         capability.type() == null ? null : capability.type().id(), capability.ioType(),
                         value.amount(), value.capacity(), List.of()));
-            } else if (storage instanceof ResourceStorage<?> resourceStorage) {
+            } else if (resourceStorage != null) {
                 snapshots.add(resourcePresentation(capability, resourceStorage));
             } else {
                 snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
@@ -516,10 +518,12 @@ public final class ComponentRuntime {
         FluidStack primaryFluid = FluidStack.EMPTY;
         FluidStack primaryOutputFluid = FluidStack.EMPTY;
         for (MachineCapability capability : capabilities) {
-            if (capability.storage() instanceof LongValueStorage energy) {
+            LongValueStorage energy = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
+            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
+            if (energy != null) {
                 storedEnergy = saturatedAdd(storedEnergy, energy.amount());
                 energyCapacity = saturatedAdd(energyCapacity, energy.capacity());
-            } else if (capability.storage() instanceof ResourceStorage<?> resourceStorage
+            } else if (resourceStorage != null
                     && resourceStorage.resourceType() == FluidResource.class) {
                 for (int slot = 0; slot < resourceStorage.size(); slot++) {
                     Object resource = resourceStorage.resource(slot);
@@ -544,9 +548,9 @@ public final class ComponentRuntime {
     private record CapabilityState(List<MachineCapability> capabilities, List<CapabilityIdentity> identity) { }
 
     private record CapabilityIdentity(BlockPos componentPos, Identifier type, IOType ioType, List<String> tags,
-                                      String storageType, Object storageIdentity) {
+        String storageType, Object storageIdentity) {
         private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability) {
-            CapabilityStorage storage = capability.storage();
+            CapabilityStorage storage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);
             return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), capability.ioType(),
                     List.copyOf(capability.view().tags()), storage == null ? "" : storage.getClass().getName(),
                     storageIdentity(storage));

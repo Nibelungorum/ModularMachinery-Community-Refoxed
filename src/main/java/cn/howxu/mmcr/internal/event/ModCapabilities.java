@@ -2,19 +2,14 @@ package cn.howxu.mmcr.internal.event;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityAdapter;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
-import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
-import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -45,7 +40,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
 
 public final class ModCapabilities {
     public static final BlockCapability<ResourceHandler<ItemResource>, Direction> ITEM_BLOCK =
@@ -54,15 +48,6 @@ public final class ModCapabilities {
             Capabilities.Fluid.BLOCK;
     public static final BlockCapability<EnergyHandler, Direction> ENERGY_BLOCK =
             Capabilities.Energy.BLOCK;
-    private static final CapabilityType ITEM_TYPE = BuiltinCapabilityDefinitions.ITEM_TYPE;
-    private static final CapabilityType FLUID_TYPE = BuiltinCapabilityDefinitions.FLUID_TYPE;
-    private static final CapabilityType ENERGY_TYPE = BuiltinCapabilityDefinitions.ENERGY_TYPE;
-    private static final Map<Identifier, BiConsumer<RegisterCapabilitiesEvent, IOPortKind>> NATIVE_REGISTRATIONS =
-            Map.of(
-                    PortFamilyIds.ITEM, ModCapabilities::registerItemPort,
-                    PortFamilyIds.FLUID, ModCapabilities::registerFluidPort,
-                    PortFamilyIds.ENERGY, ModCapabilities::registerEnergyPort);
-
     private static boolean externalAdaptersInitialized;
 
     private ModCapabilities() {}
@@ -103,7 +88,7 @@ public final class ModCapabilities {
 
     private static List<IOPortKind> nativeCapabilityPorts() {
         return PortKinds.all().stream()
-                .filter(kind -> !kind.families().isEmpty() || !externalBindings(kind).isEmpty())
+                .filter(kind -> !kind.definition().bindings().isEmpty())
                 .toList();
     }
 
@@ -117,12 +102,10 @@ public final class ModCapabilities {
         for (CapabilityBinding binding : externalBindings) {
             context.bindings(binding.type()).forEach(exposure -> registerExternalPort(event, kind, binding, exposure));
         }
-        kind.families().stream()
-                .filter(family -> !externallyExposed.contains(new CapabilityType(family.familyId())))
-                .map(PortFamilyDescriptor::familyId)
-                .map(NATIVE_REGISTRATIONS::get)
-                .filter(registration -> registration != null)
-                .forEach(registration -> registration.accept(event, kind));
+        List<CapabilityBinding> nativeBindings = kind.definition().bindings().stream()
+                .filter(binding -> !externallyExposed.contains(binding.type()))
+                .toList();
+        if (!nativeBindings.isEmpty()) registerFacetProviders(event, kind, nativeBindings);
     }
 
     static List<CapabilityBinding> externalBindings(IOPortKind kind) {
@@ -180,51 +163,81 @@ public final class ModCapabilities {
         }
     }
 
-    private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+    private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                         List<CapabilityBinding> bindings) {
         boolean canInsert = kind.ioType() == IOType.INPUT;
         event.registerBlockEntity(
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port) || !port.isAutoIOSideExposed(ITEM_TYPE, side)) return null;
-                    MachineCapability capability = port.capability(ITEM_TYPE);
-                    if (!(capability instanceof ItemBusCapability item)) return null;
+                    if (!(be instanceof IOPortBlockEntity port)
+                            || port.ioType() != kind.ioType()) return null;
+                    ResourceStorage<ItemResource> storage = resourceStorage(port, bindings, side, ItemResource.class);
+                    if (storage == null) return null;
                     if (be instanceof ItemBusBlockEntity ib) {
                         return new ItemStackResourceHandler(ib.getItemStackHandler(side), canInsert, true);
                     }
-                    return resourceStorageHandler(item.storage(), canInsert, true);
+                    return resourceStorageHandler(storage, canInsert, true);
                 });
     }
 
-    private static void registerFluidPort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+    private static void registerFluidPort(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                          List<CapabilityBinding> bindings) {
         boolean canInsert = kind.ioType() == IOType.INPUT;
         event.registerBlockEntity(
                 FLUID_BLOCK,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port) || !port.isAutoIOSideExposed(FLUID_TYPE, side)) return null;
-                    MachineCapability capability = port.capability(FLUID_TYPE);
-                    if (capability == null || !(capability.storage() instanceof ResourceStorage<?> storage)) return null;
-                    return resourceStorageHandler(fluidStorage(storage), canInsert, !canInsert);
+                    if (!(be instanceof IOPortBlockEntity port)
+                            || port.ioType() != kind.ioType()) return null;
+                    ResourceStorage<FluidResource> storage = resourceStorage(port, bindings, side, FluidResource.class);
+                    if (storage == null) return null;
+                    return resourceStorageHandler(storage, canInsert, !canInsert);
                 });
     }
 
-    private static void registerEnergyPort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+    private static void registerEnergyPort(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                           List<CapabilityBinding> bindings) {
         boolean canInsert = kind.ioType() == IOType.INPUT;
         event.registerBlockEntity(
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port) || !port.isAutoIOSideExposed(ENERGY_TYPE, side)) return null;
-                    MachineCapability capability = port.capability(ENERGY_TYPE);
-                    if (!(capability instanceof EnergyHatchCapability energy)) return null;
-                    return new DirectionalEnergyHandler(new EnergyHandlerAdapter(energy.storage()), canInsert, !canInsert);
+                    if (!(be instanceof IOPortBlockEntity port)
+                            || port.ioType() != kind.ioType()) return null;
+                    LongValueStorage storage = valueStorage(port, bindings, side);
+                    if (storage == null) return null;
+                    return new DirectionalEnergyHandler(new EnergyHandlerAdapter(storage), canInsert, !canInsert);
                 });
     }
 
-    @SuppressWarnings("unchecked")
-    private static ResourceStorage<FluidResource> fluidStorage(ResourceStorage<?> storage) {
-        return (ResourceStorage<FluidResource>) storage;
+    /** Registers NeoForge providers that discover their compatible storage through each binding's facets. */
+    private static void registerFacetProviders(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                               List<CapabilityBinding> bindings) {
+        registerItemPort(event, kind, bindings);
+        registerFluidPort(event, kind, bindings);
+        registerEnergyPort(event, kind, bindings);
+    }
+
+    private static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
+                                                            List<CapabilityBinding> bindings, Direction side,
+                                                            Class<R> resourceType) {
+        for (CapabilityBinding binding : bindings) {
+            if (!port.isAutoIOSideExposed(binding.type(), side)) continue;
+            ResourceStorage<R> storage = CapabilityFactories.resourceStorage(port.capability(binding.type()), resourceType);
+            if (storage != null) return storage;
+        }
+        return null;
+    }
+
+    private static LongValueStorage valueStorage(IOPortBlockEntity port, List<CapabilityBinding> bindings,
+                                                 Direction side) {
+        for (CapabilityBinding binding : bindings) {
+            if (!port.isAutoIOSideExposed(binding.type(), side)) continue;
+            LongValueStorage storage = CapabilityFactories.valueStorage(port.capability(binding.type()), LongValueStorage.class);
+            if (storage != null) return storage;
+        }
+        return null;
     }
 
     private static <R extends Resource> ResourceHandler<R> resourceStorageHandler(ResourceStorage<R> storage,

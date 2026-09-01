@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
@@ -115,15 +116,17 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     private void notifyAvailabilityChanges() {
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-            Object resource = capability.storage() instanceof LongValueStorage ? capability.type() : null;
+            LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
+            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
+            Object resource = valueStorage == null ? null : capability.type();
             List<Object> resources = new ArrayList<>();
             List<SlotAvailability> slots = new ArrayList<>();
             if (resource != null) resources.add(resource);
             long amount = 0L;
-            if (capability.storage() instanceof LongValueStorage valueStorage) {
+            if (valueStorage != null) {
                 amount = valueStorage.amount();
                 slots.add(new SlotAvailability(resource, amount));
-            } else if (capability.storage() instanceof ResourceStorage<?> resourceStorage) {
+            } else if (resourceStorage != null) {
                 for (int slot = 0; slot < resourceStorage.size(); slot++) {
                     long slotAmount = resourceStorage.amount(slot);
                     amount += slotAmount;
@@ -141,7 +144,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
             boolean resourceChanged = previous != null && !resources.equals(previousResources);
             if (amount > previousAmount && ioType() == IOType.INPUT) {
-                ResourceAvailabilityNotifier.Reason reason = capability.storage() instanceof LongValueStorage
+                ResourceAvailabilityNotifier.Reason reason = valueStorage != null
                                 ? ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE
                                 : ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE;
                 for (Object available : resources) notifyControllers(reason, available);

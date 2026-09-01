@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -12,6 +11,7 @@ import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
@@ -607,9 +607,9 @@ public final class FactoryRuntime {
         Set<Item> items = new LinkedHashSet<>();
         boolean supported = false;
         for (MachineCapability capability : controller.componentRuntime().capabilities()) {
-            if (capability == null || capability.ioType() != IOType.INPUT
-                    || !(capability.storage() instanceof ResourceStorage<?> storage)
-                    || storage.resourceType() != ItemResource.class) continue;
+            if (capability == null || capability.ioType() != IOType.INPUT) continue;
+            var storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
+            if (storage == null) continue;
             supported = true;
             for (int slot = 0; slot < storage.size(); slot++) {
                 Object resource = storage.resource(slot);

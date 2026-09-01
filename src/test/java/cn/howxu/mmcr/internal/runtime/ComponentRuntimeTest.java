@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -438,7 +440,8 @@ class ComponentRuntimeTest {
         }
     }
 
-    private record TestCapability(String id, CapabilityStorage storage) implements MachineCapability {
+    private record TestCapability(String id, CapabilityStorage storage)
+            implements MachineCapability, ValueFacet<CapabilityStorage> {
         private TestCapability(String id) {
             this(id, null);
         }
@@ -469,6 +472,11 @@ class ComponentRuntimeTest {
                 @Override
                 public IOType ioType() {
                     return TestCapability.this.ioType();
+                }
+
+                @Override
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(ValueFacet.class);
                 }
             };
         }

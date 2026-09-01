@@ -2,12 +2,14 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
+import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -105,7 +107,8 @@ public final class MachineIoView {
     public long energyInput() {
         long amount = 0L;
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
-            if (capability.storage() instanceof LongValueStorage storage) {
+            LongValueStorage storage = valueStorage(capability, LongValueStorage.class);
+            if (storage != null) {
                 amount = saturatedAdd(amount, Math.max(0L, storage.amount()));
             }
         }
@@ -149,7 +152,8 @@ public final class MachineIoView {
                 if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
                 if (!storage.isValidResource(slot, resource)) continue;
                 long slotCapacity = storage.capacityResource(slot, resource);
-                if (!(capability instanceof ItemBusCapability itemBus) || !itemBus.supportsLargeStacks()) {
+                ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+                if (facet == null || !facet.supportsLargeStacks()) {
                     slotCapacity = Math.min(slotCapacity, resource.getMaxStackSize());
                 }
                 capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - amount));
@@ -180,7 +184,8 @@ public final class MachineIoView {
     public long energyOutputCapacity() {
         long capacity = 0L;
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
-            if (capability.storage() instanceof LongValueStorage storage) {
+            LongValueStorage storage = valueStorage(capability, LongValueStorage.class);
+            if (storage != null) {
                 capacity = saturatedAdd(capacity, Math.max(0L, storage.capacity() - storage.amount()));
             }
         }
@@ -190,7 +195,8 @@ public final class MachineIoView {
     public Optional<Float> smartInterfaceValue(String name) {
         if (name == null) return Optional.empty();
         for (MachineCapability capability : snapshot.capabilities()) {
-            if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
+            FloatValueStorage storage = valueStorage(capability, FloatValueStorage.class);
+            if (storage == null) continue;
             Optional<Float> value = storage.value(name);
             if (value.isPresent()) return value;
         }
@@ -201,7 +207,8 @@ public final class MachineIoView {
         Map<String, Float> values = new LinkedHashMap<>();
         Set<FloatValueStorage> seenStorages = Collections.newSetFromMap(new IdentityHashMap<>());
         for (MachineCapability capability : snapshot.capabilities()) {
-            if (!(capability.storage() instanceof FloatValueStorage storage)) continue;
+            FloatValueStorage storage = valueStorage(capability, FloatValueStorage.class);
+            if (storage == null) continue;
             if (!seenStorages.add(storage)) continue;
             storage.values().forEach(values::putIfAbsent);
         }
@@ -215,8 +222,19 @@ public final class MachineIoView {
     }
 
     private static ResourceStorage<?> resourceStorage(MachineCapability capability, Class<?> resourceType) {
-        return capability.storage() instanceof ResourceStorage<?> storage
+        ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+        if (facet != null) return facet.resourceType().equals(resourceType) ? facet.storage() : null;
+        ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
+        return valueFacet != null && valueFacet.storage() instanceof ResourceStorage<?> storage
                 && storage.resourceType().equals(resourceType) ? storage : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <S extends CapabilityStorage> S valueStorage(
+            MachineCapability capability, Class<S> storageType) {
+        ValueFacet<?> facet = capability == null ? null : capability.facet(ValueFacet.class).orElse(null);
+        return facet != null && storageType.isInstance(facet.storage())
+                ? (S) facet.storage() : null;
     }
 
     private static <R> List<ResourceAmount<R>> resourceAmounts(Map<R, Long> amounts) {

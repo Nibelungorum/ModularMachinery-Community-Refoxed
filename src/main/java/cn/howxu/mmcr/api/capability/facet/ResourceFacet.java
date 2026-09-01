@@ -8,8 +8,15 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
  * @param <R> resource type
  * @author howxu <dev@howxu.cn>
  */
-public interface ResourceFacet<R> extends CapabilityFacet {
+public interface ResourceFacet<R> extends ValueFacet<ResourceStorage<R>> {
     Class<R> resourceType();
 
     ResourceStorage<R> storage();
+
+    /**
+     * Returns whether item-like resources may exceed their ordinary stack size in this storage.
+     */
+    default boolean supportsLargeStacks() {
+        return false;
+    }
 }

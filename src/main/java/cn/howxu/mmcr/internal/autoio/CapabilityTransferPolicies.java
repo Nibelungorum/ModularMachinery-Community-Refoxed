@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -11,9 +12,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
-import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
-import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.util.IOType;
@@ -76,9 +75,9 @@ public final class CapabilityTransferPolicies {
     private static final class ItemPolicy implements TransferPolicy {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            if (!(capability instanceof ItemBusCapability item)) return false;
-            ResourceStorage<ItemResource> storage = item.storage();
-            if (item.ioType() == IOType.OUTPUT) {
+            ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
+            if (storage == null) return false;
+            if (capability.ioType() == IOType.OUTPUT) {
                 for (int slot = 0; slot < storage.size(); slot++) {
                     if (storage.amount(slot) > 0L) return true;
                 }
@@ -99,22 +98,23 @@ public final class CapabilityTransferPolicies {
         @Override
         public TransferResult transfer(TransferContext context) {
             MachineCapability capability = context.capability();
-            if (!(capability instanceof ItemBusCapability item)) return blocked("unsupported_capability");
-            if (context.eject() ? !hasStoredContents(item) : !hasWork(item)) return blocked("no_work");
-            ResourceHandler<ItemResource> adjacent = adjacentItem(item, context.side());
+            ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
+            TransferFacet transfer = transferFacet(capability);
+            if (storage == null || transfer == null) return blocked("unsupported_capability");
+            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) return blocked("no_work");
+            ResourceHandler<ItemResource> adjacent = adjacentItem(capability, context.side());
             if (adjacent == null) return blocked("no_target");
-            ResourceHandler<ItemResource> internal = resourceHandler(item.storage());
-            int limit = item.transferLimit();
+            ResourceHandler<ItemResource> internal = resourceHandler(storage);
+            int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
                     ? moveResource(internal, adjacent, limit, context)
-                    : item.ioType() == IOType.INPUT
+                    : capability.ioType() == IOType.INPUT
                     ? moveResource(adjacent, internal, limit, context)
                     : moveResource(internal, adjacent, limit, context);
             return TransferResult.moved(moved);
         }
 
-        private static boolean hasStoredContents(ItemBusCapability item) {
-            ResourceStorage<ItemResource> storage = item.storage();
+        private static boolean hasStoredContents(ResourceStorage<ItemResource> storage) {
             for (int slot = 0; slot < storage.size(); slot++) {
                 if (storage.amount(slot) > 0L) return true;
             }
@@ -122,17 +122,19 @@ public final class CapabilityTransferPolicies {
         }
 
         private static ResourceHandler<ItemResource> adjacentItem(MachineCapability capability, Direction side) {
-            if (!(capability instanceof ItemBusCapability item) || !canWork(item.level(), side)) return null;
-            return item.level().getCapability(ModCapabilities.ITEM_BLOCK, adjacent(item.position(), side), side.getOpposite());
+            TransferFacet transfer = transferFacet(capability);
+            if (transfer == null || !canWork(transfer.level(), side)) return null;
+            return transfer.level().getCapability(ModCapabilities.ITEM_BLOCK,
+                    adjacent(transfer.position(), side), side.getOpposite());
         }
     }
 
     private static final class FluidPolicy implements TransferPolicy {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            if (!(capability instanceof FluidHatchCapability fluid)) return false;
-            ResourceStorage<FluidResource> storage = fluid.storage();
-            if (fluid.ioType() == IOType.OUTPUT) return hasStoredContents(storage);
+            ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
+            if (storage == null) return false;
+            if (capability.ioType() == IOType.OUTPUT) return hasStoredContents(storage);
             for (int slot = 0; slot < storage.size(); slot++) {
                 FluidResource resource = storage.resource(slot);
                 if (storage.amount(slot) < storage.capacity(slot, isEmpty(resource) ? null : resource)) return true;
@@ -148,15 +150,17 @@ public final class CapabilityTransferPolicies {
         @Override
         public TransferResult transfer(TransferContext context) {
             MachineCapability capability = context.capability();
-            if (!(capability instanceof FluidHatchCapability fluid)) return blocked("unsupported_capability");
-            if (context.eject() ? !hasStoredContents(fluid.storage()) : !hasWork(fluid)) return blocked("no_work");
-            ResourceHandler<FluidResource> adjacent = adjacentFluid(fluid, context.side());
+            ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
+            TransferFacet transfer = transferFacet(capability);
+            if (storage == null || transfer == null) return blocked("unsupported_capability");
+            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) return blocked("no_work");
+            ResourceHandler<FluidResource> adjacent = adjacentFluid(capability, context.side());
             if (adjacent == null) return blocked("no_target");
-            ResourceHandler<FluidResource> internal = resourceHandler(fluid.storage());
-            int limit = fluid.transferLimit();
+            ResourceHandler<FluidResource> internal = resourceHandler(storage);
+            int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
                     ? moveResource(internal, adjacent, limit, context)
-                    : fluid.ioType() == IOType.INPUT
+                    : capability.ioType() == IOType.INPUT
                     ? moveResource(adjacent, internal, limit, context)
                     : moveResource(internal, adjacent, limit, context);
             return TransferResult.moved(moved);
@@ -170,17 +174,19 @@ public final class CapabilityTransferPolicies {
         }
 
         private static ResourceHandler<FluidResource> adjacentFluid(MachineCapability capability, Direction side) {
-            if (!(capability instanceof FluidHatchCapability fluid) || !canWork(fluid.level(), side)) return null;
-            return fluid.level().getCapability(ModCapabilities.FLUID_BLOCK, adjacent(fluid.position(), side), side.getOpposite());
+            TransferFacet transfer = transferFacet(capability);
+            if (transfer == null || !canWork(transfer.level(), side)) return null;
+            return transfer.level().getCapability(ModCapabilities.FLUID_BLOCK,
+                    adjacent(transfer.position(), side), side.getOpposite());
         }
     }
 
     private static final class EnergyPolicy implements TransferPolicy {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            if (!(capability instanceof EnergyHatchCapability energy)) return false;
-            LongValueStorage storage = energy.storage();
-            return energy.ioType() == IOType.OUTPUT
+            LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
+            if (storage == null) return false;
+            return capability.ioType() == IOType.OUTPUT
                     ? storage.amount() > 0L
                     : storage.amount() < storage.capacity();
         }
@@ -193,24 +199,32 @@ public final class CapabilityTransferPolicies {
         @Override
         public TransferResult transfer(TransferContext context) {
             MachineCapability capability = context.capability();
-            if (!(capability instanceof EnergyHatchCapability energy)) return blocked("unsupported_capability");
-            if (context.eject() ? energy.storage().amount() <= 0L : !hasWork(energy)) return blocked("no_work");
-            EnergyHandler adjacent = adjacentEnergy(energy, context.side());
+            LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
+            TransferFacet transfer = transferFacet(capability);
+            if (storage == null || transfer == null) return blocked("unsupported_capability");
+            if (context.eject() ? storage.amount() <= 0L : !hasWork(capability)) return blocked("no_work");
+            EnergyHandler adjacent = adjacentEnergy(capability, context.side());
             if (adjacent == null) return blocked("no_target");
-            EnergyHandler internal = energyHandler(energy.storage());
-            long limit = energy.storage().transferLimit();
+            EnergyHandler internal = energyHandler(storage, transfer.transferLimit());
+            long limit = transfer.transferLimit();
             long moved = context.eject()
                     ? moveEnergy(internal, adjacent, limit, context)
-                    : energy.ioType() == IOType.INPUT
+                    : capability.ioType() == IOType.INPUT
                     ? moveEnergy(adjacent, internal, limit, context)
                     : moveEnergy(internal, adjacent, limit, context);
             return TransferResult.moved(moved);
         }
 
         private static EnergyHandler adjacentEnergy(MachineCapability capability, Direction side) {
-            if (!(capability instanceof EnergyHatchCapability energy) || !canWork(energy.level(), side)) return null;
-            return energy.level().getCapability(ModCapabilities.ENERGY_BLOCK, adjacent(energy.position(), side), side.getOpposite());
+            TransferFacet transfer = transferFacet(capability);
+            if (transfer == null || !canWork(transfer.level(), side)) return null;
+            return transfer.level().getCapability(ModCapabilities.ENERGY_BLOCK,
+                    adjacent(transfer.position(), side), side.getOpposite());
         }
+    }
+
+    private static TransferFacet transferFacet(MachineCapability capability) {
+        return capability == null ? null : capability.facet(TransferFacet.class).orElse(null);
     }
 
     private static <R extends Resource> long moveResource(ResourceHandler<R> from, ResourceHandler<R> to,
@@ -256,11 +270,11 @@ public final class CapabilityTransferPolicies {
         throw new IllegalArgumentException("Missing empty resource for " + resourceType.getName());
     }
 
-    private static EnergyHandler energyHandler(LongValueStorage storage) {
+    private static EnergyHandler energyHandler(LongValueStorage storage, long transferLimit) {
         return new LongEnergyHandler() {
             @Override public long getAmountAsLong() { return storage.amount(); }
             @Override public long getCapacityAsLong() { return storage.capacity(); }
-            @Override public long getTransferLimit() { return storage.transferLimit(); }
+            @Override public long getTransferLimit() { return transferLimit; }
             @Override public int insert(int amount, TransactionContext transaction) {
                 return (int) storage.insert(amount, transaction);
             }
