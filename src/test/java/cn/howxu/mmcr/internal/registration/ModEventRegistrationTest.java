@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -163,6 +164,12 @@ class ModEventRegistrationTest {
         assertThat(dispatcher.getRoot().getChild("mmcr").getChildren())
                 .extracting(command -> command.getName())
                 .contains("reload", "build", "export");
+    }
+
+    @Test
+    void production_capability_handler_uses_the_external_adapter_registry() {
+        assertThat(ExternalCapabilityRegistry.global()).isNotNull();
+        assertThat(ModEventRegistration.EventHandlers.production().capabilities()).isNotNull();
     }
 
     @Test

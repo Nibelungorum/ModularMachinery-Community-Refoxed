@@ -1,7 +1,11 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityAdapter;
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -59,11 +63,23 @@ public final class ModCapabilities {
                     PortFamilyIds.FLUID, ModCapabilities::registerFluidPort,
                     PortFamilyIds.ENERGY, ModCapabilities::registerEnergyPort);
 
+    private static boolean externalAdaptersInitialized;
+
     private ModCapabilities() {}
 
+    /** Ensures built-in capability adapters are installed before event listeners are exposed. */
+    public static synchronized void initializeExternalAdapters() {
+        if (externalAdaptersInitialized) return;
+        ExternalCapabilityRegistry.global().register(new NeoForgeCapabilityAdapter());
+        externalAdaptersInitialized = true;
+    }
+
     public static void register(RegisterCapabilitiesEvent event) {
+        initializeExternalAdapters();
+        ExternalCapabilityContext context = new ExternalCapabilityContext();
+        ExternalCapabilityRegistry.global().freeze(context);
         for (IOPortKind kind : nativeCapabilityPorts()) {
-            registerNativePort(event, kind);
+            registerNativePort(event, kind, context);
         }
         event.registerBlockEntity(
                 ITEM_BLOCK,
@@ -91,13 +107,15 @@ public final class ModCapabilities {
                 .toList();
     }
 
-    private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind) {
+    private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                           ExternalCapabilityContext context) {
         List<CapabilityBinding> externalBindings = externalBindings(kind);
         Set<CapabilityType> externallyExposed = externalBindings.stream()
+                .filter(binding -> !context.bindings(binding.type()).isEmpty())
                 .map(CapabilityBinding::type)
                 .collect(java.util.stream.Collectors.toSet());
         for (CapabilityBinding binding : externalBindings) {
-            binding.externalExposure().ifPresent(exposure -> registerExternalPort(event, kind, binding, exposure));
+            context.bindings(binding.type()).forEach(exposure -> registerExternalPort(event, kind, binding, exposure));
         }
         kind.families().stream()
                 .filter(family -> !externallyExposed.contains(new CapabilityType(family.familyId())))
@@ -114,6 +132,13 @@ public final class ModCapabilities {
                 .toList();
     }
 
+    private static Map<CapabilityType, CapabilityBinding.ExternalExposure<?>> externalExposuresByType() {
+        Map<CapabilityType, CapabilityBinding.ExternalExposure<?>> exposures = new java.util.LinkedHashMap<>();
+        PortKinds.all().forEach(kind -> externalBindings(kind).forEach(binding ->
+                binding.externalExposure().ifPresent(exposure -> exposures.putIfAbsent(binding.type(), exposure))));
+        return Map.copyOf(exposures);
+    }
+
     private static <T> void registerExternalPort(RegisterCapabilitiesEvent event, IOPortKind kind,
                                                   CapabilityBinding binding,
                                                   CapabilityBinding.ExternalExposure<T> exposure) {
@@ -128,6 +153,31 @@ public final class ModCapabilities {
                             || port.capability(binding.type()) == null) return null;
                     return exposure.resolver().resolve(port, binding.ioType(), side);
                 });
+    }
+
+    /** Bridges the generic MMCR external exposure declaration to NeoForge block capabilities.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class NeoForgeCapabilityAdapter implements ExternalCapabilityAdapter {
+        @Override
+        public Identifier id() {
+            return MMCR.id("neoforge");
+        }
+
+        @Override
+        public Set<CapabilityType> capabilityTypes() {
+            return externalExposuresByType().keySet();
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public void register(ExternalCapabilityContext context) {
+            externalExposuresByType().forEach(context::bind);
+        }
     }
 
     private static void registerItemPort(RegisterCapabilitiesEvent event, IOPortKind kind) {

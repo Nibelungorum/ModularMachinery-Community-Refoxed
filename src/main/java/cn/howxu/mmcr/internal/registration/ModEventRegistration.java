@@ -67,6 +67,7 @@ public final class ModEventRegistration {
 
     public static void register(IEventBus modBus, ModContainer modContainer) {
         registerDeferredRegisters(modBus);
+        ModCapabilities.initializeExternalAdapters();
         MMCR.CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         registerListeners(registrar(modBus), registrar(NeoForge.EVENT_BUS), EventHandlers.production());
