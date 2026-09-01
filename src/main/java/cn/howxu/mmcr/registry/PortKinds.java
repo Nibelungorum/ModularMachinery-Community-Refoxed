@@ -266,7 +266,9 @@ public final class PortKinds {
             this.definition = definition;
             if (id == null) throw new IllegalArgumentException("id null");
             if (ioType == null) throw new IllegalArgumentException("ioType null");
-            if (families == null || families.isEmpty()) throw new IllegalArgumentException("combined kind families empty");
+            if (families == null || families.size() < 2) {
+                throw new IllegalArgumentException("combined kind must have at least two families");
+            }
             if (entityFactory == null) throw new IllegalArgumentException("entityFactory null");
             if (definition == null) throw new IllegalArgumentException("definition null");
             List<PortFamilyDescriptor> copiedFamilies = List.copyOf(families);
