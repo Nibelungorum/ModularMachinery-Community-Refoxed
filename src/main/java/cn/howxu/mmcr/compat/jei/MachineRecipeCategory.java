@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -297,7 +299,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.SlotPlan slot, boolean input) {
         IRecipeSlotBuilder jeiSlot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slot.x(), slot.y());
         jeiSlot.setStandardSlotBackground();
-        displayEntry(recipe, slot.entry(), input).ifPresent(entry -> addGeneric(jeiSlot, entry));
+        Optional<JeiDisplayEntry> entry = displayEntry(recipe, slot.entry(), input);
+        if (entry.isEmpty()) return;
+        if (entry.get().typeId().equals(ItemRequirement.TYPE.id())) {
+            addItem(jeiSlot, recipe, slot.entry(), input);
+        } else if (entry.get().typeId().equals(FluidRequirement.TYPE.id())) {
+            addFluid(jeiSlot, recipe, slot.entry(), entry.get(), input);
+        } else {
+            addGeneric(jeiSlot, entry.get());
+        }
     }
 
     private static Optional<JeiDisplayEntry> displayEntry(MachineRecipeDisplay recipe,
@@ -325,7 +335,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 ? itemQuantityText(entry.count()) : fluidQuantityText(entry.count());
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
             String chance = entry.role() == RecipeIngredientRole.INPUT
-                    ? inputOverlayText(entry.chance(), Minecraft.getInstance().getLanguageManager().getSelected())
+                    ? inputOverlayText(entry.chance(), selectedLanguage())
                     : outputOverlayText(entry.chance());
             setItemOverlay(slot, chance, quantity);
         } else {
@@ -354,7 +364,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void addTransferSlots(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe) {
+        for (MachineRecipeDisplay.ItemInputDisplay item : recipe.itemInputs()) {
+            IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
+            addActualItem(slot, item);
+        }
         for (JeiDisplayEntry entry : recipe.entries()) {
+            if (entry.typeId().equals(ItemRequirement.TYPE.id())
+                    || entry.typeId().equals(FluidRequirement.TYPE.id())) continue;
             if (entry.role() != RecipeIngredientRole.INPUT || !entry.transferable()) continue;
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
             addGeneric(slot, entry);
@@ -374,7 +390,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
             MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
-            String overlayText = inputOverlayText(item.consumeChance(), Minecraft.getInstance().getLanguageManager().getSelected());
+            String overlayText = inputOverlayText(item.consumeChance(), selectedLanguage());
             setItemOverlay(jeiSlot, overlayText, itemQuantityText(item.count()));
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
             List<ItemStack> stacks = item.stacks().stream().map(MachineRecipeCategory::jeiItemStack).toList();
@@ -413,15 +429,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void addFluid(IRecipeSlotBuilder jeiSlot, MachineRecipeDisplay recipe,
-            MachineRecipeLayout.EntryPlan entry, boolean input) {
+            MachineRecipeLayout.EntryPlan entry, JeiDisplayEntry display, boolean input) {
         if (input) {
             int amount = recipe.fluidInputAmounts().get(entry.index());
-            recipe.fluidInputs().get(entry.index()).fluids().stream().findFirst().ifPresent(fluid -> {
-                setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
-                jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                        .add(fluid.value(), FLUID_SLOT_CAPACITY);
-                jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
-            });
+            if (!(display.ingredient() instanceof FluidStack fluid) || fluid.isEmpty()) return;
+            setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
+            jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
+                    .add(fluid.getFluid(), FLUID_SLOT_CAPACITY, fluid.getComponentsPatch());
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
         } else {
             var stack = recipe.fluidOutputs().get(entry.index());
             setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
@@ -429,6 +444,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, stack.getAmount()));
         }
+    }
+
+    private static String selectedLanguage() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft == null ? "" : minecraft.getLanguageManager().getSelected();
     }
 
     private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {
@@ -497,10 +517,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             } else if (entry.kind() == MachineRecipeLayout.Kind.FLUID) {
                 if (input) {
                     int amount = recipe.fluidInputAmounts().get(entry.index());
-                    Component displayName = recipe.fluidInputs().get(entry.index()).fluids().stream()
-                            .findFirst()
-                            .map(fluid -> new FluidStack(fluid.value(), amount).getHoverName())
-                            .orElse(Component.empty());
+                    Component displayName = entry.displayEntry() != null
+                            && entry.displayEntry().ingredient() instanceof FluidStack fluid
+                            && !fluid.isEmpty()
+                            ? fluid.copyWithAmount(amount).getHoverName()
+                            : Component.empty();
                     tooltip.add(overflowEntry(amount, displayName));
                 } else {
                     var fluidStack = recipe.fluidOutputs().get(entry.index());

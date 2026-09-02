@@ -7,14 +7,20 @@ import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.Holder;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Registry of JEI adapters keyed by MMCR requirement type ID.
@@ -81,10 +87,10 @@ public final class JeiIngredientAdapterRegistry {
                 return Optional.empty();
             }
             if (entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT) {
-                List<ItemStack> stacks = item.item().items()
+                List<ItemStack> stacks = safeItems(item.item())
                         .map(holder -> new ItemStack(holder.value()))
                         .toList();
-                return stacks.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
+                return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
                         stacks, boundedCount(entry.amount()), entry.chance(), null, true));
             }
             ItemStack stack = item.resolvedStack();
@@ -116,15 +122,31 @@ public final class JeiIngredientAdapterRegistry {
                 return Optional.empty();
             }
             FluidStack stack = entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT
-                    ? fluid.fluid().fluids().stream().findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
+                    ? safeFluids(fluid.fluid()).findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
                     : fluid.stack().copyWithAmount(1);
-            return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
+            return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
                     stack, boundedCount(entry.amount()), entry.chance(), null, false));
         }
 
         @Override
         public Optional<IRecipeTransferHandler<?, ?>> transferHandler() {
             return Optional.empty();
+        }
+    }
+
+    private static Stream<Holder<Item>> safeItems(Ingredient ingredient) {
+        try {
+            return ingredient.items();
+        } catch (UnsupportedOperationException ignored) {
+            return Stream.empty();
+        }
+    }
+
+    private static Stream<Holder<Fluid>> safeFluids(FluidIngredient ingredient) {
+        try {
+            return ingredient.fluids().stream();
+        } catch (UnsupportedOperationException ignored) {
+            return Stream.empty();
         }
     }
 }

@@ -23,8 +23,8 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
-import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
@@ -32,6 +32,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.ItemStack;
@@ -41,6 +42,12 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
+import mezz.jei.api.gui.builder.ITooltipBuilder;
+import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
+import mezz.jei.api.helpers.IGuiHelper;
+import mezz.jei.api.gui.drawable.IDrawable;
+import mezz.jei.api.gui.drawable.IDrawableStatic;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +56,12 @@ import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.Method;
+import net.minecraft.network.chat.FormattedText;
 
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
@@ -59,6 +71,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
@@ -453,6 +466,168 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void itemSlotsUseComponentAwareStacksForTagInputs() {
+        DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
+                DataComponents.REPAIR_COST, ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive(3)))));
+        Ingredient tag = Ingredient.of(HolderSet.direct(
+                Items.DIAMOND_SWORD.builtInRegistryHolder(), Items.IRON_SWORD.builtInRegistryHolder()));
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("component_tag_jei_slot"), MMCR.id("test_machine_name"), 40,
+                List.of(new MachineIngredient.ItemIngredient(tag, 1, components, 1F)), List.of());
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        List<ItemStack> stacks = display.itemInputs().getFirst().stacks();
+        assertThat(stacks).hasSize(2);
+        assertThat(stacks).allSatisfy(stack ->
+                assertThat(stack.get(DataComponents.REPAIR_COST)).isEqualTo(3));
+    }
+
+    @Test
+    void itemSlotsApplyEnchantmentPredicatesToTagCandidates() throws Exception {
+        var lookup = VanillaRegistries.createLookup();
+        JsonObject enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 2);
+        DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
+                DataComponents.ENCHANTMENTS, ComponentPredicate.exact(new Dynamic<>(
+                        RegistryOps.create(JsonOps.INSTANCE, lookup), enchantments))));
+        Ingredient tag = Ingredient.of(HolderSet.direct(
+                Items.DIAMOND_SWORD.builtInRegistryHolder(), Items.GOLDEN_SWORD.builtInRegistryHolder()));
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("enchantment_tag_jei_slot"), MMCR.id("test_machine_name"), 40,
+                List.of(new MachineIngredient.ItemIngredient(tag, 1, components, 1F)), List.of());
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        SlotCapture capture = new SlotCapture();
+        JeiDisplayEntry inputEntry = display.entries().stream()
+                .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
+                .findFirst().orElseThrow();
+
+        invokeAddEntry(recipeLayoutBuilder(capture), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0, inputEntry), true);
+
+        assertThat(capture.itemStacks).singleElement().satisfies(stacks -> {
+            assertThat(stacks).hasSize(2);
+            assertThat(stacks).allSatisfy(stack ->
+                    assertThat(stack.get(DataComponents.ENCHANTMENTS).getLevel(
+                            lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(sharpnessKey()))).isEqualTo(2));
+        });
+    }
+
+    @Test
+    void itemSlotsRegisterQuantityAndChanceTooltips() throws Exception {
+        MachineRequirement output = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                new ItemStack(Items.GOLD_INGOT, 3), 0.25F, List.of());
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("item_tooltip_jei_slot"), MMCR.id("test_machine_name"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output));
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        SlotCapture capture = new SlotCapture();
+        JeiDisplayEntry outputEntry = display.entries().stream()
+                .filter(entry -> entry.role() == RecipeIngredientRole.OUTPUT)
+                .findFirst().orElseThrow();
+
+        invokeAddEntry(recipeLayoutBuilder(capture), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0, outputEntry), false);
+
+        assertThat(capture.tooltips).hasSize(1);
+        List<FormattedText> outputTooltip = tooltipLines(capture.tooltips.getFirst());
+        assertTranslatableTooltip(outputTooltip, "jei.mmcr.machine_recipe.item_count", "3");
+        assertTranslatableTooltip(outputTooltip, "jei.mmcr.machine_recipe.output_chance", "25%");
+    }
+
+    @Test
+    void itemInputSlotTooltipDescribesCountAndConsumeChance() throws Exception {
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("item_input_tooltip_jei_slot"), MMCR.id("test_machine_name"), 40,
+                List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_INGOT), 3,
+                        new DataComponentPredicateSet(Map.of()), 0.25F)), List.of());
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        SlotCapture capture = new SlotCapture();
+        JeiDisplayEntry inputEntry = display.entries().stream()
+                .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
+                .findFirst().orElseThrow();
+
+        invokeAddEntry(recipeLayoutBuilder(capture), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0, inputEntry), true);
+
+        assertThat(capture.tooltips).hasSize(1);
+        List<FormattedText> inputTooltip = tooltipLines(capture.tooltips.getFirst());
+        assertTranslatableTooltip(inputTooltip, "jei.mmcr.machine_recipe.item_count", "3");
+        assertTranslatableTooltip(inputTooltip, "jei.mmcr.machine_recipe.consume_chance", "25%");
+    }
+
+    @Test
+    void customItemStackAdapterDoesNotUseBuiltinItemSlotPath() throws Exception {
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
+                MMCR.id("custom_item_stack_slot"), MMCR.id("test_machine_name"), 40,
+                List.of(), List.of()));
+        ItemStack ingredient = new ItemStack(Items.GOLD_INGOT);
+        JeiDisplayEntry customEntry = new JeiDisplayEntry(
+                RecipeIngredientRole.OUTPUT, MMCR.id("custom_item_stack"),
+                mezz.jei.api.constants.VanillaTypes.ITEM_STACK, ingredient, 1, 1F, null, false);
+        SlotCapture capture = new SlotCapture();
+
+        invokeAddEntry(recipeLayoutBuilder(capture), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.ITEM, 0, customEntry), false);
+
+        assertThat(capture.itemStacks).isEmpty();
+        assertThat(capture.added).singleElement().satisfies(arguments -> {
+            assertThat(arguments[0]).isSameAs(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
+            assertThat(arguments[1]).isSameAs(ingredient);
+        });
+    }
+
+    @Test
+    void emptyFluidInputDoesNotShiftFollowingFluidSlot() throws Exception {
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("empty_fluid_before_valid_fluid"), MMCR.id("test_machine_name"), 40,
+                List.of(
+                        new MachineIngredient.FluidIngredient(FluidIngredient.of(
+                                HolderSet.emptyNamed(BuiltInRegistries.FLUID, FluidTags.WATER)), 100),
+                        new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 200)),
+                List.of());
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        List<JeiDisplayEntry> fluidEntries = display.entries().stream()
+                .filter(entry -> entry.ingredientType() == mezz.jei.api.neoforge.NeoForgeTypes.FLUID_STACK)
+                .toList();
+
+        assertThat(fluidEntries).hasSize(2);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+        assertThat(layout.inputs().slots()).extracting(slot -> slot.entry().index())
+                .containsExactly(0, 1);
+        SlotCapture emptyCapture = new SlotCapture();
+        invokeAddEntry(recipeLayoutBuilder(emptyCapture), display, layout.inputs().slots().get(0).entry(), true);
+        assertThat(emptyCapture.added).isEmpty();
+
+        SlotCapture capture = new SlotCapture();
+
+        invokeAddEntry(recipeLayoutBuilder(capture), display, layout.inputs().slots().get(1).entry(), true);
+
+        assertThat(capture.added).anySatisfy(arguments ->
+                assertThat(arguments[0]).isSameAs(Fluids.WATER));
+    }
+
+    @Test
+    void smartInterfaceRequirementsDoNotCreateJeiSlots() {
+        var machineId = MMCR.id("jei_smart_interface_text_only");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Smart text only")
+                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0)).build());
+        MachineRequirement item = new ItemRequirement(RecipeModifier.IOType.INPUT,
+                Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY);
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("smart_interface_text_only_recipe"), machineId, 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(item, SmartInterfaceRequirement.input("mode", 1F)));
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+
+        assertThat(display.entries()).noneMatch(entry ->
+                entry.typeId().equals(SmartInterfaceRequirement.TYPE.id()));
+        assertThat(layout.inputs().slots()).singleElement()
+                .extracting(slot -> slot.entry().kind())
+                .isEqualTo(MachineRecipeLayout.Kind.ITEM);
+    }
+
+    @Test
     void displayFallsBackToBaseStackForRangeComponentPredicates() {
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("range_component_input_display"),
@@ -487,6 +662,24 @@ class MachineRecipeDisplayTest {
         assertThat(display.itemInputs()).singleElement().satisfies(input -> {
             assertThat(input.ingredient()).isNotNull();
             assertThat(input.stacks()).isEmpty();
+        });
+    }
+
+    @Test
+    void jeiEntriesKeepUnboundTagInputsSafe() {
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("tag_input_jei_display"),
+                MMCR.id("blast_furnace"),
+                40,
+                List.of(new MachineIngredient.ItemIngredient(
+                        Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS)), 1)),
+                List.of()
+        );
+
+        assertThat(MachineRecipeDisplay.from(recipe).entries()).singleElement().satisfies(entry -> {
+            assertThat(entry.ingredientType()).isSameAs(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
+            assertThat(entry.ingredient()).isInstanceOf(List.class);
+            assertThat((List<?>) entry.ingredient()).isEmpty();
         });
     }
 
@@ -672,5 +865,94 @@ class MachineRecipeDisplayTest {
 
     private static void bindItemComponents(Item... items) {
         for (var item : items) item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+    }
+
+    private static IGuiHelper guiHelper() {
+        return (IGuiHelper) Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{IGuiHelper.class},
+                (proxy, method, arguments) -> method.getName().equals("getSlotDrawable")
+                        ? staticDrawable() : method.getName().equals("createDrawableItemLike") ? drawable() : null);
+    }
+
+    private static IDrawable drawable() {
+        return (IDrawable) Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{IDrawable.class},
+                (proxy, method, arguments) -> null);
+    }
+
+    private static IDrawableStatic staticDrawable() {
+        return (IDrawableStatic) Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{IDrawableStatic.class},
+                (proxy, method, arguments) -> null);
+    }
+
+    private static IRecipeLayoutBuilder recipeLayoutBuilder(SlotCapture capture) {
+        return (IRecipeLayoutBuilder) Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{IRecipeLayoutBuilder.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("addSlot")
+                            || method.getName().equals("addInputSlot")
+                            || method.getName().equals("addOutputSlot")) {
+                        return recipeSlotBuilder(capture);
+                    }
+                    return null;
+                });
+    }
+
+    private static void invokeAddEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay display,
+                                       MachineRecipeLayout.EntryPlan entry, boolean input) throws Exception {
+        Method method = MachineRecipeCategory.class.getDeclaredMethod("addEntry", IRecipeLayoutBuilder.class,
+                MachineRecipeDisplay.class, MachineRecipeLayout.SlotPlan.class, boolean.class);
+        method.setAccessible(true);
+        method.invoke(null, builder, display, new MachineRecipeLayout.SlotPlan(entry, 0, 0), input);
+    }
+
+    private static Object recipeSlotBuilder(SlotCapture capture) {
+        return Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(),
+                new Class<?>[]{mezz.jei.api.gui.builder.IRecipeSlotBuilder.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("addItemStacks")) {
+                        capture.itemStacks.add((List<ItemStack>) arguments[0]);
+                    } else if (method.getName().equals("add")) {
+                        capture.added.add(arguments.clone());
+                    } else if (method.getName().equals("addRichTooltipCallback")) {
+                        capture.tooltips.add((IRecipeSlotRichTooltipCallback) arguments[0]);
+                    }
+                    return method.getReturnType().isAssignableFrom(
+                            mezz.jei.api.gui.builder.IRecipeSlotBuilder.class) ? proxy : null;
+                });
+    }
+
+    private static List<FormattedText> tooltipLines(IRecipeSlotRichTooltipCallback callback) {
+        List<FormattedText> lines = new ArrayList<>();
+        ITooltipBuilder tooltip = (ITooltipBuilder) Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{ITooltipBuilder.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("add") && arguments.length == 1
+                            && arguments[0] instanceof FormattedText text) {
+                        lines.add(text);
+                    }
+                    return null;
+                });
+        callback.onRichTooltip(null, tooltip);
+        return lines;
+    }
+
+    private static void assertTranslatableTooltip(List<FormattedText> lines, String key, String argument) {
+        assertThat(lines).anySatisfy(line -> {
+            assertThat(line).isInstanceOf(Component.class);
+            Component component = (Component) line;
+            assertThat(component.getContents()).isInstanceOf(TranslatableContents.class);
+            TranslatableContents contents = (TranslatableContents) component.getContents();
+            assertThat(contents.getKey()).isEqualTo(key);
+            assertThat(contents.getArgs()[0]).isEqualTo(argument);
+        });
+    }
+
+    private static final class SlotCapture {
+        private final List<List<ItemStack>> itemStacks = new ArrayList<>();
+        private final List<Object[]> added = new ArrayList<>();
+        private final List<IRecipeSlotRichTooltipCallback> tooltips = new ArrayList<>();
     }
 }

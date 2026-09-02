@@ -176,7 +176,8 @@ public record MachineRecipeDisplay(
      */
     public List<JeiDisplayEntry> entries() {
         return recipe.runtimeRequirements().stream()
-                .filter(requirement -> !(requirement instanceof EnergyRequirement))
+                .filter(requirement -> !(requirement instanceof EnergyRequirement)
+                        && !(requirement instanceof SmartInterfaceRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,

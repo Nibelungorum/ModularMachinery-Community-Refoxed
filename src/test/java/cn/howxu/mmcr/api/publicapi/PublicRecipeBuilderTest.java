@@ -23,6 +23,8 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.CustomOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.sync.MachineRecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -36,8 +38,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.fluids.FluidStack;
+import io.netty.buffer.Unpooled;
 
 import java.util.Map;
 import java.util.List;
@@ -47,6 +52,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -221,6 +227,25 @@ class PublicRecipeBuilderTest {
             assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
             assertThat(item.resolvedStack().get(DataComponents.REPAIR_COST)).isEqualTo(1);
         });
+    }
+
+    @Test
+    void converted_output_with_enchantment_components_passes_canonical_validation() {
+        ItemStack output = new ItemStack(Items.DIAMOND, 9);
+        output.set(DataComponents.CUSTOM_NAME, Component.literal("What a magic recipe"));
+        JsonObject enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 4);
+        DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
+                Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
+
+        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_output"), id("machine"))
+                        .outputItem(output, components).build(),
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+
+        assertThatCode(() -> RecipeRegistry.validateClientSnapshot(Map.of(recipe.id(), recipe))).doesNotThrowAnyException();
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        MachineRecipeSyncCodec.encode(buffer, recipe);
+        assertThatCode(() -> MachineRecipeSyncCodec.decode(buffer)).doesNotThrowAnyException();
     }
 
     @Test

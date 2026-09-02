@@ -142,6 +142,9 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     private static <T> void applyExactValue(ItemStack stack, DataComponentType<T> type, ComponentPredicate predicate,
             DynamicOps<?> ops) {
         T value = ComponentPredicates.exactValue(type, predicate, stack, ops);
+        if (value == null) {
+            value = ComponentPredicates.exactValue(type, predicate, stack);
+        }
         if (value == null && type == DataComponents.CUSTOM_NAME && predicate instanceof ComponentPredicate.TextValue text) {
             value = (T) text.value();
         }
