@@ -18,8 +18,10 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
+import com.mojang.serialization.Lifecycle;
 import com.google.gson.JsonObject;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.CustomOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
@@ -34,8 +36,14 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -46,6 +54,7 @@ import io.netty.buffer.Unpooled;
 
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -246,6 +255,41 @@ class PublicRecipeBuilderTest {
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         MachineRecipeSyncCodec.encode(buffer, recipe);
         assertThatCode(() -> MachineRecipeSyncCodec.decode(buffer)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void converted_output_with_enchantment_components_round_trips_with_registry_access() {
+        ItemStack output = new ItemStack(Items.DIAMOND, 9);
+        output.set(DataComponents.CUSTOM_NAME, Component.literal("What a magic recipe"));
+        JsonObject enchantments = new JsonObject();
+        enchantments.addProperty("minecraft:sharpness", 4);
+        DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
+                Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
+
+        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_network_output"), id("machine"))
+                        .outputItem(output, components).build(),
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
+                networkRegistryAccess());
+
+        MachineRecipeSyncCodec.encode(buffer, recipe);
+
+        MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
+        assertThat(decoded.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                decodedOutput -> assertThat(decodedOutput.stack().get(DataComponents.ENCHANTMENTS)).isNotNull()
+                        .isNotEqualTo(net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY));
+    }
+
+    private static RegistryAccess networkRegistryAccess() {
+        MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
+        VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT).listElements()
+                .forEach(holder -> Registry.register(enchantments, holder.key().identifier(), holder.value()));
+        enchantments.freeze();
+        List<Registry<?>> registries = new ArrayList<>();
+        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).registries()
+                .forEach(entry -> registries.add(entry.value()));
+        registries.add(enchantments);
+        return new RegistryAccess.ImmutableRegistryAccess(registries);
     }
 
     @Test

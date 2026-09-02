@@ -283,7 +283,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return outputs;
     }
 
-    private List<MachineOutput> outputsWithoutDerivedRequirements() {
+    public List<MachineOutput> outputsWithoutDerivedRequirements() {
         return outputs.stream().filter(output -> requirements.stream()
                 .map(OutputRegistry::fromRequirement)
                 .noneMatch(requirementOutput -> requirementOutput != null && sameOutput(output, requirementOutput)))

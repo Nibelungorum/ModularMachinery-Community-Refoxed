@@ -67,7 +67,7 @@ public final class MachineRecipeSyncCodec {
         Identifier.STREAM_CODEC.encode(buf, value.machineId());
         buf.writeVarInt(value.tickTime());
         writeRequirements(buf, value.requirements());
-        writeOutputs(buf, value.machineOutputs());
+        writeOutputs(buf, value.outputsWithoutDerivedRequirements());
         writeModifiers(buf, value.modifiers());
         buf.writeVarInt(value.priority());
         buf.writeVarInt(value.maxThreads());
