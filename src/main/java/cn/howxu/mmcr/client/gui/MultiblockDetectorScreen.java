@@ -96,11 +96,13 @@ public final class MultiblockDetectorScreen extends Screen {
         }
 
         int footerX = panelLeft() + (PANEL_WIDTH - 4 * FOOTER_BUTTON_WIDTH - 3 * FOOTER_BUTTON_GAP) / 2;
-        javaExportButton = addRenderableWidget(Button.builder(Component.literal("Java"), button -> {
+        javaExportButton = addRenderableWidget(Button.builder(
+                Component.translatable("gui.mmcr.multiblock_detector.export.java"), button -> {
             ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
             setFocused(null);
         }).bounds(footerX, panelTop() + FOOTER_ROW, FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
-        kubeJsExportButton = addRenderableWidget(Button.builder(Component.literal("KubeJS"), button -> {
+        kubeJsExportButton = addRenderableWidget(Button.builder(
+                Component.translatable("gui.mmcr.multiblock_detector.export.kubejs"), button -> {
             ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
             setFocused(null);
         }).bounds(footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
@@ -253,7 +255,8 @@ public final class MultiblockDetectorScreen extends Screen {
         BlockPos value = point.value(selection);
         graphics.text(font, blockName(value), panelLeft() + CONTENT_X, panelTop() + row + 5, TEXT_COLOR, false);
         for (Axis axis : AXES) {
-            graphics.text(font, Component.literal(axis.name() + "="), panelLeft() + inputX(axis) - AXIS_LABEL_WIDTH,
+            graphics.text(font, Component.translatable("gui.mmcr.multiblock_detector.axis." + axis.getSerializedName()),
+                    panelLeft() + inputX(axis) - AXIS_LABEL_WIDTH,
                     panelTop() + row + 5, TEXT_COLOR, false);
         }
     }
@@ -264,19 +267,19 @@ public final class MultiblockDetectorScreen extends Screen {
 
     private Component controllerLabel() {
         BlockPos position = selection.controllerPos();
-        Component value = position == null ? Component.translatable("tooltip.mmcr.multiblock_detector.not_set")
+        Component value = position == null ? Component.translatable("gui.mmcr.multiblock_detector.not_set")
                 : positionLabel(position, selection.controllerFace());
-        return Component.translatable("tooltip.mmcr.multiblock_detector.controller", value);
+        return Component.translatable("gui.mmcr.multiblock_detector.controller", value);
     }
 
     private Component pointLabel(Point point) {
         return Component.translatable(point == Point.FIRST
-                ? "tooltip.mmcr.multiblock_detector.first" : "tooltip.mmcr.multiblock_detector.second",
+                ? "gui.mmcr.multiblock_detector.first" : "gui.mmcr.multiblock_detector.second",
                 pointLabelValue(point.value(selection)));
     }
 
     private Component pointLabelValue(BlockPos position) {
-        return position == null ? Component.translatable("tooltip.mmcr.multiblock_detector.not_set")
+        return position == null ? Component.translatable("gui.mmcr.multiblock_detector.not_set")
                 : positionLabel(position, null);
     }
 
@@ -288,16 +291,17 @@ public final class MultiblockDetectorScreen extends Screen {
     }
 
     private Component blockName(BlockPos position) {
-        if (position == null) return Component.translatable("tooltip.mmcr.multiblock_detector.not_set");
+        if (position == null) return Component.translatable("gui.mmcr.multiblock_detector.not_set");
         Level level = Minecraft.getInstance().level;
         if (level == null || !level.hasChunkAt(position)) {
-            return Component.translatable("tooltip.mmcr.multiblock_detector.unknown_block");
+            return Component.translatable("gui.mmcr.multiblock_detector.unknown_block");
         }
         return level.getBlockState(position).getBlock().getName();
     }
 
     private Component maskLabel() {
-        return Component.literal(maskEnabled ? "Mask: ON" : "Mask: OFF");
+        return Component.translatable(maskEnabled ? "gui.mmcr.multiblock_detector.mask.enabled"
+                : "gui.mmcr.multiblock_detector.mask.disabled");
     }
 
     private ItemStack mainHandDetector() {
