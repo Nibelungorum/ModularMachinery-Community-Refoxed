@@ -19,7 +19,10 @@ class SmartInterfaceScreenTest {
     void integer_input_accepts_only_whole_number_candidates() {
         assertThat(SmartInterfaceScreen.acceptsInputCandidate("8", SmartInterfaceType.ValueType.INTEGER)).isTrue();
         assertThat(SmartInterfaceScreen.acceptsInputCandidate("123", SmartInterfaceType.ValueType.INTEGER)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("-", SmartInterfaceType.ValueType.INTEGER)).isTrue();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("-12", SmartInterfaceType.ValueType.INTEGER)).isTrue();
         assertThat(SmartInterfaceScreen.acceptsInputCandidate("12.3", SmartInterfaceType.ValueType.INTEGER)).isFalse();
+        assertThat(SmartInterfaceScreen.acceptsInputCandidate("12.5", SmartInterfaceType.ValueType.INTEGER)).isFalse();
         assertThat(SmartInterfaceScreen.acceptsInputCandidate("1E2", SmartInterfaceType.ValueType.INTEGER)).isFalse();
         assertThat(SmartInterfaceScreen.acceptsInputCandidate("abc", SmartInterfaceType.ValueType.INTEGER)).isFalse();
     }

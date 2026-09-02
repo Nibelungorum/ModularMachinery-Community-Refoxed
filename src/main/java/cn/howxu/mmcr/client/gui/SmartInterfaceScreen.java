@@ -144,7 +144,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         SmartInterfaceType.ValueType type = valueType == null ? SmartInterfaceType.ValueType.FLOAT : valueType;
         if (value.isEmpty()) return true;
         return switch (type) {
-            case INTEGER -> value.matches("[0-9]+");
+            case INTEGER -> value.matches("-?[0-9]*");
             case FLOAT -> value.matches("[0-9]+(\\.[0-9]*)?([Ee][0-9]*)?") || value.matches("\\.[0-9]*([Ee][0-9]*)?");
         };
     }
