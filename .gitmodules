@@ -42,3 +42,6 @@
 [submodule "wiki"]
 	path = wiki
 	url = https://github.com/Nibelungorum/mmcr-wiki
+[submodule "reference/gtlcore"]
+	path = reference/gtlcore
+	url = https://github.com/AaAdoniSsS/GTLCore
