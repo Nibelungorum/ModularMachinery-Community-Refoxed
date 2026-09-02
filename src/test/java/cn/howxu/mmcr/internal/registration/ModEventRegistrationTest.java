@@ -119,8 +119,8 @@ class ModEventRegistrationTest {
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
-                PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
-                PacketFlow.SERVERBOUND);
+                PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
                 cn.howxu.mmcr.internal.network.PktMachineStatePayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload.TYPE,
@@ -132,6 +132,8 @@ class ModEventRegistrationTest {
                 cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload.TYPE,
+                cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload.TYPE,
+                cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload.TYPE,
                 cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload.TYPE,

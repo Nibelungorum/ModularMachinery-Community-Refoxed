@@ -15,7 +15,9 @@ import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
@@ -141,6 +143,10 @@ public final class ModEventRegistration {
                         PktMultiblockPreviewPayload::handle)
                 .playToServer(PktMultiblockDetectorPickPayload.TYPE, PktMultiblockDetectorPickPayload.STREAM_CODEC,
                         PktMultiblockDetectorPickPayload::handle)
+                .playToServer(PktMultiblockDetectorUpdatePayload.TYPE, PktMultiblockDetectorUpdatePayload.STREAM_CODEC,
+                        PktMultiblockDetectorUpdatePayload::handle)
+                .playToServer(PktMultiblockDetectorExportPayload.TYPE, PktMultiblockDetectorExportPayload.STREAM_CODEC,
+                        PktMultiblockDetectorExportPayload::handle)
                 .playToServer(PktSmartInterfaceUpdatePayload.TYPE, PktSmartInterfaceUpdatePayload.STREAM_CODEC,
                         PktSmartInterfaceUpdatePayload::handle)
                 .playToServer(PktAutoIOConfigPayload.TYPE, PktAutoIOConfigPayload.STREAM_CODEC,
