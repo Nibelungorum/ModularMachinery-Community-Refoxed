@@ -364,9 +364,22 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void addTransferSlots(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe) {
+        for (int index = 0; index < recipe.fluidInputs().size(); index++) {
+            IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
+            int amount = recipe.fluidInputAmounts().get(index);
+            recipe.fluidInputs().get(index).fluids()
+                    .forEach(fluid -> slot.add(fluid.value(), amount));
+        }
         for (MachineRecipeDisplay.ItemInputDisplay item : recipe.itemInputs()) {
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
             addActualItem(slot, item);
+        }
+        for (FluidStack fluid : recipe.fluidOutputs()) {
+            builder.addOutputSlot(-1000, -1000)
+                    .add(fluid.getFluid(), fluid.getAmount(), fluid.getComponentsPatch());
+        }
+        for (MachineRecipeDisplay.ItemOutputDisplay output : recipe.itemOutputs()) {
+            builder.addOutputSlot(-1000, -1000).add(output.stack());
         }
         for (JeiDisplayEntry entry : recipe.entries()) {
             if (entry.typeId().equals(ItemRequirement.TYPE.id())
