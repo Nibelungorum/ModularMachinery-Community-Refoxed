@@ -5,10 +5,13 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -61,6 +64,16 @@ class MachineStructureDisplayTest {
         exposed.setCount(42);
 
         assertThat(display.materials().entries().getFirst().stack().getCount()).isOne();
+    }
+
+    @Test
+    void structureOutputUsesBlueprintAndMachineName() {
+        Machine machine = testMachineWithBlocks();
+        ItemStack output = MachineStructureCategory.structureOutput(MachineStructureDisplay.from(machine));
+
+        assertThat(output.getItem()).isSameAs(ModItems.BLUEPRINT.get());
+        assertThat(output.get(DataComponents.CUSTOM_NAME)).isEqualTo(machine.displayName());
+        assertThat(output.getItem()).isNotEqualTo(Items.ENCHANTED_BOOK);
     }
 
     @Test

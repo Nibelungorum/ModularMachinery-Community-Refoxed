@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
@@ -18,7 +19,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.List;
 
@@ -154,7 +154,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     }
 
     static ItemStack structureOutput(MachineStructureDisplay display) {
-        ItemStack output = new ItemStack(Items.ENCHANTED_BOOK);
+        ItemStack output = new ItemStack(ModItems.BLUEPRINT.get());
         output.set(DataComponents.CUSTOM_NAME, display.machine().displayName());
         return output;
     }
