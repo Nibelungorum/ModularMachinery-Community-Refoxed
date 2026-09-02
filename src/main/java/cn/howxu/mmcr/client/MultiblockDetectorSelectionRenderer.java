@@ -103,12 +103,12 @@ public final class MultiblockDetectorSelectionRenderer {
 
         // This is always one six-face shell (24 vertices), never a mesh per selected block. The native
         // debugFilledBox GPU pipeline performs back-face culling and viewport clipping for large regions.
-        face(pose, buffer, x1, y1, z1, x2, y1, z1, x2, y2, z1, x1, y2, z1);
-        face(pose, buffer, x2, y1, z2, x1, y1, z2, x1, y2, z2, x2, y2, z2);
-        face(pose, buffer, x1, y1, z2, x1, y1, z1, x1, y2, z1, x1, y2, z2);
-        face(pose, buffer, x2, y1, z1, x2, y1, z2, x2, y2, z2, x2, y2, z1);
-        face(pose, buffer, x1, y2, z1, x2, y2, z1, x2, y2, z2, x1, y2, z2);
-        face(pose, buffer, x1, y1, z2, x2, y1, z2, x2, y1, z1, x1, y1, z1);
+        face(pose, buffer, x1, y2, z1, x2, y2, z1, x2, y1, z1, x1, y1, z1);
+        face(pose, buffer, x2, y2, z2, x1, y2, z2, x1, y1, z2, x2, y1, z2);
+        face(pose, buffer, x1, y2, z2, x1, y2, z1, x1, y1, z1, x1, y1, z2);
+        face(pose, buffer, x2, y2, z1, x2, y2, z2, x2, y1, z2, x2, y1, z1);
+        face(pose, buffer, x1, y2, z2, x2, y2, z2, x2, y2, z1, x1, y2, z1);
+        face(pose, buffer, x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
     }
 
     private static void face(PoseStack.Pose pose, VertexConsumer buffer,
