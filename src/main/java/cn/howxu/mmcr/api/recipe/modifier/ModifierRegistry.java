@@ -87,13 +87,7 @@ public final class ModifierRegistry {
 
     public static @Nullable Identifier modifierFor(ItemStack stack) {
         if (stack == null) return null;
-        ModifierItemKey key = ModifierItemKey.of(stack);
-        Identifier modifierId = ITEM_BINDINGS.get(key);
-        if (modifierId == null) {
-            MMCR.LOG.info("[upgrade-bus-debug] binding miss: item={} patch={} registeredKeys={}",
-                    stack.getItem(), key.patch(), ITEM_BINDINGS.keySet());
-        }
-        return modifierId;
+        return ITEM_BINDINGS.get(ModifierItemKey.of(stack));
     }
 
     public static Map<Identifier, List<ItemStack>> modifierItems() {
