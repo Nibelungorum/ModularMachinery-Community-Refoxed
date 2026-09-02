@@ -48,9 +48,9 @@ public final class MultiblockDetectorScreen extends Screen {
     private static final int ADJUST_BUTTON_WIDTH = 22;
     private static final int ADJUST_BUTTON_HEIGHT = 18;
     private static final int ADJUST_BUTTON_GAP = 4;
-    private static final int FOOTER_BUTTON_WIDTH = 108;
+    private static final int FOOTER_BUTTON_WIDTH = 84;
     private static final int FOOTER_BUTTON_HEIGHT = 20;
-    private static final int FOOTER_BUTTON_GAP = 6;
+    private static final int FOOTER_BUTTON_GAP = 4;
     private static final int TEXT_COLOR = 0xFF202020;
     private static final int PANEL_COLOR = 0xFFB6E4F2;
     private static final int OUTER_BORDER_COLOR = 0xFF40798B;
@@ -95,7 +95,7 @@ public final class MultiblockDetectorScreen extends Screen {
             }
         }
 
-        int footerX = panelLeft() + (PANEL_WIDTH - 3 * FOOTER_BUTTON_WIDTH - 2 * FOOTER_BUTTON_GAP) / 2;
+        int footerX = panelLeft() + (PANEL_WIDTH - 4 * FOOTER_BUTTON_WIDTH - 3 * FOOTER_BUTTON_GAP) / 2;
         javaExportButton = addRenderableWidget(Button.builder(Component.literal("Java"), button -> {
             ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
             setFocused(null);
@@ -112,6 +112,14 @@ public final class MultiblockDetectorScreen extends Screen {
             setFocused(null);
         }).bounds(footerX + 2 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(
+                Component.translatable("gui.mmcr.multiblock_detector.clear_selection"), button -> {
+                    selection = MultiblockDetectorSelection.EMPTY;
+                    updateWidgets();
+                    writeLocalStateAndSync();
+                    setFocused(null);
+                }).bounds(footerX + 3 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
+                        FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         updateWidgets();
     }
 

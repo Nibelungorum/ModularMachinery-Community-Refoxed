@@ -134,6 +134,7 @@
   "container.mmcr.upgrade_bus_ultimate": "Ultimate Upgrade Bus",
 
   "gui.mmcr.controller.energy": "Energy: %s / %s FE",
+  "gui.mmcr.multiblock_detector.clear_selection": "Clear",
   "gui.mmcr.port.empty": "Empty",
   "gui.mmcr.port.items": "Items:",
   "gui.mmcr.port.fluids": "Fluids:",

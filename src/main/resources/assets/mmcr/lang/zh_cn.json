@@ -134,6 +134,7 @@
   "container.mmcr.upgrade_bus_ultimate": "究极升级总线",
 
   "gui.mmcr.controller.energy": "能量: %s / %s FE",
+  "gui.mmcr.multiblock_detector.clear_selection": "清除选中",
   "gui.mmcr.port.empty": "无",
   "gui.mmcr.port.items": "物品:",
   "gui.mmcr.port.fluids": "流体:",
