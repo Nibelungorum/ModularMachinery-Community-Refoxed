@@ -35,6 +35,10 @@ public final class ModItems {
             REGISTER.register("modularium", id -> new Item(new Item.Properties().setId(
                     ResourceKey.create(Registries.ITEM, id))));
 
+    public static final DeferredHolder<Item, Item> BLUEPRINT =
+            REGISTER.register("blueprint", id -> new Item(new Item.Properties().setId(
+                    ResourceKey.create(Registries.ITEM, id))));
+
     public static final LinkedHashMap<String, DeferredHolder<Item, Item>> ITEMS = new LinkedHashMap<>();
     private static Map<Item, Identifier> controllerMachineIds = Map.of();
 
@@ -59,6 +63,7 @@ public final class ModItems {
         ITEMS.put("thread_disperser", THREAD_DISPERSER);
         ITEMS.put("terminal", TERMINAL);
         ITEMS.put("modularium", MODULARIUM);
+        ITEMS.put("blueprint", BLUEPRINT);
     }
 
     public static Identifier machineIdForControllerItem(Item item) {
