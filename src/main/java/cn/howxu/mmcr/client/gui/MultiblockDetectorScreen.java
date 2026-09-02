@@ -285,7 +285,8 @@ public final class MultiblockDetectorScreen extends Screen {
 
     private Component positionLabel(BlockPos position, Direction face) {
         Component facing = face == null ? Component.empty()
-                : Component.translatable("tooltip.mmcr.multiblock_detector.face", face.getSerializedName());
+                : Component.translatable("tooltip.mmcr.multiblock_detector.face",
+                        Component.translatable("mmcr.direction." + face.getSerializedName()));
         return Component.translatable("tooltip.mmcr.multiblock_detector.position", blockName(position),
                 position.toShortString(), facing);
     }
