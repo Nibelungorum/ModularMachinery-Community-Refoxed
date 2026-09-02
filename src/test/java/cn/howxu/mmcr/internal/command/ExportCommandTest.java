@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.commands.CommandSourceStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -45,5 +46,14 @@ class ExportCommandTest {
         assertThat(ExportCommand.detectorSelectionAllowed(true, true, true)).isTrue();
         assertThat(ExportCommand.detectorSelectionAllowed(false, true, true)).isFalse();
         assertThat(ExportCommand.detectorSelectionAllowed(false, false, true)).isFalse();
+    }
+
+    @Test
+    void rejects_extreme_regions_without_overflowing_their_volume() {
+        BlockPos min = new BlockPos(Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);
+        BlockPos max = new BlockPos(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+
+        assertThat(ExportCommand.volume(min, max)).isEqualTo(Long.MAX_VALUE);
+        assertThat(ExportCommand.exceedsExportVolume(ExportCommand.volume(min, max))).isTrue();
     }
 }

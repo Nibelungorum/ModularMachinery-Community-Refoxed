@@ -84,8 +84,7 @@ public final class MultiblockDetectorScreen extends Screen {
                         panelTop() + inputRow(point), INPUT_WIDTH, INPUT_HEIGHT,
                         Component.translatable("item.mmcr.multiblock_detector")));
                 coordinateInputs[index].setMaxLength(11);
-                coordinateInputs[index].setFilter(value ->
-                        SmartInterfaceScreen.acceptsInputCandidate(value, SmartInterfaceType.ValueType.INTEGER));
+                coordinateInputs[index].setFilter(MultiblockDetectorScreen::acceptsCoordinateCandidate);
                 coordinateInputs[index].setResponder(value -> coordinateChanged(point, axis, value));
 
                 decrementButtons[index] = addRenderableWidget(axisButton(point, axis, -1,
@@ -99,18 +98,18 @@ public final class MultiblockDetectorScreen extends Screen {
         int footerX = panelLeft() + (PANEL_WIDTH - 3 * FOOTER_BUTTON_WIDTH - 2 * FOOTER_BUTTON_GAP) / 2;
         javaExportButton = addRenderableWidget(Button.builder(Component.literal("Java"), button -> {
             ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
-            button.setFocused(false);
+            setFocused(null);
         }).bounds(footerX, panelTop() + FOOTER_ROW, FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         kubeJsExportButton = addRenderableWidget(Button.builder(Component.literal("KubeJS"), button -> {
             ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
-            button.setFocused(false);
+            setFocused(null);
         }).bounds(footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         maskButton = addRenderableWidget(Button.builder(maskLabel(), button -> {
             maskEnabled = !maskEnabled;
             button.setMessage(maskLabel());
             writeLocalStateAndSync();
-            button.setFocused(false);
+            setFocused(null);
         }).bounds(footerX + 2 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         updateWidgets();
@@ -156,8 +155,7 @@ public final class MultiblockDetectorScreen extends Screen {
     }
 
     static OptionalInt parseCoordinate(String value) {
-        if (!SmartInterfaceScreen.acceptsInputCandidate(value,
-                SmartInterfaceType.ValueType.INTEGER)) {
+        if (!acceptsCoordinateCandidate(value)) {
             return OptionalInt.empty();
         }
         try {
@@ -165,6 +163,14 @@ public final class MultiblockDetectorScreen extends Screen {
         } catch (NumberFormatException ignored) {
             return OptionalInt.empty();
         }
+    }
+
+    static boolean acceptsCoordinateCandidate(String value) {
+        return SmartInterfaceScreen.acceptsInputCandidate(value, SmartInterfaceType.ValueType.INTEGER);
+    }
+
+    static boolean canSyncCoordinate(boolean updatingWidgets, BlockPos point, String value) {
+        return !updatingWidgets && point != null && parseCoordinate(value).isPresent();
     }
 
     static BlockPos withAxis(BlockPos original, Axis axis, int value) {
@@ -176,28 +182,31 @@ public final class MultiblockDetectorScreen extends Screen {
     }
 
     private void coordinateChanged(Point point, Axis axis, String value) {
-        if (updatingWidgets || point.value(selection) == null) return;
+        BlockPos original = point.value(selection);
+        if (!canSyncCoordinate(updatingWidgets, original, value)) return;
         OptionalInt parsed = parseCoordinate(value);
-        if (parsed.isEmpty()) return;
-        selection = point.replace(selection, withAxis(point.value(selection), axis, parsed.getAsInt()));
+        selection = point.replace(selection, withAxis(original, axis, parsed.getAsInt()));
         writeLocalStateAndSync();
     }
 
     private Button axisButton(Point point, Axis axis, int delta, int x, int y) {
         return Button.builder(Component.literal(delta < 0 ? "-" : "+"), button -> {
             adjust(point, axis, delta);
-            button.setFocused(false);
+            setFocused(null);
         }).bounds(x, y, ADJUST_BUTTON_WIDTH, ADJUST_BUTTON_HEIGHT).build();
     }
 
     private void adjust(Point point, Axis axis, int delta) {
         BlockPos original = point.value(selection);
         if (original == null) return;
-        int current = axisValue(original, axis);
-        if (delta > 0 && current == Integer.MAX_VALUE || delta < 0 && current == Integer.MIN_VALUE) return;
-        selection = point.replace(selection, withAxis(original, axis, current + delta));
+        selection = point.replace(selection, withAxis(original, axis, adjustedCoordinate(axisValue(original, axis), delta)));
         updateWidgets();
         writeLocalStateAndSync();
+    }
+
+    static int adjustedCoordinate(int current, int delta) {
+        if (delta > 0 && current == Integer.MAX_VALUE || delta < 0 && current == Integer.MIN_VALUE) return current;
+        return current + delta;
     }
 
     private void writeLocalStateAndSync() {

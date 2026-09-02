@@ -96,8 +96,8 @@ public final class ExportCommand {
             return 0;
         }
 
-        int volume = volume(min, max);
-        if (volume > MAX_EXPORT_VOLUME) {
+        long volume = volume(min, max);
+        if (exceedsExportVolume(volume)) {
             failure.accept(Component.translatable("command.mmcr.export.volume_exceeded", volume, MAX_EXPORT_VOLUME));
             return 0;
         }
@@ -146,10 +146,10 @@ public final class ExportCommand {
     private static List<MultiblockExportService.SnapshotEntry> snapshot(ServerLevel level, BlockPos controller,
                                                                         BlockPos min, BlockPos max) {
         List<MultiblockExportService.SnapshotEntry> entries = new ArrayList<>();
-        for (int y = min.getY(); y <= max.getY(); y++) {
-            for (int z = min.getZ(); z <= max.getZ(); z++) {
-                for (int x = min.getX(); x <= max.getX(); x++) {
-                    BlockPos worldPos = new BlockPos(x, y, z);
+        for (long y = min.getY(); y <= max.getY(); y++) {
+            for (long z = min.getZ(); z <= max.getZ(); z++) {
+                for (long x = min.getX(); x <= max.getX(); x++) {
+                    BlockPos worldPos = new BlockPos((int) x, (int) y, (int) z);
                     BlockState state = level.getBlockState(worldPos);
                     entries.add(new MultiblockExportService.SnapshotEntry(
                             worldPos.subtract(controller),
@@ -169,9 +169,15 @@ public final class ExportCommand {
                 && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
     }
 
-    private static int volume(BlockPos min, BlockPos max) {
-        return (max.getX() - min.getX() + 1)
-                * (max.getY() - min.getY() + 1)
-                * (max.getZ() - min.getZ() + 1);
+    static boolean exceedsExportVolume(long volume) {
+        return volume > MAX_EXPORT_VOLUME;
+    }
+
+    static long volume(BlockPos min, BlockPos max) {
+        long x = (long) max.getX() - min.getX() + 1;
+        long y = (long) max.getY() - min.getY() + 1;
+        long z = (long) max.getZ() - min.getZ() + 1;
+        if (x > Long.MAX_VALUE / y || x * y > Long.MAX_VALUE / z) return Long.MAX_VALUE;
+        return x * y * z;
     }
 }
