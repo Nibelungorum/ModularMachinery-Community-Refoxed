@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Registers and executes `/mmcr export` for multiblock detector selections.
@@ -51,17 +52,30 @@ public final class ExportCommand {
 
     private static int run(CommandContext<CommandSourceStack> ctx, ExportFormat format) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
+        return export(player, format,
+                message -> ctx.getSource().sendSuccess(() -> message, false),
+                ctx.getSource()::sendFailure,
+                false);
+    }
+
+    public static void exportFromScreen(ServerPlayer player, boolean kubeJs) {
+        export(player, kubeJs ? ExportFormat.KUBEJS : ExportFormat.JAVA,
+                player::sendSystemMessage, player::sendSystemMessage, true);
+    }
+
+    private static int export(ServerPlayer player, ExportFormat format, Consumer<Component> success,
+                              Consumer<Component> failure, boolean mainHandOnly) {
         ServerLevel level = player.level();
 
-        ItemStack detector = findSingleDetector(player);
+        ItemStack detector = findSingleDetector(player, mainHandOnly);
         if (detector == null) {
-            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.require_detector"));
+            failure.accept(Component.translatable("command.mmcr.export.require_detector"));
             return 0;
         }
 
         MultiblockDetectorSelection selection = MultiblockDetectorItem.selection(detector);
         if (!selection.isComplete()) {
-            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.incomplete_selection"));
+            failure.accept(Component.translatable("command.mmcr.export.incomplete_selection"));
             return 0;
         }
 
@@ -78,13 +92,13 @@ public final class ExportCommand {
                 Math.max(first.getZ(), second.getZ()));
 
         if (!contains(min, max, controller)) {
-            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.controller_outside"));
+            failure.accept(Component.translatable("command.mmcr.export.controller_outside"));
             return 0;
         }
 
         int volume = volume(min, max);
         if (volume > MAX_EXPORT_VOLUME) {
-            ctx.getSource().sendFailure(Component.translatable("command.mmcr.export.volume_exceeded", volume, MAX_EXPORT_VOLUME));
+            failure.accept(Component.translatable("command.mmcr.export.volume_exceeded", volume, MAX_EXPORT_VOLUME));
             return 0;
         }
 
@@ -93,7 +107,7 @@ public final class ExportCommand {
         var gameDir = server.getServerDirectory();
         var face = selection.controllerFace();
         var roll = controllerRoll(level, controller);
-        ctx.getSource().sendSuccess(() -> Component.translatable("command.mmcr.export.started", volume), false);
+        success.accept(Component.translatable("command.mmcr.export.started", volume));
 
         MultiblockExportService.executor().submit(() -> {
             try {
@@ -109,13 +123,17 @@ public final class ExportCommand {
         return 1;
     }
 
-    private static ItemStack findSingleDetector(ServerPlayer player) {
+    private static ItemStack findSingleDetector(ServerPlayer player, boolean mainHandOnly) {
         ItemStack main = player.getItemInHand(InteractionHand.MAIN_HAND);
         ItemStack off = player.getItemInHand(InteractionHand.OFF_HAND);
         boolean mainDetector = main.is(ModItems.MULTIBLOCK_DETECTOR.get());
         boolean offDetector = off.is(ModItems.MULTIBLOCK_DETECTOR.get());
-        if (mainDetector == offDetector) return null;
+        if (!detectorSelectionAllowed(mainDetector, offDetector, mainHandOnly)) return null;
         return mainDetector ? main : off;
+    }
+
+    static boolean detectorSelectionAllowed(boolean mainHandDetector, boolean offHandDetector, boolean mainHandOnly) {
+        return mainHandOnly ? mainHandDetector : mainHandDetector != offHandDetector;
     }
 
     private static Direction controllerRoll(ServerLevel level, BlockPos controller) {
