@@ -10,6 +10,9 @@ import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -47,7 +50,9 @@ class MachineRecipeCategoryTransferTest {
                         new MachineIngredient.FluidIngredient(fluidInput, 250)),
                 List.of(new ItemStack(Items.GOLD_INGOT, 3)),
                 List.of(), 0, 1, false,
-                List.of(new FluidStack(Fluids.LAVA, 500)));
+                List.of(new FluidStack(Fluids.LAVA, 500, DataComponentPatch.builder()
+                        .set(DataComponents.CUSTOM_NAME, Component.literal("Fluid output"))
+                        .build())));
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         List<CapturedSlot> slots = new ArrayList<>();
 
@@ -59,6 +64,10 @@ class MachineRecipeCategoryTransferTest {
                         RecipeIngredientRole.INPUT,
                         RecipeIngredientRole.OUTPUT,
                         RecipeIngredientRole.OUTPUT);
+        assertThat(slots).allSatisfy(slot -> {
+            assertThat(slot.x()).isEqualTo(-1000);
+            assertThat(slot.y()).isEqualTo(-1000);
+        });
         assertThat(slots.get(0).fluidAdds()).extracting(CapturedFluid::fluid)
                 .containsExactly(Fluids.WATER, Fluids.LAVA);
         assertThat(slots.get(0).fluidAdds()).extracting(CapturedFluid::amount)
@@ -69,6 +78,12 @@ class MachineRecipeCategoryTransferTest {
                 .satisfies(add -> assertThat(add.fluid()).isEqualTo(Fluids.LAVA));
         assertThat(slots.get(2).fluidAdds()).singleElement()
                 .extracting(CapturedFluid::amount).isEqualTo(500L);
+        assertThat(slots.get(2).fluidAdds()).singleElement()
+                .extracting(CapturedFluid::componentsPatch)
+                .satisfies(patch -> {
+                    assertThat(patch.isEmpty()).isFalse();
+                    assertThat(patch).isEqualTo(display.fluidOutputs().getFirst().getComponentsPatch());
+                });
         assertThat(slots.get(3).itemAdds()).singleElement()
                 .extracting(ItemStack::getCount).isEqualTo(3);
     }
@@ -82,7 +97,9 @@ class MachineRecipeCategoryTransferTest {
                             || method.getName().equals("addOutputSlot")) {
                         RecipeIngredientRole role = method.getName().equals("addInputSlot")
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT;
-                        CapturedSlot capture = new CapturedSlot(role);
+                        int x = ((Number) arguments[0]).intValue();
+                        int y = ((Number) arguments[1]).intValue();
+                        CapturedSlot capture = new CapturedSlot(role, x, y);
                         slots.add(capture);
                         return recipeSlotBuilder(capture);
                     }
@@ -111,7 +128,9 @@ class MachineRecipeCategoryTransferTest {
                         capture.itemAdds.add(stack);
                     } else if (method.getName().equals("add") && arguments.length >= 2
                             && arguments[0] instanceof Fluid fluid) {
-                        capture.fluidAdds.add(new CapturedFluid(fluid, ((Number) arguments[1]).longValue()));
+                        DataComponentPatch patch = arguments.length >= 3
+                                ? (DataComponentPatch) arguments[2] : DataComponentPatch.EMPTY;
+                        capture.fluidAdds.add(new CapturedFluid(fluid, ((Number) arguments[1]).longValue(), patch));
                     }
                     return method.getReturnType().isAssignableFrom(IRecipeSlotBuilder.class) ? proxy : null;
                 });
@@ -119,16 +138,28 @@ class MachineRecipeCategoryTransferTest {
 
     private static final class CapturedSlot {
         private final RecipeIngredientRole role;
+        private final int x;
+        private final int y;
         private final List<ItemStack> itemStacks = new ArrayList<>();
         private final List<ItemStack> itemAdds = new ArrayList<>();
         private final List<CapturedFluid> fluidAdds = new ArrayList<>();
 
-        private CapturedSlot(RecipeIngredientRole role) {
+        private CapturedSlot(RecipeIngredientRole role, int x, int y) {
             this.role = role;
+            this.x = x;
+            this.y = y;
         }
 
         private RecipeIngredientRole role() {
             return role;
+        }
+
+        private int x() {
+            return x;
+        }
+
+        private int y() {
+            return y;
         }
 
         private List<ItemStack> itemStacks() {
@@ -144,6 +175,6 @@ class MachineRecipeCategoryTransferTest {
         }
     }
 
-    private record CapturedFluid(Fluid fluid, long amount) {
+    private record CapturedFluid(Fluid fluid, long amount, DataComponentPatch componentsPatch) {
     }
 }
