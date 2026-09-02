@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
-import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -134,9 +133,12 @@ class CapabilityHostTest {
     void capability_definitions_use_storage_protocols_from_the_host() {
         StorageHost host = new StorageHost();
 
-        ItemBusCapability item = (ItemBusCapability) definition("item").factory().create(context(host));
-        FluidHatchCapability fluid = (FluidHatchCapability) definition("fluid").factory().create(context(host));
-        EnergyHatchCapability energy = (EnergyHatchCapability) definition("energy").factory().create(context(host));
+        ItemBusCapability item = (ItemBusCapability) CapabilityRegistry.get(BuiltinCapabilityDefinitions.ITEM_TYPE)
+                .factory().create(context(host));
+        FluidHatchCapability fluid = (FluidHatchCapability) CapabilityRegistry.get(BuiltinCapabilityDefinitions.FLUID_TYPE)
+                .factory().create(context(host));
+        EnergyHatchCapability energy = (EnergyHatchCapability) CapabilityRegistry.get(BuiltinCapabilityDefinitions.ENERGY_TYPE)
+                .factory().create(context(host));
 
         assertThat(item.storage()).isSameAs(host.itemStorage());
         assertThat(fluid.storage()).isSameAs(host.fluidStorage());
@@ -197,10 +199,6 @@ class CapabilityHostTest {
             }
             return capabilitySnapshot;
         }
-    }
-
-    private static CapabilityDefinition definition(String path) {
-        return CapabilityRegistry.get(new CapabilityType(cn.howxu.mmcr.MMCR.id(path)));
     }
 
     private static CapabilityCreationContext context(CapabilityHost host) {

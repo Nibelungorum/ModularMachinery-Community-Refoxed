@@ -7,7 +7,7 @@ ServerEvents.recipes( event => {
         parallelized: true,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: '#minecraft:swords', // Tags can be used as ingredients.
                 components: { // Item data components can also be matched.
@@ -19,7 +19,7 @@ ServerEvents.recipes( event => {
                 // consume_chance: 0.5 // Set the consumption chance; 0 keeps the input intact.
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:iron_ingot',
@@ -36,7 +36,7 @@ ServerEvents.recipes( event => {
                 // chance: 0.5 // Outputs can have a chance as well.
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 10
             }

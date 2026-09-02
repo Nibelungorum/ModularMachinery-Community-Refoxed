@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.capability;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
@@ -45,11 +44,12 @@ class BuiltinCapabilityDefinitionsTest {
     void registers_built_in_ids_with_their_typed_facets() {
         assertThat(CapabilityRegistry.values())
                 .extracting(definition -> definition.type().id())
-                .containsExactly(MMCR.id("item"), MMCR.id("fluid"), MMCR.id("energy"));
+                .containsExactly(BuiltinCapabilityDefinitions.ITEM_TYPE.id(),
+                        BuiltinCapabilityDefinitions.FLUID_TYPE.id(), BuiltinCapabilityDefinitions.ENERGY_TYPE.id());
 
-        CapabilityDefinition item = definition("item");
-        CapabilityDefinition fluid = definition("fluid");
-        CapabilityDefinition energy = definition("energy");
+        CapabilityDefinition item = CapabilityRegistry.get(BuiltinCapabilityDefinitions.ITEM_TYPE);
+        CapabilityDefinition fluid = CapabilityRegistry.get(BuiltinCapabilityDefinitions.FLUID_TYPE);
+        CapabilityDefinition energy = CapabilityRegistry.get(BuiltinCapabilityDefinitions.ENERGY_TYPE);
 
         assertThat(item.facets()).contains(ResourceFacet.class, OperationFacet.class);
         assertThat(fluid.facets()).contains(ResourceFacet.class, OperationFacet.class);
@@ -65,9 +65,9 @@ class BuiltinCapabilityDefinitionsTest {
         MachineCapability energy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0))
                 .capabilitySnapshot().capabilities().getFirst();
 
-        assertThat(item.type()).isEqualTo(definition("item").type());
-        assertThat(fluid.type()).isEqualTo(definition("fluid").type());
-        assertThat(energy.type()).isEqualTo(definition("energy").type());
+        assertThat(item.type()).isEqualTo(BuiltinCapabilityDefinitions.ITEM_TYPE);
+        assertThat(fluid.type()).isEqualTo(BuiltinCapabilityDefinitions.FLUID_TYPE);
+        assertThat(energy.type()).isEqualTo(BuiltinCapabilityDefinitions.ENERGY_TYPE);
         assertThat(item).isInstanceOf(ItemBusCapability.class);
         assertThat(fluid).isInstanceOf(FluidHatchCapability.class);
         assertThat(energy).isInstanceOf(EnergyHatchCapability.class);
@@ -79,7 +79,4 @@ class BuiltinCapabilityDefinitionsTest {
         assertThat(energy.facet(OperationFacet.class)).isPresent();
     }
 
-    private static CapabilityDefinition definition(String path) {
-        return CapabilityRegistry.get(new CapabilityType(MMCR.id(path)));
-    }
 }

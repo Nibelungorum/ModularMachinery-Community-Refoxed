@@ -13,19 +13,19 @@ ServerEvents.recipes( event => {
         // Define the item and energy requirements.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:coal',
                 count: 10000
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:raw_iron',
                 count: 8
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:iron_ingot',
@@ -33,7 +33,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 10
             }
@@ -53,19 +53,19 @@ ServerEvents.recipes( event => {
         // Define the item and energy requirements.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:coal',
                 count: 1
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:raw_gold',
                 count: 8
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:gold_ingot',
@@ -73,7 +73,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 12
             }
@@ -94,19 +94,19 @@ ServerEvents.recipes( event => {
         // magic uhh
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:coal',
                 count: 1
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:raw_copper',
                 count: 8
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:copper_ingot',
@@ -114,7 +114,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 10
             }

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -112,8 +113,8 @@ class AutoIOConfigTest {
     @Test
     void itemAndFluidProfilesHaveIndependentEnabledSides() {
         ProfileHost host = new ProfileHost();
-        CapabilityType item = new CapabilityType(MMCR.id("item"));
-        CapabilityType fluid = new CapabilityType(MMCR.id("fluid"));
+        CapabilityType item = BuiltinCapabilityDefinitions.ITEM_TYPE;
+        CapabilityType fluid = BuiltinCapabilityDefinitions.FLUID_TYPE;
 
         host.autoIOConfig(item).setSide(Direction.NORTH, false);
 
@@ -124,8 +125,8 @@ class AutoIOConfigTest {
     @Test
     void keyed_profiles_round_trip_for_each_exposed_capability() {
         ProfileHost host = new ProfileHost();
-        CapabilityType item = new CapabilityType(MMCR.id("item"));
-        CapabilityType fluid = new CapabilityType(MMCR.id("fluid"));
+        CapabilityType item = BuiltinCapabilityDefinitions.ITEM_TYPE;
+        CapabilityType fluid = BuiltinCapabilityDefinitions.FLUID_TYPE;
         host.autoIOConfig(item).setEnabled(true);
         host.autoIOConfig(item).setSide(Direction.NORTH, false);
         host.autoIOConfig(fluid).setSide(Direction.SOUTH, false);

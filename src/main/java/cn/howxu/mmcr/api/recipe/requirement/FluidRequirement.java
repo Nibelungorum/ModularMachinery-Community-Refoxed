@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -19,7 +18,7 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags) implements MachineRequirement {
-    private static final Identifier TYPE_ID = MMCR.id("fluid");
+    private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "fluid");
     public static final MapCodec<FluidRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

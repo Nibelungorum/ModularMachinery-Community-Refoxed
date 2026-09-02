@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jei;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import mezz.jei.api.constants.VanillaTypes;
@@ -67,7 +66,7 @@ public final class JeiIngredientAdapterRegistry {
     private static final class ItemAdapter implements JeiIngredientAdapter {
         @Override
         public Identifier typeId() {
-            return MMCR.id("item");
+            return ItemRequirement.TYPE.id();
         }
 
         @Override
@@ -102,7 +101,7 @@ public final class JeiIngredientAdapterRegistry {
     private static final class FluidAdapter implements JeiIngredientAdapter {
         @Override
         public Identifier typeId() {
-            return MMCR.id("fluid");
+            return FluidRequirement.TYPE.id();
         }
 
         @Override

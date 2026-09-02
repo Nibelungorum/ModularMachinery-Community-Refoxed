@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
@@ -104,8 +105,8 @@ public class AutoIOGameTest {
         itemSource.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
         fluidSource.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
-        CapabilityType itemType = capabilityType(input, "item");
-        CapabilityType fluidType = capabilityType(input, "fluid");
+        CapabilityType itemType = capabilityType(input, BuiltinCapabilityDefinitions.ITEM_TYPE);
+        CapabilityType fluidType = capabilityType(input, BuiltinCapabilityDefinitions.FLUID_TYPE);
         configureAutoIO(input, itemType, Direction.EAST);
         configureAutoIO(input, fluidType, Direction.WEST);
 
@@ -143,8 +144,8 @@ public class AutoIOGameTest {
         output.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
         output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
-        CapabilityType itemType = capabilityType(output, "item");
-        CapabilityType fluidType = capabilityType(output, "fluid");
+        CapabilityType itemType = capabilityType(output, BuiltinCapabilityDefinitions.ITEM_TYPE);
+        CapabilityType fluidType = capabilityType(output, BuiltinCapabilityDefinitions.FLUID_TYPE);
         configureAutoIO(output, itemType, Direction.EAST);
         configureAutoIO(output, fluidType, Direction.WEST);
 
@@ -182,8 +183,8 @@ public class AutoIOGameTest {
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
         input.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
-        CapabilityType itemType = capabilityType(input, "item");
-        CapabilityType fluidType = capabilityType(input, "fluid");
+        CapabilityType itemType = capabilityType(input, BuiltinCapabilityDefinitions.ITEM_TYPE);
+        CapabilityType fluidType = capabilityType(input, BuiltinCapabilityDefinitions.FLUID_TYPE);
         helper.assertTrue(input.ejectContents(itemType), "Item-specific ejection moves item contents");
         helper.assertTrue(itemTarget.getItem(0).is(Items.COBBLESTONE), "Item ejection reaches the item handler");
         helper.assertTrue(input.fluidStorage().getAmountAsLong() == 2_000,
@@ -389,12 +390,12 @@ public class AutoIOGameTest {
         }
     }
 
-    private static CapabilityType capabilityType(IOPortBlockEntity port, String id) {
+    private static CapabilityType capabilityType(IOPortBlockEntity port, CapabilityType expectedType) {
         return port.capabilitySnapshot().capabilities().stream()
-                .filter(capability -> capability.type().id().equals(MMCR.id(id)))
+                .filter(capability -> capability.type().equals(expectedType))
                 .map(capability -> capability.type())
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Missing combined capability: " + id));
+                .orElseThrow(() -> new IllegalStateException("Missing combined capability: " + expectedType.id()));
     }
 
     private static void configureAutoIO(IOPortBlockEntity port, CapabilityType type, Direction side) {

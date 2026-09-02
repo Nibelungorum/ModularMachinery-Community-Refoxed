@@ -6,13 +6,13 @@ ServerEvents.recipes( event => {
         parallelized: true,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:stick',
                 count: 4
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:iron_ingot',
@@ -20,12 +20,12 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 10
             },
             {
-                type: 'smart_interface', // Add a smart interface requirement.
+                type: 'mmcr:smart_interface', // Add a smart interface requirement.
                 io: 'input', // Use output to change the interface value instead.
                 interface_type: 'kubejs_mode',
                 min_value: 1,
@@ -41,13 +41,13 @@ ServerEvents.recipes( event => {
         parallelized: true,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:stick',
                 count: 4
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:diamond',
@@ -55,12 +55,12 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 1
             },
             {
-                type: 'smart_interface',
+                type: 'mmcr:smart_interface',
                 io: 'input',
                 interface_type: 'kubejs_mode',
                 min_value: 2,
@@ -76,13 +76,13 @@ ServerEvents.recipes( event => {
         parallelized: true,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:stick',
                 count: 4
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:gold_ingot',
@@ -98,12 +98,12 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 10
             },
             {
-                type: 'smart_interface',
+                type: 'mmcr:smart_interface',
                 io: 'input',
                 interface_type: 'kubejs_conversation',
                 min_value: 0,

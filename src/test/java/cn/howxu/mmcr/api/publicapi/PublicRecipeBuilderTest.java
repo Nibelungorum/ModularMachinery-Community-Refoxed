@@ -298,7 +298,7 @@ class PublicRecipeBuilderTest {
     @Test
     void custom_recipe_io_copies_payload_and_rejects_invalid_declarations() {
         JsonObject payload = new JsonObject();
-        payload.addProperty("type", "energy");
+        payload.addProperty("type", "neoforge:energy");
         payload.addProperty("io", "input");
         payload.addProperty("fe_per_tick", 12);
         var custom = new CustomRecipeIo(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.TYPE.id(),

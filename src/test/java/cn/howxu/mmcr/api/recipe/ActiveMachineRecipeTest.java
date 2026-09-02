@@ -46,7 +46,7 @@ class ActiveMachineRecipeTest {
         root.addProperty("machine", "mmcr:test_cube");
         root.addProperty("tick_time", 20);
         JsonObject requirement = new JsonObject();
-        requirement.addProperty("type", "item");
+        requirement.addProperty("type", "minecraft:item");
         requirement.addProperty("io", "output");
         JsonObject stack = new JsonObject();
         stack.addProperty("id", "minecraft:diamond_sword");

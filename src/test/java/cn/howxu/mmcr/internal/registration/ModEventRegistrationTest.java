@@ -114,7 +114,7 @@ class ModEventRegistrationTest {
 
         ModEventRegistration.registerPayloads(registrar);
 
-        assertThat(registrar.version).isEqualTo("1");
+        assertThat(registrar.version).isEqualTo("3");
         assertThat(registrar.flows).containsExactly(
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                 PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
@@ -290,13 +290,13 @@ class ModEventRegistrationTest {
     }
 
     private static final class RecordingPayloadRegistrar extends PayloadRegistrar {
-        private final String version = "1";
+        private final String version = "3";
         private final List<PacketFlow> flows = new ArrayList<>();
         private final List<CustomPacketPayload.Type<?>> types = new ArrayList<>();
         private final List<Boolean> handlers = new ArrayList<>();
 
         private RecordingPayloadRegistrar() {
-            super("1");
+            super("3");
         }
 
         @Override

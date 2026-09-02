@@ -9,7 +9,7 @@ ServerEvents.recipes(event => {
         ], // Declare the host machines where this recipe can run.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:potion',
                 components: {
@@ -20,7 +20,7 @@ ServerEvents.recipes(event => {
                 count: 1
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:potion',
@@ -33,7 +33,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 100
             }
@@ -48,13 +48,13 @@ ServerEvents.recipes(event => {
         parallelized: true,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:apple',
                 count: 1
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:golden_apple',
@@ -62,7 +62,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 100
             }

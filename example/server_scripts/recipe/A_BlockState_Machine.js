@@ -5,19 +5,19 @@ ServerEvents.recipes(event => {
         tick_time: 300,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:apple',
                 count: 3
             },
             {
-                type: 'fluid',
+                type: 'minecraft:fluid',
                 io: 'input',
                 fluid: 'minecraft:water',
                 amount: 1
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:diamond',
@@ -25,7 +25,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'fluid',
+                type: 'minecraft:fluid',
                 io: 'output',
                 stack: {
                     id: 'minecraft:lava',
@@ -33,7 +33,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'output',
                 fe_per_tick: 200
             }
@@ -48,19 +48,19 @@ ServerEvents.recipes(event => {
         tick_time: 200,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:golden_apple',
                 count: 2
             },
             {
-                type: 'fluid',
+                type: 'minecraft:fluid',
                 io: 'input',
                 fluid: 'minecraft:water',
                 amount: 800
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:gold_ingot',
@@ -68,7 +68,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'fluid',
+                type: 'minecraft:fluid',
                 io: 'output',
                 stack: {
                     id: 'minecraft:lava',
@@ -76,12 +76,12 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 10
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'output',
                 fe_per_tick: 200
             }

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -86,13 +87,13 @@ class MenuScreenTest {
 
     @Test
     void auto_io_control_tooltip_uses_capability_and_direction() {
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("item"), false))
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), false))
                 .isEqualTo("mmcr.auto_io.item_input_control");
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("item"), true))
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), true))
                 .isEqualTo("mmcr.auto_io.item_output_control");
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("fluid"), false))
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), false))
                 .isEqualTo("mmcr.auto_io.fluid_input_control");
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(MMCR.id("fluid"), true))
+        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), true))
                 .isEqualTo("mmcr.auto_io.fluid_output_control");
     }
 
@@ -144,8 +145,8 @@ class MenuScreenTest {
     void selected_capability_state_can_choose_a_non_first_capability() throws Exception {
         CapabilitySelectionScreen screen = (CapabilitySelectionScreen) unsafe().allocateInstance(
                 CapabilitySelectionScreen.class);
-        Identifier item = MMCR.id("item");
-        Identifier fluid = MMCR.id("fluid");
+        Identifier item = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
+        Identifier fluid = BuiltinCapabilityDefinitions.FLUID_TYPE.id();
 
         screen.choose(fluid);
 

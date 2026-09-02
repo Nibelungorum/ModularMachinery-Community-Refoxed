@@ -91,7 +91,7 @@ class MachineRecipeJsonTest {
             output.addProperty("type", JsonOutput.TYPE.serializedId());
             json.add("outputs", array(output));
             var outputRequirement = new JsonObject();
-            outputRequirement.addProperty("type", "energy");
+            outputRequirement.addProperty("type", "neoforge:energy");
             outputRequirement.addProperty("io", "output");
             outputRequirement.addProperty("fe_per_tick", 7);
             json.add("requirements", array(outputRequirement));
@@ -142,14 +142,14 @@ class MachineRecipeJsonTest {
         explicit.add("components", componentJson());
         explicit.addProperty("consume_chance", 0.5F);
         var energyRequirement = new JsonObject();
-        energyRequirement.addProperty("type", "energy");
+        energyRequirement.addProperty("type", "neoforge:energy");
         energyRequirement.addProperty("io", "input");
         energyRequirement.addProperty("fe_per_tick", 80);
         var requirements = new JsonArray();
         requirements.add(explicit);
         requirements.add(energyRequirement);
         var fluidRequirement = new JsonObject();
-        fluidRequirement.addProperty("type", "fluid");
+        fluidRequirement.addProperty("type", "minecraft:fluid");
         fluidRequirement.addProperty("io", "output");
         fluidRequirement.add("stack", fluidStack("minecraft:water", 1000));
         fluidRequirement.addProperty("chance", 0.75F);
@@ -369,7 +369,7 @@ class MachineRecipeJsonTest {
 
     private static JsonObject itemInput(String item, int count) {
         var input = new JsonObject();
-        input.addProperty("type", "item");
+        input.addProperty("type", "minecraft:item");
         input.add("item", arrayValue(item));
         input.addProperty("count", count);
         return input;

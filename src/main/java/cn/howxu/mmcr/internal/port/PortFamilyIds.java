@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.port;
 
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -9,9 +9,9 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public final class PortFamilyIds {
-    public static final Identifier ITEM = MMCR.id("item");
-    public static final Identifier FLUID = MMCR.id("fluid");
-    public static final Identifier ENERGY = MMCR.id("energy");
+    public static final Identifier ITEM = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
+    public static final Identifier FLUID = BuiltinCapabilityDefinitions.FLUID_TYPE.id();
+    public static final Identifier ENERGY = BuiltinCapabilityDefinitions.ENERGY_TYPE.id();
 
     private PortFamilyIds() {
     }

@@ -1,9 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
@@ -375,13 +375,13 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     protected List<Identifier> supportedCapabilityIds() {
         if (menu instanceof CombinedPortMenu || menu instanceof ExtendedCombinedMenu) {
-            return List.of(MMCR.id("item"), MMCR.id("fluid"));
+            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
         }
         if (menu instanceof FluidHatchMenu || menu instanceof ExtendedFluidMenu) {
-            return List.of(MMCR.id("fluid"));
+            return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE.id());
         }
-        if (menu instanceof EnergyHatchMenu) return List.of(MMCR.id("energy"));
-        return List.of(MMCR.id("item"));
+        if (menu instanceof EnergyHatchMenu) return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE.id());
+        return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
     }
 
     static String autoIOControlTooltipKey(Identifier capabilityId, boolean outputPort) {
@@ -390,7 +390,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     protected final Identifier selectedCapabilityId(List<Identifier> capabilityIds) {
         if (selectedCapabilityId != null && capabilityIds.contains(selectedCapabilityId)) return selectedCapabilityId;
-        return capabilityIds.stream().findFirst().orElse(MMCR.id("item"));
+        return capabilityIds.stream().findFirst().orElse(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
     }
 
     private static Direction autoIODirectionAt(int x, int y) {

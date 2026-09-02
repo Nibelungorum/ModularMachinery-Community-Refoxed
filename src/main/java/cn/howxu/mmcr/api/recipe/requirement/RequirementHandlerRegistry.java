@@ -18,9 +18,9 @@ public final class RequirementHandlerRegistry {
     private static final Map<Identifier, RequirementType<?>> CANONICAL_TYPES = new ConcurrentHashMap<>();
     private static final Object MUTATION_LOCK = new Object();
     private static final List<Identifier> BUILT_IN_IDS = List.of(
-            Identifier.fromNamespaceAndPath("mmcr", "item"),
-            Identifier.fromNamespaceAndPath("mmcr", "fluid"),
-            Identifier.fromNamespaceAndPath("mmcr", "energy"),
+            Identifier.fromNamespaceAndPath("minecraft", "item"),
+            Identifier.fromNamespaceAndPath("minecraft", "fluid"),
+            Identifier.fromNamespaceAndPath("neoforge", "energy"),
             Identifier.fromNamespaceAndPath("mmcr", "smart_interface"));
 
     private RequirementHandlerRegistry() {

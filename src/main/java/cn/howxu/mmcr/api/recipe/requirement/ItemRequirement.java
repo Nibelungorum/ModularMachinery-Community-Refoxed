@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
@@ -22,7 +21,7 @@ import java.util.Optional;
  */
 public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, float chance, List<String> tags,
                               DataComponentPredicateSet components, float consumeChance) implements MachineRequirement {
-    private static final Identifier TYPE_ID = MMCR.id("item");
+    private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "item");
     public static final MapCodec<ItemRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

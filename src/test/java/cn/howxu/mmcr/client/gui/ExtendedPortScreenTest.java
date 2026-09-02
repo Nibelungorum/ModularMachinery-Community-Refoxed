@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
@@ -225,7 +226,7 @@ class ExtendedPortScreenTest {
             Method method = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton",
                     int.class, int.class, Identifier.class);
             method.setAccessible(true);
-            return (Button) method.invoke(this, 0, 0, MMCR.id("item"));
+            return (Button) method.invoke(this, 0, 0, BuiltinCapabilityDefinitions.ITEM_TYPE.id());
         }
 
         private int firstLine() {

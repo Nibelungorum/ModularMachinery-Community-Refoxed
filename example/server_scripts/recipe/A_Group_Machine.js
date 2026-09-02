@@ -6,7 +6,7 @@ ServerEvents.recipes( event => {
         allow_partial_outputs: true, // Discard outputs when the structure lacks enough output ports.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: '#minecraft:logs',
                 count: 1
@@ -14,7 +14,7 @@ ServerEvents.recipes( event => {
             // This recipe has three outputs. Without a three-level distillation tower,
             // outputs without an available port are discarded.
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:coal',
@@ -22,7 +22,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:charcoal',
@@ -30,7 +30,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:gunpowder',
@@ -39,7 +39,7 @@ ServerEvents.recipes( event => {
                 chance: 0.2
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 20
             }

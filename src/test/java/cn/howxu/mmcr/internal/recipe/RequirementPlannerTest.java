@@ -57,6 +57,7 @@ import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
@@ -442,6 +443,32 @@ class RequirementPlannerTest {
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void built_in_requirements_match_existing_capability_identifiers() {
+        BulkItemStorage itemStorage = new BulkItemStorage(64, null);
+        itemStorage.insert(ironResource(), 1, false);
+        LongFluidStorage fluidStorage = new LongFluidStorage(2_000, null);
+        fluidStorage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        LongValueStorage energyStorage = new LongValueStorage(100, 100, null);
+        energyStorage.setAmount(10);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY),
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
+                List.of(new StorageCapability(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), IOType.INPUT, itemStorage),
+                        new StorageCapability(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), IOType.INPUT, fluidStorage),
+                        new StorageCapability(BuiltinCapabilityDefinitions.ENERGY_TYPE.id(), IOType.INPUT, energyStorage)),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(RequirementHandlerRegistry.resourceWakeupsFor(new EnergyRequirement(
+                RecipeModifier.IOType.INPUT, 4))).anySatisfy(wakeup ->
+                assertThat(wakeup.matcher().test(BuiltinCapabilityDefinitions.ENERGY_TYPE)).isTrue());
     }
 
     @Test

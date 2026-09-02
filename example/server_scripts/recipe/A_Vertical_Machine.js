@@ -7,13 +7,13 @@ ServerEvents.recipes( event => {
         tick_time: 300,
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:apple',
                 count: 3
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:iron_ingot',
@@ -21,7 +21,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'fluid', // Set the requirement type to fluid.
+                type: 'minecraft:fluid', // Set the requirement type to fluid.
                 io: 'output',
                 stack: {
                     id: 'minecraft:water', // Fluid identifier.
@@ -29,7 +29,7 @@ ServerEvents.recipes( event => {
                 }
             },
             {
-                type: 'energy', // No energy is consumed when no energy input is defined.
+                type: 'neoforge:energy', // No energy is consumed when no energy input is defined.
                 io: 'input',
                 fe_per_tick: 20
             }

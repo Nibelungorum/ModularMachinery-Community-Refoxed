@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.capability.sync.CapabilitySyncEntry;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
@@ -38,8 +39,8 @@ class PortStorageSyncPayloadTest {
     void payload_codec_round_trips_position_kind_order_resource_identity_and_long_values() {
         PktPortStorageSyncPayload payload = new PktPortStorageSyncPayload(
                 new BlockPos(1, 2, 3), PortKinds.COMBINED_INPUT.id(),
-                List.of(new CapabilitySyncEntry(cn.howxu.mmcr.MMCR.id("item"), 0, new byte[] {1, 2, 3}),
-                        new CapabilitySyncEntry(cn.howxu.mmcr.MMCR.id("fluid"), 1, new byte[] {4, 5})));
+                List.of(new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), 0, new byte[] {1, 2, 3}),
+                        new CapabilitySyncEntry(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), 1, new byte[] {4, 5})));
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktPortStorageSyncPayload.STREAM_CODEC.encode(buffer, payload);
@@ -57,12 +58,12 @@ class PortStorageSyncPayloadTest {
     void payload_rejects_malformed_kind_negative_values_and_invalid_entry_counts() {
         assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO, "not a kind", List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new CapabilitySyncEntry(cn.howxu.mmcr.MMCR.id("item"), -1, new byte[0]))
+        assertThatThrownBy(() -> new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), -1, new byte[0]))
                 .isInstanceOf(IllegalArgumentException.class);
 
         List<CapabilitySyncEntry> tooMany = new ArrayList<>();
         for (int slot = 0; slot <= PktPortStorageSyncPayload.MAX_ENTRIES; slot++) {
-            tooMany.add(new CapabilitySyncEntry(cn.howxu.mmcr.MMCR.id("item"), slot, new byte[0]));
+            tooMany.add(new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), slot, new byte[0]));
         }
         assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
                 PortKinds.EXTENDED_ITEM_INPUT.id(), tooMany))
@@ -73,7 +74,7 @@ class PortStorageSyncPayloadTest {
     void payload_rejects_total_entry_bytes_above_the_packet_budget() {
         List<CapabilitySyncEntry> entries = new ArrayList<>();
         for (int index = 0; index < 17; index++) {
-            entries.add(new CapabilitySyncEntry(cn.howxu.mmcr.MMCR.id("item"), index,
+            entries.add(new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), index,
                     new byte[CapabilitySyncEntry.MAX_PAYLOAD_BYTES]));
         }
 

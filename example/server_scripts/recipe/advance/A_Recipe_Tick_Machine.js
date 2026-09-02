@@ -6,19 +6,19 @@ ServerEvents.recipes(event => {
         // Define the item and energy requirements.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:coal',
                 count: 10000
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:diamond',
                 count: 8
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:gold_ingot',
@@ -26,7 +26,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 20
             }
@@ -40,19 +40,19 @@ ServerEvents.recipes(event => {
         // Define the item and energy requirements.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:diamond',
                 count: 114514
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:iron_ingot',
                 count: 8
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:coal',
@@ -60,7 +60,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 20
             }
@@ -74,19 +74,19 @@ ServerEvents.recipes(event => {
         // Define the item and energy requirements.
         requirements: [
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:gold_ingot',
                 count: 32
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'input',
                 item: 'minecraft:stick',
                 count: 8
             },
             {
-                type: 'item',
+                type: 'minecraft:item',
                 io: 'output',
                 stack: {
                     id: 'minecraft:diamond',
@@ -94,7 +94,7 @@ ServerEvents.recipes(event => {
                 }
             },
             {
-                type: 'energy',
+                type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 20
             }

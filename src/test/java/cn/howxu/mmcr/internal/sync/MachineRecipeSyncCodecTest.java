@@ -84,11 +84,11 @@ class MachineRecipeSyncCodecTest {
                 .hasMessageContaining("Unsupported machine recipe sync version");
         assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("unknown"), 0, buffer -> {
         }))).isInstanceOf(DecoderException.class);
-        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("energy"),
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(EnergyRequirement.TYPE.id(),
                 RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE + 1, buffer -> {
                 }))).isInstanceOf(DecoderException.class);
-        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("energy"), -1, buffer -> {
-            buffer.writeUtf("{\"type\":\"mmcr:energy\",\"io\":\"input\",\"fe_per_tick\":40}");
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(EnergyRequirement.TYPE.id(), -1, buffer -> {
+            buffer.writeUtf("{\"type\":\"neoforge:energy\",\"io\":\"input\",\"fe_per_tick\":40}");
             buffer.writeByte(0);
         }))).isInstanceOf(DecoderException.class).hasMessageContaining("Invalid requirement payload");
     }

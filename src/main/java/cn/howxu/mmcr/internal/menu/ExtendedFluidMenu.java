@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.menu;
 
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.tile.ExtendedFluidHatchBlockEntity;
@@ -82,7 +82,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
 
     public List<FluidStorageEntry> entries() { return entries; }
 
-    public Identifier selectedCapabilityId() { return MMCR.id("fluid"); }
+    public Identifier selectedCapabilityId() { return BuiltinCapabilityDefinitions.FLUID_TYPE.id(); }
 
     public boolean matches(BlockPos targetPos, String targetKind) {
         return pos.equals(targetPos) && kind.equals(targetKind);

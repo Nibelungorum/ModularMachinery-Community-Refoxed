@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
@@ -15,7 +14,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<String> tags) implements MachineRequirement {
-    private static final Identifier TYPE_ID = MMCR.id("energy");
+    private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("neoforge", "energy");
     public static final MapCodec<EnergyRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

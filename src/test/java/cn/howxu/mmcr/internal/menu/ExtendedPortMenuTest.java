@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
@@ -64,7 +65,7 @@ class ExtendedPortMenuTest {
         assertThat(menu.kind()).isEqualTo(PortKinds.EXTENDED_ITEM_INPUT.id());
         assertThat(menu.slotCount()).isEqualTo(2);
         assertThat(menu.entries()).isEmpty();
-        assertThat(menu.selectedCapabilityId()).isEqualTo(MMCR.id("item"));
+        assertThat(menu.selectedCapabilityId()).isEqualTo(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
     }
 
     @Test

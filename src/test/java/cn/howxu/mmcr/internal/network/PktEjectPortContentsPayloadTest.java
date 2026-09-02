@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
@@ -57,7 +58,7 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -72,7 +73,7 @@ class PktEjectPortContentsPayloadTest {
         }, PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -82,7 +83,7 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), new BlockPos(100, 2, 3));
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -92,7 +93,7 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -102,7 +103,7 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isTrue();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isTrue();
         assertThat(port.ejectCalls).isEqualTo(1);
     }
 
@@ -112,7 +113,7 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("fluid")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.FLUID_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -123,7 +124,7 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), replacement), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
@@ -139,14 +140,15 @@ class PktEjectPortContentsPayloadTest {
         ServerPlayer player = playerWith(port, invalidMenu, PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
-                new PktEjectPortContentsPayload(PORT_POS, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
         assertThat(port.ejectCalls).isZero();
     }
 
     @Test
     void payload_round_trips_its_target_position() {
         var buffer = Unpooled.buffer();
-        PktEjectPortContentsPayload payload = new PktEjectPortContentsPayload(new BlockPos(3, 4, 5), MMCR.id("item"));
+        PktEjectPortContentsPayload payload = new PktEjectPortContentsPayload(new BlockPos(3, 4, 5),
+                BuiltinCapabilityDefinitions.ITEM_TYPE.id());
 
         PktEjectPortContentsPayload.STREAM_CODEC.encode(buffer, payload);
         PktEjectPortContentsPayload decoded = PktEjectPortContentsPayload.STREAM_CODEC.decode(buffer);
@@ -159,7 +161,7 @@ class PktEjectPortContentsPayloadTest {
     void server_handler_rejects_missing_request_context() {
         assertThat(PktEjectPortContentsPayload.ejectOnServer(null, null)).isFalse();
         assertThat(PktEjectPortContentsPayload.ejectOnServer(null,
-                new PktEjectPortContentsPayload(BlockPos.ZERO, MMCR.id("item")))).isFalse();
+                new PktEjectPortContentsPayload(BlockPos.ZERO, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
     }
 
     private static ProbePort inputPort() {
@@ -234,7 +236,7 @@ class PktEjectPortContentsPayloadTest {
         @Override public IOType ioType() { return ioType; }
         @Override public IOPortKind kind() { return kind; }
         @Override public CapabilitySnapshot capabilitySnapshot() {
-            CapabilityType type = new CapabilityType(MMCR.id("item"));
+            CapabilityType type = BuiltinCapabilityDefinitions.ITEM_TYPE;
             MachineCapability capability = new MachineCapability() {
                 @Override public CapabilityType type() { return type; }
                 @Override public IOType ioType() { return ioType; }

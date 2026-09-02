@@ -58,7 +58,7 @@ class MachineIngredientCodecTest {
 
     @Test void invalidItemRequirementComponentsProduceAnError() {
         var json = new JsonObject();
-        json.addProperty("type", "item");
+        json.addProperty("type", "minecraft:item");
         json.addProperty("io", "input");
         json.add("item", Ingredient.CODEC.encodeStart(jsonOps(), Ingredient.of(Items.IRON_INGOT)).getOrThrow());
         json.addProperty("count", 1);
@@ -157,7 +157,7 @@ class MachineIngredientCodecTest {
 
     @Test void energyRequirement_codec_defaults_missing_io_to_input() {
         var json = new JsonObject();
-        json.addProperty("type", "energy");
+        json.addProperty("type", "neoforge:energy");
         json.addProperty("fe_per_tick", 90);
 
         var parsed = MachineRequirement.CODEC.parse(jsonOps(), json).getOrThrow();

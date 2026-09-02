@@ -84,7 +84,7 @@ class MachineRecipeDataDrivenTest {
     void legacy_fields_are_rejected() {
         JsonObject json = recipeJson();
         JsonObject input = new JsonObject();
-        input.addProperty("type", "item");
+        input.addProperty("type", "minecraft:item");
         JsonArray ingredient = new JsonArray();
         ingredient.add("minecraft:iron_ingot");
         input.add("item", ingredient);
@@ -104,7 +104,7 @@ class MachineRecipeDataDrivenTest {
     void empty_canonical_requirements_do_not_enable_legacy_recipe_fields() {
         JsonObject json = recipeJson();
         JsonObject input = new JsonObject();
-        input.addProperty("type", "item");
+        input.addProperty("type", "minecraft:item");
         input.add("item", new JsonPrimitive("minecraft:iron_ingot"));
         input.addProperty("count", 2);
         json.add("inputs", array(input));

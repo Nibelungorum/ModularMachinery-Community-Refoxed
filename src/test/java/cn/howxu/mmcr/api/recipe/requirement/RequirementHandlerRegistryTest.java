@@ -4,11 +4,13 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -26,6 +28,11 @@ class RequirementHandlerRegistryTest {
     private static final RequirementType<TestRequirement> TEST_TYPE = new RequirementType.Definition<>(
             Identifier.fromNamespaceAndPath("mmcr_test", "registered_requirement"),
             MapCodec.unit(() -> new TestRequirement(null, RecipeModifier.IOType.INPUT)), TEST_HANDLER);
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
 
     @BeforeEach
     void openRegistryScope() {
@@ -99,6 +106,22 @@ class RequirementHandlerRegistryTest {
         assertThat(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).error()).isPresent();
         assertThatThrownBy(() -> MachineRequirement.copyOf(requirement))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void built_in_requirement_types_use_external_registry_identifiers() {
+        RequirementHandlerRegistry.registerBuiltIns();
+
+        assertThat(ItemRequirement.TYPE.id()).isEqualTo(Identifier.parse("minecraft:item"));
+        assertThat(FluidRequirement.TYPE.id()).isEqualTo(Identifier.parse("minecraft:fluid"));
+        assertThat(EnergyRequirement.TYPE.id()).isEqualTo(Identifier.parse("neoforge:energy"));
+        assertThat(SmartInterfaceRequirement.TYPE.id()).isEqualTo(Identifier.parse("mmcr:smart_interface"));
+        assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("minecraft:item")))
+                .isSameAs(ItemRequirement.TYPE);
+        assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("minecraft:fluid")))
+                .isSameAs(FluidRequirement.TYPE);
+        assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("neoforge:energy")))
+                .isSameAs(EnergyRequirement.TYPE);
     }
 
     private static RequirementType<TestRequirement> type(String path) {

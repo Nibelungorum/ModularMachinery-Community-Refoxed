@@ -679,7 +679,7 @@ class MachineRecipeTest {
 
     private static JsonObject itemRequirement(String io, String itemId, int count) {
         var requirement = new JsonObject();
-        requirement.addProperty("type", "item");
+        requirement.addProperty("type", "minecraft:item");
         requirement.addProperty("io", io);
         var item = new JsonArray();
         item.add(itemId);
@@ -690,7 +690,7 @@ class MachineRecipeTest {
 
     private static JsonObject itemOutputRequirement(String itemId, int count) {
         var requirement = new JsonObject();
-        requirement.addProperty("type", "item");
+        requirement.addProperty("type", "minecraft:item");
         requirement.addProperty("io", "output");
         var stack = new JsonObject();
         stack.addProperty("id", itemId);
@@ -707,7 +707,7 @@ class MachineRecipeTest {
 
     private static JsonObject fluidOutputRequirement(String fluidId, int amount, float chance) {
         var output = new JsonObject();
-        output.addProperty("type", "fluid");
+        output.addProperty("type", "minecraft:fluid");
         output.addProperty("io", "output");
         var stack = new JsonObject();
         stack.addProperty("id", fluidId);
@@ -719,7 +719,7 @@ class MachineRecipeTest {
 
     private static JsonObject energyRequirement(int fePerTick) {
         var requirement = new JsonObject();
-        requirement.addProperty("type", "energy");
+        requirement.addProperty("type", "neoforge:energy");
         requirement.addProperty("io", "input");
         requirement.addProperty("fe_per_tick", fePerTick);
         return requirement;
