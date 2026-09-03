@@ -41,6 +41,7 @@ import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSink;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.DataStorageBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
+import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
@@ -2209,6 +2210,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (structureChanged || componentsChanged) {
                 updateComponents(previousStructure, matchedMachine, rotatedPattern, compiledPattern, facing,
                         previousLinkedPortPositions, foundModifiers, levels);
+                if (level instanceof ServerLevel serverLevel) {
+                    NetworkInterfaceBindingCoordinator.reconcile(serverLevel.getServer(), this);
+                }
             }
             if (preserveRestoredFactory) {
                 runtime.craftingRuntime().rebindCurrentVersions();
@@ -2827,7 +2831,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         PortRequirementSpec.Failure previousFormationFailure = structure.lastFormationFailure();
         Object previousStructureError = structure.lastStructureError();
         boolean wasFormed = structure.formed() || physicalFormed();
-        if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
+        if (wasFormed && level instanceof ServerLevel serverLevel) {
+            ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
+            NetworkInterfaceBindingCoordinator.clearConnectionsFor(serverLevel.getServer(), this);
+        }
         boolean hadActive = runtime.craftingRuntime().active();
         unbindNetworkInterfaces(activeNetworkInterfacePositions);
         activeNetworkInterfacePositions = Set.of();

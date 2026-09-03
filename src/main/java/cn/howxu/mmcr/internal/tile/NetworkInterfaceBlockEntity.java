@@ -43,7 +43,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     private static final int HEARTBEAT_INTERVAL_TICKS = 40;
 
     private @Nullable GlobalPos owner;
-    private final Map<GlobalPos, Connection> connections = new LinkedHashMap<>();
+    private final Map<ConnectionKey, Connection> connections = new LinkedHashMap<>();
     private int heartbeatCounter;
 
     public NetworkInterfaceBlockEntity(BlockPos pos, BlockState state) {
@@ -78,13 +78,19 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     public boolean addConnection(Connection connection) {
         if (!valid(connection)) return false;
-        Connection previous = connections.put(connection.endpoint(), connection);
+        Connection previous = connections.put(new ConnectionKey(connection.endpoint(), connection.machine()), connection);
         if (!Objects.equals(previous, connection)) setChanged();
         return true;
     }
 
     public boolean removeConnection(GlobalPos endpoint) {
-        if (endpoint == null || connections.remove(endpoint) == null) return false;
+        if (endpoint == null || !connections.keySet().removeIf(key -> endpoint.equals(key.endpoint()))) return false;
+        setChanged();
+        return true;
+    }
+
+    public boolean removeConnection(Connection connection) {
+        if (connection == null || connections.remove(new ConnectionKey(connection.endpoint(), connection.machine())) == null) return false;
         setChanged();
         return true;
     }
@@ -200,5 +206,8 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public record Connection(GlobalPos endpoint, MachineReference machine, long sequence) {
+    }
+
+    private record ConnectionKey(GlobalPos endpoint, MachineReference machine) {
     }
 }

@@ -24,6 +24,7 @@ import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
+import cn.howxu.mmcr.internal.network.NetworkServerState;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.reload.MachineRecipeDataReloadListener;
@@ -210,7 +211,10 @@ public final class ModEventRegistration {
                     SharedIoEvents::onLevelTick,
                     SharedIoEvents::onLevelUnload,
                     RuntimeContentServerBridge::onServerAboutToStart,
-                    RuntimeContentServerBridge::onServerStopped,
+                    event -> {
+                        NetworkServerState.discard(event.getServer());
+                        RuntimeContentServerBridge.onServerStopped(event);
+                    },
                     ModEventRegistration::onDefaultDataComponentsBound,
                     MachineRecipeDataReloadListener::register,
                     event -> syncPlayer(event.getEntity()),
