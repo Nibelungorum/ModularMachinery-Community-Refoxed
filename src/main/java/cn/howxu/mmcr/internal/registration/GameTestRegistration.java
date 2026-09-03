@@ -10,6 +10,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
  */
 public final class GameTestRegistration {
     private static final String GAME_TEST_REGISTRY = "cn.howxu.mmcr.GameTestRegistry";
+    private static final String NETWORK_INTERFACE_GAME_TESTS = "cn.howxu.mmcr.network.NetworkInterfaceGameTests";
 
     private GameTestRegistration() {
     }
@@ -46,6 +47,8 @@ public final class GameTestRegistration {
 
     static void registerTests(String sourceClass, RegisterGameTestsEvent event) {
         invokeOptionalSource(sourceClass, "registerAll",
+                new Class<?>[]{RegisterGameTestsEvent.class}, event);
+        invokeOptionalSource(NETWORK_INTERFACE_GAME_TESTS, "registerAll",
                 new Class<?>[]{RegisterGameTestsEvent.class}, event);
     }
 

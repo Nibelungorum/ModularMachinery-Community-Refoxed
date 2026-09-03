@@ -236,6 +236,19 @@ class ModEventRegistrationTest {
         }
     }
 
+    @Test
+    void network_interface_has_registered_block_entity_item_and_dynamic_model_entry() {
+        assertThat(ModBlocks.NETWORK_INTERFACE.get()).isNotNull();
+        assertThat(ModBlockEntities.BES).containsKey("network_interface");
+        assertThat(ModItems.ITEMS).containsKey("network_interface");
+
+        DynamicOverlayItemModel.Description description = DynamicOverlayItemModel.describeItem(
+                ModItems.ITEMS.get("network_interface").get());
+        assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
+        assertThat(description.baseModel()).isEqualTo(cn.howxu.mmcr.MMCR.id("block/dynamic_io_port"));
+        assertThat(description.overlayTexture()).isEqualTo(DynamicOverlayBakedModel.defaultPortOverlayTexture());
+    }
+
     private static ModEventRegistration.EventHandlers handlers(List<Class<?>> invoked) {
         return new ModEventRegistration.EventHandlers(
                 recording(invoked, RegisterCapabilitiesEvent.class),

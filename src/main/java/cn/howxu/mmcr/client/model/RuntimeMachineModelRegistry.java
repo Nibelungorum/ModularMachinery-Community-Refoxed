@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
@@ -176,6 +177,15 @@ public final class RuntimeMachineModelRegistry {
                     portStyleDefinition(block),
                     DynamicOverlayItemModel.Description.portOverlay(
                             MMCR.id("block/overlay_upgrade_bus_" + upgradeBus.size().id())));
+        }
+        if (block instanceof NetworkInterfaceBlock) {
+            return new RuntimeBlockModelDefinition(
+                    block,
+                    blockName,
+                    DynamicOverlayBakedModel.Kind.PORT,
+                    portStyleDefinition(block),
+                    DynamicOverlayItemModel.Description.portOverlay(
+                            DynamicOverlayBakedModel.defaultPortOverlayTexture()));
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock
                 || block instanceof SmartInterfaceBlock || block instanceof ModuleCouplerBlock) {
