@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.data;
 
-/** Supported scalar types stored by a data storage.
+/** Supported types stored by a data storage.
  * @author howxu <dev@howxu.cn>
  */
 public enum DataValueType {
@@ -13,5 +13,7 @@ public enum DataValueType {
     FLOAT,
     DOUBLE,
     BIG_INTEGER,
-    BIG_DECIMAL
+    BIG_DECIMAL,
+    LIST,
+    MAP
 }

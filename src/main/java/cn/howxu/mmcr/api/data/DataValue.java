@@ -2,10 +2,15 @@ package cn.howxu.mmcr.api.data;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Immutable tagged scalar value for machine data storage.
+/** Immutable tagged value for machine data storage.
  * @author howxu <dev@howxu.cn>
  */
 public final class DataValue {
@@ -59,6 +64,27 @@ public final class DataValue {
         return new DataValue(DataValueType.BIG_DECIMAL, requireValue(value));
     }
 
+    public static DataValue list(List<DataValue> values) {
+        if (values == null) throw new IllegalArgumentException("values must not be null");
+        List<DataValue> copy = new ArrayList<>(values.size());
+        for (DataValue value : values) {
+            if (value == null) throw new IllegalArgumentException("list value must not be null");
+            copy.add(value);
+        }
+        return new DataValue(DataValueType.LIST, List.copyOf(copy));
+    }
+
+    public static DataValue map(Map<String, DataValue> values) {
+        if (values == null) throw new IllegalArgumentException("values must not be null");
+        Map<String, DataValue> copy = new LinkedHashMap<>();
+        values.forEach((key, value) -> {
+            if (key == null || key.isBlank()) throw new IllegalArgumentException("map key must not be null or blank");
+            if (value == null) throw new IllegalArgumentException("map value must not be null");
+            copy.put(key, value);
+        });
+        return new DataValue(DataValueType.MAP, Collections.unmodifiableMap(copy));
+    }
+
     public DataValueType type() {
         return type;
     }
@@ -107,6 +133,14 @@ public final class DataValue {
         return as(DataValueType.BIG_DECIMAL, BigDecimal.class);
     }
 
+    public Optional<List<DataValue>> asList() {
+        return as(DataValueType.LIST, List.class);
+    }
+
+    public Optional<Map<String, DataValue>> asMap() {
+        return as(DataValueType.MAP, Map.class);
+    }
+
     public boolean booleanValue() {
         return exact(DataValueType.BOOLEAN, Boolean.class);
     }
@@ -147,8 +181,9 @@ public final class DataValue {
         return exact(DataValueType.BIG_DECIMAL, BigDecimal.class);
     }
 
-    private <T> Optional<T> as(DataValueType expected, Class<T> valueType) {
-        return type == expected ? Optional.of(valueType.cast(value)) : Optional.empty();
+    @SuppressWarnings("unchecked")
+    private <T> Optional<T> as(DataValueType expected, Class<?> valueType) {
+        return type == expected ? Optional.of((T) valueType.cast(value)) : Optional.empty();
     }
 
     private <T> T exact(DataValueType expected, Class<T> valueType) {

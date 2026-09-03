@@ -149,6 +149,8 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
             case DOUBLE -> output.putDouble(VALUE_KEY, value.doubleValue());
             case BIG_INTEGER -> output.putString(VALUE_KEY, value.bigIntegerValue().toString());
             case BIG_DECIMAL -> output.putString(VALUE_KEY, value.bigDecimalValue().toString());
+            default -> {
+            }
         }
     }
 
@@ -170,6 +172,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
             case DOUBLE -> DataValue.of(input.getDoubleOr(VALUE_KEY, 0D));
             case BIG_INTEGER -> DataValue.of(new BigInteger(input.getStringOr(VALUE_KEY, "")));
             case BIG_DECIMAL -> DataValue.of(new BigDecimal(input.getStringOr(VALUE_KEY, "")));
+            default -> null;
         };
     }
 }
