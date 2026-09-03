@@ -185,6 +185,18 @@ class NetworkInterfaceBindingCoordinatorTest {
         assertThat(unloaded.sourceNetwork.connections()).hasSize(1);
     }
 
+    @Test
+    void heartbeat_removes_reciprocal_records_when_the_loaded_source_has_a_stale_owner() throws Exception {
+        Fixture fixture = fixture(2, 2, true, true);
+        assertThat(connect(fixture)).isEqualTo(NetworkInterfaceBindingCoordinator.ConnectionResult.CONNECTED);
+        setField(fixture.sourceNetwork, "owner", fixture.targetOwner);
+
+        heartbeat(fixture);
+
+        assertThat(fixture.sourceNetwork.connections()).isEmpty();
+        assertThat(fixture.targetNetwork.connections()).isEmpty();
+    }
+
     private static NetworkInterfaceBlockEntity createInterface(BlockPos pos) {
         BlockEntity entity = ModBlockEntities.NETWORK_INTERFACE.get().create(pos,
                 ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());

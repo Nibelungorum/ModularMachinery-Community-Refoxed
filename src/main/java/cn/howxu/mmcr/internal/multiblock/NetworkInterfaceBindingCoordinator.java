@@ -110,9 +110,11 @@ public final class NetworkInterfaceBindingCoordinator {
             for (NetworkInterfaceBlockEntity network : activeInterfaces(server, controller)) {
                 GlobalPos sourceEndpoint = GlobalPos.of(level.dimension(), network.getBlockPos());
                 for (NetworkInterfaceBlockEntity.Connection connection : network.connections()) {
+                    ResolvedEndpoint source = resolve(server, sourceEndpoint);
                     ResolvedEndpoint target = resolve(server, connection.endpoint());
                     if (target == null) continue;
-                    if (target.controller == null || !formed(target.controller)
+                    if (source == null || source.network != network || source.controller != controller || !formed(source.controller)
+                            || target.controller == null || !formed(target.controller)
                             || !connection.machine().equals(target.controller.machineReference())
                             || !target.controller.hasActiveNetworkInterface(connection.endpoint().pos())
                             || !allows(controller, connection.machine()) || !allows(target.controller, sourceMachine)
