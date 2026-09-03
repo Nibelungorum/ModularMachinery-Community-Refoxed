@@ -51,4 +51,8 @@
 [submodule "reference/ae-flux"]
 	path = reference/ae-flux
 	url = https://github.com/GlodBlock/ExtendedAE
-	branch = appflux/1.21.1-neoforge
+	branch = appflux/26.1.2-neoforge
+[submodule "reference/eae"]
+	path = reference/eae
+	url = https://github.com/GlodBlock/ExtendedAE
+	branch = 26.1.2-neoforge
