@@ -112,6 +112,81 @@ class DataStorageBlockEntityTest {
     }
 
     @Test
+    void malformed_scalar_values_are_skipped_while_valid_siblings_remain() {
+        CompoundTag serialized = new CompoundTag();
+        ListTag values = new ListTag();
+        CompoundTag valid = new CompoundTag();
+        valid.putString("Key", "valid");
+        valid.putString("Type", "STRING");
+        valid.putString("Value", "kept");
+        values.add(valid);
+
+        for (String type : List.of("BOOLEAN", "STRING", "INT", "LONG", "FLOAT", "DOUBLE")) {
+            CompoundTag missing = new CompoundTag();
+            missing.putString("Key", "missing" + type);
+            missing.putString("Type", type);
+            values.add(missing);
+
+            CompoundTag wrongType = new CompoundTag();
+            wrongType.putString("Key", "wrong" + type);
+            wrongType.putString("Type", type);
+            if (type.equals("STRING")) {
+                wrongType.putInt("Value", 1);
+            } else {
+                wrongType.putString("Value", "not-a-" + type);
+            }
+            values.add(wrongType);
+        }
+        serialized.put("Values", values);
+
+        DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+
+        assertThat(restored.storage().values()).containsOnlyKeys("valid");
+        assertThat(restored.storage().get("valid")).contains(DataValue.of("kept"));
+    }
+
+    @Test
+    void malformed_nested_collections_are_skipped_while_valid_siblings_remain() {
+        CompoundTag serialized = new CompoundTag();
+        ListTag values = new ListTag();
+        CompoundTag valid = new CompoundTag();
+        valid.putString("Key", "valid");
+        valid.putString("Type", "STRING");
+        valid.putString("Value", "kept");
+        values.add(valid);
+
+        CompoundTag missingList = new CompoundTag();
+        missingList.putString("Key", "missingList");
+        missingList.putString("Type", "LIST");
+        values.add(missingList);
+
+        CompoundTag wrongList = new CompoundTag();
+        wrongList.putString("Key", "wrongList");
+        wrongList.putString("Type", "LIST");
+        wrongList.putString("Values", "not-a-list");
+        values.add(wrongList);
+
+        CompoundTag missingMap = new CompoundTag();
+        missingMap.putString("Key", "missingMap");
+        missingMap.putString("Type", "MAP");
+        values.add(missingMap);
+
+        CompoundTag wrongMap = new CompoundTag();
+        wrongMap.putString("Key", "wrongMap");
+        wrongMap.putString("Type", "MAP");
+        wrongMap.putString("Entries", "not-a-list");
+        values.add(wrongMap);
+        serialized.put("Values", values);
+
+        DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+
+        assertThat(restored.storage().values()).containsOnlyKeys("valid");
+        assertThat(restored.storage().get("valid")).contains(DataValue.of("kept"));
+    }
+
+    @Test
     void storage_accepts_only_one_controller_owner() {
         DataStorageBlockEntity storage = create(new BlockPos(1, 0, 0));
 

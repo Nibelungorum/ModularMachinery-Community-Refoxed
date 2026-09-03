@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.data.DataValueType;
@@ -176,8 +177,8 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private static @Nullable DataValue readValue(ValueInput input, DataValueType type) {
         try {
             return switch (type) {
-            case BOOLEAN -> DataValue.of(input.getBooleanOr(VALUE_KEY, false));
-            case STRING -> DataValue.of(input.getStringOr(VALUE_KEY, ""));
+            case BOOLEAN -> input.read(VALUE_KEY, Codec.BOOL).map(DataValue::of).orElse(null);
+            case STRING -> input.getString(VALUE_KEY).map(DataValue::of).orElse(null);
             case BYTE -> {
                 int value = input.getIntOr(VALUE_KEY, Integer.MIN_VALUE);
                 yield value < Byte.MIN_VALUE || value > Byte.MAX_VALUE ? null : DataValue.of((byte) value);
@@ -186,15 +187,17 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
                 int value = input.getIntOr(VALUE_KEY, Integer.MIN_VALUE);
                 yield value < Short.MIN_VALUE || value > Short.MAX_VALUE ? null : DataValue.of((short) value);
             }
-            case INT -> DataValue.of(input.getIntOr(VALUE_KEY, 0));
-            case LONG -> DataValue.of(input.getLongOr(VALUE_KEY, 0L));
-            case FLOAT -> DataValue.of(input.getFloatOr(VALUE_KEY, 0F));
-            case DOUBLE -> DataValue.of(input.getDoubleOr(VALUE_KEY, 0D));
+            case INT -> input.getInt(VALUE_KEY).map(DataValue::of).orElse(null);
+            case LONG -> input.getLong(VALUE_KEY).map(DataValue::of).orElse(null);
+            case FLOAT -> input.read(VALUE_KEY, Codec.FLOAT).map(DataValue::of).orElse(null);
+            case DOUBLE -> input.read(VALUE_KEY, Codec.DOUBLE).map(DataValue::of).orElse(null);
             case BIG_INTEGER -> DataValue.of(new BigInteger(input.getStringOr(VALUE_KEY, "")));
             case BIG_DECIMAL -> DataValue.of(new BigDecimal(input.getStringOr(VALUE_KEY, "")));
             case LIST -> {
+                var entries = input.childrenList(LIST_VALUES_KEY).orElse(null);
+                if (entries == null) yield null;
                 var values = new ArrayList<DataValue>();
-                for (ValueInput entry : input.childrenListOrEmpty(LIST_VALUES_KEY)) {
+                for (ValueInput entry : entries) {
                     try {
                         DataValue value = readValue(entry,
                                 DataValueType.valueOf(entry.getStringOr(TYPE_KEY, "")));
@@ -206,8 +209,10 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
                 yield DataValue.list(values);
             }
             case MAP -> {
+                var entries = input.childrenList(MAP_ENTRIES_KEY).orElse(null);
+                if (entries == null) yield null;
                 var values = new LinkedHashMap<String, DataValue>();
-                for (ValueInput entry : input.childrenListOrEmpty(MAP_ENTRIES_KEY)) {
+                for (ValueInput entry : entries) {
                     try {
                         String key = entry.getStringOr(KEY_KEY, "");
                         if (key.isBlank()) continue;
