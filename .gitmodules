@@ -45,3 +45,6 @@
 [submodule "reference/gtlcore"]
 	path = reference/gtlcore
 	url = https://github.com/AaAdoniSsS/GTLCore
+[submodule "reference/gtladd"]
+	path = reference/gtladd
+	url = https://github.com/Dragonators/GTLAdditions
