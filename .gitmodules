@@ -48,3 +48,7 @@
 [submodule "reference/gtladd"]
 	path = reference/gtladd
 	url = https://github.com/Dragonators/GTLAdditions
+[submodule "reference/ae-flux"]
+	path = reference/ae-flux
+	url = https://github.com/GlodBlock/ExtendedAE
+	branch = appflux/1.21.1-neoforge

@@ -40,6 +40,8 @@ public final class NetworkInterfaceBindingCoordinator {
         }
         if (source.network.connections().stream().anyMatch(connection -> connection.endpoint().equals(targetEndpoint)
                 && connection.machine().equals(targetMachine))) return ConnectionResult.DUPLICATE;
+        if (target.network.connections().stream().anyMatch(connection -> connection.endpoint().equals(sourceEndpoint)
+                && connection.machine().equals(sourceMachine))) return ConnectionResult.DUPLICATE;
         if (connectionCount(server, source.controller) >= machine(source.controller).networkInterface().maxConnections()) {
             return ConnectionResult.SOURCE_CAPACITY;
         }
@@ -49,9 +51,11 @@ public final class NetworkInterfaceBindingCoordinator {
         long sequence = NetworkServerState.get(server).nextConnectionSequence();
         NetworkInterfaceBlockEntity.Connection forward = new NetworkInterfaceBlockEntity.Connection(targetEndpoint, targetMachine, sequence);
         NetworkInterfaceBlockEntity.Connection reverse = new NetworkInterfaceBlockEntity.Connection(sourceEndpoint, sourceMachine, sequence);
-        if (!source.network.addConnection(forward) || !target.network.addConnection(reverse)) {
+        if (!source.network.addConnection(forward)) {
+            return ConnectionResult.INVALID_SOURCE;
+        }
+        if (!target.network.addConnection(reverse)) {
             source.network.removeConnection(forward);
-            target.network.removeConnection(reverse);
             return ConnectionResult.INVALID_TARGET;
         }
         return ConnectionResult.CONNECTED;
@@ -112,6 +116,8 @@ public final class NetworkInterfaceBindingCoordinator {
                             || !connection.machine().equals(target.controller.machineReference())
                             || !target.controller.hasActiveNetworkInterface(connection.endpoint().pos())
                             || !allows(controller, connection.machine()) || !allows(target.controller, sourceMachine)
+                            || connectionCount(server, controller) > machine(controller).networkInterface().maxConnections()
+                            || connectionCount(server, target.controller) > machine(target.controller).networkInterface().maxConnections()
                             || target.network.connections().stream().noneMatch(reverse -> reverse.endpoint().equals(sourceEndpoint)
                             && reverse.machine().equals(sourceMachine) && reverse.sequence() == connection.sequence())) {
                         disconnect(server, sourceEndpoint, sourceMachine, connection.endpoint(), connection.machine());

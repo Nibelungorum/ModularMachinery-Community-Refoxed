@@ -23,7 +23,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 /** Persists one machine network endpoint and its formed connections.
@@ -78,8 +77,9 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     public boolean addConnection(Connection connection) {
         if (!valid(connection)) return false;
-        Connection previous = connections.put(new ConnectionKey(connection.endpoint(), connection.machine()), connection);
-        if (!Objects.equals(previous, connection)) setChanged();
+        if (connections.containsKey(new ConnectionKey(connection.endpoint(), connection.machine()))) return false;
+        connections.put(new ConnectionKey(connection.endpoint(), connection.machine()), connection);
+        setChanged();
         return true;
     }
 
