@@ -246,7 +246,7 @@ class ModEventRegistrationTest {
                 ModItems.ITEMS.get("network_interface").get());
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(description.baseModel()).isEqualTo(cn.howxu.mmcr.MMCR.id("block/dynamic_io_port"));
-        assertThat(description.overlayTexture()).isEqualTo(DynamicOverlayBakedModel.defaultPortOverlayTexture());
+        assertThat(description.overlayTexture()).isEqualTo(cn.howxu.mmcr.MMCR.id("block/overlay_network_interface"));
     }
 
     private static ModEventRegistration.EventHandlers handlers(List<Class<?>> invoked) {

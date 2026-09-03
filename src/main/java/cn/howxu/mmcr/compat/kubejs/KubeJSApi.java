@@ -142,6 +142,7 @@ public final class KubeJSApi {
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
     public BlockPredicate dataStorage() { return KubeJSInterfaceHelpers.dataStorage(); }
     public BlockPredicate factoryController() { return KubeJSInterfaceHelpers.factoryController(); }
+    public BlockPredicate networkInterface() { return KubeJSInterfaceHelpers.networkInterface(); }
 
     public BlockPredicate block(String blockId) {
         return new BlockPredicate.OfBlock(requireBlock(blockId));

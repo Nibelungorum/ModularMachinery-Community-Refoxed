@@ -7,7 +7,6 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,11 +26,6 @@ public sealed interface BlockPredicate {
 
     static MachineCoupler machineCoupler() {
         return MachineCoupler.INSTANCE;
-    }
-
-    static DeferredBlock networkInterface() {
-        return new DeferredBlock(() -> BuiltInRegistries.BLOCK.getValue(
-                Identifier.parse("mmcr:network_interface")), true);
     }
 
     boolean matches(BlockState state);

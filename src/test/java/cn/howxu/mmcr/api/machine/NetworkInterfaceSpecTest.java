@@ -76,13 +76,13 @@ class NetworkInterfaceSpecTest {
     void compilerKeeps_network_positions_separate_from_component_and_port_positions() {
         Identifier id = Identifier.parse("mmcr:network_compilation");
         BlockArray pattern = new BlockArray(Map.of(
-                BlockPos.ZERO, BlockPredicate.networkInterface(),
+                BlockPos.ZERO, networkInterface(),
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
         Machine machine = new DynamicMachine(id, "Network Compilation", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
 
-        assertThat(BlockPredicate.networkInterface().matches(Blocks.STONE.defaultBlockState())).isFalse();
+        assertThat(networkInterface().matches(Blocks.STONE.defaultBlockState())).isFalse();
         assertThat(compiled.networkInterfacePositions(Direction.SOUTH)).containsExactly(BlockPos.ZERO);
         assertThat(compiled.componentPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
         assertThat(compiled.portPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
@@ -93,7 +93,7 @@ class NetworkInterfaceSpecTest {
     void compilerKeeps_network_any_of_positions_separate_from_component_and_port_positions() {
         Identifier id = Identifier.parse("mmcr:network_any_of_compilation");
         BlockArray pattern = new BlockArray(Map.of(
-                BlockPos.ZERO, new BlockPredicate.AnyOf(List.of(BlockPredicate.networkInterface()))));
+                BlockPos.ZERO, new BlockPredicate.AnyOf(List.of(networkInterface()))));
         Machine machine = new DynamicMachine(id, "Network Any Of Compilation", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
@@ -132,7 +132,7 @@ class NetworkInterfaceSpecTest {
         BlockPos ordinary = new BlockPos(1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(
                 mixedNetwork, new BlockPredicate.AnyOf(List.of(
-                        BlockPredicate.networkInterface(), new BlockPredicate.OfBlock(Blocks.STONE))),
+                        networkInterface(), new BlockPredicate.OfBlock(Blocks.STONE))),
                 ordinary, new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(Blocks.STONE)))));
 
         assertThat(MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern))
@@ -150,14 +150,14 @@ class NetworkInterfaceSpecTest {
         BlockPos ordinaryInterface = new BlockPos(5, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(
                 mixedCoupler, new BlockPredicate.AnyOf(List.of(
-                        BlockPredicate.machineCoupler(), BlockPredicate.networkInterface())),
+                        BlockPredicate.machineCoupler(), networkInterface())),
                 nestedMixedCoupler, new BlockPredicate.AnyOf(List.of(
-                        new BlockPredicate.AnyOf(List.of(BlockPredicate.networkInterface(), BlockPredicate.machineCoupler())))),
+                        new BlockPredicate.AnyOf(List.of(networkInterface(), BlockPredicate.machineCoupler())))),
                 ordinaryCoupler, new BlockPredicate.AnyOf(List.of(
                         BlockPredicate.machineCoupler(), new BlockPredicate.AnyOf(List.of(BlockPredicate.machineCoupler())))),
-                mixedInterface, new BlockPredicate.AnyOf(List.of(smartInterface, BlockPredicate.networkInterface())),
+                mixedInterface, new BlockPredicate.AnyOf(List.of(smartInterface, networkInterface())),
                 nestedMixedInterface, new BlockPredicate.AnyOf(List.of(
-                        new BlockPredicate.AnyOf(List.of(BlockPredicate.networkInterface(), smartInterface)))),
+                        new BlockPredicate.AnyOf(List.of(networkInterface(), smartInterface)))),
                 ordinaryInterface, new BlockPredicate.AnyOf(List.of(
                         smartInterface, new BlockPredicate.AnyOf(List.of(smartInterface))))));
         Machine machine = new DynamicMachine(
@@ -169,5 +169,9 @@ class NetworkInterfaceSpecTest {
         assertThat(compiled.interfacePositions(Direction.SOUTH)).containsExactly(ordinaryInterface);
         assertThat(compiled.networkInterfacePositions(Direction.SOUTH))
                 .containsExactlyInAnyOrder(mixedCoupler, nestedMixedCoupler, mixedInterface, nestedMixedInterface);
+    }
+
+    static BlockPredicate.DeferredBlock networkInterface() {
+        return new BlockPredicate.DeferredBlock(ModBlocks.NETWORK_INTERFACE::get, true);
     }
 }

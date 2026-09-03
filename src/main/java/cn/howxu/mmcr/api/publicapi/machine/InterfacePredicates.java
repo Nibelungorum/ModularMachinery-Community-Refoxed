@@ -134,6 +134,8 @@ public final class InterfacePredicates {
         return port("data_storage");
     }
 
+    public static BlockPredicate networkInterface(){return port("network_interface");}
+
     private static BlockPredicate anyOfPorts(Identifier familyId, IOType ioType) {
         List<BlockPredicate> predicates = new ArrayList<>();
         for (IOPortKind kind : PortKinds.all()) {
