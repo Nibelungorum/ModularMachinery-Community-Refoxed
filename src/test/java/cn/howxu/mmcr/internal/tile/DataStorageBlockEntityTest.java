@@ -7,6 +7,8 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -15,6 +17,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,6 +51,64 @@ class DataStorageBlockEntityTest {
         assertThat(restored.storage().get("decimal")).get().isEqualTo(DataValue.of(new BigDecimal("1.2300")));
         assertThat(restored.storage().get("enabled")).contains(DataValue.of(true));
         assertThat(restored.controllerPosition()).contains(BlockPos.ZERO);
+    }
+
+    @Test
+    void recursive_values_round_trip_and_skip_malformed_nested_children() {
+        DataStorageBlockEntity source = create(new BlockPos(1, 0, 0));
+        DataValue mixedList = DataValue.list(List.of(
+                DataValue.of("text"),
+                DataValue.of(7),
+                DataValue.map(Map.of("nested", DataValue.of(false)))
+        ));
+        source.storage().set("nested", DataValue.map(Map.of(
+                "mixed", mixedList,
+                "emptyList", DataValue.list(List.of()),
+                "emptyMap", DataValue.map(Map.of())
+        )));
+        source.storage().set("legacy", DataValue.of(42));
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, LOOKUP);
+        source.saveAdditional(output);
+        CompoundTag serialized = output.buildResult();
+        ListTag values = serialized.getListOrEmpty("Values");
+        CompoundTag malformed = new CompoundTag();
+        malformed.putString("Key", "malformed");
+        malformed.putString("Type", "MAP");
+        ListTag malformedEntries = new ListTag();
+        CompoundTag blankKeyChild = new CompoundTag();
+        blankKeyChild.putString("Key", " ");
+        blankKeyChild.putString("Type", "STRING");
+        blankKeyChild.putString("Value", "ignored");
+        malformedEntries.add(blankKeyChild);
+        CompoundTag invalidTypeChild = new CompoundTag();
+        invalidTypeChild.putString("Key", "invalidType");
+        invalidTypeChild.putString("Type", "NOT_A_TYPE");
+        malformedEntries.add(invalidTypeChild);
+        CompoundTag invalidScalarChild = new CompoundTag();
+        invalidScalarChild.putString("Key", "invalidScalar");
+        invalidScalarChild.putString("Type", "BIG_INTEGER");
+        invalidScalarChild.putString("Value", "not-a-number");
+        malformedEntries.add(invalidScalarChild);
+        CompoundTag validChild = new CompoundTag();
+        validChild.putString("Key", "survivor");
+        validChild.putString("Type", "STRING");
+        validChild.putString("Value", "ok");
+        malformedEntries.add(validChild);
+        malformed.put("Entries", malformedEntries);
+        values.add(malformed);
+
+        DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+
+        assertThat(restored.storage().get("nested")).contains(DataValue.map(Map.of(
+                "mixed", mixedList,
+                "emptyList", DataValue.list(List.of()),
+                "emptyMap", DataValue.map(Map.of())
+        )));
+        assertThat(restored.storage().get("legacy")).contains(DataValue.of(42));
+        assertThat(restored.storage().get("malformed"))
+                .contains(DataValue.map(Map.of("survivor", DataValue.of("ok"))));
     }
 
     @Test

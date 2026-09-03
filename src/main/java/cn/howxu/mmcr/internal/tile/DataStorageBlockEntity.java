@@ -14,6 +14,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 
 /** Independent typed data storage linked to at most one machine controller.
@@ -24,6 +26,8 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private static final String KEY_KEY = "Key";
     private static final String TYPE_KEY = "Type";
     private static final String VALUE_KEY = "Value";
+    private static final String LIST_VALUES_KEY = "Values";
+    private static final String MAP_ENTRIES_KEY = "Entries";
     private static final String HAS_CONTROLLER_KEY = "HasController";
     private static final String CONTROLLER_X_KEY = "ControllerX";
     private static final String CONTROLLER_Y_KEY = "ControllerY";
@@ -149,13 +153,29 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
             case DOUBLE -> output.putDouble(VALUE_KEY, value.doubleValue());
             case BIG_INTEGER -> output.putString(VALUE_KEY, value.bigIntegerValue().toString());
             case BIG_DECIMAL -> output.putString(VALUE_KEY, value.bigDecimalValue().toString());
-            default -> {
+            case LIST -> {
+                var entries = output.childrenList(LIST_VALUES_KEY);
+                for (DataValue element : value.asList().orElseThrow()) {
+                    ValueOutput entry = entries.addChild();
+                    entry.putString(TYPE_KEY, element.type().name());
+                    writeValue(entry, element);
+                }
+            }
+            case MAP -> {
+                var entries = output.childrenList(MAP_ENTRIES_KEY);
+                value.asMap().orElseThrow().forEach((key, element) -> {
+                    ValueOutput entry = entries.addChild();
+                    entry.putString(KEY_KEY, key);
+                    entry.putString(TYPE_KEY, element.type().name());
+                    writeValue(entry, element);
+                });
             }
         }
     }
 
     private static @Nullable DataValue readValue(ValueInput input, DataValueType type) {
-        return switch (type) {
+        try {
+            return switch (type) {
             case BOOLEAN -> DataValue.of(input.getBooleanOr(VALUE_KEY, false));
             case STRING -> DataValue.of(input.getStringOr(VALUE_KEY, ""));
             case BYTE -> {
@@ -172,7 +192,37 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
             case DOUBLE -> DataValue.of(input.getDoubleOr(VALUE_KEY, 0D));
             case BIG_INTEGER -> DataValue.of(new BigInteger(input.getStringOr(VALUE_KEY, "")));
             case BIG_DECIMAL -> DataValue.of(new BigDecimal(input.getStringOr(VALUE_KEY, "")));
-            default -> null;
-        };
+            case LIST -> {
+                var values = new ArrayList<DataValue>();
+                for (ValueInput entry : input.childrenListOrEmpty(LIST_VALUES_KEY)) {
+                    try {
+                        DataValue value = readValue(entry,
+                                DataValueType.valueOf(entry.getStringOr(TYPE_KEY, "")));
+                        if (value != null) values.add(value);
+                    } catch (RuntimeException ignored) {
+                        // Skip malformed nested entries without losing valid siblings.
+                    }
+                }
+                yield DataValue.list(values);
+            }
+            case MAP -> {
+                var values = new LinkedHashMap<String, DataValue>();
+                for (ValueInput entry : input.childrenListOrEmpty(MAP_ENTRIES_KEY)) {
+                    try {
+                        String key = entry.getStringOr(KEY_KEY, "");
+                        if (key.isBlank()) continue;
+                        DataValue value = readValue(entry,
+                                DataValueType.valueOf(entry.getStringOr(TYPE_KEY, "")));
+                        if (value != null) values.put(key, value);
+                    } catch (RuntimeException ignored) {
+                        // Skip malformed nested entries without losing valid siblings.
+                    }
+                }
+                yield DataValue.map(values);
+            }
+            };
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 }

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import org.jetbrains.annotations.Nullable;
 
 /** Ordered, typed, transaction-aware machine data storage.
  * @author howxu <dev@howxu.cn>
@@ -16,6 +17,7 @@ import java.util.function.Consumer;
 public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
     private final Map<String, DataValue> values = new LinkedHashMap<>();
     private final Consumer<Map<String, DataValue>> changeListener;
+    private @Nullable Map<String, DataValue> immutableValuesCache;
 
     public DataStorage() {
         this(null);
@@ -36,7 +38,12 @@ public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
     }
 
     public Map<String, DataValue> values() {
-        return immutableValues();
+        Map<String, DataValue> cached = immutableValuesCache;
+        if (cached == null) {
+            cached = Collections.unmodifiableMap(new LinkedHashMap<>(values));
+            immutableValuesCache = cached;
+        }
+        return cached;
     }
 
     public void set(String key, DataValue value) {
@@ -44,7 +51,8 @@ public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
         Objects.requireNonNull(value, "value");
         if (value.equals(values.get(key))) return;
         values.put(key, value);
-        changeListener.accept(immutableValues());
+        invalidateValuesCache();
+        changeListener.accept(values());
     }
 
     public boolean set(String key, DataValue value, TransactionContext transaction) {
@@ -54,18 +62,22 @@ public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
         if (value.equals(values.get(key))) return false;
         updateSnapshots(transaction);
         values.put(key, value);
+        invalidateValuesCache();
         return true;
     }
 
     public Optional<DataValue> remove(String key) {
         requireValidKey(key);
         DataValue previous = values.remove(key);
-        if (previous != null) changeListener.accept(immutableValues());
+        if (previous != null) {
+            invalidateValuesCache();
+            changeListener.accept(values());
+        }
         return Optional.ofNullable(previous);
     }
 
     public Object contentFingerprint() {
-        return immutableValues();
+        return values();
     }
 
     @Override
@@ -77,15 +89,19 @@ public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
     protected void revertToSnapshot(Map<String, DataValue> snapshot) {
         values.clear();
         if (snapshot != null) values.putAll(snapshot);
+        invalidateValuesCache();
     }
 
     @Override
     protected void onRootCommit(Map<String, DataValue> originalState) {
-        if (!Objects.equals(originalState, values)) changeListener.accept(immutableValues());
+        if (!Objects.equals(originalState, values)) {
+            invalidateValuesCache();
+            changeListener.accept(values());
+        }
     }
 
-    private Map<String, DataValue> immutableValues() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    private void invalidateValuesCache() {
+        immutableValuesCache = null;
     }
 
     private static void requireValidKey(String key) {

@@ -56,6 +56,34 @@ class DataStorageTest {
     }
 
     @Test
+    void values_cache_invalidates_after_mutations_and_rollback() {
+        List<Map<String, DataValue>> notifications = new ArrayList<>();
+        DataStorage storage = new DataStorage(notifications::add);
+        Map<String, DataValue> initial = storage.values();
+
+        storage.set("payload", DataValue.map(Map.of("ready", DataValue.of(true))));
+        assertThat(initial).doesNotContainKey("payload");
+        assertThat(storage.get("payload")).contains(DataValue.map(Map.of("ready", DataValue.of(true))));
+        assertThat(notifications).hasSize(1);
+
+        storage.set("payload", DataValue.map(Map.of("ready", DataValue.of(true))));
+        assertThat(notifications).hasSize(1);
+        storage.remove("payload");
+        assertThat(storage.values()).isEmpty();
+        storage.remove("payload");
+        assertThat(notifications).hasSize(2);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            storage.set("temporary", DataValue.of(1), transaction);
+            assertThat(storage.values()).containsEntry("temporary", DataValue.of(1));
+        }
+        assertThat(storage.contains("temporary")).isFalse();
+        assertThat(storage.values()).isEmpty();
+        assertThat(notifications).hasSize(2);
+        assertThatThrownBy(initial::clear).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
     void transaction_rollback_restores_the_original_map_without_notification() {
         List<Map<String, DataValue>> changes = new ArrayList<>();
         DataStorage storage = new DataStorage(changes::add);
