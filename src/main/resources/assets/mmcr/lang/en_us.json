@@ -57,6 +57,7 @@
   "block.mmcr.parallel_controller_pro": "Pro Parallel Controller",
   "block.mmcr.parallel_controller_reinforced": "Reinforced Parallel Controller",
   "block.mmcr.parallel_controller_ultimate": "Ultimate Parallel Controller",
+  "block.mmcr.network_interface": "Network Interface",
   "block.mmcr.smart_interface": "Smart Interface",
   "block.mmcr.upgrade_bus_normal": "Normal Upgrade Bus",
   "block.mmcr.upgrade_bus_reinforced": "Reinforced Upgrade Bus",
