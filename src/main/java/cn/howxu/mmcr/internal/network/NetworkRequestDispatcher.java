@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
+import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestInfo;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
@@ -79,12 +80,15 @@ public final class NetworkRequestDispatcher {
     }
 
     private void fail(Resolved source, PendingRequest request, RequestFailureReason reason) {
-        if (source == null || source.controller == null || source.machine == null) return;
-        var failure = source.machine.requestFailures().get(request.requestId());
+        RequestFailed failure = source == null || source.machine == null
+                ? null : source.machine.requestFailures().get(request.requestId());
+        if (failure == null) failure = request.sourceFailure();
         if (failure == null) return;
+        var senderStorage = source == null || source.controller == null
+                ? null : source.controller.behaviorContext().dataStorage();
         try {
             failure.fail(request.body(), new RequestInfo(request.requestId(), request.target()),
-                    source.controller.behaviorContext().dataStorage(), reason);
+                    senderStorage, reason);
         } catch (RuntimeException exception) {
             LOG.warn("Machine network request failure handler failed for {}", request.requestId(), exception);
         }

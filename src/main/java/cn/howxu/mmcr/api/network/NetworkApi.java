@@ -8,6 +8,7 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -23,13 +24,24 @@ public final class NetworkApi {
 
     public static List<NetworkInterfaceReference> interfaces(MachineBehaviorContext context) {
         Objects.requireNonNull(context, "context");
-        if (!(context.level() instanceof ServerLevel level) || !context.controller().currentStructureSnapshot().formed()) {
+        if (!(context.level() instanceof ServerLevel level)) {
             return List.of();
         }
-        return context.controller().activeNetworkInterfacePositions().stream().sorted(Comparator.<BlockPos>comparingInt(BlockPos::getX)
-                        .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ)).filter(level::hasChunkAt)
-                .map(position -> new NetworkInterfaceReference(level.getServer(), GlobalPos.of(level.dimension(), position)))
-                .toList();
+        List<NetworkInterfaceReference> references = new ArrayList<>();
+        level.getServer().executeBlocking(() -> {
+            var controller = context.controller();
+            if (!controller.currentStructureSnapshot().formed()) return;
+            var sourceMachine = controller.currentStructureSnapshot().machine();
+            GlobalPos sourceController = GlobalPos.of(level.dimension(), controller.getBlockPos());
+            references.addAll(controller.activeNetworkInterfacePositions().stream()
+                    .sorted(Comparator.<BlockPos>comparingInt(BlockPos::getX)
+                            .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ))
+                    .filter(level::hasChunkAt)
+                    .map(position -> new NetworkInterfaceReference(level.getServer(),
+                            GlobalPos.of(level.dimension(), position), sourceController, sourceMachine))
+                    .toList());
+        });
+        return List.copyOf(references);
     }
 
     public static void sendRequest(NetworkInterfaceReference source, MachineReference target, Identifier requestId,
@@ -43,11 +55,10 @@ public final class NetworkApi {
         }
         source.server().executeBlocking(() -> {
             GlobalPos targetEndpoint = source.endpointFor(target);
-            GlobalPos sourceController = source.owner();
             if (targetEndpoint == null) throw new IllegalArgumentException("Target is not connected to the source interface");
-            var level = source.server().getLevel(source.source().dimension());
             NetworkServerState.get(source.server()).enqueue(new PendingRequest(source.source(), targetEndpoint,
-                    sourceController, target, requestId, body, level == null ? 0L : level.getGameTime()));
+                    source.sourceController(), target, requestId, body, source.server().getTickCount(),
+                    source.sourceFailure(requestId)));
         });
     }
 }

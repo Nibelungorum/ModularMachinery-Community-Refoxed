@@ -10,8 +10,11 @@ import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
+import cn.howxu.mmcr.api.network.NetworkApi;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
@@ -31,6 +34,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.apache.logging.log4j.LogManager;
@@ -223,6 +227,40 @@ class NetworkRequestDispatcherTest {
     }
 
     @Test
+    void capturedSourceFailureRunsAfterEnqueueWhenOwnerIsUnavailable() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:owner_unavailable");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, null, null);
+        RequestFailed sourceFailure = (body, request, sender, reason) -> failure[0] = reason;
+        setField(fixture.level.blockEntities.get(fixture.sourceEndpoint.pos()), "owner", null);
+        PendingRequest request = new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, null,
+                fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L, sourceFailure);
+
+        NetworkServerState.get(fixture.server).enqueue(request);
+        assertEquals(null, failure[0]);
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(request);
+
+        assertEquals(RequestFailureReason.SOURCE_STRUCTURE_INVALID, failure[0]);
+    }
+
+    @Test
+    void sendRequestOnlyEnqueuesFailureUntilServerDispatch() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:send_timing");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        setField(MinecraftServer.class, fixture.server, "serverThread", Thread.currentThread());
+        var source = NetworkApi.interfaces(fixture.sourceController.behaviorContext()).getFirst();
+        setField(fixture.level.blockEntities.get(fixture.sourceEndpoint.pos()), "owner", null);
+
+        NetworkApi.sendRequest(source, fixture.targetMachine, requestId, RequestBody.of(Map.of()));
+
+        assertEquals(null, failure[0]);
+        NetworkServerState.get(fixture.server).dispatch(fixture.server, 1L);
+        assertEquals(RequestFailureReason.SOURCE_STRUCTURE_INVALID, failure[0]);
+    }
+
+    @Test
     void processorReceivesNullWhenNeitherControllerHasDataStorage() throws Exception {
         Identifier requestId = Identifier.parse("mmcr:request");
         boolean[][] storage = new boolean[1][];
@@ -350,6 +388,22 @@ class NetworkRequestDispatcherTest {
         }
     }
 
+    @Test
+    void serverTickEventDrainsOnlyOneBudgetForTheServer() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:server_budget");
+        Fixture fixture = fixture(requestId, null, new boolean[1][]);
+        NetworkServerState state = NetworkServerState.get(fixture.server);
+        for (int index = 0; index < Config.DEFAULT_MAX_REQUESTS_PER_TICK + 1; index++) {
+            state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                    fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+        }
+
+        SharedIoEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
+        SharedIoEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
+
+        assertEquals(Config.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
+    }
+
     private static void enqueueOverBudget(Fixture fixture) {
         NetworkServerState state = NetworkServerState.get(fixture.server);
         for (int index = 0; index <= Config.DEFAULT_MAX_REQUESTS_PER_TICK; index++) {
@@ -423,7 +477,7 @@ class NetworkRequestDispatcherTest {
             publishDataStorage(targetController, targetStorage);
             storages[0] = new DataStorage[]{sourceStorage, targetStorage};
         }
-        return new Fixture(server, level, global(sourceInterfacePos), global(targetInterfacePos), sourceOwner, sourceMachine,
+        return new Fixture(server, level, sourceController, global(sourceInterfacePos), global(targetInterfacePos), sourceOwner, sourceMachine,
                 targetMachine, processedBodies, failureReasons, failureExceptions, processorExceptions, observedStorages);
     }
 
@@ -520,8 +574,9 @@ class NetworkRequestDispatcherTest {
         field.set(target, value);
     }
 
-    private record Fixture(MinecraftServer server, TestServerLevel level, GlobalPos sourceEndpoint, GlobalPos targetEndpoint,
-                           GlobalPos sourceOwner, MachineReference sourceMachine, MachineReference targetMachine,
+    private record Fixture(MinecraftServer server, TestServerLevel level, MachineControllerBlockEntity sourceController,
+                            GlobalPos sourceEndpoint, GlobalPos targetEndpoint,
+                            GlobalPos sourceOwner, MachineReference sourceMachine, MachineReference targetMachine,
                            List<RequestBody> processedBodies, List<RequestFailureReason> failureReasons,
                            List<RuntimeException> failureExceptions, List<RuntimeException> processorExceptions,
                            DataStorage[][] observedStorages) {

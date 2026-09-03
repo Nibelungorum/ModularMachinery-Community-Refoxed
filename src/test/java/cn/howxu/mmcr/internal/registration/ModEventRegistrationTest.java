@@ -38,6 +38,7 @@ import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -90,7 +91,7 @@ class ModEventRegistrationTest {
         assertThat(gameBus.types()).containsExactly(
                 BlockEvent.EntityPlaceEvent.class, BlockEvent.EntityMultiPlaceEvent.class,
                 BlockEvent.FluidPlaceBlockEvent.class, BreakBlockEvent.class, ChunkEvent.Unload.class,
-                ChunkEvent.Load.class, LevelTickEvent.Post.class, LevelEvent.Unload.class,
+                ChunkEvent.Load.class, LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
                 ServerAboutToStartEvent.class, ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
                 AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                 PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class);
@@ -102,7 +103,7 @@ class ModEventRegistrationTest {
                         RegisterGameTestsEvent.class, BlockEvent.EntityPlaceEvent.class,
                         BlockEvent.EntityMultiPlaceEvent.class, BlockEvent.FluidPlaceBlockEvent.class,
                         BreakBlockEvent.class, ChunkEvent.Unload.class, ChunkEvent.Load.class,
-                        LevelTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
+                        LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
                         ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
                         AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                         PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class));
@@ -245,6 +246,7 @@ class ModEventRegistrationTest {
                 recording(invoked, BlockEvent.FluidPlaceBlockEvent.class),
                 recording(invoked, BreakBlockEvent.class), recording(invoked, ChunkEvent.Unload.class),
                 recording(invoked, ChunkEvent.Load.class), recording(invoked, LevelTickEvent.Post.class),
+                recording(invoked, ServerTickEvent.Post.class),
                 recording(invoked, LevelEvent.Unload.class), recording(invoked, ServerAboutToStartEvent.class),
                 recording(invoked, ServerStoppedEvent.class),
                 recording(invoked, DefaultDataComponentsBoundEvent.class),

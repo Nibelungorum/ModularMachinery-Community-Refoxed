@@ -1,11 +1,14 @@
 package cn.howxu.mmcr.api.network;
 
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -16,10 +19,14 @@ import java.util.Objects;
 public final class NetworkInterfaceReference {
     private final MinecraftServer server;
     private final GlobalPos source;
+    private final GlobalPos sourceController;
+    private final Map<Identifier, RequestFailed> sourceFailures;
 
-    NetworkInterfaceReference(MinecraftServer server, GlobalPos source) {
+    NetworkInterfaceReference(MinecraftServer server, GlobalPos source, GlobalPos sourceController, Machine sourceMachine) {
         this.server = Objects.requireNonNull(server, "server");
         this.source = Objects.requireNonNull(source, "source");
+        this.sourceController = Objects.requireNonNull(sourceController, "sourceController");
+        this.sourceFailures = sourceMachine == null ? Map.of() : Map.copyOf(sourceMachine.requestFailures());
     }
 
     public BlockPos position() {
@@ -42,6 +49,14 @@ public final class NetworkInterfaceReference {
     GlobalPos owner() {
         NetworkInterfaceBlockEntity endpoint = endpoint();
         return endpoint == null ? null : endpoint.owner().orElse(null);
+    }
+
+    GlobalPos sourceController() {
+        return sourceController;
+    }
+
+    RequestFailed sourceFailure(Identifier requestId) {
+        return sourceFailures.get(requestId);
     }
 
     MinecraftServer server() {

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.network.RequestFailed;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
@@ -14,7 +15,12 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record PendingRequest(GlobalPos sourceEndpoint, GlobalPos targetEndpoint, @Nullable GlobalPos sourceController, MachineReference target,
-                              Identifier requestId, RequestBody body, long enqueueTick) {
+                              Identifier requestId, RequestBody body, long enqueueTick, @Nullable RequestFailed sourceFailure) {
+    public PendingRequest(GlobalPos sourceEndpoint, GlobalPos targetEndpoint, @Nullable GlobalPos sourceController,
+                          MachineReference target, Identifier requestId, RequestBody body, long enqueueTick) {
+        this(sourceEndpoint, targetEndpoint, sourceController, target, requestId, body, enqueueTick, null);
+    }
+
     public PendingRequest {
         Objects.requireNonNull(sourceEndpoint, "sourceEndpoint");
         Objects.requireNonNull(targetEndpoint, "targetEndpoint");

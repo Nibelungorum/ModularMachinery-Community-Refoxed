@@ -54,6 +54,7 @@ import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -91,6 +92,7 @@ public final class ModEventRegistration {
         gameBus.add(ChunkEvent.Unload.class, handlers.chunkUnloaded());
         gameBus.add(ChunkEvent.Load.class, handlers.chunkLoaded());
         gameBus.add(LevelTickEvent.Post.class, handlers.levelTick());
+        gameBus.add(ServerTickEvent.Post.class, handlers.serverTick());
         gameBus.add(LevelEvent.Unload.class, handlers.levelUnload());
         gameBus.add(ServerAboutToStartEvent.class, handlers.serverAboutToStart());
         gameBus.add(ServerStoppedEvent.class, handlers.serverStopped());
@@ -189,6 +191,7 @@ public final class ModEventRegistration {
             Consumer<ChunkEvent.Unload> chunkUnloaded,
             Consumer<ChunkEvent.Load> chunkLoaded,
             Consumer<LevelTickEvent.Post> levelTick,
+            Consumer<ServerTickEvent.Post> serverTick,
             Consumer<LevelEvent.Unload> levelUnload,
             Consumer<ServerAboutToStartEvent> serverAboutToStart,
             Consumer<ServerStoppedEvent> serverStopped,
@@ -209,6 +212,7 @@ public final class ModEventRegistration {
                     StructureDirtyEvents::onChunkUnloaded,
                     StructureDirtyEvents::onChunkLoaded,
                     SharedIoEvents::onLevelTick,
+                    SharedIoEvents::onServerTick,
                     SharedIoEvents::onLevelUnload,
                     RuntimeContentServerBridge::onServerAboutToStart,
                     event -> {
