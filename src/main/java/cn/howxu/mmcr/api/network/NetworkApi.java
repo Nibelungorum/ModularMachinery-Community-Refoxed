@@ -41,11 +41,15 @@ public final class NetworkApi {
         if (requestId.getNamespace().isBlank() || requestId.getPath().isBlank()) {
             throw new IllegalArgumentException("requestId must not be blank");
         }
-        GlobalPos targetEndpoint = source.endpointFor(target);
-        if (targetEndpoint == null) throw new IllegalArgumentException("Target is not connected to the source interface");
-        var level = source.server().getLevel(source.source().dimension());
-        long tick = level == null ? 0L : level.getGameTime();
-        NetworkServerState.get(source.server()).enqueue(new PendingRequest(source.source(), targetEndpoint, target,
-                requestId, body, tick));
+        source.server().executeBlocking(() -> {
+            GlobalPos targetEndpoint = source.endpointFor(target);
+            GlobalPos sourceController = source.owner();
+            if (targetEndpoint == null) throw new IllegalArgumentException("Target is not connected to the source interface");
+            if (sourceController == null) return;
+            var level = source.server().getLevel(source.source().dimension());
+            if (level == null) return;
+            NetworkServerState.get(source.server()).enqueue(new PendingRequest(source.source(), targetEndpoint,
+                    sourceController, target, requestId, body, level.getGameTime()));
+        });
     }
 }

@@ -28,6 +28,7 @@ public final class NetworkRequestDispatcher {
     void dispatch(PendingRequest request) {
         Resolved source = resolve(request.sourceEndpoint());
         if (source == null || source.network == null) {
+            fail(resolveController(request.sourceController()), request, RequestFailureReason.SOURCE_INTERFACE_MISSING);
             return;
         }
         if (source.controller == null || !valid(source, request.sourceEndpoint())) {
@@ -100,6 +101,13 @@ public final class NetworkRequestDispatcher {
         }
         Machine machine = controller.currentStructureSnapshot().machine();
         return new Resolved(network, controller, machine);
+    }
+
+    private Resolved resolveController(GlobalPos position) {
+        ServerLevel level = server.getLevel(position.dimension());
+        if (level == null || !level.hasChunkAt(position.pos())
+                || !(level.getBlockEntity(position.pos()) instanceof MachineControllerBlockEntity controller)) return null;
+        return new Resolved(null, controller, controller.currentStructureSnapshot().machine());
     }
 
     private static boolean valid(Resolved endpoint, GlobalPos position) {

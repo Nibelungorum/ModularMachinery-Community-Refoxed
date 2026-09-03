@@ -12,11 +12,12 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PendingRequest(GlobalPos sourceEndpoint, GlobalPos targetEndpoint, MachineReference target,
-                             Identifier requestId, RequestBody body, long enqueueTick) {
+public record PendingRequest(GlobalPos sourceEndpoint, GlobalPos targetEndpoint, GlobalPos sourceController, MachineReference target,
+                              Identifier requestId, RequestBody body, long enqueueTick) {
     public PendingRequest {
         Objects.requireNonNull(sourceEndpoint, "sourceEndpoint");
         Objects.requireNonNull(targetEndpoint, "targetEndpoint");
+        Objects.requireNonNull(sourceController, "sourceController");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(body, "body");

@@ -45,7 +45,7 @@ public final class NetworkServerState {
         }
         pendingRequests.addLast(request);
         enqueuedThisTick++;
-        int budget = Config.MAX_REQUESTS_PER_TICK.get();
+        int budget = maxRequestsPerTick();
         if (enqueuedThisTick > budget && !overloaded) {
             overloaded = true;
             LOG.warn("Machine network request queue overloaded: pending={}, enqueuedThisTick={}, budget={}",
@@ -57,10 +57,18 @@ public final class NetworkServerState {
         if (lastDispatchTick == tick) return;
         lastDispatchTick = tick;
         NetworkRequestDispatcher dispatcher = new NetworkRequestDispatcher(server);
-        int budget = Config.MAX_REQUESTS_PER_TICK.get();
+        int budget = maxRequestsPerTick();
         for (int count = 0; count < budget && !pendingRequests.isEmpty(); count++) {
             dispatcher.dispatch(pendingRequests.removeFirst());
         }
         if (pendingRequests.size() <= budget) overloaded = false;
+    }
+
+    private static int maxRequestsPerTick() {
+        try {
+            return Config.MAX_REQUESTS_PER_TICK.get();
+        } catch (IllegalStateException ignored) {
+            return Config.DEFAULT_MAX_REQUESTS_PER_TICK;
+        }
     }
 }

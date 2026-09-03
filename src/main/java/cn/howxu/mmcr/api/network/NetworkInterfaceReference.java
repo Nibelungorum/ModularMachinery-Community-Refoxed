@@ -39,6 +39,11 @@ public final class NetworkInterfaceReference {
                 .map(NetworkInterfaceBlockEntity.Connection::endpoint).findFirst().orElse(null);
     }
 
+    GlobalPos owner() {
+        NetworkInterfaceBlockEntity endpoint = endpoint();
+        return endpoint == null ? null : endpoint.owner().orElse(null);
+    }
+
     MinecraftServer server() {
         return server;
     }
