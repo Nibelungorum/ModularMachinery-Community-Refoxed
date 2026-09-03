@@ -112,10 +112,9 @@ public class KeyCardItem extends Item {
 
         if (!(level instanceof ServerLevel serverLevel)) return;
         MachineReference targetMachine = targetMachine(level, target);
-        NetworkInterfaceBindingCoordinator.ConnectionResult result = targetMachine == null
-                ? NetworkInterfaceBindingCoordinator.ConnectionResult.INVALID_TARGET
-                : NetworkInterfaceBindingCoordinator.connect(serverLevel.getServer(),
-                binding.interfacePos(), binding.machine(), GlobalPos.of(level.dimension(), targetPos), targetMachine);
+        NetworkInterfaceBindingCoordinator.ConnectionResult result = NetworkInterfaceBindingCoordinator.connect(
+                serverLevel.getServer(), binding.interfacePos(), binding.machine(),
+                GlobalPos.of(level.dimension(), targetPos), targetMachine);
         player.sendSystemMessage(Component.translatable("message.mmcr.key_card.result." + result.name().toLowerCase(Locale.ROOT)));
     }
 

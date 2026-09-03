@@ -147,6 +147,26 @@ class KeyCardItemTest {
     }
 
     @Test
+    void unformed_target_reports_target_not_formed_before_invalid_target() throws Exception {
+        Fixture fixture = fixture(true, true);
+        ItemStack stack = stack(new KeyCardBinding(fixture.sourceEndpoint, fixture.sourceMachine));
+        TestPlayer player = player();
+        int count = stack.getCount();
+        publishUnformed(fixture.targetController);
+
+        assertThat(useOn(fixture, player, stack, fixture.targetEndpoint)).isEqualTo(InteractionResult.SUCCESS);
+        assertThat(player.messages).contains(Component.translatable(
+                "message.mmcr.key_card.result.target_not_formed"));
+        assertThat(player.messages).doesNotContain(Component.translatable(
+                "message.mmcr.key_card.result.invalid_target"));
+        assertThat(stack.getCount()).isEqualTo(count);
+        assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get()))
+                .isEqualTo(new KeyCardBinding(fixture.sourceEndpoint, fixture.sourceMachine));
+        assertThat(fixture.sourceNetwork.connections()).isEmpty();
+        assertThat(fixture.targetNetwork.connections()).isEmpty();
+    }
+
+    @Test
     void absent_selection_is_reported_without_connecting() throws Exception {
         Fixture fixture = fixture(true, true);
         ItemStack stack = stack();
@@ -225,7 +245,7 @@ class KeyCardItemTest {
         GlobalPos targetOwner = global(targetControllerPos);
         sourceNetwork.claimOwner(sourceOwner);
         targetNetwork.claimOwner(targetOwner);
-        return new Fixture(level, sourceNetwork, targetNetwork,
+        return new Fixture(level, targetController, sourceNetwork, targetNetwork,
                 GlobalPos.of(Level.OVERWORLD, sourceInterfacePos), GlobalPos.of(Level.OVERWORLD, targetInterfacePos),
                 sourceController.machineReference(), targetController.machineReference());
     }
@@ -258,6 +278,16 @@ class KeyCardItemTest {
         publishFormationState.setAccessible(true);
         publishFormationState.invoke(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),
                 Direction.SOUTH, Direction.NORTH, 1);
+    }
+
+    private static void publishUnformed(MachineControllerBlockEntity controller) throws Exception {
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
+        Method publishStructureState = MachineControllerRuntime.class.getDeclaredMethod("publishStructureState",
+                boolean.class, boolean.class, Machine.class, int.class);
+        publishStructureState.setAccessible(true);
+        publishStructureState.invoke(runtime, true, false, null, 0);
     }
 
     private static Machine machine(Identifier id, Set<Identifier> allowedMachines) {
@@ -334,6 +364,7 @@ class KeyCardItemTest {
 
     private static final class Fixture {
         private final TestServerLevel level;
+        private final MachineControllerBlockEntity targetController;
         private final NetworkInterfaceBlockEntity sourceNetwork;
         private final NetworkInterfaceBlockEntity targetNetwork;
         private final GlobalPos sourceEndpoint;
@@ -341,10 +372,12 @@ class KeyCardItemTest {
         private final MachineReference sourceMachine;
         private final MachineReference targetMachine;
 
-        private Fixture(TestServerLevel level, NetworkInterfaceBlockEntity sourceNetwork,
+        private Fixture(TestServerLevel level, MachineControllerBlockEntity targetController,
+                        NetworkInterfaceBlockEntity sourceNetwork,
                         NetworkInterfaceBlockEntity targetNetwork, GlobalPos sourceEndpoint, GlobalPos targetEndpoint,
                         MachineReference sourceMachine, MachineReference targetMachine) {
             this.level = level;
+            this.targetController = targetController;
             this.sourceNetwork = sourceNetwork;
             this.targetNetwork = targetNetwork;
             this.sourceEndpoint = sourceEndpoint;
