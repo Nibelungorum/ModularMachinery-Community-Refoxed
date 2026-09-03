@@ -31,6 +31,7 @@ public record DynamicMachine(
         List<FactoryThreadSpec> factoryThreads,
         MachineRole role,
         Set<Identifier> acceptedModuleIds,
+        NetworkInterfaceSpec networkInterface,
         List<MachineStructureStage> structureStages,
         RecipeFailureActions failureAction,
         MachineBehavior behavior
@@ -88,12 +89,39 @@ public record DynamicMachine(
                 : List.copyOf(structureStages);
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
+        networkInterface = networkInterface == null ? NetworkInterfaceSpec.disabled() : networkInterface;
         if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
             throw new IllegalArgumentException("Only HOST machines may accept modules");
         }
         failureAction = failureAction == null ? RecipeFailureActions.getDefaultAction() : failureAction;
         behavior = java.util.Objects.requireNonNull(behavior, "behavior");
         modifierReplacements = copyModifierReplacements(pattern, modifierReplacements);
+    }
+
+    public DynamicMachine(
+            Identifier registryName,
+            String displayNameKey,
+            BlockArray pattern,
+            MachineControllerSpec controller,
+            MachineAppearanceSpec appearance,
+            PortRequirementSpec portRequirements,
+            PortTierRequirementSpec portTierRequirements,
+            List<DynamicPatternSpec> dynamicPatterns,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
+            long maxParallelism,
+            boolean parallelizable,
+            boolean hasFactory,
+            int factoryThreadLimit,
+            List<FactoryThreadSpec> factoryThreads,
+            MachineRole role,
+            Set<Identifier> acceptedModuleIds,
+            List<MachineStructureStage> structureStages,
+            RecipeFailureActions failureAction,
+            MachineBehavior behavior) {
+        this(registryName, displayNameKey, pattern, controller, appearance, portRequirements, portTierRequirements,
+                dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory, factoryThreadLimit,
+                factoryThreads, role, acceptedModuleIds, NetworkInterfaceSpec.disabled(), structureStages,
+                failureAction, behavior);
     }
 
     public DynamicMachine(
@@ -248,7 +276,8 @@ public record DynamicMachine(
     public DynamicMachine withRole(MachineRole role, Set<Identifier> acceptedModuleIds) {
         return new DynamicMachine(registryName, displayNameKey, pattern, controller, appearance, portRequirements,
                 portTierRequirements, dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory,
-                factoryThreadLimit, factoryThreads, role, acceptedModuleIds, structureStages, failureAction, behavior);
+                factoryThreadLimit, factoryThreads, role, acceptedModuleIds, networkInterface, structureStages,
+                failureAction, behavior);
     }
 
     public List<SingleBlockModifierReplacement> modifierReplacementsAt(BlockPos pos) {

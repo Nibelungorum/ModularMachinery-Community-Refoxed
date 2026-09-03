@@ -78,6 +78,20 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void machine_builder_propagates_network_interface_specification() {
+        var targetId = MMCR.id("network_target");
+        MachineDefinition definition = MachineBuilder.machine(MMCR.id("network_source"))
+                .networkInterface(2, 3)
+                .allowNetworkMachine(targetId)
+                .allowNetworkMachine(targetId)
+                .build();
+
+        assertThat(definition.networkInterface().maxCount()).isEqualTo(2);
+        assertThat(definition.networkInterface().maxConnections()).isEqualTo(3);
+        assertThat(definition.networkInterface().allowedMachineIds()).containsExactly(targetId);
+    }
+
+    @Test
     void machine_builder_retains_hooks_for_default_recipe_behavior() {
         AtomicInteger preCalls = new AtomicInteger();
         AtomicInteger postCalls = new AtomicInteger();

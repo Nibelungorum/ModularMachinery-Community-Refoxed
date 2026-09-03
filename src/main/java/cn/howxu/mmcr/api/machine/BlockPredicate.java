@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -26,6 +27,11 @@ public sealed interface BlockPredicate {
 
     static MachineCoupler machineCoupler() {
         return MachineCoupler.INSTANCE;
+    }
+
+    static DeferredBlock networkInterface() {
+        return new DeferredBlock(() -> BuiltInRegistries.BLOCK.getValue(
+                Identifier.parse("mmcr:network_interface")), true);
     }
 
     boolean matches(BlockState state);
@@ -61,7 +67,11 @@ public sealed interface BlockPredicate {
         switch (predicate) {
             case OfBlockState ofState -> states.add(new Candidate(ofState.state(), 1));
             case OfBlock ofBlock -> states.add(new Candidate(ofBlock.block().defaultBlockState(), 0));
-            case DeferredBlock deferredBlock -> states.add(new Candidate(deferredBlock.supplier().get().defaultBlockState(), 0));
+            case DeferredBlock deferredBlock -> {
+                if (!deferredBlock.networkInterface()) {
+                    states.add(new Candidate(deferredBlock.supplier().get().defaultBlockState(), 0));
+                }
+            }
             case OfTag ofTag -> blocksInTag(ofTag.tag()).stream()
                     .map(Block::defaultBlockState)
                     .map(state -> new Candidate(state, 0))
@@ -120,8 +130,19 @@ public sealed interface BlockPredicate {
         @Override public boolean matches(BlockState state) { return state.getBlock() == block; }
     }
 
-    record DeferredBlock(java.util.function.Supplier<? extends Block> supplier) implements BlockPredicate {
-        @Override public boolean matches(BlockState state) { return state.getBlock() == supplier.get(); }
+    record DeferredBlock(java.util.function.Supplier<? extends Block> supplier, boolean networkInterface)
+            implements BlockPredicate {
+        public DeferredBlock(java.util.function.Supplier<? extends Block> supplier) {
+            this(supplier, false);
+        }
+
+        @Override public boolean matches(BlockState state) {
+            if (networkInterface) {
+                return state.getBlock().getClass().getName()
+                        .equals("cn.howxu.mmcr.internal.block.NetworkInterfaceBlock");
+            }
+            return state.getBlock() == supplier.get();
+        }
     }
 
     record OfBlockState(BlockState state) implements BlockPredicate {

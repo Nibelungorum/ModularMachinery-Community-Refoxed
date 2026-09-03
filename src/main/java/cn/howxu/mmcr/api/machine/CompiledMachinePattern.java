@@ -27,6 +27,7 @@ public record CompiledMachinePattern(
         Map<Direction, List<BlockPos>> portPositions,
         Map<Direction, List<BlockPos>> couplerPositions,
         Map<Direction, List<BlockPos>> interfacePositions,
+        Map<Direction, List<BlockPos>> networkInterfacePositions,
         List<CompiledDynamicPattern> dynamicPatterns,
         Map<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements,
         boolean stateSensitive
@@ -42,6 +43,7 @@ public record CompiledMachinePattern(
         portPositions = copyListEnumMap(portPositions);
         couplerPositions = copyListEnumMap(couplerPositions);
         interfacePositions = copyListEnumMap(interfacePositions);
+        networkInterfacePositions = copyListEnumMap(networkInterfacePositions);
         dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
         modifierReplacements = copyModifierReplacementEnumMap(modifierReplacements);
     }
@@ -52,7 +54,8 @@ public record CompiledMachinePattern(
             Map<Direction, BoundingBox> boundingBoxes,
             Map<Direction, List<BlockPos>> componentPositions,
             Map<Direction, List<BlockPos>> portPositions) {
-        this(machine, 1, rotatedPatterns, boundingBoxes, componentPositions, portPositions, Map.of(), Map.of(), List.of(), Map.of(), false);
+        this(machine, 1, rotatedPatterns, boundingBoxes, componentPositions, portPositions, Map.of(), Map.of(),
+                Map.of(), List.of(), Map.of(), false);
     }
 
     public CompiledMachinePattern(
@@ -62,7 +65,8 @@ public record CompiledMachinePattern(
             Map<Direction, List<BlockPos>> componentPositions,
             Map<Direction, List<BlockPos>> portPositions,
             List<CompiledDynamicPattern> dynamicPatterns) {
-        this(machine, 1, rotatedPatterns, boundingBoxes, componentPositions, portPositions, Map.of(), Map.of(), dynamicPatterns, Map.of(), false);
+        this(machine, 1, rotatedPatterns, boundingBoxes, componentPositions, portPositions, Map.of(), Map.of(),
+                Map.of(), dynamicPatterns, Map.of(), false);
     }
 
     public BlockArray rotatedPattern(Direction facing) {
@@ -87,6 +91,10 @@ public record CompiledMachinePattern(
 
     public List<BlockPos> interfacePositions(Direction facing) {
         return interfacePositions.getOrDefault(facing, List.of());
+    }
+
+    public List<BlockPos> networkInterfacePositions(Direction facing) {
+        return networkInterfacePositions.getOrDefault(facing, List.of());
     }
 
     public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements(Direction facing) {

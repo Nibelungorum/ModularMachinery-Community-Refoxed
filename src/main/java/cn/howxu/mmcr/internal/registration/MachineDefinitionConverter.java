@@ -118,6 +118,7 @@ public final class MachineDefinitionConverter {
                 toFactoryThreads(definition.factory()),
                 toInternalRole(definition.role()),
                 definition.acceptedModuleIds(),
+                definition.networkInterface(),
                 toStructureStages(structure),
                 definition.failureAction(),
                 definition.behavior());
@@ -143,6 +144,7 @@ public final class MachineDefinitionConverter {
                 .maxParallelAmount(definition.maxParallelism())
                 .allowModifiers(definition.allowModifiers())
                 .allowMultithreading(definition.allowMultithreading())
+                .networkInterface(definition.networkInterface())
                 .shareSmartInterfaces(definition.shareSmartInterfaces())
                 .behavior(definition.behavior());
         definition.smartInterfaceTypes().values().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceType)

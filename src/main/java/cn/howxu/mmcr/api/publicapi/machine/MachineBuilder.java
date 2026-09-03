@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
+import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import net.minecraft.resources.Identifier;
 
@@ -25,6 +26,7 @@ public final class MachineBuilder {
     private FactorySpec factory = FactorySpec.builder().build();
     private MachineRole role = MachineRole.NORMAL;
     private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+    private NetworkInterfaceSpec networkInterface = NetworkInterfaceSpec.disabled();
     private long maxParallelism = 1L;
     private boolean parallelizable;
     private RecipeFailureActions failureAction = RecipeFailureActions.getDefaultAction();
@@ -111,6 +113,16 @@ public final class MachineBuilder {
         return this;
     }
 
+    public MachineBuilder networkInterface(int maxCount, int maxConnections) {
+        networkInterface = new NetworkInterfaceSpec(maxCount, maxConnections, networkInterface.allowedMachineIds());
+        return this;
+    }
+
+    public MachineBuilder allowNetworkMachine(Identifier machineId) {
+        networkInterface = networkInterface.withAllowedMachine(Objects.requireNonNull(machineId, "machineId"));
+        return this;
+    }
+
     public MachineBuilder maxParallelism(long maxParallelism) {
         this.maxParallelism = maxParallelism;
         return this;
@@ -193,7 +205,7 @@ public final class MachineBuilder {
                     .build();
         }
         return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
-                acceptedModuleIds, maxParallelism, parallelizable, failureAction, allowModifiers,
+                acceptedModuleIds, networkInterface, maxParallelism, parallelizable, failureAction, allowModifiers,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
                 shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior);
     }

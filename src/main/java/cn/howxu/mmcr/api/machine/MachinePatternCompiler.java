@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import net.minecraft.resources.Identifier;
@@ -64,6 +65,7 @@ public final class MachinePatternCompiler {
         EnumMap<Direction, List<BlockPos>> portPositions = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> couplerPositions = new EnumMap<>(Direction.class);
         EnumMap<Direction, List<BlockPos>> interfacePositions = new EnumMap<>(Direction.class);
+        EnumMap<Direction, List<BlockPos>> networkInterfacePositions = new EnumMap<>(Direction.class);
         EnumMap<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements = new EnumMap<>(Direction.class);
 
         for (Direction facing : Direction.Plane.HORIZONTAL) {
@@ -76,10 +78,11 @@ public final class MachinePatternCompiler {
             modifierReplacements.put(facing, rotatedModifierReplacements(stage, facing));
             couplerPositions.put(facing, couplerPositions(rotated));
             interfacePositions.put(facing, interfacePositions(rotated));
+            networkInterfacePositions.put(facing, networkInterfacePositions(rotated));
         }
 
         return new CompiledMachinePattern(stage.number() == 1 ? parent : machine, stage.number(), rotatedPatterns, boundingBoxes, componentPositions, portPositions,
-                couplerPositions, interfacePositions, dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements,
+                couplerPositions, interfacePositions, networkInterfacePositions, dynamicPatterns(machine.dynamicPatterns(), cache), modifierReplacements,
                 stage.stateSensitive());
     }
 
@@ -104,6 +107,7 @@ public final class MachinePatternCompiler {
         @Override public List<MachineStructureStage> structureStages() { return List.of(stage); }
         @Override public MachineRole role() { return parent.role(); }
         @Override public Set<Identifier> acceptedModuleIds() { return parent.acceptedModuleIds(); }
+        @Override public NetworkInterfaceSpec networkInterface() { return parent.networkInterface(); }
         @Override public MachineBehavior behavior() { return parent.behavior(); }
     }
 
@@ -166,13 +170,24 @@ public final class MachinePatternCompiler {
         return List.copyOf(positions);
     }
 
+    private static List<BlockPos> networkInterfacePositions(BlockArray pattern) {
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        for (var entry : pattern.pattern().entrySet()) {
+            if (couldBeNetworkInterface(entry.getValue())) positions.add(entry.getKey());
+        }
+        return List.copyOf(positions);
+    }
+
     private static boolean couldBeComponent(BlockPredicate predicate) {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
+                    && !isNetworkInterfaceBlock(of.block())
                     || of.block() instanceof ParallelControllerBlock
                     || of.block() instanceof FactorySchedulerBlock
                     || of.block() instanceof DataStorageBlock
                     || of.block() instanceof UpgradeBusBlock;
+            case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
+            case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
         };
@@ -188,10 +203,29 @@ public final class MachinePatternCompiler {
 
     private static boolean couldBePort(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock;
+            case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock && !isNetworkInterfaceBlock(of.block());
+            case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
+            case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
             case BlockPredicate.AnyOf ignored -> true;
             default -> true;
         };
+    }
+
+    private static boolean couldBeNetworkInterface(BlockPredicate predicate) {
+        return switch (predicate) {
+            case BlockPredicate.OfBlock of -> isNetworkInterfaceBlock(of.block());
+            case BlockPredicate.OfBlockState ofState -> isNetworkInterfaceBlock(ofState.state().getBlock());
+            case BlockPredicate.DeferredBlock deferred -> deferred.networkInterface()
+                    || isNetworkInterfaceBlock(deferred.supplier().get());
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
+                    .anyMatch(MachinePatternCompiler::couldBeNetworkInterface);
+            default -> false;
+        };
+    }
+
+    private static boolean isNetworkInterfaceBlock(Block block) {
+        return block != null && block.getClass().getName()
+                .equals("cn.howxu.mmcr.internal.block.NetworkInterfaceBlock");
     }
 
     private static boolean couldBeInterface(BlockPredicate predicate) {

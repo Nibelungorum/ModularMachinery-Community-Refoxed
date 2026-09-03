@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import net.minecraft.resources.Identifier;
 
@@ -23,6 +24,7 @@ public record MachineDefinition(
         FactorySpec factory,
         MachineRole role,
         Set<Identifier> acceptedModuleIds,
+        NetworkInterfaceSpec networkInterface,
         long maxParallelism,
         boolean parallelizable,
         RecipeFailureActions failureAction,
@@ -55,6 +57,22 @@ public record MachineDefinition(
             int maxParallelAmount, boolean expandableStructure,
             java.util.Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
+            Identifier runningSoundId, Identifier finishSoundId, BlockArray pattern,
+            MachineBehavior behavior) {
+        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
+                NetworkInterfaceSpec.disabled(), maxParallelism, parallelizable, failureAction,
+                allowModifiers, allowMultithreading, maxParallelAmount, expandableStructure,
+                smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
+                finishSoundId, pattern, behavior);
+    }
+
+    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+            AppearanceSpec appearance, FactorySpec factory, MachineRole role,
+            Set<Identifier> acceptedModuleIds, long maxParallelism, boolean parallelizable,
+            RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
+            int maxParallelAmount, boolean expandableStructure,
+            java.util.Map<String, SmartInterfaceType> smartInterfaceTypes,
+            boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             Identifier runningSoundId, Identifier finishSoundId, BlockArray pattern) {
         this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 maxParallelism, parallelizable, failureAction, allowModifiers, allowMultithreading,
@@ -73,6 +91,7 @@ public record MachineDefinition(
         factory = factory == null ? FactorySpec.builder().build() : factory;
         role = role == null ? MachineRole.NORMAL : role;
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
+        networkInterface = networkInterface == null ? NetworkInterfaceSpec.disabled() : networkInterface;
         if (maxParallelism < 1L) throw new IllegalArgumentException("maxParallelism must be positive");
         if (maxParallelAmount < 1) throw new IllegalArgumentException("maxParallelAmount must be positive");
         smartInterfaceTypes = java.util.Map.copyOf(smartInterfaceTypes == null ? java.util.Map.of() : smartInterfaceTypes);

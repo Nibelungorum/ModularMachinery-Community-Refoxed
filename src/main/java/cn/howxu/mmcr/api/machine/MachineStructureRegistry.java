@@ -114,6 +114,7 @@ public final class MachineStructureRegistry {
                 java.util.List.of(),
                 registration.role(),
                 registration.acceptedModuleIds(),
+                registration.networkInterface(),
                 stages,
                 RecipeFailureActions.getDefaultAction(),
                 registration.behavior());

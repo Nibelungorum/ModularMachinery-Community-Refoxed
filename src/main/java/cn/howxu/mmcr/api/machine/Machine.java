@@ -82,6 +82,10 @@ public interface Machine {
         return Set.of();
     }
 
+    default NetworkInterfaceSpec networkInterface() {
+        return NetworkInterfaceSpec.disabled();
+    }
+
     default boolean isHost() {
         return role() == MachineRole.HOST;
     }
