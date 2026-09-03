@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.network.KeyCardBinding;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
 import cn.howxu.mmcr.internal.item.TerminalMode;
 import com.mojang.serialization.Codec;
@@ -35,6 +36,11 @@ public final class ModDataComponents {
             TERMINAL_MODE = REGISTER.registerComponentType("terminal_mode", builder ->
                     builder.persistent(TerminalMode.CODEC)
                             .networkSynchronized(TerminalMode.STREAM_CODEC));
+
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<KeyCardBinding>>
+            KEY_CARD_BINDING = REGISTER.registerComponentType("key_card_binding", builder ->
+                    builder.persistent(KeyCardBinding.CODEC)
+                            .networkSynchronized(KeyCardBinding.STREAM_CODEC));
 
     public static void register(IEventBus bus) {
         REGISTER.register(bus);

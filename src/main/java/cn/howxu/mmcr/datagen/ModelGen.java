@@ -58,6 +58,7 @@ public final class ModelGen extends ModelProvider {
         names.add("multiblock_detector");
         names.add("thread_disperser");
         names.add("terminal");
+        names.add("key_card");
         names.add("modularium");
         return List.copyOf(names);
     }

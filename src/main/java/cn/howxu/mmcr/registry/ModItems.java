@@ -3,6 +3,7 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.internal.item.InterfaceBlockItem;
+import cn.howxu.mmcr.internal.item.KeyCardItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.TerminalItem;
 import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
@@ -30,6 +31,9 @@ public final class ModItems {
 
     public static final DeferredHolder<Item, Item> TERMINAL =
             REGISTER.register("terminal", TerminalItem::new);
+
+    public static final DeferredHolder<Item, Item> KEY_CARD =
+            REGISTER.register("key_card", KeyCardItem::new);
 
     public static final DeferredHolder<Item, Item> MODULARIUM =
             REGISTER.register("modularium", id -> new Item(new Item.Properties().setId(
@@ -62,6 +66,7 @@ public final class ModItems {
         ITEMS.put("multiblock_detector", MULTIBLOCK_DETECTOR);
         ITEMS.put("thread_disperser", THREAD_DISPERSER);
         ITEMS.put("terminal", TERMINAL);
+        ITEMS.put("key_card", KEY_CARD);
         ITEMS.put("modularium", MODULARIUM);
         ITEMS.put("blueprint", BLUEPRINT);
     }
