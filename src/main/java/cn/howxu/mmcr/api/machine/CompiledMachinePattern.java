@@ -69,6 +69,22 @@ public record CompiledMachinePattern(
                 Map.of(), dynamicPatterns, Map.of(), false);
     }
 
+    public CompiledMachinePattern(
+            Machine machine,
+            int stageNumber,
+            Map<Direction, BlockArray> rotatedPatterns,
+            Map<Direction, BoundingBox> boundingBoxes,
+            Map<Direction, List<BlockPos>> componentPositions,
+            Map<Direction, List<BlockPos>> portPositions,
+            Map<Direction, List<BlockPos>> couplerPositions,
+            Map<Direction, List<BlockPos>> interfacePositions,
+            List<CompiledDynamicPattern> dynamicPatterns,
+            Map<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements,
+            boolean stateSensitive) {
+        this(machine, stageNumber, rotatedPatterns, boundingBoxes, componentPositions, portPositions,
+                couplerPositions, interfacePositions, Map.of(), dynamicPatterns, modifierReplacements, stateSensitive);
+    }
+
     public BlockArray rotatedPattern(Direction facing) {
         return rotatedPatterns.get(facing);
     }

@@ -138,6 +138,15 @@ public final class MachinePatternCompiler {
         return new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
+    public static List<BlockPos> positionsExcludingNetworkInterfaces(BlockArray pattern) {
+        if (pattern == null) return List.of();
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        for (var entry : pattern.pattern().entrySet()) {
+            if (!couldBeNetworkInterface(entry.getValue())) positions.add(entry.getKey());
+        }
+        return List.copyOf(positions);
+    }
+
     private static List<BlockPos> componentPositions(BlockArray pattern) {
         ArrayList<BlockPos> positions = new ArrayList<>();
         for (var entry : pattern.pattern().entrySet()) {
@@ -194,6 +203,7 @@ public final class MachinePatternCompiler {
     }
 
     private static boolean couldBeCoupler(BlockPredicate predicate) {
+        if (couldBeNetworkInterface(predicate)) return false;
         return switch (predicate) {
             case BlockPredicate.MachineCoupler ignored -> true;
             case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(MachinePatternCompiler::couldBeCoupler);
@@ -229,6 +239,7 @@ public final class MachinePatternCompiler {
     }
 
     private static boolean couldBeInterface(BlockPredicate predicate) {
+        if (couldBeNetworkInterface(predicate)) return false;
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof SmartInterfaceBlock;
             case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(MachinePatternCompiler::couldBeInterface);

@@ -2,10 +2,12 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -99,5 +101,73 @@ class NetworkInterfaceSpecTest {
         assertThat(compiled.networkInterfacePositions(Direction.SOUTH)).containsExactly(BlockPos.ZERO);
         assertThat(compiled.componentPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
         assertThat(compiled.portPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
+    }
+
+    @Test
+    void old_complete_constructor_defaults_network_positions_to_empty() {
+        Identifier id = Identifier.parse("mmcr:legacy_compiled_pattern");
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()));
+        Machine machine = new DynamicMachine(id, "Legacy Compiled Pattern", pattern);
+
+        CompiledMachinePattern compiled = new CompiledMachinePattern(
+                machine,
+                2,
+                Map.of(Direction.SOUTH, pattern),
+                Map.of(Direction.SOUTH, new BoundingBox(0, 0, 0, 0, 0, 0)),
+                Map.of(Direction.SOUTH, List.of(BlockPos.ZERO)),
+                Map.of(Direction.SOUTH, List.of(BlockPos.ZERO)),
+                Map.of(Direction.SOUTH, List.of()),
+                Map.of(Direction.SOUTH, List.of()),
+                List.of(),
+                Map.of(),
+                false);
+
+        assertThat(compiled.stageNumber()).isEqualTo(2);
+        assertThat(compiled.networkInterfacePositions(Direction.SOUTH)).isEmpty();
+    }
+
+    @Test
+    void raw_fallback_positions_exclude_network_predicates_but_keep_ordinary_any_of() {
+        BlockPos mixedNetwork = BlockPos.ZERO;
+        BlockPos ordinary = new BlockPos(1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                mixedNetwork, new BlockPredicate.AnyOf(List.of(
+                        BlockPredicate.networkInterface(), new BlockPredicate.OfBlock(Blocks.STONE))),
+                ordinary, new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(Blocks.STONE)))));
+
+        assertThat(MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern))
+                .containsExactly(ordinary);
+    }
+
+    @Test
+    void mixed_nested_network_any_of_never_enters_module_connection_indexes() {
+        var smartInterface = new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get());
+        BlockPos mixedCoupler = BlockPos.ZERO;
+        BlockPos nestedMixedCoupler = new BlockPos(1, 0, 0);
+        BlockPos ordinaryCoupler = new BlockPos(2, 0, 0);
+        BlockPos mixedInterface = new BlockPos(3, 0, 0);
+        BlockPos nestedMixedInterface = new BlockPos(4, 0, 0);
+        BlockPos ordinaryInterface = new BlockPos(5, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                mixedCoupler, new BlockPredicate.AnyOf(List.of(
+                        BlockPredicate.machineCoupler(), BlockPredicate.networkInterface())),
+                nestedMixedCoupler, new BlockPredicate.AnyOf(List.of(
+                        new BlockPredicate.AnyOf(List.of(BlockPredicate.networkInterface(), BlockPredicate.machineCoupler())))),
+                ordinaryCoupler, new BlockPredicate.AnyOf(List.of(
+                        BlockPredicate.machineCoupler(), new BlockPredicate.AnyOf(List.of(BlockPredicate.machineCoupler())))),
+                mixedInterface, new BlockPredicate.AnyOf(List.of(smartInterface, BlockPredicate.networkInterface())),
+                nestedMixedInterface, new BlockPredicate.AnyOf(List.of(
+                        new BlockPredicate.AnyOf(List.of(BlockPredicate.networkInterface(), smartInterface)))),
+                ordinaryInterface, new BlockPredicate.AnyOf(List.of(
+                        smartInterface, new BlockPredicate.AnyOf(List.of(smartInterface))))));
+        Machine machine = new DynamicMachine(
+                Identifier.parse("mmcr:mixed_network_indexes"), "Mixed Network Indexes", pattern);
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.couplerPositions(Direction.SOUTH)).containsExactly(ordinaryCoupler);
+        assertThat(compiled.interfacePositions(Direction.SOUTH)).containsExactly(ordinaryInterface);
+        assertThat(compiled.networkInterfacePositions(Direction.SOUTH))
+                .containsExactlyInAnyOrder(mixedCoupler, nestedMixedCoupler, mixedInterface, nestedMixedInterface);
     }
 }

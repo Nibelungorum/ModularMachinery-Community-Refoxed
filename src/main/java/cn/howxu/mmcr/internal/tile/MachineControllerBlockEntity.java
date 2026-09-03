@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -2374,7 +2375,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private List<UpgradeBusBlockEntity> upgradeBusComponents(BlockArray pattern) {
         if (level == null || pattern == null) return List.of();
         List<UpgradeBusBlockEntity> buses = new ArrayList<>();
-        for (BlockPos relativePos : pattern.pattern().keySet()) {
+        for (BlockPos relativePos : MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern)) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof UpgradeBusBlockEntity bus) {
                 buses.add(bus);
             }
@@ -2415,7 +2416,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Set<BlockPos> nextDataStoragePositions = new HashSet<>();
         Set<BlockPos> nextUpgradeBusPositions = new HashSet<>();
         List<BlockEntity> nextContainers = new ArrayList<>();
-        for (BlockPos relativePos : pattern.pattern().keySet()) {
+        for (BlockPos relativePos : MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern)) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
             if (entity instanceof DataStorageBlockEntity) nextDataStoragePositions.add(entity.getBlockPos().immutable());
             if (entity instanceof UpgradeBusBlockEntity) nextUpgradeBusPositions.add(relativePos.immutable());
@@ -2444,8 +2445,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                                                Direction facing) {
         if (level == null || pattern == null || facing == null) return List.of();
         List<DataStorageBlockEntity> storages = new ArrayList<>();
-        List<BlockPos> positions = hasCompiledFacing(compiled, facing)
-                ? compiled.componentPositions(facing) : new ArrayList<>(pattern.pattern().keySet());
+        List<BlockPos> positions = componentPositions(pattern, compiled, facing);
         for (BlockPos relativePos : positions) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof DataStorageBlockEntity storage) {
                 storages.add(storage);
@@ -2499,7 +2499,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (hasCompiledFacing(structure.compiledPattern(), structure.facing())) {
             return structure.compiledPattern().componentPositions(structure.facing());
         }
-        return new ArrayList<>(structure.pattern().pattern().keySet());
+        return MachinePatternCompiler.positionsExcludingNetworkInterfaces(structure.pattern());
     }
 
     private static List<BlockPos> componentPositions(StructureSnapshot structure) {
@@ -2507,7 +2507,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private static List<BlockPos> componentPositions(BlockArray pattern, @Nullable CompiledMachinePattern compiled, Direction facing) {
-        return hasCompiledFacing(compiled, facing) ? compiled.componentPositions(facing) : new ArrayList<>(pattern.pattern().keySet());
+        return hasCompiledFacing(compiled, facing)
+                ? compiled.componentPositions(facing)
+                : MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern);
     }
 
     private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
@@ -2516,7 +2518,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         List<BlockPos> positions = hasCompiledFacing(compiledPattern, facing)
                 ? compiledPattern.portPositions(facing)
-                : new ArrayList<>(rotatedPattern.pattern().keySet());
+                : MachinePatternCompiler.positionsExcludingNetworkInterfaces(rotatedPattern);
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
@@ -2536,7 +2538,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         List<BlockPos> positions = hasCompiledFacing(compiledPattern, facing)
                 ? compiledPattern.portPositions(facing)
-                : new ArrayList<>(rotatedPattern.pattern().keySet());
+                : MachinePatternCompiler.positionsExcludingNetworkInterfaces(rotatedPattern);
         List<IOPortKind> kinds = new ArrayList<>();
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
