@@ -188,7 +188,7 @@ public final class MachinePatternCompiler {
                     || of.block() instanceof UpgradeBusBlock;
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
             case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
-            case BlockPredicate.AnyOf ignored -> true;
+            case BlockPredicate.AnyOf anyOf -> !couldBeNetworkInterface(anyOf);
             default -> true;
         };
     }
@@ -206,7 +206,7 @@ public final class MachinePatternCompiler {
             case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock && !isNetworkInterfaceBlock(of.block());
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
             case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
-            case BlockPredicate.AnyOf ignored -> true;
+            case BlockPredicate.AnyOf anyOf -> !couldBeNetworkInterface(anyOf);
             default -> true;
         };
     }

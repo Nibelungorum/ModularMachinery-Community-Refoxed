@@ -86,4 +86,18 @@ class NetworkInterfaceSpecTest {
         assertThat(compiled.portPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
         assertThat(compiled.networkInterfacePositions(Direction.UP)).isEmpty();
     }
+
+    @Test
+    void compilerKeeps_network_any_of_positions_separate_from_component_and_port_positions() {
+        Identifier id = Identifier.parse("mmcr:network_any_of_compilation");
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO, new BlockPredicate.AnyOf(List.of(BlockPredicate.networkInterface()))));
+        Machine machine = new DynamicMachine(id, "Network Any Of Compilation", pattern);
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.networkInterfacePositions(Direction.SOUTH)).containsExactly(BlockPos.ZERO);
+        assertThat(compiled.componentPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
+        assertThat(compiled.portPositions(Direction.SOUTH)).doesNotContain(BlockPos.ZERO);
+    }
 }
