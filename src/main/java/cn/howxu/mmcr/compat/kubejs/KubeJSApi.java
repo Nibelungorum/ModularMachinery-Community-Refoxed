@@ -19,6 +19,12 @@ import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
+import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
+import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.network.MachineReference;
+import cn.howxu.mmcr.api.network.NetworkApi;
+import cn.howxu.mmcr.api.network.NetworkInterfaceReference;
+import cn.howxu.mmcr.api.network.RequestBody;
 
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.ReadableNumber;
@@ -42,9 +48,14 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.lang.reflect.Array;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 
 /**
  * Public declaration helpers exposed to KubeJS through {@code MMCR.getAPI()} and MMCR event objects.
@@ -104,6 +115,17 @@ public final class KubeJSApi {
 
     public Identifier id(String id) {
         return Identifier.parse(id);
+    }
+
+    public List<NetworkInterfaceReference> networkInterfaces(MachineBehaviorContext context) {
+        return NetworkApi.interfaces(context);
+    }
+
+    public void sendRequest(NetworkInterfaceReference source, MachineReference target, String requestId, Object body) {
+        DataValue value = toDataValue(body);
+        Map<String, DataValue> values = value.asMap().orElseThrow(() ->
+                new IllegalArgumentException("Network request body must be a map"));
+        NetworkApi.sendRequest(source, target, Identifier.parse(requestId), RequestBody.of(values));
     }
 
     public BlockPredicate air() { return new BlockPredicate.Air(); }
@@ -301,6 +323,43 @@ public final class KubeJSApi {
             throw new IllegalArgumentException("Port count must be an integer: " + value);
         }
         return (int) number;
+    }
+
+    private static DataValue toDataValue(Object value) {
+        if (value == null) throw new IllegalArgumentException("Network value must not be null");
+        if (value instanceof DataValue dataValue) return dataValue;
+        if (value instanceof Map<?, ?> map) {
+            Map<String, DataValue> converted = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String key) || key.isBlank()) {
+                    throw new IllegalArgumentException("Network map keys must be non-blank strings");
+                }
+                converted.put(key, toDataValue(entry.getValue()));
+            }
+            return DataValue.map(converted);
+        }
+        if (value instanceof Collection<?> collection) {
+            List<DataValue> converted = new ArrayList<>(collection.size());
+            for (Object element : collection) converted.add(toDataValue(element));
+            return DataValue.list(converted);
+        }
+        if (value.getClass().isArray()) {
+            int length = Array.getLength(value);
+            List<DataValue> converted = new ArrayList<>(length);
+            for (int index = 0; index < length; index++) converted.add(toDataValue(Array.get(value, index)));
+            return DataValue.list(converted);
+        }
+        if (value instanceof Boolean booleanValue) return DataValue.of(booleanValue);
+        if (value instanceof String stringValue) return DataValue.of(stringValue);
+        if (value instanceof BigInteger bigInteger) return DataValue.of(bigInteger);
+        if (value instanceof BigDecimal bigDecimal) return DataValue.of(bigDecimal);
+        if (value instanceof Byte byteValue) return DataValue.of(byteValue);
+        if (value instanceof Short shortValue) return DataValue.of(shortValue);
+        if (value instanceof Integer integerValue) return DataValue.of(integerValue);
+        if (value instanceof Long longValue) return DataValue.of(longValue);
+        if (value instanceof Float floatValue) return DataValue.of(floatValue);
+        if (value instanceof Double doubleValue) return DataValue.of(doubleValue);
+        throw new IllegalArgumentException("Unsupported network value: " + value.getClass().getName());
     }
 
     private static <T extends Comparable<T>> BlockState setProperty(BlockState state, Property<T> property, String value) {

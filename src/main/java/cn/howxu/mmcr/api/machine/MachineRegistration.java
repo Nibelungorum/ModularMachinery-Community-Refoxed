@@ -292,6 +292,16 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder networkInterface(int maxCount, int maxConnections) {
+            return networkInterface(new NetworkInterfaceSpec(maxCount, maxConnections,
+                    networkInterface.allowedMachineIds()));
+        }
+
+        public Builder allowNetworkMachine(Identifier machineId) {
+            this.networkInterface = networkInterface.withAllowedMachine(Objects.requireNonNull(machineId, "machineId"));
+            return this;
+        }
+
         public Builder module() {
             this.module = true;
             return this;

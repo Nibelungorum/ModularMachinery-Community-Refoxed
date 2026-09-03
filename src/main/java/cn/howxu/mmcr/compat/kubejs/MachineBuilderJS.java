@@ -16,6 +16,8 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.resources.Identifier;
@@ -56,6 +58,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     private MachineRole role = MachineRole.NORMAL;
     private boolean explicitRole;
     private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+    private int networkInterfaceMaxCount;
+    private int networkInterfaceMaxConnections;
+    private final Set<Identifier> allowedNetworkMachineIds = new LinkedHashSet<>();
     private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
@@ -65,9 +70,11 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     private MachineBehavior.Kind behaviorKind;
     private MachineBehavior.MachineCallback preServerTick;
     private MachineBehavior.MachineCallback postServerTick;
+    private final MachineBuilder callbackBuilder;
 
     public MachineBuilderJS(Identifier id) {
         super(id);
+        callbackBuilder = MachineBuilder.machine(id);
     }
 
     public MachineBuilderJS(String id) {
@@ -100,6 +107,27 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    public MachineBuilderJS networkInterface(int maxCount, int maxConnections) {
+        networkInterfaceMaxCount = maxCount;
+        networkInterfaceMaxConnections = maxConnections;
+        return this;
+    }
+
+    public MachineBuilderJS allowNetworkMachine(String machineId) {
+        allowedNetworkMachineIds.add(Identifier.parse(machineId));
+        return this;
+    }
+
+    public MachineBuilderJS requestProcess(String requestId, RequestProcess process) {
+        callbackBuilder.requestProcess(Identifier.parse(requestId), process);
+        return this;
+    }
+
+    public MachineBuilderJS requestFailed(String requestId, RequestFailed failure) {
+        callbackBuilder.requestFailed(Identifier.parse(requestId), failure);
+        return this;
+    }
+
     @Override
     public MachineRegistration createObject() {
         var registration = MachineRegistration.builder(id)
@@ -115,6 +143,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .finishSound(finishSoundId)
                 .shareSmartInterfaces(shareSmartInterfaces)
                 .behavior(behaviorWithServerTickHooks());
+        registration.networkInterface(networkInterfaceMaxCount, networkInterfaceMaxConnections);
+        allowedNetworkMachineIds.forEach(registration::allowNetworkMachine);
         if (expandableStructure) registration.expandableStructure();
         if (explicitRole && (role == MachineRole.NORMAL && (!acceptedModuleIds.isEmpty() || module)
                 || role == MachineRole.HOST && module)) {
@@ -127,6 +157,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         }
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
+        MachineDefinition callbacks = callbackBuilder.build();
+        callbacks.requestProcessors().forEach(registration::requestProcess);
+        callbacks.requestFailures().forEach(registration::requestFailed);
         return registration.build();
     }
 
@@ -578,6 +611,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                         .hasFactory(factoryThreadLimit > 1)
                         .threadLimit(factoryThreadLimit))
                 .role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.valueOf(registration.role().name()))
+                .networkInterface(registration.networkInterface().maxCount(), registration.networkInterface().maxConnections())
                 .maxParallelism(registration.maxParallelAmount())
                 .parallelizable(registration.allowParallelism())
                 .failureAction(RecipeFailureActions.getDefaultAction());
@@ -594,6 +628,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                     .postServerTick(recipe.postServerTick());
         }
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
+        registration.networkInterface().allowedMachineIds().forEach(builder::allowNetworkMachine);
         if (registration.role() == MachineRole.MODULE) {
             builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);
         }

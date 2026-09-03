@@ -27,6 +27,12 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestFailureReason;
+import cn.howxu.mmcr.api.network.RequestInfo;
+import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -200,6 +206,48 @@ class MachineBuilderJSTest {
         assertThat(registration.allowMultithreading()).isTrue();
         assertThat(registration.allowParallelism()).isTrue();
         assertThat(registration.maxParallelAmount()).isEqualTo(12);
+    }
+
+    @Test
+    void startup_builder_forwards_network_settings_and_request_callbacks() throws Exception {
+        Identifier targetId = MMCR.id("network_target");
+        Identifier processId = MMCR.id("process");
+        Identifier failureId = MMCR.id("failure");
+        AtomicInteger processCalls = new AtomicInteger();
+        AtomicInteger failureCalls = new AtomicInteger();
+        RequestProcess process = (body, request, sender, receiver) -> processCalls.incrementAndGet();
+        RequestFailed failure = (body, request, sender, reason) -> failureCalls.incrementAndGet();
+        MachineBuilderJS builder = new MachineBuilderJS("mmcr:network_builder")
+                .networkInterface(2, 3)
+                .allowNetworkMachine(targetId.toString())
+                .requestProcess(processId.toString(), process)
+                .requestFailed(failureId.toString(), failure);
+
+        MachineRegistration registration = builder.createObject();
+        assertThat(registration.networkInterface().maxCount()).isEqualTo(2);
+        assertThat(registration.networkInterface().maxConnections()).isEqualTo(3);
+        assertThat(registration.networkInterface().allowedMachineIds()).containsExactly(targetId);
+        assertThat(registration.requestProcessors()).containsEntry(processId, process);
+        assertThat(registration.requestFailures()).containsEntry(failureId, failure);
+
+        registration.requestProcessors().get(processId).process(RequestBody.of(java.util.Map.of()),
+                new RequestInfo(processId, new MachineReference(targetId, 1L)), null, null);
+        registration.requestFailures().get(failureId).fail(RequestBody.of(java.util.Map.of()),
+                new RequestInfo(failureId, new MachineReference(targetId, 1L)), null,
+                RequestFailureReason.UNREACHABLE);
+        assertThat(processCalls).hasValue(1);
+        assertThat(failureCalls).hasValue(1);
+    }
+
+    @Test
+    void startup_builder_rejects_duplicate_request_callback_ids() throws Exception {
+        MachineBuilderJS builder = new MachineBuilderJS("mmcr:duplicate_callbacks");
+        RequestProcess process = (body, request, sender, receiver) -> { };
+
+        builder.requestProcess("mmcr:request", process);
+        assertThatThrownBy(() -> builder.requestProcess("mmcr:request", process))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate request processor");
     }
 
     @Test
@@ -522,4 +570,5 @@ class MachineBuilderJSTest {
         method.setAccessible(true);
         return (Set<Identifier>) method.invoke(null);
     }
+
 }
