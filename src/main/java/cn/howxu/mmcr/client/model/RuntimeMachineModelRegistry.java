@@ -185,7 +185,7 @@ public final class RuntimeMachineModelRegistry {
                     DynamicOverlayBakedModel.Kind.PORT,
                     portStyleDefinition(block),
                     DynamicOverlayItemModel.Description.portOverlay(
-                            DynamicOverlayBakedModel.defaultPortOverlayTexture()));
+                            MMCR.id("block/overlay_network_interface")));
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock
                 || block instanceof SmartInterfaceBlock || block instanceof ModuleCouplerBlock) {

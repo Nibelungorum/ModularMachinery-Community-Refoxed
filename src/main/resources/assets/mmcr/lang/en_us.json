@@ -258,6 +258,7 @@
   "item.mmcr.parallel_controller_ultimate": "Ultimate Parallel Controller",
   "item.mmcr.reactor_controller": "Reactor Controller",
   "item.mmcr.module_bridge": "Module Bridge",
+  "item.mmcr.network_interface": "Network Interface",
   "item.mmcr.smart_interface": "Smart Interface",
   "item.mmcr.upgrade_bus_normal": "Normal Upgrade Bus",
   "item.mmcr.upgrade_bus_reinforced": "Reinforced Upgrade Bus",
