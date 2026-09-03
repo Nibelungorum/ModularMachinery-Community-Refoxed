@@ -111,6 +111,10 @@ public final class GameTestRegistry {
         register(event, "shared_multiblock_exclusive_replacement", 100,
                 helper -> new SharedMultiblockIoGameTest().exclusiveReplacementInvalidatesOneSharedController(helper));
         register(event, "smart_interface", 100, helper -> new SmartInterfaceGameTest().bindsDefaultValueAndWritesRecipeOutput(helper));
+        register(event, "network_interface_same_block_state_replacement", 100,
+                helper -> new NetworkInterfaceGameTest().sameBlockStateReplacementPreservesConnections(helper));
+        register(event, "network_interface_block_replacement", 100,
+                helper -> new NetworkInterfaceGameTest().blockReplacementClearsPeerConnections(helper));
         register(event, "tag_component_ingredient", 100, helper -> new TagComponentIngredientGameTest().tagIngredientMatchesComponentPredicate(helper));
         register(event, "terminal_build", 100, helper -> new TerminalAssemblyGameTest().buildSkipsOccupiedPositionsAndPlacesOnlyMissingBlocks(helper));
         register(event, "terminal_demolish", 100, helper -> new TerminalAssemblyGameTest().demolishSkipsAirAndNonMatchingBlocks(helper));
