@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -44,6 +45,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.MachineReferenceHasher;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -168,6 +170,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Identifier cachedCandidatesMachineId;
     private long cachedCandidatesCatalogVersion = Long.MIN_VALUE;
     private List<MachineRecipe> cachedCandidates = List.of();
+    private @Nullable MachineReference cachedMachineReference;
+    private long cachedMachineReferenceStructureVersion = Long.MIN_VALUE;
     private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
     private boolean sharedStartPending;
     private @Nullable MachineRecipe pendingSharedStartRecipe;
@@ -403,6 +407,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public @Nullable Identifier machineId() {
         Machine currentMachine = runtimeSnapshot().structure().configuredMachine();
         return currentMachine == null ? null : currentMachine.registryName();
+    }
+
+    public @Nullable MachineReference machineReference() {
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
+        if (!(level instanceof ServerLevel serverLevel) || !structure.formed() || structure.machine() == null) {
+            cachedMachineReference = null;
+            cachedMachineReferenceStructureVersion = Long.MIN_VALUE;
+            return null;
+        }
+        Machine machine = structure.machine();
+        long structureVersion = structure.version();
+        if (cachedMachineReference != null
+                && cachedMachineReferenceStructureVersion == structureVersion
+                && cachedMachineReference.type().equals(machine.registryName())) {
+            return cachedMachineReference;
+        }
+        Identifier type = machine.registryName();
+        cachedMachineReference = new MachineReference(type,
+                MachineReferenceHasher.hashForController(serverLevel.dimension().identifier(), type, getBlockPos()));
+        cachedMachineReferenceStructureVersion = structureVersion;
+        return cachedMachineReference;
     }
 
     public void setMachine(Machine m) {
@@ -2772,6 +2797,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
         runtime.clearAllText();
         unbindUpgradeBuses();
+        cachedMachineReference = null;
+        cachedMachineReferenceStructureVersion = Long.MIN_VALUE;
         runtime.resetStructure(configuredMachine, wasFormed || hadActive);
         if (!clearFormationFailure) {
             publishStructureWork(state -> state.withFormationFailure(previousFormationFailure)
