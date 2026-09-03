@@ -14,8 +14,8 @@ MMCREvents.startup(event => {
         .createMachine(PRODUCER_ID)
         .displayNameKey("machine.mmcr_kubejs.kubejs_network_producer_machine")
         .appearance("minecraft:white_wool")
-        .networkInterface(1, 8)
-        .allowNetworkMachine(CENTER_ID)
+        .networkInterface(1, 1) // allow 1 network port and max 1 connections
+        .allowNetworkMachine(CENTER_ID) // allow connect to network center machine
 
     machine_producer
         .tickBehavior(behavior => behavior
@@ -23,10 +23,11 @@ MMCREvents.startup(event => {
                 const storage = ctx.dataStorage()
                 if (storage == null) return
 
-                let power = storage.get("power").flatMap(v => v.asInt()).orElse(20)
-                let dryTicks = storage.get("dry_ticks").flatMap(v => v.asInt()).orElse(0)
+                let power = storage.get("power").flatMap(v => v.asInt()).orElse(20) // some data type named power?
+                let dry_sec = storage.get("dry_sec").flatMap(v => v.asInt()).orElse(0) // if the machine has been long without cool down, it will explosed
                 let feOk = true
 
+                // consume fe
                 const energyPlan = ctx.ioPlan()
                 energyPlan.addInput(api.energyRequirement(RecipeIO.INPUT, 100))
                 if (!energyPlan.commit().successful()) {
@@ -34,6 +35,7 @@ MMCREvents.startup(event => {
                 }
 
                 if (feOk && ctx.isDue(20)) {
+                    // consume water, every 20 ticks
                     const waterPlan = ctx.ioPlan()
                     waterPlan.addInput(waterRequirement)
                     const waterSim = waterPlan.simulate()
@@ -41,16 +43,18 @@ MMCREvents.startup(event => {
                     if (waterSim.inputsSatisfied()) {
                         waterPlan.commit()
                         power = 20
-                        dryTicks = 0
+                        dry_sec = 0
                     } else {
                         power = 10
-                        dryTicks = dryTicks + 20
+                        dry_sec = dry_sec + 1
                     }
 
+                    // update the power and dry_sec
                     storage.set("power", api.dataValue(power))
-                    storage.set("dry_ticks", api.dataValue(dryTicks))
+                    storage.set("dry_sec", api.dataValue(dry_sec))
 
-                    if (dryTicks >= 600) {
+                    // if it has been dry for 30 secends, explode
+                    if (dry_sec >= 30) {
                         const level = ctx.level()
                         const pos = ctx.controllerPos()
                         level.explode(
@@ -66,26 +70,31 @@ MMCREvents.startup(event => {
                     }
 
                     const interfaces = api.networkInterfaces(ctx)
-                    for (let i = 0; i < interfaces.size(); i++) {
-                        const iface = interfaces.get(i)
+                    const iface = interfaces != null && !interfaces.isEmpty() ? interfaces.get(0) : null
+                    if (iface != null) {
                         const connections = iface.connections()
-                        for (let j = 0; j < connections.size(); j++) {
-                            api.sendRequest(iface, connections.get(j), REPORT_POWER, {
+                        const target = connections != null && !connections.isEmpty() ? connections.get(0) : null
+                        if (target != null) {
+                            // send the network center that I can provide 20 powers
+                            // make sure you have done enough null check
+                            api.sendRequest(iface, target, REPORT_POWER, {
                                 power: power
                             })
                         }
                     }
                 }
 
+                // then it's better to add some infomation on the UI and Jade display if u like
+                // This will do every tick, so we needn't CONTROLLER instead of OPERATION
                 const powerId = api.id("mmcr_kubejs:producer_power")
                 const waterId = api.id("mmcr_kubejs:producer_water")
                 const feId = api.id("mmcr_kubejs:producer_fe")
 
                 ctx.screenText().append(api.screenScope().OPERATION, powerId, Text.literal("Computing Power: " + power + " tfps"))
                 ctx.screenText().append(api.screenScope().OPERATION, waterId, Text.literal(
-                    dryTicks === 0
+                    dry_sec === 0
                         ? "Water: OK"
-                        : "Water: DRY (overflow in " + Math.max(0, Math.floor((600 - dryTicks) / 20)) + " cycles)"
+                        : "Water: DRY (overflow in " + Math.max(0, 30 - dry_sec) + " sec)"
                 ))
                 ctx.screenText().append(api.screenScope().OPERATION, feId, Text.literal(
                     feOk ? "Energy: OK" : "Energy: LOW"
@@ -93,7 +102,7 @@ MMCREvents.startup(event => {
 
                 ctx.jadeText().append(powerId, Text.literal(power + " tfps"))
                 ctx.jadeText().append(waterId, Text.literal(
-                    dryTicks === 0 ? "Water OK" : "Water DRY"
+                    dry_sec === 0 ? "Water OK" : "Water DRY"
                 ))
             })
         )
@@ -104,11 +113,14 @@ MMCREvents.startup(event => {
         .createMachine(CENTER_ID)
         .displayNameKey("machine.mmcr_kubejs.kubejs_network_center_machine")
         .appearance("minecraft:black_wool")
-        .networkInterface(1, 16)
+        .networkInterface(1, 16) // one interface but 16 connections
         .allowNetworkMachine(PRODUCER_ID)
+        // register a request porcess for REPORT_POWER id
         .requestProcess(REPORT_POWER, (body, request, senderStorage, receiverStorage) => {
             if (receiverStorage == null) return
+            // the power value that producer produced(what a sentence)
             const reported = body.get("power").flatMap(v => v.asInt()).orElse(0)
+            // set it's unique name, here you can use hash
             const key = "power_" + request.peer().hash()
             receiverStorage.set(key, api.dataValue(reported))
         })
@@ -124,58 +136,55 @@ MMCREvents.startup(event => {
                 const energyPlan = ctx.ioPlan()
                 energyPlan.addInput(api.energyRequirement(RecipeIO.INPUT, 200))
                 const energyOk = energyPlan.commit().successful()
+                // consume FE
 
                 if (ctx.isDue(20)) {
-                    const interfaces = api.networkInterfaces(ctx)
                     let count = 0
-                    for (let i = 0; i < interfaces.size(); i++) {
-                        count = count + interfaces.get(i).connections().size()
+                    const connectedHashes = new Set()
+                    const interfaces = api.networkInterfaces(ctx)
+                    const iface = interfaces != null && !interfaces.isEmpty() ? interfaces.get(0) : null
+                    if (iface != null) {
+                        for (const target of iface.connections()) {
+                            count = count + 1
+                            connectedHashes.add(target.hash())
+                        }
                     }
                     storage.set("producer_count", api.dataValue(count))
 
-                    const connectedHashes = new Set()
-                    for (let i = 0; i < interfaces.size(); i++) {
-                        const connections = interfaces.get(i).connections()
-                        for (let j = 0; j < connections.size(); j++) {
-                            connectedHashes.add(connections.get(j).hash())
-                        }
-                    }
-
-                    const stale = []
-                    storage.values().forEach((key, value) => {
+                    // clean the offline producers
+                    for (const key of storage.values().keySet()) {
                         if (typeof key === "string" && key.startsWith("power_")) {
-                            const suffix = key.substring("power_".length)
-                            const h = Number(suffix)
-                            if (!connectedHashes.has(h)) stale.push(key)
+                            const h = Number(key.substring("power_".length))
+                            if (!connectedHashes.has(h)) storage.remove(key)
                         }
-                    })
-                    for (let i = 0; i < stale.length; i++) {
-                        storage.remove(stale[i])
                     }
                 }
 
+                // compute all the powers
                 let total = 0
-                storage.values().forEach((key, value) => {
+                for (const [key, value] of storage.values().entrySet()) {
                     if (typeof key === "string" && key.startsWith("power_")) {
                         total = total + value.asInt().orElse(0)
                     }
-                })
+                }
 
+                // some information display
                 const count = storage.get("producer_count").flatMap(v => v.asInt()).orElse(0)
 
                 const powerId = api.id("mmcr_kubejs:center_power")
                 const countId = api.id("mmcr_kubejs:center_count")
 
                 ctx.screenText().append(api.screenScope().OPERATION, powerId, Text.literal("Total Power: " + total + " tfps"))
-                ctx.screenText().append(api.screenScope().OPERATION, countId, Text.literal("Connected Producers: " + count))
+                ctx.screenText().append(api.screenScope().OPERATION, countId, Text.literal("Connected Devices: " + count))
                 ctx.screenText().append(api.screenScope().OPERATION, feId, Text.literal(
                     energyOk ? "Energy: OK" : "Energy: LOW"
                 ))
 
-                ctx.jadeText().append(powerId, Text.literal(total + " tfps"))
-                ctx.jadeText().append(countId, Text.literal(count + " producers"))
+                ctx.jadeText().append(powerId, Text.literal("Total Power: " + total + " tfps"))
+                ctx.jadeText().append(countId, Text.literal("Connected Devices: " + count + " producers"))
             })
         )
 
     machine_center.register()
+    // so just a few codes, you can create a powerful power system!
 })

@@ -12,6 +12,7 @@ MMCREvents.server(event => {
             api.anyOfFluidInput(),
             api.anyOfEnergyInput(),
             api.networkInterface(),
+            api.dataStorage(),
             api.block('minecraft:red_terracotta')
         ))
         .controller('C')
@@ -28,6 +29,7 @@ MMCREvents.server(event => {
         .set('A', api.anyOf(
             api.anyOfEnergyInput(),
             api.networkInterface(),
+            api.dataStorage(),
             api.block('minecraft:red_terracotta')
         ))
         .controller('C')

@@ -197,7 +197,8 @@ public final class MachinePatternCompiler {
                     || of.block() instanceof UpgradeBusBlock;
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
             case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
-            case BlockPredicate.AnyOf anyOf -> !couldBeNetworkInterface(anyOf);
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
+                    .anyMatch(MachinePatternCompiler::couldBeComponent);
             default -> true;
         };
     }

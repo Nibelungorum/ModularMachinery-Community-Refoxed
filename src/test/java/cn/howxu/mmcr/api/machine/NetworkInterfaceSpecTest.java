@@ -104,6 +104,19 @@ class NetworkInterfaceSpecTest {
     }
 
     @Test
+    void compiler_keeps_data_storage_component_positions_when_they_share_an_any_of_with_network_interfaces() {
+        BlockPos sharedPosition = BlockPos.ZERO;
+        BlockArray pattern = new BlockArray(Map.of(sharedPosition, new BlockPredicate.AnyOf(List.of(
+                networkInterface(), new BlockPredicate.OfBlock(ModBlocks.DATA_STORAGE.get())))));
+        Machine machine = new DynamicMachine(Identifier.parse("mmcr:network_data_storage_compilation"),
+                "Network Data Storage Compilation", pattern);
+
+        CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
+
+        assertThat(compiled.componentPositions(Direction.SOUTH)).contains(sharedPosition);
+    }
+
+    @Test
     void old_complete_constructor_defaults_network_positions_to_empty() {
         Identifier id = Identifier.parse("mmcr:legacy_compiled_pattern");
         BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()));

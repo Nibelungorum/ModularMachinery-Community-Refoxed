@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.item;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.network.KeyCardBinding;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
@@ -77,8 +79,10 @@ public class KeyCardItem extends Item {
             tooltip.accept(Component.translatable("tooltip.mmcr.key_card.not_selected").withStyle(ChatFormatting.DARK_GRAY));
             return;
         }
+        Machine machine = MachineRegistry.getMachine(binding.machine().type());
+        Component machineName = machine != null ? machine.displayName() : Component.literal(binding.machine().type().toString());
         tooltip.accept(Component.translatable("tooltip.mmcr.key_card.selected",
-                binding.interfacePos().pos().toShortString(), binding.machine().type())
+                binding.interfacePos().pos().toShortString(), machineName)
                 .withStyle(ChatFormatting.GRAY));
     }
 
