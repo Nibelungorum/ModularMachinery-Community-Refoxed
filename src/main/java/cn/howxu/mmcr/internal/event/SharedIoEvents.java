@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.network.NetworkServerState;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -24,6 +25,7 @@ public final class SharedIoEvents {
             ModuleConnectionCoordinator.tick(level);
             SharedIoCoordinator.get(level).resolve(level);
             NetworkInterfaceBindingCoordinator.heartbeat(level);
+            NetworkServerState.get(level.getServer()).dispatch(level.getServer(), level.getGameTime());
         }
     }
 

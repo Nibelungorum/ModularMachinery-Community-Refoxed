@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.resources.Identifier;
 
 import java.util.Collections;
@@ -38,7 +40,23 @@ public record MachineDefinition(
         Identifier runningSoundId,
         Identifier finishSoundId,
         BlockArray pattern,
-        MachineBehavior behavior) {
+        MachineBehavior behavior,
+        java.util.Map<Identifier, RequestProcess> requestProcessors,
+        java.util.Map<Identifier, RequestFailed> requestFailures) {
+
+    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+            AppearanceSpec appearance, FactorySpec factory, MachineRole role, Set<Identifier> acceptedModuleIds,
+            NetworkInterfaceSpec networkInterface, long maxParallelism, boolean parallelizable,
+            RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
+            int maxParallelAmount, boolean expandableStructure,
+            java.util.Map<String, SmartInterfaceType> smartInterfaceTypes, boolean shareSmartInterfaces,
+            List<SmartInterfaceModifier> smartInterfaceModifiers, Identifier runningSoundId, Identifier finishSoundId,
+            BlockArray pattern, MachineBehavior behavior) {
+        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds, networkInterface,
+                maxParallelism, parallelizable, failureAction, allowModifiers, allowMultithreading, maxParallelAmount,
+                expandableStructure, smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
+                finishSoundId, pattern, behavior, java.util.Map.of(), java.util.Map.of());
+    }
 
     public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
@@ -98,6 +116,10 @@ public record MachineDefinition(
         smartInterfaceModifiers = List.copyOf(smartInterfaceModifiers == null ? List.of() : smartInterfaceModifiers);
         failureAction = failureAction == null ? RecipeFailureActions.getDefaultAction() : failureAction;
         behavior = java.util.Objects.requireNonNull(behavior, "behavior");
+        requestProcessors = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(
+                requestProcessors == null ? java.util.Map.of() : requestProcessors));
+        requestFailures = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(
+                requestFailures == null ? java.util.Map.of() : requestFailures));
         if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
             throw new IllegalStateException("Only HOST machines may accept modules");
         }

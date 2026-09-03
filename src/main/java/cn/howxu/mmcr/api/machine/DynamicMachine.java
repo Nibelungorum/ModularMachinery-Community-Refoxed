@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -34,8 +36,22 @@ public record DynamicMachine(
         NetworkInterfaceSpec networkInterface,
         List<MachineStructureStage> structureStages,
         RecipeFailureActions failureAction,
-        MachineBehavior behavior
+        MachineBehavior behavior,
+        Map<Identifier, RequestProcess> requestProcessors,
+        Map<Identifier, RequestFailed> requestFailures
 ) implements Machine {
+    public DynamicMachine(Identifier registryName, String displayNameKey, BlockArray pattern,
+            MachineControllerSpec controller, MachineAppearanceSpec appearance, PortRequirementSpec portRequirements,
+            PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements, long maxParallelism,
+            boolean parallelizable, boolean hasFactory, int factoryThreadLimit, List<FactoryThreadSpec> factoryThreads,
+            MachineRole role, Set<Identifier> acceptedModuleIds, NetworkInterfaceSpec networkInterface,
+            List<MachineStructureStage> structureStages, RecipeFailureActions failureAction, MachineBehavior behavior) {
+        this(registryName, displayNameKey, pattern, controller, appearance, portRequirements, portTierRequirements,
+                dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory, factoryThreadLimit,
+                factoryThreads, role, acceptedModuleIds, networkInterface, structureStages, failureAction, behavior,
+                Map.of(), Map.of());
+    }
     public DynamicMachine(
             Identifier registryName,
             String displayNameKey,
@@ -95,6 +111,8 @@ public record DynamicMachine(
         }
         failureAction = failureAction == null ? RecipeFailureActions.getDefaultAction() : failureAction;
         behavior = java.util.Objects.requireNonNull(behavior, "behavior");
+        requestProcessors = Collections.unmodifiableMap(new LinkedHashMap<>(requestProcessors == null ? Map.of() : requestProcessors));
+        requestFailures = Collections.unmodifiableMap(new LinkedHashMap<>(requestFailures == null ? Map.of() : requestFailures));
         modifierReplacements = copyModifierReplacements(pattern, modifierReplacements);
     }
 

@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -44,8 +46,23 @@ public record MachineRegistration(
         Set<Identifier> acceptedModuleIds,
         NetworkInterfaceSpec networkInterface,
         BlockArray pattern,
-        MachineBehavior behavior
+        MachineBehavior behavior,
+        Map<Identifier, RequestProcess> requestProcessors,
+        Map<Identifier, RequestFailed> requestFailures
 ) {
+    public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
+            MachineAppearanceSpec appearance, Identifier recipeFamilyId, boolean allowModifiers,
+            boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
+            boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
+            boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
+            @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
+            Set<Identifier> acceptedModuleIds, NetworkInterfaceSpec networkInterface, BlockArray pattern,
+            MachineBehavior behavior) {
+        this(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers, allowMultithreading,
+                allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
+                smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface,
+                pattern, behavior, Map.of(), Map.of());
+    }
     public MachineRegistration {
         if (id == null) throw new IllegalArgumentException("id null");
         displayNameKey = defaultDisplayNameKey(id, displayNameKey);
@@ -65,6 +82,8 @@ public record MachineRegistration(
         }
         pattern = pattern == null ? new BlockArray(Map.of()) : pattern;
         behavior = Objects.requireNonNull(behavior, "behavior");
+        requestProcessors = Collections.unmodifiableMap(new LinkedHashMap<>(requestProcessors == null ? Map.of() : requestProcessors));
+        requestFailures = Collections.unmodifiableMap(new LinkedHashMap<>(requestFailures == null ? Map.of() : requestFailures));
     }
 
     public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
@@ -117,7 +136,8 @@ public record MachineRegistration(
     public MachineRegistration withPattern(BlockArray pattern) {
         return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
-                smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior);
+                 smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior,
+                requestProcessors, requestFailures);
     }
 
     public static String defaultDisplayNameKey(Identifier id) {
@@ -162,6 +182,8 @@ public record MachineRegistration(
         private NetworkInterfaceSpec networkInterface = NetworkInterfaceSpec.disabled();
         private BlockArray pattern;
         private MachineBehavior behavior = RecipeBehavior.defaults();
+        private final Map<Identifier, RequestProcess> requestProcessors = new LinkedHashMap<>();
+        private final Map<Identifier, RequestFailed> requestFailures = new LinkedHashMap<>();
 
         private Builder(Identifier id) {
             this.id = id;
@@ -285,6 +307,22 @@ public record MachineRegistration(
             return this;
         }
 
+        public Builder requestProcess(Identifier requestId, RequestProcess process) {
+            if (requestProcessors.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
+                    Objects.requireNonNull(process, "process")) != null) {
+                throw new IllegalArgumentException("Duplicate request processor: " + requestId);
+            }
+            return this;
+        }
+
+        public Builder requestFailed(Identifier requestId, RequestFailed failure) {
+            if (requestFailures.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
+                    Objects.requireNonNull(failure, "failure")) != null) {
+                throw new IllegalArgumentException("Duplicate request failure handler: " + requestId);
+            }
+            return this;
+        }
+
         public MachineRegistration build() {
             if (host && module) {
                 throw new IllegalArgumentException("Machine roles are mutually exclusive");
@@ -292,7 +330,8 @@ public record MachineRegistration(
             MachineRole role = host ? MachineRole.HOST : module ? MachineRole.MODULE : MachineRole.NORMAL;
             return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipeFamilyId, allowModifiers,
                     allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
-                    smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior);
+                     smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior,
+                    requestProcessors, requestFailures);
         }
 
         private static Identifier soundId(SoundEvent sound) {

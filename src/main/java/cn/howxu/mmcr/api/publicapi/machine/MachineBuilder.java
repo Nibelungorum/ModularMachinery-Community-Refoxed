@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashSet;
@@ -41,6 +43,8 @@ public final class MachineBuilder {
     private MachineBehavior behavior = RecipeBehavior.defaults();
     private MachineBehavior.MachineCallback preServerTick;
     private MachineBehavior.MachineCallback postServerTick;
+    private final java.util.Map<Identifier, RequestProcess> requestProcessors = new LinkedHashMap<>();
+    private final java.util.Map<Identifier, RequestFailed> requestFailures = new LinkedHashMap<>();
 
     private MachineBuilder(Identifier id) {
         this.id = Objects.requireNonNull(id, "id");
@@ -188,6 +192,22 @@ public final class MachineBuilder {
         return this;
     }
 
+    public MachineBuilder requestProcess(Identifier requestId, RequestProcess process) {
+        if (requestProcessors.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
+                Objects.requireNonNull(process, "process")) != null) {
+            throw new IllegalArgumentException("Duplicate request processor: " + requestId);
+        }
+        return this;
+    }
+
+    public MachineBuilder requestFailed(Identifier requestId, RequestFailed failure) {
+        if (requestFailures.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
+                Objects.requireNonNull(failure, "failure")) != null) {
+            throw new IllegalArgumentException("Duplicate request failure handler: " + requestId);
+        }
+        return this;
+    }
+
     public MachineDefinition build() {
         MachineBehavior resolvedBehavior = behavior;
         if (preServerTick != null || postServerTick != null) {
@@ -207,6 +227,7 @@ public final class MachineBuilder {
         return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
                 acceptedModuleIds, networkInterface, maxParallelism, parallelizable, failureAction, allowModifiers,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
-                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior);
+                shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior,
+                requestProcessors, requestFailures);
     }
 }

@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -96,5 +98,13 @@ public interface Machine {
 
     default MachineBehavior behavior() {
         return RecipeBehavior.defaults();
+    }
+
+    default Map<Identifier, RequestProcess> requestProcessors() {
+        return Map.of();
+    }
+
+    default Map<Identifier, RequestFailed> requestFailures() {
+        return Map.of();
     }
 }

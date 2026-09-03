@@ -117,7 +117,7 @@ public final class MachineStructureRegistry {
                 registration.networkInterface(),
                 stages,
                 RecipeFailureActions.getDefaultAction(),
-                registration.behavior());
+                registration.behavior(), registration.requestProcessors(), registration.requestFailures());
     }
 
     public static void validateDynamicRoles(Map<Identifier, MachineStructureDefinition> structures) {

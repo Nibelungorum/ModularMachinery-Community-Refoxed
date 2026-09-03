@@ -10,6 +10,7 @@ public final class Config {
     public static final int DEFAULT_BUILD_TASK_TIMEOUT_TICKS = 20 * 60;
     public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 10;
     public static final int DEFAULT_STRUCTURE_SENTINEL_COUNT = 16;
+    public static final int DEFAULT_MAX_REQUESTS_PER_TICK = 64;
     public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue TERMINAL_MAX_DEMOLISH_BLOCKS;
@@ -20,6 +21,7 @@ public final class Config {
     public static final ModConfigSpec.IntValue STRUCTURE_SENTINEL_COUNT;
     public static final ModConfigSpec.BooleanValue STRUCTURE_SENTINEL_ENABLED;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
+    public static final ModConfigSpec.IntValue MAX_REQUESTS_PER_TICK;
 
     static {
         var b = new ModConfigSpec.Builder();
@@ -50,6 +52,9 @@ public final class Config {
         ENERGY_CONSUMPTION_MULTIPLIER = b
                 .comment("Global multiplier on energy consumption")
                 .defineInRange("energy_consumption_multiplier", 1.0, 0.0, 100.0);
+        MAX_REQUESTS_PER_TICK = b
+                .comment("Maximum machine network requests processed per server tick")
+                .defineInRange("max_requests_per_tick", DEFAULT_MAX_REQUESTS_PER_TICK, 1, 1_000_000);
         SPEC = b.build();
     }
 

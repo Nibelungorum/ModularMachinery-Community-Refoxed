@@ -1,0 +1,55 @@
+package cn.howxu.mmcr.api.network;
+
+import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.server.MinecraftServer;
+
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Server-created reference to an active machine network interface.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class NetworkInterfaceReference {
+    private final MinecraftServer server;
+    private final GlobalPos source;
+
+    NetworkInterfaceReference(MinecraftServer server, GlobalPos source) {
+        this.server = Objects.requireNonNull(server, "server");
+        this.source = Objects.requireNonNull(source, "source");
+    }
+
+    public BlockPos position() {
+        return source.pos();
+    }
+
+    public List<MachineReference> connections() {
+        NetworkInterfaceBlockEntity endpoint = endpoint();
+        return endpoint == null ? List.of() : endpoint.connections().stream()
+                .map(NetworkInterfaceBlockEntity.Connection::machine).toList();
+    }
+
+    GlobalPos endpointFor(MachineReference target) {
+        NetworkInterfaceBlockEntity endpoint = endpoint();
+        if (endpoint == null) return null;
+        return endpoint.connections().stream().filter(connection -> connection.machine().equals(target))
+                .map(NetworkInterfaceBlockEntity.Connection::endpoint).findFirst().orElse(null);
+    }
+
+    MinecraftServer server() {
+        return server;
+    }
+
+    GlobalPos source() {
+        return source;
+    }
+
+    private NetworkInterfaceBlockEntity endpoint() {
+        var level = server.getLevel(source.dimension());
+        if (level == null || !level.hasChunkAt(source.pos())) return null;
+        return level.getBlockEntity(source.pos()) instanceof NetworkInterfaceBlockEntity endpoint ? endpoint : null;
+    }
+}

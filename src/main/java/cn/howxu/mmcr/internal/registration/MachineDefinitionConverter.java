@@ -147,6 +147,8 @@ public final class MachineDefinitionConverter {
                 .networkInterface(definition.networkInterface())
                 .shareSmartInterfaces(definition.shareSmartInterfaces())
                 .behavior(definition.behavior());
+        definition.requestProcessors().forEach(builder::requestProcess);
+        definition.requestFailures().forEach(builder::requestFailed);
         definition.smartInterfaceTypes().values().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceType)
                 .forEach(builder::smartInterfaceType);
         definition.smartInterfaceModifiers().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceModifier)
