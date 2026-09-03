@@ -9,7 +9,9 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -18,16 +20,19 @@ import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
@@ -54,6 +59,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -72,6 +78,7 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -84,6 +91,7 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -468,6 +476,57 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.runtimeSnapshot()).isEqualTo(published);
         assertThat(controller.snapshotBuildCountForTesting()).isEqualTo(buildCount);
         assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @Test
+    void structure_reconciliation_claims_only_sorted_network_interfaces_within_machine_limit() {
+        BlockPos firstPatternPos = new BlockPos(-2, 0, 0);
+        BlockPos secondPatternPos = new BlockPos(1, 0, 0);
+        DynamicMachine machine = networkMachine(MMCR.id("network_interface_limit"), 1,
+                Map.of(firstPatternPos, new BlockPredicate.OfBlock(ModBlocks.NETWORK_INTERFACE.get()),
+                        secondPatternPos, new BlockPredicate.OfBlock(ModBlocks.NETWORK_INTERFACE.get())));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        List<BlockPos> positions = MachinePatternCompiler.compile(machine)
+                .networkInterfacePositions(controller.getBlockState().getValue(MachineControllerBlock.FACING));
+        Comparator<BlockPos> positionOrder = Comparator.<BlockPos>comparingInt(BlockPos::getX)
+                .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ);
+        BlockPos firstPos = positions.stream().min(positionOrder).orElseThrow();
+        BlockPos secondPos = positions.stream().max(positionOrder).orElseThrow();
+        NetworkInterfaceBlockEntity first = networkInterface(firstPos);
+        NetworkInterfaceBlockEntity second = networkInterface(secondPos);
+
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, first, second);
+
+        assertThat(controller.activeNetworkInterfacePositions()).containsExactly(firstPos);
+        assertThat(controller.hasActiveNetworkInterface(firstPos)).isTrue();
+        assertThat(controller.hasActiveNetworkInterface(secondPos)).isFalse();
+        assertThat(first.owner()).contains(GlobalPos.of(controller.getLevel().dimension(), controller.getBlockPos()));
+        assertThat(second.owner()).isEmpty();
+        assertThat(controller.runtimeSnapshot().linkedPortPositions()).doesNotContain(firstPos, secondPos);
+        assertThat(first.linkedControllerPositions()).contains(controller.getBlockPos());
+    }
+
+    @Test
+    void resetting_a_controller_releases_network_interface_ownership_and_connections() {
+        BlockPos interfacePatternPos = new BlockPos(1, 0, 0);
+        DynamicMachine machine = networkMachine(MMCR.id("network_interface_reset"), 1,
+                Map.of(interfacePatternPos, new BlockPredicate.OfBlock(ModBlocks.NETWORK_INTERFACE.get())));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos interfacePos = MachinePatternCompiler.compile(machine)
+                .networkInterfacePositions(controller.getBlockState().getValue(MachineControllerBlock.FACING)).getFirst();
+        NetworkInterfaceBlockEntity networkInterface = networkInterface(interfacePos);
+
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, networkInterface);
+        assertThat(networkInterface.addConnection(new NetworkInterfaceBlockEntity.Connection(
+                globalPos("mmcr:network_endpoint", new BlockPos(4, 0, 0)),
+                new cn.howxu.mmcr.api.network.MachineReference(MMCR.id("network_target"), 4L), 1L))).isTrue();
+
+        controller.invalidateFormedStructure();
+
+        assertThat(controller.activeNetworkInterfacePositions()).isEmpty();
+        assertThat(networkInterface.owner()).isEmpty();
+        assertThat(networkInterface.connections()).isEmpty();
+        assertThat(networkInterface.linkedControllerPositions()).isEmpty();
     }
 
     @Test
@@ -1208,6 +1267,28 @@ class MachineControllerBlockEntityTest {
         if (controller.resourceDomain() != null) {
             SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
         }
+    }
+
+    private static NetworkInterfaceBlockEntity networkInterface(BlockPos pos) {
+        BlockEntity entity = ModBlockEntities.NETWORK_INTERFACE.get().create(pos,
+                ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());
+        assertThat(entity).isInstanceOf(NetworkInterfaceBlockEntity.class);
+        return (NetworkInterfaceBlockEntity) entity;
+    }
+
+    private static DynamicMachine networkMachine(Identifier machineId, int maxCount,
+                                                  Map<BlockPos, BlockPredicate> pattern) {
+        return new DynamicMachine(machineId, "network test", new BlockArray(pattern),
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(),
+                1, false, false, 1, List.of(), MachineRole.NORMAL, Set.of(),
+                new NetworkInterfaceSpec(maxCount, 4, Set.of()), List.of(),
+                RecipeFailureActions.getDefaultAction(), RecipeBehavior.defaults());
+    }
+
+    private static GlobalPos globalPos(String dimension, BlockPos pos) {
+        return GlobalPos.of(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION, Identifier.parse(dimension)), pos);
     }
 
     private static MachineControllerBlockEntity textController(Identifier machineId) {

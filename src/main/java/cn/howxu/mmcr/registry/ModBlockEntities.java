@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
+import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
@@ -41,12 +42,14 @@ public final class ModBlockEntities {
         registerFactoryController();
         registerSmartInterface();
         registerDataStorage();
+        registerNetworkInterface();
         registerModuleCoupler();
         for (UpgradeBusSize size : UpgradeBusSize.values()) registerUpgradeBus(size);
     }
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> SMART_INTERFACE = BES.get("smart_interface");
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> DATA_STORAGE = BES.get("data_storage");
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> NETWORK_INTERFACE = BES.get("network_interface");
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> MODULE_BRIDGE = BES.get("module_bridge");
 
     private static void registerMachineController(Identifier machineId) {
@@ -82,6 +85,11 @@ public final class ModBlockEntities {
     private static void registerDataStorage() {
         BES.put("data_storage", register("data_storage", () -> new BlockEntityType<>(
                 DataStorageBlockEntity::new, ModBlocks.DATA_STORAGE.get())));
+    }
+
+    private static void registerNetworkInterface() {
+        BES.put("network_interface", register("network_interface", () -> new BlockEntityType<>(
+                NetworkInterfaceBlockEntity::new, ModBlocks.NETWORK_INTERFACE.get())));
     }
 
     private static void registerModuleCoupler() {

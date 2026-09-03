@@ -90,6 +90,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
@@ -208,6 +209,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private final Map<Long, Integer> buildTaskPlacementsPerTickForTesting = new LinkedHashMap<>();
     private final transient MachineControllerRuntime runtime;
     private List<UpgradeBusBlockEntity> boundUpgradeBuses = List.of();
+    private Set<BlockPos> activeNetworkInterfacePositions = Set.of();
     private final Runnable upgradeBusChangeListener = this::onUpgradeBusContentsChanged;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
@@ -429,6 +431,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 MachineReferenceHasher.hashForController(serverLevel.dimension().identifier(), type, getBlockPos()));
         cachedMachineReferenceStructureVersion = structureVersion;
         return cachedMachineReference;
+    }
+
+    public Set<BlockPos> activeNetworkInterfacePositions() {
+        return activeNetworkInterfacePositions;
+    }
+
+    public boolean hasActiveNetworkInterface(BlockPos position) {
+        return position != null && activeNetworkInterfacePositions.contains(position);
     }
 
     public void setMachine(Machine m) {
@@ -2288,7 +2298,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .filter(SmartInterfaceBlockEntity.class::isInstance)
                 .map(SmartInterfaceBlockEntity.class::cast)
                 .toList();
+        Set<BlockPos> previousNetworkInterfacePositions = activeNetworkInterfacePositions;
         if (level == null || matchedMachine == null || matchedPattern == null) {
+            unbindNetworkInterfaces(previousNetworkInterfacePositions);
+            activeNetworkInterfacePositions = Set.of();
             new DataStorageBindingCoordinator().unbind(this, previousDataStorages);
             runtime.publishDataStorages(Map.of());
             runtime.publishUpgradeBusState(List.of());
@@ -2330,6 +2343,31 @@ public class MachineControllerBlockEntity extends BlockEntity {
             new SmartInterfaceBindingCoordinator(registration.smartInterfaceTypes(), registration.shareSmartInterfaces())
                     .reconcile(this, smartInterfaces);
         }
+
+        GlobalPos networkOwner = GlobalPos.of(level.dimension(), getBlockPos());
+        CompiledMachinePattern networkInterfacePattern = compiledPattern == null
+                ? MachinePatternCompiler.compile(matchedMachine)
+                : compiledPattern;
+        List<BlockPos> actualNetworkInterfacePositions = networkInterfacePattern.networkInterfacePositions(facing).stream()
+                .map(relativePos -> getBlockPos().offset(relativePos))
+                .filter(worldPos -> level.getBlockEntity(worldPos) instanceof NetworkInterfaceBlockEntity)
+                .sorted(Comparator.<BlockPos>comparingInt(BlockPos::getX)
+                        .thenComparingInt(BlockPos::getY)
+                        .thenComparingInt(BlockPos::getZ))
+                .toList();
+        Set<BlockPos> nextNetworkInterfacePositions = new HashSet<>();
+        for (BlockPos worldPos : actualNetworkInterfacePositions.stream()
+                .limit(matchedMachine.networkInterface().maxCount()).toList()) {
+            if (level.getBlockEntity(worldPos) instanceof NetworkInterfaceBlockEntity networkInterface
+                    && networkInterface.claimOwner(networkOwner)) {
+                networkInterface.linkControllerAppearance(getBlockPos(), formedTexture);
+                nextNetworkInterfacePositions.add(worldPos.immutable());
+            }
+        }
+        unbindNetworkInterfaces(previousNetworkInterfacePositions.stream()
+                .filter(position -> !nextNetworkInterfacePositions.contains(position))
+                .collect(java.util.stream.Collectors.toSet()));
+        activeNetworkInterfacePositions = Set.copyOf(nextNetworkInterfacePositions);
 
         for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
@@ -2791,6 +2829,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean wasFormed = structure.formed() || physicalFormed();
         if (wasFormed && level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.clearConnectionsFor(serverLevel, this);
         boolean hadActive = runtime.craftingRuntime().active();
+        unbindNetworkInterfaces(activeNetworkInterfacePositions);
+        activeNetworkInterfacePositions = Set.of();
         releaseStructureClaims();
         unbindSmartInterfaces();
         unbindDataStorages();
@@ -2837,6 +2877,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         new SmartInterfaceBindingCoordinator(Map.of()).unbindAll(this, smartInterfaces);
+    }
+
+    private void unbindNetworkInterfaces(Set<BlockPos> positions) {
+        if (level == null || positions.isEmpty()) return;
+        GlobalPos owner = GlobalPos.of(level.dimension(), getBlockPos());
+        for (BlockPos position : positions) {
+            if (level.getBlockEntity(position) instanceof NetworkInterfaceBlockEntity networkInterface) {
+                networkInterface.releaseOwner(owner);
+            }
+        }
     }
 
     private void unbindDataStorages() {

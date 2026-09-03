@@ -18,6 +18,7 @@ import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
@@ -29,6 +30,7 @@ import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
+import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
@@ -141,6 +143,7 @@ public final class TestBootstrap {
         bindFactoryController();
         bindSmartInterface();
         bindDataStorage();
+        bindNetworkInterface();
         bindModuleBridge();
         bindUpgradeBuses();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
@@ -418,6 +421,26 @@ public final class TestBootstrap {
         blockEntities.freeze();
         blocks.freeze();
         bind(ModBlockEntities.MODULE_BRIDGE, blockEntityType);
+    }
+
+    private static void bindNetworkInterface() throws Exception {
+        MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        blocks.unfreeze(true);
+        blockEntities.unfreeze(true);
+        NetworkInterfaceBlock block = new NetworkInterfaceBlock(
+                () -> ModBlockEntities.NETWORK_INTERFACE.get(), Blocks.IRON_BLOCK.properties());
+        Registry.register(BuiltInRegistries.BLOCK, MMCR.id("network_interface"), block);
+        bind(ModBlocks.NETWORK_INTERFACE, block);
+        Item item = registerItem(ModItems.ITEMS.get("network_interface"));
+        bind(ModItems.ITEMS.get("network_interface"), item);
+        Item.BY_BLOCK.put(block, item);
+
+        BlockEntityType<?> blockEntityType = new BlockEntityType<>(NetworkInterfaceBlockEntity::new, block);
+        Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("network_interface"), blockEntityType);
+        blockEntities.freeze();
+        blocks.freeze();
+        bind(ModBlockEntities.NETWORK_INTERFACE, blockEntityType);
     }
 
     private static void bindDataStorage() throws Exception {

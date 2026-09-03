@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
@@ -40,6 +41,7 @@ public final class ModBlocks {
         registerFactoryController();
         registerSmartInterface();
         registerDataStorage();
+        registerNetworkInterface();
         registerModuleCoupler();
         for (UpgradeBusSize size : UpgradeBusSize.values()) registerUpgradeBus(size);
     }
@@ -47,6 +49,7 @@ public final class ModBlocks {
     public static final DeferredHolder<Block, Block> BASIC_CASING = BLOCKS.get("basic_casing");
     public static final DeferredHolder<Block, Block> SMART_INTERFACE = BLOCKS.get("smart_interface");
     public static final DeferredHolder<Block, Block> DATA_STORAGE = BLOCKS.get("data_storage");
+    public static final DeferredHolder<Block, Block> NETWORK_INTERFACE = BLOCKS.get("network_interface");
     public static final DeferredHolder<Block, Block> MODULE_BRIDGE = BLOCKS.get("module_bridge");
 
     /** Compatibility alias for {@link #BASIC_CASING}; the block id was renamed from {@code casing} to {@code basic_casing}. */
@@ -121,6 +124,13 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.DATA_STORAGE.get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new DataStorageBlock(beTypeSupplier, properties)));
+    }
+
+    private static void registerNetworkInterface() {
+        String name = "network_interface";
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.NETWORK_INTERFACE.get();
+        BLOCKS.put(name, REGISTER.registerBlock(name,
+                properties -> new NetworkInterfaceBlock(beTypeSupplier, properties)));
     }
 
     private static void registerModuleCoupler() {
