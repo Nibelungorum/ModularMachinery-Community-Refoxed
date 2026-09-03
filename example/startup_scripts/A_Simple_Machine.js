@@ -9,8 +9,6 @@ MMCREvents.startup(event => {
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_blast_furnace") // Global machine identifier.
         .displayNameKey("machine.mmcr_kubejs.kubejs_blast_furnace") // Translation key for the display name.
-        .recipeFamily("mmcr_kubejs:kubejs_blast_furnace"); // Recipe family tag used by the machine
-    // recipeFamily is a deperated feature, you can detele this line if you like
 
 
     // Configure the machine properties.

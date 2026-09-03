@@ -221,6 +221,46 @@ class KubeJSApiTest {
     }
 
     @Test
+    void rhino_adds_fluid_input_requirement_without_internal_imports() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineRecipeBuilderJS("mmcr:fluid_requirement_test");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, "builder.addRequirement(api.fluidInputRequirement('minecraft:water', 100))",
+                "fluid-requirement-test", 1, null);
+        Object requirement = builder.requirements.getFirst();
+
+        assertThat(requirement).isInstanceOfSatisfying(cn.howxu.mmcr.api.recipe.requirement.FluidRequirement.class,
+                fluid -> {
+                    assertThat(fluid.io()).isEqualTo(RecipeModifier.IOType.INPUT);
+                    assertThat(fluid.fluid().test(new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 1))).isTrue();
+                    assertThat(fluid.amount()).isEqualTo(100);
+                });
+    }
+
+    @Test
+    void data_value_factory_converts_kubejs_maps_and_lists() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+
+        Object value = context.evaluateString(scope,
+                "api.dataValue({answer: 42, items: ['a', 'b']})", "data-value-test", 1, null);
+        if (value instanceof dev.latvian.mods.rhino.NativeJavaObject wrapper) {
+            value = wrapper.unwrap();
+        }
+
+        assertThat(value).isInstanceOfSatisfying(cn.howxu.mmcr.api.data.DataValue.class, data -> {
+            var values = data.asMap().orElseThrow();
+            assertThat(values).containsKeys("answer", "items");
+            assertThat(values.get("answer").doubleValue()).isEqualTo(42D);
+            assertThat(values.get("items").asList().orElseThrow()).hasSize(2);
+        });
+    }
+
+    @Test
     void readable_number_methods_are_available_to_kubejs_api() {
         assertThat(api.readableNumber(1_000L)).isEqualTo("1k");
         assertThat(api.readableNumberExact(1_000_000L)).isEqualTo("1,000,000");

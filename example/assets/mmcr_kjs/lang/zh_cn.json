@@ -56,5 +56,13 @@
     "gui.mmcr_kubejs.in_line":     "§a  寰宇猪咪系统",
     "gui.mmcr_kubejs.after_line":  "§a------------",
 
-    "gui.mmcr_kubejs.display_when_idle": "寰宇猪咪系统:当Idle时显示这一行文本"
+    "gui.mmcr_kubejs.display_when_idle": "寰宇猪咪系统:当Idle时显示这一行文本",
+
+    "block.mmcr.kubejs_network_producer_machine_controller": "算力生产者控制器",
+    "item.mmcr.kubejs_network_producer_machine_controller": "算力生产者控制器",
+    "machine.mmcr_kubejs.kubejs_network_producer_machine": "算力生产者",
+
+    "block.mmcr.kubejs_network_center_machine_controller": "算力中心控制器",
+    "item.mmcr.kubejs_network_center_machine_controller": "算力中心控制器",
+    "machine.mmcr_kubejs.kubejs_network_center_machine": "算力中心"
 }

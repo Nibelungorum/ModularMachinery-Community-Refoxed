@@ -54,5 +54,13 @@
     "gui.mmcr_kubejs.before_line": "§a------------",
     "gui.mmcr_kubejs.in_line": "§a  Demo Tick System",
     "gui.mmcr_kubejs.after_line": "§a------------",
-    "gui.mmcr_kubejs.display_when_idle": "Demo Tick System: Idle"
+    "gui.mmcr_kubejs.display_when_idle": "Demo Tick System: Idle",
+
+    "block.mmcr.kubejs_network_producer_machine_controller": "Network Producer Controller",
+    "item.mmcr.kubejs_network_producer_machine_controller": "Network Producer Controller",
+    "machine.mmcr_kubejs.kubejs_network_producer_machine": "Network Producer",
+
+    "block.mmcr.kubejs_network_center_machine_controller": "Network Center Controller",
+    "item.mmcr.kubejs_network_center_machine_controller": "Network Center Controller",
+    "machine.mmcr_kubejs.kubejs_network_center_machine": "Network Center"
 }

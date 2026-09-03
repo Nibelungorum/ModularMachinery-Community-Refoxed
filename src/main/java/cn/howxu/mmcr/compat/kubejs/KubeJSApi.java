@@ -122,10 +122,14 @@ public final class KubeJSApi {
     }
 
     public void sendRequest(NetworkInterfaceReference source, MachineReference target, String requestId, Object body) {
-        DataValue value = toDataValue(body);
+        DataValue value = dataValue(body);
         Map<String, DataValue> values = value.asMap().orElseThrow(() ->
                 new IllegalArgumentException("Network request body must be a map"));
         NetworkApi.sendRequest(source, target, Identifier.parse(requestId), RequestBody.of(values));
+    }
+
+    public DataValue dataValue(Object value) {
+        return toDataValue(value);
     }
 
     public BlockPredicate air() { return new BlockPredicate.Air(); }
@@ -292,6 +296,10 @@ public final class KubeJSApi {
 
     public MachineRequirement itemInputRequirement(String itemId, int count) {
         return MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), count));
+    }
+
+    public MachineRequirement fluidInputRequirement(String fluidId, int amount) {
+        return MachineRequirement.fromInput(fluidInput(fluidId, amount));
     }
 
     public MachineRequirement fluidOutputRequirement(String fluidId, int amount, float chance) {
