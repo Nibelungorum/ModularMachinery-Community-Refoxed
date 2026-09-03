@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -132,6 +135,31 @@ class PublicApiAdapterTest {
 
         assertThat(registration.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
         assertThat(machine.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
+    }
+
+    @Test
+    void adapter_and_role_projection_preserve_request_handlers() {
+        var machineId = MMCR.id("handler_machine");
+        var processId = MMCR.id("process");
+        var failureId = MMCR.id("failure");
+        RequestProcess process = (body, request, sender, receiver) -> { };
+        RequestFailed failure = (body, request, sender, reason) -> { };
+        var definition = MachineBuilder.machine(machineId)
+                .requestProcess(processId, process)
+                .requestFailed(failureId, failure)
+                .build();
+
+        var converted = MachineDefinitionConverter.toDynamicMachine(definition, structureFor(machineId));
+
+        assertThat(converted.requestProcessors()).containsExactly(Map.entry(processId, process));
+        assertThat(converted.requestFailures()).containsExactly(Map.entry(failureId, failure));
+        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, java.util.Set.of())
+                .requestProcessors()).containsExactly(Map.entry(processId, process));
+        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, java.util.Set.of())
+                .requestFailures()).containsExactly(Map.entry(failureId, failure));
+        var startup = MachineDefinitionConverter.toStartupRegistration(definition);
+        assertThat(startup.requestProcessors()).containsExactly(Map.entry(processId, process));
+        assertThat(startup.requestFailures()).containsExactly(Map.entry(failureId, failure));
     }
 
     @Test

@@ -28,11 +28,13 @@ public final class NetworkRequestDispatcher {
     void dispatch(PendingRequest request) {
         Resolved source = resolve(request.sourceEndpoint());
         if (source == null || source.network == null) {
-            fail(resolveController(request.sourceController()), request, RequestFailureReason.SOURCE_INTERFACE_MISSING);
+            fail(sourceFailure(request, source), request, RequestFailureReason.SOURCE_INTERFACE_MISSING);
             return;
         }
-        if (source.controller == null || !valid(source, request.sourceEndpoint())) {
-            fail(source, request, RequestFailureReason.SOURCE_STRUCTURE_INVALID);
+        if (source.controller == null || !valid(source, request.sourceEndpoint())
+                || request.sourceController() != null && !request.sourceController().equals(source.controller.getLevel() == null
+                ? null : GlobalPos.of(source.controller.getLevel().dimension(), source.controller.getBlockPos()))) {
+            fail(sourceFailure(request, source), request, RequestFailureReason.SOURCE_STRUCTURE_INVALID);
             return;
         }
         Resolved target = resolve(request.targetEndpoint());
@@ -88,6 +90,15 @@ public final class NetworkRequestDispatcher {
         }
     }
 
+    private Resolved sourceFailure(PendingRequest request, Resolved source) {
+        if (source != null && source.controller != null && source.machine != null) {
+            GlobalPos owner = source.controller.getLevel() == null ? null
+                    : GlobalPos.of(source.controller.getLevel().dimension(), source.controller.getBlockPos());
+            if (request.sourceController() == null || request.sourceController().equals(owner)) return source;
+        }
+        return request.sourceController() == null ? null : resolveController(request.sourceController());
+    }
+
     private Resolved resolve(GlobalPos endpoint) {
         ServerLevel level = server.getLevel(endpoint.dimension());
         if (level == null || !level.hasChunkAt(endpoint.pos())) return null;
@@ -104,6 +115,7 @@ public final class NetworkRequestDispatcher {
     }
 
     private Resolved resolveController(GlobalPos position) {
+        if (position == null) return null;
         ServerLevel level = server.getLevel(position.dimension());
         if (level == null || !level.hasChunkAt(position.pos())
                 || !(level.getBlockEntity(position.pos()) instanceof MachineControllerBlockEntity controller)) return null;

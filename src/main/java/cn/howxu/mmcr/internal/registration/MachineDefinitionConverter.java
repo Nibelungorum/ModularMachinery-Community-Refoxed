@@ -121,7 +121,8 @@ public final class MachineDefinitionConverter {
                 definition.networkInterface(),
                 toStructureStages(structure),
                 definition.failureAction(),
-                definition.behavior());
+                definition.behavior(),
+                definition.requestProcessors(), definition.requestFailures());
     }
 
     public static MachineRegistration toRegistration(MachineDefinition definition) {

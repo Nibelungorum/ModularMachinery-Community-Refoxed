@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.RequestBody;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
@@ -12,12 +13,11 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PendingRequest(GlobalPos sourceEndpoint, GlobalPos targetEndpoint, GlobalPos sourceController, MachineReference target,
+public record PendingRequest(GlobalPos sourceEndpoint, GlobalPos targetEndpoint, @Nullable GlobalPos sourceController, MachineReference target,
                               Identifier requestId, RequestBody body, long enqueueTick) {
     public PendingRequest {
         Objects.requireNonNull(sourceEndpoint, "sourceEndpoint");
         Objects.requireNonNull(targetEndpoint, "targetEndpoint");
-        Objects.requireNonNull(sourceController, "sourceController");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(body, "body");

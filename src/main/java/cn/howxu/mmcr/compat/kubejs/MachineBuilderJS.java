@@ -599,14 +599,15 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         }
         MachineDefinition base = builder.build();
         MachineDefinition definition = new MachineDefinition(base.id(), base.displayNameKey(), base.controller(), base.appearance(),
-                base.factory(), base.role(), base.acceptedModuleIds(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
+                base.factory(), base.role(), base.acceptedModuleIds(), base.networkInterface(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
                 registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
                 registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()
                         .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
                                 entry -> toPublicSmartInterfaceType(entry.getValue()))),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers().stream()
                         .map(MachineBuilderJS::toPublicSmartInterfaceModifier).toList(),
-                registration.runningSoundId(), registration.finishSoundId(), registration.pattern(), registration.behavior());
+                registration.runningSoundId(), registration.finishSoundId(), registration.pattern(), registration.behavior(),
+                registration.requestProcessors(), registration.requestFailures());
         Plugin.registerStartupMachine(definition);
     }
 

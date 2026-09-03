@@ -45,11 +45,9 @@ public final class NetworkApi {
             GlobalPos targetEndpoint = source.endpointFor(target);
             GlobalPos sourceController = source.owner();
             if (targetEndpoint == null) throw new IllegalArgumentException("Target is not connected to the source interface");
-            if (sourceController == null) return;
             var level = source.server().getLevel(source.source().dimension());
-            if (level == null) return;
             NetworkServerState.get(source.server()).enqueue(new PendingRequest(source.source(), targetEndpoint,
-                    sourceController, target, requestId, body, level.getGameTime()));
+                    sourceController, target, requestId, body, level == null ? 0L : level.getGameTime()));
         });
     }
 }

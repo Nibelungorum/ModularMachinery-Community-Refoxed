@@ -295,7 +295,7 @@ public record DynamicMachine(
         return new DynamicMachine(registryName, displayNameKey, pattern, controller, appearance, portRequirements,
                 portTierRequirements, dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory,
                 factoryThreadLimit, factoryThreads, role, acceptedModuleIds, networkInterface, structureStages,
-                failureAction, behavior);
+                failureAction, behavior, requestProcessors, requestFailures);
     }
 
     public List<SingleBlockModifierReplacement> modifierReplacementsAt(BlockPos pos) {

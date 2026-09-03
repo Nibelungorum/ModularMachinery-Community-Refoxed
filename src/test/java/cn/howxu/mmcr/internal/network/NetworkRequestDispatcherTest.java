@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
+import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.RequestBody;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
@@ -21,6 +22,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
@@ -40,6 +42,7 @@ import org.apache.logging.log4j.core.config.Property;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +84,130 @@ class NetworkRequestDispatcherTest {
     }
 
     @Test
+    void queuedRequestsAreProcessedInFIFOOrder() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:fifo");
+        Fixture fixture = fixture(requestId, null, new boolean[1][]);
+        List<RequestBody> bodies = List.of(
+                RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(1))),
+                RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(2))),
+                RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(3))));
+        NetworkServerState state = NetworkServerState.get(fixture.server);
+        for (RequestBody body : bodies) {
+            state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                    fixture.targetMachine, requestId, body, 0L));
+        }
+
+        state.dispatch(fixture.server, 1L);
+
+        assertEquals(bodies, fixture.processedBodies);
+    }
+
+    @Test
+    void oneBodyInstanceCanBeDeliveredToMultipleTargets() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:shared_body");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, new boolean[1][]);
+        List<RequestBody> secondBodies = new ArrayList<>();
+        BlockPos targetControllerPos = new BlockPos(64, 64, 0);
+        BlockPos targetInterfacePos = new BlockPos(65, 64, 0);
+        Machine secondMachine = machine(MMCR.id("target_two"), requestId, null, null, secondBodies, null, null, null, null);
+        MachineControllerBlockEntity secondController = controller(targetControllerPos, secondMachine, fixture.level, targetInterfacePos);
+        NetworkInterfaceBlockEntity secondNetwork = createInterface(targetInterfacePos);
+        secondNetwork.setLevel(fixture.level);
+        fixture.level.blockEntities.put(targetInterfacePos, secondNetwork);
+        fixture.level.loadedChunks.add(chunkPos(targetControllerPos));
+        fixture.level.loadedChunks.add(chunkPos(targetInterfacePos));
+        secondNetwork.claimOwner(global(targetControllerPos));
+        MachineReference secondReference = secondController.machineReference();
+        NetworkInterfaceBlockEntity sourceNetwork = (NetworkInterfaceBlockEntity)
+                fixture.level.blockEntities.get(fixture.sourceEndpoint.pos());
+        sourceNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(global(targetInterfacePos), secondReference, 2L));
+        secondNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(fixture.sourceEndpoint, fixture.sourceMachine, 2L));
+        RequestBody body = RequestBody.of(Map.of("nested", cn.howxu.mmcr.api.data.DataValue.map(
+                Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(7)))));
+        NetworkServerState state = NetworkServerState.get(fixture.server);
+        state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                fixture.targetMachine, requestId, body, 0L));
+        state.enqueue(new PendingRequest(fixture.sourceEndpoint, global(targetInterfacePos), fixture.sourceOwner,
+                secondReference, requestId, body, 0L));
+
+        state.dispatch(fixture.server, 1L);
+
+        assertEquals(1, fixture.processedBodies.size(), fixture.failureReasons.toString());
+        assertEquals(1, secondBodies.size(), fixture.failureReasons.toString());
+        assertEquals(body, fixture.processedBodies.getFirst());
+        assertEquals(body, secondBodies.getFirst());
+        assertEquals(7, body.get("nested").orElseThrow().asMap().orElseThrow().get("value").intValue());
+    }
+
+    @Test
+    void dispatcherProcessesAtMostTheConfiguredBudgetPerTick() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:budget");
+        Fixture fixture = fixture(requestId, null, new boolean[1][]);
+        NetworkServerState state = NetworkServerState.get(fixture.server);
+        for (int index = 0; index < Config.DEFAULT_MAX_REQUESTS_PER_TICK + 1; index++) {
+            state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                    fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+        }
+
+        state.dispatch(fixture.server, 1L);
+
+        assertEquals(Config.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
+    }
+
+    @Test
+    void unloadedTargetReportsTargetChunkFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:unloaded");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        fixture.level.loadedChunks.remove(chunkPos(fixture.targetEndpoint.pos()));
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.TARGET_CHUNK_UNLOADED, failure[0]);
+    }
+
+    @Test
+    void missingReciprocalConnectionReportsConnectionFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:reciprocal");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        ((NetworkInterfaceBlockEntity) fixture.level.blockEntities.get(fixture.targetEndpoint.pos()))
+                .removeConnection(fixture.sourceEndpoint);
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.CONNECTION_MISSING, failure[0]);
+    }
+
+    @Test
+    void targetHashMismatchReportsHashFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:hash");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, new MachineReference(fixture.targetMachine.type(), fixture.targetMachine.hash() + 1),
+                requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.HASH_MISMATCH, failure[0]);
+    }
+
+    @Test
+    void missingTargetProcessorReportsHandlerFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:missing_processor");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null, null, false);
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.TARGET_HANDLER_MISSING, failure[0]);
+    }
+
+    @Test
     void missingSourceInterfaceReportsFailureAndPassesNullableStorage() throws Exception {
         Identifier requestId = Identifier.parse("mmcr:request");
         RequestFailureReason[] failure = new RequestFailureReason[1];
@@ -105,6 +232,96 @@ class NetworkRequestDispatcherTest {
                 fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
 
         assertEquals(List.of(true, true), List.of(storage[0][0], storage[0][1]));
+    }
+
+    @Test
+    void processorReceivesTheFirstStorageFromBothControllers() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:storage");
+        DataStorage[][] storages = new DataStorage[1][];
+        Fixture fixture = fixture(requestId, null, null, storages);
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(2, storages[0].length);
+        org.junit.jupiter.api.Assertions.assertSame(storages[0][0], fixture.observedStorages[0][0]);
+        org.junit.jupiter.api.Assertions.assertSame(storages[0][1], fixture.observedStorages[0][1]);
+    }
+
+    @Test
+    void callbackExceptionsDoNotRetryOrBlockFollowingRequests() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:callback_exception");
+        Fixture fixture = fixture(requestId, null, null);
+        fixture.processorExceptions.add(new IllegalStateException("processor"));
+        NetworkServerState state = NetworkServerState.get(fixture.server);
+        RequestBody first = RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(1)));
+        RequestBody second = RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(2)));
+        state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                fixture.targetMachine, requestId, first, 0L));
+        state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                fixture.targetMachine, requestId, second, 0L));
+
+        state.dispatch(fixture.server, 1L);
+
+        assertEquals(List.of(first, second), fixture.processedBodies);
+    }
+
+    @Test
+    void failureCallbackExceptionsDoNotRetryOrBlockFollowingFailures() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:failure_exception");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        fixture.failureExceptions.add(new IllegalStateException("failure"));
+        NetworkServerState state = NetworkServerState.get(fixture.server);
+        PendingRequest request = new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
+                fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L);
+        ((NetworkInterfaceBlockEntity) fixture.level.blockEntities.get(fixture.targetEndpoint.pos()))
+                .removeConnection(fixture.sourceEndpoint);
+        state.enqueue(request);
+        state.enqueue(request);
+
+        state.dispatch(fixture.server, 1L);
+
+        assertEquals(List.of(RequestFailureReason.CONNECTION_MISSING, RequestFailureReason.CONNECTION_MISSING), fixture.failureReasons);
+    }
+
+    @Test
+    void missingSourceOwnerUsesSourceStructureFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:source_owner");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        setField(fixture.level.blockEntities.get(fixture.sourceEndpoint.pos()), "owner", null);
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.SOURCE_STRUCTURE_INVALID, failure[0]);
+    }
+
+    @Test
+    void sourceOwnerThatIsNotTheFormedControllerUsesSourceStructureFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:source_controller");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        setField(fixture.level.blockEntities.get(fixture.sourceEndpoint.pos()), "owner", global(new BlockPos(2, 64, 0)));
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.SOURCE_STRUCTURE_INVALID, failure[0]);
+    }
+
+    @Test
+    void sourceControllerThatIsNoLongerFormedUsesSourceStructureFailure() throws Exception {
+        Identifier requestId = Identifier.parse("mmcr:source_unformed");
+        RequestFailureReason[] failure = new RequestFailureReason[1];
+        Fixture fixture = fixture(requestId, failure, null);
+        setField(fixture.level.blockEntities.get(fixture.sourceOwner.pos()), "activeNetworkInterfacePositions", Set.of());
+
+        new NetworkRequestDispatcher(fixture.server).dispatch(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint,
+                fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
+
+        assertEquals(RequestFailureReason.SOURCE_STRUCTURE_INVALID, failure[0]);
     }
 
     @Test
@@ -147,9 +364,20 @@ class NetworkRequestDispatcherTest {
     }
 
     private static Fixture fixture(Identifier requestId, RequestFailureReason[] failure, boolean[][] storage) throws Exception {
+        return fixture(requestId, failure, storage, null, true);
+    }
+
+    private static Fixture fixture(Identifier requestId, RequestFailureReason[] failure, boolean[][] storage,
+                                   DataStorage[][] storages) throws Exception {
+        return fixture(requestId, failure, storage, storages, true);
+    }
+
+    private static Fixture fixture(Identifier requestId, RequestFailureReason[] failure, boolean[][] storage,
+                                   DataStorage[][] storages, boolean targetProcessor) throws Exception {
         TestServerLevel level = allocate(TestServerLevel.class);
         level.blockEntities = new HashMap<>();
         level.blocks = new HashMap<>();
+        level.loadedChunks = new java.util.HashSet<>();
         setField(Level.class, level, "dimension", Level.OVERWORLD);
         setField(ServerLevel.class, level, "players", List.of());
         MinecraftServer server = allocate(DedicatedServer.class);
@@ -160,8 +388,18 @@ class NetworkRequestDispatcherTest {
         BlockPos sourceInterfacePos = new BlockPos(1, 64, 0);
         BlockPos targetControllerPos = new BlockPos(32, 64, 0);
         BlockPos targetInterfacePos = new BlockPos(33, 64, 0);
-        Machine source = machine(MMCR.id("source"), requestId, failure, null);
-        Machine target = machine(MMCR.id("target"), requestId, null, storage);
+        level.loadedChunks.add(chunkPos(sourceControllerPos));
+        level.loadedChunks.add(chunkPos(sourceInterfacePos));
+        level.loadedChunks.add(chunkPos(targetControllerPos));
+        level.loadedChunks.add(chunkPos(targetInterfacePos));
+        List<RequestBody> processedBodies = new ArrayList<>();
+        List<RequestFailureReason> failureReasons = new ArrayList<>();
+        List<RuntimeException> failureExceptions = new ArrayList<>();
+        List<RuntimeException> processorExceptions = new ArrayList<>();
+        DataStorage[][] observedStorages = new DataStorage[1][];
+        Machine source = machine(MMCR.id("source"), requestId, failure, null, null, failureReasons, failureExceptions, null, null);
+        Machine target = machine(MMCR.id("target"), requestId, null, storage,
+                targetProcessor ? processedBodies : null, null, null, processorExceptions, observedStorages);
         MachineControllerBlockEntity sourceController = controller(sourceControllerPos, source, level, sourceInterfacePos);
         MachineControllerBlockEntity targetController = controller(targetControllerPos, target, level, targetInterfacePos);
         NetworkInterfaceBlockEntity sourceNetwork = createInterface(sourceInterfacePos);
@@ -178,20 +416,41 @@ class NetworkRequestDispatcherTest {
         MachineReference targetMachine = targetController.machineReference();
         sourceNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(global(targetInterfacePos), targetMachine, 1L));
         targetNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(global(sourceInterfacePos), sourceMachine, 1L));
-        return new Fixture(server, level, global(sourceInterfacePos), global(targetInterfacePos), sourceOwner, targetMachine);
+        if (storages != null) {
+            DataStorage sourceStorage = new DataStorage();
+            DataStorage targetStorage = new DataStorage();
+            publishDataStorage(sourceController, sourceStorage);
+            publishDataStorage(targetController, targetStorage);
+            storages[0] = new DataStorage[]{sourceStorage, targetStorage};
+        }
+        return new Fixture(server, level, global(sourceInterfacePos), global(targetInterfacePos), sourceOwner, sourceMachine,
+                targetMachine, processedBodies, failureReasons, failureExceptions, processorExceptions, observedStorages);
     }
 
-    private static Machine machine(Identifier id, Identifier requestId, RequestFailureReason[] failure, boolean[][] storage) {
+    private static Machine machine(Identifier id, Identifier requestId, RequestFailureReason[] failure, boolean[][] storage,
+                                   List<RequestBody> processedBodies, List<RequestFailureReason> failureReasons,
+                                   List<RuntimeException> failureExceptions, List<RuntimeException> processorExceptions,
+                                   DataStorage[][] observedStorages) {
         return new Machine() {
             @Override public Identifier registryName() { return id; }
             @Override public BlockArray pattern() { return new BlockArray(Map.of()); }
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
-            @Override public NetworkInterfaceSpec networkInterface() { return new NetworkInterfaceSpec(1, 2, Set.of(MMCR.id("source"), MMCR.id("target"))); }
+            @Override public NetworkInterfaceSpec networkInterface() { return new NetworkInterfaceSpec(1, 2,
+                    Set.of(MMCR.id("source"), MMCR.id("target"), MMCR.id("target_two"))); }
             @Override public Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> requestFailures() {
-                return failure == null ? Map.of() : Map.of(requestId, (body, request, sender, reason) -> failure[0] = reason);
+                return failure == null ? Map.of() : Map.of(requestId, (body, request, sender, reason) -> {
+                    if (failure != null) failure[0] = reason;
+                    if (failureReasons != null) failureReasons.add(reason);
+                    if (failureExceptions != null && !failureExceptions.isEmpty()) throw failureExceptions.remove(0);
+                });
             }
             @Override public Map<Identifier, cn.howxu.mmcr.api.network.RequestProcess> requestProcessors() {
-                return storage == null ? Map.of() : Map.of(requestId, (body, request, sender, receiver) -> storage[0] = new boolean[]{sender == null, receiver == null});
+                return storage == null && processedBodies == null ? Map.of() : Map.of(requestId, (body, request, sender, receiver) -> {
+                    if (processedBodies != null) processedBodies.add(body);
+                    if (storage != null) storage[0] = new boolean[]{sender == null, receiver == null};
+                    if (observedStorages != null) observedStorages[0] = new DataStorage[]{sender, receiver};
+                    if (processorExceptions != null && !processorExceptions.isEmpty()) throw processorExceptions.remove(0);
+                });
             }
         };
     }
@@ -218,8 +477,21 @@ class NetworkRequestDispatcherTest {
                 ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());
     }
 
+    private static void publishDataStorage(MachineControllerBlockEntity controller, DataStorage storage) throws Exception {
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
+        Method publish = MachineControllerRuntime.class.getDeclaredMethod("publishDataStorages", Map.class);
+        publish.setAccessible(true);
+        publish.invoke(runtime, Map.of(BlockPos.ZERO, storage));
+    }
+
     private static GlobalPos global(BlockPos pos) {
         return GlobalPos.of(Level.OVERWORLD, pos);
+    }
+
+    private static ChunkPos chunkPos(BlockPos pos) {
+        return new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
     }
 
     @SuppressWarnings("unchecked")
@@ -249,7 +521,10 @@ class NetworkRequestDispatcherTest {
     }
 
     private record Fixture(MinecraftServer server, TestServerLevel level, GlobalPos sourceEndpoint, GlobalPos targetEndpoint,
-                           GlobalPos sourceOwner, MachineReference targetMachine) {
+                           GlobalPos sourceOwner, MachineReference sourceMachine, MachineReference targetMachine,
+                           List<RequestBody> processedBodies, List<RequestFailureReason> failureReasons,
+                           List<RuntimeException> failureExceptions, List<RuntimeException> processorExceptions,
+                           DataStorage[][] observedStorages) {
     }
 
     private static final class RecordingAppender extends AbstractAppender {
@@ -268,6 +543,7 @@ class NetworkRequestDispatcherTest {
     private static class TestServerLevel extends ServerLevel {
         private Map<BlockPos, BlockEntity> blockEntities;
         private Map<BlockPos, BlockState> blocks;
+        private java.util.Set<ChunkPos> loadedChunks;
         private MinecraftServer server;
 
         private TestServerLevel() {
@@ -277,7 +553,7 @@ class NetworkRequestDispatcherTest {
         @Override public MinecraftServer getServer() { return server; }
         @Override public long getGameTime() { return 0L; }
         @Override public BlockEntity getBlockEntity(BlockPos pos) { return blockEntities.get(pos); }
-        @Override public boolean hasChunk(int chunkX, int chunkZ) { return true; }
+        @Override public boolean hasChunk(int chunkX, int chunkZ) { return loadedChunks.contains(new ChunkPos(chunkX, chunkZ)); }
         @Override public BlockState getBlockState(BlockPos pos) { return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState()); }
         @Override public void blockEntityChanged(BlockPos pos) { }
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
