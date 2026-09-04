@@ -88,6 +88,30 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
+    public void demolishStopsBeforeRejectedDropAndPreservesLaterBlocks(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        BlockPos firstPos = template.get(0).pos();
+        BlockPos rejectedPos = template.get(1).pos();
+        BlockPos laterPos = template.get(2).pos();
+        for (MultiblockAssemblyService.Placement placement : template) {
+            helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
+        }
+        int[] accepted = {0};
+
+        MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(servicePlayer(helper), controller,
+                template.size(), stack -> accepted[0]++ == 0);
+
+        helper.assertTrue(result.changedBlocks() == 1, "Only the accepted first drop removes a block");
+        helper.assertTrue(helper.getLevel().getBlockState(firstPos).isAir(), "First accepted block is removed");
+        helper.assertTrue(!helper.getLevel().getBlockState(rejectedPos).isAir(), "Rejected drop keeps its block");
+        helper.assertTrue(!helper.getLevel().getBlockState(laterPos).isAir(), "Later candidate remains after rejection");
+        helper.succeed();
+    }
+
     public void demolishExpandableFormedStageTwoRemovesCompleteSnapshot(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
