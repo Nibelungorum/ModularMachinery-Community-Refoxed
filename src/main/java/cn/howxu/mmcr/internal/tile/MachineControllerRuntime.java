@@ -36,6 +36,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -459,9 +461,25 @@ public final class MachineControllerRuntime {
     boolean publishFormationState(Machine machine, BlockArray pattern,
                                   @Nullable CompiledMachinePattern compiledPattern,
                                   Direction facing, Direction rollFacing, int matchedStage) {
-        boolean changed = structure.publishFormationState(machine, pattern, compiledPattern, facing, rollFacing, matchedStage);
+        boolean changed = structure.publishFormationState(machine, pattern, compiledPattern, facing, rollFacing, matchedStage,
+                countStructureBlocks(pattern));
         publishSnapshot();
         return changed;
+    }
+
+    long countStructureBlocks(Block block) {
+        return structure.countStructureBlocks(block);
+    }
+
+    private Map<Block, Long> countStructureBlocks(BlockArray pattern) {
+        Level level = controller.getLevel();
+        if (!(level instanceof ServerLevel)) return Map.of();
+        Map<Block, Long> counts = new LinkedHashMap<>();
+        for (BlockPos relativePos : pattern.pattern().keySet()) {
+            Block block = level.getBlockState(controller.getBlockPos().offset(relativePos)).getBlock();
+            counts.merge(block, 1L, Long::sum);
+        }
+        return Map.copyOf(counts);
     }
 
     boolean formationIdentityMatches(Machine machine, BlockArray pattern,

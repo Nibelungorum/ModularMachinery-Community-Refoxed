@@ -7,10 +7,12 @@ import cn.howxu.mmcr.api.publicapi.controller.JadeText;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -122,6 +124,29 @@ public class MachineBehaviorContext {
 
     public JadeText jadeText() {
         return jadeText;
+    }
+
+    public long countStructureBlocks(Block block) {
+        Objects.requireNonNull(block, "block");
+        return controller == null ? 0L : controller.countStructureBlocks(block);
+    }
+
+    /**
+     * Counts blocks of the given registry name in the currently formed structure.
+     *
+     * @param blockId block registry name
+     * @return number of matching blocks, or {@code 0} when the structure is unformed
+     */
+    public long countStructureBlocks(String blockId) {
+        if (blockId == null || blockId.isBlank()) throw new IllegalArgumentException("blockId must not be blank");
+        Identifier id;
+        try {
+            id = Identifier.parse(blockId);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid block id: " + blockId, exception);
+        }
+        if (!BuiltInRegistries.BLOCK.containsKey(id)) throw new IllegalArgumentException("Unknown block: " + blockId);
+        return countStructureBlocks(BuiltInRegistries.BLOCK.getValue(id));
     }
 
     static MachineBehaviorContext empty(Identifier machineId) {

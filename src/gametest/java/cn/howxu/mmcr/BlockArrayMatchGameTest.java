@@ -23,6 +23,20 @@ public class BlockArrayMatchGameTest {
         be.setMachine(machine);
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(be.structureSnapshot().formed(), "Structure formed after bounded scan");
+            helper.assertTrue(be.behaviorContext().countStructureBlocks(ModBlocks.CASING.get()) == 8,
+                    "Formed structure records the eight casing blocks");
+            helper.assertTrue(be.behaviorContext().countStructureBlocks("mmcr:basic_casing") == 8,
+                    "Registry-name lookup matches the Block lookup");
+            boolean rejected = false;
+            try {
+                be.behaviorContext().countStructureBlocks("missingmod:not_a_block");
+            } catch (IllegalArgumentException ignored) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, "Unknown block registry names are rejected");
+            be.invalidateFormedStructure();
+            helper.assertTrue(be.behaviorContext().countStructureBlocks(ModBlocks.CASING.get()) == 0,
+                    "Unformed structures do not retain block counts");
             helper.succeed();
         });
     }

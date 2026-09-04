@@ -13,9 +13,11 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -63,6 +65,7 @@ public final class StructureRuntime {
     private boolean formed;
     private boolean structureAreaLoaded = true;
     private Set<ChunkPos> criticalChunks = Set.of();
+    private Map<Block, Long> structureBlockCounts = Map.of();
 
     StructureRuntime(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -147,6 +150,7 @@ public final class StructureRuntime {
         formed = false;
         structureAreaLoaded = true;
         criticalChunks = Set.of();
+        structureBlockCounts = Map.of();
         if (stateChanged || hadState || forceVersion) stateEpoch = nextVersion(stateEpoch);
     }
 
@@ -156,6 +160,10 @@ public final class StructureRuntime {
 
     public long version() {
         return version;
+    }
+
+    long countStructureBlocks(Block block) {
+        return formed ? structureBlockCounts.getOrDefault(Objects.requireNonNull(block, "block"), 0L) : 0L;
     }
 
     void restoreVersion(long version) {
@@ -443,7 +451,8 @@ public final class StructureRuntime {
 
     boolean publishFormationState(Machine machine, BlockArray pattern,
                                           @Nullable CompiledMachinePattern compiledPattern,
-                                          Direction facing, Direction rollFacing, int matchedStage) {
+                                          Direction facing, Direction rollFacing, int matchedStage,
+                                          Map<Block, Long> structureBlockCounts) {
         Direction normalizedRoll = rollFacing == null ? Direction.SOUTH : rollFacing;
         FormationIdentity nextIdentity = new FormationIdentity(machine.registryName(), pattern, compiledPattern, facing, normalizedRoll,
                 matchedStage, true);
@@ -456,6 +465,7 @@ public final class StructureRuntime {
         this.matchedRollFacing = normalizedRoll;
         this.matchedStructureStage = matchedStage;
         this.formed = true;
+        this.structureBlockCounts = Map.copyOf(Objects.requireNonNull(structureBlockCounts, "structureBlockCounts"));
         if (changed) {
             version = nextVersion(version);
             stateEpoch = nextVersion(stateEpoch);
@@ -496,6 +506,7 @@ public final class StructureRuntime {
         this.mismatchDiagnostic = null;
         this.formationFailure = null;
         this.criticalChunks = Set.of();
+        this.structureBlockCounts = Map.of();
         this.structureAreaLoaded = structureAreaLoaded;
         this.scan = null;
         this.scanMachine = null;

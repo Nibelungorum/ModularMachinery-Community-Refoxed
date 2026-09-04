@@ -108,9 +108,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.storage.ValueInput;
@@ -239,6 +239,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineBehaviorContext behaviorContext(ControllerScreenText screenText) {
         return runtime.behaviorContext(screenText);
+    }
+
+    public long countStructureBlocks(Block block) {
+        return runtime.countStructureBlocks(block);
     }
 
     public JadeTextSnapshot jadeTextSnapshot() {
