@@ -18,7 +18,7 @@ dependencies {
     implementation("dev.latvian.mods:kubejs-neoforge:26.1.2-8.0.4-mmcr")
 
     runtimeOnly "curse.maven:athena-841890:7970442"
-    runtimeOnly "curse.maven:geckolib-388172:8327201"
+    // runtimeOnly "curse.maven:geckolib-388172:8327201"
 
     // spark
     runtimeOnly "curse.maven:spark-361579:8275631"
