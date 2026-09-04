@@ -18,5 +18,6 @@ public final class BuiltInProvider implements MachineDefinitionProvider {
         DISTILLATION_TOWER.registerDefinitions(event);
         SPACE.registerDefinitions(event);
         MONSTER_FARM.registerDefinitions(event);
+        ARTIFICIAL_STAR.registerDefinitions(event);
     }
 }

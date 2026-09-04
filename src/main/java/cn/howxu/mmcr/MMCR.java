@@ -49,8 +49,7 @@ public class MMCR {
     }
 
     /** Test seam for invoking an optional GameTest source without making it a production dependency. */
-    static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes,
-            Object... arguments) {
+    static void invokeOptionalSourceForTesting(String className, String methodName, Class<?>[] parameterTypes, Object... arguments) {
         GameTestRegistration.invokeOptionalSourceForTesting(className, methodName, parameterTypes, arguments);
     }
 

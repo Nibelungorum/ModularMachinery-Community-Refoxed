@@ -10,6 +10,7 @@ public final class Config {
     public static final int DEFAULT_BUILD_TASK_TIMEOUT_TICKS = 20 * 60;
     public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 10;
     public static final int DEFAULT_STRUCTURE_SENTINEL_COUNT = 16;
+    public static final int DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS = 524_288;
     public static final int DEFAULT_MAX_REQUESTS_PER_TICK = 1024;
     public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
@@ -20,6 +21,7 @@ public final class Config {
     public static final ModConfigSpec.IntValue STRUCTURE_SCAN_BATCHES;
     public static final ModConfigSpec.IntValue STRUCTURE_SENTINEL_COUNT;
     public static final ModConfigSpec.BooleanValue STRUCTURE_SENTINEL_ENABLED;
+    public static final ModConfigSpec.IntValue STRUCTURE_SYNC_MAX_BLOCKS;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
     public static final ModConfigSpec.IntValue MAX_REQUESTS_PER_TICK;
 
@@ -49,6 +51,9 @@ public final class Config {
         STRUCTURE_SENTINEL_ENABLED = b
                 .comment("Whether deterministic structure sentinel checks are enabled")
                 .define("structure_sentinel_enabled", true);
+        STRUCTURE_SYNC_MAX_BLOCKS = b
+                .comment("Maximum block pattern entries synchronized for one machine structure")
+                .defineInRange("structure_sync_max_blocks", DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS, 1, Integer.MAX_VALUE);
         ENERGY_CONSUMPTION_MULTIPLIER = b
                 .comment("Global multiplier on energy consumption")
                 .defineInRange("energy_consumption_multiplier", 1.0, 0.0, 100.0);

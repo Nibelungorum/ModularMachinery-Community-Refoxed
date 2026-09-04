@@ -80,7 +80,10 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
 
     private static void encode(RegistryFriendlyByteBuf buf, PktRuntimeContentPayload payload) {
         RuntimeContentSnapshot snapshot = payload.snapshot();
-        writeMap(buf, snapshot.structures(), MAX_STRUCTURES, MachineStructureSyncCodec::encode);
+        int maxStructureBlocks = MachineStructureSyncCodec.maximumBlockPatternCount();
+        buf.writeVarInt(maxStructureBlocks);
+        writeMap(buf, snapshot.structures(), MAX_STRUCTURES,
+                (structureBuf, structure) -> MachineStructureSyncCodec.encode(structureBuf, structure, maxStructureBlocks));
         writeMap(buf, snapshot.recipes(), MAX_RECIPES, MachineRecipeSyncCodec::encode);
         writeMap(buf, snapshot.controllerSpecs(), MAX_SPECS, CONTROLLER_SPEC_CODEC::encode);
         writeMap(buf, snapshot.appearances(), MAX_SPECS, APPEARANCE_SPEC_CODEC::encode);
@@ -88,7 +91,10 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     }
 
     private static PktRuntimeContentPayload decode(RegistryFriendlyByteBuf buf) {
-        Map<Identifier, MachineStructureDefinition> structures = readMap(buf, MAX_STRUCTURES, MachineStructureSyncCodec::decode);
+        int maxStructureBlocks = buf.readVarInt();
+        if (maxStructureBlocks <= 0) throw new IllegalArgumentException("Invalid maximum block pattern count: " + maxStructureBlocks);
+        Map<Identifier, MachineStructureDefinition> structures = readMap(buf, MAX_STRUCTURES,
+                structureBuf -> MachineStructureSyncCodec.decode(structureBuf, maxStructureBlocks));
         Map<Identifier, MachineRecipe> recipes = readMap(buf, MAX_RECIPES, MachineRecipeSyncCodec::decode);
         Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, MAX_SPECS, CONTROLLER_SPEC_CODEC::decode);
         Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, MAX_SPECS, APPEARANCE_SPEC_CODEC::decode);

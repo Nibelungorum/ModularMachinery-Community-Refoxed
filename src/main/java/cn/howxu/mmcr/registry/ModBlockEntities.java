@@ -20,7 +20,9 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Collection;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public final class ModBlockEntities {
@@ -30,6 +32,7 @@ public final class ModBlockEntities {
 
     public static final LinkedHashMap<String, DeferredHolder<BlockEntityType<?>, BlockEntityType<?>>> BES =
             new LinkedHashMap<>();
+    private static final Set<Identifier> CONTROLLER_MACHINE_IDS = new LinkedHashSet<>();
 
     static {
         PortKinds.all().forEach(kind -> {
@@ -55,12 +58,17 @@ public final class ModBlockEntities {
     private static void registerMachineController(Identifier machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         if (BES.containsKey(name)) return;
+        CONTROLLER_MACHINE_IDS.add(machineId);
         BES.put(name, register(name, () -> new BlockEntityType<>(
                 MachineControllerBlockEntity::new, ModBlocks.controllerFor(machineId).get())));
     }
 
     public static void registerMachineControllers(Collection<Identifier> machineIds) {
         machineIds.forEach(ModBlockEntities::registerMachineController);
+    }
+
+    public static Set<Identifier> controllerMachineIds() {
+        return Set.copyOf(CONTROLLER_MACHINE_IDS);
     }
 
     private static void registerParallelController(ParallelTier tier) {

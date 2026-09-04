@@ -1,0 +1,9 @@
+{
+  "flip_v": true,
+  "loader": "neoforge:obj",
+  "model": "mmcr_test:models/obj/star.obj",
+  "textures": {
+    "texture0": "mmcr_test:block/obj/star_layer",
+    "particle": "mmcr_test:block/obj/star_layer"
+  }
+}

@@ -1,6 +1,5 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRendersEvent;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
@@ -27,7 +26,9 @@ import cn.howxu.mmcr.client.preview.StructurePreviewReloadListener;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModUIs;
+// import org.nibelungorum.client.ArtificialStarRenderer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.server.packs.PackType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -53,6 +54,7 @@ public class Client {
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerItemModels);
         modBus.addListener(Client::registerMachineRenderers);
+        // modBus.addListener(ArtificialStarRenderer::registerModel);
         modBus.addListener(Client::registerRuntimeResourcePack);
         modBus.addListener(Client::registerPreviewReloadListener);
         NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
@@ -114,16 +116,19 @@ public class Client {
         RuntimeMachineModelRegistry.registerItemModels(event);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void registerMachineRenderers(EntityRenderersEvent.RegisterRenderers event) {
         MMCRMachineRendersEvent registrations = new MMCRMachineRendersEvent(
-                MachineDefinitions.effectiveSnapshot().keySet());
+                ModBlockEntities.controllerMachineIds());
         NeoForge.EVENT_BUS.post(registrations);
         registrations.freeze();
-        registrations.renderers().forEach((machineId, renderer) ->
-                event.registerBlockEntityRenderer(
-                        (BlockEntityType<MachineControllerBlockEntity>) (BlockEntityType<?>) ModBlockEntities.controllerFor(machineId).get(),
-                        context -> new MachineControllerRendererDispatcher(machineId, renderer)));
+        registrations.renderers().forEach((machineId, renderer) -> {
+            BlockEntityRendererProvider provider =
+                    context -> new MachineControllerRendererDispatcher(machineId, renderer);
+            event.registerBlockEntityRenderer(
+                        (BlockEntityType) ModBlockEntities.controllerFor(machineId).get(),
+                        provider);
+        });
     }
 
     private static void registerRuntimeResourcePack(AddPackFindersEvent event) {

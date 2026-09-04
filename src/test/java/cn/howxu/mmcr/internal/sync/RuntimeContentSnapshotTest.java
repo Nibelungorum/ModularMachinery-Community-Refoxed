@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.sync;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -245,6 +246,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
         Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        buf.writeVarInt(Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
         MachineStructureSyncCodec.encode(buf, structure(machineId));
@@ -261,6 +263,7 @@ class RuntimeContentSnapshotTest {
         Identifier key = MMCR.id("runtime_test_machine");
         Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        buf.writeVarInt(Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
         MachineStructureSyncCodec.encode(buf, structure(structureId));
@@ -509,6 +512,24 @@ class RuntimeContentSnapshotTest {
         assertThatThrownBy(() -> MachineStructureSyncCodec.encode(buf, original))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid declaration count");
+    }
+
+    @Test
+    void structureSyncCodecUsesConfiguredDefaultBlockPatternLimit() {
+        assertThat(Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
+        assertThat(MachineStructureSyncCodec.maximumBlockPatternCount()).isEqualTo(524_288);
+    }
+
+    @Test
+    void structureSyncCodecRejectsBlockPatternsWhoseCombinedSizeExceedsLimit() {
+        Identifier machineId = MMCR.id("oversized_combined_structure");
+        MachineStructureDefinition original = new MachineStructureDefinition(machineId,
+                Collections.nCopies(2, structure(machineId).declarations().getFirst()));
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+
+        assertThatThrownBy(() -> MachineStructureSyncCodec.encode(buf, original, 2))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid block pattern count: 4");
     }
 
     @SuppressWarnings("unchecked")
