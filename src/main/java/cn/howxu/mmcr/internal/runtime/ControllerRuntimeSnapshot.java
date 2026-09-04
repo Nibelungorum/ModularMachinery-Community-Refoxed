@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -46,7 +47,8 @@ public record ControllerRuntimeSnapshot(
         long maxParallelControllerCount,
         long maxParallelism,
         List<ItemStack> upgradeItems,
-        long upgradeContentRevision) {
+        long upgradeContentRevision,
+        Map<String, DataValue> dataStorageValues) {
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion, long modifierVersion,
                                      long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
@@ -63,7 +65,27 @@ public record ControllerRuntimeSnapshot(
                 linkedPortPositions, moduleConnectionStatus, installedModuleCount, capabilityAggregate, crafting,
                 factory, componentPresentations, capabilityPresentations, foundLevelIds, machineId, machineName,
                 controllerRole, factorySupported, factoryControllerPresent, parallelControllerCount,
-                maxParallelControllerCount, maxParallelism, List.of(), 0L);
+                maxParallelControllerCount, maxParallelism, List.of(), 0L, Map.of());
+    }
+
+    public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
+                                     long modifierVersion, long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
+                                     Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
+                                     ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
+                                     ComponentRuntime.CapabilityAggregate capabilityAggregate,
+                                     CraftingStateSnapshot crafting, FactorySnapshot factory,
+                                     List<ComponentPresentation> componentPresentations,
+                                     List<CapabilityPresentation> capabilityPresentations, List<String> foundLevelIds,
+                                     String machineId, String machineName, int controllerRole, boolean factorySupported,
+                                     boolean factoryControllerPresent, int parallelControllerCount,
+                                     long maxParallelControllerCount, long maxParallelism,
+                                     Map<String, DataValue> dataStorageValues) {
+        this(structure, capabilityVersion, modifierVersion, stateVersion, foundModifiers, foundLevels,
+                linkedPortPositions, moduleConnectionStatus, installedModuleCount, capabilityAggregate,
+                crafting, factory, componentPresentations, capabilityPresentations, foundLevelIds,
+                machineId, machineName, controllerRole, factorySupported, factoryControllerPresent,
+                parallelControllerCount, maxParallelControllerCount, maxParallelism, List.of(), 0L,
+                dataStorageValues);
     }
 
     public ControllerRuntimeSnapshot {
@@ -74,6 +96,7 @@ public record ControllerRuntimeSnapshot(
         }
         foundModifiers = immutableMap(modifierCopy);
         foundLevels = immutableMap(new LinkedHashMap<>(foundLevels == null ? Map.of() : foundLevels));
+        dataStorageValues = immutableMap(dataStorageValues == null ? Map.of() : dataStorageValues);
         linkedPortPositions = Set.copyOf(linkedPortPositions == null ? Set.of() : linkedPortPositions);
         moduleConnectionStatus = moduleConnectionStatus == null
                 ? ModuleConnectionStatus.disconnected() : moduleConnectionStatus;

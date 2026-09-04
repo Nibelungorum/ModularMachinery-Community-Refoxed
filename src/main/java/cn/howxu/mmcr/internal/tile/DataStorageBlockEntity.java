@@ -150,6 +150,10 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
         if (loading) return;
         setChanged();
         storageSyncPending = true;
+        if (level != null && controllerPosition != null
+                && level.getBlockEntity(controllerPosition) instanceof MachineControllerBlockEntity controller) {
+            controller.onDataStorageChanged(storage);
+        }
     }
 
     private static void writeValue(ValueOutput output, DataValue value) {

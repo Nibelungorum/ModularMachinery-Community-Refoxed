@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -49,10 +50,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Immutable controller sync and final payload tests.
@@ -134,12 +138,28 @@ class ControllerSyncRuntimeTest {
                 new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(1L, 0L, 0L), FactorySnapshot.empty(),
                 List.of(), List.of(), List.of(), machineId.toString(), "Sync Tick", 0,
-                false, false, 0, 0, 1);
+                false, false, 0, 0, 1, Map.of());
 
         MachineStateSnapshot state = new ControllerSyncRuntime().machineState(runtime);
 
         assertThat(state.active()).isTrue();
         assertThat(state.activeRecipe()).isEmpty();
+    }
+
+    @Test
+    void controller_snapshot_publishes_data_storage_values_immutably() {
+        Map<String, DataValue> values = new LinkedHashMap<>();
+        values.put("mode", DataValue.of("active"));
+        ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
+                StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
+                ModuleConnectionStatus.disconnected(), 0,
+                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
+                CraftingStateSnapshot.empty(0L, 0L, 0L), FactorySnapshot.empty(),
+                List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1, values);
+
+        assertEquals(values, snapshot.dataStorageValues());
+        assertThrows(UnsupportedOperationException.class,
+                () -> snapshot.dataStorageValues().put("mode", DataValue.of("changed")));
     }
 
     @Test
@@ -257,7 +277,7 @@ class ControllerSyncRuntimeTest {
                 base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
                 base.capabilityAggregate(), crafting, FactorySnapshot.empty(), base.componentPresentations(),
                 base.capabilityPresentations(), base.foundLevelIds(), base.machineId(), base.machineName(),
-                base.controllerRole(), false, false, 0, 32, 32);
+                base.controllerRole(), false, false, 0, 32, 32, base.dataStorageValues());
 
         MachineStateSnapshot state = new ControllerSyncRuntime().machineState(runtime);
         assertThat(state.parallelism()).isEqualTo(7);
@@ -272,7 +292,8 @@ class ControllerSyncRuntimeTest {
                 base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
                 base.capabilityAggregate(), base.crafting(), base.factory(), base.componentPresentations(),
                 base.capabilityPresentations(), base.foundLevelIds(), base.machineId(), base.machineName(),
-                base.controllerRole(), true, true, base.parallelControllerCount(), base.maxParallelControllerCount(), 32);
+                base.controllerRole(), true, true, base.parallelControllerCount(), base.maxParallelControllerCount(), 32,
+                base.dataStorageValues());
 
         assertThat(new ControllerSyncRuntime().machineState(runtime).maxParallelism()).isEqualTo(32);
         assertThat(new ControllerSyncRuntime().factoryState(runtime).maxParallelism()).isEqualTo(32);
@@ -441,7 +462,7 @@ class ControllerSyncRuntimeTest {
                 new ComponentRuntime.CapabilityAggregate(250L, 1000L,
                         new FluidStack(Fluids.WATER, 250), new FluidStack(Fluids.LAVA, 100)),
                 crafting, factory, List.of(), List.of(), List.of("mmcr:steel"), "mmcr:machine", "machine", 1,
-                true, true, 1, 2, 8);
+                true, true, 1, 2, 8, Map.of());
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

@@ -210,7 +210,7 @@ class RecipeCandidateIndexTest {
                 new cn.howxu.mmcr.internal.runtime.ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot.empty(0L, 0L, 0L),
                 cn.howxu.mmcr.internal.runtime.FactorySnapshot.empty(), List.of(), List.of(), List.of(),
-                "", "", 0, false, false, 0, 0, 1);
+                "", "", 0, false, false, 0, 0, 1, java.util.Map.of());
     }
 
     private static MachineRecipe itemRecipe(String path, Ingredient ingredient) {

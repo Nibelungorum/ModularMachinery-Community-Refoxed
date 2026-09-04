@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -62,6 +63,10 @@ public final class MachineControllerRuntime {
     private final Map<String, ControllerScreenTextState> recipeScreenTexts = new LinkedHashMap<>();
     private Map<BlockPos, DataStorage> dataStorages = Map.of();
     private @Nullable DataStorage primaryDataStorage;
+    private Map<String, DataValue> clientDataStorageValues = Map.of();
+    private long dataStorageStateEpoch;
+    private long workingDataStorageStateEpoch = Long.MIN_VALUE;
+    private long publishedDataStorageStateEpoch = Long.MIN_VALUE;
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
     private ControllerRuntimeSnapshot publishedSnapshot;
     private @Nullable ControllerRuntimeSnapshot workingSnapshot;
@@ -219,7 +224,7 @@ public final class MachineControllerRuntime {
                 components.capabilityPresentations(), foundLevelIds(), machine == null ? "" : machine.registryName().toString(),
                 machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
                 parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),
-                components.upgradeItems(), components.upgradeContentRevision());
+                components.upgradeItems(), components.upgradeContentRevision(), currentDataStorageValues());
         workingStructureEpoch = structure.stateEpoch();
         workingCapabilityVersion = components.capabilityVersion();
         workingCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
@@ -227,7 +232,15 @@ public final class MachineControllerRuntime {
         workingComponentStateVersion = components.stateVersion();
         workingFactoryEpoch = factoryRuntime.stateEpoch();
         workingCraftingEpoch = craftingStateEpoch;
+        workingDataStorageStateEpoch = dataStorageStateEpoch;
         return workingSnapshot;
+    }
+
+    private Map<String, DataValue> currentDataStorageValues() {
+        if (controller.getLevel() != null && controller.getLevel().isClientSide()) {
+            return clientDataStorageValues;
+        }
+        return primaryDataStorage == null ? Map.of() : primaryDataStorage.values();
     }
 
     StructureSnapshot currentStructureSnapshot() {
@@ -274,6 +287,7 @@ public final class MachineControllerRuntime {
         publishedComponentStateVersion = components.stateVersion();
         publishedFactoryEpoch = factoryRuntime.stateEpoch();
         publishedCraftingEpoch = craftingStateEpoch;
+        publishedDataStorageStateEpoch = dataStorageStateEpoch;
         snapshotDirty = false;
         snapshotBuildCountForTesting++;
     }
@@ -285,7 +299,8 @@ public final class MachineControllerRuntime {
                 && workingModifierVersion == components.modifierVersion()
                 && workingComponentStateVersion == components.stateVersion()
                 && workingFactoryEpoch == factoryRuntime.stateEpoch()
-                && workingCraftingEpoch == craftingStateEpoch;
+                && workingCraftingEpoch == craftingStateEpoch
+                && workingDataStorageStateEpoch == dataStorageStateEpoch;
     }
 
     private boolean epochsUnchanged() {
@@ -295,7 +310,8 @@ public final class MachineControllerRuntime {
                 && publishedModifierVersion == components.modifierVersion()
                 && publishedComponentStateVersion == components.stateVersion()
                 && publishedFactoryEpoch == factoryRuntime.stateEpoch()
-                && publishedCraftingEpoch == craftingStateEpoch;
+                && publishedCraftingEpoch == craftingStateEpoch
+                && publishedDataStorageStateEpoch == dataStorageStateEpoch;
     }
 
     private void updateCraftingState(CraftingStateSnapshot nextCrafting) {
@@ -517,6 +533,16 @@ public final class MachineControllerRuntime {
         components.replaceModuleConnectionState(status, installedModuleCount);
     }
 
+    void publishClientDataStorageState(Map<String, DataValue> values) {
+        Map<String, DataValue> next = Map.copyOf(values == null ? Map.of() : values);
+        if (!clientDataStorageValues.equals(next)) {
+            clientDataStorageValues = next;
+            dataStorageStateEpoch++;
+            snapshotDirty = true;
+        }
+        publishSnapshot();
+    }
+
     void publishComponentState(List<ProcessingComponent> nextComponents,
                                Map<String, List<RecipeModifier>> modifiers,
                                Map<Identifier, MachineLevel> levels,
@@ -546,6 +572,15 @@ public final class MachineControllerRuntime {
     void publishDataStorages(Map<BlockPos, DataStorage> nextDataStorages) {
         dataStorages = Map.copyOf(nextDataStorages == null ? Map.of() : nextDataStorages);
         primaryDataStorage = dataStorages.isEmpty() ? null : dataStorages.values().iterator().next();
+        publishSnapshot();
+    }
+
+    void onDataStorageChanged(DataStorage storage) {
+        if (storage == primaryDataStorage) {
+            dataStorageStateEpoch++;
+            snapshotDirty = true;
+            publishSnapshot();
+        }
     }
 
     Set<BlockPos> dataStoragePositions() {

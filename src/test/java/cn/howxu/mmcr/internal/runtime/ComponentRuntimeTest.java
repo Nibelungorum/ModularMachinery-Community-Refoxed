@@ -326,7 +326,7 @@ class ComponentRuntimeTest {
                 ModuleConnectionStatus.disconnected(), 0,
                 new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(0L, 0L, 0L), FactorySnapshot.empty(),
-                List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1);
+                List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1, Map.of());
         FactorySearchContext context = new FactorySearchContext(snapshot, null, null, null,
                 3L, 4L, 0, 5L);
 
@@ -361,7 +361,7 @@ class ComponentRuntimeTest {
                 ModuleConnectionStatus.connected(hostId), 2,
                 new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null), CraftingStateSnapshot.empty(0L, 0L, 0L),
                 FactorySnapshot.empty(), List.of(), List.of(), List.of(), "", "", 0,
-                false, false, 0, 0, 1);
+                false, false, 0, 0, 1, Map.of());
 
         assertThat(snapshot.moduleConnectionStatus()).isEqualTo(ModuleConnectionStatus.connected(hostId));
         assertThat(snapshot.installedModuleCount()).isEqualTo(2);

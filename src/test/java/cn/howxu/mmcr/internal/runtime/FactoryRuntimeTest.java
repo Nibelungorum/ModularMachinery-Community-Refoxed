@@ -1294,7 +1294,7 @@ class FactoryRuntimeTest {
                 snapshot.componentPresentations(), snapshot.capabilityPresentations(), snapshot.foundLevelIds(),
                 snapshot.machineId(), snapshot.machineName(), snapshot.controllerRole(), snapshot.factorySupported(),
                 snapshot.factoryControllerPresent(), snapshot.parallelControllerCount(),
-                snapshot.maxParallelControllerCount(), snapshot.maxParallelism());
+                snapshot.maxParallelControllerCount(), snapshot.maxParallelism(), snapshot.dataStorageValues());
     }
 
     private static final class RecordingController extends MachineControllerBlockEntity {
