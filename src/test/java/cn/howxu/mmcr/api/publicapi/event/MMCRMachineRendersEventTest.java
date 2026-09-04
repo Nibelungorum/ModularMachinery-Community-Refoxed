@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -24,6 +25,16 @@ class MMCRMachineRendersEventTest {
 
         assertSame(renderer, event.renderers().get(machine));
         assertThrows(UnsupportedOperationException.class, () -> event.renderers().clear());
+    }
+
+    @Test
+    void rejectsNullAndDuplicateMachineIdsDuringConstruction() {
+        Identifier machine = Identifier.fromNamespaceAndPath("test", "machine");
+
+        assertThrows(ApiRegistrationException.class,
+                () -> new MMCRMachineRendersEvent(Arrays.asList(machine, machine)));
+        assertThrows(ApiRegistrationException.class,
+                () -> new MMCRMachineRendersEvent(Arrays.asList(machine, null)));
     }
 
     @Test

@@ -8,8 +8,8 @@ import net.neoforged.bus.api.Event;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /** Canonical event for collecting machine controller renderers.
@@ -21,7 +21,15 @@ public class MMCRMachineRendersEvent extends Event {
     private boolean frozen;
 
     public MMCRMachineRendersEvent(Collection<Identifier> machineIds) {
-        this.machineIds = Set.copyOf(Objects.requireNonNull(machineIds, "machineIds"));
+        if (machineIds == null) throw new ApiRegistrationException("machineIds must not be null");
+        LinkedHashSet<Identifier> copied = new LinkedHashSet<>();
+        for (Identifier machineId : machineIds) {
+            if (machineId == null) throw new ApiRegistrationException("machine id must not be null");
+            if (!copied.add(machineId)) {
+                throw new ApiRegistrationException("Duplicate machine id: " + machineId);
+            }
+        }
+        this.machineIds = Collections.unmodifiableSet(copied);
     }
 
     public void register(Identifier machineId, ControllerRenderer renderer) {
