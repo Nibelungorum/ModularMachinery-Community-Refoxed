@@ -1,7 +1,12 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -11,9 +16,12 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -226,6 +234,36 @@ class MachineRecipeLayoutTest {
 
         assertThat(layout.levelRequirementY(MachineRecipeDisplay.from(recipe), 0))
                 .isEqualTo(layout.durationTextY() + 20);
+    }
+
+    @Test
+    void levelRequirementSlotStartsAfterThePrecedingMetadataTextRow() {
+        TestBootstrap.beginRegistration();
+        Identifier coilType = MMCR.id("layout_coil_type");
+        Identifier casingType = MMCR.id("layout_casing_type");
+        Identifier coilLevel = MMCR.id("layout_coil_level");
+        Identifier casingLevel = MMCR.id("layout_casing_level");
+        TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
+        TestBootstrap.registerType(new LevelType(casingType, Component.literal("Casing")));
+        TestBootstrap.registerLevel(new MachineLevel(coilLevel, coilType, 0,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+        TestBootstrap.registerLevel(new MachineLevel(casingLevel, casingType, 0,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("jei_level_slot_layout"), MMCR.id("layout_test_machine"), 100,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(new LevelRequirement(coilType, coilLevel), new LevelRequirement(casingType, casingLevel)),
+                false, Set.of(MMCR.id("layout_host")));
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+
+        assertThat(layout.levelRequirementSlotY(display, 0)).isEqualTo(layout.hostRequirementTextY() + 10);
+        assertThat(layout.levelRequirementSlotY(display, 1)).isEqualTo(layout.levelRequirementSlotY(display, 0) + 18);
+        assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1) + 18 + 10);
+        assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1));
     }
 
     @Test

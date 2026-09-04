@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -45,6 +44,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -57,9 +57,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int FLUID_SLOT_CAPACITY = 1000;
     private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     private static final float TEXT_SCALE = 0.85F;
-    private static final int TEXT_LINE_SPACING = 10;
+    private static final int TEXT_LINE_SPACING = MachineRecipeLayout.TEXT_LINE_SPACING;
     private static final float SMART_INTERFACE_TEXT_SCALE = 0.85F;
-    private static final int SMART_INTERFACE_LINE_SPACING = 10;
+    private static final int SMART_INTERFACE_LINE_SPACING = MachineRecipeLayout.TEXT_LINE_SPACING;
+    private static final int JEI_SLOT_SIZE = 16;
+    private static final int LEVEL_LABEL_SLOT_GAP = 2;
+    private static final int LEVEL_ITEM_CYCLE_TICKS = 60;
     static final int RECIPE_ARROW_X = 72;
     static final int RECIPE_ARROW_Y = 8;
     static final int ITEM_OVERLAY_X = 0;
@@ -75,6 +78,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         public List<Component> getTooltip(FluidStack fluid, TooltipFlag tooltipFlag) {
             Minecraft minecraft = Minecraft.getInstance();
             return fluidTooltip(fluid, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+        }
+    };
+
+    private static final IIngredientRenderer<ItemStack> EMPTY_ITEM_RENDERER = new IIngredientRenderer<>() {
+        @Override
+        public void render(GuiGraphicsExtractor guiGraphics, ItemStack ingredient) {
+        }
+
+        @Override
+        public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
+            return List.of();
         }
     };
 
@@ -136,6 +150,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
+        addLevelRequirementSlots(builder, layout, recipe, Minecraft.getInstance().font::width);
         addTransferSlots(builder, recipe);
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
@@ -177,13 +192,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
-        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
-            guiGraphics.text(Minecraft.getInstance().font, levelRequirement(requirement, gameTime),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
-            y += TEXT_LINE_SPACING;
-        }
+        drawLevelRequirementLabels(recipe, layout, guiGraphics, textX);
         y = layout.smartInterfaceTextY(recipe);
         guiGraphics.pose().popMatrix();
+        drawLevelRequirementItems(recipe, layout, gameTime, guiGraphics);
         guiGraphics.pose().pushMatrix();
         guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE);
         textX = (int) (layout.durationTextX() / SMART_INTERFACE_TEXT_SCALE);
@@ -246,29 +258,76 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Component.translatable(stack.getItem().getDescriptionId());
     }
 
-    static Component levelRequirement(LevelRequirement requirement, long gameTime) {
-        MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
+    static Component levelLabel(LevelRequirement requirement) {
         var type = MachineLevelRegistry.getType(requirement.typeId());
-        if (required == null || type == null) return Component.empty();
-        List<MachineLevel> eligible = MachineLevelRegistry.levelsForType(requirement.typeId()).stream()
+        return type == null ? Component.empty() : type.displayName().copy().append(Component.literal(": "));
+    }
+
+    static List<ItemStack> levelCandidates(LevelRequirement requirement) {
+        MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
+        if (required == null) return List.of();
+        return MachineLevelRegistry.levelsForType(requirement.typeId()).stream()
                 .filter(level -> level.priority() >= required.priority())
-                .sorted(Comparator.comparingInt(MachineLevel::priority))
+                .sorted(Comparator.comparingInt(MachineLevel::priority)
+                        .thenComparing(level -> level.id().toString()))
+                .map(MachineLevel::representative)
+                .map(MachineRecipeCategory::jeiItemStack)
                 .toList();
-        if (eligible.isEmpty()) return Component.empty();
-        int cycleLength = eligible.size() * 2 - 2;
-        int index = cycleLength == 0 ? 0 : (int) ((gameTime / 20) % cycleLength);
-        if (index >= eligible.size()) index = cycleLength - index;
-        MachineLevel selected = eligible.get(index);
-        Component levelName = selected.statePredicate() instanceof BlockPredicate.OfBlockState predicate
-                ? predicate.state().getBlock().getName()
-                : selected.representative().getHoverName();
-        Component suffix = selected.id().equals(required.id())
-                ? Component.translatable("jei.mmcr.machine_recipe.minimum_level")
-                : Component.empty();
-        return type.displayName().copy()
-                .append(Component.literal(": "))
-                .append(levelName)
-                .append(suffix);
+    }
+
+    static ItemStack levelCandidate(LevelRequirement requirement, long gameTime) {
+        List<ItemStack> candidates = levelCandidates(requirement);
+        return candidates.isEmpty() ? ItemStack.EMPTY : candidates.get((int) ((gameTime / 60) % candidates.size()));
+    }
+
+    static Component minimumLevelTooltip(LevelRequirement requirement) {
+        return MachineLevelRegistry.getLevel(requirement.levelId()) == null
+                ? Component.empty()
+                : Component.translatable("jei.mmcr.machine_recipe.minimum_level");
+    }
+
+    static void addLevelRequirementSlots(IRecipeLayoutBuilder builder, MachineRecipeLayout layout,
+            MachineRecipeDisplay recipe, ToIntFunction<Component> labelWidth) {
+        int index = 0;
+        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
+            Component label = levelLabel(requirement);
+            int slotX = levelSlotX(layout.durationTextX(), labelWidth.applyAsInt(label));
+            int slotY = layout.levelRequirementSlotY(recipe, index++);
+            IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slotX, slotY);
+            slot.setStandardSlotBackground();
+            slot.setCustomRenderer(VanillaTypes.ITEM_STACK, EMPTY_ITEM_RENDERER);
+            List<ItemStack> candidates = levelCandidates(requirement);
+            if (!candidates.isEmpty()) {
+                slot.add(candidates.getFirst());
+            }
+            slot.addRichTooltipCallback((view, tooltip) -> tooltip.add(minimumLevelTooltip(requirement)));
+        }
+    }
+
+    private static void drawLevelRequirementItems(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+            long gameTime, GuiGraphicsExtractor guiGraphics) {
+        int index = 0;
+        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
+            Component label = levelLabel(requirement);
+            int slotX = levelSlotX(layout.durationTextX(), Minecraft.getInstance().font.width(label));
+            int slotY = layout.levelRequirementSlotY(recipe, index++);
+            guiGraphics.item(levelCandidate(requirement, gameTime), slotX, slotY);
+        }
+    }
+
+    private static int levelSlotX(int textX, int labelWidth) {
+        return textX + labelWidth + LEVEL_LABEL_SLOT_GAP;
+    }
+
+    private static void drawLevelRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+            GuiGraphicsExtractor guiGraphics, int textX) {
+        int index = 0;
+        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
+            int slotY = layout.levelRequirementSlotY(recipe, index++);
+            int labelY = slotY + (JEI_SLOT_SIZE - Minecraft.getInstance().font.lineHeight) / 2;
+            guiGraphics.text(Minecraft.getInstance().font, levelLabel(requirement), textX,
+                    (int) (labelY / TEXT_SCALE), 0xFF404040, false);
+        }
     }
 
     static Component hostRequirementComponent(MachineRecipeDisplay recipe, long gameTime) {

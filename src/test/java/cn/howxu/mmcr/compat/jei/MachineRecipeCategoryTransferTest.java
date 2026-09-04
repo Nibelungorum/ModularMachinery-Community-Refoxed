@@ -1,21 +1,32 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
+import mezz.jei.api.gui.builder.ITooltipBuilder;
+import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -88,12 +99,50 @@ class MachineRecipeCategoryTransferTest {
                 .extracting(ItemStack::getCount).isEqualTo(3);
     }
 
+    @Test
+    void levelRequirementUsesRenderOnlySlotAndMinimumLevelTooltip() throws Exception {
+        TestBootstrap.beginRegistration();
+        Identifier typeId = MMCR.id("slot_coil_type");
+        Identifier copperId = MMCR.id("slot_copper");
+        Identifier ironId = MMCR.id("slot_iron");
+        TestBootstrap.registerType(new LevelType(typeId, Component.literal("Coils")));
+        registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
+        registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
+        LevelRequirement requirement = new LevelRequirement(typeId, ironId);
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("jei_level_slot"), MMCR.id("level_slot_test_machine"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(requirement));
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+        List<CapturedSlot> slots = new ArrayList<>();
+
+        MachineRecipeCategory.addLevelRequirementSlots(recipeLayoutBuilder(slots), layout, display, label -> 40);
+
+        assertThat(slots).singleElement().satisfies(slot -> {
+            assertThat(slot.role()).isEqualTo(RecipeIngredientRole.RENDER_ONLY);
+            assertThat(slot.x()).isEqualTo(layout.durationTextX() + 40 + 2);
+            assertThat(slot.y()).isEqualTo(layout.levelRequirementSlotY(display, 0));
+            assertThat(slot.standardBackground()).isTrue();
+            assertThat(slot.itemAdds()).singleElement()
+                    .extracting(ItemStack::getItem).isEqualTo(Blocks.IRON_BLOCK.asItem());
+            assertThat(tooltipLines(slot.tooltipCallbacks().getFirst()))
+                    .containsExactly(MachineRecipeCategory.minimumLevelTooltip(requirement));
+        });
+    }
+
     private static IRecipeLayoutBuilder recipeLayoutBuilder(List<CapturedSlot> slots) {
         return (IRecipeLayoutBuilder) Proxy.newProxyInstance(
                 MachineRecipeCategoryTransferTest.class.getClassLoader(),
                 new Class<?>[]{IRecipeLayoutBuilder.class},
                 (proxy, method, arguments) -> {
-                    if (method.getName().equals("addInputSlot")
+                    if (method.getName().equals("addSlot") && arguments.length == 3
+                            && arguments[0] instanceof RecipeIngredientRole role) {
+                        CapturedSlot capture = new CapturedSlot(role,
+                                ((Number) arguments[1]).intValue(), ((Number) arguments[2]).intValue());
+                        slots.add(capture);
+                        return recipeSlotBuilder(capture);
+                    } else if (method.getName().equals("addInputSlot")
                             || method.getName().equals("addOutputSlot")) {
                         RecipeIngredientRole role = method.getName().equals("addInputSlot")
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT;
@@ -115,6 +164,27 @@ class MachineRecipeCategoryTransferTest {
         method.invoke(null, builder, display);
     }
 
+    private static List<FormattedText> tooltipLines(IRecipeSlotRichTooltipCallback callback) {
+        List<FormattedText> lines = new ArrayList<>();
+        ITooltipBuilder tooltip = (ITooltipBuilder) Proxy.newProxyInstance(
+                MachineRecipeCategoryTransferTest.class.getClassLoader(), new Class<?>[]{ITooltipBuilder.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("add") && arguments.length == 1
+                            && arguments[0] instanceof FormattedText text) {
+                        lines.add(text);
+                    }
+                    return null;
+                });
+        callback.onRichTooltip(null, tooltip);
+        return lines;
+    }
+
+    private static void registerLevel(Identifier id, Identifier typeId, int priority, Block block) {
+        TestBootstrap.registerLevel(new MachineLevel(id, typeId, priority,
+                new BlockPredicate.OfBlockState(block.defaultBlockState()),
+                new ItemStack(block.asItem()), LevelModifier.IDENTITY));
+    }
+
     @SuppressWarnings("unchecked")
     private static Object recipeSlotBuilder(CapturedSlot capture) {
         return Proxy.newProxyInstance(
@@ -123,6 +193,10 @@ class MachineRecipeCategoryTransferTest {
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("addItemStacks")) {
                         capture.itemStacks.addAll((List<ItemStack>) arguments[0]);
+                    } else if (method.getName().equals("setStandardSlotBackground")) {
+                        capture.standardBackground = true;
+                    } else if (method.getName().equals("addRichTooltipCallback")) {
+                        capture.tooltipCallbacks.add((IRecipeSlotRichTooltipCallback) arguments[0]);
                     } else if (method.getName().equals("add") && arguments.length == 1
                             && arguments[0] instanceof ItemStack stack) {
                         capture.itemAdds.add(stack);
@@ -143,6 +217,8 @@ class MachineRecipeCategoryTransferTest {
         private final List<ItemStack> itemStacks = new ArrayList<>();
         private final List<ItemStack> itemAdds = new ArrayList<>();
         private final List<CapturedFluid> fluidAdds = new ArrayList<>();
+        private final List<IRecipeSlotRichTooltipCallback> tooltipCallbacks = new ArrayList<>();
+        private boolean standardBackground;
 
         private CapturedSlot(RecipeIngredientRole role, int x, int y) {
             this.role = role;
@@ -172,6 +248,14 @@ class MachineRecipeCategoryTransferTest {
 
         private List<CapturedFluid> fluidAdds() {
             return fluidAdds;
+        }
+
+        private List<IRecipeSlotRichTooltipCallback> tooltipCallbacks() {
+            return tooltipCallbacks;
+        }
+
+        private boolean standardBackground() {
+            return standardBackground;
         }
     }
 

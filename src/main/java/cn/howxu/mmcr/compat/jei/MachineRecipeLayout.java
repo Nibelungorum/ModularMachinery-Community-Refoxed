@@ -34,6 +34,7 @@ public record MachineRecipeLayout(
     private static final int SLOT_SIZE = 18;
     private static final int SLOT_START_Y = 8;
     private static final int TEXT_OFFSET_Y = 4;
+    static final int TEXT_LINE_SPACING = 10;
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
         return forDisplay(display, (int) Minecraft.getInstance().getWindow().getGuiScale());
@@ -84,7 +85,7 @@ public record MachineRecipeLayout(
     }
 
     private static int hostRequirementTextY(MachineRecipeDisplay display, int guiScale) {
-        return durationTextY(display, guiScale) + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size());
+        return durationTextY(display, guiScale) + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size());
     }
 
     private static int durationTextY(MachineRecipeDisplay display, int guiScale) {
@@ -176,23 +177,36 @@ public record MachineRecipeLayout(
     }
 
     public int levelRequirementY(MachineRecipeDisplay display, int index) {
+        return levelRequirementSlotY(display, index);
+    }
+
+    public int levelRequirementSlotY(MachineRecipeDisplay display, int index) {
         int metadataY = display.requiredHostIds().isEmpty()
-                ? durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size())
-                : hostRequirementTextY + 10;
-        return metadataY + 10 * index;
+                ? durationTextY + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size())
+                : hostRequirementTextY + TEXT_LINE_SPACING;
+        return metadataY + SLOT_SIZE * index;
     }
 
     public int smartInterfaceTextY(MachineRecipeDisplay display) {
-        return durationTextY + 10 * (1 + display.energyInputs().size() + display.energyOutputs().size()
-                + (display.requiredHostIds().isEmpty() ? 0 : 1)
-                + display.recipe().levelRequirements().size());
+        int levelCount = display.recipe().levelRequirements().size();
+        if (levelCount > 0) {
+            return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE + TEXT_LINE_SPACING;
+        }
+        return durationTextY + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size()
+                + (display.requiredHostIds().isEmpty() ? 0 : 1));
     }
 
     public int lastMetadataTextY(MachineRecipeDisplay display) {
-        return durationTextY + 10 * (display.energyInputs().size() + display.energyOutputs().size()
-                + (display.requiredHostIds().isEmpty() ? 0 : 1)
-                + display.recipe().levelRequirements().size() + display.smartInterfaceInputs().size()
-                + display.smartInterfaceOutputs().size());
+        int smartInterfaceCount = display.smartInterfaceInputs().size() + display.smartInterfaceOutputs().size();
+        if (smartInterfaceCount > 0) {
+            return smartInterfaceTextY(display) + TEXT_LINE_SPACING * (smartInterfaceCount - 1);
+        }
+        int levelCount = display.recipe().levelRequirements().size();
+        if (levelCount > 0) {
+            return levelRequirementSlotY(display, levelCount - 1);
+        }
+        return durationTextY + TEXT_LINE_SPACING * (display.energyInputs().size() + display.energyOutputs().size()
+                + (display.requiredHostIds().isEmpty() ? 0 : 1));
     }
 
     public enum Kind { ITEM, FLUID, GENERIC, TEXT }

@@ -781,7 +781,7 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void levelRequirementCyclesEligibleLevelsEverySecond() {
+    void levelRequirementProvidesLocalizedLabelAndThreeSecondItemCycle() {
         var typeId = MMCR.id("coil");
         var copperId = MMCR.id("copper");
         var ironId = MMCR.id("iron");
@@ -796,13 +796,15 @@ class MachineRecipeDisplayTest {
         TestBootstrap.freezeRegistration();
         LevelRequirement requirement = new LevelRequirement(typeId, ironId);
 
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 0).getString())
-                .isEqualTo("Coils: Block of Ironjei.mmcr.machine_recipe.minimum_level");
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 20).getString()).isEqualTo("Coils: Block of Gold");
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 40).getString()).isEqualTo("Coils: Block of Diamond");
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 60).getString()).isEqualTo("Coils: Block of Gold");
-        assertThat(MachineRecipeCategory.levelRequirement(requirement, 80).getString())
-                .isEqualTo("Coils: Block of Ironjei.mmcr.machine_recipe.minimum_level");
+        assertThat(MachineRecipeCategory.levelLabel(requirement).getString()).isEqualTo("Coils: ");
+        assertThat(MachineRecipeCategory.levelCandidates(requirement))
+                .extracting(ItemStack::getItem)
+                .containsExactly(Blocks.IRON_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem(), Blocks.DIAMOND_BLOCK.asItem());
+        assertThat(MachineRecipeCategory.levelCandidate(requirement, 0).getItem()).isEqualTo(Blocks.IRON_BLOCK.asItem());
+        assertThat(MachineRecipeCategory.levelCandidate(requirement, 59).getItem()).isEqualTo(Blocks.IRON_BLOCK.asItem());
+        assertThat(MachineRecipeCategory.levelCandidate(requirement, 60).getItem()).isEqualTo(Blocks.GOLD_BLOCK.asItem());
+        assertThat(MachineRecipeCategory.minimumLevelTooltip(requirement).getString())
+                .isEqualTo("jei.mmcr.machine_recipe.minimum_level");
     }
 
     private static MachineRecipe recipe(String id, String machine, int priority) {
