@@ -620,16 +620,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         if (!structure.formed()) {
             if (structure.configuredMachine() != null) requestImmediateStructureCheck();
-            publishRuntimeState();
             return;
         }
         if (structure.pattern() == null || structure.facing() == null) {
-            publishRuntimeState();
             return;
         }
         boolean insideStructure = isInsideCompiledBounds(changedPos);
         if (!insideStructure) {
-            publishRuntimeState();
             return;
         }
         boolean componentChanged = isInsideComponentPositions(changedPos, structure);
