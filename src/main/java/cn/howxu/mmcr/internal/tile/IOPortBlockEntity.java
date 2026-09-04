@@ -58,6 +58,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private static final int AUTO_IO_MAX_DELAY = 60;
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;
+    private boolean loadingAdditional;
     private final Map<CapabilityType, AutoIOState> autoIOStates = new LinkedHashMap<>();
     private final Map<CapabilityType, AvailabilityState> availabilityStates = new LinkedHashMap<>();
 
@@ -102,6 +103,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     protected final void notifyStorageChanged() {
+        if (loadingAdditional) return;
         setChanged();
         sendStorageSnapshot();
         notifyAvailabilityChanges();
@@ -194,10 +196,18 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     protected void notifyControllerOfInputChange() {
-        if (ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
+        if (loadingAdditional || ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
         if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
             controller.onRecipeInputsChanged();
         }
+    }
+
+    protected final void beginLoadingAdditional() {
+        loadingAdditional = true;
+    }
+
+    protected final void endLoadingAdditional() {
+        loadingAdditional = false;
     }
 
     protected void sendStorageSnapshot() {
@@ -557,6 +567,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     @Override
     protected Identifier resolveLinkedAppearance(TreeMap<BlockPos, Identifier> linkedControllers) {
-        return linkedControllers.get(linkedControllers.firstKey());
+        return linkedControllers.isEmpty()
+                ? DEFAULT_APPEARANCE_BASE_TEXTURE
+                : linkedControllers.get(linkedControllers.firstKey());
     }
 }

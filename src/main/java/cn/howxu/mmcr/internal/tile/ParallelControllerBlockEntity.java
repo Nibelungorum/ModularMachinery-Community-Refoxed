@@ -50,6 +50,7 @@ public class ParallelControllerBlockEntity extends LinkedAppearanceBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        setCurrentParallelism(input.getIntOr("current_parallelism", tier.maxParallelism()));
+        currentParallelism = Math.max(1, Math.min(
+                input.getIntOr("current_parallelism", tier.maxParallelism()), tier.maxParallelism()));
     }
 }

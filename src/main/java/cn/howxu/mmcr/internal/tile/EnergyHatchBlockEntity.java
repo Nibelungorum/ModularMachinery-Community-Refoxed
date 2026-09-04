@@ -84,9 +84,14 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        input.child("energy").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.load(child)));
+        beginLoadingAdditional();
+        try {
+            super.loadAdditional(input);
+            input.child("energy").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(child)));
+        } finally {
+            endLoadingAdditional();
+        }
     }
 
     private final class EnergyPersistenceFacet implements PersistenceFacet {

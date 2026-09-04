@@ -93,9 +93,14 @@ public class ExtendedCombinedPortBlockEntity extends IOPortBlockEntity {
 
     @Override
     protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        loadItems(input);
-        loadFluids(input);
+        beginLoadingAdditional();
+        try {
+            super.loadAdditional(input);
+            loadItems(input);
+            loadFluids(input);
+        } finally {
+            endLoadingAdditional();
+        }
     }
 
     private void saveItems(ValueOutput output) {

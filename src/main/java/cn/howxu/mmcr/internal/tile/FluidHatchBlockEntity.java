@@ -100,9 +100,14 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
     @Override
     protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        input.child("fluid").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.load(child)));
+        beginLoadingAdditional();
+        try {
+            super.loadAdditional(input);
+            input.child("fluid").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(child)));
+        } finally {
+            endLoadingAdditional();
+        }
     }
 
     private void loadFluids(ValueInput input) {

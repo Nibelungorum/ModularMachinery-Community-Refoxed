@@ -113,7 +113,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             String texture = controllerInput.getStringOr(LINKED_CONTROLLER_TEXTURE_KEY, DEFAULT_APPEARANCE_BASE_TEXTURE.toString());
             linkedControllers.put(controllerPos, texture.isBlank() ? DEFAULT_APPEARANCE_BASE_TEXTURE : Identifier.parse(texture));
         }
-        refreshLinkedAppearance();
+        appearanceBaseTexture = resolveLinkedAppearance(linkedControllers);
     }
 
     @Override

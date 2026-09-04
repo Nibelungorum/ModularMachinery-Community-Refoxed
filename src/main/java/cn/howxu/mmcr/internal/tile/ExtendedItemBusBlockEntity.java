@@ -83,17 +83,22 @@ public class ExtendedItemBusBlockEntity extends IOPortBlockEntity {
 
     @Override
     protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        for (int slot = 0; slot < storage.size(); slot++) {
-            String suffix = "_" + slot;
-            if (input.getBooleanOr("itemHasResource" + suffix, false)) {
-                ItemResource resource = input.read("itemResource" + suffix, ItemResource.OPTIONAL_CODEC)
-                        .orElse(ItemResource.EMPTY);
-                long amount = input.getLong("itemAmount" + suffix).orElse(0L);
-                storage.setContents(slot, resource, amount);
-            } else {
-                storage.setContents(slot, ItemResource.EMPTY, 0L);
+        beginLoadingAdditional();
+        try {
+            super.loadAdditional(input);
+            for (int slot = 0; slot < storage.size(); slot++) {
+                String suffix = "_" + slot;
+                if (input.getBooleanOr("itemHasResource" + suffix, false)) {
+                    ItemResource resource = input.read("itemResource" + suffix, ItemResource.OPTIONAL_CODEC)
+                            .orElse(ItemResource.EMPTY);
+                    long amount = input.getLong("itemAmount" + suffix).orElse(0L);
+                    storage.setContents(slot, resource, amount);
+                } else {
+                    storage.setContents(slot, ItemResource.EMPTY, 0L);
+                }
             }
+        } finally {
+            endLoadingAdditional();
         }
     }
 

@@ -3473,7 +3473,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.publishStructureState(currentStructure.structureAreaLoaded(), currentStructure.formed(),
                     currentStructure.configuredMachine(), Math.max(0, input.getIntOr("matched_structure_stage", 0)));
             runtime.requestStructureCheck();
-            setChanged();
             redstonePaused = false;
             lockedRecipeId = null;
             runtime.craftingRuntime().invalidate();
@@ -3498,7 +3497,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.craftingRuntime().load(input.childOrEmpty("crafting_runtime"), resourceDomain());
             runtime.requestStructureCheck();
             runtime.restoreStructureVersion(input.getLongOr("structure_runtime_version", 0L));
-            setChanged();
         } finally {
             publishRuntimeState();
         }
