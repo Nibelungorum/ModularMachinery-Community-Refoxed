@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemStorage;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorageResolver;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -21,6 +22,7 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -140,6 +142,32 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(StructureItemStorageResolver.resolve(player, containerMode.withContainer(GlobalPos.of(
                         helper.getLevel().dimension(), noStoragePos))).isEmpty(),
                 "Container target without item storage capability is unavailable");
+        helper.succeed();
+    }
+
+    public void blockStorageAcceptsCompleteStacksAndRollsBackPartialInsertions(GameTestHelper helper) {
+        BlockPos busPos = new BlockPos(0, 1, 0);
+        helper.setBlock(busPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        ItemBusBlockEntity bus = helper.getBlockEntity(busPos, ItemBusBlockEntity.class);
+        TerminalData data = TerminalData.DEFAULT.withInventoryMode(TerminalInventoryMode.CONTAINER)
+                .withContainer(GlobalPos.of(helper.getLevel().dimension(), helper.absolutePos(busPos)));
+        var storage = StructureItemStorageResolver.resolve(servicePlayer(helper), data).orElseThrow();
+
+        helper.assertTrue(storage.sink().accept(new ItemStack(Items.STONE, 2)),
+                "Block storage accepts a complete stack through its item capability");
+        helper.assertTrue(bus.getItemStackHandler(null).getStackInSlot(0).getCount() == 2,
+                "Successful block storage insertion commits to the item bus");
+
+        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.STONE, 63));
+        for (int slot = 1; slot < bus.getItemStackHandler(null).getSlots(); slot++) {
+            bus.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.DIRT, 64));
+        }
+
+        helper.assertTrue(!storage.sink().accept(new ItemStack(Items.STONE, 2)),
+                "Block storage rejects a stack that only partially fits");
+        helper.assertTrue(bus.getItemStackHandler(null).getStackInSlot(0).is(Items.STONE)
+                        && bus.getItemStackHandler(null).getStackInSlot(0).getCount() == 63,
+                "Rejected block storage insertion rolls back the partial first-slot insertion");
         helper.succeed();
     }
 

@@ -25,7 +25,7 @@ class StructureItemStorageTest {
         List<ItemStack> stacks = new ArrayList<>(List.of(new ItemStack(Items.STONE, 63)));
         StructureItemStorage storage = PlayerInventoryStructureItemStorage.forStacks(stacks);
 
-        assertFalse(storage.sink().accept(new ItemStack(Items.DIRT)));
+        assertFalse(storage.sink().accept(new ItemStack(Items.STONE, 2)));
         assertEquals(63, storage.source().copyStacks().getFirst().getCount());
         assertEquals(Items.STONE, storage.source().copyStacks().getFirst().getItem());
     }
