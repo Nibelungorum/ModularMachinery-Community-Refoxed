@@ -111,6 +111,10 @@ public final class MachineLevelRegistry {
         return TYPES.get(id);
     }
 
+    public static List<LevelType> types() {
+        return List.copyOf(TYPES.values());
+    }
+
     public static Collection<MachineLevel> getLevels(Identifier typeId) {
         return levelsForType(typeId);
     }

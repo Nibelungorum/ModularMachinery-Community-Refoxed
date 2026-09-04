@@ -1786,6 +1786,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return candidatePatterns(candidate, facing).stream().map(CandidatePattern::stageNumber).toList();
     }
 
+    public List<Integer> availableStructureStages() {
+        return boundMachine().map(machine -> candidateStageNumbers(machine, getBlockState().getValue(MachineControllerBlock.FACING)).stream()
+                .sorted().toList()).orElse(List.of(1));
+    }
+
     private List<CandidatePattern> candidatePatterns(Machine candidate, Direction facing) {
         List<CompiledMachinePattern> stages = MachineRegistry.getCompiledStages(candidate.registryName());
         if (stages.isEmpty()) {

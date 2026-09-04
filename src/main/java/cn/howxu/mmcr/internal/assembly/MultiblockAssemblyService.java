@@ -180,11 +180,17 @@ public final class MultiblockAssemblyService {
     }
 
     public static Result build(ServerPlayer player, MachineControllerBlockEntity controller, boolean creative) {
+        int stage = controller.structureSnapshot().formed() ? controller.structureSnapshot().matchedStage() : 1;
+        return build(player, controller, stage, new PlayerInventoryStructureItemSource(player), creative);
+    }
+
+    public static Result build(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
+                               StructureItemSource source, boolean freeBuild) {
         var machine = controller.boundMachine();
         if (machine.isEmpty()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
-        BlockArray pattern = controller.assemblyPattern(machine.get());
+        BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
         List<Placement> placements = createTemplatePlacements(controller.getBlockPos(), pattern).stream()
                 .filter(placement -> player.level().getBlockState(placement.pos()).isAir())
                 .toList();
@@ -195,8 +201,7 @@ public final class MultiblockAssemblyService {
         if (controller.hasActiveBuildTask()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
-        if (!creative) {
-            StructureItemSource source = new PlayerInventoryStructureItemSource(player);
+        if (!freeBuild) {
             placements = extractAvailablePlacements(placements, source);
             if (placements.isEmpty()) {
                 return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
@@ -204,7 +209,7 @@ public final class MultiblockAssemblyService {
             source.extractAll(aggregateRequirements(placements));
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), placements,
-                controller.buildBlocksPerTick(), !creative);
+                controller.buildBlocksPerTick(), !freeBuild);
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
@@ -214,11 +219,17 @@ public final class MultiblockAssemblyService {
 
     public static Result demolish(ServerPlayer player, MachineControllerBlockEntity controller,
                                   int maxBlocks, StructureItemSink sink) {
+        int stage = controller.structureSnapshot().formed() ? controller.structureSnapshot().matchedStage() : 1;
+        return demolish(player, controller, stage, maxBlocks, sink);
+    }
+
+    public static Result demolish(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
+                                  int maxBlocks, StructureItemSink sink) {
         var machine = controller.boundMachine();
         if (machine.isEmpty()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
-        BlockArray pattern = controller.assemblyPattern(machine.get());
+        BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
         boolean stateSensitive = controller.assemblyStateSensitive(machine.get());
         List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
         maxBlocks = Math.min(maxBlocks, MAX_BLOCKS_PER_OPERATION);

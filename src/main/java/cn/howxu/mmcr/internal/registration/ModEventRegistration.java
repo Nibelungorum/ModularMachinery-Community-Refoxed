@@ -24,6 +24,8 @@ import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
+import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
+import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
@@ -144,8 +146,10 @@ public final class ModEventRegistration {
                          PktPortStorageSyncPayload::handle)
                 .playToClient(PktMultiblockMismatchHighlightPayload.TYPE,
                         PktMultiblockMismatchHighlightPayload.STREAM_CODEC, PktMultiblockMismatchHighlightPayload::handle)
-                .playToClient(PktMultiblockPreviewPayload.TYPE, PktMultiblockPreviewPayload.STREAM_CODEC,
-                        PktMultiblockPreviewPayload::handle)
+                 .playToClient(PktMultiblockPreviewPayload.TYPE, PktMultiblockPreviewPayload.STREAM_CODEC,
+                         PktMultiblockPreviewPayload::handle)
+                 .playToClient(PktTerminalStatePayload.TYPE, PktTerminalStatePayload.STREAM_CODEC,
+                         (payload, context) -> {})
                 .playToServer(PktMultiblockDetectorPickPayload.TYPE, PktMultiblockDetectorPickPayload.STREAM_CODEC,
                         PktMultiblockDetectorPickPayload::handle)
                 .playToServer(PktMultiblockDetectorUpdatePayload.TYPE, PktMultiblockDetectorUpdatePayload.STREAM_CODEC,
@@ -158,8 +162,10 @@ public final class ModEventRegistration {
                         PktAutoIOConfigPayload::handle)
                 .playToServer(PktEjectPortContentsPayload.TYPE, PktEjectPortContentsPayload.STREAM_CODEC,
                         PktEjectPortContentsPayload::handle)
-                .playToServer(PktRecipeLockPayload.TYPE, PktRecipeLockPayload.STREAM_CODEC,
-                        PktRecipeLockPayload::handle);
+                 .playToServer(PktRecipeLockPayload.TYPE, PktRecipeLockPayload.STREAM_CODEC,
+                         PktRecipeLockPayload::handle)
+                 .playToServer(PktTerminalActionPayload.TYPE, PktTerminalActionPayload.STREAM_CODEC,
+                         PktTerminalActionPayload::handle);
     }
 
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {

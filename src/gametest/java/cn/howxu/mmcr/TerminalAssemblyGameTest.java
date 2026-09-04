@@ -8,10 +8,13 @@ import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemStorage;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorageResolver;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
+import cn.howxu.mmcr.internal.item.TerminalAction;
+import cn.howxu.mmcr.internal.item.TerminalService;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -40,6 +43,36 @@ import java.util.UUID;
  * @author howxu <dev@howxu.cn>
  */
 public class TerminalAssemblyGameTest {
+
+    public void terminalServiceRejectsActionsWithoutHeldTerminal(GameTestHelper helper) {
+        ServerPlayer player = servicePlayer(helper);
+
+        TerminalService.Result result = TerminalService.execute(player, player.getMainHandItem(), TerminalAction.SET_STAGE,
+                2, null, null);
+
+        helper.assertTrue(!result.accepted() && result.messageKey().equals("message.mmcr.terminal.not_held"),
+                "A packet action cannot mutate state when the main hand is not a terminal");
+        helper.succeed();
+    }
+
+    public void terminalServiceBindsControllerAndClearResetsData(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        ServerPlayer player = servicePlayer(helper);
+        ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+        player.getInventory().setItem(0, terminal);
+        GlobalPos controller = GlobalPos.of(helper.getLevel().dimension(), helper.absolutePos(controllerPos));
+
+        TerminalService.Result bind = TerminalService.bindController(player, terminal, controller);
+        helper.assertTrue(bind.accepted() && controller.equals(TerminalData.from(terminal).controller()),
+                "Binding stores the loaded controller on the held terminal");
+        TerminalService.Result clear = TerminalService.clear(player, terminal);
+
+        helper.assertTrue(TerminalData.from(terminal).equals(TerminalData.DEFAULT),
+                "Clearing removes every terminal field");
+        helper.assertTrue(clear.accepted(), "Clearing a held terminal succeeds");
+        helper.succeed();
+    }
 
     public void buildSkipsOccupiedPositionsAndPlacesOnlyMissingBlocks(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
