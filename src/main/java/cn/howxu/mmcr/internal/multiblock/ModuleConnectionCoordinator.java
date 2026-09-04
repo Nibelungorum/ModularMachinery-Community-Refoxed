@@ -102,7 +102,7 @@ public final class ModuleConnectionCoordinator {
         if (level == null || controller == null) return;
         Set<MachineControllerBlockEntity> affectedControllers = new LinkedHashSet<>();
         affectedControllers.add(controller);
-        for (BlockPos couplerPos : couplerWorldPositions(controller)) {
+        for (BlockPos couplerPos : controller.couplerWorldPositions()) {
             if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
             existingConnection(level, coupler).ifPresent(connection -> {
                 affectedControllers.add(connection.host());
@@ -117,7 +117,7 @@ public final class ModuleConnectionCoordinator {
 
     public static void enqueueCouplers(ServerLevel level, MachineControllerBlockEntity controller) {
         if (level == null || controller == null) return;
-        for (BlockPos couplerPos : couplerWorldPositions(controller)) ModuleConnectionRefreshQueue.enqueue(level, couplerPos);
+        for (BlockPos couplerPos : controller.couplerWorldPositions()) ModuleConnectionRefreshQueue.enqueue(level, couplerPos);
     }
 
     public static void enqueueCouplersInChunk(ServerLevel level, ChunkPos chunkPos) {
@@ -136,7 +136,7 @@ public final class ModuleConnectionCoordinator {
         if (moduleMachine == null || !moduleMachine.isModule()) return ModuleConnectionStatus.notRequired();
         if (!(controller.getLevel() instanceof ServerLevel level)) return ModuleConnectionStatus.disconnected();
         GlobalPos expectedModule = GlobalPos.of(level.dimension(), controller.getBlockPos());
-        for (BlockPos couplerPos : couplerWorldPositions(controller)) {
+        for (BlockPos couplerPos : controller.couplerWorldPositions()) {
             if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
             Optional<GlobalPos> hostPos = coupler.connectedHost();
             Optional<GlobalPos> modulePos = coupler.connectedModule();
@@ -156,7 +156,7 @@ public final class ModuleConnectionCoordinator {
         if (controller == null || !(controller.getLevel() instanceof ServerLevel level)) return 0;
         if (!isFormedHost(controller)) return 0;
         int count = 0;
-        for (BlockPos couplerPos : couplerWorldPositions(controller)) {
+        for (BlockPos couplerPos : controller.couplerWorldPositions()) {
             if (!level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) continue;
             if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
             Optional<GlobalPos> hostPos = coupler.connectedHost();
@@ -182,7 +182,7 @@ public final class ModuleConnectionCoordinator {
                     || !isFormedModule(module)) continue;
             Machine moduleMachine = module.currentStructureSnapshot().machine();
             if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) continue;
-            Set<BlockPos> moduleCouplers = couplerWorldPositions(module);
+            Set<BlockPos> moduleCouplers = module.couplerWorldPositions();
             if (Collections.disjoint(hostCouplers, moduleCouplers)) continue;
             for (BlockPos moduleInterface : interfaceWorldPositions(module)) {
                 if (hostInterfaces.contains(moduleInterface)) return true;
@@ -197,7 +197,7 @@ public final class ModuleConnectionCoordinator {
         Machine hostMachine = host.currentStructureSnapshot().machine();
         Machine moduleMachine = module.currentStructureSnapshot().machine();
         if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) return false;
-        if (!couplerWorldPositions(host).contains(couplerPos) || !couplerWorldPositions(module).contains(couplerPos)) return false;
+        if (!host.couplerWorldPositions().contains(couplerPos) || !module.couplerWorldPositions().contains(couplerPos)) return false;
         if (!structureMatches(level, host) || !structureMatches(level, module)) return false;
         return true;
     }
@@ -208,7 +208,7 @@ public final class ModuleConnectionCoordinator {
                 .filter(MachineControllerBlockEntity.class::isInstance)
                 .map(MachineControllerBlockEntity.class::cast)
                 .filter(controller -> host ? isFormedHost(controller) : isFormedModule(controller))
-                .filter(controller -> couplerWorldPositions(controller).contains(couplerPos))
+                .filter(controller -> controller.couplerWorldPositions().contains(couplerPos))
                 .toList();
     }
 
@@ -216,7 +216,7 @@ public final class ModuleConnectionCoordinator {
         Set<BlockPos> couplers = new LinkedHashSet<>();
         for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
             if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
-                couplers.addAll(couplerWorldPositions(controller));
+                couplers.addAll(controller.couplerWorldPositions());
             }
         }
         return couplers;
@@ -271,15 +271,6 @@ public final class ModuleConnectionCoordinator {
         Direction facing = facing(controller);
         return compiled != null && facing != null
                 && StructureMatcher.matchesCompiled(compiled, facing, level, controller.getBlockPos(), compiled.stateSensitive());
-    }
-
-    private static Set<BlockPos> couplerWorldPositions(MachineControllerBlockEntity controller) {
-        CompiledMachinePattern compiled = compiled(controller);
-        Direction facing = facing(controller);
-        if (compiled == null || facing == null) return Set.of();
-        Set<BlockPos> positions = new LinkedHashSet<>();
-        for (BlockPos relative : compiled.couplerPositions(facing)) positions.add(controller.getBlockPos().offset(relative));
-        return Set.copyOf(positions);
     }
 
     private static Set<BlockPos> worldPositions(List<BlockPos> relativePositions, BlockPos controllerPos) {

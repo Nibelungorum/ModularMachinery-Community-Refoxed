@@ -145,7 +145,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private static final Logger LOG = LoggerFactory.getLogger(MachineControllerBlockEntity.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
-    private static final Set<MachineControllerBlockEntity> FORMED_CONTROLLERS = ConcurrentHashMap.newKeySet();
+    private static final Map<ServerLevel, Map<ChunkPos, Set<MachineControllerBlockEntity>>> FORMED_CONTROLLER_INDEX = new ConcurrentHashMap<>();
     private static final Set<MachineControllerBlockEntity> ACTIVE_STRUCTURE_SCANS = ConcurrentHashMap.newKeySet();
     private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
@@ -213,6 +213,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private final transient MachineControllerRuntime runtime;
     private List<UpgradeBusBlockEntity> boundUpgradeBuses = List.of();
     private Set<BlockPos> activeNetworkInterfacePositions = Set.of();
+    private transient Set<BlockPos> pendingStructureChanges = new HashSet<>();
+    private transient @Nullable ServerLevel indexedFormedLevel;
+    private transient Set<ChunkPos> indexedFormedChunks = Set.of();
+    private transient long cachedCouplerPositionsVersion = Long.MIN_VALUE;
+    private transient Set<BlockPos> cachedCouplerWorldPositions = Set.of();
     private final Runnable upgradeBusChangeListener = this::onUpgradeBusContentsChanged;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
@@ -525,6 +530,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean before = physicalFormed();
         StructureSnapshot current = runtimeSnapshot().structure();
         runtime.publishStructureState(isStructureAreaLoaded(current), f, current.configuredMachine(), current.matchedStage());
+        if (f) registerFormedController();
+        else unregisterFormedController();
         if (before == f) {
             publishRuntimeState();
             return;
@@ -615,7 +622,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void handleStructureBlockChanged(BlockPos changedPos) {
-        if (getBlockPos().equals(changedPos)) return;
+        if (changedPos == null) return;
+        pendingStructureChanges.remove(changedPos);
+        handleStructureBlockChanges(Set.of(changedPos));
+    }
+
+    private void handleStructureBlockChanges(Set<BlockPos> changedPositions) {
+        if (changedPositions.isEmpty()) return;
+        if (changedPositions.stream().allMatch(getBlockPos()::equals)) return;
         if (structureWorkSnapshot().scan() != null) publishStructureWork(state -> state.withPendingInvalidation(true));
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         if (!structure.formed()) {
@@ -625,25 +639,42 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (structure.pattern() == null || structure.facing() == null) {
             return;
         }
-        boolean insideStructure = isInsideCompiledBounds(changedPos);
+        boolean insideStructure = changedPositions.stream()
+                .filter(changedPos -> !getBlockPos().equals(changedPos))
+                .anyMatch(this::isInsideCompiledBounds);
         if (!insideStructure) {
             return;
         }
-        boolean componentChanged = isInsideComponentPositions(changedPos, structure);
         runtime.requestStructureCheck(StructureRuntime.CheckReason.DIRTY_EVENT);
         publishStructureWork(state -> state.withPendingInvalidation(state.scan() != null)
-                .withComponentRefreshRequired(state.componentRefreshRequired() || componentChanged || insideStructure));
+                .withComponentRefreshRequired(true));
         if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
         setChanged();
         publishRuntimeState();
     }
 
+    public void queueStructureBlockChanged(BlockPos changedPos) {
+        if (changedPos != null && !isRemoved()) pendingStructureChanges.add(changedPos.immutable());
+    }
+
+    void flushPendingStructureChanges() {
+        if (pendingStructureChanges.isEmpty()) return;
+        Set<BlockPos> changes = pendingStructureChanges;
+        pendingStructureChanges = new HashSet<>();
+        handleStructureBlockChanges(changes);
+    }
+
     public static void markStructureDirty(LevelAccessor level, BlockPos changedPos) {
-        if (level == null || level.isClientSide()) return;
-        FORMED_CONTROLLERS.removeIf(controller -> controller.isRemoved() || controller.level == null);
-        for (MachineControllerBlockEntity controller : FORMED_CONTROLLERS) {
-            if (controller.level == level) controller.onStructureBlockChanged(changedPos);
-        }
+        if (!(level instanceof ServerLevel serverLevel) || changedPos == null) return;
+        Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX.get(serverLevel);
+        if (byChunk == null) return;
+        ChunkPos changedChunk = new ChunkPos(changedPos.getX() >> 4, changedPos.getZ() >> 4);
+        Set<MachineControllerBlockEntity> controllers = byChunk.get(changedChunk);
+        if (controllers == null) return;
+        controllers.removeIf(controller -> controller.isRemoved() || controller.level != serverLevel);
+        for (MachineControllerBlockEntity controller : controllers) controller.queueStructureBlockChanged(changedPos);
+        if (controllers.isEmpty()) byChunk.remove(changedChunk);
+        if (byChunk.isEmpty()) FORMED_CONTROLLER_INDEX.remove(serverLevel);
     }
 
     public static void markStructureChunkDirty(LevelAccessor level, ChunkPos chunkPos) {
@@ -656,20 +687,108 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private static void markStructureChunkDirty(LevelAccessor level, ChunkPos chunkPos, boolean unloading) {
         if (level == null || level.isClientSide()) return;
-        FORMED_CONTROLLERS.removeIf(controller -> controller.isRemoved() || controller.level == null);
         ACTIVE_STRUCTURE_SCANS.removeIf(controller -> controller.isRemoved() || controller.level == null);
         if (!(level instanceof ServerLevel serverLevel)) return;
-        for (MachineControllerBlockEntity controller : FORMED_CONTROLLERS) {
-            if (controller.level == level && controller.structureSnapshot().criticalChunks().contains(chunkPos)) {
+        Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX.get(serverLevel);
+        Set<MachineControllerBlockEntity> controllers = byChunk == null ? null : byChunk.get(chunkPos);
+        if (controllers != null) {
+            controllers.removeIf(controller -> controller.isRemoved() || controller.level != serverLevel);
+            for (MachineControllerBlockEntity controller : controllers) {
+                if (!controller.currentStructureSnapshot().criticalChunks().contains(chunkPos)) continue;
                 if (unloading) controller.onStructureChunkUnloaded(serverLevel, chunkPos);
                 else controller.onStructureChunkChanged(serverLevel);
             }
         }
         for (MachineControllerBlockEntity controller : ACTIVE_STRUCTURE_SCANS) {
-            if (!FORMED_CONTROLLERS.contains(controller) && controller.level == level
+            if (controller.indexedFormedLevel != serverLevel && controller.level == level
                     && controller.isChunkRelevantToActiveStructureScan(chunkPos)) {
                 if (unloading) controller.onStructureChunkUnloaded(serverLevel, chunkPos);
                 else controller.onStructureChunkChanged(serverLevel);
+            }
+        }
+    }
+
+    public Set<BlockPos> couplerWorldPositions() {
+        StructureSnapshot structure = currentStructureSnapshot();
+        long version = structure.version();
+        if (cachedCouplerPositionsVersion == version) return cachedCouplerWorldPositions;
+        if (structure.compiledPattern() == null || structure.facing() == null) {
+            cachedCouplerWorldPositions = Set.of();
+        } else {
+            Set<BlockPos> positions = new HashSet<>();
+            for (BlockPos relative : structure.compiledPattern().couplerPositions(structure.facing())) {
+                positions.add(getBlockPos().offset(relative));
+            }
+            cachedCouplerWorldPositions = Set.copyOf(positions);
+        }
+        cachedCouplerPositionsVersion = version;
+        return cachedCouplerWorldPositions;
+    }
+
+    private void registerFormedController() {
+        unregisterFormedController();
+        if (!(level instanceof ServerLevel serverLevel)) return;
+        Set<ChunkPos> chunks = indexChunks(currentStructureSnapshot());
+        if (chunks.isEmpty()) {
+            chunks = Set.of(new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4));
+        }
+        Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX
+                .computeIfAbsent(serverLevel, ignored -> new ConcurrentHashMap<>());
+        for (ChunkPos chunk : chunks) {
+            byChunk.computeIfAbsent(chunk, ignored -> ConcurrentHashMap.newKeySet()).add(this);
+        }
+        indexedFormedLevel = serverLevel;
+        indexedFormedChunks = Set.copyOf(chunks);
+    }
+
+    private void unregisterFormedController() {
+        if (indexedFormedLevel == null) return;
+        Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX.get(indexedFormedLevel);
+        if (byChunk != null) {
+            for (ChunkPos chunk : indexedFormedChunks) {
+                Set<MachineControllerBlockEntity> controllers = byChunk.get(chunk);
+                if (controllers == null) continue;
+                controllers.remove(this);
+                if (controllers.isEmpty()) byChunk.remove(chunk);
+            }
+            if (byChunk.isEmpty()) FORMED_CONTROLLER_INDEX.remove(indexedFormedLevel);
+        }
+        indexedFormedLevel = null;
+        indexedFormedChunks = Set.of();
+    }
+
+    public static void clearFormedControllerIndex(ServerLevel level) {
+        Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX.remove(level);
+        if (byChunk == null) return;
+        for (Set<MachineControllerBlockEntity> controllers : byChunk.values()) {
+            for (MachineControllerBlockEntity controller : controllers) {
+                if (controller.indexedFormedLevel == level) {
+                    controller.indexedFormedLevel = null;
+                    controller.indexedFormedChunks = Set.of();
+                }
+            }
+        }
+    }
+
+    private Set<ChunkPos> indexChunks(StructureSnapshot structure) {
+        Set<ChunkPos> chunks = new HashSet<>(structure.criticalChunks());
+        Machine candidate = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        if (candidate != null && structure.facing() != null) {
+            for (CandidatePattern pattern : candidatePatterns(candidate, structure.facing())) {
+                addIndexChunks(chunks, boundingBox(pattern.pattern()));
+            }
+        }
+        return Set.copyOf(chunks);
+    }
+
+    private void addIndexChunks(Set<ChunkPos> chunks, BoundingBox box) {
+        int minChunkX = (getBlockPos().getX() + box.minX()) >> 4;
+        int maxChunkX = (getBlockPos().getX() + box.maxX()) >> 4;
+        int minChunkZ = (getBlockPos().getZ() + box.minZ()) >> 4;
+        int maxChunkZ = (getBlockPos().getZ() + box.maxZ()) >> 4;
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                chunks.add(new ChunkPos(chunkX, chunkZ));
             }
         }
     }
@@ -2181,7 +2300,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         .withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK)
                         .withNextCheckTick(level.getGameTime() + STRUCTURE_SAFETY_INTERVAL_TICKS)
                         .withFormationFailure(null).withLastStructureError(null));
-                FORMED_CONTROLLERS.add(this);
+                registerFormedController();
                 restoringFactoryRuntime = false;
                 resumePausedRecipeAfterStructureCheck();
                 setChanged();
@@ -2211,7 +2330,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 updatePhysicalFormedState(true);
                 notifyPreviewReceiversStructureFormed();
             }
-            FORMED_CONTROLLERS.add(this);
+            registerFormedController();
             if (structureChanged || componentsChanged) {
                 updateComponents(previousStructure, matchedMachine, rotatedPattern, compiledPattern, facing,
                         previousLinkedPortPositions, foundModifiers, levels);
@@ -2650,12 +2769,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return contains(box, relative);
     }
 
-    private boolean isInsideComponentPositions(BlockPos worldPos, StructureSnapshot structure) {
-        if (structure.pattern() == null || structure.facing() == null) return false;
-        BlockPos relative = worldPos.subtract(getBlockPos());
-        return componentPositions(structure).contains(relative);
-    }
-
     private static boolean contains(BoundingBox box, BlockPos relative) {
         return relative.getX() >= box.minX()
                 && relative.getX() <= box.maxX()
@@ -2842,6 +2955,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureWorkSnapshot work = structureWorkSnapshot();
         invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);
         ACTIVE_STRUCTURE_SCANS.remove(this);
+        unregisterFormedController();
         Machine configuredMachine = structure.configuredMachine();
         PortRequirementSpec.Failure previousFormationFailure = structure.lastFormationFailure();
         Object previousStructureError = structure.lastStructureError();
@@ -2871,7 +2985,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!wasFormed || !invalidateScheduledCheck) {
             publishStructureWork(state -> state.withNextCheckTick(work.nextCheckTick()));
         }
-        FORMED_CONTROLLERS.remove(this);
         runtime.publishUpgradeBusState(List.of());
         runtime.publishComponentState(List.of(), Map.of(), Map.of(), Set.of());
         if (wasFormed && invalidateScheduledCheck) publishStructureWork(state -> state.withNextCheckTick(-1L));
@@ -3410,6 +3523,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void setRemoved() {
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
         ACTIVE_STRUCTURE_SCANS.remove(this);
+        unregisterFormedController();
         if (level != null && !level.isClientSide()) cancelBuildTask();
         structureCheckIntervalOverrideForTesting = null;
         structureScanBatchesOverrideForTesting = null;

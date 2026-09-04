@@ -182,19 +182,13 @@ class PluginBindingTest {
         MachineControllerRuntime runtime = runtimeOf(controller);
         runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("stale_reload_text"), Component.literal("stale"));
-        Set<MachineControllerBlockEntity> formedControllers = formedControllers();
-        formedControllers.add(controller);
 
-        try {
-            Object reload = new Object();
-            Plugin.beginServerReload(reload, 0);
-            Plugin.completeServerReload(reload, 0);
+        Object reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        Plugin.completeServerReload(reload, 0);
 
-            assertThat(runtime.screenText().snapshot().lines()).singleElement()
-                    .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("stale")));
-        } finally {
-            formedControllers.remove(controller);
-        }
+        assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("stale")));
     }
 
     @Test
@@ -804,13 +798,6 @@ class PluginBindingTest {
         var field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
         field.setAccessible(true);
         return (MachineControllerRuntime) field.get(controller);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Set<MachineControllerBlockEntity> formedControllers() throws Exception {
-        var field = MachineControllerBlockEntity.class.getDeclaredField("FORMED_CONTROLLERS");
-        field.setAccessible(true);
-        return (Set<MachineControllerBlockEntity>) field.get(null);
     }
 
     private static void setField(Object target, String name, Object value) {

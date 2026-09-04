@@ -791,6 +791,23 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void queued_structure_changes_are_coalesced_until_controller_tick() {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        BlockPos changedPos = controller.getBlockPos().offset(1, 0, 0);
+        long formedVersion = controller.structureSnapshot().version();
+
+        controller.queueStructureBlockChanged(changedPos);
+        controller.queueStructureBlockChanged(changedPos);
+
+        assertThat(controller.structureSnapshot().version()).isEqualTo(formedVersion);
+        controller.serverTick();
+
+        assertThat(controller.structureSnapshot().version()).isEqualTo(formedVersion + 1);
+    }
+
+    @Test
     void unformed_structure_mismatch_waits_for_the_next_check_interval() {
         BlockPos controllerPos = BlockPos.ZERO;
         Identifier machineId = MMCR.id("controller_mismatch_interval");

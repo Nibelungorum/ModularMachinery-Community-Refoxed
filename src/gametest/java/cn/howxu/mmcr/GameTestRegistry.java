@@ -28,6 +28,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
 import java.util.function.Consumer;
@@ -127,7 +128,9 @@ public final class GameTestRegistry {
         register(event, "terminal_build_structure_diagnostic", 100,
                 helper -> new TerminalAssemblyGameTest().completedBuildRequestsStructureDiagnostic(helper));
         register(event, "terminal_incremental_invalidation", 200,
-                helper -> new TerminalAssemblyGameTest().incrementalScanRestartsAfterPendingInvalidation(helper));
+                 helper -> new TerminalAssemblyGameTest().incrementalScanRestartsAfterPendingInvalidation(helper));
+        register(event, "terminal_falling_block_invalidation", 100,
+                helper -> new TerminalAssemblyGameTest().fallingBuildBlockInvalidatesFormedStructure(helper));
         register(event, "terminal_small_structure_diagnostic", 100,
                 helper -> new TerminalAssemblyGameTest().smallStructureDiagnosticIsDeliveredAfterNextScan(helper));
         register(event, "terminal_build_disconnect_refund", 100,
@@ -140,7 +143,7 @@ public final class GameTestRegistry {
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
-                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
+                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             Identifier id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
             builder.displayNameKey("machine.mmcr_test." + name);
@@ -190,7 +193,7 @@ public final class GameTestRegistry {
                 ModifierDefinition.of("item", "input", 1.0F, "add", false));
         event.registerModifierItem(new ItemStack(Items.NETHER_STAR), upgradeBusModifierId);
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
-                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll")) {
+                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             Identifier id = MMCR.id(name);
             event.registerStructure(id, structure -> {
                 BlockPredicate casing = BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get());
@@ -234,6 +237,14 @@ public final class GameTestRegistry {
                             .layer("CX")
                             .where('C', controller)
                             .where('X', BlockPredicate.deferredBlock(() -> ModBlocks.DATA_STORAGE.get()))
+                            .controller('C')));
+                    return structure;
+                }
+                if (name.equals("falling_block_structure")) {
+                    structure.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("CS")
+                            .where('C', controller)
+                            .where('S', BlockPredicate.block(Blocks.SAND))
                             .controller('C')));
                     return structure;
                 }

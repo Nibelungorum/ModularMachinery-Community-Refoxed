@@ -112,6 +112,7 @@ public final class MachineControllerRuntime {
         }
         beginUpdateBatch();
         try {
+            controller.flushPendingStructureChanges();
             structure.tick(level, controllerPos);
             controller.tickRuntimeWork(level, controllerPos);
         } finally {

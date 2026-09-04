@@ -18,12 +18,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.BlockQuadOutput;
+import net.minecraft.client.renderer.block.BlockModelLighter;
 import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ColorResolver;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
@@ -37,7 +42,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import net.minecraft.util.Util;
 
 /**
  * Tesselates the immutable preview level into a private, render-thread-owned mesh generation.
@@ -57,6 +66,7 @@ public final class PreviewSceneMeshCompiler {
         Map<ChunkSectionLayer, BufferBuilder> started = new EnumMap<>(ChunkSectionLayer.class);
         Map<ChunkSectionLayer, List<MeshData>> meshes = new EnumMap<>(ChunkSectionLayer.class);
         Set<BlockPos> blockEntities = new HashSet<>();
+        BlockModelLighter.enableCaching();
         try {
             Minecraft minecraft = Minecraft.getInstance();
             var modelSet = minecraft.getModelManager().getBlockStateModelSet();
@@ -98,6 +108,8 @@ public final class PreviewSceneMeshCompiler {
             meshes.values().forEach(list -> list.forEach(MeshData::close));
             builders.close();
             throw exception;
+        } finally {
+            BlockModelLighter.clearCache();
         }
     }
 
@@ -107,13 +119,16 @@ public final class PreviewSceneMeshCompiler {
                 key.vertexFormat()));
     }
 
-    private static BlockAndTintGetter previewRegion(PreviewLevel level) {
+    static BlockAndTintGetter previewRegion(PreviewLevel level) {
         return new BlockAndTintGetter() {
             @Override public BlockState getBlockState(BlockPos position) { return level.getBlockState(position); }
             @Override public FluidState getFluidState(BlockPos position) { return level.getFluidState(position); }
             @Override public BlockEntity getBlockEntity(BlockPos position) { return null; }
             @Override public int getHeight() { return level.getHeight(); }
             @Override public int getMinY() { return level.getMinY(); }
+            @Override public int getBrightness(LightLayer lightLayer, BlockPos position) {
+                return level.getBrightness(lightLayer, position);
+            }
             @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
             @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {

@@ -47,6 +47,7 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
@@ -89,6 +90,7 @@ public final class ModEventRegistration {
         gameBus.add(BlockEvent.EntityMultiPlaceEvent.class, handlers.blocksPlaced());
         gameBus.add(BlockEvent.FluidPlaceBlockEvent.class, handlers.fluidPlaced());
         gameBus.add(BreakBlockEvent.class, handlers.blockBroken());
+        gameBus.add(EntityJoinLevelEvent.class, handlers.fallingBlockJoined());
         gameBus.add(ChunkEvent.Unload.class, handlers.chunkUnloaded());
         gameBus.add(ChunkEvent.Load.class, handlers.chunkLoaded());
         gameBus.add(LevelTickEvent.Post.class, handlers.levelTick());
@@ -188,6 +190,7 @@ public final class ModEventRegistration {
             Consumer<BlockEvent.EntityMultiPlaceEvent> blocksPlaced,
             Consumer<BlockEvent.FluidPlaceBlockEvent> fluidPlaced,
             Consumer<BreakBlockEvent> blockBroken,
+            Consumer<EntityJoinLevelEvent> fallingBlockJoined,
             Consumer<ChunkEvent.Unload> chunkUnloaded,
             Consumer<ChunkEvent.Load> chunkLoaded,
             Consumer<LevelTickEvent.Post> levelTick,
@@ -209,6 +212,7 @@ public final class ModEventRegistration {
                     StructureDirtyEvents::onBlocksPlaced,
                     StructureDirtyEvents::onFluidPlaced,
                     StructureDirtyEvents::onBlockBroken,
+                    StructureDirtyEvents::onFallingBlockJoined,
                     StructureDirtyEvents::onChunkUnloaded,
                     StructureDirtyEvents::onChunkLoaded,
                     SharedIoEvents::onLevelTick,

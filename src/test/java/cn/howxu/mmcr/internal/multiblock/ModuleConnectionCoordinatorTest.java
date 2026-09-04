@@ -240,6 +240,18 @@ class ModuleConnectionCoordinatorTest {
     }
 
     @Test
+    void controller_caches_coupler_world_positions() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+
+        Set<BlockPos> cached = fixture.host().couplerWorldPositions();
+        assertThat(cached).isSameAs(fixture.host().couplerWorldPositions());
+
+        fixture.host().handleStructureBlockChanged(fixture.couplerPos());
+
+        assertThat(fixture.host().couplerWorldPositions()).isNotSameAs(cached);
+    }
+
+    @Test
     void installed_module_count_drops_when_the_module_chunk_is_unloaded() throws Exception {
         FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
 

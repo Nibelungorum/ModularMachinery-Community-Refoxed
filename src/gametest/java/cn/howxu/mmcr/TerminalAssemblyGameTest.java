@@ -198,6 +198,42 @@ public class TerminalAssemblyGameTest {
         });
     }
 
+    public void fallingBuildBlockInvalidatesFormedStructure(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 3, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("falling_block_structure")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("falling_block_structure")));
+        controller.setBuildBlocksPerTickForTesting(1);
+        controller.setStructureCheckIntervalForTesting(1);
+        BlockPos sandPos = MultiblockAssemblyService.createTemplatePlacements(controller.getBlockPos(),
+                controller.assemblyPattern(controller.boundMachine().orElseThrow())).getFirst().pos();
+        helper.getLevel().setBlock(sandPos.below(), Blocks.STONE.defaultBlockState(), 3);
+
+        MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(servicePlayer(helper), controller, true);
+        helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Falling-block structure build is accepted");
+
+        helper.runAtTickTime(1, () -> helper.assertTrue(helper.getLevel().getBlockState(sandPos.below()).is(Blocks.STONE),
+                "Temporary support remains before the automatic build tick: sand="
+                        + helper.getLevel().getBlockState(sandPos) + ", support="
+                        + helper.getLevel().getBlockState(sandPos.below())));
+        helper.runAtTickTime(8, () -> {
+            helper.assertTrue(controller.structureSnapshot().formed(),
+                    "Automatically placed sand forms the structure before falling: sand="
+                            + helper.getLevel().getBlockState(sandPos) + ", support="
+                            + helper.getLevel().getBlockState(sandPos.below()));
+            helper.assertTrue(helper.getLevel().getBlockState(sandPos).is(Blocks.SAND),
+                    "Automatically placed sand is present before falling");
+            helper.getLevel().removeBlock(sandPos.below(), false);
+        });
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(helper.getLevel().getBlockState(sandPos).isAir(),
+                    "Automatically placed sand falls after its support is removed");
+            helper.assertTrue(!controller.structureSnapshot().formed(),
+                    "A falling automatically placed block invalidates the formed structure");
+            helper.succeed();
+        });
+    }
+
     public void completedBuildRequestsStructureDiagnostic(GameTestHelper helper) {
         BlockPos controllerPos = new BlockPos(4, 1, 4);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());

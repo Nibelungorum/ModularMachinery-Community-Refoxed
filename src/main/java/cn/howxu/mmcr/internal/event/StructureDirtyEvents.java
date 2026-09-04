@@ -9,10 +9,12 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.LevelAccessor;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /**
  * Marks formed machine controllers dirty when their cached structure area changes.
@@ -25,6 +27,7 @@ public final class StructureDirtyEvents {
     }
 
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent event) {
+        if (event instanceof BlockEvent.EntityMultiPlaceEvent) return;
         MachineControllerBlockEntity.markStructureDirty(event.getLevel(), event.getPos());
         enqueueCoupler(event.getLevel(), event.getPos());
         markAdjacentAutoIOPortsDirty(event.getLevel(), event.getPos());
@@ -48,6 +51,13 @@ public final class StructureDirtyEvents {
         MachineControllerBlockEntity.markStructureDirty(event.getLevel(), event.getPos());
         enqueueCoupler(event.getLevel(), event.getPos());
         markAdjacentAutoIOPortsDirty(event.getLevel(), event.getPos());
+    }
+
+    public static void onFallingBlockJoined(EntityJoinLevelEvent event) {
+        if (event.loadedFromDisk()) return;
+        if (event.getEntity() instanceof FallingBlockEntity fallingBlock) {
+            MachineControllerBlockEntity.markStructureDirty(event.getLevel(), fallingBlock.getStartPos());
+        }
     }
 
     public static void onChunkUnloaded(ChunkEvent.Unload event) {

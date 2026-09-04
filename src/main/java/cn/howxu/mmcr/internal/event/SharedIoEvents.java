@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -39,6 +40,7 @@ public final class SharedIoEvents {
             SharedIoCoordinator.discard(level);
             ModuleConnectionRefreshQueue.discard(level);
             StructureClaimRegistry.discard(level);
+            MachineControllerBlockEntity.clearFormedControllerIndex(level);
         }
     }
 }
