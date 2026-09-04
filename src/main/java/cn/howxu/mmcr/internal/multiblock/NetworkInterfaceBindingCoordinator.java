@@ -12,7 +12,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Coordinates reciprocal machine-network bindings without loading remote chunks.
  * @author howxu <dev@howxu.cn>
@@ -75,7 +77,12 @@ public final class NetworkInterfaceBindingCoordinator {
 
     public static void reconcile(MinecraftServer server, MachineControllerBlockEntity controller) {
         if (server == null || controller == null || !formed(controller)) return;
-        List<StoredConnection> connections = activeInterfaces(server, controller).stream()
+        reconcile(server, controller, activeInterfaces(server, controller));
+    }
+
+    private static void reconcile(MinecraftServer server, MachineControllerBlockEntity controller,
+                                  List<NetworkInterfaceBlockEntity> networks) {
+        List<StoredConnection> connections = networks.stream()
                 .flatMap(network -> network.connections().stream().map(connection -> new StoredConnection(network, connection)))
                 .sorted(Comparator.comparingLong(stored -> stored.connection.sequence()))
                 .toList();
@@ -102,12 +109,18 @@ public final class NetworkInterfaceBindingCoordinator {
     public static void heartbeat(ServerLevel level) {
         if (level == null) return;
         MinecraftServer server = level.getServer();
+        Map<GlobalPos, List<NetworkInterfaceBlockEntity>> interfaceCache = new HashMap<>();
+        Map<GlobalPos, Integer> connectionCountCache = new HashMap<>();
         for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
             if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
-            reconcile(server, controller);
+            GlobalPos controllerKey = GlobalPos.of(level.dimension(), controllerPos);
+            List<NetworkInterfaceBlockEntity> networks = interfaceCache.computeIfAbsent(controllerKey,
+                    ignored -> activeInterfaces(server, controller));
+            reconcile(server, controller, networks);
+            connectionCountCache.clear();
             MachineReference sourceMachine = controller.machineReference();
             if (sourceMachine == null) continue;
-            for (NetworkInterfaceBlockEntity network : activeInterfaces(server, controller)) {
+            for (NetworkInterfaceBlockEntity network : networks) {
                 GlobalPos sourceEndpoint = GlobalPos.of(level.dimension(), network.getBlockPos());
                 for (NetworkInterfaceBlockEntity.Connection connection : network.connections()) {
                     ResolvedEndpoint source = resolve(server, sourceEndpoint);
@@ -118,11 +131,17 @@ public final class NetworkInterfaceBindingCoordinator {
                             || !connection.machine().equals(target.controller.machineReference())
                             || !target.controller.hasActiveNetworkInterface(connection.endpoint().pos())
                             || !allows(controller, connection.machine()) || !allows(target.controller, sourceMachine)
-                            || connectionCount(server, controller) > machine(controller).networkInterface().maxConnections()
-                            || connectionCount(server, target.controller) > machine(target.controller).networkInterface().maxConnections()
+                            || connectionCountCache.computeIfAbsent(controllerKey,
+                            ignored -> connectionCount(networks)) > machine(controller).networkInterface().maxConnections()
+                            || connectionCountCache.computeIfAbsent(controllerKey(target.controller),
+                            ignored -> connectionCount(interfaceCache.computeIfAbsent(controllerKey(target.controller),
+                                    ignoredController -> activeInterfaces(server, target.controller))))
+                            > machine(target.controller).networkInterface().maxConnections()
                             || target.network.connections().stream().noneMatch(reverse -> reverse.endpoint().equals(sourceEndpoint)
                             && reverse.machine().equals(sourceMachine) && reverse.sequence() == connection.sequence())) {
                         disconnect(server, sourceEndpoint, sourceMachine, connection.endpoint(), connection.machine());
+                        connectionCountCache.remove(controllerKey);
+                        if (target.controller != null) connectionCountCache.remove(controllerKey(target.controller));
                     }
                 }
             }
@@ -141,6 +160,14 @@ public final class NetworkInterfaceBindingCoordinator {
 
     private static int connectionCount(MinecraftServer server, MachineControllerBlockEntity controller) {
         return activeInterfaces(server, controller).stream().mapToInt(network -> network.connections().size()).sum();
+    }
+
+    private static int connectionCount(List<NetworkInterfaceBlockEntity> networks) {
+        return networks.stream().mapToInt(network -> network.connections().size()).sum();
+    }
+
+    private static GlobalPos controllerKey(MachineControllerBlockEntity controller) {
+        return GlobalPos.of(((ServerLevel) controller.getLevel()).dimension(), controller.getBlockPos());
     }
 
     private static boolean formed(MachineControllerBlockEntity controller) {

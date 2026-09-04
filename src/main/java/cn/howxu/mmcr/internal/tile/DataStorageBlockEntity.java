@@ -40,6 +40,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private @Nullable BlockPos controllerPosition;
     private @Nullable Identifier controllerMachine;
     private boolean loading;
+    private boolean storageSyncPending;
     private int linkCheckCounter;
 
     public DataStorageBlockEntity(BlockPos pos, BlockState state) {
@@ -78,13 +79,22 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public void serverTick() {
-        if (level == null || level.isClientSide() || controllerPosition == null) return;
+        if (level == null || level.isClientSide()) return;
+        if (storageSyncPending) {
+            storageSyncPending = false;
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
+        BlockPos currentControllerPosition = controllerPosition;
+        if (currentControllerPosition == null) return;
         if (Math.floorMod(linkCheckCounter++ + worldPosition.asLong(), LINK_CHECK_INTERVAL_TICKS) != 0) return;
-        if (!level.hasChunkAt(controllerPosition)) return;
-        if (!(level.getBlockEntity(controllerPosition) instanceof MachineControllerBlockEntity controller)
-                || !controller.runtimeSnapshot().structure().formed()
-                || !controller.runtimeSnapshot().linkedPortPositions().contains(worldPosition)) {
-            releaseController(controllerPosition);
+        if (!level.hasChunkAt(currentControllerPosition)) return;
+        if (!(level.getBlockEntity(currentControllerPosition) instanceof MachineControllerBlockEntity controller)) {
+            releaseController(currentControllerPosition);
+        } else {
+            var snapshot = controller.runtimeSnapshot();
+            if (!snapshot.structure().formed() || !snapshot.linkedPortPositions().contains(worldPosition)) {
+                releaseController(currentControllerPosition);
+            }
         }
         maintainControllerLink();
     }
@@ -139,7 +149,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private void onStorageChanged(java.util.Map<String, DataValue> ignored) {
         if (loading) return;
         setChanged();
-        if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        storageSyncPending = true;
     }
 
     private static void writeValue(ValueOutput output, DataValue value) {

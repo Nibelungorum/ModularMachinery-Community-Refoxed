@@ -43,6 +43,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     private @Nullable GlobalPos owner;
     private final Map<ConnectionKey, Connection> connections = new LinkedHashMap<>();
+    private @Nullable List<Connection> connectionSnapshot;
     private int heartbeatCounter;
 
     public NetworkInterfaceBlockEntity(BlockPos pos, BlockState state) {
@@ -54,7 +55,12 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public List<Connection> connections() {
-        return List.copyOf(connections.values());
+        List<Connection> snapshot = connectionSnapshot;
+        if (snapshot == null) {
+            snapshot = List.copyOf(connections.values());
+            connectionSnapshot = snapshot;
+        }
+        return snapshot;
     }
 
     public boolean claimOwner(GlobalPos owner) {
@@ -71,6 +77,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         unlinkControllerAppearance(owner.pos());
         this.owner = null;
         connections.clear();
+        connectionSnapshot = null;
         setChanged();
         return true;
     }
@@ -79,18 +86,21 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         if (!valid(connection)) return false;
         if (connections.containsKey(new ConnectionKey(connection.endpoint(), connection.machine()))) return false;
         connections.put(new ConnectionKey(connection.endpoint(), connection.machine()), connection);
+        connectionSnapshot = null;
         setChanged();
         return true;
     }
 
     public boolean removeConnection(GlobalPos endpoint) {
         if (endpoint == null || !connections.keySet().removeIf(key -> endpoint.equals(key.endpoint()))) return false;
+        connectionSnapshot = null;
         setChanged();
         return true;
     }
 
     public boolean removeConnection(Connection connection) {
         if (connection == null || connections.remove(new ConnectionKey(connection.endpoint(), connection.machine())) == null) return false;
+        connectionSnapshot = null;
         setChanged();
         return true;
     }
@@ -152,6 +162,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         super.loadAdditional(input);
         owner = readGlobalPos(input.childOrEmpty(OWNER_KEY));
         connections.clear();
+        connectionSnapshot = null;
         for (ValueInput serialized : input.childrenListOrEmpty(CONNECTIONS_KEY)) {
             try {
                 GlobalPos endpoint = readGlobalPos(serialized.childOrEmpty(ENDPOINT_KEY));

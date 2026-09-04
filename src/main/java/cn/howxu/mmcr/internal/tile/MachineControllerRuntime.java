@@ -59,6 +59,7 @@ public final class MachineControllerRuntime {
     private final JadeText jadeText = JadeTextSupport.create();
     private final Map<String, ControllerScreenTextState> recipeScreenTexts = new LinkedHashMap<>();
     private Map<BlockPos, DataStorage> dataStorages = Map.of();
+    private @Nullable DataStorage primaryDataStorage;
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
     private ControllerRuntimeSnapshot publishedSnapshot;
     private @Nullable ControllerRuntimeSnapshot workingSnapshot;
@@ -164,7 +165,7 @@ public final class MachineControllerRuntime {
         ServerLevel level = currentLevel instanceof ServerLevel serverLevel ? serverLevel : null;
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
-                screenText, dataStorages.values().stream().findFirst().orElse(null),
+                screenText, primaryDataStorage,
                 new MachineIoView(capabilitySnapshot), components.upgradeItems(), jadeText);
     }
 
@@ -478,6 +479,7 @@ public final class MachineControllerRuntime {
 
     void resetStructure(@Nullable Machine configuredMachine, boolean forceVersion) {
         dataStorages = Map.of();
+        primaryDataStorage = null;
         structure.reset(configuredMachine, forceVersion);
         publishSnapshot();
     }
@@ -525,6 +527,7 @@ public final class MachineControllerRuntime {
 
     void publishDataStorages(Map<BlockPos, DataStorage> nextDataStorages) {
         dataStorages = Map.copyOf(nextDataStorages == null ? Map.of() : nextDataStorages);
+        primaryDataStorage = dataStorages.isEmpty() ? null : dataStorages.values().iterator().next();
     }
 
     Set<BlockPos> dataStoragePositions() {

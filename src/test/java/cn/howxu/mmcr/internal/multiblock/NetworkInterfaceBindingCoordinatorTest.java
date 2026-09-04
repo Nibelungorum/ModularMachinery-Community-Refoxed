@@ -62,6 +62,29 @@ class NetworkInterfaceBindingCoordinatorTest {
     }
 
     @Test
+    void connections_returns_cached_immutable_snapshots_until_topology_changes() {
+        NetworkInterfaceBlockEntity network = createInterface(BlockPos.ZERO);
+        var first = new NetworkInterfaceBlockEntity.Connection(
+                global("minecraft:overworld", new BlockPos(1, 0, 0)),
+                new MachineReference(MMCR.id("first"), 1L), 1L);
+        var second = new NetworkInterfaceBlockEntity.Connection(
+                global("minecraft:overworld", new BlockPos(2, 0, 0)),
+                new MachineReference(MMCR.id("second"), 2L), 2L);
+
+        assertThat(network.connections()).isEmpty();
+        network.addConnection(first);
+        List<NetworkInterfaceBlockEntity.Connection> afterFirst = network.connections();
+        assertThat(network.connections()).isSameAs(afterFirst);
+
+        network.addConnection(second);
+        assertThat(afterFirst).containsExactly(first);
+        assertThat(network.connections()).containsExactly(first, second);
+
+        network.removeConnection(first);
+        assertThat(network.connections()).containsExactly(second);
+    }
+
+    @Test
     void connect_creates_reciprocal_records_and_rejects_duplicates_on_either_endpoint() throws Exception {
         Fixture fixture = fixture(2, 2, true, true);
 

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -195,6 +196,23 @@ class DataStorageBlockEntityTest {
         assertThat(storage.controllerPosition()).contains(BlockPos.ZERO);
         assertThat(storage.releaseController(BlockPos.ZERO)).isTrue();
         assertThat(storage.controllerPosition()).isEmpty();
+    }
+
+    @Test
+    void storage_changes_are_synced_once_per_tick() {
+        DataStorageBlockEntity storage = create(new BlockPos(1, 0, 0));
+        var level = LevelStub.create(Map.of());
+        storage.setLevel(level);
+
+        storage.storage().set("first", DataValue.of(1));
+        storage.storage().set("second", DataValue.of(2));
+
+        assertThat(LevelStub.sentBlockUpdates(level)).isZero();
+        storage.serverTick();
+        assertThat(LevelStub.sentBlockUpdates(level)).isEqualTo(1);
+
+        storage.serverTick();
+        assertThat(LevelStub.sentBlockUpdates(level)).isEqualTo(1);
     }
 
     private static DataStorageBlockEntity create(BlockPos pos) {
