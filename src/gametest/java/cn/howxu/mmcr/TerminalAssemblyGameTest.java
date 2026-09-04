@@ -77,7 +77,7 @@ public class TerminalAssemblyGameTest {
         helper.getLevel().setBlock(nonMatchingPos, nonMatchingBlock.defaultBlockState(), 3);
 
         ServerPlayer player = servicePlayer(helper);
-        MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 1, stack -> {});
+        MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 1, stack -> true);
 
         helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Demolish succeeds in service mode");
         helper.assertTrue(helper.getLevel().getBlockState(removedPos).isAir(), "Matching block is removed");
@@ -106,7 +106,7 @@ public class TerminalAssemblyGameTest {
             helper.assertTrue(controller.structureSnapshot().formed(), "Stage 2 structure forms before demolish");
             helper.assertTrue(controller.structureSnapshot().matchedStage() == 2, "Controller matched stage 2 before demolish");
 
-            MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 16, stack -> {});
+            MultiblockAssemblyService.Result result = MultiblockAssemblyService.demolish(player, controller, 16, stack -> true);
 
             helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "Demolish succeeds in service mode");
             helper.assertTrue(result.changedBlocks() == 2, "Demolish removes the complete stage 2 snapshot");

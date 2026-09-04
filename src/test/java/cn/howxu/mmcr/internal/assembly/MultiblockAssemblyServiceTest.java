@@ -227,6 +227,28 @@ class MultiblockAssemblyServiceTest {
         assertTrue(task.takeCompletionReport().isEmpty());
     }
 
+    @Test
+    void rejectedDropStopsBeforeRemovingCurrentAndLaterBlocks() {
+        List<MultiblockAssemblyService.Removal> removed = new java.util.ArrayList<>();
+        StructureItemSink sink = new StructureItemSink() {
+            private int accepted;
+
+            @Override
+            public boolean accept(ItemStack stack) {
+                return accepted++ == 0;
+            }
+        };
+        List<MultiblockAssemblyService.Removal> removals = List.of(
+                new MultiblockAssemblyService.Removal(BlockPos.ZERO, Blocks.STONE.defaultBlockState(), new ItemStack(Items.STONE)),
+                new MultiblockAssemblyService.Removal(BlockPos.ZERO.east(), Blocks.DIRT.defaultBlockState(), new ItemStack(Items.DIRT)),
+                new MultiblockAssemblyService.Removal(BlockPos.ZERO.east(2), Blocks.COBBLESTONE.defaultBlockState(), new ItemStack(Items.COBBLESTONE)));
+
+        int count = MultiblockAssemblyService.removeAcceptedDrops(removals, sink, removal -> removed.add(removal));
+
+        assertEquals(1, count);
+        assertEquals(List.of(BlockPos.ZERO), removed.stream().map(MultiblockAssemblyService.Removal::pos).toList());
+    }
+
     private static ItemStack itemStack(Item item, int count) {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }

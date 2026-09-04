@@ -67,7 +67,7 @@ public class TerminalItem extends Item {
             }
         } else {
             result = MultiblockAssemblyService.demolish(serverPlayer, controller, Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(),
-                    serverPlayer.isCreative() ? stack -> {} : new PlayerInventoryStructureItemSink(serverPlayer));
+                    serverPlayer.isCreative() ? stack -> true : new PlayerInventoryStructureItemSink(serverPlayer));
         }
         serverPlayer.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
         return result.interactionResult();

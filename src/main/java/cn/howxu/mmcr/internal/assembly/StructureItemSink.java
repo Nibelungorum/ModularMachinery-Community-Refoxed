@@ -8,5 +8,8 @@ import net.minecraft.world.item.ItemStack;
  * @author howxu <dev@howxu.cn>
  */
 public interface StructureItemSink {
-    void accept(ItemStack stack);
+    /**
+     * Accepts a complete item stack without mutating the destination on failure.
+     */
+    boolean accept(ItemStack stack);
 }

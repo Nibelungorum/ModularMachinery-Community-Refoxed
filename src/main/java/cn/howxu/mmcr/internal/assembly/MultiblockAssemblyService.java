@@ -221,18 +221,16 @@ public final class MultiblockAssemblyService {
         BlockArray pattern = controller.assemblyPattern(machine.get());
         boolean stateSensitive = controller.assemblyStateSensitive(machine.get());
         List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
-        int removed = 0;
         maxBlocks = Math.min(maxBlocks, MAX_BLOCKS_PER_OPERATION);
+        List<Removal> removals = new ArrayList<>();
         for (Placement placement : template) {
-            if (removed >= maxBlocks) break;
+            if (removals.size() >= maxBlocks) break;
             BlockState current = player.level().getBlockState(placement.pos());
             if (current.isAir()) continue;
             if (!placement.matches(current, stateSensitive)) continue;
-            ItemStack drop = current.getBlock().asItem().getDefaultInstance();
-            player.level().removeBlock(placement.pos(), false);
-            if (!drop.isEmpty()) sink.accept(drop);
-            removed++;
+            removals.add(new Removal(placement.pos(), current, current.getBlock().asItem().getDefaultInstance()));
         }
+        int removed = removeAcceptedDrops(removals, sink, removal -> player.level().removeBlock(removal.pos(), false));
         if (removed == 0) {
             return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.demolish.none"));
         }
@@ -240,6 +238,16 @@ public final class MultiblockAssemblyService {
             return new Result(InteractionResult.SUCCESS, removed, new ComponentKey("message.mmcr.terminal.demolish.limit", removed, maxBlocks));
         }
         return new Result(InteractionResult.SUCCESS, removed, new ComponentKey("message.mmcr.terminal.demolish.success", removed));
+    }
+
+    static int removeAcceptedDrops(List<Removal> removals, StructureItemSink sink, Predicate<Removal> remove) {
+        int removed = 0;
+        for (Removal removal : removals) {
+            if (!removal.drop().isEmpty() && !sink.accept(removal.drop().copy())) break;
+            if (!remove.test(removal)) break;
+            removed++;
+        }
+        return removed;
     }
 
     public static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {

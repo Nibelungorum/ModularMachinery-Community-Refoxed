@@ -4,24 +4,19 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Returns removed structure blocks to a player inventory, dropping remainders at the player's feet.
+ * Compatibility adapter for a player inventory backed structure storage.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class PlayerInventoryStructureItemSink implements StructureItemSink {
-    private final ServerPlayer player;
+    private final StructureItemSink sink;
 
     public PlayerInventoryStructureItemSink(ServerPlayer player) {
-        this.player = player;
+        this.sink = new PlayerInventoryStructureItemStorage(player).sink();
     }
 
     @Override
-    public void accept(ItemStack stack) {
-        if (stack.isEmpty()) return;
-        ItemStack remainder = stack.copy();
-        boolean inserted = player.getInventory().add(remainder);
-        if (!inserted || !remainder.isEmpty()) {
-            player.drop(remainder, false);
-        }
+    public boolean accept(ItemStack stack) {
+        return sink.accept(stack);
     }
 }
