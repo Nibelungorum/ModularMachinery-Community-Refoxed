@@ -13,6 +13,7 @@ import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -40,6 +41,8 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -155,18 +158,28 @@ public final class PreviewSceneRenderer {
     }
 
     private void compileTranslucent(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {
-        MeshData.SortState sortState = cache.translucentSortState();
-        if (sortState == null) {
+        List<PreviewSceneMeshCache.MeshPart> parts = cache.translucentParts();
+        if (parts.isEmpty()) {
             return;
         }
         long generation = requestedGeneration;
         PreviewSceneMeshCache.TranslucentOrder result = null;
         try {
             VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
-            ByteBufferBuilder.Result indexBuffer = sortState.buildSortedIndexBuffer(
-                    cache.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting);
-            if (indexBuffer == null) return;
-            result = new PreviewSceneMeshCache.TranslucentOrder(indexBuffer, cache.translucentIndexType());
+            List<ByteBufferBuilder.Result> indexBuffers = new ArrayList<>(parts.size());
+            List<VertexFormat.IndexType> indexTypes = new ArrayList<>(parts.size());
+            for (PreviewSceneMeshCache.MeshPart part : parts) {
+                MeshData.SortState sortState = part.translucentSortState();
+                ByteBufferBuilder.Result indexBuffer = sortState.buildSortedIndexBuffer(
+                        part.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting);
+                if (indexBuffer == null) {
+                    indexBuffers.forEach(ByteBufferBuilder.Result::close);
+                    return;
+                }
+                indexBuffers.add(indexBuffer);
+                indexTypes.add(sortState.indexType());
+            }
+            result = new PreviewSceneMeshCache.TranslucentOrder(indexBuffers, indexTypes);
             if (!compileState.accepts(generation, SceneCompileKind.TRANSLUCENT_ONLY)
                     || meshes.current() != cache || closed) return;
             meshes.publishTranslucent(result);

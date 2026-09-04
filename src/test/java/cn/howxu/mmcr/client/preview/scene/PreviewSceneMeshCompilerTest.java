@@ -32,17 +32,12 @@ class PreviewSceneMeshCompilerTest {
     void worker_count_uses_single_thread_for_small_previews() {
         assertThat(PreviewSceneMeshCompiler.workerCount(0)).isEqualTo(1);
         assertThat(PreviewSceneMeshCompiler.workerCount(10_000)).isEqualTo(1);
+        assertThat(PreviewSceneMeshCompiler.workerCount(80_000)).isEqualTo(1);
     }
 
     @Test
-    void worker_count_uses_three_threads_for_medium_previews() {
-        assertThat(PreviewSceneMeshCompiler.workerCount(10_001)).isEqualTo(3);
-        assertThat(PreviewSceneMeshCompiler.workerCount(40_000)).isEqualTo(3);
-    }
-
-    @Test
-    void worker_count_uses_six_threads_for_large_previews() {
-        assertThat(PreviewSceneMeshCompiler.workerCount(40_001)).isEqualTo(6);
+    void worker_count_uses_two_threads_above_large_preview_limit() {
+        assertThat(PreviewSceneMeshCompiler.workerCount(80_001)).isEqualTo(2);
     }
 
     @Test
@@ -58,11 +53,11 @@ class PreviewSceneMeshCompilerTest {
 
     @Test
     void preview_region_uses_full_brightness_without_querying_the_light_engine() {
-        PreviewLevel level = PreviewLevel.create(new StructurePreviewSchema(MMCR.id("preview_region_test"),
-                Map.of(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()), Map.of()),
-                () -> PreviewVisibility.ALL);
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("preview_region_test"),
+                Map.of(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()), Map.of());
+        PreviewLevel level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL);
 
-        var region = PreviewSceneMeshCompiler.previewRegion(level);
+        var region = PreviewSceneMeshCompiler.previewRegion(level, schema, PreviewVisibility.ALL);
 
         assertThat(region.getBrightness(LightLayer.BLOCK, BlockPos.ZERO)).isEqualTo(15);
         assertThat(region.getBrightness(LightLayer.SKY, BlockPos.ZERO)).isEqualTo(15);

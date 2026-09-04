@@ -34,6 +34,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
+import org.lwjgl.system.MemoryUtil;
 import java.util.OptionalInt;
 
 /**
@@ -90,11 +91,16 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
         }
     }
 
-    void replaceTranslucent(ByteBufferBuilder.Result sorted, VertexFormat.IndexType indexType) {
+    void replaceTranslucent(List<ByteBufferBuilder.Result> sorted, List<VertexFormat.IndexType> indexTypes) {
         RenderSystem.assertOnRenderThread();
         List<Layer> layerList = layers.get(ChunkSectionLayer.TRANSLUCENT);
         if (layerList == null || layerList.isEmpty()) return;
-        layerList.getFirst().replaceIndex(sorted, indexType);
+        if (layerList.size() != sorted.size() || sorted.size() != indexTypes.size()) {
+            throw new IllegalArgumentException("translucent layer count mismatch");
+        }
+        for (int index = 0; index < layerList.size(); index++) {
+            layerList.get(index).replaceIndex(sorted.get(index), indexTypes.get(index));
+        }
     }
 
     @Override
@@ -177,9 +183,8 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
             try {
                 ByteBuffer indexBytes = mesh.indexBuffer();
                 if (indexBytes == null) {
-                    var sequential = RenderSystem.getSequentialBuffer(drawState.mode());
-                    return new Layer(vertices, sequential.getBuffer(drawState.indexCount()), false,
-                            sequential.type(), drawState.indexCount());
+                    GpuBuffer indices = createSequentialIndexBuffer(drawState);
+                    return new Layer(vertices, indices, true, drawState.indexType(), drawState.indexCount());
                 }
                 GpuBuffer indices = RenderSystem.getDevice().createBuffer(
                         () -> "MMCR preview indices", GpuBuffer.USAGE_INDEX, indexBytes.duplicate());
@@ -187,6 +192,40 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
             } catch (RuntimeException exception) {
                 vertices.close();
                 throw exception;
+            }
+        }
+
+        private static GpuBuffer createSequentialIndexBuffer(MeshData.DrawState drawState) {
+            int indexCount = drawState.indexCount();
+            int indexBytes = indexCount * drawState.indexType().bytes;
+            try (ByteBufferBuilder builder = new ByteBufferBuilder(Math.max(1, indexBytes))) {
+                long pointer = builder.reserve(indexBytes);
+                for (int quad = 0; quad < indexCount / 6; quad++) {
+                    int vertex = quad * 4;
+                    writeIndex(pointer, quad * 6L, drawState.indexType(), vertex);
+                    writeIndex(pointer, quad * 6L + 1, drawState.indexType(), vertex + 1);
+                    writeIndex(pointer, quad * 6L + 2, drawState.indexType(), vertex + 2);
+                    writeIndex(pointer, quad * 6L + 3, drawState.indexType(), vertex + 2);
+                    writeIndex(pointer, quad * 6L + 4, drawState.indexType(), vertex + 3);
+                    writeIndex(pointer, quad * 6L + 5, drawState.indexType(), vertex);
+                }
+                ByteBufferBuilder.Result result = builder.build();
+                if (result == null) throw new IllegalStateException("preview mesh has no index data");
+                try {
+                    return RenderSystem.getDevice().createBuffer(
+                            () -> "MMCR preview indices", GpuBuffer.USAGE_INDEX, result.byteBuffer().duplicate());
+                } finally {
+                    result.close();
+                }
+            }
+        }
+
+        private static void writeIndex(long pointer, long index, VertexFormat.IndexType type, int value) {
+            long address = pointer + index * type.bytes;
+            if (type == VertexFormat.IndexType.SHORT) {
+                MemoryUtil.memPutShort(address, (short) value);
+            } else {
+                MemoryUtil.memPutInt(address, value);
             }
         }
 

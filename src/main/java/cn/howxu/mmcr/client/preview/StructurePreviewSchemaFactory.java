@@ -88,16 +88,19 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
         Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
         int levelRank = highestSharedLevelRank(stage);
-        for (var entry : rotatedPattern.pattern().entrySet()) {
+        Map<BlockPos, BlockPredicate> pattern = rotatedPattern.pattern();
+        boolean hasController = hasController(pattern);
+        Direction correctedFacing = hasController ? correctedControllerFacing(pattern) : null;
+        for (var entry : pattern.entrySet()) {
             BlockPos position = entry.getKey().immutable();
             Identifier levelSlot = rotatedLevelSlots.get(entry.getKey());
             BlockState state = levelSlot == null
                     ? entry.getValue() instanceof BlockPredicate.MachineCoupler
                             ? MultiblockPreviewPredicates.machineCouplerState().orElse(null)
                             : entry.getValue().preferredState().orElse(null)
-                    : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
+                            : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
-            states.put(position, orientState(position, state, facing, rotatedPattern.pattern()));
+            states.put(position, orientState(position, state, facing, hasController, correctedFacing));
             if (lazyCandidates) {
             } else {
                 List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
@@ -107,7 +110,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         }
         if (lazyCandidates) {
             return StructurePreviewSchema.withCandidateResolver(machineId, states, levelSlots,
-                    position -> candidates(rotatedPattern.pattern().get(position), rotatedModifierReplacements.get(position)));
+                    position -> candidates(pattern.get(position), rotatedModifierReplacements.get(position)));
         }
         return new StructurePreviewSchema(machineId, states, levelSlots, candidates, true);
     }
@@ -166,9 +169,8 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
     }
 
     private static BlockState orientState(BlockPos position, BlockState state, Direction facing,
-                                          Map<BlockPos, BlockPredicate> pattern) {
-        if (!hasController(pattern)) return state;
-        Direction correctedFacing = correctedControllerFacing(pattern);
+                                          boolean hasController, Direction correctedFacing) {
+        if (!hasController) return state;
         if (state.getBlock() instanceof MachineControllerBlock && position.equals(BlockPos.ZERO)) {
             if (facing.getAxis().isVertical()) {
                 return state.setValue(MachineControllerBlock.FACING, facing);
