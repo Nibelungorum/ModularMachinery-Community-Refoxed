@@ -211,6 +211,10 @@ class MachineControllerBlockEntityTest {
     @Test
     void data_storage_change_in_idle_recipe_batch_broadcasts_the_flushed_payload() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        Identifier machineId = MMCR.id("idle_data_storage_batch");
+        RuntimeTestFixtures.formStructureWithComponents(controller, new DynamicMachine(machineId,
+                "Idle Data Storage Batch", new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), MachineControllerSpec.defaultsFor(machineId)));
         MachineControllerRuntime runtime = runtimeOf(controller);
         DataStorage storage = new DataStorage();
         storage.set("mode", DataValue.of("idle"));
