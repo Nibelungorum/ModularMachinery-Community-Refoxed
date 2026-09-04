@@ -49,7 +49,7 @@ public final class MachineControllerRendererDispatcher
         if (!machineId.toString().equals(snapshot.machineId())) return;
 
         StructureSnapshot structure = snapshot.structure();
-        if (structure == null) return;
+        if (structure.configuredMachine() == null) return;
 
         BlockState blockState = controller.getBlockState();
         Direction facing = structure.facing();
@@ -72,12 +72,22 @@ public final class MachineControllerRendererDispatcher
 
     @Override
     public boolean shouldRenderOffScreen() {
-        return renderer.shouldRenderOffScreen();
+        try {
+            return renderer.shouldRenderOffScreen();
+        } catch (RuntimeException exception) {
+            MMCR.LOG.error("Controller renderer off-screen metadata failed for machine {}", machineId, exception);
+            return BlockEntityRenderer.super.shouldRenderOffScreen();
+        }
     }
 
     @Override
     public int getViewDistance() {
-        return renderer.getViewDistance();
+        try {
+            return renderer.getViewDistance();
+        } catch (RuntimeException exception) {
+            MMCR.LOG.error("Controller renderer view-distance metadata failed for machine {}", machineId, exception);
+            return BlockEntityRenderer.super.getViewDistance();
+        }
     }
 
     @Override
