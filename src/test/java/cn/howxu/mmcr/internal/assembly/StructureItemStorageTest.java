@@ -39,4 +39,11 @@ class StructureItemStorageTest {
 
         assertEquals(Items.STONE, storage.source().copyStacks().getFirst().getItem());
     }
+
+    @Test
+    void playerInventoryStorageAcceptsEmptyStacks() {
+        StructureItemStorage storage = PlayerInventoryStructureItemStorage.forStacks(new ArrayList<>());
+
+        assertTrue(storage.sink().accept(ItemStack.EMPTY));
+    }
 }

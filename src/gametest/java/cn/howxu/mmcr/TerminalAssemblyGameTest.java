@@ -4,12 +4,19 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
+import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemStorage;
+import cn.howxu.mmcr.internal.assembly.StructureItemStorageResolver;
+import cn.howxu.mmcr.internal.item.TerminalData;
+import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -109,6 +116,30 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(helper.getLevel().getBlockState(firstPos).isAir(), "First accepted block is removed");
         helper.assertTrue(!helper.getLevel().getBlockState(rejectedPos).isAir(), "Rejected drop keeps its block");
         helper.assertTrue(!helper.getLevel().getBlockState(laterPos).isAir(), "Later candidate remains after rejection");
+        helper.succeed();
+    }
+
+    public void storageResolverRejectsUnavailableContainerTargets(GameTestHelper helper) {
+        ServerPlayer player = servicePlayer(helper);
+        TerminalData containerMode = TerminalData.DEFAULT.withInventoryMode(TerminalInventoryMode.CONTAINER);
+        BlockPos unloadedPos = new BlockPos(1_000_000, 64, 1_000_000);
+        BlockPos noStoragePos = new BlockPos(1, 1, 1);
+        helper.setBlock(noStoragePos, Blocks.STONE.defaultBlockState());
+
+        helper.assertTrue(StructureItemStorageResolver.resolve(player, TerminalData.DEFAULT)
+                        .orElseThrow() instanceof PlayerInventoryStructureItemStorage,
+                "Inventory mode resolves player inventory storage");
+        helper.assertTrue(StructureItemStorageResolver.resolve(player, containerMode).isEmpty(),
+                "Container mode without a binding is unavailable");
+        helper.assertTrue(StructureItemStorageResolver.resolve(player, containerMode.withContainer(GlobalPos.of(
+                        ResourceKey.create(Registries.DIMENSION, MMCR.id("missing_dimension")), BlockPos.ZERO))).isEmpty(),
+                "Unknown container dimension is unavailable");
+        helper.assertTrue(StructureItemStorageResolver.resolve(player, containerMode.withContainer(GlobalPos.of(
+                        helper.getLevel().dimension(), unloadedPos))).isEmpty(),
+                "Unloaded container chunk is unavailable");
+        helper.assertTrue(StructureItemStorageResolver.resolve(player, containerMode.withContainer(GlobalPos.of(
+                        helper.getLevel().dimension(), noStoragePos))).isEmpty(),
+                "Container target without item storage capability is unavailable");
         helper.succeed();
     }
 
