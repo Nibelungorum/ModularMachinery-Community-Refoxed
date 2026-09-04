@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -36,15 +37,15 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                       ExecutionStatus failure, boolean structureAreaLoaded, boolean redstonePaused,
                                        int tick, int totalTick, long parallelism, long maxParallelism,
                                       boolean factoryControllerPresent, int factoryThreadCount,
-                                      int activeFactoryThreadCount, int parallelControllerCount,
-                                       long maxParallelControllerCount, long totalStoredEnergy,
-                                      long totalCapacityEnergy, FluidStack primaryFluid,
-                                      FluidStack primaryOutputFluid)
+                                       int activeFactoryThreadCount, int parallelControllerCount,
+                                        long maxParallelControllerCount, long totalStoredEnergy,
+                                       long totalCapacityEnergy, FluidStack primaryFluid,
+                                       FluidStack primaryOutputFluid, Map<String, DataValue> dataStorageValues)
         implements CustomPacketPayload {
     public static final int MAX_LEVEL_SNAPSHOTS = 1024;
     public static final int MAX_FAILURE_DETAIL_ENTRIES = 1024;
     public static final int MAX_INSTALLED_MODULES = 1024;
-    private static final int MAX_STRING_LENGTH = 256;
+    static final int MAX_STRING_LENGTH = 256;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     public PktMachineStatePayload {
@@ -57,6 +58,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         craftingMessage = craftingMessage == null ? "" : craftingMessage;
         primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
         primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
+        dataStorageValues = Map.copyOf(dataStorageValues == null ? Map.of() : dataStorageValues);
         if (installedModuleCount < 0 || installedModuleCount > MAX_INSTALLED_MODULES
                 || tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
                 || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
@@ -85,7 +87,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 machineState.factoryControllerPresent(), machineState.factoryThreadCount(),
                 machineState.activeFactoryThreadCount(), machineState.parallelControllerCount(),
                 machineState.maxParallelControllerCount(), machineState.totalStoredEnergy(),
-                machineState.totalCapacityEnergy(), machineState.primaryFluid(), machineState.primaryOutputFluid());
+                machineState.totalCapacityEnergy(), machineState.primaryFluid(), machineState.primaryOutputFluid(),
+                runtime.dataStorageValues());
     }
 
     public static boolean stateChanged(PktMachineStatePayload current, PktMachineStatePayload previous) {
@@ -118,7 +121,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || current.totalStoredEnergy != previous.totalStoredEnergy
                 || current.totalCapacityEnergy != previous.totalCapacityEnergy
                 || !FluidStack.matches(current.primaryFluid, previous.primaryFluid)
-                || !FluidStack.matches(current.primaryOutputFluid, previous.primaryOutputFluid);
+                || !FluidStack.matches(current.primaryOutputFluid, previous.primaryOutputFluid)
+                || !current.dataStorageValues.equals(previous.dataStorageValues);
     }
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));
@@ -163,6 +167,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeLong(payload.totalCapacityEnergy);
         FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryFluid);
         FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryOutputFluid);
+        DataValuePayloadCodec.writeMap(buf, payload.dataStorageValues);
     }
 
     private static PktMachineStatePayload read(RegistryFriendlyByteBuf buf) {
@@ -196,7 +201,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                  buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(),
                  buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readLong(),
                 buf.readLong(), buf.readLong(), FluidStack.OPTIONAL_STREAM_CODEC.decode(buf),
-                FluidStack.OPTIONAL_STREAM_CODEC.decode(buf));
+                 FluidStack.OPTIONAL_STREAM_CODEC.decode(buf), DataValuePayloadCodec.readMap(buf));
     }
 
     private static void writeFailure(RegistryFriendlyByteBuf buf, ExecutionStatus failure) {
@@ -238,7 +243,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                         machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole, installedModuleCount,
                         moduleConnected, connectedHostId.isEmpty() ? null : Identifier.parse(connectedHostId),
                         new CraftingStatus(craftingStatus, craftingMessage), failure, structureAreaLoaded,
-                        tick, totalTick, parallelism, maxParallelism);
+                        tick, totalTick, parallelism, maxParallelism, dataStorageValues);
             }
             if (menuMatches) {
                 MachineControllerMenu menu = (MachineControllerMenu) player.containerMenu;

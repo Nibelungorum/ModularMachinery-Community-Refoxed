@@ -149,7 +149,7 @@ class MachineControllerScreenTest {
                 CONTROLLER_POS, "mmcr:recipe", true, true, List.of(), true, "mmcr:locked_recipe",
                 machineId.toString(), 0, 0, false, "", CraftingStatus.Status.CRAFTING, "", FAILURE,
                 true, false, 4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
-                FluidStack.EMPTY, FluidStack.EMPTY));
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of()));
         return menu;
     }
 

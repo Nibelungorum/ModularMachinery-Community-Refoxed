@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -702,9 +703,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void applyClientState(String recipeName, boolean formed, boolean active, List<String> foundLevelIds,
                                  boolean recipeLocked, String lockedRecipeId, @Nullable Identifier machineId,
                                  int controllerRole, int installedModuleCount, boolean moduleConnected,
-                                 @Nullable Identifier connectedHostId, CraftingStatus craftingStatus,
-                                 @Nullable ExecutionStatus failure, boolean structureAreaLoaded,
-                                  int tick, int totalTick, long parallelism, long maxParallelism) {
+                                  @Nullable Identifier connectedHostId, CraftingStatus craftingStatus,
+                                  @Nullable ExecutionStatus failure, boolean structureAreaLoaded,
+                                   int tick, int totalTick, long parallelism, long maxParallelism,
+                                   Map<String, DataValue> dataStorageValues) {
         if (level == null || !level.isClientSide()) return;
         if (physicalFormed() != formed) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.FORMED, formed), 3);
@@ -730,6 +732,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishClientComponentState(levels, moduleStatus, installedModuleCount);
         this.clientRecipeLocked = recipeLocked;
         this.clientLockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
+        runtime.publishClientDataStorageState(dataStorageValues);
         runtime.publishCraftingState(clientRecipeId, craftingStatus, failure,
                 tick, totalTick, parallelism, maxParallelism);
     }

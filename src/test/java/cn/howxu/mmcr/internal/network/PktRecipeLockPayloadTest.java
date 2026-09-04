@@ -192,7 +192,7 @@ class PktRecipeLockPayloadTest {
         return new PktMachineStatePayload(new BlockPos(1, 2, 3), "", true, false,
                 List.of(), locked, recipeId, "", 0, 0, false, "", CraftingStatus.Status.IDLE, "", null,
                 true, false, 0, 0, 1, 1, false, 0, 0, 0, 0, 0, 0,
-                FluidStack.EMPTY, FluidStack.EMPTY);
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of());
     }
 
     private static TestServerLevel serverLevel(MachineControllerBlockEntity controller) throws Exception {
