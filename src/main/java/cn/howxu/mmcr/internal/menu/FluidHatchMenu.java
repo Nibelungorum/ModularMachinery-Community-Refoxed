@@ -85,7 +85,8 @@ public class FluidHatchMenu extends AbstractMachineMenu {
     }
 
     private FluidHatchBlockEntity resolvedOwner() {
-        return owner;
+        if (owner != null) return owner;
+        return level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null;
     }
 
     @Override

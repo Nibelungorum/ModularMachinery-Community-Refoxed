@@ -100,10 +100,13 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
                 || Math.floorMod(heartbeatCounter++ + worldPosition.asLong(), HEARTBEAT_INTERVAL_TICKS) != 0) return;
         GlobalPos currentOwner = owner;
         if (currentOwner != null && currentOwner.dimension().equals(level.dimension())
-                && level.hasChunkAt(currentOwner.pos())
-                && (!(level.getBlockEntity(currentOwner.pos()) instanceof MachineControllerBlockEntity controller)
-                || !controller.hasActiveNetworkInterface(worldPosition))) {
-            releaseOwner(currentOwner);
+                && level.hasChunkAt(currentOwner.pos())) {
+            BlockEntity ownerEntity = level.getBlockEntity(currentOwner.pos());
+            if (!(ownerEntity instanceof MachineControllerBlockEntity controller)
+                    || controller.currentStructureSnapshot().formed()
+                    && !controller.hasActiveNetworkInterface(worldPosition)) {
+                releaseOwner(currentOwner);
+            }
         }
         maintainControllerLink();
     }
@@ -158,9 +161,10 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
                         || serialized.getLong(SEQUENCE_KEY).isEmpty()) continue;
                 long sequence = serialized.getLong(SEQUENCE_KEY).orElseThrow();
                 if (sequence < 0L) continue;
-                addConnection(new Connection(endpoint,
-                        new MachineReference(Identifier.parse(machine), serialized.getLong(HASH_KEY).orElseThrow()),
-                        sequence));
+                MachineReference machineReference = new MachineReference(
+                        Identifier.parse(machine), serialized.getLong(HASH_KEY).orElseThrow());
+                connections.put(new ConnectionKey(endpoint, machineReference),
+                        new Connection(endpoint, machineReference, sequence));
             } catch (RuntimeException ignored) {
                 // Malformed connection records must not prevent the endpoint from loading.
             }

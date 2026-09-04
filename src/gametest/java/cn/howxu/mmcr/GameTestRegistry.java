@@ -65,6 +65,7 @@ public final class GameTestRegistry {
         register(event, "e2e_distillation_tower_partial_outputs", 160, helper -> new E2ERecipeRunGameTest().distillationTowerUnlocksPartialFluidOutputsByStage(helper));
         register(event, "energy_hatch_capability", 100, helper -> new EnergyHatchCapabilityGameTest().energyHatchStoresFE(helper));
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
+        register(event, "fluid_hatch_menu_storage", 100, helper -> new FluidHatchCapabilityGameTest().positionOnlyFluidHatchMenuResolvesStoredFluid(helper));
         register(event, "fluid_hatch_bucket_interaction", 100, helper -> new FluidHatchCapabilityGameTest().bucketInteractionRespectsHatchDirection(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
         register(event, "item_bus_non_stackable_limit", 100,

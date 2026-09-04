@@ -51,6 +51,8 @@ public final class StructureDirtyEvents {
     }
 
     public static void onChunkUnloaded(ChunkEvent.Unload event) {
+        if (event.getLevel() instanceof ServerLevel serverLevel
+                && serverLevel.getServer().isCurrentlySaving()) return;
         MachineControllerBlockEntity.markStructureChunkUnloaded(event.getLevel(), event.getChunk().getPos());
         if (event.getLevel() instanceof ServerLevel serverLevel) {
             ModuleConnectionCoordinator.enqueueCouplersInChunk(
@@ -59,6 +61,8 @@ public final class StructureDirtyEvents {
     }
 
     public static void onChunkLoaded(ChunkEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel serverLevel
+                && serverLevel.getServer().isCurrentlySaving()) return;
         MachineControllerBlockEntity.markStructureChunkDirty(event.getLevel(), event.getChunk().getPos());
         if (event.getLevel() instanceof ServerLevel serverLevel) {
             ModuleConnectionCoordinator.enqueueCouplersInChunk(

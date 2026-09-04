@@ -2,6 +2,7 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.authlib.GameProfile;
@@ -79,6 +80,19 @@ public class FluidHatchCapabilityGameTest {
             tx.commit();
         }
 
+        helper.succeed();
+    }
+
+    public void positionOnlyFluidHatchMenuResolvesStoredFluid(GameTestHelper helper) {
+        BlockPos inputPos = new BlockPos(0, 1, 0);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
+        FluidHatchBlockEntity hatch = helper.getBlockEntity(inputPos, FluidHatchBlockEntity.class);
+        hatch.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+
+        FluidHatchMenu menu = new FluidHatchMenu(0, servicePlayer(helper, false).getInventory(), hatch.getBlockPos());
+
+        helper.assertTrue(menu.storage() != null && !menu.storage().getResource(0).isEmpty(),
+                "A position-only fluid hatch menu resolves the fluid stored in its level block entity");
         helper.succeed();
     }
 

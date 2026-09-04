@@ -151,6 +151,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final int STRUCTURE_SAFETY_INTERVAL_TICKS = 120;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
+    private boolean chunkUnloaded;
 
     private @Nullable Runnable structureDiagnosticCallbackForTesting;
     private int matcherInvocationCountForTesting;
@@ -3400,7 +3401,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         structureScanBatchesOverrideForTesting = null;
         buildBlocksPerTickOverrideForTesting = null;
         super.setRemoved();
-        if (level != null && !level.isClientSide()) resetMachine(true, false);
+        if (level != null && !level.isClientSide() && !chunkUnloaded) resetMachine(true, false);
+    }
+
+    @Override
+    public void onChunkUnloaded() {
+        chunkUnloaded = true;
     }
 
     void bindDefaultMachine() {
