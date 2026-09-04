@@ -81,17 +81,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     };
 
-    private static final IIngredientRenderer<ItemStack> EMPTY_ITEM_RENDERER = new IIngredientRenderer<>() {
-        @Override
-        public void render(GuiGraphicsExtractor guiGraphics, ItemStack ingredient) {
-        }
-
-        @Override
-        public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
-            return List.of();
-        }
-    };
-
     private final Component title;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
@@ -158,14 +147,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrow(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        int index = 0;
-        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
-            Component label = levelLabel(requirement);
-            int slotX = levelSlotX(layout.durationTextX(), Minecraft.getInstance().font.width(label));
-            int slotY = layout.levelRequirementSlotY(recipe, index++);
-            builder.addDrawable(levelItemDrawable(requirement), slotX, slotY);
-        }
     }
 
     @Override
@@ -277,14 +258,34 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .filter(level -> level.priority() >= required.priority())
                 .sorted(Comparator.comparingInt(MachineLevel::priority)
                         .thenComparing(level -> level.id().toString()))
-                .map(MachineLevel::representative)
-                .map(MachineRecipeCategory::jeiItemStack)
+                .map(MachineRecipeCategory::levelDisplayStack)
+                .filter(stack -> !stack.isEmpty())
                 .toList();
+    }
+
+    private static ItemStack levelDisplayStack(MachineLevel level) {
+        ItemStack representative = level.representative();
+        if (!representative.isEmpty()) {
+            return new ItemStack(representative.getItem().builtInRegistryHolder(), 1, representative.getComponentsPatch());
+        }
+        return level.statePredicate().preferredState()
+                .map(state -> new ItemStack(state.getBlock().asItem()))
+                .map(MachineRecipeCategory::jeiItemStack)
+                .orElse(ItemStack.EMPTY);
     }
 
     static ItemStack levelCandidate(LevelRequirement requirement, long gameTime) {
         List<ItemStack> candidates = levelCandidates(requirement);
-        return candidates.isEmpty() ? ItemStack.EMPTY : candidates.get((int) ((gameTime / 60) % candidates.size()));
+        return candidates.isEmpty() ? ItemStack.EMPTY
+                : candidates.get((int) ((gameTime / LEVEL_ITEM_CYCLE_TICKS) % candidates.size()));
+    }
+
+    private static boolean isMinimumLevelCandidate(LevelRequirement requirement) {
+        List<ItemStack> candidates = levelCandidates(requirement);
+        if (candidates.isEmpty()) return false;
+        Minecraft minecraft = Minecraft.getInstance();
+        long gameTime = minecraft.level == null ? 0L : minecraft.level.getGameTime();
+        return ItemStack.isSameItemSameComponents(levelCandidate(requirement, gameTime), candidates.getFirst());
     }
 
     static Component minimumLevelTooltip(LevelRequirement requirement) {
@@ -302,12 +303,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             int slotY = layout.levelRequirementSlotY(recipe, index++);
             IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slotX, slotY);
             slot.setStandardSlotBackground();
-            slot.setCustomRenderer(VanillaTypes.ITEM_STACK, EMPTY_ITEM_RENDERER);
+            slot.setCustomRenderer(VanillaTypes.ITEM_STACK, levelItemRenderer(requirement));
             List<ItemStack> candidates = levelCandidates(requirement);
             if (!candidates.isEmpty()) {
                 slot.add(candidates.getFirst());
             }
-            slot.addRichTooltipCallback((view, tooltip) -> tooltip.add(minimumLevelTooltip(requirement)));
+            slot.addRichTooltipCallback((view, tooltip) -> {
+                if (isMinimumLevelCandidate(requirement)) {
+                    tooltip.add(minimumLevelTooltip(requirement));
+                }
+            });
         }
     }
 
@@ -315,23 +320,27 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return textX + labelWidth + LEVEL_LABEL_SLOT_GAP;
     }
 
-    private static IDrawable levelItemDrawable(LevelRequirement requirement) {
-        return new IDrawable() {
+    private static IIngredientRenderer<ItemStack> levelItemRenderer(LevelRequirement requirement) {
+        return new IIngredientRenderer<>() {
             @Override
-            public int getWidth() {
-                return JEI_SLOT_SIZE;
-            }
-
-            @Override
-            public int getHeight() {
-                return JEI_SLOT_SIZE;
-            }
-
-            @Override
-            public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+            public void render(GuiGraphicsExtractor guiGraphics, ItemStack ingredient) {
                 Minecraft minecraft = Minecraft.getInstance();
                 long gameTime = minecraft.level == null ? 0L : minecraft.level.getGameTime();
-                guiGraphics.item(levelCandidate(requirement, gameTime), xOffset, yOffset);
+                ItemStack candidate = levelCandidate(requirement, gameTime);
+                if (!candidate.isEmpty()) {
+                    guiGraphics.fakeItem(candidate, 0, 0);
+                    guiGraphics.itemDecorations(minecraft.font, candidate, 0, 0);
+                }
+            }
+
+            @Override
+            public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
+                Minecraft minecraft = Minecraft.getInstance();
+                ItemStack candidate = levelCandidate(requirement,
+                        minecraft.level == null ? 0L : minecraft.level.getGameTime());
+                return candidate.isEmpty()
+                        ? List.of()
+                        : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
             }
         };
     }
@@ -341,7 +350,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         int index = 0;
         for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
             int slotY = layout.levelRequirementSlotY(recipe, index++);
-            int labelY = slotY + (JEI_SLOT_SIZE - Minecraft.getInstance().font.lineHeight) / 2;
+            int labelY = slotY + (JEI_SLOT_SIZE - Minecraft.getInstance().font.lineHeight) / 2 + 2;
             guiGraphics.text(Minecraft.getInstance().font, levelLabel(requirement), textX,
                     (int) (labelY / TEXT_SCALE), 0xFF404040, false);
         }

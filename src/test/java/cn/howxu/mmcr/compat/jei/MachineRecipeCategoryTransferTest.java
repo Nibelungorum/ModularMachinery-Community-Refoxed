@@ -12,7 +12,6 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
-import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.HolderSet;
@@ -20,7 +19,6 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.FormattedText;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -126,8 +124,9 @@ class MachineRecipeCategoryTransferTest {
             assertThat(slot.standardBackground()).isTrue();
             assertThat(slot.itemAdds()).singleElement()
                     .extracting(ItemStack::getItem).isEqualTo(Blocks.IRON_BLOCK.asItem());
-            assertThat(tooltipLines(slot.tooltipCallbacks().getFirst()))
-                    .containsExactly(MachineRecipeCategory.minimumLevelTooltip(requirement));
+            assertThat(slot.tooltipCallbacks()).hasSize(1);
+            assertThat(MachineRecipeCategory.minimumLevelTooltip(requirement).getString())
+                    .isEqualTo("jei.mmcr.machine_recipe.minimum_level");
         });
     }
 
@@ -162,21 +161,6 @@ class MachineRecipeCategoryTransferTest {
                 "addTransferSlots", IRecipeLayoutBuilder.class, MachineRecipeDisplay.class);
         method.setAccessible(true);
         method.invoke(null, builder, display);
-    }
-
-    private static List<FormattedText> tooltipLines(IRecipeSlotRichTooltipCallback callback) {
-        List<FormattedText> lines = new ArrayList<>();
-        ITooltipBuilder tooltip = (ITooltipBuilder) Proxy.newProxyInstance(
-                MachineRecipeCategoryTransferTest.class.getClassLoader(), new Class<?>[]{ITooltipBuilder.class},
-                (proxy, method, arguments) -> {
-                    if (method.getName().equals("add") && arguments.length == 1
-                            && arguments[0] instanceof FormattedText text) {
-                        lines.add(text);
-                    }
-                    return null;
-                });
-        callback.onRichTooltip(null, tooltip);
-        return lines;
     }
 
     private static void registerLevel(Identifier id, Identifier typeId, int priority, Block block) {
