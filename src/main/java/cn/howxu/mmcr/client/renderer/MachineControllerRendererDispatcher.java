@@ -5,7 +5,6 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.publicapi.render.ControllerRenderContext;
 import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
-import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -48,7 +47,7 @@ public final class MachineControllerRendererDispatcher
         ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
         if (!machineId.toString().equals(snapshot.machineId())) return;
 
-        StructureSnapshot structure = snapshot.structure();
+        var structure = snapshot.structure();
         if (structure.configuredMachine() == null) return;
 
         BlockState blockState = controller.getBlockState();
@@ -58,8 +57,16 @@ public final class MachineControllerRendererDispatcher
         }
 
         state.context = new ControllerRenderContext(
-                controller.getLevel(), controller.getBlockPos(), machineId, facing,
-                structure, snapshot.crafting(), snapshot.dataStorageValues(), state.lightCoords, partialTick);
+                controller.getBlockPos(), machineId, facing,
+                new ControllerRenderContext.StructureView(
+                        structure.formed(), structure.structureAreaLoaded(), structure.matchedStage()),
+                new ControllerRenderContext.CraftingView(
+                        snapshot.crafting().recipeId(), snapshot.crafting().status().getStatus(),
+                        snapshot.crafting().status().getUnlocMessage(), snapshot.crafting().failure(),
+                        snapshot.crafting().tick(), snapshot.crafting().totalTick(),
+                        snapshot.crafting().parallelism(), snapshot.crafting().maxParallelism(),
+                        snapshot.crafting().recipeLocked(), snapshot.crafting().lockedRecipeId()),
+                snapshot.dataStorageValues(), state.lightCoords, partialTick);
     }
 
     @Override

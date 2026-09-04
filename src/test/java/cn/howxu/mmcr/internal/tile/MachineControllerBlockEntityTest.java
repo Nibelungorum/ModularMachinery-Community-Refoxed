@@ -40,6 +40,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -205,6 +206,34 @@ class MachineControllerBlockEntityTest {
         runtime.publishDataStorages(Map.of());
 
         assertThat(runtime.snapshot().dataStorageValues()).isEmpty();
+    }
+
+    @Test
+    void data_storage_change_in_idle_recipe_batch_broadcasts_the_flushed_payload() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        DataStorage storage = new DataStorage();
+        storage.set("mode", DataValue.of("idle"));
+        runtime.publishDataStorages(Map.of(BlockPos.ZERO, storage));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer player = testPlayer(level, controller.getBlockPos());
+        setPlayers(level, List.of(player));
+        controller.onDataStorageChanged(storage);
+
+        runtime.beginUpdateBatch();
+        try {
+            storage.set("mode", DataValue.of("changed"));
+            controller.onDataStorageChanged(storage);
+            assertThat(machineStatePackets(player)).hasSize(1);
+        } finally {
+            runtime.endUpdateBatch();
+        }
+
+        assertThat(controller.runtimeSnapshot().crafting().status().getStatus())
+                .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(machineStatePackets(player)).hasSize(2);
+        assertThat(machineStatePackets(player).getLast().dataStorageValues())
+                .containsEntry("mode", DataValue.of("changed"));
     }
 
     @Test
@@ -1359,6 +1388,15 @@ class MachineControllerBlockEntityTest {
                 .map(packet -> ((ClientboundCustomPayloadPacket) packet).payload())
                 .filter(PktControllerScreenTextPayload.class::isInstance)
                 .map(PktControllerScreenTextPayload.class::cast)
+                .toList();
+    }
+
+    private static List<PktMachineStatePayload> machineStatePackets(ServerPlayer player) {
+        return ((TestConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket)
+                .map(packet -> ((ClientboundCustomPayloadPacket) packet).payload())
+                .filter(PktMachineStatePayload.class::isInstance)
+                .map(PktMachineStatePayload.class::cast)
                 .toList();
     }
 

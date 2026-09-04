@@ -73,7 +73,13 @@ class MachineControllerRendererDispatcherTest {
     void configuredUnformedMachineStillInvokesRenderer() {
         Identifier machine = MMCR.id("test_cube");
         AtomicBoolean invoked = new AtomicBoolean();
-        ControllerRenderer renderer = (context, poseStack, collector, camera) -> invoked.set(true);
+        ControllerRenderer renderer = (context, poseStack, collector, camera) -> {
+            invoked.set(true);
+            assertFalse(context.structure().formed());
+            assertTrue(context.structure().structureAreaLoaded());
+            assertEquals(0, context.structure().matchedStage());
+            assertEquals(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE, context.crafting().status());
+        };
         MachineControllerRendererDispatcher dispatcher =
                 new MachineControllerRendererDispatcher(machine, renderer);
         MachineControllerBlockEntity controller = new SnapshotController(machine,

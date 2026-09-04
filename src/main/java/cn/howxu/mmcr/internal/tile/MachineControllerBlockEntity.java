@@ -2722,7 +2722,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     void onDataStorageChanged(DataStorage storage) {
         if (level == null || level.isClientSide()) return;
         runtime.onDataStorageChanged(storage);
-        broadcastStateIfChanged();
+        if (runtime.updateBatchActive()) {
+            runtimeStateBroadcastPending = true;
+        } else {
+            broadcastStateIfChanged();
+        }
     }
 
     private void refreshCriticalStructureChunks(BlockArray pattern, @Nullable CompiledMachinePattern compiled,
