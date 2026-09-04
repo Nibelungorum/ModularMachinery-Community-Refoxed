@@ -158,6 +158,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrow(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        int index = 0;
+        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
+            Component label = levelLabel(requirement);
+            int slotX = levelSlotX(layout.durationTextX(), Minecraft.getInstance().font.width(label));
+            int slotY = layout.levelRequirementSlotY(recipe, index++);
+            builder.addDrawable(levelItemDrawable(requirement), slotX, slotY);
+        }
     }
 
     @Override
@@ -195,7 +203,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         drawLevelRequirementLabels(recipe, layout, guiGraphics, textX);
         y = layout.smartInterfaceTextY(recipe);
         guiGraphics.pose().popMatrix();
-        drawLevelRequirementItems(recipe, layout, gameTime, guiGraphics);
         guiGraphics.pose().pushMatrix();
         guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE);
         textX = (int) (layout.durationTextX() / SMART_INTERFACE_TEXT_SCALE);
@@ -304,19 +311,29 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static void drawLevelRequirementItems(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-            long gameTime, GuiGraphicsExtractor guiGraphics) {
-        int index = 0;
-        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
-            Component label = levelLabel(requirement);
-            int slotX = levelSlotX(layout.durationTextX(), Minecraft.getInstance().font.width(label));
-            int slotY = layout.levelRequirementSlotY(recipe, index++);
-            guiGraphics.item(levelCandidate(requirement, gameTime), slotX, slotY);
-        }
-    }
-
     private static int levelSlotX(int textX, int labelWidth) {
         return textX + labelWidth + LEVEL_LABEL_SLOT_GAP;
+    }
+
+    private static IDrawable levelItemDrawable(LevelRequirement requirement) {
+        return new IDrawable() {
+            @Override
+            public int getWidth() {
+                return JEI_SLOT_SIZE;
+            }
+
+            @Override
+            public int getHeight() {
+                return JEI_SLOT_SIZE;
+            }
+
+            @Override
+            public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+                Minecraft minecraft = Minecraft.getInstance();
+                long gameTime = minecraft.level == null ? 0L : minecraft.level.getGameTime();
+                guiGraphics.item(levelCandidate(requirement, gameTime), xOffset, yOffset);
+            }
+        };
     }
 
     private static void drawLevelRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
