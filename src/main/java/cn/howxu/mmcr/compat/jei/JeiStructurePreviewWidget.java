@@ -336,6 +336,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public void getTooltip(ITooltipBuilder tooltip, double mouseX, double mouseY) {
+        if (preview == null) return;
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
             String[] keys = {"previous_layer", "next_layer", "all_layers", "reset", "next_level"};

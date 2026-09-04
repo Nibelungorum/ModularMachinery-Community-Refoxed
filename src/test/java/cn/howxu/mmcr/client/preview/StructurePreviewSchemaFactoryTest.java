@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 
 import java.util.LinkedHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.minecraft.world.level.block.Block;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -298,6 +299,27 @@ class StructurePreviewSchemaFactoryTest {
         assertThat(schema.candidatesAt(BlockPos.ZERO)).extracting(ItemStack::getItem).containsExactlyInAnyOrder(
                 ModBlocks.BLOCKS.get("item_input_bus").get().asItem(),
                 ModBlocks.BLOCKS.get("item_input_bus_tiny").get().asItem());
+    }
+
+    @Test
+    void factory_resolves_deferred_candidates_only_when_the_position_is_selected() {
+        AtomicInteger resolutions = new AtomicInteger();
+        BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPredicate.DeferredBlock(() -> {
+                    resolutions.incrementAndGet();
+                    return Blocks.GOLD_BLOCK;
+                })));
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(BlockPos.ZERO, predicate)),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage,
+                MMCR.id("lazy_deferred_candidates"), StructurePreviewVariantSelection.defaults());
+
+        int resolutionsBeforeSelection = resolutions.get();
+        assertThat(schema.candidatesAt(BlockPos.ZERO)).extracting(ItemStack::getItem).containsExactlyInAnyOrder(
+                Blocks.IRON_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
+        assertThat(resolutions).hasValue(resolutionsBeforeSelection + 1);
     }
 
     @Test

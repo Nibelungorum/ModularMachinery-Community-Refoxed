@@ -60,8 +60,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
     private StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId,
             StructurePreviewVariantSelection selection, Direction facing) {
         Objects.requireNonNull(machineId, "machineId");
-        StructurePreviewSchema resolved = resolve(stage, selection, facing);
-        return new StructurePreviewSchema(machineId, resolved.states(), resolved.levelSlots(), resolved.previewCandidates(), true);
+        return resolve(stage, machineId, selection, facing, true);
     }
 
     @Override
@@ -71,6 +70,11 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
 
     private StructurePreviewSchema resolve(MachineStructureStage stage, StructurePreviewVariantSelection selection,
             Direction facing) {
+        return resolve(stage, RESOLVED_STAGE_ID, selection, facing, false);
+    }
+
+    private StructurePreviewSchema resolve(MachineStructureStage stage, Identifier machineId,
+            StructurePreviewVariantSelection selection, Direction facing, boolean lazyCandidates) {
         Objects.requireNonNull(stage, "stage");
         Objects.requireNonNull(selection, "selection");
         BlockArray rotatedPattern = BlockArrayCache.get(stage.pattern(), facing);
@@ -94,11 +98,18 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                     : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
             states.put(position, orientState(position, state, facing, rotatedPattern.pattern()));
-            List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
-            if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
+            if (lazyCandidates) {
+            } else {
+                List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
+                if (!positionCandidates.isEmpty()) candidates.put(position, positionCandidates);
+            }
             if (levelSlot != null) levelSlots.put(position, levelSlot);
         }
-        return new StructurePreviewSchema(RESOLVED_STAGE_ID, states, levelSlots, candidates, true);
+        if (lazyCandidates) {
+            return StructurePreviewSchema.withCandidateResolver(machineId, states, levelSlots,
+                    position -> candidates(rotatedPattern.pattern().get(position), rotatedModifierReplacements.get(position)));
+        }
+        return new StructurePreviewSchema(machineId, states, levelSlots, candidates, true);
     }
 
     private static int highestSharedLevelRank(MachineStructureStage stage) {

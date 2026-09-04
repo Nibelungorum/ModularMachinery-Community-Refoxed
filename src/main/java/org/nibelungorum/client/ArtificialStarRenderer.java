@@ -52,7 +52,7 @@ public final class ArtificialStarRenderer implements ControllerRenderer {
         if (!context.structure().formed() || Minecraft.getInstance().level == null) return;
 
         double x = 0.5;
-        double y = 36.5;
+        double y = 42.5;
         double z = 0.5;
         if (context.facing() != null) {
             switch (context.facing()) {

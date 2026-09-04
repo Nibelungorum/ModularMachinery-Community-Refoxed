@@ -4,13 +4,16 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -89,5 +92,25 @@ class StructurePreviewSchemaTest {
         assertThat(schema.max()).isEqualTo(BlockPos.ZERO);
         assertThat(schema.center()).containsExactly(0.5F, 0.5F, 0.5F);
         assertThat(schema.layers()).isEmpty();
+    }
+
+    @Test
+    void schema_resolves_candidates_only_for_the_requested_position() {
+        AtomicInteger resolutions = new AtomicInteger();
+        BlockPos first = BlockPos.ZERO;
+        BlockPos second = new BlockPos(1, 0, 0);
+        StructurePreviewSchema schema = StructurePreviewSchema.withCandidateResolver(MMCR.id("lazy_candidates"),
+                Map.of(first, Blocks.IRON_BLOCK.defaultBlockState(), second, Blocks.GOLD_BLOCK.defaultBlockState()), Map.of(),
+                position -> {
+                    resolutions.incrementAndGet();
+                    return List.of(new StructurePreviewSchema.Candidate(new ItemStack(
+                            position.equals(first) ? Blocks.IRON_BLOCK : Blocks.GOLD_BLOCK), false));
+                });
+
+        assertThat(resolutions).hasValue(0);
+        assertThat(schema.candidatesAt(first)).extracting(ItemStack::getItem).containsExactly(Blocks.IRON_BLOCK.asItem());
+        assertThat(schema.candidatesAt(first)).extracting(ItemStack::getItem).containsExactly(Blocks.IRON_BLOCK.asItem());
+        assertThat(schema.candidatesAt(second)).extracting(ItemStack::getItem).containsExactly(Blocks.GOLD_BLOCK.asItem());
+        assertThat(resolutions).hasValue(2);
     }
 }

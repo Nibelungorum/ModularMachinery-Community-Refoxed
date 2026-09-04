@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.stream.Collectors;
 
@@ -24,6 +25,7 @@ public final class StructurePreviewSchema {
     private final Map<BlockPos, BlockState> states;
     private final Map<BlockPos, Identifier> levelSlots;
     private final Map<BlockPos, List<Candidate>> candidates;
+    private final CandidateResolver candidateResolver;
     private final BlockPos min;
     private final BlockPos max;
     private final List<Float> center;
@@ -43,10 +45,17 @@ public final class StructurePreviewSchema {
 
     public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates, boolean markedCandidates) {
+        this(machineId, states, levelSlots, candidates, null);
+    }
+
+    private StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates,
+            CandidateResolver candidateResolver) {
         this.machineId = Objects.requireNonNull(machineId, "machineId");
         this.states = copyPositions(states);
         this.levelSlots = copyPositions(levelSlots);
-        this.candidates = copyCandidates(candidates);
+        this.candidates = new ConcurrentHashMap<>(copyCandidates(candidates));
+        this.candidateResolver = candidateResolver;
         if (!this.states.keySet().containsAll(this.levelSlots.keySet())) {
             throw new IllegalArgumentException("level slot position is not in preview schema");
         }
@@ -113,11 +122,22 @@ public final class StructurePreviewSchema {
     }
 
     public List<Candidate> previewCandidatesAt(BlockPos position) {
-        return candidates.getOrDefault(position, List.of()).stream().map(Candidate::copy).toList();
+        List<Candidate> resolved = candidates.get(position);
+        if (resolved == null && candidateResolver != null && states.containsKey(position)) {
+            resolved = candidates.computeIfAbsent(position.immutable(), this::resolveCandidates);
+        }
+        return (resolved == null ? List.<Candidate>of() : resolved).stream().map(Candidate::copy).toList();
     }
 
     public Map<BlockPos, List<Candidate>> previewCandidates() {
+        states.keySet().forEach(position -> candidates.computeIfAbsent(position, this::resolveCandidates));
         return copyCandidates(candidates);
+    }
+
+    static StructurePreviewSchema withCandidateResolver(Identifier machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, Identifier> levelSlots, CandidateResolver candidateResolver) {
+        return new StructurePreviewSchema(machineId, states, levelSlots, Map.of(),
+                Objects.requireNonNull(candidateResolver, "candidateResolver"));
     }
 
     public BlockPos min() {
@@ -145,6 +165,10 @@ public final class StructurePreviewSchema {
         return Collections.unmodifiableMap(copy);
     }
 
+    private List<Candidate> resolveCandidates(BlockPos position) {
+        return List.copyOf(candidateResolver.resolve(position).stream().map(Candidate::copy).toList());
+    }
+
     private static Map<BlockPos, List<Candidate>> copyCandidates(Map<BlockPos, List<Candidate>> source) {
         Map<BlockPos, List<Candidate>> copy = new LinkedHashMap<>();
         source.forEach((position, stacks) -> copy.put(position.immutable(),
@@ -160,6 +184,11 @@ public final class StructurePreviewSchema {
         private Candidate copy() {
             return new Candidate(stack, modifier);
         }
+    }
+
+    @FunctionalInterface
+    interface CandidateResolver {
+        List<Candidate> resolve(BlockPos position);
     }
 
 }

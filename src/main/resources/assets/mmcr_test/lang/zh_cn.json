@@ -37,5 +37,9 @@
     "mmcr.smart_interface.type.conversation": "转化率",
     "mmcr.smart_interface.type.conversation.description": "[0.0,1.0] something magic",
     "mmcr.smart_interface.type.mode": "模式",
-    "mmcr.smart_interface.type.mode.description": "[1,2,3] 控制输出"
+    "mmcr.smart_interface.type.mode.description": "[1,2,3] 控制输出",
+
+    "block.mmcr.artificial_star_controller": "人造恒星",
+    "item.mmcr.artificial_star_controller": "人造恒星",
+    "machine.mmcr.artificial_star": "人造恒星"
 }

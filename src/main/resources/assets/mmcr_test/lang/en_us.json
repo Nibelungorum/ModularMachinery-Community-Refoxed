@@ -38,5 +38,9 @@
     "mmcr.smart_interface.type.conversation": "Conversion",
     "mmcr.smart_interface.type.conversation.description": "[0.0,1.0] something magic",
     "mmcr.smart_interface.type.mode": "Mode",
-    "mmcr.smart_interface.type.mode.description": "[1,2,3] control output"
+    "mmcr.smart_interface.type.mode.description": "[1,2,3] control output",
+
+    "block.mmcr.artificial_star_controller": "Artificial Star Controller",
+    "item.mmcr.artificial_star_controller": "Artificial Star Controller",
+    "machine.mmcr.artificial_star": "Artificial Star"
 }
