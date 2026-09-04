@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
@@ -182,6 +184,27 @@ class MachineControllerBlockEntityTest {
         assertThat(itemDescription.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(itemDescription.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(itemDescription.overlayTexture()).isEqualTo(MMCR.id("block/overlay_data_storage"));
+    }
+
+    @Test
+    void replacing_or_clearing_primary_data_storage_refreshes_snapshot() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        DataStorage initial = new DataStorage();
+        initial.set("mode", DataValue.of("initial"));
+        runtime.publishDataStorages(Map.of(BlockPos.ZERO, initial));
+
+        assertThat(runtime.snapshot().dataStorageValues()).containsEntry("mode", DataValue.of("initial"));
+
+        DataStorage replacement = new DataStorage();
+        replacement.set("mode", DataValue.of("replacement"));
+        runtime.publishDataStorages(Map.of(BlockPos.ZERO, replacement));
+
+        assertThat(runtime.snapshot().dataStorageValues()).containsEntry("mode", DataValue.of("replacement"));
+
+        runtime.publishDataStorages(Map.of());
+
+        assertThat(runtime.snapshot().dataStorageValues()).isEmpty();
     }
 
     @Test

@@ -571,7 +571,12 @@ public final class MachineControllerRuntime {
 
     void publishDataStorages(Map<BlockPos, DataStorage> nextDataStorages) {
         dataStorages = Map.copyOf(nextDataStorages == null ? Map.of() : nextDataStorages);
-        primaryDataStorage = dataStorages.isEmpty() ? null : dataStorages.values().iterator().next();
+        DataStorage nextPrimaryDataStorage = dataStorages.isEmpty() ? null : dataStorages.values().iterator().next();
+        if (primaryDataStorage != nextPrimaryDataStorage) {
+            dataStorageStateEpoch++;
+            snapshotDirty = true;
+        }
+        primaryDataStorage = nextPrimaryDataStorage;
         publishSnapshot();
     }
 
