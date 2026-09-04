@@ -1,5 +1,7 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRendersEvent;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
 import cn.howxu.mmcr.client.gui.ExtendedCombinedScreen;
@@ -19,8 +21,11 @@ import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.client.model.RuntimeMachineResourcePack;
+import cn.howxu.mmcr.client.renderer.MachineControllerRendererDispatcher;
 import cn.howxu.mmcr.client.sound.MachineSoundManager;
 import cn.howxu.mmcr.client.preview.StructurePreviewReloadListener;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
@@ -29,6 +34,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
@@ -36,6 +42,7 @@ import net.neoforged.neoforge.event.AddPackFindersEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 
 @Mod(value = MMCR.MODID, dist = Dist.CLIENT)
 public class Client {
@@ -45,6 +52,7 @@ public class Client {
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerItemModels);
+        modBus.addListener(Client::registerMachineRenderers);
         modBus.addListener(Client::registerRuntimeResourcePack);
         modBus.addListener(Client::registerPreviewReloadListener);
         NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
@@ -104,6 +112,18 @@ public class Client {
 
     private static void registerItemModels(RegisterItemModelsEvent event) {
         RuntimeMachineModelRegistry.registerItemModels(event);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void registerMachineRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        MMCRMachineRendersEvent registrations = new MMCRMachineRendersEvent(
+                MachineDefinitions.effectiveSnapshot().keySet());
+        NeoForge.EVENT_BUS.post(registrations);
+        registrations.freeze();
+        registrations.renderers().forEach((machineId, renderer) ->
+                event.registerBlockEntityRenderer(
+                        (BlockEntityType<MachineControllerBlockEntity>) (BlockEntityType<?>) ModBlockEntities.controllerFor(machineId).get(),
+                        context -> new MachineControllerRendererDispatcher(machineId, renderer)));
     }
 
     private static void registerRuntimeResourcePack(AddPackFindersEvent event) {
