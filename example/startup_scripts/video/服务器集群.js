@@ -1,50 +1,41 @@
 MMCREvents.startup(event => {
     const api = MMCR.getAPI()
     const RecipeIO = api.recipeIO()
-
     const ExplosionInteraction = Java.loadClass("net.minecraft.world.level.Level$ExplosionInteraction")
-
-    const PRODUCER_ID = "mmcr_kubejs:kubejs_network_producer_machine"
-    const CENTER_ID = "mmcr_kubejs:kubejs_network_center_machine"
-    const REPORT_POWER = "mmcr_kubejs:report_power"
-
+    const PRODUCER_ID = "kubejs:server"
+    const CENTER_ID = "kubejs:center"
+    const REPORT_POWER = "kubejs:report_power"
     const waterRequirement = api.fluidInputRequirement("minecraft:water", 100)
 
     const machine_producer = event
         .createMachine(PRODUCER_ID)
-        .displayNameKey("machine.mmcr_kubejs.kubejs_network_producer_machine")
-        .appearance("minecraft:white_wool")
-        .networkInterface(1, 1) // allow 1 network port and max 1 connections
-        .allowNetworkMachine(CENTER_ID) // allow connect to network center machine
+        .displayNameKey("machine.kuebjs.server")
+        .appearance("mekanism:block_tin")
+        .networkInterface(1, 1)
+        .allowNetworkMachine(CENTER_ID)
 
     machine_producer
         .tickBehavior(behavior => behavior
             .serverTick(ctx => {
                 let storage = ctx.dataStorage()
                 if (storage == null) return
-
                 let power = Number(storage.get("power").flatMap(v => v.asDouble()).orElse(0))
                 let dry_sec = Number(storage.get("dry_sec").flatMap(v => v.asDouble()).orElse(0))
                 let feOk = true
-
                 let energyPlan = ctx.ioPlan()
                 energyPlan.addInput(api.energyRequirement(RecipeIO.INPUT, 100))
                 let energySim = energyPlan.simulate()
                 if (!energySim.energySatisfied() || !energyPlan.commit().successful()) {
                     feOk = false
                 }
-                // Skip downstream updates while the structure is unpowered so the UI shows the
-                // last computed power and the dry countdown keeps its persisted value.
                 let powerPublished = power
                 let dryPublished = dry_sec
                 let shouldReport = false
-
                 if (ctx.isDue(20)) {
                     let waterPlan = ctx.ioPlan()
                     waterPlan.addInput(waterRequirement)
                     let waterSim = waterPlan.simulate()
                     let hasWater = waterSim.inputsSatisfied()
-
                     if (feOk && hasWater && waterPlan.commit().successful()) {
                         power = 20
                         dry_sec = 0
@@ -55,31 +46,28 @@ MMCREvents.startup(event => {
                             hasWater = false
                         }
                     }
-
                     storage.set("has_water", api.dataValue(hasWater))
                     storage.set("power", api.dataValue(power))
                     storage.set("dry_sec", api.dataValue(dry_sec))
                     powerPublished = power
                     dryPublished = dry_sec
-
                     if (dry_sec >= 30) {
                         let level = ctx.level()
                         let pos = ctx.controllerPos()
-                        level.explode(
-                            null,
-                            pos.getX() + 0.5,
-                            pos.getY() + 0.5,
-                            pos.getZ() + 0.5,
-                            4.0,
-                            false,
-                            ExplosionInteraction.BLOCK
-                        )
+                        // level.explode(
+                        //     null,
+                        //     pos.getX() + 0.5,
+                        //     pos.getY() + 0.5,
+                        //     pos.getZ() + 0.5,
+                        //     4.0,
+                        //     false,
+                        //     ExplosionInteraction.BLOCK
+                        // )
+                        // dry_sec = 0
                         return
                     }
-
                     shouldReport = feOk
                 }
-
                 if (shouldReport) {
                     let interfaces = api.networkInterfaces(ctx)
                     let iface = interfaces != null && !interfaces.isEmpty() ? interfaces.get(0) : null
@@ -93,26 +81,37 @@ MMCREvents.startup(event => {
                         }
                     }
                 }
+                let powerId = api.id("kubejs:producer_power")
+                let waterId = api.id("kubejs:producer_water")
+                let feId = api.id("kubejs:producer_fe")
+                ctx.screenText().append(api.screenScope().OPERATION, powerId, Text.literal("算力产出: " + powerPublished + " FLOPS"))
 
-                let powerId = api.id("mmcr_kubejs:producer_power")
-                let waterId = api.id("mmcr_kubejs:producer_water")
-                let feId = api.id("mmcr_kubejs:producer_fe")
-                let hasWater = storage.get("has_water").flatMap(v => v.asBoolean()).orElse(false)
-
-                ctx.screenText().append(api.screenScope().OPERATION, powerId, Text.literal("Computing Power: " + powerPublished + " tfps"))
-                ctx.screenText().append(api.screenScope().OPERATION, waterId, Text.literal(
-                    hasWater
-                        ? "Water: OK"
-                        : "Water: DRY (overflow in " + Math.max(0, 30 - dryPublished) + " sec)"
+                let has_water = storage.get("has_water").flatMap(v => v.asBoolean()).orElse(false)
+                if(!has_water){
+                    ctx.screenText().append(api.screenScope().OPERATION, waterId, Text.literal(
+                        "冷却剂: 不足"
+                    ))
+                }else{
+                    ctx.screenText().append(api.screenScope().OPERATION, waterId, Text.literal(
+                    dryPublished === 0
+                        ? "冷却剂: 正常"
+                        : "冷却剂: 不足 (将在" + Math.max(0, 30 - dryPublished) + " 秒后超载)"
                 ))
+                }
+
                 ctx.screenText().append(api.screenScope().OPERATION, feId, Text.literal(
-                    feOk ? "Energy: OK" : "Energy: LOW"
+                    feOk ? "能量输入: 正常" : "能量输入: 低"
                 ))
-
-                ctx.jadeText().append(powerId, Text.literal(powerPublished + " tfps"))
-                ctx.jadeText().append(waterId, Text.literal(
-                    hasWater ? "Water OK" : "Water DRY"
-                ))
+                ctx.jadeText().append(powerId, Text.literal("算力产出: " + powerPublished + " FLOPS"))
+                if (!has_water) {
+                    ctx.jadeText().append(waterId, Text.literal(
+                        "冷却剂: 不足"
+                    ))
+                }else{
+                    ctx.jadeText().append(waterId, Text.literal(
+                        dryPublished === 0 ? "冷却剂: 正常" : "冷却剂: 不足"
+                    ))
+                }
             })
         )
 
@@ -120,16 +119,13 @@ MMCREvents.startup(event => {
 
     const machine_center = event
         .createMachine(CENTER_ID)
-        .displayNameKey("machine.mmcr_kubejs.kubejs_network_center_machine")
-        .appearance("minecraft:black_wool")
-        .networkInterface(1, 16) // one interface but 16 connections
+        .displayNameKey("machine.kubejs.center")
+        .appearance("mekanism:superheating_element")
+        .networkInterface(1, 16)
         .allowNetworkMachine(PRODUCER_ID)
-        // register a request porcess for REPORT_POWER id
         .requestProcess(REPORT_POWER, (body, request, senderStorage, receiverStorage) => {
             if (receiverStorage == null) return
-            // the power value that producer produced(what a sentence)
             let reported = Number(body.get("power").flatMap(v => v.asDouble()).orElse(0))
-            // set it's unique name, here you can use hash
             let key = "power_" + request.peer().hash()
             receiverStorage.set(key, api.dataValue(reported))
         })
@@ -139,17 +135,11 @@ MMCREvents.startup(event => {
             .serverTick(ctx => {
                 let storage = ctx.dataStorage()
                 if (storage == null) return
-
-                let feId = api.id("mmcr_kubejs:center_fe")
-
+                let feId = api.id("kubejs:center_fe")
                 let energyPlan = ctx.ioPlan()
                 energyPlan.addInput(api.energyRequirement(RecipeIO.INPUT, 200))
                 let energySim = energyPlan.simulate()
                 let energyOk = energySim.energySatisfied() && energyPlan.commit().successful()
-                // consume FE
-
-                // Re-derive the live producer count every tick so the UI reflects the actual
-                // network connections even when storage has not been refreshed recently.
                 let liveCount = 0
                 let connectedHashes = new Set()
                 let interfaces = api.networkInterfaces(ctx)
@@ -160,21 +150,17 @@ MMCREvents.startup(event => {
                         connectedHashes.add(String(target.hash()))
                     }
                 }
-                // Remove reports whose producer is no longer connected. Collect keys first
-                // because removing while iterating the Java map is unsafe.
                 let staleKeys = []
                 if (iface != null) {
                     for (let key of storage.values().keySet()) {
                         let keyString = key.toString()
                         if (keyString.startsWith("power_")
-                                && !connectedHashes.has(keyString.substring("power_".length))) {
+                            && !connectedHashes.has(keyString.substring("power_".length))) {
                             staleKeys.push(key)
                         }
                     }
                 }
                 for (let key of staleKeys) storage.remove(key)
-
-                // compute all the powers
                 let total = 0
                 let valueIter = storage.values().entrySet().iterator()
                 while (valueIter.hasNext()) {
@@ -185,24 +171,21 @@ MMCREvents.startup(event => {
                         total = total + value.asDouble().orElse(0)
                     }
                 }
-
-                // some information display
                 let count = liveCount
 
-                let powerId = api.id("mmcr_kubejs:center_power")
-                let countId = api.id("mmcr_kubejs:center_count")
+                let powerId = api.id("kuebjs:center_power")
+                let countId = api.id("kuebjs:center_count")
 
-                ctx.screenText().append(api.screenScope().OPERATION, powerId, Text.literal("Total Power: " + total + " tfps"))
-                ctx.screenText().append(api.screenScope().OPERATION, countId, Text.literal("Connected Devices: " + count))
+                ctx.screenText().append(api.screenScope().OPERATION, powerId, Text.literal("总算力: " + total + " FLOPS"))
+                ctx.screenText().append(api.screenScope().OPERATION, countId, Text.literal("在线设备: " + count))
                 ctx.screenText().append(api.screenScope().OPERATION, feId, Text.literal(
-                    energyOk ? "Energy: OK" : "Energy: LOW"
+                    energyOk ? "能量输入: 正常" : "能量输入: 低"
                 ))
 
-                ctx.jadeText().append(powerId, Text.literal("Total Power: " + total + " tfps"))
-                ctx.jadeText().append(countId, Text.literal("Connected Devices: " + count + " producers"))
+                ctx.jadeText().append(powerId, Text.literal("总算力: " + total + " FLOPS"))
+                ctx.jadeText().append(countId, Text.literal("在线设备: " + count))
             })
         )
 
     machine_center.register()
-    // so just a few codes, you can create a powerful power system!
 })

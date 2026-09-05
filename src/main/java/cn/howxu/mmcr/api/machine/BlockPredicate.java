@@ -4,8 +4,11 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
+import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
@@ -91,6 +94,7 @@ public sealed interface BlockPredicate {
         if (block instanceof FactorySchedulerBlock) return 4;
         if (block instanceof ParallelControllerBlock) return 3;
         if (block instanceof SmartInterfaceBlock) return 2;
+        if (block instanceof DataStorageBlock || block instanceof NetworkInterfaceBlock || block instanceof UpgradeBusBlock) return 1;
         if (block instanceof IOPortBlock) return 1;
         return 0;
     }

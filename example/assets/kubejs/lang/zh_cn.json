@@ -1,0 +1,17 @@
+{
+        "block.mmcr.server_controller": "算力集群",
+        "item.mmcr.server_controller": "算力集群",
+        "machine.kubejs.server": "算力集群",
+
+        "block.mmcr.center_controller": "网络中心",
+        "item.mmcr.center_controller": "网络中心",
+        "machine.kubejs.center": "网络中心",
+
+        "block.mmcr.hello_world_controller": "高炉",
+        "item.mmcr.hello_world_controller": "高炉",
+        "machine.kubejs.hello_world": "高炉",
+
+        "block.mmcr.artificial_star_video_controller": "人造恒星",
+        "item.mmcr.artificial_star_video_controller": "人造恒星",
+        "machine.kubejs.artificial_star_video": "人造恒星"
+}

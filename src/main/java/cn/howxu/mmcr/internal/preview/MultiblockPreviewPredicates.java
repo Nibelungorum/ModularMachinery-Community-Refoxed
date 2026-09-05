@@ -1,10 +1,13 @@
 package cn.howxu.mmcr.internal.preview;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -78,6 +81,7 @@ public final class MultiblockPreviewPredicates {
         if (block instanceof FactorySchedulerBlock) return 4;
         if (block instanceof ParallelControllerBlock) return 3;
         if (block instanceof SmartInterfaceBlock) return 2;
+        if (block instanceof DataStorageBlock || block instanceof NetworkInterfaceBlock || block instanceof UpgradeBusBlock) return 1;
         if (block instanceof IOPortBlock) return 1;
         return 0;
     }
