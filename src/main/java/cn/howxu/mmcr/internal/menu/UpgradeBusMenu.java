@@ -10,7 +10,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.ItemStackHandler;
 
 /**
  * Inventory menu for a standalone upgrade bus.
@@ -157,14 +156,14 @@ public final class UpgradeBusMenu extends AbstractMachineMenu {
 
     private void addBusSlots(UpgradeBusBlockEntity owner) {
         SlotLayout layout = slotLayoutForSize(size);
-        ItemStackHandler clientHandler = owner == null ? new ItemStackHandler(busSlotCount) : null;
+        SimpleContainer clientContainer = owner == null ? new SimpleContainer(busSlotCount) : null;
         for (int index = 0; index < busSlotCount; index++) {
             int row = index / busColumns;
             int column = index % busColumns;
             int x = layout.startX() + column * SLOT_SIZE;
             int y = layout.startY() + row * SLOT_SIZE;
-            addSlot(new net.neoforged.neoforge.items.SlotItemHandler(
-                    owner == null ? clientHandler : owner.itemStackHandler(), index, x, y));
+            if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
+            else addSlot(new DirectionalItemSlot(owner.itemStorage(), index, x, y));
         }
     }
 

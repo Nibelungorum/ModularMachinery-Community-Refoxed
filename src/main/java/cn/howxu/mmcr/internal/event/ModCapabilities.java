@@ -11,28 +11,22 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
-import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.capabilities.BlockCapability;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.TransferPreconditions;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import org.jetbrains.annotations.Nullable;
 
 import net.neoforged.neoforge.capabilities.Capabilities;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +52,7 @@ public final class ModCapabilities {
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("factory_controller").get(),
                 (be, side) -> be instanceof FactorySchedulerBlockEntity scheduler
-                        ? new ItemStackResourceHandler(scheduler.getItemStackHandler(side), true, true)
+                        ? resourceStorageHandler(scheduler.itemStorage(), true, true)
                         : null);
     }
 
@@ -140,9 +134,6 @@ public final class ModCapabilities {
                             || port.ioType() != kind.ioType()) return null;
                     ResourceStorage<ItemResource> storage = resourceStorage(port, bindings, side, ItemResource.class);
                     if (storage == null) return null;
-                    if (be instanceof ItemBusBlockEntity ib) {
-                        return new ItemStackResourceHandler(ib.getItemStackHandler(side), canInsert, true);
-                    }
                     return resourceStorageHandler(storage, canInsert, true);
                 });
     }
@@ -324,91 +315,4 @@ public final class ModCapabilities {
         }
     }
 
-    private static final class ItemStackResourceHandler extends SnapshotJournal<List<ItemStack>> implements ResourceHandler<ItemResource> {
-        private final ItemStackHandler handler;
-        private final boolean canInsert;
-        private final boolean canExtract;
-
-        ItemStackResourceHandler(ItemStackHandler handler, boolean canInsert, boolean canExtract) {
-            this.handler = handler;
-            this.canInsert = canInsert;
-            this.canExtract = canExtract;
-        }
-
-        @Override
-        public int size() {
-            return handler.getSlots();
-        }
-
-        @Override
-        public ItemResource getResource(int slot) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            return stack.isEmpty() ? ItemResource.EMPTY : ItemResource.of(stack);
-        }
-
-        @Override
-        public long getAmountAsLong(int slot) {
-            return handler.getStackInSlot(slot).getCount();
-        }
-
-        @Override
-        public long getCapacityAsLong(int slot, ItemResource resource) {
-            return resource.isEmpty()
-                    ? handler.getSlotLimit(slot)
-                    : Math.min(handler.getSlotLimit(slot), resource.getMaxStackSize());
-        }
-
-        @Override
-        public boolean isValid(int slot, ItemResource resource) {
-            return handler.isItemValid(slot, resource.toStack(1));
-        }
-
-        @Override
-        public int insert(int slot, ItemResource resource, int amount, TransactionContext tx) {
-            if (!canInsert) return 0;
-            ResourceStorage<ItemResource> transactionalStorage = transactionalStorage();
-            if (transactionalStorage != null) {
-                return (int) transactionalStorage.insert(slot, resource, amount, tx);
-            }
-            updateSnapshots(tx);
-            ItemStack remainder = handler.insertItem(slot, resource.toStack(amount), false);
-            int inserted = amount - remainder.getCount();
-            return inserted;
-        }
-
-        @Override
-        public int extract(int slot, ItemResource resource, int amount, TransactionContext tx) {
-            if (!canExtract) return 0;
-            ResourceStorage<ItemResource> transactionalStorage = transactionalStorage();
-            if (transactionalStorage != null) {
-                return (int) transactionalStorage.extract(slot, resource, amount, tx);
-            }
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (stack.isEmpty() || !ItemResource.of(stack).equals(resource)) return 0;
-            updateSnapshots(tx);
-            ItemStack extracted = handler.extractItem(slot, amount, false);
-            return extracted.getCount();
-        }
-
-        @SuppressWarnings("unchecked")
-        private @Nullable ResourceStorage<ItemResource> transactionalStorage() {
-            return handler instanceof ResourceStorage<?> storage ? (ResourceStorage<ItemResource>) storage : null;
-        }
-
-        @Override
-        protected List<ItemStack> createSnapshot() {
-            List<ItemStack> stacks = new ArrayList<>();
-            for (int slot = 0; slot < handler.getSlots(); slot++) {
-                stacks.add(handler.getStackInSlot(slot).copy());
-            }
-            return stacks;
-        }
-
-        @Override
-        protected void revertToSnapshot(List<ItemStack> snapshot) {
-            for (int slot = 0; slot < handler.getSlots(); slot++) {
-                handler.setStackInSlot(slot, snapshot.get(slot).copy());
-            }
-        }
-    }
 }

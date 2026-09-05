@@ -15,14 +15,15 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
-import net.minecraft.util.profiling.ProfilerFiller;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
+import net.neoforged.neoforge.resource.ContextAwareReloadListener;
 
 import java.io.Reader;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 /**
@@ -30,17 +31,12 @@ import java.util.function.Consumer;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class MachineRecipeDataReloadListener extends SimplePreparableReloadListener<MachineRecipeDataReloadListener.PreparedRecipes> {
-    private final HolderLookup.Provider registries;
+public final class MachineRecipeDataReloadListener extends ContextAwareReloadListener {
     private volatile Map<Identifier, MachineRecipe> snapshot = Map.of();
     private volatile List<MachineRecipeJson.RecipeJsonException> errors = List.of();
 
-    public MachineRecipeDataReloadListener(HolderLookup.Provider registries) {
-        this.registries = registries;
-    }
-
     public static void register(AddServerReloadListenersEvent event) {
-        event.addListener(MMCR.id("machine_recipes"), new MachineRecipeDataReloadListener(event.getRegistryAccess()));
+        event.addListener(MMCR.id("machine_recipes"), new MachineRecipeDataReloadListener());
     }
 
     public Map<Identifier, MachineRecipe> snapshot() {
@@ -52,12 +48,15 @@ public final class MachineRecipeDataReloadListener extends SimplePreparableReloa
     }
 
     @Override
-    protected PreparedRecipes prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
-        return loadCandidate(resourceManager, registries);
+    public CompletableFuture<Void> reload(SharedState sharedState, Executor prepareExecutor,
+                                          PreparationBarrier barrier, Executor applyExecutor) {
+        ResourceManager resourceManager = sharedState.resourceManager();
+        return CompletableFuture.supplyAsync(() -> loadCandidate(resourceManager, getRegistryLookup()), prepareExecutor)
+                .thenCompose(barrier::wait)
+                .thenAcceptAsync(candidate -> apply(candidate, resourceManager), applyExecutor);
     }
 
-    @Override
-    protected void apply(PreparedRecipes candidate, ResourceManager resourceManager, ProfilerFiller profiler) {
+    private void apply(PreparedRecipes candidate, ResourceManager resourceManager) {
         if (!candidate.errors().isEmpty()) {
             errors = candidate.errors();
             candidate.errors().forEach(error -> MMCR.LOG.error("Failed to load machine recipe {}", error.recipeId(), error));

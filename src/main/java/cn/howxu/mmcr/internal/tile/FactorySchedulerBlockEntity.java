@@ -1,17 +1,15 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.ItemStackHandler;
 
 /**
  * Single-slot storage for thread dispersers.
@@ -20,16 +18,11 @@ import net.neoforged.neoforge.items.ItemStackHandler;
  */
 public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
-    private final ItemStackHandler handler = new ItemStackHandler(1) {
+    private final LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, 64L,
+            ItemResource::isEmpty, this::onContentsChanged) {
         @Override
-        public boolean isItemValid(int slot, ItemStack stack) {
-            return stack.is(ModItems.THREAD_DISPERSER.get());
-        }
-
-        @Override
-        protected void onContentsChanged(int slot) {
-            setChanged();
-            if (owner != null) owner.invalidateFactoryCapacity();
+        public boolean isValid(int slot, ItemResource resource) {
+            return resource.toStack(1).is(ModItems.THREAD_DISPERSER.get()) && super.isValid(slot, resource);
         }
     };
     private @Nullable MachineControllerBlockEntity owner;
@@ -43,26 +36,16 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public int threadCount() {
-        long count = 1L + handler.getStackInSlot(0).getCount();
+        long count = 1L + storage.amount(0);
         return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
     }
 
-    public IItemHandler getItemHandler(Direction side) {
-        return handler;
-    }
-
-    public ItemStackHandler getItemStackHandler(Direction side) {
-        return handler;
+    public ResourceStorage<ItemResource> itemStorage() {
+        return storage;
     }
 
     public void dropContents() {
-        if (level == null || level.isClientSide()) return;
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (stack.isEmpty()) continue;
-            Block.popResource(level, worldPosition, stack);
-            handler.setStackInSlot(slot, ItemStack.EMPTY);
-        }
+        ItemBusBlockEntity.dropItemResources(level, worldPosition, storage);
     }
 
     @Override
@@ -74,18 +57,34 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        handler.serialize(output.child("inventory"));
+        ItemResource resource = storage.resource(0);
+        output.putBoolean("itemHasResource", resource != null && !resource.isEmpty());
+        if (resource != null && !resource.isEmpty()) {
+            output.store("itemResource", ItemResource.OPTIONAL_CODEC, resource);
+            output.putLong("itemAmount", storage.amount(0));
+        }
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        handler.deserialize(input.childOrEmpty("inventory"));
+        if (input.getBooleanOr("itemHasResource", false)) {
+            ItemResource resource = input.read("itemResource", ItemResource.OPTIONAL_CODEC)
+                    .orElse(ItemResource.EMPTY);
+            storage.setContents(0, resource, input.getLong("itemAmount").orElse(0L));
+        } else {
+            storage.setContents(0, ItemResource.EMPTY, 0L);
+        }
     }
 
     @Override
     public void setRemoved() {
         owner = null;
         super.setRemoved();
+    }
+
+    private void onContentsChanged() {
+        setChanged();
+        if (owner != null) owner.invalidateFactoryCapacity();
     }
 }

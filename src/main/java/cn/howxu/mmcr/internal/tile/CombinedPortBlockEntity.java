@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -15,8 +16,6 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -28,8 +27,9 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
  */
 public class CombinedPortBlockEntity extends IOPortBlockEntity {
     private static final long FLUID_CAPACITY = 256_000L;
+    private static final long ITEM_CAPACITY = 64L;
 
-    private final ItemBusBlockEntity.StorageItemHandler itemHandler;
+    private final LongResourceStorage<ItemResource> itemStorage;
     private final LongFluidStorage fluidStorage;
     private final IOPortKind kind;
     private CapabilitySnapshot capabilitySnapshot;
@@ -43,7 +43,8 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
         CombinedPortSize size = kind.combinedPortSize()
                 .orElseThrow(() -> new IllegalStateException("Combined port missing size: " + kind.id()));
         this.kind = kind;
-        this.itemHandler = new ItemBusBlockEntity.StorageItemHandler(size.itemTypes(), ignored -> markStorageChanged());
+        this.itemStorage = new LongResourceStorage<>(ItemResource.class, size.itemTypes(), ITEM_CAPACITY,
+                ItemResource::isEmpty, this::markStorageChanged);
         this.fluidStorage = new LongFluidStorage(size.fluidTypes(), FLUID_CAPACITY, this::markStorageChanged);
     }
 
@@ -57,17 +58,9 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
         return kind;
     }
 
-    public IItemHandler getItemHandler(Direction side) {
-        return itemHandler;
-    }
-
-    public ItemStackHandler getItemStackHandler(Direction side) {
-        return itemHandler;
-    }
-
     @Override
     public ResourceStorage<ItemResource> itemStorage() {
-        return ItemBusBlockEntity.asResourceStorage(itemHandler);
+        return itemStorage;
     }
 
     public ResourceHandler<FluidResource> getResourceHandler(Direction side) {
@@ -81,7 +74,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
 
     @Override
     public void dropContents() {
-        ItemBusBlockEntity.dropItemStacks(level, worldPosition, itemHandler);
+        ItemBusBlockEntity.dropItemResources(level, worldPosition, itemStorage);
     }
 
     @Override
@@ -90,7 +83,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
             capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
                     .filter(binding -> binding.ioType() == kind.ioType())
                     .map(this::createCapability)
-                    .toList(), java.util.List.of(new InventoryPersistenceFacet(), new FluidPersistenceFacet()));
+                    .toList(), java.util.List.of(new FluidPersistenceFacet()));
         }
         return capabilitySnapshot;
     }
@@ -106,6 +99,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        saveItems(output);
         capabilitySnapshot().facets(PersistenceFacet.class)
                 .forEach(facet -> facet.save(output.child(facet.stateKey())));
     }
@@ -115,6 +109,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
         beginLoadingAdditional();
         try {
             super.loadAdditional(input);
+            loadItems(input);
             capabilitySnapshot().facets(PersistenceFacet.class)
                     .forEach(facet -> input.child(facet.stateKey()).ifPresent(facet::load));
         } finally {
@@ -130,6 +125,31 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
             if (!resource.isEmpty()) {
                 output.store("tankFluid" + suffix, FluidResource.OPTIONAL_CODEC, resource);
                 output.putLong("tankAmount" + suffix, fluidStorage.amount(slot));
+            }
+        }
+    }
+
+    private void saveItems(ValueOutput output) {
+        for (int slot = 0; slot < itemStorage.size(); slot++) {
+            String suffix = "_" + slot;
+            ItemResource resource = itemStorage.resource(slot);
+            output.putBoolean("itemHasResource" + suffix, resource != null && !resource.isEmpty());
+            if (resource != null && !resource.isEmpty()) {
+                output.store("itemResource" + suffix, ItemResource.OPTIONAL_CODEC, resource);
+                output.putLong("itemAmount" + suffix, itemStorage.amount(slot));
+            }
+        }
+    }
+
+    private void loadItems(ValueInput input) {
+        for (int slot = 0; slot < itemStorage.size(); slot++) {
+            String suffix = "_" + slot;
+            if (input.getBooleanOr("itemHasResource" + suffix, false)) {
+                ItemResource resource = input.read("itemResource" + suffix, ItemResource.OPTIONAL_CODEC)
+                        .orElse(ItemResource.EMPTY);
+                itemStorage.setContents(slot, resource, input.getLong("itemAmount" + suffix).orElse(0L));
+            } else {
+                itemStorage.setContents(slot, ItemResource.EMPTY, 0L);
             }
         }
     }
@@ -151,23 +171,6 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
         markAutoIOCacheDirty();
         notifyStorageChanged();
         notifyControllerOfInputChange();
-    }
-
-    private final class InventoryPersistenceFacet implements PersistenceFacet {
-        @Override
-        public String stateKey() {
-            return "inventory";
-        }
-
-        @Override
-        public void save(ValueOutput output) {
-            itemHandler.serialize(output);
-        }
-
-        @Override
-        public void load(ValueInput input) {
-            itemHandler.deserialize(input);
-        }
     }
 
     private final class FluidPersistenceFacet implements PersistenceFacet {

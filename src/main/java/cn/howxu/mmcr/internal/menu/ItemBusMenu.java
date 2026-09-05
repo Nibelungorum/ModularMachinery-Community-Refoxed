@@ -28,7 +28,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
     private final int busRows;
     private final int busColumns;
 
-    /** 服务端:带 BE 引用,槽位直接绑定到 BE 的 ItemStackHandler。 */
+    /** 服务端:带 BE 引用,槽位直接绑定到 BE 的资源存储。 */
     public ItemBusMenu(int containerId, Inventory playerInv, ItemBusBlockEntity owner) {
         super(ModUIs.ITEM_BUS.get(), containerId);
         this.owner = owner;
@@ -160,7 +160,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
             int x = layout.startX() + col * SLOT_SIZE;
             int y = layout.startY() + row * SLOT_SIZE;
             if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
-            else addSlot(new DirectionalItemSlot(owner.getItemStackHandler(null), index, x, y, owner.ioType()));
+            else addSlot(new DirectionalItemSlot(owner.itemStorage(), index, x, y));
         }
     }
 

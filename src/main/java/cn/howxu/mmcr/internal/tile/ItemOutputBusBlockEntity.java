@@ -15,7 +15,9 @@ public class ItemOutputBusBlockEntity extends ItemBusBlockEntity {
     }
 
     private ItemOutputBusBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
-        super(typeForKind(kind), pos, state, kind);
+        super(typeForKind(kind), pos, state, kind.itemBusSize()
+                .orElseThrow(() -> new IllegalStateException("Item bus missing item size: " + kind.id()))
+                .slots(), 64L);
         this.kind = kind;
     }
 

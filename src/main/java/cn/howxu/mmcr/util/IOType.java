@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.util;
 
 import net.minecraft.util.StringRepresentable;
+import org.jspecify.annotations.NonNull;
 
 public enum IOType implements StringRepresentable {
     INPUT, OUTPUT;
@@ -10,7 +11,7 @@ public enum IOType implements StringRepresentable {
     }
 
     @Override
-    public String getSerializedName() {
+    public @NonNull String getSerializedName() {
         return name().toLowerCase();
     }
 }
