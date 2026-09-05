@@ -185,7 +185,7 @@ public final class TerminalScreen extends Screen {
     }
 
     static boolean closesAfter(TerminalAction action) {
-        return action == TerminalAction.CHECK
+        return action == TerminalAction.SET_PREVIEW_ENABLED || action == TerminalAction.CHECK
                 || action == TerminalAction.BUILD || action == TerminalAction.DEMOLISH;
     }
 
@@ -221,8 +221,8 @@ public final class TerminalScreen extends Screen {
         LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
         ControlState controls = controlState(controllerAvailable, stages, previewLayers);
         inventoryModeButton.setMessage(inventoryModeLabel());
-        typeButton.active = controllerAvailable && view.typeButtonActive();
-        levelButton.active = controllerAvailable && view.levelButtonActive();
+        typeButton.active = controllerAvailable && levelButtonsActive(view);
+        levelButton.active = controllerAvailable && levelButtonsActive(view);
         stageButton.active = controls.stageActive();
         stageButton.setMessage(Component.literal(Integer.toString(data.stage())));
         plusButton.active = controls.layerActive();
@@ -246,6 +246,10 @@ public final class TerminalScreen extends Screen {
     private List<LevelType> levelTypes() {
         return MachineLevelRegistry.types().stream()
                 .filter(type -> validLevelSelection(type.id(), data.selectedLevels())).toList();
+    }
+
+    private boolean levelButtonsActive(LevelView view) {
+        return levelTypes().size() > 1 && view.levelButtonActive();
     }
 
     private Identifier nextType(Identifier current) {
@@ -310,8 +314,8 @@ public final class TerminalScreen extends Screen {
             case REQUEST_STATE -> false;
             case SET_INVENTORY_MODE -> true;
             case SET_STAGE -> controllerAvailable && stages.size() > 1;
-            case SET_LEVEL -> controllerAvailable && levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels())
-                    .typeButtonActive();
+            case SET_LEVEL -> controllerAvailable && levelButtonsActive(
+                    levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels()));
             case SET_PREVIEW_ENABLED, SET_PREVIEW_LAYER, CHECK -> controllerAvailable;
             case BUILD, DEMOLISH -> controllerAvailable && storageAvailable;
         };

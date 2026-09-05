@@ -96,7 +96,8 @@ public final class TerminalService {
                 if (controller == null || !controller.availableStructureStages().contains(value)) {
                     return rejected(player, stack, "message.mmcr.terminal.invalid_stage");
                 }
-                TerminalData updated = normalize(controller, data.withStage(value));
+                TerminalData updated = normalize(controller, data.withStage(value)
+                        .withPreview(data.previewEnabled(), Integer.MAX_VALUE));
                 setData(stack, updated);
                 if (updated.previewEnabled()) controller.sendTerminalStructurePreview(player, updated.stage(), updated.selectedLevels());
                 return accepted(player, stack, "message.mmcr.terminal.updated");
@@ -148,6 +149,11 @@ public final class TerminalService {
                 if (storage == null) return rejected(player, stack, "message.mmcr.terminal.storage_unavailable");
                 boolean freeInventoryBuild = player.isCreative() && data.inventoryMode() == TerminalInventoryMode.INVENTORY;
                 StructureItemSink demolitionSink = freeInventoryBuild ? ignored -> true : storage.sink();
+                if (action == TerminalAction.BUILD && data.previewEnabled()) {
+                    controller.clearStructurePreview(player);
+                    data = data.withPreview(false, data.previewLayer());
+                    setData(stack, data);
+                }
                 MultiblockAssemblyService.Result result = action == TerminalAction.BUILD
                         ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild,
                                 data.selectedLevels())
