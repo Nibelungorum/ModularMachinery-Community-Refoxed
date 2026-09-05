@@ -48,7 +48,7 @@ public class SmartInterfaceGameTest {
                 "Smart interface received its default binding");
         helper.assertTrue(smartInterface.setValue(0, 15F), "Smart interface accepts range-compatible input value");
 
-        RecipeRegistry.register(MachineRecipe.fromCanonical(MMCR.id("smart_interface_output"), machine.registryName(), 20,
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id("smart_interface_output"), machine.registryName(), 20,
                 List.of(SmartInterfaceRequirement.input(type, 10F, 20F),
                         SmartInterfaceRequirement.output(type, 42F)), List.of(), List.of(), 0, 1, false, false,
                 List.of(), false, Set.of()));

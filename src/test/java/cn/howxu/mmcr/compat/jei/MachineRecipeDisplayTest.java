@@ -704,9 +704,9 @@ class MachineRecipeDisplayTest {
         MachineRecipe low = recipe("low", "blast_furnace", 0);
         MachineRecipe high = recipe("high", "blast_furnace", 10);
         MachineRecipe other = recipe("other", "other_machine", 5);
-        RecipeRegistry.register(low);
-        RecipeRegistry.register(other);
-        RecipeRegistry.register(high);
+        RecipeRegistry.registerStatic(low);
+        RecipeRegistry.registerStatic(other);
+        RecipeRegistry.registerStatic(high);
 
         assertThat(MachineRecipeDisplays.all())
                 .extracting(MachineRecipeDisplay::recipeId)

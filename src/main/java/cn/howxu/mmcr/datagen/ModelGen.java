@@ -60,6 +60,7 @@ public final class ModelGen extends ModelProvider {
         names.add("thread_disperser");
         names.add("terminal");
         names.add("key_card");
+        names.add("blueprint");
         names.add("modularium");
         return List.copyOf(names);
     }
@@ -75,6 +76,7 @@ public final class ModelGen extends ModelProvider {
         itemRegistration.register(ModItems.THREAD_DISPERSER::get, "thread_disperser");
         itemRegistration.register(ModItems.TERMINAL::get, "terminal");
         itemRegistration.register(ModItems.KEY_CARD::get, "key_card");
+        itemRegistration.register(ModItems.BLUEPRINT::get,"blueprint");
         itemRegistration.register(ModItems.MODULARIUM::get, "modularium");
     }
 

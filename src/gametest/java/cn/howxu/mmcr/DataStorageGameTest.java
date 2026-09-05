@@ -193,7 +193,7 @@ public final class DataStorageGameTest {
         controller.setMachine(recipeMachine);
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Recipe snapshot machine forms with real I/O buses");
-            RecipeRegistry.register(recipe);
+            RecipeRegistry.registerStatic(recipe);
             controller.serverTick();
             helper.assertTrue(recipe.id().equals(controller.runtimeSnapshot().crafting().recipeId()) && starts.get() == 1,
                     "Recipe Start runs once before serialization");

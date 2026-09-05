@@ -205,7 +205,7 @@ class JeiRuntimeReloaderTest {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
         Identifier staticRecipeId = MMCR.id("pre_existing_static_recipe");
-        RecipeRegistry.register(RecipeTestSupport.create(staticRecipeId, machineId, 20, List.of(),
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(staticRecipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))));
         JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));

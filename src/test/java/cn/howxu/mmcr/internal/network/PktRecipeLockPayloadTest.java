@@ -159,7 +159,7 @@ class PktRecipeLockPayloadTest {
         controller.setLevel(level);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_lock_success_recipe"), machine.registryName(), 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         controller.tickRuntimeWork(level, controllerPos);
 
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());

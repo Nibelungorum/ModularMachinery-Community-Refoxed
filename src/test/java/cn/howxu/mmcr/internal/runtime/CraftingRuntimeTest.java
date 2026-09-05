@@ -595,7 +595,7 @@ class CraftingRuntimeTest {
     void active_runtime_persists_finish_state_and_input_plan() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("runtime_persisted", 1, List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         runtime.start(recipe, 1);
@@ -621,7 +621,7 @@ class CraftingRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
         MachineRecipe recipe = recipe("runtime_persisted_finish_failure", 1,
                 List.of(output(Items.IRON_NUGGET, 1)));
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();

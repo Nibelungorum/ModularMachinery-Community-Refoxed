@@ -109,7 +109,7 @@ class FactoryRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         MachineRecipe candidate = itemInputRecipe("factory_index_missing_input", Items.IRON_INGOT);
-        RecipeRegistry.register(candidate);
+        RecipeRegistry.registerStatic(candidate);
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
 
@@ -125,8 +125,8 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         MachineRecipe exact = itemInputRecipe("factory_index_exact", Items.IRON_INGOT);
         MachineRecipe fallback = recipe("factory_index_fallback", 20);
-        RecipeRegistry.register(exact);
-        RecipeRegistry.register(fallback);
+        RecipeRegistry.registerStatic(exact);
+        RecipeRegistry.registerStatic(fallback);
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
 
@@ -205,7 +205,7 @@ class FactoryRuntimeTest {
     void recipe_lock_persists_with_the_lane_runtime_state() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("factory_lock_persisted", 20);
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         FactoryRuntime saved = new FactoryRuntime();
         saved.ensureBaseLane(controller);
         saved.tick(List.of(recipe), 1);
@@ -408,7 +408,7 @@ class FactoryRuntimeTest {
     void runtimeStateRoundTripsThroughValuePersistence() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("factory_persisted", 20);
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         FactoryRuntime saved = new FactoryRuntime();
         saved.ensureBaseLane(controller);
         saved.setLaneLimit(2);
@@ -645,8 +645,8 @@ class FactoryRuntimeTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new ItemStack(Items.IRON_NUGGET, 1))), false, List.of(), true);
-        RecipeRegistry.register(active);
-        RecipeRegistry.register(blocked);
+        RecipeRegistry.registerStatic(active);
+        RecipeRegistry.registerStatic(blocked);
 
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = sharedFactoryController(machineId, blockedId, output);
@@ -714,7 +714,7 @@ class FactoryRuntimeTest {
     void loaded_retry_failure_rebuilds_the_matching_resource_predicate() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe candidate = inputRecipe("factory_retry_matcher_restore");
-        RecipeRegistry.register(candidate);
+        RecipeRegistry.registerStatic(candidate);
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(candidate), 1, 0L)).isFalse();
@@ -733,7 +733,7 @@ class FactoryRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         MachineRecipe candidate = cancellingInputRecipe("factory_locked_retry_restore");
-        RecipeRegistry.register(candidate);
+        RecipeRegistry.registerStatic(candidate);
         input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 1));
 
         FactoryRuntime saved = new FactoryRuntime();
@@ -812,7 +812,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = factoryController("factory_async_version_failure");
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_version_failure_recipe"),
                 MMCR.id("factory_async_version_failure"), 20, List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
         assertThat(controller.structureSnapshot().structureAreaLoaded()).isTrue();

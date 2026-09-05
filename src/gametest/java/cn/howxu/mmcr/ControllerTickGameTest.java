@@ -299,7 +299,7 @@ public class ControllerTickGameTest {
         helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
                 .insertItem(0, new ItemStack(Items.IRON_INGOT), false);
         Identifier recipeId = MMCR.id("controller_tick_redstone_pause");
-        RecipeRegistry.register(MachineRecipe.fromCanonical(recipeId, MMCR.id("controller_tick"), 20,
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("controller_tick"), 20,
                 List.of(MachineRequirement.fromInput(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))), List.of(),
                 List.of(), 0, 1, false, false, List.of(), false, Set.of()));

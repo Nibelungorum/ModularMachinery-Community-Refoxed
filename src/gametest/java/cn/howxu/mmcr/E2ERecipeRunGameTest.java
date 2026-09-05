@@ -52,7 +52,7 @@ public class E2ERecipeRunGameTest {
 
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor");
         var machine = MachineRegistry.getMachine(machineId);
-        RecipeRegistry.register(MachineRecipe.fromCanonical(
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(
                 Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor_recipe"), machineId, 40,
                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                 Ingredient.of(Items.IRON_INGOT), 2)),
@@ -101,7 +101,7 @@ public class E2ERecipeRunGameTest {
         Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor");
         var machine = new DynamicMachine(machineId, "Wide Compressor", new BlockArray(pattern));
         MachineRegistry.register(machine);
-        RecipeRegistry.register(MachineRecipe.fromCanonical(
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(
                 Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor_recipe"), machineId, 20,
                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                 Ingredient.of(Items.IRON_INGOT), 1)),

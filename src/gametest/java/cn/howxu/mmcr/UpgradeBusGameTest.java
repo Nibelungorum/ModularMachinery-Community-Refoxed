@@ -103,7 +103,7 @@ public class UpgradeBusGameTest {
             input.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false);
             Identifier recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
             ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
-            RecipeRegistry.register(MachineRecipe.fromCanonical(recipeId, machineId, 20,
+            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 20,
                     List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                     Ingredient.of(Items.IRON_INGOT), 1)),
                             MachineRequirement.itemOutput(goldNugget)),

@@ -217,6 +217,26 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('F', Blocks.OBSERVER)
                 .save(output);
 
+        shaped(ModBlocks.DATA_STORAGE.get(), 1)
+                .pattern("ADA")
+                .pattern("BCB")
+                .pattern("ADA")
+                .define('A', Tags.Items.DUSTS_REDSTONE)
+                .define('B', Tags.Items.CHESTS)
+                .define('C', ModBlocks.BASIC_CASING.get())
+                .define('D', Tags.Items.GEMS_DIAMOND)
+                .save(output);
+
+        shaped(ModBlocks.NETWORK_INTERFACE.get(), 1)
+                .pattern("AEA")
+                .pattern("BCB")
+                .pattern("AEA")
+                .define('A', Tags.Items.DUSTS_REDSTONE)
+                .define('B', Tags.Items.GEMS_DIAMOND)
+                .define('C', ModBlocks.BASIC_CASING.get())
+                .define('E', Items.ENDER_PEARL)
+                .save(output);
+
         shaped(ModItems.ITEMS.get("factory_controller").get(), 1)
                 .pattern("ABA")
                 .pattern("CDC")
@@ -248,6 +268,15 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('B', Tags.Items.GEMS_LAPIS)
                 .define('C', Tags.Items.DUSTS_REDSTONE)
                 .define('E', Tags.Items.GLASS_PANES)
+                .save(output);
+
+        shaped(ModItems.KEY_CARD.get(), 1)
+                .pattern("IRI")
+                .pattern("RPR")
+                .pattern("IRI")
+                .define('I', Tags.Items.INGOTS_IRON)
+                .define('R', Tags.Items.DUSTS_REDSTONE)
+                .define('P', Items.PAPER)
                 .save(output);
 
         shaped(ModItems.THREAD_DISPERSER.get(), 1)

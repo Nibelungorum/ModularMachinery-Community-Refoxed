@@ -385,7 +385,7 @@ public class MachineRecipeBuilderJS {
         if (transaction != null) {
             transaction.registerRecipe(recipe);
         } else {
-            RecipeRegistry.register(recipe);
+            RecipeRegistry.registerStatic(recipe);
         }
     }
 

@@ -30,6 +30,7 @@ class TerminalScreenTest {
     private static final Identifier TYPE_B = Identifier.parse("test:terminal_type_b");
     private static final Identifier LEVEL_A = Identifier.parse("test:terminal_level_a");
     private static final Identifier LEVEL_B = Identifier.parse("test:terminal_level_b");
+    private static final Identifier LEVEL_B_ALT = Identifier.parse("test:terminal_level_b_alt");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -44,6 +45,10 @@ class TerminalScreenTest {
                         new MachineLevel(LEVEL_B, TYPE_B, 1,
                                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()),
                                 new ItemStack(Items.GOLD_INGOT),
+                                LevelModifier.IDENTITY),
+                        new MachineLevel(LEVEL_B_ALT, TYPE_B, 2,
+                                new BlockPredicate.OfBlockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
+                                new ItemStack(Items.DIAMOND),
                                 LevelModifier.IDENTITY)));
     }
 
@@ -110,7 +115,7 @@ class TerminalScreenTest {
 
     @Test
     void empty_layer_list_disables_navigation_without_disabling_reset_semantics() {
-        TerminalScreen.ControlState state = TerminalScreen.controlState(true, List.of(1), List.of());
+        TerminalScreen.ControlState state = TerminalScreen.controlState(true, List.of(1, 2), List.of());
 
         assertThat(state.stageActive()).isTrue();
         assertThat(state.layerActive()).isFalse();

@@ -181,7 +181,7 @@ class ControllerSyncRuntimeTest {
         controller.setFormed(true);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_recipe"), machineId, 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -221,7 +221,7 @@ class ControllerSyncRuntimeTest {
         RuntimeTestFixtures.republish(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_immediate_recipe"), machineId, 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -257,7 +257,7 @@ class ControllerSyncRuntimeTest {
         RuntimeTestFixtures.republish(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_level_recipe"), machineId, 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -325,7 +325,7 @@ class ControllerSyncRuntimeTest {
                 List.of(), List.of(), List.of(), 0, 4, false, List.of(), List.of(
                         new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                                 ItemStack.EMPTY)));
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -352,7 +352,7 @@ class ControllerSyncRuntimeTest {
         controller.setFormed(true);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_reform_recipe"), machineId, 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -384,7 +384,7 @@ class ControllerSyncRuntimeTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY)));
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         MachineStateSnapshot state = new ControllerSyncRuntime().machineState(controller.runtimeSnapshot());

@@ -623,7 +623,7 @@ class MachineControllerBlockEntityTest {
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
         controller.invalidateFormedStructure();
-        RecipeRegistry.register(RecipeTestSupport.create(MMCR.id("same_tick_factory_recipe"), machineId, 20,
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(MMCR.id("same_tick_factory_recipe"), machineId, 20,
                 List.of(), List.of()));
 
         controller.serverTick();
@@ -670,7 +670,7 @@ class MachineControllerBlockEntityTest {
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
         RuntimeTestFixtures.republish(controller);
-        RecipeRegistry.register(RecipeTestSupport.create(MMCR.id("same_tick_reset_recipe"), machineId, 20,
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(MMCR.id("same_tick_reset_recipe"), machineId, 20,
                 List.of(), List.of()));
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -1126,7 +1126,7 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.republish(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_factory_persistence_recipe"), machineId, 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
         resolveSharedRequests(controller);
@@ -1171,7 +1171,7 @@ class MachineControllerBlockEntityTest {
         controller.setFormed(true);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_factory_removed_after_load_recipe"), machineId, 20,
                 List.of(), List.of());
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         controller.serverTick();
         resolveSharedRequests(controller);
         assertThat(controller.runtimeSnapshot().factory().active()).isTrue();

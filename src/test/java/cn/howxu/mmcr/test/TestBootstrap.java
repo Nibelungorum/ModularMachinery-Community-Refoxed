@@ -148,6 +148,7 @@ public final class TestBootstrap {
         bindUpgradeBuses();
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         bind(ModItems.TERMINAL, registerItem(ModItems.TERMINAL));
+        bind(ModItems.KEY_CARD, registerItem(ModItems.KEY_CARD));
         bind(ModItems.BLUEPRINT, registerItem(ModItems.BLUEPRINT));
         registerTestEvents();
         registerRuntimeTestContent();

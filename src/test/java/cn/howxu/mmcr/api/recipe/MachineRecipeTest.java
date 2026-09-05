@@ -350,11 +350,11 @@ class MachineRecipeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "other"), 20, List.of(), List.of());
 
         var machine = new DynamicMachine(machineId, "Compressor", new BlockArray(Map.of()));
-        RecipeRegistry.register(recipe);
-        RecipeRegistry.register(other);
+        RecipeRegistry.registerStatic(recipe);
+        RecipeRegistry.registerStatic(other);
 
         assertThat(RecipeRegistry.byMachine(machine)).containsExactly(recipe);
-        assertThatThrownBy(() -> RecipeRegistry.register(
+        assertThatThrownBy(() -> RecipeRegistry.registerStatic(
                 RecipeTestSupport.create(null, machineId, 1, List.of(), List.of())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -364,7 +364,7 @@ class MachineRecipeTest {
         long before = RecipeRegistry.reloadVersion();
         var machineId = Identifier.fromNamespaceAndPath("mmcr", "versioned_machine");
 
-        RecipeRegistry.register(RecipeTestSupport.create(
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "versioned_recipe"),
                 machineId,
                 20,

@@ -282,9 +282,9 @@ class RecipeApiSmokeTest {
         var recipe2 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
         var recipe3 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r3"), machineB, 30, List.of(), List.of(), List.of(), 0, 1);
 
-        RecipeRegistry.register(recipe1);
-        RecipeRegistry.register(recipe2);
-        RecipeRegistry.register(recipe3);
+        RecipeRegistry.registerStatic(recipe1);
+        RecipeRegistry.registerStatic(recipe2);
+        RecipeRegistry.registerStatic(recipe3);
 
         assertThat(RecipeRegistry.getRecipe(recipe1.id())).isEqualTo(recipe1);
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
@@ -300,7 +300,7 @@ class RecipeApiSmokeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "active_test_machine"),
                 100, List.of(), List.of()
         );
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
 
         var active = new ActiveMachineRecipe(recipe, 4);
         active.setTick(50);
@@ -330,7 +330,7 @@ class RecipeApiSmokeTest {
                 Identifier.fromNamespaceAndPath("mmcr", "done_test_machine"),
                 10, List.of(), List.of()
         );
-        RecipeRegistry.register(recipe);
+        RecipeRegistry.registerStatic(recipe);
         var active = new ActiveMachineRecipe(recipe);
         active.setTick(10);
         assertThat(active.isCompleted()).isTrue();
