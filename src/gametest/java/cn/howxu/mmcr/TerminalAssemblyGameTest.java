@@ -2,6 +2,7 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemStorage;
@@ -20,10 +21,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -53,6 +56,53 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(!result.accepted() && result.messageKey().equals("message.mmcr.terminal.not_held"),
                 "A packet action cannot mutate state when the main hand is not a terminal");
         helper.succeed();
+    }
+
+    public void terminalServiceRejectsLevelSelectionWithoutController(GameTestHelper helper) {
+        ServerPlayer player = servicePlayer(helper);
+        ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+        player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
+        var type = MachineLevelRegistry.types().getFirst();
+        var level = MachineLevelRegistry.levelsForType(type.id()).getFirst();
+
+        TerminalService.Result result = TerminalService.execute(player, terminal, TerminalAction.SET_LEVEL,
+                0, type.id(), level.id());
+
+        helper.assertTrue(!result.accepted() && result.messageKey().equals("message.mmcr.terminal.no_controller"),
+                "A valid level selection without a controller is rejected without normalizing null");
+        helper.succeed();
+    }
+
+    public void terminalServiceNormalizesStaleStageBeforeBuildAndDemolish(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        ServerPlayer player = servicePlayer(helper);
+        player.setPos(helper.absolutePos(controllerPos).getCenter());
+        player.getAbilities().instabuild = true;
+        ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+        player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
+        TerminalData staleData = TerminalData.DEFAULT.withController(GlobalPos.of(helper.getLevel().dimension(),
+                helper.absolutePos(controllerPos))).withStage(2);
+        terminal.set(cn.howxu.mmcr.registry.ModDataComponents.TERMINAL_DATA.get(), staleData);
+
+        TerminalService.Result build = TerminalService.execute(player, terminal, TerminalAction.BUILD, 0, null, null);
+
+        helper.assertTrue(build.accepted(), "Build accepts a terminal with a stale stage after normalization");
+        helper.assertTrue(TerminalData.from(terminal).stage() == 1,
+                "Build writes the controller's available stage back to terminal data");
+        helper.runAtTickTime(2, () -> {
+            TerminalData staleDemolishData = TerminalData.from(terminal).withStage(2);
+            terminal.set(cn.howxu.mmcr.registry.ModDataComponents.TERMINAL_DATA.get(), staleDemolishData);
+
+            TerminalService.Result demolish = TerminalService.execute(player, terminal, TerminalAction.DEMOLISH, 0, null, null);
+
+            helper.assertTrue(demolish.accepted(), "Demolish accepts a terminal with a stale stage after normalization");
+            helper.assertTrue(TerminalData.from(terminal).stage() == 1,
+                    "Demolish writes the controller's available stage back to terminal data");
+            helper.succeed();
+        });
     }
 
     public void buildSkipsOccupiedPositionsAndPlacesOnlyMissingBlocks(GameTestHelper helper) {
@@ -477,7 +527,12 @@ public class TerminalAssemblyGameTest {
     private static ServerPlayer servicePlayer(GameTestHelper helper) {
         return new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
                 new GameProfile(UUID.nameUUIDFromBytes("mmcr-terminal-gametest".getBytes(StandardCharsets.UTF_8)), "mmcr-terminal"),
-                ClientInformation.createDefault());
+                ClientInformation.createDefault()) {
+            @Override
+            public void sendSystemMessage(Component message) {
+                // The isolated GameTest player has no packet connection.
+            }
+        };
     }
 
 }

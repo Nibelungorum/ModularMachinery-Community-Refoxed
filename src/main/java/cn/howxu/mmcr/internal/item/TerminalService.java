@@ -87,6 +87,7 @@ public final class TerminalService {
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
             case SET_LEVEL -> {
+                if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 MachineLevel level = secondId == null ? null : MachineLevelRegistry.getLevel(secondId);
                 if (firstId == null || level == null || !level.typeId().equals(firstId)) {
                     return rejected(player, stack, "message.mmcr.terminal.invalid_level");
@@ -114,6 +115,9 @@ public final class TerminalService {
             }
             case BUILD, DEMOLISH -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
+                TerminalData normalized = normalize(controller, data);
+                if (!normalized.equals(data)) setData(stack, normalized);
+                data = normalized;
                 StructureItemStorage storage = StructureItemStorageResolver.resolve(player, data).orElse(null);
                 if (storage == null) return rejected(player, stack, "message.mmcr.terminal.storage_unavailable");
                 boolean freeInventoryBuild = player.isCreative() && data.inventoryMode() == TerminalInventoryMode.INVENTORY;
