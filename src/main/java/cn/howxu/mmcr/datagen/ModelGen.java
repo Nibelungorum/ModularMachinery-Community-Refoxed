@@ -74,6 +74,7 @@ public final class ModelGen extends ModelProvider {
         itemRegistration.register(ModItems.MULTIBLOCK_DETECTOR::get, "multiblock_detector");
         itemRegistration.register(ModItems.THREAD_DISPERSER::get, "thread_disperser");
         itemRegistration.register(ModItems.TERMINAL::get, "terminal");
+        itemRegistration.register(ModItems.KEY_CARD::get, "key_card");
         itemRegistration.register(ModItems.MODULARIUM::get, "modularium");
     }
 

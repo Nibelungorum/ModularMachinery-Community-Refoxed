@@ -21,8 +21,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Data
-        run: ./run_data.sh
+      - name: Run Client Data
+        run: gradle runClientData --no-daemon
+
+      - name: Run Server Data
+        run: gradle runServerData --no-daemon
 
       - name: Compile Test
         run: gradle compileJava --no-daemon

@@ -50,11 +50,11 @@ jobs:
           set -euo pipefail
           perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.version }}/m' gradle.properties
 
-      - name: Run Data Permission
-        run: chmod u+x run_data.sh
+      - name: Run Client Data
+        run: gradle runClientData --no-daemon
 
-      - name: Run Data
-        run: ./run_data.sh
+      - name: Run Server Data
+        run: gradle runServerData --no-daemon
 
       - name: Compile Test
         run: gradle compileJava --no-daemon
