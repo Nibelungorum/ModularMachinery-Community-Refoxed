@@ -6,6 +6,7 @@ import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -21,5 +22,11 @@ class PktTerminalActionPayloadTest {
 
         assertThat(PktTerminalActionPayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
         buffer.release();
+    }
+
+    @Test
+    void rejects_a_value_outside_the_terminal_data_range() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PktTerminalActionPayload(
+                TerminalAction.SET_PREVIEW_LAYER, 1 << 25, null, null));
     }
 }
