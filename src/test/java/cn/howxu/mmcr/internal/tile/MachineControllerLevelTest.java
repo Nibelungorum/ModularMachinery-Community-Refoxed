@@ -181,7 +181,7 @@ class MachineControllerLevelTest {
 
     private MachineControllerBlockEntity controllerWithSlots(Block first, Block second) throws Exception {
         MachineDefinitions.clearForTesting();
-        MachineDefinitions.register(MachineRegistration.builder(MACHINE_ID).localizedName("Level Machine").build());
+        MachineDefinitions.register(MachineRegistration.builder(MACHINE_ID).build());
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(COIL_TYPE, Component.literal("Coils")));
         copper = level("test:copper", 1, Blocks.COPPER_BLOCK);
@@ -256,7 +256,6 @@ class MachineControllerLevelTest {
                                                                       Map<BlockPos, Block> blocks) throws Exception {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(MACHINE_ID)
-                .localizedName("Facing Machine")
                 .controllerSpec(spec)
                 .build());
         Map<BlockPos, BlockPredicate> patternPredicates = new LinkedHashMap<>();

@@ -14,7 +14,7 @@ class SmartInterfaceTypeTest {
         var mode = new SmartInterfaceType("mode", 1.5F, 20);
         var speed = new SmartInterfaceType("speed", 2F, 10);
         var registration = MachineRegistration.builder(MMCR.id("interface_test"))
-                .localizedName("Interface Test").smartInterfaceType(mode).smartInterfaceType(speed).build();
+                .smartInterfaceType(mode).smartInterfaceType(speed).build();
 
         assertThat(registration.smartInterfaceTypes()).containsEntry("mode", mode).containsEntry("speed", speed);
         assertThat(registration.smartInterfaceTypes().keySet()).containsExactly("mode", "speed");

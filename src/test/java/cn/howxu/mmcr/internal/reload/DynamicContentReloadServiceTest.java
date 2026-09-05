@@ -152,7 +152,7 @@ class DynamicContentReloadServiceTest {
         Identifier identifier = Identifier.parse(id);
         if (MachineDefinitions.getRegistration(identifier) == null) {
             MachineDefinitions.beginRegistryPhase();
-            MachineDefinitions.register(MachineRegistration.builder(identifier).localizedName(id).build());
+            MachineDefinitions.register(MachineRegistration.builder(identifier).build());
         }
     }
 

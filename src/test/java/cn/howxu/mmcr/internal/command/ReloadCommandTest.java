@@ -59,7 +59,7 @@ class ReloadCommandTest {
     @Test
     void reloadCommandPreservesDynamicStructuresAndSynchronizesEffectiveSnapshot() throws Exception {
         Identifier removed = Identifier.parse("mmcr:removed");
-        MachineDefinitions.register(MachineRegistration.builder(removed).localizedName("Removed").build());
+        MachineDefinitions.register(MachineRegistration.builder(removed).build());
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(structure(removed)));
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
         ReloadCommand.register(dispatcher);

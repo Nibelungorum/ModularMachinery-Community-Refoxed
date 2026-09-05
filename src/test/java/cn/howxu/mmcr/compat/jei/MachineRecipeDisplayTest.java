@@ -131,7 +131,7 @@ class MachineRecipeDisplayTest {
     @Test
     void display_uses_i18n_tooltip_for_interface_input() {
         var machineId = MMCR.id("interface_jei_machine");
-        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI")
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0)).build());
         MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.input("mode", 1F, 2F), machineId);
 
@@ -151,7 +151,7 @@ class MachineRecipeDisplayTest {
     @Test
     void display_uses_i18n_tooltip_for_interface_output() {
         var machineId = MMCR.id("interface_jei_fallback");
-        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI Fallback")
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0)).build());
         MachineRecipeDisplay display = displayFor(SmartInterfaceRequirement.output("mode", 4F), machineId);
 
@@ -166,7 +166,7 @@ class MachineRecipeDisplayTest {
     @Test
     void smart_interface_jei_text_uses_localized_type_compact_ranges_and_integer_values() {
         var machineId = MMCR.id("interface_jei_compact");
-        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Interface JEI Compact")
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .smartInterfaceType(new SmartInterfaceType("Mode", 0F, 0, SmartInterfaceType.ValueType.INTEGER))
                 .smartInterfaceType(new SmartInterfaceType("Temperature", 400F, 1, SmartInterfaceType.ValueType.INTEGER))
                 .build());
@@ -608,7 +608,7 @@ class MachineRecipeDisplayTest {
     @Test
     void smartInterfaceRequirementsDoNotCreateJeiSlots() {
         var machineId = MMCR.id("jei_smart_interface_text_only");
-        MachineDefinitions.register(MachineRegistration.builder(machineId).localizedName("Smart text only")
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0)).build());
         MachineRequirement item = new ItemRequirement(RecipeModifier.IOType.INPUT,
                 Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY);

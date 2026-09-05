@@ -44,12 +44,12 @@ class MachineDefinitionBootstrapTest {
     @Test
     void startupRegistrationsRejectDuplicateIds() {
         var staticId = Identifier.parse("mmcr:static_machine");
-        MachineDefinitions.register(MachineRegistration.builder(staticId).localizedName("Static").build());
+        MachineDefinitions.register(MachineRegistration.builder(staticId).build());
 
         assertThat(MachineDefinitions.getRegistration(staticId)).isNotNull();
         assertThat(MachineDefinitions.allRegistrations()).extracting(MachineRegistration::id)
                 .containsExactly(staticId);
-        assertThatThrownBy(() -> MachineDefinitions.register(MachineRegistration.builder(staticId).localizedName("Conflict").build()))
+        assertThatThrownBy(() -> MachineDefinitions.register(MachineRegistration.builder(staticId).build()))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -87,7 +87,7 @@ class MachineDefinitionBootstrapTest {
     }
 
     private static MachineRegistration testRegistration(String path) {
-        return MachineRegistration.builder(MMCR.id(path)).localizedName(path).build();
+        return MachineRegistration.builder(MMCR.id(path)).build();
     }
 
     private static MachineStructureDefinition structure(String id) {

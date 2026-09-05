@@ -120,7 +120,7 @@ class MachineRegistryTest {
         var dynamicStructure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()),
                 PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         MachineRegistry.register(staticMachine);
-        MachineDefinitions.register(MachineRegistration.builder(dynamicId).localizedName("Dynamic").build());
+        MachineDefinitions.register(MachineRegistration.builder(dynamicId).build());
 
         MachineStructureRegistry.replaceDynamic(Map.of(dynamicId, dynamicStructure));
 
@@ -142,7 +142,6 @@ class MachineRegistryTest {
     void dynamic_runtime_machine_preserves_registration_concurrency_capabilities() {
         var dynamicId = Identifier.parse("mmcr:dynamic_concurrency");
         var registration = MachineRegistration.builder(dynamicId)
-                .localizedName("Dynamic Concurrency")
                 .allowMultithreading(true)
                 .allowParallelism(true)
                 .maxParallelAmount(9)
