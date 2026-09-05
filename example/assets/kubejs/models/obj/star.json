@@ -1,0 +1,9 @@
+{
+  "flip_v": true,
+  "loader": "neoforge:obj",
+  "model": "kubejs:models/obj/star.obj",
+  "textures": {
+    "texture0": "kubejs:block/obj/star_layer",
+    "particle": "kubejs:block/obj/star_layer"
+  }
+}

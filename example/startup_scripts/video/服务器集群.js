@@ -9,7 +9,7 @@ MMCREvents.startup(event => {
 
     const machine_producer = event
         .createMachine(PRODUCER_ID)
-        .displayNameKey("machine.kuebjs.server")
+        .displayNameKey("machine.kubejs.server")
         .appearance("mekanism:block_tin")
         .networkInterface(1, 1)
         .allowNetworkMachine(CENTER_ID)
@@ -120,7 +120,7 @@ MMCREvents.startup(event => {
     const machine_center = event
         .createMachine(CENTER_ID)
         .displayNameKey("machine.kubejs.center")
-        .appearance("mekanism:superheating_element")
+        .appearance("mekanism:induction_casing")
         .networkInterface(1, 16)
         .allowNetworkMachine(PRODUCER_ID)
         .requestProcess(REPORT_POWER, (body, request, senderStorage, receiverStorage) => {
