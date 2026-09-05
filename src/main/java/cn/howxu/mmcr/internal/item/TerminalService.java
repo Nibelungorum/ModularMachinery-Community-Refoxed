@@ -192,7 +192,9 @@ public final class TerminalService {
     private static void sendState(ServerPlayer player, ItemStack stack, String statusKey) {
         if (player == null || player.connection == null || stack == null || !stack.is(ModItems.TERMINAL.get())) return;
         TerminalData data = TerminalData.from(stack);
+        MachineControllerBlockEntity controller = controllerAt(player, data.controller()).orElse(null);
         PacketDistributor.sendToPlayer(player, new PktTerminalStatePayload(data,
-                controllerAt(player, data.controller()).isPresent(), StructureItemStorageResolver.resolve(player, data).isPresent(), statusKey));
+                controller != null, StructureItemStorageResolver.resolve(player, data).isPresent(),
+                controller == null ? List.of() : controller.availableStructureStages(), statusKey));
     }
 }

@@ -149,7 +149,7 @@ public final class ModEventRegistration {
                  .playToClient(PktMultiblockPreviewPayload.TYPE, PktMultiblockPreviewPayload.STREAM_CODEC,
                          PktMultiblockPreviewPayload::handle)
                  .playToClient(PktTerminalStatePayload.TYPE, PktTerminalStatePayload.STREAM_CODEC,
-                         (payload, context) -> {})
+                          PktTerminalStatePayload::handle)
                 .playToServer(PktMultiblockDetectorPickPayload.TYPE, PktMultiblockDetectorPickPayload.STREAM_CODEC,
                         PktMultiblockDetectorPickPayload::handle)
                 .playToServer(PktMultiblockDetectorUpdatePayload.TYPE, PktMultiblockDetectorUpdatePayload.STREAM_CODEC,
