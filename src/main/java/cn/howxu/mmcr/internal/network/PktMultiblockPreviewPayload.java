@@ -29,6 +29,7 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
                                           List<MultiblockPreviewSnapshot.Entry> entries,
                                           int durationTicks) implements CustomPacketPayload {
     public static final int DURATION_TICKS = 200;
+    public static final int PERSISTENT_DURATION_TICKS = -1;
     public static final int MAX_ENTRIES = 131072;
     public static final Type<PktMultiblockPreviewPayload> TYPE = new Type<>(MMCR.id("multiblock_preview"));
     private static final StreamCodec<RegistryFriendlyByteBuf, BlockState> BLOCK_STATE_CODEC = StreamCodec.of(

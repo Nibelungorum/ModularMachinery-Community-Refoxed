@@ -86,6 +86,20 @@ public final class MultiblockPreviewClientHandler {
         if (controllerPos != null && previewDimension.equals(dimension) && previewControllerPos.equals(controllerPos)) clear();
     }
 
+    public static void setSelectedLayer(int newLayer) {
+        if (controllerPos == null || (newLayer != Integer.MAX_VALUE && !layers.contains(newLayer))) return;
+        if (selectedLayer == newLayer) return;
+        selectedLayer = newLayer;
+        worldMeshCompileInput = null;
+        cancelCompilation();
+        if (gpuMesh != null) {
+            gpuMesh.close();
+            gpuMesh = null;
+            gpuMeshKey = null;
+        }
+        rebuildVisibleEntries();
+    }
+
     static void showAtTick(ResourceKey<Level> newDimension, BlockPos newControllerPos,
                            List<MultiblockPreviewSnapshot.Entry> newEntries, int durationTicks, long now) {
         boolean sameActiveController = isActive(now)
@@ -101,7 +115,7 @@ public final class MultiblockPreviewClientHandler {
         layers = entries.stream().map(entry -> entry.relativePos().getY()).distinct().sorted().toList();
         selectedLayer = sameActiveController ? nextLayer() : Integer.MAX_VALUE;
         worldMeshRequest = worldMeshCache.requestToken(worldMeshKey());
-        expiresAtTick = now + Math.max(1, durationTicks);
+        expiresAtTick = durationTicks < 0 ? Long.MAX_VALUE : now + Math.max(1, durationTicks);
         rebuildVisibleEntries();
     }
 
@@ -302,11 +316,11 @@ public final class MultiblockPreviewClientHandler {
             RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
             RenderSystem.getModelViewStack().translate((float) -camera.x, (float) -camera.y, (float) -camera.z);
             if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
-                mesh.draw(ChunkSectionLayer.SOLID, event.getModelViewMatrix());
-                mesh.draw(ChunkSectionLayer.CUTOUT, event.getModelViewMatrix());
+                mesh.draw(ChunkSectionLayer.SOLID);
+                mesh.draw(ChunkSectionLayer.CUTOUT);
             } else {
                 mesh.resortTranslucent(camera);
-                mesh.draw(ChunkSectionLayer.TRANSLUCENT, event.getModelViewMatrix());
+                mesh.draw(ChunkSectionLayer.TRANSLUCENT);
             }
         } finally {
             RenderSystem.getModelViewStack().popMatrix();

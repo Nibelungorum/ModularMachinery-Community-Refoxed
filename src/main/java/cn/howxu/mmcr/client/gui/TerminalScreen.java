@@ -7,13 +7,13 @@ import cn.howxu.mmcr.internal.item.TerminalAction;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
-import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -87,13 +87,13 @@ public final class TerminalScreen extends Screen {
                 send(TerminalAction.SET_STAGE, nextStage(), null, null)));
         plusButton = addRenderableWidget(Button.builder(Component.literal("+"), button ->
                 sendPreviewLayer(nextLayer(data.previewLayer(), previewLayers), false))
-                .bounds(x + 96, top() + 94, 18, 18).build());
+                .bounds(x, top() + 94, 18, 18).build());
         minusButton = addRenderableWidget(Button.builder(Component.literal("-"), button ->
                 sendPreviewLayer(previousLayer(data.previewLayer(), previewLayers), false))
-                .bounds(x + 116, top() + 94, 18, 18).build());
+                .bounds(x + 20, top() + 94, 18, 18).build());
         resetButton = addRenderableWidget(Button.builder(Component.literal("R"), button ->
                 sendPreviewLayer(resetLayer(), true))
-                .bounds(x + 136, top() + 94, 18, 18).build());
+                .bounds(x + 40, top() + 94, 18, 18).build());
         int footer = left() + 8;
         previewButton = addRenderableWidget(actionButton("gui.mmcr.terminal.preview", footer,
                 TerminalAction.SET_PREVIEW_ENABLED));
@@ -129,15 +129,6 @@ public final class TerminalScreen extends Screen {
     }
 
     @Override
-    public void tick() {
-        super.tick();
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || !minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get())) {
-            minecraft.setScreen(null);
-        }
-    }
-
-    @Override
     public boolean isPauseScreen() {
         return false;
     }
@@ -169,7 +160,13 @@ public final class TerminalScreen extends Screen {
         MachineLevel level = MachineLevelRegistry.getLevel(levelId);
         boolean multipleLevels = MachineLevelRegistry.levelsForType(typeId).size() > 1;
         return new LevelView(true, level != null && multipleLevels, typeId, levelId,
-                level == null ? ItemStack.EMPTY : level.representative());
+                level == null ? ItemStack.EMPTY : levelBlockStack(level));
+    }
+
+    private static ItemStack levelBlockStack(MachineLevel level) {
+        return level.statePredicate().preferredState()
+                .map(state -> state.getBlock().asItem().getDefaultInstance())
+                .orElse(ItemStack.EMPTY);
     }
 
     private static boolean validLevelSelection(Identifier typeId, Map<Identifier, Identifier> selectedLevels) {
@@ -188,7 +185,7 @@ public final class TerminalScreen extends Screen {
     }
 
     static boolean closesAfter(TerminalAction action) {
-        return action == TerminalAction.SET_PREVIEW_ENABLED || action == TerminalAction.CHECK
+        return action == TerminalAction.CHECK
                 || action == TerminalAction.BUILD || action == TerminalAction.DEMOLISH;
     }
 
@@ -197,8 +194,8 @@ public final class TerminalScreen extends Screen {
     }
 
     private Button actionButton(String key, int x, TerminalAction action) {
-        var label = Component.translatable(key);
-        if (action == TerminalAction.SET_PREVIEW_ENABLED || action == TerminalAction.BUILD) {
+        var label = action == TerminalAction.SET_PREVIEW_ENABLED ? previewLabel() : Component.translatable(key);
+        if (action == TerminalAction.BUILD) {
             label = label.withStyle(ChatFormatting.GREEN);
         } else if (action == TerminalAction.DEMOLISH) {
             label = label.withStyle(ChatFormatting.RED);
@@ -227,14 +224,15 @@ public final class TerminalScreen extends Screen {
         typeButton.active = controllerAvailable && view.typeButtonActive();
         levelButton.active = controllerAvailable && view.levelButtonActive();
         stageButton.active = controls.stageActive();
+        stageButton.setMessage(Component.literal(Integer.toString(data.stage())));
         plusButton.active = controls.layerActive();
         minusButton.active = controls.layerActive();
         resetButton.active = controls.resetActive();
         typeButton.setMessage(view.typeId() == null ? Component.translatable("gui.mmcr.terminal.level_type")
                 : MachineLevelRegistry.getType(view.typeId()).displayName());
-        levelButton.setMessage(view.levelId() == null ? Component.translatable("gui.mmcr.terminal.level")
-                : view.slotStack().getHoverName());
+        levelButton.setMessage(levelLabel(view));
         previewButton.active = controllerAvailable;
+        previewButton.setMessage(previewLabel());
         checkButton.active = controllerAvailable;
         buildButton.active = controllerAvailable && storageAvailable;
         dismantleButton.active = controllerAvailable && storageAvailable;
@@ -293,11 +291,25 @@ public final class TerminalScreen extends Screen {
                 ? "gui.mmcr.terminal.inventory_mode.inventory" : "gui.mmcr.terminal.inventory_mode.container");
     }
 
+    private Component levelLabel(LevelView view) {
+        if (view.levelId() == null) return Component.translatable("gui.mmcr.terminal.level");
+        MachineLevel level = MachineLevelRegistry.getLevel(view.levelId());
+        return level == null ? Component.translatable("gui.mmcr.terminal.level")
+                : level.statePredicate().preferredState()
+                        .map(state -> (Component) state.getBlock().getName())
+                        .orElseGet(() -> view.slotStack().getHoverName());
+    }
+
+    private MutableComponent previewLabel() {
+        return Component.translatable(data.previewEnabled()
+                ? "gui.mmcr.terminal.preview.on" : "gui.mmcr.terminal.preview.off");
+    }
+
     private boolean canSend(TerminalAction action) {
         return switch (action) {
             case REQUEST_STATE -> false;
             case SET_INVENTORY_MODE -> true;
-            case SET_STAGE -> controllerAvailable && !stages.isEmpty();
+            case SET_STAGE -> controllerAvailable && stages.size() > 1;
             case SET_LEVEL -> controllerAvailable && levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels())
                     .typeButtonActive();
             case SET_PREVIEW_ENABLED, SET_PREVIEW_LAYER, CHECK -> controllerAvailable;
@@ -306,7 +318,7 @@ public final class TerminalScreen extends Screen {
     }
 
     static ControlState controlState(boolean controllerAvailable, List<Integer> stages, List<Integer> previewLayers) {
-        return new ControlState(controllerAvailable && !stages.isEmpty(),
+        return new ControlState(controllerAvailable && stages.size() > 1,
                 controllerAvailable && !previewLayers.isEmpty(), controllerAvailable);
     }
 

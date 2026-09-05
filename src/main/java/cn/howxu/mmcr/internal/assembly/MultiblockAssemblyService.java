@@ -2,12 +2,15 @@ package cn.howxu.mmcr.internal.assembly;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.resources.Identifier;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -186,12 +189,19 @@ public final class MultiblockAssemblyService {
 
     public static Result build(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
                                StructureItemSource source, boolean freeBuild) {
+        return build(player, controller, stage, source, freeBuild, Map.of());
+    }
+
+    public static Result build(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
+                               StructureItemSource source, boolean freeBuild,
+                               Map<Identifier, Identifier> selectedLevels) {
         var machine = controller.boundMachine();
         if (machine.isEmpty()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
         BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
-        List<Placement> placements = createTemplatePlacements(controller.getBlockPos(), pattern).stream()
+        List<Placement> placements = applySelectedLevels(machine.get(), stage, pattern, controller.getBlockPos(),
+                createTemplatePlacements(controller.getBlockPos(), pattern), selectedLevels).stream()
                 .filter(placement -> player.level().getBlockState(placement.pos()).isAir())
                 .toList();
         placements = limitOperation(placements);
@@ -215,6 +225,22 @@ public final class MultiblockAssemblyService {
         }
         return new Result(InteractionResult.SUCCESS, placements.size(),
                 new ComponentKey("message.mmcr.terminal.build.accepted", placements.size()));
+    }
+
+    private static List<Placement> applySelectedLevels(Machine machine, int stage, BlockArray pattern,
+            BlockPos controllerPos, List<Placement> placements, Map<Identifier, Identifier> selectedLevels) {
+        Map<Character, Identifier> levelTypes = machine.structureStages().stream()
+                .filter(structureStage -> structureStage.number() == stage)
+                .findFirst().map(structureStage -> structureStage.requirements().levelSlots()).orElse(Map.of());
+        if (levelTypes.isEmpty() || selectedLevels.isEmpty()) return placements;
+        return placements.stream().map(placement -> {
+            Character symbol = pattern.symbolsByPosition().get(placement.pos().subtract(controllerPos));
+            Identifier levelId = symbol == null ? null : selectedLevels.get(levelTypes.get(symbol));
+            MachineLevel level = levelId == null ? null : MachineLevelRegistry.getLevel(levelId);
+            BlockState state = level == null ? null : level.statePredicate().preferredState().orElse(null);
+            return state == null ? placement
+                    : new Placement(placement.pos(), state, requirementFor(state), level.statePredicate());
+        }).toList();
     }
 
     public static Result demolish(ServerPlayer player, MachineControllerBlockEntity controller,

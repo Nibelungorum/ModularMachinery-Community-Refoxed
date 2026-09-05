@@ -1573,7 +1573,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (configuredMachine == null) return Optional.empty();
 
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
-        for (CandidatePattern candidatePattern : candidatePatterns(configuredMachine, facing)) {
+        for (CandidatePattern candidatePattern : candidatePatterns(configuredMachine, facing).stream()
+                .sorted(Comparator.comparingInt(CandidatePattern::stageNumber)).toList()) {
             MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(), candidatePattern.pattern(), maxEntries);
             if (!snapshot.isEmpty()) return Optional.of(snapshot);
         }
@@ -1620,6 +1621,43 @@ public class MachineControllerBlockEntity extends BlockEntity {
         PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.get()));
         rememberPreviewReceiver(player.getUUID(), level.getGameTime(), PREVIEW_RECEIVER_WINDOW_TICKS);
         return true;
+    }
+
+    public boolean sendTerminalStructurePreview(ServerPlayer player, int stage,
+            Map<Identifier, Identifier> selectedLevels) {
+        if (level == null || level.isClientSide() || currentRuntimeSnapshot().structure().formed()) return false;
+        Machine machine = boundMachine().orElse(null);
+        if (machine == null) return false;
+        BlockArray pattern;
+        try {
+            pattern = assemblyPattern(machine, stage);
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+        MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(),
+                applySelectedLevels(machine, stage, pattern, selectedLevels), PktMultiblockPreviewPayload.MAX_ENTRIES);
+        if (snapshot.isEmpty()) return false;
+        PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.dimension(), snapshot.controllerPos(),
+                snapshot.entries(), PktMultiblockPreviewPayload.PERSISTENT_DURATION_TICKS));
+        previewReceivers().put(player.getUUID(), Long.MAX_VALUE);
+        return true;
+    }
+
+    private static BlockArray applySelectedLevels(Machine machine, int stage, BlockArray pattern,
+            Map<Identifier, Identifier> selectedLevels) {
+        Map<Character, Identifier> levelTypes = machine.structureStages().stream()
+                .filter(structureStage -> structureStage.number() == stage)
+                .findFirst().map(structureStage -> structureStage.requirements().levelSlots()).orElse(Map.of());
+        if (levelTypes.isEmpty() || selectedLevels.isEmpty()) return pattern;
+        Map<BlockPos, BlockPredicate> selectedPattern = new LinkedHashMap<>(pattern.pattern());
+        pattern.symbolsByPosition().forEach((position, symbol) -> {
+            Identifier levelId = selectedLevels.get(levelTypes.get(symbol));
+            MachineLevel selectedLevel = levelId == null ? null : MachineLevelRegistry.getLevel(levelId);
+            if (selectedLevel == null) return;
+            selectedLevel.statePredicate().preferredState()
+                    .ifPresent(state -> selectedPattern.put(position, new BlockPredicate.OfBlockState(state)));
+        });
+        return new BlockArray(selectedPattern, pattern.tagsByPosition(), pattern.symbolsByPosition());
     }
 
     public void clearStructurePreview(ServerPlayer player) {

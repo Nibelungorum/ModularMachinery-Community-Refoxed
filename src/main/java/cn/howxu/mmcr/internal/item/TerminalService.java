@@ -43,7 +43,9 @@ public final class TerminalService {
         if (!isHeldTerminal(player, stack)) return rejected(player, stack, "message.mmcr.terminal.not_held");
         MachineControllerBlockEntity controller = controllerAt(player, target).orElse(null);
         if (controller == null) return rejected(player, stack, "message.mmcr.terminal.invalid_controller");
-        setData(stack, normalize(controller, TerminalData.from(stack).withController(target)));
+        TerminalData data = TerminalData.from(stack);
+        controllerAt(player, data.controller()).ifPresent(previous -> previous.clearStructurePreview(player));
+        setData(stack, normalize(controller, data.withController(target).withPreview(false, Integer.MAX_VALUE)));
         return accepted(player, stack, "message.mmcr.terminal.controller_bound");
     }
 
@@ -94,23 +96,31 @@ public final class TerminalService {
                 if (controller == null || !controller.availableStructureStages().contains(value)) {
                     return rejected(player, stack, "message.mmcr.terminal.invalid_stage");
                 }
-                setData(stack, normalize(controller, data.withStage(value)));
+                TerminalData updated = normalize(controller, data.withStage(value));
+                setData(stack, updated);
+                if (updated.previewEnabled()) controller.sendTerminalStructurePreview(player, updated.stage(), updated.selectedLevels());
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
             case SET_LEVEL -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 MachineLevel level = secondId == null ? null : MachineLevelRegistry.getLevel(secondId);
-                if (firstId == null || level == null || !level.typeId().equals(firstId)) {
+                TerminalData normalized = normalize(controller, data);
+                if (firstId == null || level == null || !level.typeId().equals(firstId)
+                        || !normalized.selectedLevels().containsKey(firstId)) {
                     return rejected(player, stack, "message.mmcr.terminal.invalid_level");
                 }
-                setData(stack, normalize(controller, data.withSelectedLevel(firstId, secondId)));
+                TerminalData updated = normalize(controller, normalized.withSelectedLevel(firstId, secondId)
+                        .withPreview(normalized.previewEnabled(), Integer.MAX_VALUE));
+                setData(stack, updated);
+                if (updated.previewEnabled()) controller.sendTerminalStructurePreview(player, updated.stage(), updated.selectedLevels());
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
             case SET_PREVIEW_ENABLED -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 boolean enabled = value != 0;
-                setData(stack, data.withPreview(enabled, data.previewLayer()));
-                if (enabled) controller.sendStructurePreview(player);
+                TerminalData updated = data.withPreview(enabled, data.previewLayer());
+                setData(stack, updated);
+                if (enabled) controller.sendTerminalStructurePreview(player, updated.stage(), updated.selectedLevels());
                 else controller.clearStructurePreview(player);
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
@@ -119,7 +129,9 @@ public final class TerminalService {
                 if (!previewLayerAllowed(value, currentPreviewLayers(controller, data))) {
                     return rejected(player, stack, "message.mmcr.terminal.invalid_preview_layer");
                 }
-                setData(stack, data.withPreview(data.previewEnabled(), value));
+                TerminalData updated = data.withPreview(data.previewEnabled(), value);
+                setData(stack, updated);
+                if (updated.previewEnabled()) controller.sendTerminalStructurePreview(player, updated.stage(), updated.selectedLevels());
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
             case CHECK -> {
@@ -137,7 +149,8 @@ public final class TerminalService {
                 boolean freeInventoryBuild = player.isCreative() && data.inventoryMode() == TerminalInventoryMode.INVENTORY;
                 StructureItemSink demolitionSink = freeInventoryBuild ? ignored -> true : storage.sink();
                 MultiblockAssemblyService.Result result = action == TerminalAction.BUILD
-                        ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild)
+                        ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild,
+                                data.selectedLevels())
                         : MultiblockAssemblyService.demolish(player, controller, data.stage(),
                                 Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink);
                 player.sendSystemMessage(net.minecraft.network.chat.Component.translatable(result.message().key(), result.message().args()));
@@ -197,7 +210,7 @@ public final class TerminalService {
 
     private static boolean canAccess(ServerPlayer player, GlobalPos target) {
         return player != null && target != null && player.level().dimension().equals(target.dimension())
-                && player.blockPosition().distSqr(target.pos()) <= 64;
+                && player.blockPosition().distSqr(target.pos()) <= 36;
     }
 
     private static boolean isHeldTerminal(ServerPlayer player, ItemStack stack) {

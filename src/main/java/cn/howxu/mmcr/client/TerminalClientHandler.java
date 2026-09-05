@@ -45,6 +45,11 @@ public final class TerminalClientHandler {
         if (minecraft.screen instanceof TerminalScreen screen) {
             screen.applyState(data, controllerAvailable, storageAvailable, stages, machineName, previewLayers, statusKey);
         }
+        if (data.previewEnabled()) {
+            MultiblockPreviewClientHandler.setSelectedLayer(data.previewLayer());
+        } else if (data.controller() != null) {
+            MultiblockPreviewClientHandler.clearPreview(data.controller().dimension(), data.controller().pos());
+        }
     }
 
     static PktTerminalActionPayload initialStateRequest() {
