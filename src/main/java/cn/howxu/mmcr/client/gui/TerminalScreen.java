@@ -279,7 +279,7 @@ public final class TerminalScreen extends Screen {
             return Component.translatable("gui.mmcr.terminal.no_controller");
         }
         return Component.translatable("gui.mmcr.terminal.machine", machineName,
-                data.controller().dimension().identifier(), data.controller().pos().toShortString());
+                data.controller().dimension().identifier().toString(), data.controller().pos().toShortString());
     }
 
     private Component layerLabel() {
