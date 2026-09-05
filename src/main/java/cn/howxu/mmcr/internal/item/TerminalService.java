@@ -35,6 +35,8 @@ import java.util.OptionalInt;
  * @author howxu <dev@howxu.cn>
  */
 public final class TerminalService {
+    private static final int CONTROLLER_ACCESS_RADIUS = 6 * 16;
+
     private TerminalService() {}
 
     public record Result(boolean accepted, String messageKey) {}
@@ -216,7 +218,8 @@ public final class TerminalService {
 
     private static boolean canAccess(ServerPlayer player, GlobalPos target) {
         return player != null && target != null && player.level().dimension().equals(target.dimension())
-                && player.blockPosition().distSqr(target.pos()) <= 36;
+                && player.blockPosition().distSqr(target.pos())
+                <= CONTROLLER_ACCESS_RADIUS * CONTROLLER_ACCESS_RADIUS;
     }
 
     private static boolean isHeldTerminal(ServerPlayer player, ItemStack stack) {

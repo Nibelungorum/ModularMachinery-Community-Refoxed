@@ -5,10 +5,12 @@ import cn.howxu.mmcr.client.gui.TerminalScreen;
 import cn.howxu.mmcr.internal.item.TerminalAction;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -30,7 +32,7 @@ public final class TerminalClientHandler {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
         if (!shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.hasShiftDown(), minecraft.screen != null,
-                minecraft.hitResult != null && minecraft.hitResult.getType() == HitResult.Type.MISS,
+                isTerminalScreenTarget(minecraft),
                 minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get()))) return;
         TerminalData data = TerminalData.from(minecraft.player.getMainHandItem());
         minecraft.setScreen(new TerminalScreen(data, false, false, List.of(), ""));
@@ -56,8 +58,15 @@ public final class TerminalClientHandler {
         return new PktTerminalActionPayload(TerminalAction.REQUEST_STATE, 0, null, null);
     }
 
+    private static boolean isTerminalScreenTarget(Minecraft minecraft) {
+        HitResult hit = minecraft.hitResult;
+        if (hit == null || hit.getType() == HitResult.Type.MISS) return true;
+        return hit instanceof BlockHitResult blockHit && minecraft.level != null
+                && !(minecraft.level.getBlockEntity(blockHit.getBlockPos()) instanceof MachineControllerBlockEntity);
+    }
+
     static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean shiftDown,
-            boolean hasScreen, boolean miss, boolean terminalHeld) {
-        return useItem && hand == InteractionHand.MAIN_HAND && !shiftDown && !hasScreen && miss && terminalHeld;
+            boolean hasScreen, boolean targetAllowed, boolean terminalHeld) {
+        return useItem && hand == InteractionHand.MAIN_HAND && !shiftDown && !hasScreen && targetAllowed && terminalHeld;
     }
 }
