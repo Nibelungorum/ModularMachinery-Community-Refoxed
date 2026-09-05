@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.assembly.StructureItemSink;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorageResolver;
 import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
@@ -134,10 +135,11 @@ public final class TerminalService {
                 StructureItemStorage storage = StructureItemStorageResolver.resolve(player, data).orElse(null);
                 if (storage == null) return rejected(player, stack, "message.mmcr.terminal.storage_unavailable");
                 boolean freeInventoryBuild = player.isCreative() && data.inventoryMode() == TerminalInventoryMode.INVENTORY;
+                StructureItemSink demolitionSink = freeInventoryBuild ? ignored -> true : storage.sink();
                 MultiblockAssemblyService.Result result = action == TerminalAction.BUILD
                         ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild)
                         : MultiblockAssemblyService.demolish(player, controller, data.stage(),
-                                Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), storage.sink());
+                                Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink);
                 player.sendSystemMessage(net.minecraft.network.chat.Component.translatable(result.message().key(), result.message().args()));
                 return result.interactionResult().consumesAction()
                         ? accepted(player, stack, result.message().key()) : rejected(player, stack, result.message().key());
@@ -156,8 +158,15 @@ public final class TerminalService {
     }
 
     private static TerminalData normalize(MachineControllerBlockEntity controller, TerminalData data) {
+        List<Integer> stages = controller.availableStructureStages();
+        int stage = stages.contains(data.stage()) ? data.stage() : stages.getFirst();
+        List<Identifier> levelTypes = controller.boundMachine().map(machine -> machine.structureStages().stream()
+                .filter(structureStage -> structureStage.number() == stage)
+                .flatMap(structureStage -> structureStage.levelSlots().values().stream())
+                .distinct().toList()).orElse(List.of());
         LinkedHashMap<Identifier, Identifier> levels = new LinkedHashMap<>();
         for (LevelType type : MachineLevelRegistry.types()) {
+            if (!levelTypes.contains(type.id())) continue;
             List<MachineLevel> available = MachineLevelRegistry.levelsForType(type.id()).stream()
                     .sorted(java.util.Comparator.comparingInt(MachineLevel::priority)).toList();
             if (available.isEmpty()) continue;
@@ -172,8 +181,6 @@ public final class TerminalService {
             if (!validSelection) selected = available.getFirst().id();
             levels.put(type.id(), selected);
         }
-        List<Integer> stages = controller.availableStructureStages();
-        int stage = stages.contains(data.stage()) ? data.stage() : stages.getFirst();
         Identifier selectedType = data.selectedLevelType();
         if (selectedType == null || !levels.containsKey(selectedType)) selectedType = levels.isEmpty() ? null : levels.keySet().iterator().next();
         return new TerminalData(data.controller(), data.container(), data.inventoryMode(), selectedType, levels, stage,
@@ -219,9 +226,7 @@ public final class TerminalService {
         Machine machine = structure == null ? null
                 : structure.machine() == null ? structure.configuredMachine() : structure.machine();
         List<Integer> stages = controller == null ? List.of() : controller.availableStructureStages();
-        OptionalInt stage = effectiveStage(stages, data.stage());
-        TerminalData stateData = stage.isPresent() && stage.getAsInt() != data.stage()
-                ? data.withStage(stage.getAsInt()) : data;
+        TerminalData stateData = controller == null ? data : normalize(controller, data);
         BlockArray pattern = previewPattern(controller, data, structure, machine, stages);
         PacketDistributor.sendToPlayer(player, new PktTerminalStatePayload(stateData,
                 controller != null, StructureItemStorageResolver.resolve(player, data).isPresent(),

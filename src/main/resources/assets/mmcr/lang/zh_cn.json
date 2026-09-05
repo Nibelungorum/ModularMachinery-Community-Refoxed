@@ -365,6 +365,8 @@
   "message.mmcr.port_tier.tiny": "微型",
   "message.mmcr.port_tier.ultimate": "究极",
   "message.mmcr.port_tier.vacuum": "终极",
+  "message.mmcr.terminal.controller_bound": "已选中机器控制器",
+  "message.mmcr.terminal.cleared": "已清空终端数据",
   "message.mmcr.terminal.build.missing": "缺少搭建所需方块",
   "message.mmcr.terminal.build.none": "结构已成型",
   "message.mmcr.terminal.build.success": "已搭建 %s 个方块",

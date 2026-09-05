@@ -365,6 +365,8 @@
   "message.mmcr.port_tier.tiny": "tiny",
   "message.mmcr.port_tier.ultimate": "ultimate",
   "message.mmcr.port_tier.vacuum": "vacuum",
+  "message.mmcr.terminal.controller_bound": "Machine controller selected",
+  "message.mmcr.terminal.cleared": "Terminal data cleared",
   "message.mmcr.terminal.build.missing": "Missing required structure blocks",
   "message.mmcr.terminal.build.none": "Structure already formed",
   "message.mmcr.terminal.build.success": "Built %s blocks",

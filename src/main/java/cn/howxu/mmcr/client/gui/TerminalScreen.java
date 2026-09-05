@@ -167,7 +167,8 @@ public final class TerminalScreen extends Screen {
         if (typeId == null) return new LevelView(false, false, null, null, ItemStack.EMPTY);
         Identifier levelId = selectedLevels.get(typeId);
         MachineLevel level = MachineLevelRegistry.getLevel(levelId);
-        return new LevelView(true, level != null, typeId, levelId,
+        boolean multipleLevels = MachineLevelRegistry.levelsForType(typeId).size() > 1;
+        return new LevelView(true, level != null && multipleLevels, typeId, levelId,
                 level == null ? ItemStack.EMPTY : level.representative());
     }
 
@@ -232,7 +233,7 @@ public final class TerminalScreen extends Screen {
         typeButton.setMessage(view.typeId() == null ? Component.translatable("gui.mmcr.terminal.level_type")
                 : MachineLevelRegistry.getType(view.typeId()).displayName());
         levelButton.setMessage(view.levelId() == null ? Component.translatable("gui.mmcr.terminal.level")
-                : Component.literal(view.levelId().getPath()));
+                : view.slotStack().getHoverName());
         previewButton.active = controllerAvailable;
         checkButton.active = controllerAvailable;
         buildButton.active = controllerAvailable && storageAvailable;

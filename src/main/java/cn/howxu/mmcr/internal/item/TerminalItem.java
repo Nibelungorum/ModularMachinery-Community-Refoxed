@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -34,7 +35,10 @@ public class TerminalItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
         if (!player.isShiftKeyDown()) return InteractionResult.PASS;
         if (level.isClientSide()) return InteractionResult.SUCCESS;
-        if (player instanceof ServerPlayer serverPlayer) TerminalService.clear(serverPlayer, stack);
+        if (player instanceof ServerPlayer serverPlayer) {
+            TerminalService.Result result = TerminalService.clear(serverPlayer, stack);
+            if (result.accepted()) serverPlayer.sendSystemMessage(Component.translatable(result.messageKey()));
+        }
         return InteractionResult.SUCCESS;
     }
 
@@ -47,7 +51,9 @@ public class TerminalItem extends Item {
         BlockEntity blockEntity = context.getLevel().getBlockEntity(context.getClickedPos());
         GlobalPos target = GlobalPos.of(context.getLevel().dimension(), context.getClickedPos());
         if (blockEntity instanceof MachineControllerBlockEntity) {
-            return TerminalService.bindController(serverPlayer, context.getItemInHand(), target).accepted()
+            TerminalService.Result result = TerminalService.bindController(serverPlayer, context.getItemInHand(), target);
+            if (result.accepted()) serverPlayer.sendSystemMessage(Component.translatable(result.messageKey()));
+            return result.accepted()
                     ? InteractionResult.SUCCESS : InteractionResult.FAIL;
         }
         if (TerminalData.from(context.getItemInHand()).inventoryMode() == TerminalInventoryMode.CONTAINER) {
