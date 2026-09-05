@@ -1,17 +1,17 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.internal.item.TerminalAction;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
 import cn.howxu.mmcr.registry.ModItems;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -32,9 +32,16 @@ public final class TerminalScreen extends Screen {
     private boolean controllerAvailable;
     private boolean storageAvailable;
     private List<Integer> stages;
+    private List<Integer> previewLayers;
+    private Component machineName;
     private String statusKey;
+    private Button inventoryModeButton;
     private Button typeButton;
     private Button levelButton;
+    private Button stageButton;
+    private Button plusButton;
+    private Button minusButton;
+    private Button resetButton;
     private Button previewButton;
     private Button checkButton;
     private Button buildButton;
@@ -42,46 +49,58 @@ public final class TerminalScreen extends Screen {
 
     public TerminalScreen(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
             List<Integer> stages, String statusKey) {
+        this(data, controllerAvailable, storageAvailable, stages, Component.empty(), List.of(), statusKey);
+    }
+
+    public TerminalScreen(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
+            List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
         super(Component.translatable("gui.mmcr.terminal.title"));
         this.data = data;
         this.controllerAvailable = controllerAvailable;
         this.storageAvailable = storageAvailable;
         this.stages = List.copyOf(stages);
+        this.machineName = machineName == null ? Component.empty() : machineName;
+        this.previewLayers = List.copyOf(previewLayers);
         this.statusKey = statusKey;
     }
 
     @Override
     protected void init() {
-        int x = left() + 98;
-        addRenderableWidget(button("gui.mmcr.terminal.inventory_mode", x, top() + 34, 92, button ->
+        Layout layout = layout();
+        int x = left() + layout.contentX();
+        inventoryModeButton = addRenderableWidget(button("gui.mmcr.terminal.inventory_mode", x, top() + 34, 92, button ->
                 send(TerminalAction.SET_INVENTORY_MODE, nextInventoryMode().ordinal(), null, null)));
-        typeButton = addRenderableWidget(button("gui.mmcr.terminal.level_type", x, top() + 54, 92, button -> {
-            LevelView view = levelView(levelTypes(), data.selectedLevels());
-            if (!view.typeButtonActive()) return;
-            Identifier nextType = nextType(view.typeId());
-            send(TerminalAction.SET_LEVEL, 0, nextType, data.selectedLevels().get(nextType));
-        }));
-        levelButton = addRenderableWidget(button("gui.mmcr.terminal.level", x + 96, top() + 54, 92, button -> {
-            LevelView view = levelView(levelTypes(), data.selectedLevels());
-            if (!view.levelButtonActive()) return;
-            send(TerminalAction.SET_LEVEL, 0, view.typeId(), nextLevel(view.typeId(), view.levelId()));
-        }));
-        addRenderableWidget(button("gui.mmcr.terminal.stage", x, top() + 74, 92, button ->
-                send(TerminalAction.SET_STAGE, nextStage(button), null, null)));
-        addRenderableWidget(Button.builder(Component.literal("+"), button ->
-                send(TerminalAction.SET_PREVIEW_LAYER, nextLayer(data.previewLayer(), layers()), null, null))
+        typeButton = addRenderableWidget(button("gui.mmcr.terminal.level_type", x, top() + 54,
+                layout.levelTypeWidth(), button -> {
+                    LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
+                    if (!view.typeButtonActive()) return;
+                    Identifier nextType = nextType(view.typeId());
+                    send(TerminalAction.SET_LEVEL, 0, nextType, data.selectedLevels().get(nextType));
+                }));
+        levelButton = addRenderableWidget(button("gui.mmcr.terminal.level", left() + layout.levelX(), top() + 54,
+                layout.levelWidth(), button -> {
+                    LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
+                    if (!view.levelButtonActive()) return;
+                    send(TerminalAction.SET_LEVEL, 0, view.typeId(), nextLevel(view.typeId(), view.levelId()));
+                }));
+        stageButton = addRenderableWidget(button("gui.mmcr.terminal.stage", x, top() + 74, 92, button ->
+                send(TerminalAction.SET_STAGE, nextStage(), null, null)));
+        plusButton = addRenderableWidget(Button.builder(Component.literal("+"), button ->
+                sendPreviewLayer(nextLayer(data.previewLayer(), previewLayers), false))
                 .bounds(x + 96, top() + 94, 18, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("-"), button ->
-                send(TerminalAction.SET_PREVIEW_LAYER, previousLayer(data.previewLayer(), layers()), null, null))
+        minusButton = addRenderableWidget(Button.builder(Component.literal("-"), button ->
+                sendPreviewLayer(previousLayer(data.previewLayer(), previewLayers), false))
                 .bounds(x + 116, top() + 94, 18, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("R"), button ->
-                send(TerminalAction.SET_PREVIEW_LAYER, resetLayer(), null, null))
+        resetButton = addRenderableWidget(Button.builder(Component.literal("R"), button ->
+                sendPreviewLayer(resetLayer(), true))
                 .bounds(x + 136, top() + 94, 18, 18).build());
         int footer = left() + 8;
-        previewButton = addRenderableWidget(actionButton("gui.mmcr.terminal.preview", footer, TerminalAction.SET_PREVIEW_ENABLED));
+        previewButton = addRenderableWidget(actionButton("gui.mmcr.terminal.preview", footer,
+                TerminalAction.SET_PREVIEW_ENABLED));
         checkButton = addRenderableWidget(actionButton("gui.mmcr.terminal.check", footer + 74, TerminalAction.CHECK));
         buildButton = addRenderableWidget(actionButton("gui.mmcr.terminal.build", footer + 148, TerminalAction.BUILD));
-        dismantleButton = addRenderableWidget(actionButton("gui.mmcr.terminal.dismantle", footer + 222, TerminalAction.DEMOLISH));
+        dismantleButton = addRenderableWidget(actionButton("gui.mmcr.terminal.dismantle", footer + 222,
+                TerminalAction.DEMOLISH));
         updateWidgets();
     }
 
@@ -97,13 +116,14 @@ public final class TerminalScreen extends Screen {
         text(graphics, Component.translatable("gui.mmcr.terminal.machine_stage"), 8, 78);
         text(graphics, Component.translatable("gui.mmcr.terminal.preview_layer", layerLabel()), 8, 98);
         if (!statusKey.isEmpty()) text(graphics, Component.translatable(statusKey), 194, 38);
-        LevelView view = levelView(levelTypes(), data.selectedLevels());
+        LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
         if (!view.slotStack().isEmpty()) {
-            int slotX = left() + 194;
+            int slotX = left() + layout().slotX();
             int slotY = top() + 55;
             graphics.item(view.slotStack(), slotX, slotY, 0);
             if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
-                graphics.setComponentTooltipForNextFrame(font, getTooltipFromItem(Minecraft.getInstance(), view.slotStack()), mouseX, mouseY);
+                graphics.setComponentTooltipForNextFrame(font,
+                        getTooltipFromItem(Minecraft.getInstance(), view.slotStack()), mouseX, mouseY);
             }
         }
     }
@@ -112,7 +132,9 @@ public final class TerminalScreen extends Screen {
     public void tick() {
         super.tick();
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || !minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get())) minecraft.setScreen(null);
+        if (minecraft.player == null || !minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get())) {
+            minecraft.setScreen(null);
+        }
     }
 
     @Override
@@ -121,23 +143,32 @@ public final class TerminalScreen extends Screen {
     }
 
     public void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
-            List<Integer> stages, String statusKey) {
+            List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
         this.data = data;
         this.controllerAvailable = controllerAvailable;
         this.storageAvailable = storageAvailable;
         this.stages = List.copyOf(stages);
+        this.machineName = machineName == null ? Component.empty() : machineName;
+        this.previewLayers = List.copyOf(previewLayers);
         this.statusKey = statusKey;
         updateWidgets();
     }
 
-    static LevelView levelView(List<LevelType> types, Map<Identifier, Identifier> selectedLevels) {
-        if (types.isEmpty() || selectedLevels.isEmpty()) return new LevelView(false, false, null, null, ItemStack.EMPTY);
-        Identifier typeId = selectedLevels.keySet().stream().filter(id -> MachineLevelRegistry.getType(id) != null)
-                .findFirst().orElse(null);
+    static LevelView levelView(List<LevelType> types, Identifier selectedType,
+            Map<Identifier, Identifier> selectedLevels) {
+        if (types.isEmpty() || selectedLevels.isEmpty()) {
+            return new LevelView(false, false, null, null, ItemStack.EMPTY);
+        }
+        Identifier typeId = types.stream().map(LevelType::id)
+                .filter(id -> id.equals(selectedType) && selectedLevels.containsKey(id))
+                .findFirst()
+                .orElseGet(() -> types.stream().map(LevelType::id).filter(selectedLevels::containsKey)
+                        .findFirst().orElse(null));
         if (typeId == null) return new LevelView(false, false, null, null, ItemStack.EMPTY);
         Identifier levelId = selectedLevels.get(typeId);
         MachineLevel level = MachineLevelRegistry.getLevel(levelId);
-        return new LevelView(true, level != null, typeId, levelId, level == null ? ItemStack.EMPTY : level.representative());
+        return new LevelView(true, level != null, typeId, levelId,
+                level == null ? ItemStack.EMPTY : level.representative());
     }
 
     static int nextLayer(int current, List<Integer> layers) {
@@ -160,21 +191,39 @@ public final class TerminalScreen extends Screen {
     }
 
     private Button actionButton(String key, int x, TerminalAction action) {
-        return Button.builder(Component.translatable(key), button -> send(action,
+        var label = Component.translatable(key);
+        if (action == TerminalAction.SET_PREVIEW_ENABLED || action == TerminalAction.BUILD) {
+            label = label.withStyle(ChatFormatting.GREEN);
+        } else if (action == TerminalAction.DEMOLISH) {
+            label = label.withStyle(ChatFormatting.RED);
+        }
+        return Button.builder(label, button -> send(action,
                 action == TerminalAction.SET_PREVIEW_ENABLED && !data.previewEnabled() ? 1 : 0, null, null))
                 .bounds(x, top() + 128, 70, 20).build();
     }
 
     private void send(TerminalAction action, int value, Identifier firstId, Identifier secondId) {
+        if (!canSend(action)) return;
         ClientPacketDistributor.sendToServer(new PktTerminalActionPayload(action, value, firstId, secondId));
         if (closesAfter(action)) Minecraft.getInstance().setScreen(null);
     }
 
+    private void sendPreviewLayer(int value, boolean reset) {
+        if (!controllerAvailable || (!reset && previewLayers.isEmpty())) return;
+        send(TerminalAction.SET_PREVIEW_LAYER, value, null, null);
+    }
+
     private void updateWidgets() {
         if (typeButton == null) return;
-        LevelView view = levelView(levelTypes(), data.selectedLevels());
+        LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
+        ControlState controls = controlState(controllerAvailable, stages, previewLayers);
+        inventoryModeButton.setMessage(inventoryModeLabel());
         typeButton.active = controllerAvailable && view.typeButtonActive();
         levelButton.active = controllerAvailable && view.levelButtonActive();
+        stageButton.active = controls.stageActive();
+        plusButton.active = controls.layerActive();
+        minusButton.active = controls.layerActive();
+        resetButton.active = controls.resetActive();
         typeButton.setMessage(view.typeId() == null ? Component.translatable("gui.mmcr.terminal.level_type")
                 : MachineLevelRegistry.getType(view.typeId()).displayName());
         levelButton.setMessage(view.levelId() == null ? Component.translatable("gui.mmcr.terminal.level")
@@ -206,19 +255,11 @@ public final class TerminalScreen extends Screen {
         return levels.get(index < 0 || index + 1 == levels.size() ? 0 : index + 1).id();
     }
 
-    private int nextStage(Button button) {
+    private int nextStage() {
         if (stages.isEmpty()) return data.stage();
-        int delta = minecraftShiftDown() ? -1 : 1;
+        int delta = Minecraft.getInstance().hasShiftDown() ? -1 : 1;
         int index = stages.indexOf(data.stage());
         return stages.get(Math.floorMod(index + delta, stages.size()));
-    }
-
-    private boolean minecraftShiftDown() {
-        return Minecraft.getInstance().hasShiftDown();
-    }
-
-    private List<Integer> layers() {
-        return List.of();
     }
 
     private int previousLayer(int current, List<Integer> layers) {
@@ -228,9 +269,11 @@ public final class TerminalScreen extends Screen {
     }
 
     private Component machineLabel() {
-        if (data.controller() == null) return Component.translatable("gui.mmcr.terminal.no_controller");
-        return Component.translatable("gui.mmcr.terminal.machine", data.controller().dimension().identifier(),
-                data.controller().pos().toShortString());
+        if (data.controller() == null || machineName == null || machineName.getString().isEmpty()) {
+            return Component.translatable("gui.mmcr.terminal.no_controller");
+        }
+        return Component.translatable("gui.mmcr.terminal.machine", machineName,
+                data.controller().dimension().identifier(), data.controller().pos().toShortString());
     }
 
     private Component layerLabel() {
@@ -238,8 +281,30 @@ public final class TerminalScreen extends Screen {
                 : Component.literal(Integer.toString(data.previewLayer()));
     }
 
-    private void text(GuiGraphicsExtractor graphics, Component text, int x, int y) {
-        graphics.text(font, text, left() + x, top() + y, TEXT_COLOR, false);
+    private Component inventoryModeLabel() {
+        return Component.translatable(data.inventoryMode() == TerminalInventoryMode.INVENTORY
+                ? "gui.mmcr.terminal.inventory_mode.inventory" : "gui.mmcr.terminal.inventory_mode.container");
+    }
+
+    private boolean canSend(TerminalAction action) {
+        return switch (action) {
+            case REQUEST_STATE -> false;
+            case SET_INVENTORY_MODE -> true;
+            case SET_STAGE -> controllerAvailable && !stages.isEmpty();
+            case SET_LEVEL -> controllerAvailable && levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels())
+                    .typeButtonActive();
+            case SET_PREVIEW_ENABLED, SET_PREVIEW_LAYER, CHECK -> controllerAvailable;
+            case BUILD, DEMOLISH -> controllerAvailable && storageAvailable;
+        };
+    }
+
+    static ControlState controlState(boolean controllerAvailable, List<Integer> stages, List<Integer> previewLayers) {
+        return new ControlState(controllerAvailable && !stages.isEmpty(),
+                controllerAvailable && !previewLayers.isEmpty(), controllerAvailable);
+    }
+
+    static Layout layout() {
+        return new Layout(96, 164, 232, 64, 64);
     }
 
     private int left() {
@@ -250,6 +315,18 @@ public final class TerminalScreen extends Screen {
         return (height - PANEL_HEIGHT) / 2;
     }
 
+    private void text(GuiGraphicsExtractor graphics, Component text, int x, int y) {
+        graphics.text(font, text, left() + x, top() + y, TEXT_COLOR, false);
+    }
+
     record LevelView(boolean typeButtonActive, boolean levelButtonActive, Identifier typeId, Identifier levelId,
             ItemStack slotStack) {}
+
+    record ControlState(boolean stageActive, boolean layerActive, boolean resetActive) {}
+
+    record Layout(int contentX, int levelX, int slotX, int levelTypeWidth, int levelWidth) {
+        int levelButtonEnd() {
+            return levelX + levelWidth;
+        }
+    }
 }

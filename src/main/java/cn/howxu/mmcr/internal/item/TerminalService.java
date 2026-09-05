@@ -1,17 +1,22 @@
 package cn.howxu.mmcr.internal.item;
 
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorageResolver;
 import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -78,6 +83,10 @@ public final class TerminalService {
                 if (value < 0 || value >= modes.length) return rejected(player, stack, "message.mmcr.terminal.invalid_mode");
                 setData(stack, data.withInventoryMode(modes[value]));
                 return accepted(player, stack, "message.mmcr.terminal.updated");
+            }
+            case REQUEST_STATE -> {
+                sendState(player, stack, "");
+                return new Result(true, "");
             }
             case SET_STAGE -> {
                 if (controller == null || !controller.availableStructureStages().contains(value)) {
@@ -193,8 +202,24 @@ public final class TerminalService {
         if (player == null || player.connection == null || stack == null || !stack.is(ModItems.TERMINAL.get())) return;
         TerminalData data = TerminalData.from(stack);
         MachineControllerBlockEntity controller = controllerAt(player, data.controller()).orElse(null);
+        StructureSnapshot structure = controller == null ? null : controller.currentRuntimeSnapshot().structure();
+        Machine machine = structure == null ? null
+                : structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        BlockArray pattern = structure == null ? null : structure.pattern();
+        if (pattern == null && controller != null && machine != null) {
+            pattern = controller.assemblyPattern(machine, data.stage());
+        }
         PacketDistributor.sendToPlayer(player, new PktTerminalStatePayload(data,
                 controller != null, StructureItemStorageResolver.resolve(player, data).isPresent(),
-                controller == null ? List.of() : controller.availableStructureStages(), statusKey));
+                controller == null ? List.of() : controller.availableStructureStages(),
+                machine == null ? Component.translatable("gui.mmcr.terminal.no_controller")
+                        : machine.displayName(),
+                previewLayers(pattern, PktTerminalStatePayload.MAX_PREVIEW_LAYERS), statusKey));
+    }
+
+    static List<Integer> previewLayers(BlockArray pattern, int maxLayers) {
+        if (pattern == null || maxLayers <= 0) return List.of();
+        return pattern.pattern().keySet().stream().map(BlockPos::getY).distinct().sorted()
+                .limit(maxLayers).toList();
     }
 }

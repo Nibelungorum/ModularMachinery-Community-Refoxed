@@ -383,6 +383,8 @@
   "gui.mmcr.terminal.dismantle": "Dismantle",
   "gui.mmcr.terminal.inventory": "Inventory mode:",
   "gui.mmcr.terminal.inventory_mode": "Inventory",
+  "gui.mmcr.terminal.inventory_mode.container": "Container",
+  "gui.mmcr.terminal.inventory_mode.inventory": "Inventory",
   "gui.mmcr.terminal.level": "Level",
   "gui.mmcr.terminal.level_blocks": "Level blocks:",
   "gui.mmcr.terminal.level_type": "Type",

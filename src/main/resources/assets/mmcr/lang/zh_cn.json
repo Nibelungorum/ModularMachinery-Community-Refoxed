@@ -383,6 +383,8 @@
   "gui.mmcr.terminal.dismantle": "拆除",
   "gui.mmcr.terminal.inventory": "库存模式:",
   "gui.mmcr.terminal.inventory_mode": "库存",
+  "gui.mmcr.terminal.inventory_mode.container": "容器",
+  "gui.mmcr.terminal.inventory_mode.inventory": "库存",
   "gui.mmcr.terminal.level": "等级",
   "gui.mmcr.terminal.level_blocks": "等级方块:",
   "gui.mmcr.terminal.level_type": "类型",

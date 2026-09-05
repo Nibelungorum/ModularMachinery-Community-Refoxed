@@ -13,5 +13,6 @@ public enum TerminalAction {
     SET_PREVIEW_LAYER,
     CHECK,
     BUILD,
-    DEMOLISH
+    DEMOLISH,
+    REQUEST_STATE
 }

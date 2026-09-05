@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client;
 
+import cn.howxu.mmcr.internal.item.TerminalAction;
 import net.minecraft.world.InteractionHand;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +10,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class TerminalClientHandlerTest {
+    @Test
+    void opening_requests_server_authoritative_state() {
+        var request = TerminalClientHandler.initialStateRequest();
+
+        assertThat(request.action()).isEqualTo(TerminalAction.REQUEST_STATE);
+        assertThat(request.value()).isZero();
+        assertThat(request.firstId()).isNull();
+        assertThat(request.secondId()).isNull();
+    }
+
     @Test
     void opens_for_an_unshifted_main_hand_terminal_air_use_without_a_screen() {
         assertThat(TerminalClientHandler.shouldOpenScreen(
