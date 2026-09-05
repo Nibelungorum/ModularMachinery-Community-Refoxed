@@ -49,6 +49,26 @@ class MachineRegistryTest {
     }
 
     @Test
+    void effective_snapshot_is_reused_until_registry_changes() {
+        MachineRegistry.clearForTesting();
+        var first = new DynamicMachine(Identifier.parse("mmcr:first"), "First", new BlockArray(Map.of()));
+        var second = new DynamicMachine(Identifier.parse("mmcr:second"), "Second", new BlockArray(Map.of()));
+
+        MachineRegistry.register(first);
+        Map<Identifier, Machine> initial = MachineRegistry.effectiveSnapshot();
+
+        assertThat(MachineRegistry.effectiveSnapshot()).isSameAs(initial);
+
+        MachineRegistry.register(second);
+
+        assertThat(MachineRegistry.effectiveSnapshot()).isNotSameAs(initial).containsEntry(second.registryName(), second);
+
+        MachineRegistry.clearForTesting();
+
+        assertThat(MachineRegistry.effectiveSnapshot()).isNotSameAs(initial).isEmpty();
+    }
+
+    @Test
     void dynamic_machine_exposes_immutable_replacement_map() {
         BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
@@ -104,11 +124,15 @@ class MachineRegistryTest {
 
         MachineStructureRegistry.replaceDynamic(Map.of(dynamicId, dynamicStructure));
 
+        Map<Identifier, Machine> installed = MachineRegistry.effectiveSnapshot();
+        assertThat(installed).containsEntry(staticMachine.registryName(), staticMachine).containsKey(dynamicId);
+
         assertThat(MachineRegistry.getCompiled(staticMachine.registryName())).isNotNull();
         assertThat(MachineRegistry.getCompiled(dynamicId)).isNotNull();
 
         MachineStructureRegistry.replaceDynamic(Map.of());
 
+        assertThat(MachineRegistry.effectiveSnapshot()).isNotSameAs(installed).doesNotContainKey(dynamicId);
         assertThat(MachineRegistry.getMachine(staticMachine.registryName())).isSameAs(staticMachine);
         assertThat(MachineRegistry.getMachine(dynamicId)).isNull();
         assertThat(MachineRegistry.getCompiled(dynamicId)).isNull();

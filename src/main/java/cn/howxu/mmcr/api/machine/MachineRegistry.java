@@ -13,18 +13,22 @@ public final class MachineRegistry {
     private static final Map<Identifier, Machine> STATIC_MACHINES = new LinkedHashMap<>();
     private static volatile Map<Identifier, Machine> STRUCTURE_MACHINES = Map.of();
     private static volatile Map<Identifier, List<CompiledMachinePattern>> COMPILED = Map.of();
+    private static volatile Map<Identifier, Machine> EFFECTIVE_MACHINES = Map.of();
 
     private MachineRegistry() {
     }
 
     public static void register(Machine machine) {
-        if (STATIC_MACHINES.containsKey(machine.registryName())) {
-            throw new IllegalStateException("Machine already registered: " + machine.registryName());
+        synchronized (RuntimeContentVersion.lock()) {
+            if (STATIC_MACHINES.containsKey(machine.registryName())) {
+                throw new IllegalStateException("Machine already registered: " + machine.registryName());
+            }
+            STATIC_MACHINES.put(machine.registryName(), machine);
+            Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>(COMPILED);
+            compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, null));
+            COMPILED = Map.copyOf(compiled);
+            rebuildEffectiveSnapshot();
         }
-        STATIC_MACHINES.put(machine.registryName(), machine);
-        Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>(COMPILED);
-        compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, null));
-        COMPILED = Map.copyOf(compiled);
     }
 
     public static Machine getMachine(Identifier id) {
@@ -34,7 +38,7 @@ public final class MachineRegistry {
 
     public static Map<Identifier, Machine> getAll() {
         synchronized (RuntimeContentVersion.lock()) {
-            return Collections.unmodifiableMap(mergedMachines());
+            return EFFECTIVE_MACHINES;
         }
     }
 
@@ -61,37 +65,43 @@ public final class MachineRegistry {
     }
 
     public static void installStructures(Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, Machine> structureMachines = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
-            MachineRegistration registration = MachineDefinitions.getRegistration(entry.getKey());
-            if (registration == null) {
-                throw new IllegalStateException("No startup machine registration for structure: " + entry.getKey());
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, Machine> structureMachines = new LinkedHashMap<>();
+            for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
+                MachineRegistration registration = MachineDefinitions.getRegistration(entry.getKey());
+                if (registration == null) {
+                    throw new IllegalStateException("No startup machine registration for structure: " + entry.getKey());
+                }
+                structureMachines.put(entry.getKey(), MachineStructureRegistry.toRuntimeMachine(registration, entry.getValue()));
             }
-            structureMachines.put(entry.getKey(), MachineStructureRegistry.toRuntimeMachine(registration, entry.getValue()));
-        }
 
-        Map<Identifier, Machine> allMachines = new LinkedHashMap<>(STATIC_MACHINES);
-        allMachines.putAll(structureMachines);
-        Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(allMachines.values());
-        Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
-        for (Machine machine : allMachines.values()) {
-            compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
-        }
+            Map<Identifier, Machine> allMachines = new LinkedHashMap<>(STATIC_MACHINES);
+            allMachines.putAll(structureMachines);
+            Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(allMachines.values());
+            Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
+            for (Machine machine : allMachines.values()) {
+                compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
+            }
 
-        STRUCTURE_MACHINES = Map.copyOf(structureMachines);
-        BlockArrayCache.installCache(cache);
-        COMPILED = Map.copyOf(compiled);
+            STRUCTURE_MACHINES = immutableSnapshot(structureMachines);
+            BlockArrayCache.installCache(cache);
+            COMPILED = Map.copyOf(compiled);
+            EFFECTIVE_MACHINES = immutableSnapshot(allMachines);
+        }
     }
 
     public static void rebuildCompiledCache() {
-        Map<Identifier, Machine> machines = mergedMachines();
-        Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(machines.values());
-        Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
-        for (Machine machine : machines.values()) {
-            compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, Machine> machines = mergedMachines();
+            Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(machines.values());
+            Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
+            for (Machine machine : machines.values()) {
+                compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
+            }
+            BlockArrayCache.installCache(cache);
+            COMPILED = Map.copyOf(compiled);
+            rebuildEffectiveSnapshot();
         }
-        BlockArrayCache.installCache(cache);
-        COMPILED = Map.copyOf(compiled);
     }
 
     private static Map<Identifier, Machine> mergedMachines() {
@@ -100,12 +110,23 @@ public final class MachineRegistry {
         return machines;
     }
 
+    private static void rebuildEffectiveSnapshot() {
+        EFFECTIVE_MACHINES = immutableSnapshot(mergedMachines());
+    }
+
+    private static Map<Identifier, Machine> immutableSnapshot(Map<Identifier, Machine> machines) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(machines));
+    }
+
     /** Test-only helper. Never call from production code. */
     public static void clearForTesting() {
-        STATIC_MACHINES.clear();
-        STRUCTURE_MACHINES = Map.of();
-        COMPILED = Map.of();
-        BlockArrayCache.clearForTesting();
+        synchronized (RuntimeContentVersion.lock()) {
+            STATIC_MACHINES.clear();
+            STRUCTURE_MACHINES = Map.of();
+            COMPILED = Map.of();
+            EFFECTIVE_MACHINES = Map.of();
+            BlockArrayCache.clearForTesting();
+        }
     }
 
     /** Restores compiled startup machines after a test that intentionally clears the registry. */
