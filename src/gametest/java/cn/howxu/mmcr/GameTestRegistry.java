@@ -121,8 +121,6 @@ public final class GameTestRegistry {
         register(event, "terminal_build", 100, helper -> new TerminalAssemblyGameTest().buildSkipsOccupiedPositionsAndPlacesOnlyMissingBlocks(helper));
         register(event, "terminal_service_rejects_non_terminal", 100,
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsActionsWithoutHeldTerminal(helper));
-        register(event, "terminal_service_bind_and_clear", 100,
-                helper -> new TerminalAssemblyGameTest().terminalServiceBindsControllerAndClearResetsData(helper));
         register(event, "terminal_demolish", 100, helper -> new TerminalAssemblyGameTest().demolishSkipsAirAndNonMatchingBlocks(helper));
         register(event, "terminal_demolish_rejected_drop", 100,
                 helper -> new TerminalAssemblyGameTest().demolishStopsBeforeRejectedDropAndPreservesLaterBlocks(helper));

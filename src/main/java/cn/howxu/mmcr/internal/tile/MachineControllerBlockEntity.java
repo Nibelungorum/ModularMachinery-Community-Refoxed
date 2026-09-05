@@ -150,6 +150,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
     private static final int STRUCTURE_SAFETY_INTERVAL_TICKS = 120;
+    private static final int STRUCTURE_SAFETY_SCAN_BATCHES = 40;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
     private boolean chunkUnloaded;
@@ -1475,9 +1476,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Optional<StructureMatcher.Mismatch> mismatch = StructureMatcher.firstSentinelMismatch(
                 structure.version(), structure.facing(), structure.rollFacing(), structure.matchedStage(),
                 structure.pattern(), plan, replacements, compiled != null && compiled.stateSensitive(), level, getBlockPos());
-        if (mismatch.isEmpty()) return;
-        publishStructureWork(state -> state.withPreviousMismatch(mismatch.get(), structure.pattern()));
-        runtime.requestStructureCheck(StructureRuntime.CheckReason.DIRTY_EVENT);
+        if (mismatch.isPresent()) {
+            publishStructureWork(state -> state.withPreviousMismatch(mismatch.get(), structure.pattern()));
+            runtime.requestStructureCheck(StructureRuntime.CheckReason.DIRTY_EVENT);
+            return;
+        }
+        if (!isPatternAreaLoaded(structure.pattern())) return;
+        CandidatePattern candidatePattern = new CandidatePattern(compiled, structure.pattern(), structure.rollFacing());
+        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(STRUCTURE_SAFETY_SCAN_BATCHES, false, 0);
+        CompiledMachinePattern.ScanPlan scanPlan = hasCompiledFacing(compiled, structure.facing())
+                ? compiled.scanPlan(structure.facing(), 0) : null;
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(structure.version(), structure.facing(), structure.rollFacing(),
+                structure.matchedStage(), structure.pattern(), structure.pattern(), replacements,
+                compiled != null && compiled.stateSensitive(), options, null, scanPlan, runtime.structureChunkStateEpoch());
+        runtime.startStructureScan(scan, machine, candidatePattern, level.getGameTime(), level.getGameTime());
+        ACTIVE_STRUCTURE_SCANS.add(this);
+        advanceStructureScan();
     }
 
     private void invalidateForControllerRotation() {
@@ -1873,7 +1887,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(serverLevel(), getBlockPos());
         if (scanResult.inProgress()) {
             publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
-                    .withCheckReason(StructureRuntime.CheckReason.SCAN_CONTINUATION));
+                    .withCheckReason(work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK
+                            ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION));
             return false;
         }
         if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
@@ -1919,7 +1934,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(serverLevel(), getBlockPos());
         if (scanResult.inProgress()) {
             publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
-                    .withCheckReason(StructureRuntime.CheckReason.SCAN_CONTINUATION));
+                    .withCheckReason(work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK
+                            ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION));
             return;
         }
         CandidatePattern candidatePattern = work.scanCandidate() instanceof CandidatePattern candidate ? candidate : null;
@@ -1962,6 +1978,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         publishStructureWork(state -> state.withPreviousMismatch(null, null).withPendingInvalidation(false));
         clearStructureScan();
+        if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK) {
+            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + STRUCTURE_SAFETY_INTERVAL_TICKS));
+            return;
+        }
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         CompiledMachinePattern compiled = candidatePattern.compiled();
         Machine validationMachine = compiled == null ? candidate : compiled.machine();

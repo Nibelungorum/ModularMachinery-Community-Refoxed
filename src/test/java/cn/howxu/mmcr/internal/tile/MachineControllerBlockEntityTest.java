@@ -853,6 +853,35 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void formed_structure_safety_check_continues_with_a_full_batched_scan() {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        controller.setStructureScanBatchesForTesting(5);
+        var published = controller.runtimeSnapshot();
+
+        for (int tick = 0; tick < 120; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controller.getBlockPos());
+        }
+        for (int tick = 0; tick < 4; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controller.getBlockPos());
+        }
+        assertThat(controller.structureWorkSnapshotForTesting().scan()).isNotNull();
+        for (int tick = 0; tick < 40 && controller.structureWorkSnapshotForTesting().scan() != null; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controller.getBlockPos());
+        }
+
+        assertThat(controller.scanBatchCountForTesting()).isGreaterThan(5);
+        assertThat(controller.structureWorkSnapshotForTesting().scan()).isNull();
+        assertThat(controller.structureSnapshot().formed()).isTrue();
+        assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @Test
     void stable_safety_check_keeps_the_published_runtime_snapshot() {
         TestBootstrap.registerRuntimeBuiltins();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
