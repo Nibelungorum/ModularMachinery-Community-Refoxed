@@ -26,6 +26,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * Server-authoritative terminal configuration and structure operations.
@@ -114,6 +115,9 @@ public final class TerminalService {
             }
             case SET_PREVIEW_LAYER -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
+                if (!previewLayerAllowed(value, currentPreviewLayers(controller, data))) {
+                    return rejected(player, stack, "message.mmcr.terminal.invalid_preview_layer");
+                }
                 setData(stack, data.withPreview(data.previewEnabled(), value));
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
@@ -140,6 +144,15 @@ public final class TerminalService {
             }
         }
         return rejected(player, stack, "message.mmcr.terminal.invalid_action");
+    }
+
+    static OptionalInt effectiveStage(List<Integer> availableStages, int requestedStage) {
+        if (availableStages.contains(requestedStage)) return OptionalInt.of(requestedStage);
+        return availableStages.stream().mapToInt(Integer::intValue).findFirst();
+    }
+
+    static boolean previewLayerAllowed(int layer, List<Integer> currentLayers) {
+        return layer == Integer.MAX_VALUE || currentLayers.contains(layer);
     }
 
     private static TerminalData normalize(MachineControllerBlockEntity controller, TerminalData data) {
@@ -205,16 +218,39 @@ public final class TerminalService {
         StructureSnapshot structure = controller == null ? null : controller.currentRuntimeSnapshot().structure();
         Machine machine = structure == null ? null
                 : structure.machine() == null ? structure.configuredMachine() : structure.machine();
-        BlockArray pattern = structure == null ? null : structure.pattern();
-        if (pattern == null && controller != null && machine != null) {
-            pattern = controller.assemblyPattern(machine, data.stage());
-        }
-        PacketDistributor.sendToPlayer(player, new PktTerminalStatePayload(data,
+        List<Integer> stages = controller == null ? List.of() : controller.availableStructureStages();
+        OptionalInt stage = effectiveStage(stages, data.stage());
+        TerminalData stateData = stage.isPresent() && stage.getAsInt() != data.stage()
+                ? data.withStage(stage.getAsInt()) : data;
+        BlockArray pattern = previewPattern(controller, data, structure, machine, stages);
+        PacketDistributor.sendToPlayer(player, new PktTerminalStatePayload(stateData,
                 controller != null, StructureItemStorageResolver.resolve(player, data).isPresent(),
-                controller == null ? List.of() : controller.availableStructureStages(),
+                stages,
                 machine == null ? Component.translatable("gui.mmcr.terminal.no_controller")
                         : machine.displayName(),
                 previewLayers(pattern, PktTerminalStatePayload.MAX_PREVIEW_LAYERS), statusKey));
+    }
+
+    private static List<Integer> currentPreviewLayers(MachineControllerBlockEntity controller, TerminalData data) {
+        StructureSnapshot structure = controller.currentRuntimeSnapshot().structure();
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        List<Integer> stages = controller.availableStructureStages();
+        return previewLayers(previewPattern(controller, data, structure, machine, stages),
+                PktTerminalStatePayload.MAX_PREVIEW_LAYERS);
+    }
+
+    private static BlockArray previewPattern(MachineControllerBlockEntity controller, TerminalData data,
+            StructureSnapshot structure, Machine machine, List<Integer> stages) {
+        if (controller == null || structure == null) return null;
+        if (structure.pattern() != null) return structure.pattern();
+        if (machine == null) return null;
+        OptionalInt stage = effectiveStage(stages, data.stage());
+        if (stage.isEmpty()) return null;
+        try {
+            return controller.assemblyPattern(machine, stage.getAsInt());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     static List<Integer> previewLayers(BlockArray pattern, int maxLayers) {

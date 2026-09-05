@@ -375,6 +375,7 @@
   "message.mmcr.terminal.demolish.none": "没有可拆除的结构方块",
   "message.mmcr.terminal.demolish.success": "已拆除 %s 个方块",
   "message.mmcr.terminal.no_machine": "无法解析控制器对应的机器",
+  "message.mmcr.terminal.invalid_preview_layer": "所选预览层不属于当前结构",
   "message.mmcr.terminal.switched": "切换到: %s",
 
   "gui.mmcr.terminal.all": "全部",
@@ -388,7 +389,7 @@
   "gui.mmcr.terminal.level": "等级",
   "gui.mmcr.terminal.level_blocks": "等级方块:",
   "gui.mmcr.terminal.level_type": "类型",
-  "gui.mmcr.terminal.machine": "机器: %s @ %s",
+  "gui.mmcr.terminal.machine": "机器: %s @ %s @ %s",
   "gui.mmcr.terminal.machine_stage": "机器等级:",
   "gui.mmcr.terminal.no_controller": "未绑定控制器",
   "gui.mmcr.terminal.preview": "预览",

@@ -77,6 +77,29 @@ class TerminalScreenTest {
     }
 
     @Test
+    void cross_type_selected_level_is_not_displayed_as_the_selected_type() {
+        TerminalScreen.LevelView view = TerminalScreen.levelView(
+                List.of(MachineLevelRegistry.getType(TYPE_A)), TYPE_A, Map.of(TYPE_A, LEVEL_B));
+
+        assertThat(view.typeButtonActive()).isFalse();
+        assertThat(view.levelButtonActive()).isFalse();
+        assertThat(view.typeId()).isNull();
+        assertThat(view.levelId()).isNull();
+        assertThat(view.slotStack().isEmpty()).isTrue();
+    }
+
+    @Test
+    void expired_selected_level_falls_back_to_another_valid_type_and_level() {
+        TerminalScreen.LevelView view = TerminalScreen.levelView(
+                List.of(MachineLevelRegistry.getType(TYPE_A), MachineLevelRegistry.getType(TYPE_B)), TYPE_A,
+                Map.of(TYPE_A, Identifier.parse("test:expired_level"), TYPE_B, LEVEL_B));
+
+        assertThat(view.typeId()).isEqualTo(TYPE_B);
+        assertThat(view.levelId()).isEqualTo(LEVEL_B);
+        assertThat(view.levelButtonActive()).isTrue();
+    }
+
+    @Test
     void unavailable_controller_disables_stage_and_layer_controls_but_reset_remains_explicit() {
         TerminalScreen.ControlState state = TerminalScreen.controlState(false, List.of(1), List.of(-2, 0));
 

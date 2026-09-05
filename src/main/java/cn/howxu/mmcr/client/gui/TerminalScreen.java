@@ -160,15 +160,20 @@ public final class TerminalScreen extends Screen {
             return new LevelView(false, false, null, null, ItemStack.EMPTY);
         }
         Identifier typeId = types.stream().map(LevelType::id)
-                .filter(id -> id.equals(selectedType) && selectedLevels.containsKey(id))
+                .filter(id -> id.equals(selectedType) && validLevelSelection(id, selectedLevels))
                 .findFirst()
-                .orElseGet(() -> types.stream().map(LevelType::id).filter(selectedLevels::containsKey)
+                .orElseGet(() -> types.stream().map(LevelType::id).filter(id -> validLevelSelection(id, selectedLevels))
                         .findFirst().orElse(null));
         if (typeId == null) return new LevelView(false, false, null, null, ItemStack.EMPTY);
         Identifier levelId = selectedLevels.get(typeId);
         MachineLevel level = MachineLevelRegistry.getLevel(levelId);
         return new LevelView(true, level != null, typeId, levelId,
                 level == null ? ItemStack.EMPTY : level.representative());
+    }
+
+    private static boolean validLevelSelection(Identifier typeId, Map<Identifier, Identifier> selectedLevels) {
+        MachineLevel level = MachineLevelRegistry.getLevel(selectedLevels.get(typeId));
+        return level != null && level.typeId().equals(typeId);
     }
 
     static int nextLayer(int current, List<Integer> layers) {
@@ -240,7 +245,8 @@ public final class TerminalScreen extends Screen {
     }
 
     private List<LevelType> levelTypes() {
-        return MachineLevelRegistry.types().stream().filter(type -> data.selectedLevels().containsKey(type.id())).toList();
+        return MachineLevelRegistry.types().stream()
+                .filter(type -> validLevelSelection(type.id(), data.selectedLevels())).toList();
     }
 
     private Identifier nextType(Identifier current) {

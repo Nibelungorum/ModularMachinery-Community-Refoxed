@@ -375,6 +375,7 @@
   "message.mmcr.terminal.demolish.none": "No matching structure blocks to demolish",
   "message.mmcr.terminal.demolish.success": "Demolished %s blocks",
   "message.mmcr.terminal.no_machine": "Could not resolve the controller machine",
+  "message.mmcr.terminal.invalid_preview_layer": "The selected preview layer is not part of the current structure",
   "message.mmcr.terminal.switched": "Switched to: %s",
 
   "gui.mmcr.terminal.all": "All",
@@ -388,7 +389,7 @@
   "gui.mmcr.terminal.level": "Level",
   "gui.mmcr.terminal.level_blocks": "Level blocks:",
   "gui.mmcr.terminal.level_type": "Type",
-  "gui.mmcr.terminal.machine": "Machine: %s @ %s",
+  "gui.mmcr.terminal.machine": "Machine: %s @ %s @ %s",
   "gui.mmcr.terminal.machine_stage": "Machine stage:",
   "gui.mmcr.terminal.no_controller": "No controller bound",
   "gui.mmcr.terminal.preview": "Preview",
