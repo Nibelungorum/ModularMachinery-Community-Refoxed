@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -16,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Direction.Axis;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -98,14 +100,14 @@ public final class MultiblockDetectorScreen extends Screen {
         int footerX = panelLeft() + (PANEL_WIDTH - 4 * FOOTER_BUTTON_WIDTH - 3 * FOOTER_BUTTON_GAP) / 2;
         javaExportButton = addRenderableWidget(Button.builder(
                 Component.translatable("gui.mmcr.multiblock_detector.export.java"), button -> {
-            ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
-            setFocused(null);
-        }).bounds(footerX, panelTop() + FOOTER_ROW, FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
+                    ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
+                    setFocused(null);
+                }).bounds(footerX, panelTop() + FOOTER_ROW, FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         kubeJsExportButton = addRenderableWidget(Button.builder(
                 Component.translatable("gui.mmcr.multiblock_detector.export.kubejs"), button -> {
-            ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
-            setFocused(null);
-        }).bounds(footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
+                    ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
+                    setFocused(null);
+                }).bounds(footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         maskButton = addRenderableWidget(Button.builder(maskLabel(), button -> {
             maskEnabled = !maskEnabled;
@@ -115,13 +117,13 @@ public final class MultiblockDetectorScreen extends Screen {
         }).bounds(footerX + 2 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         addRenderableWidget(Button.builder(
-                Component.translatable("gui.mmcr.multiblock_detector.clear_selection"), button -> {
+                Component.translatable("gui.mmcr.multiblock_detector.clear_selection").withStyle(ChatFormatting.RED), button -> {
                     selection = MultiblockDetectorSelection.EMPTY;
                     updateWidgets();
                     writeLocalStateAndSync();
                     setFocused(null);
                 }).bounds(footerX + 3 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
-                        FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
+                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
         updateWidgets();
     }
 
@@ -267,14 +269,14 @@ public final class MultiblockDetectorScreen extends Screen {
 
     private Component controllerLabel() {
         BlockPos position = selection.controllerPos();
-        Component value = position == null ? Component.translatable("gui.mmcr.multiblock_detector.not_set")
-                : positionLabel(position, selection.controllerFace());
-        return Component.translatable("gui.mmcr.multiblock_detector.controller", value);
+        MutableComponent value = Component.literal(": ").append(position == null ? Component.translatable("gui.mmcr.multiblock_detector.not_set")
+                : positionLabel(position, selection.controllerFace()));
+        return Component.translatable("gui.mmcr.multiblock_detector.controller").withStyle(ChatFormatting.DARK_GREEN).append(value.withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private Component pointLabel(Point point) {
         return Component.translatable(point == Point.FIRST
-                ? "gui.mmcr.multiblock_detector.first" : "gui.mmcr.multiblock_detector.second",
+                        ? "gui.mmcr.multiblock_detector.first" : "gui.mmcr.multiblock_detector.second",
                 pointLabelValue(point.value(selection)));
     }
 
@@ -283,10 +285,10 @@ public final class MultiblockDetectorScreen extends Screen {
                 : positionLabel(position, null);
     }
 
-    private Component positionLabel(BlockPos position, Direction face) {
+    private MutableComponent positionLabel(BlockPos position, Direction face) {
         Component facing = face == null ? Component.empty()
                 : Component.translatable("tooltip.mmcr.multiblock_detector.face",
-                        Component.translatable("mmcr.direction." + face.getSerializedName()));
+                Component.translatable("mmcr.direction." + face.getSerializedName()));
         return Component.translatable("tooltip.mmcr.multiblock_detector.position", blockName(position),
                 position.toShortString(), facing);
     }

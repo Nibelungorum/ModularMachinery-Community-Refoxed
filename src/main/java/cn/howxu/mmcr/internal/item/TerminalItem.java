@@ -81,38 +81,63 @@ public class TerminalItem extends Item {
                                 Consumer<Component> tooltip, TooltipFlag flag) {
         TerminalData data = TerminalData.from(stack);
 
-        Component modeLabel = Component.translatable(data.inventoryMode() == TerminalInventoryMode.INVENTORY
-                ? "tooltip.mmcr.terminal.inventory_mode.inventory"
-                : "tooltip.mmcr.terminal.inventory_mode.container");
-        tooltip.accept(Component.translatable("tooltip.mmcr.terminal.mode", modeLabel)
-                .withStyle(ChatFormatting.GRAY));
+        Component modeLabel = Component.translatable(
+                        data.inventoryMode() == TerminalInventoryMode.INVENTORY
+                                ? "tooltip.mmcr.terminal.inventory_mode.inventory"
+                                : "tooltip.mmcr.terminal.inventory_mode.container")
+                .withStyle(ChatFormatting.GRAY);
+        tooltip.accept(
+                Component.empty()
+                        .append(Component.translatable("tooltip.mmcr.terminal.mode").withStyle(ChatFormatting.GREEN))
+                        .append(Component.literal(": "))
+                        .append(modeLabel)
+        );
 
         appendController(data.controller(), context.level(), tooltip);
         appendContainer(data, context.level(), tooltip);
         appendLevels(data.selectedLevels(), tooltip);
 
-        tooltip.accept(Component.translatable("tooltip.mmcr.terminal.stage", Integer.toString(data.stage()))
-                .withStyle(ChatFormatting.GRAY));
+        tooltip.accept(
+                Component.empty()
+                        .append(Component.translatable("tooltip.mmcr.terminal.stage").withStyle(ChatFormatting.GREEN))
+                        .append(Component.literal(": "))
+                        .append(Component.literal(Integer.toString(data.stage())))
+        );
 
-        Component previewState = Component.translatable(data.previewEnabled()
-                ? "gui.mmcr.terminal.preview.on" : "gui.mmcr.terminal.preview.off");
         Component layerLabel = data.previewLayer() == Integer.MAX_VALUE
                 ? Component.translatable("gui.mmcr.terminal.all")
                 : Component.literal(Integer.toString(data.previewLayer()));
-        tooltip.accept(Component.translatable("tooltip.mmcr.terminal.preview", previewState.copy().append(" / ").append(layerLabel))
-                .withStyle(ChatFormatting.GRAY));
+
+        Component previewState = Component.empty()
+                        .append(Component.translatable("gui.mmcr.terminal.preview").withStyle(ChatFormatting.DARK_AQUA))
+                        .append(Component.literal(": "))
+                        .append(data.previewEnabled() ?
+                            Component.translatable("gui.mmcr.terminal.preview.on").withStyle(ChatFormatting.GREEN)
+                            :
+                            Component.translatable("gui.mmcr.terminal.preview.off").withStyle(ChatFormatting.RED)
+                            )
+                        .append(Component.literal(" / "))
+                        .append(layerLabel)
+                ;
+        tooltip.accept(previewState);
     }
 
     private static void appendController(GlobalPos controller, Level level, Consumer<Component> tooltip) {
         if (controller == null) {
             tooltip.accept(Component.translatable("tooltip.mmcr.terminal.unbound")
-                    .withStyle(ChatFormatting.DARK_GRAY));
+                    .withStyle(ChatFormatting.RED));
             return;
         }
         Component value = resolveControllerValue(controller, level);
-        tooltip.accept(Component.translatable("tooltip.mmcr.terminal.controller", value,
-                        controller.dimension().identifier().toString())
-                .withStyle(ChatFormatting.GRAY));
+        tooltip.accept(
+                Component.empty()
+                        .append(Component.translatable("tooltip.mmcr.terminal.controller").withStyle(ChatFormatting.GREEN))
+                        .append(Component.literal(": "))
+                        .append(value)
+                        .append(" @ ")
+                        .append(Component.literal(controller.dimension().identifier().toString()))
+        );
+
     }
 
     private static Component resolveControllerValue(GlobalPos controller, Level level) {
@@ -135,9 +160,14 @@ public class TerminalItem extends Item {
         if (data.inventoryMode() != TerminalInventoryMode.CONTAINER || data.container() == null) return;
         GlobalPos container = data.container();
         Component value = resolveContainerValue(container, level);
-        tooltip.accept(Component.translatable("tooltip.mmcr.terminal.container", value,
-                        container.dimension().identifier().toString())
-                .withStyle(ChatFormatting.GRAY));
+        tooltip.accept(
+                Component.empty()
+                        .append(Component.translatable("tooltip.mmcr.terminal.container").withStyle(ChatFormatting.GREEN))
+                        .append(Component.literal(": "))
+                        .append(value)
+                        .append(" @ ")
+                        .append(Component.literal(container.dimension().identifier().toString()))
+        );
     }
 
     private static Component resolveContainerValue(GlobalPos container, Level level) {
@@ -161,8 +191,14 @@ public class TerminalItem extends Item {
             Component levelName = levelEntry.statePredicate().preferredState()
                     .map(state -> (Component) state.getBlock().getName())
                     .orElseGet(() -> levelEntry.representative().getHoverName());
-            tooltip.accept(Component.translatable("tooltip.mmcr.terminal.level", typeName, levelName)
-                    .withStyle(ChatFormatting.GRAY));
+            tooltip.accept(
+                    Component.empty()
+                            .append(Component.translatable("tooltip.mmcr.terminal.level").withStyle(ChatFormatting.GREEN))
+                            .append(Component.literal(": "))
+                            .append(typeName)
+                            .append(" / ")
+                            .append(levelName)
+            );
         }
     }
 }

@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -29,9 +30,7 @@ import java.util.function.Consumer;
 public class MultiblockDetectorItem extends Item {
 
     public MultiblockDetectorItem() {
-        super(new Item.Properties()
-                .stacksTo(1)
-                .setId(ResourceKey.create(Registries.ITEM, MMCR.id("multiblock_detector"))));
+        super(new Item.Properties().stacksTo(1).setId(ResourceKey.create(Registries.ITEM, MMCR.id("multiblock_detector"))));
     }
 
     @Override
@@ -68,22 +67,41 @@ public class MultiblockDetectorItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
-            Consumer<Component> builder, TooltipFlag tooltipFlag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display, Consumer<Component> builder, TooltipFlag tooltipFlag) {
         MultiblockDetectorSelection selection = selection(stack);
-        builder.accept(selectionLine(context, "controller", selection.controllerPos(), selection.controllerFace()));
-        builder.accept(selectionLine(context, "first", selection.firstPos(), null));
-        builder.accept(selectionLine(context, "second", selection.secondPos(), null));
+        builder.accept(controllerLine(context, selection.controllerPos(), selection.controllerFace()));
+        builder.accept(positionLine(context, "first", selection.firstPos()));
+        builder.accept(positionLine(context, "second", selection.secondPos()));
     }
 
-    private static Component selectionLine(Item.TooltipContext context, String key, BlockPos pos, Direction face) {
-        Component value = pos == null
-                ? Component.translatable("tooltip.mmcr.multiblock_detector.not_set")
-                : Component.translatable("tooltip.mmcr.multiblock_detector.position", blockName(context, pos),
-                        pos.toShortString(), face == null ? Component.empty()
-                                : Component.translatable("tooltip.mmcr.multiblock_detector.face", face.getSerializedName()));
-        return Component.translatable("tooltip.mmcr.multiblock_detector." + key, value)
-                .withStyle(pos == null ? ChatFormatting.DARK_GRAY : ChatFormatting.GRAY);
+    private Component controllerLine(Item.TooltipContext context, BlockPos pos, Direction face) {
+        MutableComponent rt = Component.empty();
+        if (pos == null) {
+            rt.append(Component.translatable("tooltip.mmcr.multiblock_detector.controller").withStyle(ChatFormatting.RED));
+            rt.append(Component.literal(": "));
+            rt.append(Component.translatable("tooltip.mmcr.multiblock_detector.not_set"));
+            return rt;
+        }
+        // pos not null
+        rt.append(Component.translatable("tooltip.mmcr.multiblock_detector.controller").withStyle(ChatFormatting.GREEN));
+        rt.append(Component.literal(": "));
+        rt.append(Component.translatable("tooltip.mmcr.multiblock_detector.position", blockName(context, pos), pos.toShortString(), face == null ? Component.empty() : Component.translatable("tooltip.mmcr.multiblock_detector.face", face.getSerializedName())));
+        return rt;
+    }
+
+    private Component positionLine(Item.TooltipContext context, String key, BlockPos pos) {
+        MutableComponent rt = Component.empty();
+        if (pos == null) {
+            rt.append(Component.translatable("tooltip.mmcr.multiblock_detector." + key).withStyle(ChatFormatting.RED));
+            rt.append(Component.literal(": "));
+            rt.append(Component.translatable("tooltip.mmcr.multiblock_detector.not_set"));
+            return rt;
+        }
+
+        rt.append(Component.translatable("tooltip.mmcr.multiblock_detector." + key).withStyle(ChatFormatting.GREEN));
+        rt.append(Component.literal(": "));
+        rt.append(Component.translatable("tooltip.mmcr.multiblock_detector.position", blockName(context, pos), pos.toShortString(), Component.empty()));
+        return rt;
     }
 
     private static Component blockName(Item.TooltipContext context, BlockPos pos) {

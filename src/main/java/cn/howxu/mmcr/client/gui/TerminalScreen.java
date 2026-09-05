@@ -286,8 +286,13 @@ public final class TerminalScreen extends Screen {
         if (data.controller() == null || machineName == null || machineName.getString().isEmpty()) {
             return Component.translatable("gui.mmcr.terminal.no_controller");
         }
-        return Component.translatable("gui.mmcr.terminal.machine", machineName,
-                data.controller().dimension().identifier().toString(), data.controller().pos().toShortString());
+        return Component.empty()
+                .append(Component.translatable("gui.mmcr.terminal.machine").withStyle(ChatFormatting.DARK_PURPLE))
+                .append(machineName)
+                .append(" @ ")
+                .append(data.controller().dimension().identifier().toString())
+                .append(" @ ")
+                .append(data.controller().pos().toShortString());
     }
 
     @Nullable
@@ -323,8 +328,14 @@ public final class TerminalScreen extends Screen {
     }
 
     private MutableComponent previewLabel() {
-        return Component.translatable(data.previewEnabled()
-                ? "gui.mmcr.terminal.preview.on" : "gui.mmcr.terminal.preview.off");
+        return Component.translatable("gui.mmcr.terminal.preview.label")
+                .append(
+                        data.previewEnabled()
+                        ?
+                        Component.translatable("gui.mmcr.terminal.preview.on").withStyle(ChatFormatting.GREEN)
+                        :
+                        Component.translatable("gui.mmcr.terminal.preview.off").withStyle(ChatFormatting.RED)
+                );
     }
 
     private boolean canSend(TerminalAction action) {
