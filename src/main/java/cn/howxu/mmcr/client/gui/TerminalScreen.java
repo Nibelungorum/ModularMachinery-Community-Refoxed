@@ -221,8 +221,8 @@ public final class TerminalScreen extends Screen {
         LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
         ControlState controls = controlState(controllerAvailable, stages, previewLayers);
         inventoryModeButton.setMessage(inventoryModeLabel());
-        typeButton.active = controllerAvailable && levelButtonsActive(view);
-        levelButton.active = controllerAvailable && levelButtonsActive(view);
+        typeButton.active = controllerAvailable && typeButtonActive(view);
+        levelButton.active = controllerAvailable && view.levelButtonActive();
         stageButton.active = controls.stageActive();
         stageButton.setMessage(Component.literal(Integer.toString(data.stage())));
         plusButton.active = controls.layerActive();
@@ -248,8 +248,8 @@ public final class TerminalScreen extends Screen {
                 .filter(type -> validLevelSelection(type.id(), data.selectedLevels())).toList();
     }
 
-    private boolean levelButtonsActive(LevelView view) {
-        return levelTypes().size() > 1 && view.levelButtonActive();
+    private boolean typeButtonActive(LevelView view) {
+        return levelTypes().size() > 1 && view.typeButtonActive();
     }
 
     private Identifier nextType(Identifier current) {
@@ -314,8 +314,10 @@ public final class TerminalScreen extends Screen {
             case REQUEST_STATE -> false;
             case SET_INVENTORY_MODE -> true;
             case SET_STAGE -> controllerAvailable && stages.size() > 1;
-            case SET_LEVEL -> controllerAvailable && levelButtonsActive(
-                    levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels()));
+            case SET_LEVEL -> {
+                LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
+                yield controllerAvailable && (typeButtonActive(view) || view.levelButtonActive());
+            }
             case SET_PREVIEW_ENABLED, SET_PREVIEW_LAYER, CHECK -> controllerAvailable;
             case BUILD, DEMOLISH -> controllerAvailable && storageAvailable;
         };
