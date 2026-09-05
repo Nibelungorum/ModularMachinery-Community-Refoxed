@@ -12,11 +12,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -111,6 +114,8 @@ public final class TerminalScreen extends Screen {
         graphics.fill(left(), top() + PANEL_HEIGHT - 1, left() + PANEL_WIDTH, top() + PANEL_HEIGHT, 0xFF40798B);
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         text(graphics, machineLabel(), 8, 8);
+        Component containerLabel = containerLabel();
+        if (containerLabel != null) text(graphics, containerLabel, 8, 22);
         text(graphics, Component.translatable("gui.mmcr.terminal.inventory"), 8, 38);
         text(graphics, Component.translatable("gui.mmcr.terminal.level_blocks"), 8, 58);
         text(graphics, Component.translatable("gui.mmcr.terminal.machine_stage"), 8, 78);
@@ -283,6 +288,19 @@ public final class TerminalScreen extends Screen {
         }
         return Component.translatable("gui.mmcr.terminal.machine", machineName,
                 data.controller().dimension().identifier().toString(), data.controller().pos().toShortString());
+    }
+
+    @Nullable
+    private Component containerLabel() {
+        if (data.inventoryMode() != TerminalInventoryMode.CONTAINER || data.container() == null) return null;
+        GlobalPos container = data.container();
+        Component detail = Component.literal(container.pos().toShortString());
+        Level level = Minecraft.getInstance().level;
+        if (level != null && level.dimension().equals(container.dimension()) && level.hasChunkAt(container.pos())) {
+            Component blockName = level.getBlockState(container.pos()).getBlock().getName();
+            detail = Component.literal(blockName.getString() + " @ " + container.pos().toShortString());
+        }
+        return Component.translatable("gui.mmcr.terminal.container", detail);
     }
 
     private Component layerLabel() {
