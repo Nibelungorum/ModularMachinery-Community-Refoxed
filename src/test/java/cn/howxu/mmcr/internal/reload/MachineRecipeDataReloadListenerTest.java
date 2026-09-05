@@ -65,7 +65,7 @@ class MachineRecipeDataReloadListenerTest {
 
     @Test
     void deletedRecipeIsAbsentAfterSecondReload() {
-        var listener = new MachineRecipeDataReloadListener(registries);
+        var listener = new MachineRecipeDataReloadListener();
         listener.applySnapshot(Map.of(Identifier.parse("mmcr_test:old_recipe"), recipe()));
         listener.applySnapshot(Map.of(Identifier.parse("mmcr_test:new_recipe"), recipe()));
 
@@ -79,7 +79,7 @@ class MachineRecipeDataReloadListenerTest {
         var id = Identifier.parse("mmcr_test:published_recipe");
         var recipe = RecipeTestSupport.create(id, Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
-        var listener = new MachineRecipeDataReloadListener(registries);
+        var listener = new MachineRecipeDataReloadListener();
 
         listener.applySnapshot(Map.of(id, recipe));
 
@@ -91,7 +91,7 @@ class MachineRecipeDataReloadListenerTest {
     @Test
     void failed_candidate_keeps_previous_snapshot_and_reports_structured_error() {
         var oldId = Identifier.parse("mmcr_test:previous_recipe");
-        var listener = new MachineRecipeDataReloadListener(registries);
+        var listener = new MachineRecipeDataReloadListener();
         listener.applySnapshot(Map.of(oldId, recipe()));
         var previous = RecipeRegistry.dataPackSnapshot();
 
@@ -100,11 +100,12 @@ class MachineRecipeDataReloadListenerTest {
                 + "\"machine\":\"mmcr:test_machine_name\","
                 + "\"tick_time\":20,"
                 + "\"requirements\":[{\"type\":\"mmcr_test:missing\"}]}";
-        var candidate = listener.prepare(resources(Map.of(
+        var resourceManager = resources(Map.of(
                 Identifier.parse("mmcr_test:recipes/invalid.json"), resource(invalid),
-                Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()))), null);
+                Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson())));
+        var candidate = MachineRecipeDataReloadListener.loadCandidate(resourceManager, registries);
 
-        listener.apply(candidate, null, null);
+        listener.apply(candidate, resourceManager);
 
         assertThat(listener.errors()).singleElement()
                 .satisfies(error -> assertThat(error.path()).isEqualTo("requirements[0]"));
@@ -115,14 +116,15 @@ class MachineRecipeDataReloadListenerTest {
 
     @Test
     void successful_candidate_rebuilds_the_machine_catalog_once() {
-        var listener = new MachineRecipeDataReloadListener(registries);
+        var listener = new MachineRecipeDataReloadListener();
         var machineId = Identifier.parse("mmcr:test_machine_name");
         var before = RecipeRegistry.catalog(machineId);
-        var candidate = listener.prepare(resources(Map.of(
-                Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()))), null);
+        var resourceManager = resources(Map.of(
+                Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson())));
+        var candidate = MachineRecipeDataReloadListener.loadCandidate(resourceManager, registries);
 
         RecipeCandidateIndex.resetBuildCountForTesting();
-        listener.apply(candidate, null, null);
+        listener.apply(candidate, resourceManager);
 
         assertThat(listener.errors()).isEmpty();
         assertThat(RecipeCandidateIndex.buildCountForTesting()).isEqualTo(1);
@@ -136,15 +138,16 @@ class MachineRecipeDataReloadListenerTest {
     void candidate_validation_reports_the_offending_recipe_id_and_json_path() {
         try (var scope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(INVALID_OUTPUT_TYPE);
-            var listener = new MachineRecipeDataReloadListener(registries);
+            var listener = new MachineRecipeDataReloadListener();
             var oldId = Identifier.parse("mmcr_test:old_recipe");
             listener.applySnapshot(Map.of(oldId, recipe()));
             Map<Identifier, Resource> resourceMap = new LinkedHashMap<>();
             resourceMap.put(Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson()));
             resourceMap.put(Identifier.parse("mmcr_test:recipes/invalid.json"), resource(invalidOutputRecipeJson()));
 
-            var candidate = listener.prepare(resources(resourceMap), null);
-            listener.apply(candidate, null, null);
+            var resourceManager = resources(resourceMap);
+            var candidate = MachineRecipeDataReloadListener.loadCandidate(resourceManager, registries);
+            listener.apply(candidate, resourceManager);
 
             assertThat(listener.errors()).isEmpty();
             assertThat(RecipeRegistry.getRecipe(oldId)).isNull();
@@ -155,7 +158,7 @@ class MachineRecipeDataReloadListenerTest {
 
     @Test
     void sync_failure_after_publication_restores_previous_data_pack_snapshot() {
-        var listener = new MachineRecipeDataReloadListener(registries);
+        var listener = new MachineRecipeDataReloadListener();
         var oldId = Identifier.parse("mmcr_test:old_snapshot");
         var newId = Identifier.parse("mmcr_test:new_snapshot");
         listener.applySnapshot(Map.of(oldId, recipe()));
@@ -195,7 +198,7 @@ class MachineRecipeDataReloadListenerTest {
         var id = Identifier.parse("mmcr_test:published_sync_recipe");
         var recipe = RecipeTestSupport.create(id, Identifier.parse("mmcr:test_machine_name"), 1,
                 List.of(), List.of());
-        var listener = new MachineRecipeDataReloadListener(registries);
+        var listener = new MachineRecipeDataReloadListener();
         AtomicBoolean synced = new AtomicBoolean();
 
         listener.applySnapshotFromServerReloadHook(Map.of(id, recipe), committed -> {

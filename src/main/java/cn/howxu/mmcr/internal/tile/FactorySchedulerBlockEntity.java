@@ -18,7 +18,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
-    private final LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, 64L,
+    private final LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, Long.MAX_VALUE,
             ItemResource::isEmpty, this::onContentsChanged) {
         @Override
         public boolean isValid(int slot, ItemResource resource) {

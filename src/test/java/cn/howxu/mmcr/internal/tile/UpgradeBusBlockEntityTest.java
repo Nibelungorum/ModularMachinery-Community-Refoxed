@@ -10,6 +10,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -35,15 +37,15 @@ class UpgradeBusBlockEntityTest {
     @Test
     void each_tier_creates_its_fixed_storage_size() {
         for (UpgradeBusSize size : UpgradeBusSize.values()) {
-            assertThat(create(size).itemStackHandler().getSlots()).isEqualTo(size.slots());
+            assertThat(create(size).itemStorage().size()).isEqualTo(size.slots());
         }
     }
 
     @Test
     void persists_non_empty_slots_and_keeps_snapshot_stacks_isolated() {
         UpgradeBusBlockEntity source = create(UpgradeBusSize.ELITE);
-        source.itemStackHandler().setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
-        source.itemStackHandler().setStackInSlot(8, new ItemStack(Items.GOLD_INGOT, 7));
+        insert(source, 0, new ItemStack(Items.IRON_INGOT, 3));
+        insert(source, 8, new ItemStack(Items.GOLD_INGOT, 7));
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
         source.saveAdditional(output);
@@ -51,14 +53,14 @@ class UpgradeBusBlockEntityTest {
         UpgradeBusBlockEntity restored = create(UpgradeBusSize.ELITE);
         restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()));
 
-        assertThat(restored.itemStackHandler().getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
-        assertThat(restored.itemStackHandler().getStackInSlot(0).getCount()).isEqualTo(3);
-        assertThat(restored.itemStackHandler().getStackInSlot(8).getItem()).isEqualTo(Items.GOLD_INGOT);
-        assertThat(restored.itemStackHandler().getStackInSlot(8).getCount()).isEqualTo(7);
+        assertThat(restored.itemStorage().resource(0).toStack(1).getItem()).isEqualTo(Items.IRON_INGOT);
+        assertThat(restored.itemStorage().amount(0)).isEqualTo(3L);
+        assertThat(restored.itemStorage().resource(8).toStack(1).getItem()).isEqualTo(Items.GOLD_INGOT);
+        assertThat(restored.itemStorage().amount(8)).isEqualTo(7L);
 
         List<ItemStack> snapshot = restored.itemSnapshot();
         snapshot.get(0).setCount(1);
-        assertThat(restored.itemStackHandler().getStackInSlot(0).getCount()).isEqualTo(3);
+        assertThat(restored.itemStorage().amount(0)).isEqualTo(3L);
     }
 
     @Test
@@ -68,18 +70,29 @@ class UpgradeBusBlockEntityTest {
         bus.addControllerChangeListener(notifications::incrementAndGet);
 
         long initial = bus.contentsVersion();
-        bus.itemStackHandler().insertItem(0, new ItemStack(Items.IRON_INGOT, 2), true);
+        try (Transaction transaction = Transaction.openRoot()) {
+            bus.itemStorage().insert(0, ItemResource.of(new ItemStack(Items.IRON_INGOT, 2)), 2L, transaction);
+        }
         assertThat(bus.contentsVersion()).isEqualTo(initial);
 
-        bus.itemStackHandler().insertItem(0, new ItemStack(Items.IRON_INGOT, 2), false);
+        insert(bus, 0, new ItemStack(Items.IRON_INGOT, 2));
         long afterInsert = bus.contentsVersion();
         assertThat(afterInsert).isGreaterThan(initial);
 
-        bus.itemStackHandler().extractItem(0, 1, false);
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemResource iron = ItemResource.of(new ItemStack(Items.IRON_INGOT, 1));
+            bus.itemStorage().extract(0, iron, 1L, transaction);
+            transaction.commit();
+        }
         long afterExtract = bus.contentsVersion();
         assertThat(afterExtract).isGreaterThan(afterInsert);
 
-        bus.itemStackHandler().setStackInSlot(0, new ItemStack(Items.GOLD_INGOT, 1));
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemResource iron = ItemResource.of(new ItemStack(Items.IRON_INGOT, 1));
+            bus.itemStorage().extract(0, iron, bus.itemStorage().amount(0), transaction);
+            bus.itemStorage().insert(0, ItemResource.of(new ItemStack(Items.GOLD_INGOT, 1)), 1L, transaction);
+            transaction.commit();
+        }
         assertThat(bus.contentsVersion()).isGreaterThan(afterExtract);
         assertThat(notifications).hasValue(3);
     }
@@ -88,5 +101,12 @@ class UpgradeBusBlockEntityTest {
         String id = "upgrade_bus_" + size.id();
         return new UpgradeBusBlockEntity(size, net.minecraft.core.BlockPos.ZERO,
                 ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+    }
+
+    private static void insert(UpgradeBusBlockEntity bus, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            bus.itemStorage().insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            transaction.commit();
+        }
     }
 }

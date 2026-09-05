@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -23,6 +24,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.HashMap;
 import java.util.List;
@@ -39,10 +42,9 @@ public class E2ERecipeRunGameTest {
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         BlockPos inputPos = new BlockPos(1, 2, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
-                .insertItem(0, new ItemStack(Items.IRON_INGOT), false);
-        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
-                .insertItem(1, new ItemStack(Items.IRON_INGOT), false);
+        ItemInputBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
+        insertItem(inputBus, 0, new ItemStack(Items.IRON_INGOT));
+        insertItem(inputBus, 1, new ItemStack(Items.IRON_INGOT));
         BlockPos outputPos = new BlockPos(1, 2, 2);
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
         BlockPos energyPos = new BlockPos(2, 2, 1);
@@ -65,9 +67,9 @@ public class E2ERecipeRunGameTest {
         controller.setMachine(machine);
         helper.runAtTickTime(120, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
-            ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-            ItemStack input1 = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(1);
-            ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+            ItemStack input = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0);
+            ItemStack input1 = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 1);
+            ItemStack output = item(helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class), 0);
             helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed input0=" + input + " input1=" + input1
                     + " crafting=" + controller.runtimeSnapshot().crafting()
                     + " failure=" + controller.runtimeSnapshot().crafting().failure());
@@ -82,8 +84,8 @@ public class E2ERecipeRunGameTest {
 
         BlockPos inputPos = controllerPos.offset(2, 0, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
-                .insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        insertItem(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0,
+                new ItemStack(Items.IRON_INGOT));
 
         BlockPos outputPos = controllerPos.offset(0, 0, 2);
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
@@ -116,8 +118,8 @@ public class E2ERecipeRunGameTest {
         helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
         for (int tick = 0; tick < 20; tick++) controller.serverTick();
 
-        ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
-        ItemStack output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        ItemStack input = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0);
+        ItemStack output = item(helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class), 0);
         helper.assertTrue(input.isEmpty(), "Pattern input bus consumed ingot outside legacy scan");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Pattern output bus received nugget outside legacy scan");
         helper.succeed();
@@ -173,14 +175,14 @@ public class E2ERecipeRunGameTest {
     }
 
     private static void insertCoal(GameTestHelper helper, BlockPos inputPos) {
-        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
-                .insertItem(0, new ItemStack(Items.COAL), false);
+        insertItem(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0,
+                new ItemStack(Items.COAL));
     }
 
     private static void assertDistillationBatchComplete(GameTestHelper helper,
                                                          MachineControllerBlockEntity controller, BlockPos inputPos) {
         helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null, "Distillation recipe completed");
-        ItemStack input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null).getStackInSlot(0);
+        ItemStack input = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0);
         helper.assertTrue(input.isEmpty(), "Distillation recipe consumed input");
     }
 
@@ -189,5 +191,18 @@ public class E2ERecipeRunGameTest {
         helper.assertTrue(controller.structureSnapshot().formed(), "Distillation tower formed");
         helper.assertTrue(controller.structureSnapshot().matchedStage() == expectedStage,
                 "Distillation tower matched stage " + expectedStage);
+    }
+
+    private static void insertItem(ItemBusBlockEntity bus, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            bus.itemStorage().insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            transaction.commit();
+        }
+    }
+
+    private static ItemStack item(ItemBusBlockEntity bus, int slot) {
+        ItemResource resource = bus.itemStorage().resource(slot);
+        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
+                : resource.toStack((int) Math.min(bus.itemStorage().amount(slot), resource.getMaxStackSize()));
     }
 }

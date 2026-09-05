@@ -47,28 +47,31 @@ public class ItemBusCapabilityGameTest {
         helper.assertTrue(output != null, "Output item capability is present");
 
         try (Transaction tx = Transaction.openRoot()) {
-            int inserted = 0;
+            long inserted = 0L;
             for (int slot = 0; slot < 4; slot++) {
                 inserted += input.insert(slot, ItemResource.of(Items.IRON_INGOT), 1, tx);
             }
-            int extracted = input.extract(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            helper.assertTrue(inserted == 4, "Input capability inserts");
-            helper.assertTrue(extracted == 1, "Input capability extracts");
+            long extracted = input.extract(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
+            helper.assertTrue(inserted == 4L, "Input capability inserts");
+            helper.assertTrue(extracted == 1L, "Input capability extracts");
             tx.commit();
         }
 
-        for (int slot = 0; slot < 4; slot++) {
-            outputBus.getItemStackHandler(null).insertItem(slot, new ItemStack(Items.IRON_INGOT), false);
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (int slot = 0; slot < 4; slot++) {
+                outputBus.itemStorage().insert(slot, ItemResource.of(Items.IRON_INGOT), 1L, transaction);
+            }
+            transaction.commit();
         }
 
         try (Transaction tx = Transaction.openRoot()) {
-            int inserted = output.insert(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            int extracted = 0;
+            long inserted = output.insert(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
+            long extracted = 0L;
             for (int slot = 0; slot < 4; slot++) {
                 extracted += output.extract(slot, ItemResource.of(Items.IRON_INGOT), 1, tx);
             }
-            helper.assertTrue(inserted == 0, "Output capability rejects inserts");
-            helper.assertTrue(extracted == 4, "Output capability extracts");
+            helper.assertTrue(inserted == 0L, "Output capability rejects inserts");
+            helper.assertTrue(extracted == 4L, "Output capability extracts");
             tx.commit();
         }
 
@@ -115,7 +118,10 @@ public class ItemBusCapabilityGameTest {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
-        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
+        try (Transaction transaction = Transaction.openRoot()) {
+            bus.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
+            transaction.commit();
+        }
 
         helper.destroyBlock(pos);
         helper.runAfterDelay(1, () -> {

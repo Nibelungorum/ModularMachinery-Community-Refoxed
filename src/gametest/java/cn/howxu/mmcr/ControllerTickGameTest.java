@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -52,7 +53,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.items.ItemStackHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.lang.reflect.Field;
@@ -296,8 +298,8 @@ public class ControllerTickGameTest {
         BlockPos inputPos = controllerPos.offset(1, 0, 0);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("controller_tick")).get().defaultBlockState());
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).getItemHandler(null)
-                .insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        insert(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).itemStorage(), 0,
+                new ItemStack(Items.IRON_INGOT));
         Identifier recipeId = MMCR.id("controller_tick_redstone_pause");
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("controller_tick"), 20,
                 List.of(MachineRequirement.fromInput(
@@ -351,9 +353,9 @@ public class ControllerTickGameTest {
         ItemOutputBusBlockEntity secondOutput = helper.getBlockEntity(secondOutputPos, ItemOutputBusBlockEntity.class);
         EnergyInputHatchBlockEntity energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class);
         DataStorageBlockEntity storage = helper.getBlockEntity(storagePos, DataStorageBlockEntity.class);
-        firstInput.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT), false);
-        secondInput.getItemHandler(null).insertItem(0, new ItemStack(Items.IRON_INGOT), false);
-        firstOutput.getItemHandler(null).insertItem(0, new ItemStack(Items.GOLD_NUGGET, 63), false);
+        insert(firstInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        insert(secondInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        insert(firstOutput.itemStorage(), 0, new ItemStack(Items.GOLD_NUGGET, 63));
         fillOutput(firstOutput, 0);
         fillOutput(secondOutput, -1);
         energy.energyStorage().setAmount(5L);
@@ -389,10 +391,10 @@ public class ControllerTickGameTest {
                             .addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(5)))
                             .addOutput(MachineRequirement.itemOutput(new ItemStack(Items.GOLD_NUGGET, 3)),
                                     OutputPolicy.ALLOW_PARTIAL);
-                    List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.getItemStackHandler(null));
-                    List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.getItemStackHandler(null));
-                    List<ItemStack> firstOutputBeforeSimulation = snapshot(firstOutput.getItemStackHandler(null));
-                    List<ItemStack> secondOutputBeforeSimulation = snapshot(secondOutput.getItemStackHandler(null));
+                    List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.itemStorage());
+                    List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.itemStorage());
+                    List<ItemStack> firstOutputBeforeSimulation = snapshot(firstOutput.itemStorage());
+                    List<ItemStack> secondOutputBeforeSimulation = snapshot(secondOutput.itemStorage());
                     long energyBeforeSimulation = energy.energyStorage().getAmountAsLong();
                     Map<String, DataValue> dataBeforeSimulation = storage.storage().values();
                     MachineIoPlan.Simulation simulation = plan.simulate();
@@ -403,10 +405,10 @@ public class ControllerTickGameTest {
                                     && simulation.outputs().getFirst().accepted() == 1L
                                     && simulation.outputs().getFirst().fit() == OutputFit.PARTIAL,
                             "Tick simulation reports the one-item partial output fit");
-                    helper.assertTrue(sameStacks(firstInputBeforeSimulation, snapshot(firstInput.getItemStackHandler(null)))
-                                    && sameStacks(secondInputBeforeSimulation, snapshot(secondInput.getItemStackHandler(null)))
-                                    && sameStacks(firstOutputBeforeSimulation, snapshot(firstOutput.getItemStackHandler(null)))
-                                    && sameStacks(secondOutputBeforeSimulation, snapshot(secondOutput.getItemStackHandler(null)))
+                    helper.assertTrue(sameStacks(firstInputBeforeSimulation, snapshot(firstInput.itemStorage()))
+                                    && sameStacks(secondInputBeforeSimulation, snapshot(secondInput.itemStorage()))
+                                    && sameStacks(firstOutputBeforeSimulation, snapshot(firstOutput.itemStorage()))
+                                    && sameStacks(secondOutputBeforeSimulation, snapshot(secondOutput.itemStorage()))
                                     && energy.energyStorage().getAmountAsLong() == energyBeforeSimulation
                                     && dataBeforeSimulation.equals(storage.storage().values()),
                             "Tick simulation leaves input, energy, output, and DataStorage state unchanged");
@@ -420,14 +422,14 @@ public class ControllerTickGameTest {
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Real Tick machine forms with all I/O parts");
             helper.assertTrue(executed.get(), "Formed Tick machine invokes its server callback");
-            helper.assertTrue(count(firstInput.getItemStackHandler(null), Items.IRON_INGOT)
-                            + count(secondInput.getItemStackHandler(null), Items.IRON_INGOT) == 0L,
+            helper.assertTrue(count(firstInput.itemStorage(), Items.IRON_INGOT)
+                            + count(secondInput.itemStorage(), Items.IRON_INGOT) == 0L,
                     "Tick commit consumes both input buses according to the complete plan");
             helper.assertTrue(energy.energyStorage().getAmountAsLong() == 0L,
                     "Tick commit consumes the complete energy plan");
-            helper.assertTrue(firstOutput.getItemHandler(null).getStackInSlot(0).getCount() == 64
-                            && count(firstOutput.getItemStackHandler(null), Items.GOLD_NUGGET) - 63L == 1L
-                            && count(secondOutput.getItemStackHandler(null), Items.GOLD_NUGGET) == 0L,
+            helper.assertTrue(firstOutput.itemStorage().amount(0) == 64L
+                            && count(firstOutput.itemStorage(), Items.GOLD_NUGGET) - 63L == 1L
+                            && count(secondOutput.itemStorage(), Items.GOLD_NUGGET) == 0L,
                     "Partial output commit writes only the accepted item");
             helper.assertTrue(storage.storage().get("ticks").map(DataValue.of(1L)::equals).orElse(false),
                     "DataStorage writes commit with the Tick I/O transaction");
@@ -436,26 +438,39 @@ public class ControllerTickGameTest {
     }
 
     private static void fillOutput(ItemOutputBusBlockEntity output, int retainedGoldSlot) {
-        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
-            if (slot != retainedGoldSlot) {
-                output.getItemStackHandler(null).setStackInSlot(slot, new ItemStack(Items.COBBLESTONE, 64));
+        ResourceStorage<ItemResource> itemStorage = output.itemStorage();
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (int slot = 0; slot < itemStorage.size(); slot++) {
+                if (slot != retainedGoldSlot) {
+                    itemStorage.insert(slot, ItemResource.of(Items.COBBLESTONE), 64L, transaction);
+                }
             }
+            transaction.commit();
         }
     }
 
-    private static long count(ItemStackHandler handler, Item item) {
+    private static void insert(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            transaction.commit();
+        }
+    }
+
+    private static long count(ResourceStorage<ItemResource> storage, Item item) {
         long amount = 0L;
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (stack.is(item)) amount += stack.getCount();
+        for (int slot = 0; slot < storage.size(); slot++) {
+            ItemResource resource = storage.resource(slot);
+            if (resource != null && resource.toStack(1).is(item)) amount += storage.amount(slot);
         }
         return amount;
     }
 
-    private static List<ItemStack> snapshot(ItemStackHandler handler) {
-        List<ItemStack> stacks = new ArrayList<>(handler.getSlots());
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            stacks.add(handler.getStackInSlot(slot).copy());
+    private static List<ItemStack> snapshot(ResourceStorage<ItemResource> storage) {
+        List<ItemStack> stacks = new ArrayList<>(storage.size());
+        for (int slot = 0; slot < storage.size(); slot++) {
+            ItemResource resource = storage.resource(slot);
+            stacks.add(resource == null ? ItemStack.EMPTY
+                    : resource.toStack((int) Math.min(storage.amount(slot), Integer.MAX_VALUE)));
         }
         return List.copyOf(stacks);
     }

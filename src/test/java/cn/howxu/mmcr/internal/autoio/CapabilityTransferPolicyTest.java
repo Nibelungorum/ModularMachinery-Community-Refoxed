@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
 import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
@@ -118,19 +119,19 @@ class CapabilityTransferPolicyTest {
         var energyInput = ports.energyInput.capabilitySnapshot().capabilities().getFirst();
         var energyOutput = ports.energyOutput.capabilitySnapshot().capabilities().getFirst();
 
-        ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(2));
+        setItem(ports.itemOutput.itemStorage(), 0, stack(2));
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
                 itemHandler(ports.itemOutput, false, true));
         assertThat(transfer(CapabilityTransferPolicies.policyFor(itemInput).orElseThrow(), itemInput,
                 Direction.EAST).amount()).isEqualTo(2);
-        assertThat(ports.itemInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(ports.itemInput.itemStorage().amount(0)).isEqualTo(2L);
 
-        ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(3));
+        setItem(ports.itemOutput.itemStorage(), 0, stack(3));
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemInput.getBlockPos(),
                 itemHandler(ports.itemInput, true, false));
         assertThat(eject(CapabilityTransferPolicies.policyFor(itemOutput).orElseThrow(), itemOutput,
                 Direction.WEST).amount()).isEqualTo(3);
-        assertThat(ports.itemInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(5);
+        assertThat(ports.itemInput.itemStorage().amount(0)).isEqualTo(5L);
 
         ports.fluidOutput.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 400));
         LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidOutput.getBlockPos(),
@@ -187,7 +188,7 @@ class CapabilityTransferPolicyTest {
     void disabled_or_unavailable_side_does_not_mutate_real_storage() {
         Ports ports = connectedPorts();
         var input = ports.itemInput.capabilitySnapshot().capabilities().getFirst();
-        ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(2));
+        setItem(ports.itemOutput.itemStorage(), 0, stack(2));
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
                 itemHandler(ports.itemOutput, false, true));
 
@@ -196,8 +197,8 @@ class CapabilityTransferPolicyTest {
 
         assertThat(blocked.successful()).isFalse();
         assertThat(blocked.failure().details()).containsEntry("reason", "no_target");
-        assertThat(ports.itemInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isZero();
-        assertThat(ports.itemOutput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(ports.itemInput.itemStorage().amount(0)).isZero();
+        assertThat(ports.itemOutput.itemStorage().amount(0)).isEqualTo(2L);
     }
 
     @Test
@@ -223,10 +224,10 @@ class CapabilityTransferPolicyTest {
     @Test
     void output_port_ejection_is_rejected_before_transfer_policy_runs() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
-        output.getItemStackHandler(null).setStackInSlot(0, stack(2));
+        setItem(output.itemStorage(), 0, stack(2));
 
         assertThat(output.ejectContents()).isFalse();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
     }
 
     @Test
@@ -246,7 +247,7 @@ class CapabilityTransferPolicyTest {
     @Test
     void empty_long_resource_storage_is_safe_for_auto_io_and_handler_projection() {
         Ports ports = connectedPorts();
-        ports.itemOutput.getItemStackHandler(null).setStackInSlot(0, stack(2));
+        setItem(ports.itemOutput.itemStorage(), 0, stack(2));
         LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
                 itemHandler(ports.itemOutput, false, true));
 
@@ -333,11 +334,22 @@ class CapabilityTransferPolicyTest {
         return stack;
     }
 
+    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemResource current = storage.resource(slot);
+            if (current != null && !current.isEmpty()) {
+                storage.extract(slot, current, storage.amount(slot), transaction);
+            }
+            storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            transaction.commit();
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static ResourceHandler<ItemResource> itemHandler(ItemBusBlockEntity port, boolean canInsert,
                                                               boolean canExtract) {
         try {
-            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ItemStackResourceHandler");
+            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ResourceStorageHandler");
             Constructor<?> constructor = null;
             for (Constructor<?> candidate : type.getDeclaredConstructors()) {
                 if (candidate.getParameterCount() == 3) {
@@ -347,7 +359,7 @@ class CapabilityTransferPolicyTest {
             }
             if (constructor == null) throw new NoSuchMethodException("Item capability adapter constructor");
             constructor.setAccessible(true);
-            return (ResourceHandler<ItemResource>) constructor.newInstance(port.getItemStackHandler(null), canInsert,
+            return (ResourceHandler<ItemResource>) constructor.newInstance(port.itemStorage(), canInsert,
                     canExtract);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to create the production item capability adapter", exception);

@@ -384,7 +384,7 @@ class MachineBuilderJSTest {
     @Test
     void builder_declares_configured_smart_interface() {
         var registration = new MachineBuilderJS("mmcr:interface_builder_test")
-                .localizedName("Interface Builder Test")
+                // .localizedName("Interface Builder Test")
                 .smartInterface("speed", 1F, 4F).priority(10).end()
                 .createObject();
 
@@ -445,7 +445,7 @@ class MachineBuilderJSTest {
     @Test
     void builder_sets_machine_basic_block_for_all_base_textures() {
         var registration = new MachineBuilderJS("mmcr:electric_press")
-                .localizedName("Electric Press")
+                // .localizedName("Electric Press")
                 .appearance("kubejs:steel_casing")
                 .createObject();
 

@@ -47,13 +47,14 @@ class UpgradeBusMenuTest {
         ItemStack movedToBus = menu.quickMoveStack(null, menu.playerInventorySlotStart());
 
         assertThat(movedToBus.getItem()).isEqualTo(Items.IRON_INGOT);
-        assertThat(owner.itemStackHandler().getStackInSlot(0).getCount()).isEqualTo(4);
+        assertThat(owner.itemStorage().amount(0)).isEqualTo(4);
         assertThat(playerInventory.getItem(9).isEmpty()).isTrue();
 
         ItemStack movedToPlayer = menu.quickMoveStack(null, 0);
 
         assertThat(movedToPlayer.getItem()).isEqualTo(Items.IRON_INGOT);
-        assertThat(owner.itemStackHandler().getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(owner.itemStorage().amount(0)).isZero();
+        assertThat(owner.itemStorage().resource(0)).isNull();
         assertThat(playerInventory.getItem(8).getCount()).isEqualTo(4);
     }
 

@@ -52,6 +52,8 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -139,8 +141,16 @@ public final class DataStorageGameTest {
 
         ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
         ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-        input.getItemHandler(null).insertItem(0, new ItemStack(Items.DIAMOND), false);
-        input.getItemHandler(null).insertItem(1, new ItemStack(Items.IRON_INGOT, 2), false);
+        try (Transaction transaction = Transaction.openRoot()) {
+            input.itemStorage().insert(0, ItemResource.of(Items.DIAMOND), 1L, transaction);
+            transaction.commit();
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            input.itemStorage().insert(1, ItemResource.of(Items.IRON_INGOT), 2L, transaction);
+            transaction.commit();
+        }
+        // input.getItemHandler(null).insertItem(0, new ItemStack(Items.DIAMOND), false);
+        // input.getItemHandler(null).insertItem(1, new ItemStack(Items.IRON_INGOT, 2), false);
 
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         AtomicInteger starts = new AtomicInteger();
@@ -204,7 +214,13 @@ public final class DataStorageGameTest {
                             && controller.runtimeSnapshot().crafting().totalTick() == 2
                             && starts.get() == 1,
                     "Controller load restores the effective recipe without rerunning Start");
-            input.getItemHandler(null).extractItem(0, 1, false);
+            try (Transaction transaction = Transaction.openRoot()) {
+                ItemResource resource = input.itemStorage().resource(0);
+                if (resource != null && !resource.isEmpty()) {
+                    input.itemStorage().extract(0, resource, 1L, transaction);
+                    transaction.commit();
+                }
+            }
 
             controller.serverTick();
             controller.serverTick();
@@ -214,8 +230,8 @@ public final class DataStorageGameTest {
             helper.assertTrue(ticks.get() == 2 && finishes.get() == 1 && starts.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
-                            && output.getItemHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)
-                            && output.getItemHandler(null).getStackInSlot(0).getCount() == 2,
+                            && output.itemStorage().resource(0).toStack(1).is(Items.GOLD_NUGGET)
+                            && output.itemStorage().amount(0) == 2L,
                     "Loaded effective output finishes through the real output bus");
             helper.succeed();
         });

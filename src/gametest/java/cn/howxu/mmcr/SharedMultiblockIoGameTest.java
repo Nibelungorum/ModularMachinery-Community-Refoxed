@@ -27,6 +27,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.List;
 import java.util.Map;
@@ -74,7 +76,10 @@ public class SharedMultiblockIoGameTest {
             second.serverTick();
             ItemInputBusBlockEntity input = helper.getBlockEntity(sharedInput, ItemInputBusBlockEntity.class);
             for (int slot = 0; slot < 10; slot++) {
-                input.getItemHandler(null).insertItem(slot, new ItemStack(Items.IRON_INGOT), false);
+                try (Transaction transaction = Transaction.openRoot()) {
+                    input.itemStorage().insert(slot, ItemResource.of(Items.IRON_INGOT), 1L, transaction);
+                    transaction.commit();
+                }
             }
             MachineRecipe recipe = itemRecipe("shared_input_start");
             StructureClaimRegistry.ResourceDomain domain = first.resourceDomain();
@@ -86,7 +91,8 @@ public class SharedMultiblockIoGameTest {
             coordinator.resolve(domain);
 
             helper.assertTrue(totalParallelism.get() == 10, "two requests for eight must receive total parallelism ten");
-            helper.assertTrue(input.getItemHandler(null).getStackInSlot(0).isEmpty(), "shared input is fully committed");
+            helper.assertTrue(input.itemStorage().amount(0) == 0L,
+                    "shared input is fully committed");
             helper.succeed();
         });
     }

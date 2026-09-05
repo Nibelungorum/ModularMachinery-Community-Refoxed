@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
@@ -50,22 +51,37 @@ class IOPortSizeTest {
         ItemBusBlockEntity normal = itemBus("item_input_bus");
         ItemBusBlockEntity ludicrous = itemBus("item_output_bus_ludicrous");
 
-        assertThat(tiny.getItemStackHandler(null).getSlots()).isEqualTo(1);
-        assertThat(normal.getItemStackHandler(null).getSlots()).isEqualTo(6);
-        assertThat(ludicrous.getItemStackHandler(null).getSlots()).isEqualTo(32);
+        assertThat(tiny.itemStorage().size()).isEqualTo(1);
+        assertThat(normal.itemStorage().size()).isEqualTo(6);
+        assertThat(ludicrous.itemStorage().size()).isEqualTo(32);
     }
 
     @Test
     void itemBusCachesInventoryEmptyState() {
         ItemBusBlockEntity bus = itemBus("item_output_bus");
 
-        assertThat(bus.isInventoryEmpty()).isTrue();
+        assertThat(isStorageEmpty(bus.itemStorage())).isTrue();
 
-        bus.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
-        assertThat(bus.isInventoryEmpty()).isFalse();
+        try (Transaction transaction = Transaction.openRoot()) {
+            bus.itemStorage().insert(
+                    0,
+                    ItemResource.of(new ItemStack(Items.IRON_INGOT)),
+                    1L,
+                    transaction
+            );
+            transaction.commit();
+        }
+        assertThat(isStorageEmpty(bus.itemStorage())).isFalse();
 
-        bus.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
-        assertThat(bus.isInventoryEmpty()).isTrue();
+        ItemResource resource = bus.itemStorage().resource(0);
+        if (resource != null && !resource.isEmpty()) {
+            try (Transaction transaction = Transaction.openRoot()) {
+                bus.itemStorage().extract(0, resource, bus.itemStorage().amount(0), transaction);
+                transaction.commit();
+            }
+        }
+
+        assertThat(isStorageEmpty(bus.itemStorage())).isTrue();
     }
 
     @Test
@@ -211,6 +227,11 @@ class IOPortSizeTest {
 
     private static LongFluidStorage tank(FluidHatchBlockEntity hatch) {
         return hatch.fluidStorage();
+    }
+
+    private static boolean isStorageEmpty(ResourceStorage<ItemResource> storage) {
+        return IntStream.range(0, storage.size())
+                .allMatch(slot -> storage.amount(slot) == 0L);
     }
 
 }

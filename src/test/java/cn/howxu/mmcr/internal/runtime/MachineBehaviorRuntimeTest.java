@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
@@ -55,6 +56,7 @@ import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -69,6 +71,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -106,12 +110,12 @@ class MachineBehaviorRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> context.cancel()).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(runtime.start(recipe("behavior_start_veto_recipe", input(Items.IRON_INGOT)), 1).isCrafting())
                 .isFalse();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -136,12 +140,12 @@ class MachineBehaviorRuntimeTest {
                     context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
                 }).build());
         controller.setMachine(machine);
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(runtime.start(recipe("behavior_lifecycle", input(Items.IRON_INGOT), output(Items.IRON_NUGGET)), 1)
                 .isCrafting()).isFalse();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
 
         var secondStart = runtime.start(recipe("behavior_lifecycle", input(Items.IRON_INGOT), output(Items.IRON_NUGGET)), 1);
         assertThat(secondStart.isCrafting())
@@ -153,7 +157,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(starts).hasValue(2);
         assertThat(ticks).hasValue(1);
         assertThat(finishes).hasValue(1);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
         assertThat(((ControllerScreenTextState) controller.behaviorContext().screenText()).snapshot().lines())
                 .anyMatch(line -> line.text().getString().equals("running"));
     }
@@ -178,7 +182,7 @@ class MachineBehaviorRuntimeTest {
                             ControllerScreenTextScope.CONTROLLER, MMCR.id("lane_finished"), Component.literal("finish"));
                     context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
                 }).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         runtime.setScreenText(laneText);
 
@@ -203,7 +207,7 @@ class MachineBehaviorRuntimeTest {
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> {
                     starts.incrementAndGet();
-                    assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+                    assertThat(input.itemStorage().amount(0)).isEqualTo(2L);
                     context.setDuration(2);
                     context.setRequirements(List.of(
                             new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
@@ -216,7 +220,7 @@ class MachineBehaviorRuntimeTest {
                     assertThat(((ItemRequirement) context.requirements().getFirst()).count()).isEqualTo(2);
                     ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(64);
                 }).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 2));
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 2));
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("behavior_start_snapshot"), TEST_MACHINE_ID, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 input(Items.IRON_INGOT), output(Items.IRON_NUGGET)));
@@ -235,8 +239,8 @@ class MachineBehaviorRuntimeTest {
 
         assertThat(starts).hasValue(1);
         assertThat(ticks).hasValue(2);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -268,7 +272,7 @@ class MachineBehaviorRuntimeTest {
         runtime.tick();
         runtime.finish();
 
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
     }
 
     @Test
@@ -292,8 +296,8 @@ class MachineBehaviorRuntimeTest {
         runtime.tick();
         runtime.finish();
 
-        assertThat(itemOutput.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
-        assertThat(itemOutput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(item(itemOutput.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(itemOutput.itemStorage().amount(0)).isEqualTo(1L);
         assertThat(fluidOutput.fluidStorage().getFluidStack().getAmount()).isEqualTo(1_000);
     }
 
@@ -372,7 +376,7 @@ class MachineBehaviorRuntimeTest {
         BlockPos parallelPos = new BlockPos(2, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.STICK, 2));
+        setItem(scheduler.itemStorage(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
         ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, parallelPos,
                 ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
         parallel.setCurrentParallelism(4);
@@ -413,7 +417,7 @@ class MachineBehaviorRuntimeTest {
         BlockPos parallelPos = new BlockPos(2, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        scheduler.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.STICK, 2));
+        setItem(scheduler.itemStorage(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
         ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, parallelPos,
                 ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
         parallel.setCurrentParallelism(4);
@@ -450,7 +454,7 @@ class MachineBehaviorRuntimeTest {
         UpgradeBusBlockEntity bus = new UpgradeBusBlockEntity(UpgradeBusSize.NORMAL, new BlockPos(1, 0, 0),
                 ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
         ItemStack source = new ItemStack(Items.IRON_INGOT, 2);
-        bus.itemStackHandler().setStackInSlot(0, source);
+        setItem(bus.itemStorage(), 0, source);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
         Machine machine = machine(TEST_MACHINE_ID, new BlockArray(Map.of(
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))),
@@ -478,11 +482,11 @@ class MachineBehaviorRuntimeTest {
         ItemOutputBusBlockEntity secondOutput = RuntimeTestFixtures.itemOutput(secondOutputPos);
         DataStorageBlockEntity dataStorage = (DataStorageBlockEntity) ModBlockEntities.DATA_STORAGE.get().create(
                 storagePos, ModBlocks.DATA_STORAGE.get().defaultBlockState());
-        firstInput.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
-        secondInput.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        setItem(firstInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(secondInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         ItemStack initialOutput = new ItemStack(Items.GOLD_NUGGET, 63);
         initialOutput.set(DataComponents.MAX_STACK_SIZE, 64);
-        firstOutput.getItemStackHandler(null).setStackInSlot(0, initialOutput);
+        setItem(firstOutput.itemStorage(), 0, initialOutput);
         dataStorage.storage().set("ticks", DataValue.of(0L));
 
         AtomicBoolean failFirstCommit = new AtomicBoolean(true);
@@ -544,26 +548,20 @@ class MachineBehaviorRuntimeTest {
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(calls).hasValue(1);
-        assertThat(firstInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(secondInput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(firstOutput.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(63);
-        assertThat(secondOutput.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(firstInput.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(secondInput.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(firstOutput.itemStorage().amount(0)).isEqualTo(63L);
+        assertThat(secondOutput.itemStorage().amount(0)).isZero();
         assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(0L));
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(calls).hasValue(2);
-        assertThat(firstInput.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(secondInput.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        int outputCount = 0;
-        for (int slot = 0; slot < firstOutput.getItemStackHandler(null).getSlots(); slot++) {
-            outputCount += firstOutput.getItemStackHandler(null).getStackInSlot(slot).getCount();
-        }
-        for (int slot = 0; slot < secondOutput.getItemStackHandler(null).getSlots(); slot++) {
-            outputCount += secondOutput.getItemStackHandler(null).getStackInSlot(slot).getCount();
-        }
-        assertThat(outputCount).isEqualTo(66);
+        assertThat(firstInput.itemStorage().amount(0)).isZero();
+        assertThat(secondInput.itemStorage().amount(0)).isZero();
+        long outputCount = itemAmount(firstOutput.itemStorage()) + itemAmount(secondOutput.itemStorage());
+        assertThat(outputCount).isEqualTo(66L);
         assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(1L));
     }
 
@@ -629,7 +627,7 @@ class MachineBehaviorRuntimeTest {
                             MMCR.id("recipe_hook_status"), Component.literal("post"));
                 })
                 .build());
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         RuntimeTestFixtures.formStructureWithComponents(controller, recipeMachine, input, output);
         MachineRecipe lifecycleRecipe = recipe("behavior_recipe_hook_lifecycle", machineId,
                 input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
@@ -663,7 +661,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(preContexts.get(1).screenText()).isSameAs(postContexts.get(1).screenText());
         assertThat(((ControllerScreenTextState) preContexts.get(1).screenText()).snapshot().lines())
                  .singleElement().satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("post")));
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
     }
 
     @Test
@@ -688,13 +686,13 @@ class MachineBehaviorRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> { throw new IllegalStateException("test callback failure"); }).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThatCode(() -> runtime.start(recipe("behavior_exception_recipe", input(Items.IRON_INGOT)), 1))
                 .doesNotThrowAnyException();
         assertThat(runtime.active()).isFalse();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -713,7 +711,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(runtime.finish().getStatus())
                 .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.NO_RECIPE);
         assertThat(runtime.active()).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(output.itemStorage().amount(0)).isZero();
     }
 
     private static Machine machine(net.minecraft.resources.Identifier id, MachineBehavior behavior) {
@@ -740,6 +738,31 @@ class MachineBehaviorRuntimeTest {
     private static ItemRequirement input(net.minecraft.world.item.Item item) {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1,
                 ItemStack.EMPTY, 1F, List.of());
+    }
+
+    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemResource current = storage.resource(slot);
+            if (current != null && !current.isEmpty()) {
+                storage.extract(slot, current, storage.amount(slot), transaction);
+            }
+            if (!stack.isEmpty()) {
+                storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            }
+            transaction.commit();
+        }
+    }
+
+    private static ItemStack item(ResourceStorage<ItemResource> storage, int slot) {
+        ItemResource resource = storage.resource(slot);
+        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
+                : resource.toStack((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
+    }
+
+    private static long itemAmount(ResourceStorage<ItemResource> storage) {
+        long amount = 0L;
+        for (int slot = 0; slot < storage.size(); slot++) amount += storage.amount(slot);
+        return amount;
     }
 
     private static ItemRequirement output(net.minecraft.world.item.Item item) {

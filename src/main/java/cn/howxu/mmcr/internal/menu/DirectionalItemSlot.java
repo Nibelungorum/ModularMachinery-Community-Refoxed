@@ -62,6 +62,23 @@ public class DirectionalItemSlot extends Slot {
     }
 
     @Override
+    public ItemStack safeInsert(ItemStack inputStack, int inputAmount) {
+        if (inputStack.isEmpty() || !mayPlace(inputStack)) return inputStack;
+
+        int transferable = Math.min(Math.min(inputAmount, inputStack.getCount()),
+                getMaxStackSize(inputStack) - getItem().getCount());
+        if (transferable <= 0) return inputStack;
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            long inserted = storage.insert(getContainerSlot(), ItemResource.of(inputStack), transferable, transaction);
+            if (inserted <= 0L) return inputStack;
+            transaction.commit();
+            inputStack.shrink((int) inserted);
+        }
+        return inputStack;
+    }
+
+    @Override
     public int getMaxStackSize() {
         ItemResource resource = storage.resource(getContainerSlot());
         return resource == null || resource.isEmpty() ? super.getMaxStackSize() : resource.getMaxStackSize();

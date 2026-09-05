@@ -56,7 +56,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
                 .thenAcceptAsync(candidate -> apply(candidate, resourceManager), applyExecutor);
     }
 
-    private void apply(PreparedRecipes candidate, ResourceManager resourceManager) {
+    void apply(PreparedRecipes candidate, ResourceManager resourceManager) {
         if (!candidate.errors().isEmpty()) {
             errors = candidate.errors();
             candidate.errors().forEach(error -> MMCR.LOG.error("Failed to load machine recipe {}", error.recipeId(), error));

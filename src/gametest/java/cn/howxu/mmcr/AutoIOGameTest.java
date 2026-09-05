@@ -17,6 +17,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -38,7 +40,7 @@ public class AutoIOGameTest {
         inputBus.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, inputBus::serverTick);
         helper.runAtTickTime(80, () -> {
-            ItemStack imported = inputBus.getItemStackHandler(Direction.EAST).getStackInSlot(0);
+            ItemStack imported = item(inputBus, 0);
             helper.assertTrue(imported.is(Items.IRON_INGOT), "Input bus imports iron ingots from east chest");
             helper.assertTrue(imported.getCount() > 0, "Input bus receives items from east chest");
             helper.assertTrue(chest.getItem(0).getCount() < 3, "Source chest loses items to auto input");
@@ -141,7 +143,7 @@ public class AutoIOGameTest {
         CombinedPortBlockEntity output = helper.getBlockEntity(outputPos, CombinedPortBlockEntity.class);
         ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos, ChestBlockEntity.class);
         FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos, FluidHatchBlockEntity.class);
-        output.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT, 3));
+        setItem(output, 0, new ItemStack(Items.IRON_INGOT, 3));
         output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
         CapabilityType itemType = capabilityType(output, BuiltinCapabilityDefinitions.ITEM_TYPE);
@@ -156,12 +158,12 @@ public class AutoIOGameTest {
 
             fluidBeforeDisable[0] = fluidTarget.fluidStorage().getAmountAsLong();
             output.setAutoIOSide(itemType, Direction.EAST, false);
-            output.getItemStackHandler(null).setStackInSlot(1, new ItemStack(Items.GOLD_INGOT, 2));
+            setItem(output, 1, new ItemStack(Items.GOLD_INGOT, 2));
             output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
         });
         helper.runAtTickTime(120, () -> {
             helper.assertTrue(itemTarget.getItem(1).isEmpty()
-                            && output.getItemStackHandler(null).getStackInSlot(1).getCount() == 2,
+                            && output.itemStorage().amount(1) == 2L,
                     "Disabling only the item profile stops item output");
             helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > fluidBeforeDisable[0],
                     "Disabling only the item profile keeps fluid output active");
@@ -180,7 +182,7 @@ public class AutoIOGameTest {
         CombinedPortBlockEntity input = helper.getBlockEntity(inputPos, CombinedPortBlockEntity.class);
         ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos, ChestBlockEntity.class);
         FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos, FluidHatchBlockEntity.class);
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
+        setItem(input, 0, new ItemStack(Items.COBBLESTONE, 3));
         input.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
         CapabilityType itemType = capabilityType(input, BuiltinCapabilityDefinitions.ITEM_TYPE);
@@ -192,14 +194,14 @@ public class AutoIOGameTest {
         helper.assertTrue(fluidTarget.fluidStorage().isEmpty(), "Item-specific ejection does not fill fluid handlers");
 
         int itemTargetBeforeFluidEjection = itemTarget.getItem(0).getCount();
-        input.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
+        setItem(input, 0, new ItemStack(Items.COBBLESTONE, 3));
         long fluidBeforeFluidEjection = input.fluidStorage().getAmountAsLong();
         helper.assertTrue(input.ejectContents(fluidType), "Fluid-specific ejection moves fluid contents");
         helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > 0L,
                 "Fluid ejection reaches the fluid handler");
         helper.assertTrue(input.fluidStorage().getAmountAsLong() < fluidBeforeFluidEjection,
                 "Fluid-specific ejection drains fluid contents");
-        helper.assertTrue(input.getItemStackHandler(null).getStackInSlot(0).getCount() == 3,
+        helper.assertTrue(input.itemStorage().amount(0) == 3L,
                 "Fluid-specific ejection leaves item source contents untouched");
         helper.assertTrue(itemTarget.getItem(0).getCount() == itemTargetBeforeFluidEjection,
                 "Fluid-specific ejection leaves item target contents untouched");
@@ -210,7 +212,7 @@ public class AutoIOGameTest {
         ItemBusBlockEntity source = placeItemInputPort(helper, new BlockPos(0, 1, 0));
         ChestBlockEntity firstTarget = placeChest(helper, new BlockPos(1, 1, 0));
         ChestBlockEntity secondTarget = placeChest(helper, new BlockPos(-1, 1, 0));
-        source.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 2));
+        setItem(source, 0, new ItemStack(Items.COBBLESTONE, 2));
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Item input bus ejects its contents");
@@ -218,7 +220,7 @@ public class AutoIOGameTest {
             int secondCount = secondTarget.getItem(0).getCount();
             helper.assertTrue((firstCount == 2 && secondCount == 0) || (firstCount == 0 && secondCount == 2),
                     "Exactly one adjacent item target receives all contents");
-            helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).isEmpty(), "Item input bus is empty after a complete first transfer");
+            helper.assertTrue(source.itemStorage().amount(0) == 0L, "Item input bus is empty after a complete first transfer");
             helper.succeed();
         });
     }
@@ -227,7 +229,7 @@ public class AutoIOGameTest {
         ItemBusBlockEntity source = placeItemInputPort(helper, new BlockPos(0, 1, 0));
         ChestBlockEntity firstTarget = placeChest(helper, new BlockPos(1, 1, 0));
         ChestBlockEntity secondTarget = placeChest(helper, new BlockPos(-1, 1, 0));
-        source.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 2));
+        setItem(source, 0, new ItemStack(Items.COBBLESTONE, 2));
         fillChestExceptOne(firstTarget);
         fillChestExceptOne(secondTarget);
 
@@ -237,7 +239,7 @@ public class AutoIOGameTest {
                     "First item target receives its remaining capacity: " + firstTarget.getItem(0).getCount());
             helper.assertTrue(secondTarget.getItem(0).getCount() == 64,
                     "Second item target receives the remaining item: " + secondTarget.getItem(0).getCount());
-            helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).isEmpty(), "Item input bus is empty after both partial transfers");
+            helper.assertTrue(source.itemStorage().amount(0) == 0L, "Item input bus is empty after both partial transfers");
             helper.succeed();
         });
     }
@@ -246,7 +248,7 @@ public class AutoIOGameTest {
         ItemBusBlockEntity source = placeItemInputPort(helper, new BlockPos(0, 1, 0));
         ChestBlockEntity firstTarget = placeChest(helper, new BlockPos(1, 1, 0));
         ChestBlockEntity secondTarget = placeChest(helper, new BlockPos(-1, 1, 0));
-        source.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.COBBLESTONE, 3));
+        setItem(source, 0, new ItemStack(Items.COBBLESTONE, 3));
         fillChestExceptOne(firstTarget);
         fillChestExceptOne(secondTarget);
 
@@ -256,7 +258,7 @@ public class AutoIOGameTest {
                     "First item target is filled: " + firstTarget.getItem(0).getCount());
             helper.assertTrue(secondTarget.getItem(0).getCount() == 64,
                     "Second item target is filled: " + secondTarget.getItem(0).getCount());
-            helper.assertTrue(source.getItemStackHandler(null).getStackInSlot(0).getCount() == 1, "Item input bus preserves the remaining item");
+            helper.assertTrue(source.itemStorage().amount(0) == 1L, "Item input bus preserves the remaining item");
             helper.succeed();
         });
     }
@@ -402,5 +404,22 @@ public class AutoIOGameTest {
         port.setAutoIOEnabled(type, true);
         port.setAllAutoIOSides(type, false);
         port.setAutoIOSide(type, side, true);
+    }
+
+    private static void setItem(IOPortBlockEntity port, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemResource current = port.itemStorage().resource(slot);
+            if (current != null && !current.isEmpty()) {
+                port.itemStorage().extract(slot, current, port.itemStorage().amount(slot), transaction);
+            }
+            port.itemStorage().insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            transaction.commit();
+        }
+    }
+
+    private static ItemStack item(IOPortBlockEntity port, int slot) {
+        ItemResource resource = port.itemStorage().resource(slot);
+        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
+                : resource.toStack((int) Math.min(port.itemStorage().amount(slot), resource.getMaxStackSize()));
     }
 }

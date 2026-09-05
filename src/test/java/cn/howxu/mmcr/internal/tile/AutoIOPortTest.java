@@ -17,6 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -44,27 +45,27 @@ class AutoIOPortTest {
     void input_ejection_retries_after_a_missing_target_and_completes_the_transfer() {
         ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
         ItemOutputBusBlockEntity target = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
-        source.getItemStackHandler(null).setStackInSlot(0, stack(3));
+        setItems(source, 3L);
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
 
         assertThat(source.ejectContents()).isFalse();
-        assertThat(source.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+        assertThat(source.itemStorage().amount(0)).isEqualTo(3L);
 
         LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents()).isTrue();
-        assertThat(source.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(target.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+        assertThat(source.itemStorage().amount(0)).isZero();
+        assertThat(target.itemStorage().amount(0)).isEqualTo(3L);
     }
 
     @Test
     void auto_io_uses_only_enabled_sides_and_publishes_configuration_changes() {
         ItemOutputBusBlockEntity source = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
         ItemInputBusBlockEntity target = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
-        source.getItemStackHandler(null).setStackInSlot(0, stack(3));
+        setItems(source, 3L);
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
@@ -80,8 +81,8 @@ class AutoIOPortTest {
         assertThat(source.autoIOConfig().enabled()).isTrue();
         assertThat(source.autoIOConfig().enabledSides()).containsExactly(Direction.EAST);
         assertThat(source.autoIOCandidateCount()).isEqualTo(1);
-        assertThat(source.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(target.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+        assertThat(source.itemStorage().amount(0)).isZero();
+        assertThat(target.itemStorage().amount(0)).isEqualTo(3L);
         assertThat(LevelStub.sentBlockUpdates(level)).isGreaterThan(updatesBefore);
     }
 
@@ -89,7 +90,7 @@ class AutoIOPortTest {
     void full_ejection_moves_real_contents_to_the_available_adjacent_port() {
         ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
         ItemOutputBusBlockEntity target = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
-        source.getItemStackHandler(null).setStackInSlot(0, stack(4));
+        setItems(source, 4L);
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
@@ -97,24 +98,24 @@ class AutoIOPortTest {
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents()).isTrue();
-        assertThat(source.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
-        assertThat(target.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(4);
+        assertThat(source.itemStorage().amount(0)).isZero();
+        assertThat(target.itemStorage().amount(0)).isEqualTo(4L);
     }
 
     @Test
     void output_port_rejects_manual_ejection_without_mutating_contents() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
-        output.getItemStackHandler(null).setStackInSlot(0, stack(2));
+        setItems(output, 2L);
 
         assertThat(output.ejectContents()).isFalse();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
     }
 
     @Test
     void auto_io_does_not_eject_a_port_used_by_an_active_factory_lane() throws Exception {
         ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(new BlockPos(0, 0, 1));
         ItemOutputBusBlockEntity target = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 1));
-        source.getItemStackHandler(null).setStackInSlot(0, stack(3));
+        setItems(source, 3L);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), source);
         Level level = controller.getLevel();
         LevelStub.putBlockEntity(level, target);
@@ -130,13 +131,20 @@ class AutoIOPortTest {
 
         assertThat(controller.isPortUsedByActiveRecipe(source.getBlockPos())).isTrue();
         assertThat(source.ejectContents()).isFalse();
-        assertThat(source.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(3);
+        assertThat(source.itemStorage().amount(0)).isEqualTo(3L);
     }
 
     private static ItemStack stack(int count) {
         ItemStack stack = new ItemStack(Items.IRON_INGOT, count);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return stack;
+    }
+
+    private static void setItems(ItemBusBlockEntity port, long amount) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            port.itemStorage().insert(0, ItemResource.of(stack((int) amount)), amount, transaction);
+            transaction.commit();
+        }
     }
 
     private static FactoryRuntime factoryRuntime(MachineControllerBlockEntity controller) throws Exception {
@@ -150,7 +158,7 @@ class AutoIOPortTest {
     private static ResourceHandler<ItemResource> itemHandler(ItemBusBlockEntity port, boolean canInsert,
                                                               boolean canExtract) {
         try {
-            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ItemStackResourceHandler");
+            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ResourceStorageHandler");
             Constructor<?> constructor = null;
             for (Constructor<?> candidate : type.getDeclaredConstructors()) {
                 if (candidate.getParameterCount() == 3) {
@@ -160,8 +168,7 @@ class AutoIOPortTest {
             }
             if (constructor == null) throw new NoSuchMethodException("Item capability adapter constructor");
             constructor.setAccessible(true);
-            return (ResourceHandler<ItemResource>) constructor.newInstance(port.getItemStackHandler(null), canInsert,
-                    canExtract);
+            return (ResourceHandler<ItemResource>) constructor.newInstance(port.itemStorage(), canInsert, canExtract);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to create the production item capability adapter", exception);
         }

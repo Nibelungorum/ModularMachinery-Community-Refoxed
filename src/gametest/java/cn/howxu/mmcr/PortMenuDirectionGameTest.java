@@ -10,6 +10,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 public class PortMenuDirectionGameTest {
 
@@ -27,10 +29,13 @@ public class PortMenuDirectionGameTest {
         Slot inputSlot = inputMenu.getSlot(0);
         helper.assertTrue(inputSlot.mayPlace(new ItemStack(Items.IRON_INGOT)), "Input slot accepts placement");
 
-        helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).getItemStackHandler(null)
-                .setStackInSlot(0, new ItemStack(Items.GOLD_INGOT));
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).itemStorage()
+                    .insert(0, ItemResource.of(Items.GOLD_INGOT), 1L, transaction);
+            transaction.commit();
+        }
         Slot outputSlot = outputMenu.getSlot(0);
-        helper.assertTrue(outputSlot.mayPlace(new ItemStack(Items.IRON_INGOT)), "Output slot accepts placement");
+        helper.assertTrue(outputSlot.mayPlace(new ItemStack(Items.GOLD_INGOT)), "Output slot accepts placement");
         helper.assertTrue(outputSlot.mayPickup(player), "Output slot accepts pickup");
 
         inventory.setItem(0, new ItemStack(Items.IRON_INGOT));

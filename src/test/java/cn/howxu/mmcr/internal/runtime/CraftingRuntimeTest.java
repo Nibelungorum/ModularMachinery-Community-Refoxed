@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -69,6 +70,7 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -108,16 +110,16 @@ class CraftingRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_complete", 1, List.of(
                 input(Items.IRON_INGOT, 2), output(Items.IRON_NUGGET, 1)));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(input.itemStorage().amount(0)).isZero();
         assertThat(runtime.tick().isCrafting()).isTrue();
         assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
-        ItemStack result = output.getItemStackHandler(null).getStackInSlot(0);
+        ItemStack result = item(output.itemStorage(), 0);
         assertThat(result.getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(result.getCount()).isEqualTo(1);
     }
@@ -154,13 +156,13 @@ class CraftingRuntimeTest {
     void start_plans_inputs_without_requiring_output_capacity() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_output_capacity_is_deferred", 20, List.of(
                 input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(input.itemStorage().amount(0)).isZero();
     }
 
     @Test
@@ -187,7 +189,7 @@ class CraftingRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> context.cancel()).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(runtime.start(recipe("runtime_cancelled_start", 20,
@@ -195,7 +197,7 @@ class CraftingRuntimeTest {
                 .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNull();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -224,7 +226,7 @@ class CraftingRuntimeTest {
         EnergyOutputHatchBlockEntity outputEnergy = RuntimeTestFixtures.energyOutput(new BlockPos(3, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"),
                 input, output, inputEnergy, outputEnergy);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         inputEnergy.energyStorage().setAmount(2);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_discard_outputs"), MMCR.id("test_cube"), 1,
@@ -235,15 +237,15 @@ class CraftingRuntimeTest {
                 .beforeFinish(context -> context.discardOutputs()).build()));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(input.itemStorage().amount(0)).isZero();
         assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(1L);
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
 
         assertThat(runtime.active()).isFalse();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(input.itemStorage().amount(0)).isZero();
         assertThat(inputEnergy.energyStorage().getAmountAsLong()).isZero();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(output.itemStorage().amount(0)).isZero();
         assertThat(outputEnergy.energyStorage().getAmountAsLong()).isZero();
     }
 
@@ -287,7 +289,7 @@ class CraftingRuntimeTest {
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
 
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
     }
 
@@ -304,7 +306,7 @@ class CraftingRuntimeTest {
     void failedStartReportsStructuredMissingResourceAndRollsBackRootTransaction() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_missing_input", 20, List.of(
                 input(Items.IRON_INGOT, 2)));
@@ -314,14 +316,14 @@ class CraftingRuntimeTest {
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
         assertThat(runtime.failure().details()).containsEntry("reason", "insufficient_resource");
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
     void duplicateInputRequirementsRemainAtomicWhenCombinedStorageIsInsufficient() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_duplicate_input", 20, List.of(
                 input(Items.IRON_INGOT, 1), input(Items.IRON_INGOT, 1)));
@@ -329,7 +331,7 @@ class CraftingRuntimeTest {
         runtime.start(recipe, 1);
 
         assertThat(runtime.active()).isFalse();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -343,7 +345,7 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
     }
 
     @Test
@@ -365,7 +367,7 @@ class CraftingRuntimeTest {
     void capabilityVersionInvalidationCancelsTheActiveRuntime() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_invalidation", 20, List.of(input(Items.IRON_INGOT, 1)));
 
@@ -490,7 +492,7 @@ class CraftingRuntimeTest {
     void zero_consume_chance_retains_the_input_across_start_and_tick() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_retain_input"), MMCR.id("test_cube"), 2,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
@@ -501,7 +503,7 @@ class CraftingRuntimeTest {
         runtime.start(recipe, 1);
         runtime.tick();
 
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -517,7 +519,7 @@ class CraftingRuntimeTest {
         runtime.tick();
         runtime.finish();
 
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(output.itemStorage().amount(0)).isZero();
     }
 
     @Test
@@ -525,7 +527,7 @@ class CraftingRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         ItemRequirement consumed = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                 ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 1F);
@@ -534,21 +536,21 @@ class CraftingRuntimeTest {
         MachineRecipe recipe = recipe("runtime_positive_chance", 1, List.of(consumed, produced));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(input.itemStorage().amount(0)).isZero();
         runtime.tick();
         runtime.finish();
 
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(item(output.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(output.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
     void partialOutputCommitsAvailableStorageWithoutLeakingTheRemainder() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
-        for (int slot = 1; slot < output.getItemStackHandler(null).getSlots(); slot++) {
-            output.getItemStackHandler(null).setStackInSlot(slot, stack(Items.COBBLESTONE, 64));
+        for (int slot = 1; slot < output.itemStorage().size(); slot++) {
+            setItem(output.itemStorage(), slot, stack(Items.COBBLESTONE, 64));
         }
-        output.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 44));
+        setItem(output.itemStorage(), 0, stack(Items.IRON_INGOT, 44));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_partial_output"), MMCR.id("test_cube"), 1,
@@ -559,7 +561,7 @@ class CraftingRuntimeTest {
         runtime.tick();
         runtime.finish();
 
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(64);
+        assertThat(output.itemStorage().amount(0)).isEqualTo(64L);
     }
 
     @Test
@@ -573,8 +575,8 @@ class CraftingRuntimeTest {
         MachineRecipe recipe = recipe("runtime_finish_retry", 1, List.of(output(Items.IRON_NUGGET, 1)));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
-            output.getItemStackHandler(null).setStackInSlot(slot, stack(Items.COBBLESTONE, 64));
+        for (int slot = 0; slot < output.itemStorage().size(); slot++) {
+            setItem(output.itemStorage(), slot, stack(Items.COBBLESTONE, 64));
         }
         runtime.tick();
 
@@ -583,12 +585,12 @@ class CraftingRuntimeTest {
         assertThat(runtime.active()).isTrue();
         assertThat(runtime.shouldRetryFinish()).isFalse();
 
-        output.getItemStackHandler(null).setStackInSlot(0, ItemStack.EMPTY);
+        setItem(output.itemStorage(), 0, ItemStack.EMPTY);
         LevelStub.setGameTime(level, 10);
 
         assertThat(runtime.shouldRetryFinish()).isTrue();
         assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
     }
 
     @Test
@@ -615,8 +617,8 @@ class CraftingRuntimeTest {
     @Test
     void active_runtime_persists_finish_failure_reason() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
-        for (int slot = 0; slot < output.getItemStackHandler(null).getSlots(); slot++) {
-            output.getItemStackHandler(null).setStackInSlot(slot, stack(Items.COBBLESTONE, 64));
+        for (int slot = 0; slot < output.itemStorage().size(); slot++) {
+            setItem(output.itemStorage(), slot, stack(Items.COBBLESTONE, 64));
         }
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
         MachineRecipe recipe = recipe("runtime_persisted_finish_failure", 1,
@@ -652,7 +654,7 @@ class CraftingRuntimeTest {
                     context.setRequirements(List.of(
                             input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 2)));
                 }).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_persisted_effective_snapshot", 20, List.of(
                 input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1), output(Items.DIAMOND, 1)));
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -677,8 +679,8 @@ class CraftingRuntimeTest {
         restored.tick();
         restored.finish();
 
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
     }
 
     @Test
@@ -692,7 +694,7 @@ class CraftingRuntimeTest {
                     context.setDuration(2);
                     context.setRequirements(List.of(input(Items.IRON_INGOT, 2)));
                 }).build()));
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));
         MachineRecipe recipe = recipe("runtime_legacy_effective_snapshot", 20,
                 List.of(input(Items.IRON_INGOT, 1)));
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -777,7 +779,7 @@ class CraftingRuntimeTest {
     void active_runtime_rejects_effective_snapshot_without_consumption_plan() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_missing_effective_plan", 20, List.of(
                 input(Items.IRON_INGOT, 1)));
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -802,7 +804,7 @@ class CraftingRuntimeTest {
     void active_runtime_rejects_an_invalid_effective_requirement_before_restore() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_invalid_effective_requirement", 20, List.of(
                 input(Items.IRON_INGOT, 1)));
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -827,7 +829,7 @@ class CraftingRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe oldRecipe = recipe("runtime_reload_active", 1, List.of(
                 input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
         MachineRecipe replacement = recipe("runtime_reload_active", 1, List.of(
@@ -842,8 +844,8 @@ class CraftingRuntimeTest {
         runtime.finish();
 
         assertThat(runtime.active()).isFalse();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.DIAMOND)).isFalse();
+        assertThat(item(output.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.DIAMOND)).isFalse();
     }
 
     @Test
@@ -851,7 +853,7 @@ class CraftingRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe oldRecipe = recipe("runtime_reload_persisted", 1, List.of(
                 input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
         MachineRecipe replacement = recipe("runtime_reload_persisted", 1, List.of(
@@ -865,7 +867,7 @@ class CraftingRuntimeTest {
         var savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
         assertThat(savedRecipeTag.getBooleanOr("has_recipe_definition", false)).isTrue();
         assertThat(savedRecipeTag.getCompound("recipe_definition").orElseThrow().isEmpty()).isFalse();
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
@@ -880,9 +882,9 @@ class CraftingRuntimeTest {
         restored.tick();
         restored.finish();
 
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.IRON_NUGGET)).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.DIAMOND)).isFalse();
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(item(output.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(item(output.itemStorage(), 0).is(Items.DIAMOND)).isFalse();
     }
 
     @Test
@@ -962,7 +964,7 @@ class CraftingRuntimeTest {
                         2F, RecipeModifier.Operation.MULTIPLY, false),
                 new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT,
                         2F, RecipeModifier.Operation.MULTIPLY, false))));
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 2));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));
         MachineRecipe recipe = recipe("runtime_legacy_modifier_restore", 1,
                 List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 1)));
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
@@ -994,8 +996,8 @@ class CraftingRuntimeTest {
         restored.finish();
 
         assertThat(callbackFailure).hasValue(null);
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).is(Items.GOLD_NUGGET)).isTrue();
-        assertThat(output.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(2);
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
     }
 
     @Test
@@ -1076,7 +1078,7 @@ class CraftingRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_malformed_plan", 20, List.of(
                 input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1)));
         RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
@@ -1089,7 +1091,7 @@ class CraftingRuntimeTest {
         CompoundTag malformedPlan = new CompoundTag();
         malformedPlan.putIntArray("consumedInputBatches", new int[]{1});
         savedRecipeTag.put("inputConsumptionPlan", malformedPlan);
-        input.getItemStackHandler(null).setStackInSlot(0, stack(Items.IRON_INGOT, 1));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
@@ -1098,7 +1100,7 @@ class CraftingRuntimeTest {
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
         assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
-        assertThat(input.getItemStackHandler(null).getStackInSlot(0).getCount()).isEqualTo(1);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -1187,6 +1189,25 @@ class CraftingRuntimeTest {
         ItemStack stack = new ItemStack(item, count);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return stack;
+    }
+
+    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemResource current = storage.resource(slot);
+            if (current != null && !current.isEmpty()) {
+                storage.extract(slot, current, storage.amount(slot), transaction);
+            }
+            if (!stack.isEmpty()) {
+                storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
+            }
+            transaction.commit();
+        }
+    }
+
+    private static ItemStack item(ResourceStorage<ItemResource> storage, int slot) {
+        ItemResource resource = storage.resource(slot);
+        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
+                : resource.toStack((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
     }
 
     private static CraftingRuntime controllerRuntime(MachineControllerBlockEntity controller) {

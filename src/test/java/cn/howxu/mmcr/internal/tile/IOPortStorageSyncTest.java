@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +47,15 @@ class IOPortStorageSyncTest {
         TrackingItemPort port = new TrackingItemPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
 
-        port.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        try (Transaction transaction = Transaction.openRoot()) {
+            port.itemStorage().insert(
+                    0,
+                    ItemResource.of(new ItemStack(Items.IRON_INGOT)),
+                    1L,
+                    transaction
+            );
+            transaction.commit();
+        }
 
         assertThat(port.snapshotNotifications).isEqualTo(1);
     }
@@ -64,7 +73,15 @@ class IOPortStorageSyncTest {
 
         TrackingCombinedPort combined = new TrackingCombinedPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.COMBINED_INPUT.id()).get().defaultBlockState());
-        combined.getItemStackHandler(null).setStackInSlot(0, new ItemStack(Items.IRON_INGOT));
+        try (Transaction transaction = Transaction.openRoot()) {
+            combined.itemStorage().insert(
+                    0,
+                    ItemResource.of(new ItemStack(Items.IRON_INGOT)),
+                    1L,
+                    transaction
+            );
+            transaction.commit();
+        }
         combined.fluidStorage().setContents(0, FluidResource.of(Fluids.WATER), 1L);
 
         assertThat(extendedItem.recipeInputNotifications).isEqualTo(1);

@@ -228,7 +228,12 @@ class PktEjectPortContentsPayloadTest {
         private int ejectCalls;
 
         private ProbePort(BlockPos pos, BlockState state, IOType ioType, IOPortKind kind) {
-            super(ModBlockEntities.BES.get(kind.id()).get(), pos, state, kind);
+            super(ModBlockEntities.BES.get(kind.id()).get(), pos, state,
+                    kind.itemBusSize()
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Item bus missing item size: " + kind.id()))
+                            .slots(),
+                    64L);
             this.ioType = ioType;
             this.kind = kind;
         }

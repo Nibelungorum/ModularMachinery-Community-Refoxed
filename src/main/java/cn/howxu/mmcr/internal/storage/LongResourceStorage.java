@@ -83,7 +83,7 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
         checkNonNegative(amount);
         if (amount == 0L || !isValid(slot, resource)) return 0L;
 
-        long inserted = Math.min(amount, capacity - amounts[slot]);
+        long inserted = Math.min(amount, Math.max(0L, capacity(slot, resource) - amounts[slot]));
         if (inserted > 0L) {
             updateSnapshots(transaction);
             if (isEmptyResource(resources.get(slot))) resources.set(slot, resource);
@@ -113,7 +113,7 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
      */
     public void setContents(int slot, @Nullable R resource, long amount) {
         checkSlot(slot);
-        long storedAmount = Math.min(amount, capacity);
+        long storedAmount = Math.min(amount, capacity(slot, resource));
         if (storedAmount <= 0L || isEmptyResource(resource)) {
             resources.set(slot, null);
             amounts[slot] = 0L;
@@ -134,7 +134,7 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
         checkResource(resource);
         if (requested <= 0L || !isValid(slot, resource)) return 0L;
 
-        long inserted = Math.min(requested, capacity - amounts[slot]);
+        long inserted = Math.min(requested, Math.max(0L, capacity(slot, resource) - amounts[slot]));
         if (!simulate && inserted > 0L) {
             if (isEmptyResource(resources.get(slot))) resources.set(slot, resource);
             amounts[slot] += inserted;

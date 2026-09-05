@@ -89,7 +89,7 @@ class ScrollableTextScreenTest {
         private static TestScreen create() throws Exception {
             TestScreen screen = (TestScreen) unsafe().allocateInstance(TestScreen.class);
             java.lang.reflect.Field font = net.minecraft.client.gui.screens.Screen.class.getDeclaredField("font");
-            unsafe().putObject(screen, unsafe().objectFieldOffset(font),
+            unsafe().putObject(screen, unsafe() .objectFieldOffset(font),
                     ControllerScreenTextComposerTest.testFont());
             screen.lines = new ArrayList<>();
             return screen;
