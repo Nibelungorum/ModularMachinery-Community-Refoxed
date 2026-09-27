@@ -183,11 +183,19 @@ class MachineBuilderJSTest {
 
     @Test
     void recipe_pool_is_the_only_machine_recipe_ownership_builder_api() {
-        assertThat(new MachineBuilderJS("mmcr:pooled_machine")
-                .recipePool("mmcr:shared_pool")
-                .createObject().recipePoolId()).isEqualTo(Identifier.parse("mmcr:shared_pool"));
+        MachineRegistration pooled = new MachineBuilderJS("mmcr:pooled_machine")
+                .recipePool("mmcr:first_pool", "mmcr:second_pool")
+                .createObject();
+        assertThat(pooled.recipePoolIds()).containsExactly(
+                Identifier.parse("mmcr:first_pool"), Identifier.parse("mmcr:second_pool"));
+        assertThat(pooled.recipePoolId()).isEqualTo(Identifier.parse("mmcr:first_pool"));
         assertThat(new MachineBuilderJS("mmcr:default_pool_machine")
-                .createObject().recipePoolId()).isEqualTo(Identifier.parse("mmcr:default_pool_machine"));
+                .createObject().recipePoolIds()).containsExactly(Identifier.parse("mmcr:default_pool_machine"));
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr:empty_pool_machine").recipePool())
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("at least one");
+        assertThatThrownBy(() -> new MachineBuilderJS("mmcr:duplicate_pool_machine")
+                .recipePool("mmcr:pool", "mmcr:pool"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Duplicate");
         assertThat(List.of(MachineBuilderJS.class.getMethods()))
                 .extracting(Method::getName)
                 .doesNotContain("recipeFamily");

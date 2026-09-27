@@ -45,7 +45,15 @@ public final class RecipeSearchTask {
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
                             long maxParallelism, List<MachineRecipe> candidates,
                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities) {
-        this(snapshot, machineId, structureVersion, maxParallelism, orderedCandidates(candidates),
+        this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
+                maxParallelism, orderedCandidates(candidates),
+                lockedRecipeId, capabilities, flattenModifiers(snapshot));
+    }
+
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, Identifier recipePoolId,
+                            long structureVersion, long maxParallelism, List<MachineRecipe> candidates,
+                            @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities) {
+        this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates(candidates),
                 lockedRecipeId, capabilities, flattenModifiers(snapshot));
     }
 
@@ -53,11 +61,21 @@ public final class RecipeSearchTask {
                             long maxParallelism, List<MachineRecipe> orderedCandidates,
                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
                             List<RecipeModifier> modifiers) {
-        this(snapshot, machineId, structureVersion, maxParallelism, orderedCandidates, lockedRecipeId,
+        this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
+                maxParallelism, orderedCandidates, lockedRecipeId,
                 capabilities, modifiers, null);
     }
 
-    private RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, Identifier recipePoolId,
+                            long structureVersion, long maxParallelism, List<MachineRecipe> orderedCandidates,
+                            @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
+                            List<RecipeModifier> modifiers) {
+        this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates, lockedRecipeId,
+                capabilities, modifiers, null);
+    }
+
+    private RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId,
+                             @Nullable Identifier recipePoolId, long structureVersion,
                              long maxParallelism, List<MachineRecipe> orderedCandidates,
                              @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
                              List<RecipeModifier> modifiers, @Nullable List<PlanningValue> planningValues) {
@@ -66,7 +84,7 @@ public final class RecipeSearchTask {
         this.machineId = machineId;
         this.structureVersion = structureVersion;
         this.maxParallelism = Math.max(1L, maxParallelism);
-        this.candidates = planningValues == null ? poolCandidates(machineId, orderedCandidates)
+        this.candidates = planningValues == null ? poolCandidates(recipePoolId, orderedCandidates)
                 : List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
         this.lockedRecipeId = lockedRecipeId;
         this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
@@ -80,7 +98,7 @@ public final class RecipeSearchTask {
                                                       List<MachineRecipe> candidates,
                                                       @Nullable Identifier lockedRecipeId,
                                                       List<PlanningValue> planningValues) {
-        return new RecipeSearchTask(snapshot, machineId, structureVersion, maxParallelism, candidates,
+        return new RecipeSearchTask(snapshot, machineId, null, structureVersion, maxParallelism, candidates,
                 lockedRecipeId, List.of(), List.of(), planningValues);
     }
 
@@ -187,8 +205,8 @@ public final class RecipeSearchTask {
                 .toList();
     }
 
-    private static List<MachineRecipe> poolCandidates(Identifier machineId, List<MachineRecipe> candidates) {
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machineId);
+    private static List<MachineRecipe> poolCandidates(@Nullable Identifier recipePoolId,
+                                                       List<MachineRecipe> candidates) {
         if (recipePoolId == null || candidates == null || candidates.isEmpty()) return List.of();
         return candidates.stream().filter(recipe -> recipe != null
                 && recipePoolId.equals(recipe.recipePoolId())).toList();

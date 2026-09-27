@@ -260,6 +260,8 @@ class PktFactoryControllerStatePayloadTest {
     private static void appendStageFooter(RegistryFriendlyByteBuf buffer) {
         buffer.writeVarInt(0);
         buffer.writeVarInt(1);
+        buffer.writeUtf("");
+        buffer.writeUtf("");
     }
 
     private static void writeFactoryHeader(RegistryFriendlyByteBuf buffer, int laneLimit, int activeLaneCount,

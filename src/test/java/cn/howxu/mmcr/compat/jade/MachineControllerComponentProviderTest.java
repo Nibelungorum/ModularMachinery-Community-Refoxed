@@ -64,6 +64,21 @@ class MachineControllerComponentProviderTest {
     }
 
     @Test
+    void recipePoolLineFollowsStateForRecipeMachines() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("formed", true);
+        tag.putString("recipePool", "mmcr:jade_pool");
+
+        MachineControllerComponentProvider.Snapshot snapshot =
+                MachineControllerComponentProvider.Snapshot.from(tag);
+
+        assertThat(snapshot.recipePoolId()).isEqualTo(MMCR.id("jade_pool"));
+        assertThat(MachineControllerComponentProvider.lineKeys(snapshot))
+                .containsExactly("structure", "state", "recipe_pool");
+        assertThat(appendTooltip(tag).get(2).toString()).contains("mmcr:jade_pool");
+    }
+
+    @Test
     void appendTooltipAddsCustomLinesAfterTheStructureLineForTickMachines() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("tickMachine", true);

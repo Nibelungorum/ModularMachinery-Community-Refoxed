@@ -5,6 +5,10 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -31,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -152,6 +157,28 @@ class FactoryRecipeThreadTest {
 
         assertThat(restored.searchFailureReason()).isNull();
         assertThat(restored.searchFailureKey()).isNull();
+    }
+
+    @Test
+    void factory_search_uses_the_controller_selected_recipe_pool() {
+        Identifier machineId = MMCR.id("factory_selected_pool_machine");
+        Identifier firstPool = MMCR.id("factory_selected_pool_first");
+        Identifier secondPool = MMCR.id("factory_selected_pool_second");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolIds(List.of(firstPool, secondPool)).build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.setMachine(new DynamicMachine(machineId, "factory multi pool", new BlockArray(Map.of())));
+        assertThat(controller.selectRecipePool(secondPool)).isTrue();
+        MachineRecipe first = RecipeTestSupport.create(MMCR.id("factory_selected_pool_first_recipe"), firstPool,
+                20, List.of(), List.of());
+        MachineRecipe second = RecipeTestSupport.create(MMCR.id("factory_selected_pool_second_recipe"), secondPool,
+                20, List.of(), List.of());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(first, second), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        assertThat(thread.runtime().recipe()).isEqualTo(second);
     }
 
     private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io)

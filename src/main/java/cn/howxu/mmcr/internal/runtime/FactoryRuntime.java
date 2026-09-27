@@ -11,7 +11,6 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
@@ -75,6 +74,7 @@ public final class FactoryRuntime {
     private long nextFactoryLaneId;
     private long coreCatalogVersion = Long.MIN_VALUE;
     private @Nullable Machine syncedCoreMachine;
+    private @Nullable Identifier syncedCoreRecipePoolId;
     private @Nullable MachineControllerBlockEntity controller;
     private @Nullable ExecutionStatus failure;
     private long searchAttemptsForTesting;
@@ -113,6 +113,26 @@ public final class FactoryRuntime {
         startReservations.clear();
         readyLanes.clear();
         pendingAsyncSearches.clear();
+    }
+
+    public void discardForRecipePoolChange() {
+        boolean changed = !recipeLocks.isEmpty() || !recipeLockUsed.isEmpty() || !startReservations.isEmpty()
+                || !patternStartReservations.isEmpty() || !readyLanes.isEmpty() || !pendingAsyncSearches.isEmpty();
+        for (FactoryRecipeThread lane : lanes) {
+            LaneObservation before = observe(lane);
+            lane.discardForRecipePoolChange();
+            changed |= !before.equals(observe(lane));
+        }
+        recipeLocks.clear();
+        recipeLockUsed.clear();
+        startReservations.clear();
+        patternStartReservations.clear();
+        readyLanes.clear();
+        pendingAsyncSearches.clear();
+        clearCandidateCaches();
+        failureDirty = true;
+        recomputeFailureIfDirty();
+        if (changed) markLaneStateChanged();
     }
 
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished) {
@@ -499,7 +519,7 @@ public final class FactoryRuntime {
         long initialEpoch = factoryStateEpoch;
         ensureBaseLane(controller);
         long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = controller.currentRecipePoolId();
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
         for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
             if (recipe != null && recipePoolId != null && recipePoolId.equals(recipe.recipePoolId())) {
@@ -557,13 +577,15 @@ public final class FactoryRuntime {
         trimLanesToLimit();
         coreCatalogVersion = catalogVersion;
         syncedCoreMachine = machine;
+        syncedCoreRecipePoolId = recipePoolId;
         return initialEpoch != factoryStateEpoch;
     }
 
     public boolean syncCoreLanesIfNeeded(MachineControllerBlockEntity controller, Machine machine,
                                          List<MachineRecipe> candidates) {
         long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
-        if (lanes.isEmpty() || syncedCoreMachine != machine || coreCatalogVersion != catalogVersion) {
+        if (lanes.isEmpty() || syncedCoreMachine != machine || coreCatalogVersion != catalogVersion
+                || !Objects.equals(syncedCoreRecipePoolId, controller.currentRecipePoolId())) {
             return syncCoreLanes(controller, machine, candidates);
         }
         return false;
@@ -631,7 +653,7 @@ public final class FactoryRuntime {
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         List<MachineRecipe> machineCandidates = candidatesForPool(nonNullCandidates(candidates),
-                MachineRegistry.recipePoolForMachine(machine));
+                controller.currentRecipePoolId());
         return filterAvailableCandidates(machineCandidates, activeRecipeCounts());
     }
 
@@ -838,6 +860,7 @@ public final class FactoryRuntime {
         pendingAsyncSearches.clear();
         coreCatalogVersion = Long.MIN_VALUE;
         syncedCoreMachine = null;
+        syncedCoreRecipePoolId = null;
         clearCandidateCaches();
         if (changed && lanes.isEmpty()) markLaneStateChanged();
     }
@@ -964,7 +987,7 @@ public final class FactoryRuntime {
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = controller.currentRecipePoolId();
         if (!Objects.equals(cachedCandidateRecipePoolId, recipePoolId)) {
             clearCandidateCaches();
             cachedCandidateRecipePoolId = recipePoolId;

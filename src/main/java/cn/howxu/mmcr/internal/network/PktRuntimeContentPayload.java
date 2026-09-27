@@ -34,7 +34,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     private static final int MAX_RECIPES = 16384;
     private static final int MAX_SPECS = 4096;
     private static final int MAX_TOOLTIP_LINES = 1024;
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 4;
 
     private static final StreamCodec<RegistryFriendlyByteBuf, List<String>> TOOLTIP_CODEC = StreamCodec.of(
             PktRuntimeContentPayload::writeTooltip,
@@ -94,7 +94,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         writeMap(buf, snapshot.recipes(), maxRecipes(), MachineRecipeSyncCodec::encode);
         writeMap(buf, snapshot.controllerSpecs(), maxSpecs(), CONTROLLER_SPEC_CODEC::encode);
         writeMap(buf, snapshot.appearances(), maxSpecs(), APPEARANCE_SPEC_CODEC::encode);
-        writeMap(buf, snapshot.machineRecipePools(), maxStructures(), Identifier.STREAM_CODEC::encode);
+        writeMap(buf, snapshot.machineRecipePools(), maxStructures(), PktRuntimeContentPayload::writeRecipePools);
         buf.writeVarLong(snapshot.contentVersion());
     }
 
@@ -110,7 +110,8 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         Map<Identifier, MachineRecipe> recipes = readMap(buf, maxRecipes(), MachineRecipeSyncCodec::decode);
         Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, maxSpecs(), CONTROLLER_SPEC_CODEC::decode);
         Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, maxSpecs(), APPEARANCE_SPEC_CODEC::decode);
-        Map<Identifier, Identifier> machineRecipePools = readMap(buf, maxStructures(), Identifier.STREAM_CODEC::decode);
+        Map<Identifier, List<Identifier>> machineRecipePools = readMap(buf, maxStructures(),
+                PktRuntimeContentPayload::readRecipePools);
         validateMap(structures, (id, value) -> {
             if (!id.equals(value.machineId())) throw new IllegalArgumentException("Structure key does not match machine id: " + id);
         });
@@ -125,7 +126,8 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         if (!machineRecipePools.keySet().containsAll(structures.keySet())) {
             throw new IllegalArgumentException("Missing machine recipe pool mapping for synced structure");
         }
-        if (recipes.values().stream().anyMatch(recipe -> !machineRecipePools.containsValue(recipe.recipePoolId()))) {
+        if (recipes.values().stream().anyMatch(recipe -> machineRecipePools.values().stream()
+                .noneMatch(pools -> pools.contains(recipe.recipePoolId())))) {
             throw new IllegalArgumentException("Synced recipe pool is not mapped to a machine");
         }
         long contentVersion = buf.readVarLong();
@@ -168,6 +170,31 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         List<String> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) values.add(ByteBufCodecs.STRING_UTF8.decode(buf));
         return List.copyOf(values);
+    }
+
+    private static void writeRecipePools(RegistryFriendlyByteBuf buf, List<Identifier> recipePools) {
+        if (recipePools == null || recipePools.isEmpty()) {
+            throw new IllegalArgumentException("Invalid recipe pool count: 0");
+        }
+        checkSize(recipePools.size(), maxStructures(), "recipe pool");
+        if (recipePools.stream().distinct().count() != recipePools.size()) {
+            throw new IllegalArgumentException("Duplicate recipe pool id");
+        }
+        buf.writeVarInt(recipePools.size());
+        recipePools.forEach(pool -> Identifier.STREAM_CODEC.encode(buf, pool));
+    }
+
+    private static List<Identifier> readRecipePools(RegistryFriendlyByteBuf buf) {
+        int count = buf.readVarInt();
+        checkSize(count, maxStructures(), "recipe pool");
+        if (count == 0) throw new IllegalArgumentException("Invalid recipe pool count: 0");
+        List<Identifier> recipePools = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            Identifier pool = Identifier.STREAM_CODEC.decode(buf);
+            if (recipePools.contains(pool)) throw new IllegalArgumentException("Duplicate recipe pool id: " + pool);
+            recipePools.add(pool);
+        }
+        return List.copyOf(recipePools);
     }
 
     private static <T> void validateMap(Map<Identifier, T> values, BiConsumer<Identifier, T> validator) {

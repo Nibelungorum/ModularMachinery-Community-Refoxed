@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -56,6 +57,22 @@ class MachineControllerMenuTest {
         assertThat(menu.maxParallelism()).isEqualTo(8);
         assertThat(menu.factoryThreadCount()).isEqualTo(2);
         assertThat(menu.installedModuleCount()).isEqualTo(3);
+    }
+
+    @Test
+    void client_menu_exposes_the_selected_and_supported_recipe_pools() {
+        Identifier machineId = MMCR.id("menu_recipe_pool_machine");
+        Identifier firstPool = MMCR.id("menu_recipe_pool_first");
+        Identifier secondPool = MMCR.id("menu_recipe_pool_second");
+        MachineRegistry.replaceClientRecipePools(Map.of(machineId, List.of(firstPool, secondPool)));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applyClientSnapshot(new PktMachineStatePayload(BlockPos.ZERO, "", true, false, List.of(), false, "",
+                machineId.toString(), 0, 0, false, "", CraftingStatus.Status.IDLE, "", null, true, false,
+                0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(), 0, 1, secondPool.toString()));
+
+        assertThat(menu.currentRecipePoolId()).isEqualTo(secondPool);
+        assertThat(menu.recipePoolIds()).containsExactly(firstPool, secondPool);
+        MachineRegistry.clearClientRecipePools();
     }
 
     @Test

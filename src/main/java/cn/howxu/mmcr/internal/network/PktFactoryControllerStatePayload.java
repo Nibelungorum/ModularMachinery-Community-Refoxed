@@ -64,6 +64,8 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         for (FactoryRuntime.ThreadSnapshot thread : state.presentationLanes()) writeThread(buf, thread);
         buf.writeVarInt(state.matchedStage());
         buf.writeVarInt(state.stageCount());
+        buf.writeUtf(state.machineId(), maxStringLength());
+        buf.writeUtf(state.recipePoolId(), maxStringLength());
     }
 
     private static PktFactoryControllerStatePayload read(RegistryFriendlyByteBuf buf) {
@@ -101,7 +103,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         }
         FactorySnapshot snapshot = new FactorySnapshot(formed, active, lanes, laneLimit,
                 activeLaneCount, maxParallelism, paused, threads, machineName, parallelSlots, failure, foundLevelIds,
-                buf.readVarInt(), buf.readVarInt());
+                buf.readVarInt(), buf.readVarInt(), buf.readUtf(maxStringLength()), buf.readUtf(maxStringLength()));
         validateSnapshot(snapshot);
         return new PktFactoryControllerStatePayload(pos, snapshot);
     }

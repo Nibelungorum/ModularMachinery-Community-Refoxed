@@ -68,5 +68,34 @@ ServerEvents.recipes(event => {
             }
         ]
     })
+
+    // One another recipe pool for space_reassembler
+    event.custom({
+        type: 'mmcr:machine_recipe',
+        recipe_pool: 'mmcr_kubejs:kubejs_space_miner',
+        tick_time: 200,
+        parallelized: true,
+        requirements: [
+            {
+                type: 'minecraft:item',
+                io: 'input',
+                item: 'minecraft:apple',
+                count: 1
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:iron_ingot',
+                    count: 12
+                }
+            },
+            {
+                type: 'neoforge:energy',
+                io: 'input',
+                fe_per_tick: 100
+            }
+        ]
+    })
     // The module and host recipes are complete.
 })

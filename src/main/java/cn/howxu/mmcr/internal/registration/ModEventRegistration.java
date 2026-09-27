@@ -24,6 +24,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
+import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
@@ -176,6 +177,8 @@ public final class ModEventRegistration {
                          PktBlueprintStageUpdatePayload::handle)
                   .playToServer(PktRecipeLockPayload.TYPE, PktRecipeLockPayload.STREAM_CODEC,
                          PktRecipeLockPayload::handle)
+                  .playToServer(PktRecipePoolSelectPayload.TYPE, PktRecipePoolSelectPayload.STREAM_CODEC,
+                         PktRecipePoolSelectPayload::handle)
                  .playToServer(PktTerminalActionPayload.TYPE, PktTerminalActionPayload.STREAM_CODEC,
                          PktTerminalActionPayload::handle);
     }

@@ -137,7 +137,7 @@ public final class MachineDefinitionConverter {
             cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
         if (structure != null) validateDefinitionStructureIds(definition, structure);
         MachineRegistration.Builder builder = MachineRegistration.builder(definition.id())
-                .recipePoolId(definition.recipePoolId())
+                .recipePoolIds(definition.recipePoolIds())
                 .displayNameKey(definition.displayNameKey())
                 .controllerSpec(toControllerSpec(definition.id(), definition.controller()))
                 .appearance(toAppearanceSpec(definition.appearance()))

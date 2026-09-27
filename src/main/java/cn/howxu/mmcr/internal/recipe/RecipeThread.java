@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
@@ -93,10 +92,10 @@ public abstract class RecipeThread {
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null || availableParallelism <= 0) return false;
-        List<MachineRecipe> machineCandidates = candidatesForPool(candidates, machineId);
+        List<MachineRecipe> machineCandidates = candidatesForPool(candidates, controller.currentRecipePoolId());
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(snapshot, machineId, structureVersion,
+            result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
                     availableParallelism, machineCandidates, lockedRecipeId, controller.componentRuntime().capabilities()).compute();
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
@@ -120,10 +119,10 @@ public abstract class RecipeThread {
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null || context.maxParallelism() <= 0) return false;
-        List<MachineRecipe> machineCandidates = candidatesForPool(candidates, machineId);
+        List<MachineRecipe> machineCandidates = candidatesForPool(candidates, controller.currentRecipePoolId());
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(snapshot, machineId, structureVersion,
+            result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
                     context.maxParallelism(), machineCandidates, lockedRecipeId,
                     context.capabilities(), MachineModifier.recipeModifiers(context.modifiers())).compute();
         } catch (RuntimeException exception) {
@@ -231,9 +230,8 @@ public abstract class RecipeThread {
             }
         }
 
-    private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, Identifier machineId) {
+    private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, Identifier recipePoolId) {
         if (candidates == null || candidates.isEmpty()) return List.of();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machineId);
         if (recipePoolId == null) return List.of();
         return candidates.stream().filter(recipe -> recipe != null
                 && recipePoolId.equals(recipe.recipePoolId())).toList();
@@ -247,7 +245,7 @@ public abstract class RecipeThread {
                                   @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0) return false;
         ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
-        Identifier recipePoolId = recipePoolForMachine(currentSnapshot);
+        Identifier recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (usesFullAsyncContinuation() && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
@@ -314,7 +312,7 @@ public abstract class RecipeThread {
                                                                  @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0 || pendingAsyncStart != null) return null;
         ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
-        Identifier recipePoolId = recipePoolForMachine(currentSnapshot);
+        Identifier recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())
                 || !(controller.getLevel() instanceof ServerLevel serverLevel)) return null;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
@@ -432,7 +430,7 @@ public abstract class RecipeThread {
             return false;
         }
         if (pendingStartRecipePoolId == null
-                || !pendingStartRecipePoolId.equals(recipePoolForMachine(snapshot))
+                || !pendingStartRecipePoolId.equals(controller.currentRecipePoolId())
                 || !pendingStartRecipePoolId.equals(recipe.recipePoolId())) {
             invalidatePendingStartForCatalog(token, recipe);
             return false;
@@ -838,7 +836,7 @@ public abstract class RecipeThread {
                     && snapshot.runtime().capabilityVersion() == current.capabilityVersion()
                     && snapshot.runtime().modifierVersion() == current.modifierVersion()
                     && snapshot.runtime().stateVersion() == current.stateVersion()
-                    && snapshot.recipePoolId().equals(recipePoolForMachine(current))
+                    && snapshot.recipePoolId().equals(controller.currentRecipePoolId())
                     && snapshot.recipePoolId().equals(pending.recipe().recipePoolId());
         }
         long catalogVersion = step instanceof MainThreadStep.TickTransitionCommit transition ? transition.catalogVersion()
@@ -1018,9 +1016,23 @@ public abstract class RecipeThread {
         pendingAsyncStart = null;
         pendingAsyncStartExecution = null;
         asyncFinishPrepared = false;
-        clearPendingStart(pendingStartToken, pendingStartRecipe);
+        clearPendingStartUnconditionally();
         clearPendingTick();
     }
+
+    public void discardForRecipePoolChange() {
+        cancelAsyncState();
+        clearPendingStartUnconditionally();
+        runtime.invalidate();
+        controller.clearRecipeScreenText(laneId());
+        onDiscardedForRecipePoolChange();
+    }
+
+    private void clearPendingStartUnconditionally() {
+        if (startPending) clearPendingStart(pendingStartToken, pendingStartRecipe);
+    }
+
+    protected void onDiscardedForRecipePoolChange() { }
 
     public void invalidateForSmartInterfaceChange() {
         runtime.invalidateForSmartInterfaceChange();
@@ -1044,12 +1056,6 @@ public abstract class RecipeThread {
     protected @Nullable RecipeSearchContextKey searchContextKeyForStart() { return null; }
     protected String laneId() { return "base"; }
     public final String asyncLaneId() { return laneId(); }
-
-    private static @Nullable Identifier recipePoolForMachine(ControllerRuntimeSnapshot snapshot) {
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return MachineRegistry.recipePoolForMachine(machine);
-    }
 
     public Status getStatus() {
         if (runtime.active()) return runtime.finishPending() ? Status.WAITING : Status.WORKING;

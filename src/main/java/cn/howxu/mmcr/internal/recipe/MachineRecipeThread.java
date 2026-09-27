@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -95,7 +94,7 @@ public final class MachineRecipeThread extends RecipeThread {
     private boolean canRestartNow(MachineRecipe recipe) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = currentMachine();
-        RecipeSearchResult result = new RecipeSearchTask(snapshot, machine.registryName(),
+        RecipeSearchResult result = new RecipeSearchTask(snapshot, machine.registryName(), controller.currentRecipePoolId(),
                 snapshot.structure().version(), controller.getMaxParallelism(), List.of(recipe), null,
                 controller.componentRuntime().capabilities()).compute();
         if (result.success()) return true;
@@ -206,6 +205,11 @@ public final class MachineRecipeThread extends RecipeThread {
         super.invalidate();
     }
 
+    @Override
+    protected void onDiscardedForRecipePoolChange() {
+        clearLastRecipe();
+    }
+
     private String asyncSearchLaneId() {
         return "normal-search/" + asyncLaneId();
     }
@@ -239,13 +243,13 @@ public final class MachineRecipeThread extends RecipeThread {
     }
 
     private List<MachineRecipe> candidatesForMachine(List<MachineRecipe> candidates) {
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(currentMachine());
+        Identifier recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || candidates == null) return List.of();
         return candidates.stream().filter(recipe -> recipe != null && recipePoolId.equals(recipe.recipePoolId())).toList();
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(currentMachine());
+        Identifier recipePoolId = controller.currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 

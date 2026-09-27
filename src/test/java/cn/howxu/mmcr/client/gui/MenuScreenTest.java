@@ -190,6 +190,8 @@ class MenuScreenTest {
                 new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
                         .append(Component.literal(" "))
                         .append(Component.translatable("gui.mmcr.controller.running")), 0xFF55FF55),
+                new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
+                        Component.literal("mmcr:test_cube")), MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(MachineControllerScreen.levelLine(level),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(Component.translatable(

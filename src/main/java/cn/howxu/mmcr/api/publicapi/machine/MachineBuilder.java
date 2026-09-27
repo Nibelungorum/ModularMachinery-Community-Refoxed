@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
 import cn.howxu.mmcr.api.network.RequestProcess;
@@ -28,7 +29,7 @@ import java.util.function.UnaryOperator;
  */
 public final class MachineBuilder {
     private final Identifier id;
-    private Identifier recipePoolId;
+    private List<Identifier> recipePoolIds;
     private String displayNameKey;
     private ControllerSpec controller = ControllerSpec.builder().build();
     private AppearanceSpec appearance = AppearanceSpec.builder().build();
@@ -66,8 +67,8 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder recipePool(Identifier recipePoolId) {
-        this.recipePoolId = Objects.requireNonNull(recipePoolId, "recipePoolId");
+    public MachineBuilder recipePool(Identifier... recipePoolIds) {
+        this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id, List.of(recipePoolIds));
         return this;
     }
 
@@ -260,7 +261,7 @@ public final class MachineBuilder {
             else if (recipe.hasPostServerTick()) builder.postServerTick(recipe.postServerTick());
             resolvedBehavior = builder.build();
         }
-        return new MachineDefinition(id, recipePoolId, displayNameKey, controller, appearance, factory, role,
+        return new MachineDefinition(id, recipePoolIds, displayNameKey, controller, appearance, factory, role,
                 acceptedModuleIds, networkInterface, maxParallelism, parallelizable, failureAction, allowModifiers,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
                 shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior,

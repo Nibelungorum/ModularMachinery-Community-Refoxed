@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -372,8 +371,11 @@ public final class FactoryRecipeThread extends RecipeThread {
                 ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
         Identifier machineId = machine == null ? null : machine.registryName();
         if (machineId == null || context.maxParallelism() <= 0) return new SearchResult(null, null, false);
+        Identifier recipePoolId = candidates == null ? null : candidates.stream()
+                .filter(Objects::nonNull).map(MachineRecipe::recipePoolId).findFirst().orElse(null);
         try {
-            return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId, structureVersion,
+            return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId,
+                    recipePoolId, structureVersion,
                     context.maxParallelism(), candidates, lockedRecipeId, context.capabilities(),
                     MachineModifier.recipeModifiers(context.modifiers())).compute(),
                     null, false);
@@ -766,7 +768,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null) return List.of();
         List<MachineRecipe> source = candidates == null
                 ? RecipeRegistry.catalogForMachine(machine).recipes() : candidates;
@@ -780,7 +782,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     private @Nullable Identifier currentRecipePoolId() {
-        return MachineRegistry.recipePoolForMachine(currentMachine());
+        return controller.currentRecipePoolId();
     }
 
     private MachineRecipeCatalog currentRecipeCatalog() {

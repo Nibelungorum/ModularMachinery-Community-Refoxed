@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import net.minecraft.resources.Identifier;
 
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
  * Immutable boundary object for runtime-reloadable server content.
@@ -22,7 +24,7 @@ public record RuntimeContentSnapshot(
         Map<Identifier, MachineRecipe> recipes,
         Map<Identifier, MachineControllerSpec> controllerSpecs,
         Map<Identifier, MachineAppearanceSpec> appearances,
-        Map<Identifier, Identifier> machineRecipePools,
+        Map<Identifier, List<Identifier>> machineRecipePools,
         long contentVersion) {
 
     public RuntimeContentSnapshot {
@@ -31,7 +33,12 @@ public record RuntimeContentSnapshot(
         recipes = Map.copyOf(recipes == null ? Map.of() : recipes);
         controllerSpecs = Map.copyOf(controllerSpecs == null ? Map.of() : controllerSpecs);
         appearances = Map.copyOf(appearances == null ? Map.of() : appearances);
-        machineRecipePools = Map.copyOf(machineRecipePools == null ? Map.of() : machineRecipePools);
+        Map<Identifier, List<Identifier>> recipePoolCopy = new LinkedHashMap<>();
+        if (machineRecipePools != null) {
+            machineRecipePools.forEach((id, pools) -> recipePoolCopy.put(id,
+                    pools == null ? null : List.copyOf(pools)));
+        }
+        machineRecipePools = Map.copyOf(recipePoolCopy);
     }
 
     public static RuntimeContentSnapshot empty() {
@@ -62,7 +69,8 @@ public record RuntimeContentSnapshot(
         if (!machineRecipePools.keySet().containsAll(structures.keySet())) {
             throw new IllegalArgumentException("Missing machine recipe pool mapping for synced structure");
         }
-        if (recipes.values().stream().anyMatch(recipe -> !machineRecipePools.containsValue(recipe.recipePoolId()))) {
+        if (recipes.values().stream().anyMatch(recipe -> machineRecipePools.values().stream()
+                .noneMatch(pools -> pools.contains(recipe.recipePoolId())))) {
             throw new IllegalArgumentException("Synced recipe pool is not mapped to a machine");
         }
         controllerSpecs.forEach((id, spec) -> {

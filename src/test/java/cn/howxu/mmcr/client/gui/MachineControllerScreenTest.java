@@ -104,7 +104,15 @@ class MachineControllerScreenTest {
                 .extracting(ControllerTextLine::text)
                 .containsExactly(Component.translatable("gui.mmcr.controller.status_label")
                         .append(Component.literal(" "))
-                        .append(Component.translatable("gui.mmcr.controller.running")));
+                        .append(Component.translatable("gui.mmcr.controller.running")),
+                        Component.translatable("gui.mmcr.controller.recipe_pool",
+                                Component.literal(TICK_MACHINE_ID.toString())));
+    }
+
+    @Test
+    void recipe_pool_entry_uses_the_approved_controller_coordinates() {
+        assertThat(MachineControllerScreen.RECIPE_POOL_BUTTON_X).isEqualTo(160);
+        assertThat(MachineControllerScreen.RECIPE_POOL_BUTTON_Y).isEqualTo(4);
     }
 
     @Test

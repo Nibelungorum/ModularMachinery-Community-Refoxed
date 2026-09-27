@@ -4,7 +4,10 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -15,6 +18,12 @@ import java.util.List;
  */
 public final class ControllerSyncRuntime {
     public MachineStateSnapshot machineState(ControllerRuntimeSnapshot runtime) {
+        Machine machine = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine() : runtime.structure().machine();
+        return machineState(runtime, MachineRegistry.recipePoolForMachine(machine));
+    }
+
+    public MachineStateSnapshot machineState(ControllerRuntimeSnapshot runtime, @Nullable Identifier recipePoolId) {
         require(runtime);
         ExecutionStatus failure = runtime.factory().failure() == null ? runtime.crafting().failure() : runtime.factory().failure();
         return new MachineStateSnapshot(
@@ -47,10 +56,16 @@ public final class ControllerSyncRuntime {
                 runtime.componentPresentations(),
                 runtime.capabilityPresentations(),
                 runtime.structure().matchedStage(),
-                stageCount(runtime), runtime.recipePresentation());
+                stageCount(runtime), runtime.recipePresentation(), recipePoolId == null ? "" : recipePoolId.toString());
     }
 
     public FactorySnapshot factoryState(ControllerRuntimeSnapshot runtime) {
+        Machine machine = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine() : runtime.structure().machine();
+        return factoryState(runtime, MachineRegistry.recipePoolForMachine(machine));
+    }
+
+    public FactorySnapshot factoryState(ControllerRuntimeSnapshot runtime, @Nullable Identifier recipePoolId) {
         require(runtime);
         FactorySnapshot factory = runtime.factory();
         ExecutionStatus failure = factory.failure() == null ? runtime.crafting().failure() : factory.failure();
@@ -58,7 +73,8 @@ public final class ControllerSyncRuntime {
                 factory.laneLimit(), factory.activeLaneCount(), runtime.maxParallelism(),
                 factory.paused(), factory.presentationLanes(), runtime.machineName(),
                 runtime.parallelControllerCount(), failure, runtime.foundLevelIds(),
-                runtime.structure().matchedStage(), stageCount(runtime));
+                runtime.structure().matchedStage(), stageCount(runtime), runtime.machineId(),
+                recipePoolId == null ? "" : recipePoolId.toString());
     }
 
     public boolean factoryControllerPresent(ControllerRuntimeSnapshot runtime) {

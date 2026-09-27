@@ -341,6 +341,44 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void recipe_pool_change_discards_pending_factory_starts() {
+        MachineControllerBlockEntity controller = factoryController("test_cube");
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        runtime.tick(List.of(recipe("factory_recipe_pool_pending_discard", 20)), 1, 0L);
+        assertThat(runtime.activeLaneCount()).isZero();
+
+        runtime.discardForRecipePoolChange();
+        resolveSharedRequests(controller);
+
+        assertThat(runtime.activeLaneCount()).isZero();
+    }
+
+    @Test
+    void recipe_pool_change_discards_factory_work_without_removing_lane_configuration() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        runtime.tick(List.of(recipe("factory_recipe_pool_active_discard", 20)), 1, 0L);
+        assertThat(runtime.activeRuntimes()).isNotEmpty();
+        assertThat(runtime.toggleRecipeLock(0)).isTrue();
+        runtime.pause();
+        int laneCount = runtime.laneCount();
+
+        runtime.discardForRecipePoolChange();
+
+        assertThat(runtime.activeRuntimes()).isEmpty();
+        assertThat(runtime.laneCount()).isEqualTo(laneCount);
+        assertThat(runtime.laneLimit()).isEqualTo(2);
+        assertThat(runtime.isPaused()).isTrue();
+        assertThat(runtime.snapshot().presentationLanes()).noneMatch(FactoryRuntime.ThreadSnapshot::locked);
+    }
+
+    @Test
     void unchanged_lane_limit_does_not_rebuild_the_factory_snapshot() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();

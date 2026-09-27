@@ -35,12 +35,37 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int PROGRESS_STATUS_COLOR = -1;
     private static final float DETAIL_SCALE = 0.85F;
     private static final int DETAIL_LINE_SPACING = 10;
+    static final int RECIPE_POOL_BUTTON_X = 160;
+    static final int RECIPE_POOL_BUTTON_Y = 4;
+    private StyledButton recipePoolButton;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
         titleLabelX += 3;
         titleLabelY += 5;
         inventoryLabelY = -1000;
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        recipePoolButton = addRenderableWidget(new StyledButton(
+                leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
+                Component.translatable("gui.mmcr.recipe_pool.open"), button -> minecraft.setScreen(
+                        new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
+                                menu.currentRecipePoolId()))));
+        updateRecipePoolButton();
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        updateRecipePoolButton();
+    }
+
+    private void updateRecipePoolButton() {
+        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
     @Override
@@ -106,6 +131,11 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         boolean tickMachine = menu.isTickMachine();
         List<ControllerTextLine> lines = new ArrayList<>();
         lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
+        Identifier recipePoolId = displayedRecipePoolId(menu.currentRecipePoolId(), menu.recipePoolIds());
+        if (recipePoolId != null) {
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
+                    RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
+        }
         if (menu.isFormed() && menu.matchedStage() > 0 && menu.stageCount() > 1) {
             lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
         }
@@ -141,6 +171,10 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     STATUS_LABEL_COLOR));
         }
         return lines;
+    }
+
+    static Identifier displayedRecipePoolId(Identifier current, List<Identifier> supported) {
+        return current != null ? current : supported.isEmpty() ? null : supported.getFirst();
     }
 
     private static ControllerTextLine statusLine(boolean formed, boolean active) {

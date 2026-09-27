@@ -22,6 +22,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
+import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
@@ -143,8 +144,9 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.SERVERBOUND,
-                 PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
-                 PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
+                  PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                  PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                  PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
                 PktMachineStatePayload.TYPE,
                 PktFactoryControllerStatePayload.TYPE,
@@ -162,9 +164,10 @@ class ModEventRegistrationTest {
                 PktSmartInterfaceUpdatePayload.TYPE,
                  PktAutoIOConfigPayload.TYPE,
                  PktEjectPortContentsPayload.TYPE,
-                 PktBlueprintStageUpdatePayload.TYPE,
-                 PktRecipeLockPayload.TYPE,
-                 PktTerminalActionPayload.TYPE);
+                  PktBlueprintStageUpdatePayload.TYPE,
+                  PktRecipeLockPayload.TYPE,
+                  PktRecipePoolSelectPayload.TYPE,
+                  PktTerminalActionPayload.TYPE);
         assertThat(registrar.handlers).containsOnly(true);
     }
 

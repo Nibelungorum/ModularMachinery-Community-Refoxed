@@ -169,10 +169,10 @@ public final class RuntimeContentCoordinator {
                 RuntimeContentVersion.current());
     }
 
-    private static Map<Identifier, Identifier> machineRecipePools() {
-        Map<Identifier, Identifier> pools = new LinkedHashMap<>();
+    private static Map<Identifier, List<Identifier>> machineRecipePools() {
+        Map<Identifier, List<Identifier>> pools = new LinkedHashMap<>();
         MachineDefinitions.allRegistrations().forEach(registration ->
-                pools.put(registration.id(), registration.recipePoolId()));
+                pools.put(registration.id(), registration.recipePoolIds()));
         return Map.copyOf(pools);
     }
 
@@ -229,9 +229,9 @@ public final class RuntimeContentCoordinator {
                                                Map<Identifier, MachineStructureDefinition> structures) {
         MachineRegistration directRegistration = MachineDefinitions.getRegistration(recipePoolId);
         if (MachineRegistry.containsStatic(recipePoolId)
-                && (directRegistration == null || recipePoolId.equals(directRegistration.recipePoolId()))) return true;
+                && (directRegistration == null || directRegistration.recipePoolIds().contains(recipePoolId))) return true;
         return MachineDefinitions.allRegistrations().stream()
-                .filter(registration -> recipePoolId.equals(registration.recipePoolId()))
+                .filter(registration -> registration.recipePoolIds().contains(recipePoolId))
                 .anyMatch(registration -> structures.containsKey(registration.id())
                         || MachineStructureRegistry.startupSnapshot().containsKey(registration.id())
                         || MachineRegistry.containsStatic(registration.id()));

@@ -192,6 +192,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Identifier lockedRecipeId;
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable Identifier pendingControllerLockId;
+    private @Nullable Identifier selectedRecipePoolId;
     private boolean redstonePaused;
     private boolean runtimePersistenceChanged;
     private @Nullable MachineWorkMode activeWorkMode;
@@ -1311,7 +1312,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void sendRecipeLockState(ServerPlayer player) {
         if (player == null) return;
         runtime.publishSnapshot();
-        player.connection.send(new ClientboundCustomPayloadPacket(PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot())));
+        player.connection.send(new ClientboundCustomPayloadPacket(PktMachineStatePayload.from(getBlockPos(),
+                runtimeSnapshot(), currentRecipePoolId())));
         sendControllerScreenTextOnMenuOpen(player);
     }
 
@@ -1379,7 +1381,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (player != null) {
             ControllerRuntimeSnapshot state = runtimeSnapshot();
             player.connection.send(new ClientboundCustomPayloadPacket(
-                    new PktFactoryControllerStatePayload(getBlockPos(), SYNC_RUNTIME.factoryState(state))));
+                    new PktFactoryControllerStatePayload(getBlockPos(),
+                            SYNC_RUNTIME.factoryState(state, currentRecipePoolId()))));
             sendControllerScreenTextOnMenuOpen(player);
             sendFactoryControllerScreenText(player);
         }
@@ -3663,7 +3666,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishSnapshot();
         ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
         if (!SYNC_RUNTIME.factoryControllerPresent(runtimeState)) return;
-        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState);
+        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState, currentRecipePoolId());
         for (ServerPlayer player : serverLevel.players()) {
             if (player.containerMenu instanceof FactoryControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos())) {
@@ -3737,7 +3740,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void broadcastStateIfChanged() {
-        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot());
+        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot(),
+                currentRecipePoolId());
         if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)) {
             return;
         }
@@ -3761,7 +3765,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         long maxParallelism = getMaxParallelism();
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(current, machineId, current.structure().version(),
+            result = new RecipeSearchTask(current, machineId, currentRecipePoolId(), current.structure().version(),
                     maxParallelism, candidates, lockedRecipeId, componentRuntime().capabilities(),
                     MachineModifier.recipeModifiers(componentRuntime().modifierList())).compute();
         } catch (RuntimeException e) {
@@ -4162,18 +4166,45 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return RecipeRegistry.catalogForMachine(machine).version();
     }
 
-    private @Nullable Identifier currentRecipePoolId() {
+    public List<Identifier> supportedRecipePoolIds() {
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return MachineRegistry.recipePoolForMachine(machine);
+        return MachineRegistry.recipePoolsForMachine(machine);
+    }
+
+    public @Nullable Identifier currentRecipePoolId() {
+        List<Identifier> pools = supportedRecipePoolIds();
+        if (pools.isEmpty()) return null;
+        if (selectedRecipePoolId == null || !pools.contains(selectedRecipePoolId)) {
+            boolean poolChanged = selectedRecipePoolId != null;
+            selectedRecipePoolId = pools.getFirst();
+            if (poolChanged) discardWorkForRecipePoolChange();
+            if (level != null && !level.isClientSide()) setChanged();
+        }
+        return selectedRecipePoolId;
+    }
+
+    public boolean selectRecipePool(Identifier recipePoolId) {
+        if (level == null || level.isClientSide() || !supportedRecipePoolIds().contains(recipePoolId)) return false;
+        if (recipePoolId.equals(currentRecipePoolId())) return false;
+        selectedRecipePoolId = recipePoolId;
+        discardWorkForRecipePoolChange();
+        setChanged();
+        broadcastStateIfChanged();
+        return true;
+    }
+
+    private void discardWorkForRecipePoolChange() {
+        normalRecipeThread.discardForRecipePoolChange();
+        runtime.factoryRuntime().discardForRecipePoolChange();
+        clearPendingSharedStart();
+        clearSharedTickPending();
+        clearCandidateCache();
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
-        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 
@@ -4227,7 +4258,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         Identifier machineId = machine == null ? null : machine.registryName();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = currentRecipePoolId();
         if (machineId == null || recipePoolId == null) return List.of();
         MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         if (machineId.equals(cachedCandidatesMachineId)
@@ -4238,7 +4269,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedCandidatesMachineId = machineId;
         cachedCandidatesRecipePoolId = recipePoolId;
         cachedCandidatesCatalogVersion = catalog.version();
-        cachedCandidates = catalog.recipes();
+        cachedCandidates = catalog.recipes().stream()
+                .filter(recipe -> recipePoolId.equals(recipe.recipePoolId())).toList();
         return cachedCandidates;
     }
 
@@ -4301,6 +4333,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.craftingRuntime().save(output.child("crafting_runtime"));
         Identifier lockToSave = lockedRecipeId == null ? pendingControllerLockId : lockedRecipeId;
         if (lockToSave != null) output.putString("locked_recipe", lockToSave.toString());
+        if (selectedRecipePoolId != null) output.putString("selected_recipe_pool", selectedRecipePoolId.toString());
         if (hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
             runtime.factoryRuntime().save(output.child("factory_runtime"));
         }
@@ -4318,6 +4351,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             redstonePaused = false;
             lockedRecipeId = null;
             pendingControllerLockId = null;
+            selectedRecipePoolId = Identifier.tryParse(input.getStringOr("selected_recipe_pool", ""));
             runtime.craftingRuntime().invalidate();
             Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
             input.listOrEmpty("found_levels", Codec.STRING).forEach(id -> {

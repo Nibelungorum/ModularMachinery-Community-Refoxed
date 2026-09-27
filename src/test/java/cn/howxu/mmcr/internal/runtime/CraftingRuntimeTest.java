@@ -922,7 +922,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void rebinding_versions_invalidates_an_active_recipe_when_the_machine_pool_changes() {
+    void rebinding_versions_discards_an_active_recipe_when_the_machine_pool_changes() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = controllerRuntime(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_pool_rebind"), MMCR.id("test_cube"),
@@ -936,8 +936,7 @@ class CraftingRuntimeTest {
         runtime.rebindCurrentVersions();
 
         assertThat(runtime.active()).isFalse();
-        assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+        assertThat(runtime.failure()).isNull();
     }
 
     @Test

@@ -40,7 +40,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                        int activeFactoryThreadCount, int parallelControllerCount,
                                          long maxParallelControllerCount, Map<String, DataValue> dataStorageValues,
                                         int matchedStage, int stageCount,
-                                        ControllerRecipePresentation recipePresentation)
+                                         ControllerRecipePresentation recipePresentation,
+                                         String recipePoolId)
         implements CustomPacketPayload {
     public static final int MAX_LEVEL_SNAPSHOTS = 1024;
     public static final int MAX_FAILURE_DETAIL_ENTRIES = FailureStatusCodec.MAX_DETAILS;
@@ -58,6 +59,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         craftingMessage = craftingMessage == null ? "" : craftingMessage;
         dataStorageValues = Map.copyOf(dataStorageValues == null ? Map.of() : dataStorageValues);
         recipePresentation = recipePresentation == null ? ControllerRecipePresentation.empty() : recipePresentation;
+        recipePoolId = recipePoolId == null ? "" : recipePoolId;
         if (installedModuleCount < 0 || installedModuleCount > maxInstalledModules()
                 || tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
                 || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
@@ -82,11 +84,35 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 craftingMessage, failure, structureAreaLoaded, redstonePaused, tick, totalTick, parallelism,
                 maxParallelism, factoryControllerPresent, factoryThreadCount, activeFactoryThreadCount,
                 parallelControllerCount, maxParallelControllerCount, dataStorageValues, matchedStage,
-                stageCount, ControllerRecipePresentation.empty());
+                stageCount, ControllerRecipePresentation.empty(), "");
+    }
+
+    public PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
+                                  List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId,
+                                  String machineId, int controllerRole, int installedModuleCount,
+                                  boolean moduleConnected, String connectedHostId, CraftingStatus.Status craftingStatus,
+                                  String craftingMessage, ExecutionStatus failure, boolean structureAreaLoaded,
+                                  boolean redstonePaused, int tick, int totalTick, long parallelism,
+                                  long maxParallelism, boolean factoryControllerPresent, int factoryThreadCount,
+                                  int activeFactoryThreadCount, int parallelControllerCount,
+                                  long maxParallelControllerCount, Map<String, DataValue> dataStorageValues,
+                                  int matchedStage, int stageCount, String recipePoolId) {
+        this(pos, recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId, machineId,
+                controllerRole, installedModuleCount, moduleConnected, connectedHostId, craftingStatus,
+                craftingMessage, failure, structureAreaLoaded, redstonePaused, tick, totalTick, parallelism,
+                maxParallelism, factoryControllerPresent, factoryThreadCount, activeFactoryThreadCount,
+                parallelControllerCount, maxParallelControllerCount, dataStorageValues, matchedStage,
+                stageCount, ControllerRecipePresentation.empty(), recipePoolId);
     }
 
     public static PktMachineStatePayload from(BlockPos pos, ControllerRuntimeSnapshot runtime) {
-        MachineStateSnapshot machineState = SYNC_RUNTIME.machineState(runtime);
+        return from(pos, runtime, null);
+    }
+
+    public static PktMachineStatePayload from(BlockPos pos, ControllerRuntimeSnapshot runtime,
+                                              Identifier recipePoolId) {
+        MachineStateSnapshot machineState = recipePoolId == null
+                ? SYNC_RUNTIME.machineState(runtime) : SYNC_RUNTIME.machineState(runtime, recipePoolId);
         return new PktMachineStatePayload(pos, machineState.activeRecipe(), machineState.formed(), machineState.active(),
                 machineState.foundLevelIds(), machineState.recipeLocked(), machineState.lockedRecipeId(),
                 machineState.machineId(), machineState.controllerRole(), machineState.installedModuleCount(),
@@ -98,7 +124,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 machineState.activeFactoryThreadCount(), machineState.parallelControllerCount(),
                  machineState.maxParallelControllerCount(),
                  runtime.dataStorageValues(),
-                 machineState.matchedStage(), machineState.stageCount(), machineState.recipePresentation());
+                  machineState.matchedStage(), machineState.stageCount(), machineState.recipePresentation(),
+                machineState.recipePoolId());
     }
 
     public static boolean stateChanged(PktMachineStatePayload current, PktMachineStatePayload previous) {
@@ -131,7 +158,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || !current.dataStorageValues.equals(previous.dataStorageValues)
                 || current.matchedStage != previous.matchedStage
                 || current.stageCount != previous.stageCount
-                || !current.recipePresentation.equals(previous.recipePresentation);
+                || !current.recipePresentation.equals(previous.recipePresentation)
+                || !current.recipePoolId.equals(previous.recipePoolId);
     }
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));
@@ -173,6 +201,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeVarInt(payload.matchedStage);
         buf.writeVarInt(payload.stageCount);
         ControllerRecipePresentation.write(buf, payload.recipePresentation);
+        buf.writeUtf(payload.recipePoolId, maxStringLength());
     }
 
     private static PktMachineStatePayload read(RegistryFriendlyByteBuf buf) {
@@ -206,7 +235,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                  buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(),
                  buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readLong(),
                 DataValuePayloadCodec.readMap(buf),
-                 buf.readVarInt(), buf.readVarInt(), ControllerRecipePresentation.read(buf));
+                 buf.readVarInt(), buf.readVarInt(), ControllerRecipePresentation.read(buf),
+                buf.readUtf(maxStringLength()));
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

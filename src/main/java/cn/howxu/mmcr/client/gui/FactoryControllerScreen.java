@@ -60,6 +60,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int DETAIL_X = 115;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
+    static final int RECIPE_POOL_BUTTON_X = 267;
+    static final int RECIPE_POOL_BUTTON_Y = 4;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
@@ -67,11 +69,34 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
+    private StyledButton recipePoolButton;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
         titleLabelY = -1000;
         inventoryLabelY = -1000;
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        recipePoolButton = addRenderableWidget(new StyledButton(
+                leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
+                Component.translatable("gui.mmcr.recipe_pool.open"), button -> minecraft.setScreen(
+                        new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
+                                menu.currentRecipePoolId()))));
+        updateRecipePoolButton();
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        updateRecipePoolButton();
+    }
+
+    private void updateRecipePoolButton() {
+        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
     @Override
@@ -185,6 +210,12 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                         .append(Component.literal(" "))
                         .append(Component.translatable(controllerStatusKey(menu.isFormed(), selected.active()))),
                 controllerStatusColor(menu.isFormed(), selected.active())));
+        Identifier recipePoolId = MachineControllerScreen.displayedRecipePoolId(
+                menu.currentRecipePoolId(), menu.recipePoolIds());
+        if (recipePoolId != null) {
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
+                    RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
+        }
         if (menu.isFormed() && menu.matchedStage() > 0 && menu.stageCount() > 1) {
             lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
         }

@@ -14,7 +14,7 @@ public final class MachineRegistry {
     private static volatile Map<Identifier, Machine> STRUCTURE_MACHINES = Map.of();
     private static volatile Map<Identifier, List<CompiledMachinePattern>> COMPILED = Map.of();
     private static volatile Map<Identifier, Machine> EFFECTIVE_MACHINES = Map.of();
-    private static volatile Map<Identifier, Identifier> CLIENT_RECIPE_POOLS = Map.of();
+    private static volatile Map<Identifier, List<Identifier>> CLIENT_RECIPE_POOLS = Map.of();
 
     private MachineRegistry() {
     }
@@ -42,17 +42,28 @@ public final class MachineRegistry {
     }
 
     public static Identifier recipePoolForMachine(Identifier machineId) {
-        if (machineId == null) return null;
-        Identifier clientPool = CLIENT_RECIPE_POOLS.get(machineId);
-        if (clientPool != null) return clientPool;
-        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
-        return registration == null ? machineId : registration.recipePoolId();
+        List<Identifier> recipePools = recipePoolsForMachine(machineId);
+        return recipePools.isEmpty() ? null : recipePools.getFirst();
     }
 
-    public static void replaceClientRecipePools(Map<Identifier, Identifier> recipePools) {
+    public static List<Identifier> recipePoolsForMachine(Machine machine) {
+        return machine == null ? List.of() : recipePoolsForMachine(machine.registryName());
+    }
+
+    public static List<Identifier> recipePoolsForMachine(Identifier machineId) {
+        if (machineId == null) return List.of();
+        List<Identifier> clientPools = CLIENT_RECIPE_POOLS.get(machineId);
+        if (clientPools != null) return clientPools;
+        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        return registration == null ? List.of(machineId) : registration.recipePoolIds();
+    }
+
+    public static void replaceClientRecipePools(Map<Identifier, List<Identifier>> recipePools) {
         synchronized (RuntimeContentVersion.lock()) {
             validateClientRecipePools(recipePools);
-            CLIENT_RECIPE_POOLS = Map.copyOf(recipePools);
+            Map<Identifier, List<Identifier>> copy = new LinkedHashMap<>();
+            recipePools.forEach((id, pools) -> copy.put(id, List.copyOf(pools)));
+            CLIENT_RECIPE_POOLS = Map.copyOf(copy);
         }
     }
 
@@ -62,10 +73,14 @@ public final class MachineRegistry {
         }
     }
 
-    public static void validateClientRecipePools(Map<Identifier, Identifier> recipePools) {
-        if (recipePools == null || recipePools.entrySet().stream()
-                .anyMatch(entry -> entry.getKey() == null || entry.getValue() == null)) {
-            throw new IllegalArgumentException("Invalid machine recipe pool mapping");
+    public static void validateClientRecipePools(Map<Identifier, List<Identifier>> recipePools) {
+        if (recipePools == null) throw new IllegalArgumentException("Invalid machine recipe pool mapping");
+        for (Map.Entry<Identifier, List<Identifier>> entry : recipePools.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null || entry.getValue().isEmpty()
+                    || entry.getValue().stream().anyMatch(java.util.Objects::isNull)
+                    || entry.getValue().stream().distinct().count() != entry.getValue().size()) {
+                throw new IllegalArgumentException("Invalid machine recipe pool mapping");
+            }
         }
     }
 
@@ -100,9 +115,9 @@ public final class MachineRegistry {
     public static boolean containsRecipePool(Identifier recipePoolId) {
         if (recipePoolId == null) return false;
         if (MachineDefinitions.allRegistrations().stream()
-                .anyMatch(registration -> recipePoolId.equals(registration.recipePoolId()))) return true;
+                .anyMatch(registration -> registration.recipePoolIds().contains(recipePoolId))) return true;
         return EFFECTIVE_MACHINES.values().stream()
-                .anyMatch(machine -> recipePoolId.equals(recipePoolForMachine(machine)));
+                .anyMatch(machine -> recipePoolsForMachine(machine).contains(recipePoolId));
     }
 
     public static void installStructures(Map<Identifier, MachineStructureDefinition> structures) {

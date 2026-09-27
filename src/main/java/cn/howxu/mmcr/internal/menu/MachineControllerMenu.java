@@ -199,6 +199,15 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? clientMachineId : identifierOrNull(state.machineId());
     }
 
+    public @Nullable Identifier currentRecipePoolId() {
+        if (clientSnapshot != null) return identifierOrNull(clientSnapshot.recipePoolId());
+        return owner == null ? null : owner.currentRecipePoolId();
+    }
+
+    public List<Identifier> recipePoolIds() {
+        return MachineRegistry.recipePoolsForMachine(machineId());
+    }
+
     public boolean isTickMachine() {
         Identifier machineId = machineId();
         if (machineId == null) return false;
@@ -335,7 +344,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public void broadcastChanges() {
         super.broadcastChanges();
         if (owner == null || serverPlayer == null) return;
-        PktMachineStatePayload next = PktMachineStatePayload.from(pos, owner.runtimeSnapshot());
+        PktMachineStatePayload next = PktMachineStatePayload.from(pos, owner.runtimeSnapshot(),
+                owner.currentRecipePoolId());
         if (lastSentSnapshot != null && !PktMachineStatePayload.stateChanged(next, lastSentSnapshot)) return;
         serverPlayer.connection.send(new ClientboundCustomPayloadPacket(next));
         lastSentSnapshot = next;
@@ -418,7 +428,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     private static MachineStateSnapshot machineState(MachineControllerBlockEntity controller) {
-        return SYNC_RUNTIME.machineState(controller.runtimeSnapshot());
+        return SYNC_RUNTIME.machineState(controller.runtimeSnapshot(), controller.currentRecipePoolId());
     }
 
     private static @Nullable Identifier identifierOrNull(String value) {

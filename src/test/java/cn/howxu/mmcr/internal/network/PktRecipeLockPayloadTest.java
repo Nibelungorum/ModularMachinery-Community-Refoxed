@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -25,6 +27,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.protocol.Packet;
@@ -192,6 +195,46 @@ class PktRecipeLockPayloadTest {
         assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
         assertThat(controller.recipeLocked()).isFalse();
         assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isFalse();
+    }
+
+    @Test
+    void recipe_pool_selection_requires_the_matching_open_menu_distance_and_supported_pool() throws Exception {
+        BlockPos controllerPos = new BlockPos(1, 2, 3);
+        Identifier firstPool = MMCR.id("select_boundary_first");
+        Identifier secondPool = MMCR.id("select_boundary_second");
+        Identifier machineId = MMCR.id("select_boundary_machine");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolIds(List.of(firstPool, secondPool)).build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        RuntimeTestFixtures.publishStructure(controller,
+                new DynamicMachine(machineId, "Select Boundary", new BlockArray(Map.of())), true);
+        TestServerLevel level = serverLevel(controller);
+        controller.setLevel(level);
+        ServerPlayer player = player(level, controllerPos);
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+
+        assertThat(PktRecipePoolSelectPayload.selectOnServer(player,
+                new PktRecipePoolSelectPayload(controllerPos, MMCR.id("unsupported")))).isFalse();
+        assertThat(PktRecipePoolSelectPayload.selectOnServer(player,
+                new PktRecipePoolSelectPayload(controllerPos.offset(1, 0, 0), secondPool))).isFalse();
+
+        setField(Entity.class, player, "position", Vec3.atCenterOf(controllerPos.offset(100, 0, 0)));
+        assertThat(PktRecipePoolSelectPayload.selectOnServer(player,
+                new PktRecipePoolSelectPayload(controllerPos, secondPool))).isFalse();
+
+        setField(Entity.class, player, "position", Vec3.atCenterOf(controllerPos));
+        player.containerMenu = new AbstractContainerMenu(null, 1) {
+            @Override public ItemStack quickMoveStack(Player ignored, int index) { return ItemStack.EMPTY; }
+            @Override public boolean stillValid(Player ignored) { return true; }
+        };
+        assertThat(PktRecipePoolSelectPayload.selectOnServer(player,
+                new PktRecipePoolSelectPayload(controllerPos, secondPool))).isFalse();
+
+        player.containerMenu = new MachineControllerMenu(2, new Inventory(null, null), controller);
+        assertThat(PktRecipePoolSelectPayload.selectOnServer(player,
+                new PktRecipePoolSelectPayload(controllerPos, secondPool))).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(secondPool);
     }
 
     @Test

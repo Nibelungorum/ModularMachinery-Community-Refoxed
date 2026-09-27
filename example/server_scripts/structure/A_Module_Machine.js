@@ -48,7 +48,8 @@ MMCREvents.server(event => {
             api.block('minecraft:smooth_quartz'),
             api.anyOfItemInput(),
             api.anyOfItemOutput(),
-            api.anyOfEnergyInput()
+            api.anyOfEnergyInput(),
+            api.block('mmcr:factory_controller')
         ))
         .set('D', api.block('minecraft:glass'))
         .set('E',api.coupler())

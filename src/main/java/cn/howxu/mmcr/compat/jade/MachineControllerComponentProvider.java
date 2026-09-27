@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.gui.RecipePoolDisplayName;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -78,6 +79,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         List<String> keys = new ArrayList<>();
         keys.add("structure");
         keys.add("state");
+        if (snapshot.recipePoolId() != null) keys.add("recipe_pool");
         if (!snapshot.hasFactoryController() && snapshot.hasProgress()) keys.add("progress");
         if (snapshot.shouldShowParallelSlots()) keys.add("parallel_slots");
         if (snapshot.shouldShowParallelism()) keys.add("parallelism");
@@ -90,6 +92,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             case "structure" -> Component.translatable("jade.mmcr.machine_controller.structure." + (snapshot.formed() ? "formed" : "unformed"))
                     .withStyle(snapshot.formed() ? ChatFormatting.GREEN : ChatFormatting.RED);
             case "state" -> Component.translatable("jade.mmcr.machine_controller.status." + snapshot.status());
+            case "recipe_pool" -> RecipePoolDisplayName.component(snapshot.recipePoolId());
             case "progress" -> Component.empty();
             case "parallel_slots" -> Component.translatable("jade.mmcr.machine_controller.parallel_slots.value",
                     snapshot.parallelSlots());
@@ -127,7 +130,8 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             int fluidInputs,
             int fluidOutputs,
             int energyInputs,
-            int energyOutputs
+            int energyOutputs,
+            Identifier recipePoolId
     ) {
 
         static Snapshot from(CompoundTag tag) {
@@ -150,7 +154,12 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getIntOr("fluidInputs", 0),
                     tag.getIntOr("fluidOutputs", 0),
                     tag.getIntOr("energyInputs", 0),
-                    tag.getIntOr("energyOutputs", 0));
+                    tag.getIntOr("energyOutputs", 0),
+                    parseIdentifier(tag.getStringOr("recipePool", "")));
+        }
+
+        private static Identifier parseIdentifier(String value) {
+            return value == null || value.isEmpty() ? null : Identifier.tryParse(value);
         }
 
         String status() {

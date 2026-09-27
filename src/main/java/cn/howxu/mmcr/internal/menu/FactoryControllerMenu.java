@@ -5,6 +5,8 @@ import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -52,7 +54,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         if (owner != null) {
             ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
             if (SYNC_RUNTIME.factoryControllerPresent(runtime)) {
-                snapshot = SYNC_RUNTIME.factoryState(runtime);
+                snapshot = SYNC_RUNTIME.factoryState(runtime, owner.currentRecipePoolId());
                 owner.sendFactoryControllerState(player);
             }
         }
@@ -99,6 +101,13 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     }
     public long maxParallelism() { return snapshot.maxParallelism(); }
     public String machineName() { return snapshot.machineName(); }
+    public @Nullable Identifier machineId() {
+        return snapshot.machineId().isEmpty() ? null : Identifier.tryParse(snapshot.machineId());
+    }
+    public @Nullable Identifier currentRecipePoolId() {
+        return snapshot.recipePoolId().isEmpty() ? null : Identifier.tryParse(snapshot.recipePoolId());
+    }
+    public List<Identifier> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public int matchedStage() { return snapshot.matchedStage(); }
     public int stageCount() { return snapshot.stageCount(); }
@@ -143,7 +152,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         if (owner == null) return;
         ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
         if (!SYNC_RUNTIME.factoryControllerPresent(runtime)) return;
-        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtime);
+        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtime, owner.currentRecipePoolId());
         applySnapshot(next);
         if (player != null && !next.equals(lastSentSnapshot)) {
             owner.sendFactoryControllerState(player);

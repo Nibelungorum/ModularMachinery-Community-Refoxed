@@ -56,7 +56,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier controllerActiveOverlayTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
-    private Identifier recipePoolId;
+    private List<Identifier> recipePoolIds;
     private boolean expandableStructure;
     private MachineControllerSpec explicitControllerSpec;
     private MachineAppearanceSpec explicitAppearance;
@@ -139,7 +139,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .displayNameKey(displayNameKey)
                 .controllerSpec(explicitControllerSpec != null ? explicitControllerSpec : controllerSpec())
                 .appearance(explicitAppearance != null ? explicitAppearance : appearanceSpec())
-                .recipePoolId(recipePoolId != null ? recipePoolId : id)
                 .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
                 .factoryThreadLimit(factoryThreadLimit)
@@ -149,6 +148,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .finishSound(finishSoundId)
                 .shareSmartInterfaces(shareSmartInterfaces)
                 .behavior(behaviorWithServerTickHooks());
+        if (recipePoolIds != null) registration.recipePoolIds(recipePoolIds);
         registration.networkInterface(networkInterfaceMaxCount, networkInterfaceMaxConnections);
         allowedNetworkMachineIds.forEach(registration::allowNetworkMachine);
         if (expandableStructure) registration.expandableStructure();
@@ -212,8 +212,12 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return builder.build();
     }
 
-    public MachineBuilderJS recipePool(String recipePoolId) {
-        this.recipePoolId = Identifier.parse(recipePoolId);
+    public MachineBuilderJS recipePool(String... recipePoolIds) {
+        if (recipePoolIds == null || recipePoolIds.length == 0) {
+            throw new IllegalArgumentException("recipePool requires at least one id");
+        }
+        this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id,
+                Arrays.stream(recipePoolIds).map(Identifier::parse).toList());
         return this;
     }
 
@@ -629,7 +633,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineRegistration registration = createObject();
         MachineBuilder builder = MachineBuilder.machine(id)
                 .displayNameKey(registration.displayNameKey())
-                .recipePool(registration.recipePoolId())
+                .recipePool(registration.recipePoolIds().toArray(Identifier[]::new))
                 .controller(controller -> controller
                         .id(registration.controllerSpec().id())
                         .frontTexture(registration.controllerSpec().frontTexture())
@@ -678,7 +682,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
             builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);
         }
         MachineDefinition base = builder.build();
-        MachineDefinition definition = new MachineDefinition(base.id(), base.recipePoolId(), base.displayNameKey(), base.controller(), base.appearance(),
+        MachineDefinition definition = new MachineDefinition(base.id(), base.recipePoolIds(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.networkInterface(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
                 registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
                 registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()

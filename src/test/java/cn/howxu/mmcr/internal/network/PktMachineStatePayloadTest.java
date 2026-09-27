@@ -122,7 +122,7 @@ class PktMachineStatePayloadTest {
                 base.redstonePaused(), base.tick(), base.totalTick(), base.parallelism(), base.maxParallelism(),
                 base.factoryControllerPresent(), base.factoryThreadCount(), base.activeFactoryThreadCount(),
                 base.parallelControllerCount(), base.maxParallelControllerCount(), base.dataStorageValues(),
-                base.matchedStage(), base.stageCount(), presentation);
+                 base.matchedStage(), base.stageCount(), presentation, base.recipePoolId());
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
@@ -209,7 +209,7 @@ class PktMachineStatePayloadTest {
         return new PktMachineStatePayload(BlockPos.ZERO, "mmcr:recipe", true, true, levels, false, "",
                 "mmcr:machine", 0, 0, false, "", CraftingStatus.Status.IDLE,
                 "", failure, true, false, 0, 10, parallelism, maxParallelism, false, 0, 0, 0,
-                maxParallelControllerCount, dataStorageValues, 0, 1);
+                maxParallelControllerCount, dataStorageValues, 0, 1, "mmcr:pool");
     }
 
     private static ExecutionStatus failure(int detailCount) {

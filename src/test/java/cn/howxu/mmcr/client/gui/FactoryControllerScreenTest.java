@@ -79,6 +79,12 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void recipe_pool_entry_uses_the_approved_factory_coordinates() {
+        assertThat(FactoryControllerScreen.RECIPE_POOL_BUTTON_X).isEqualTo(267);
+        assertThat(FactoryControllerScreen.RECIPE_POOL_BUTTON_Y).isEqualTo(4);
+    }
+
+    @Test
     void active_selected_thread_hides_aggregate_last_failure() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,

@@ -1360,6 +1360,124 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void recipe_pool_defaults_to_the_first_supported_pool_when_no_selection_was_saved() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_default");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_first");
+        Identifier secondPool = MMCR.id("controller_recipe_pool_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+
+        assertThat(controller.supportedRecipePoolIds()).containsExactly(firstPool, secondPool);
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+    }
+
+    @Test
+    void selected_recipe_pool_round_trips_through_value_persistence() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_persistence");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_persistence_first");
+        Identifier secondPool = MMCR.id("controller_recipe_pool_persistence_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+        assertThat(controller.selectRecipePool(secondPool)).isTrue();
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        controller.saveAdditional(output);
+        MachineControllerBlockEntity restored = recipePoolController(machineId, firstPool, secondPool);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        assertThat(restored.currentRecipePoolId()).isEqualTo(secondPool);
+    }
+
+    @Test
+    void malformed_saved_recipe_pool_falls_back_to_the_first_supported_pool() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_malformed");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_malformed_first");
+        Identifier secondPool = MMCR.id("controller_recipe_pool_malformed_second");
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        output.putString("selected_recipe_pool", "not an identifier");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+
+        controller.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+    }
+
+    @Test
+    void removed_saved_recipe_pool_falls_back_to_the_first_replacement_pool() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_removed");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_removed_first");
+        Identifier removedPool = MMCR.id("controller_recipe_pool_removed_second");
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        output.putString("selected_recipe_pool", removedPool.toString());
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
+        controller.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+    }
+
+    @Test
+    void removed_current_recipe_pool_discards_active_work_when_falling_back() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_removed_active");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_removed_active_first");
+        Identifier removedPool = MMCR.id("controller_recipe_pool_removed_active_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
+        controller.selectRecipePool(removedPool);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_removed_active_recipe"),
+                removedPool, 20, List.of(), List.of());
+        CraftingRuntime craftingRuntime = controllerRuntime(controller).craftingRuntime();
+
+        assertThat(craftingRuntime.start(recipe, 1).isCrafting()).isTrue();
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+        assertThat(craftingRuntime.active()).isFalse();
+    }
+
+    @Test
+    void selecting_a_recipe_pool_discards_active_controller_work() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_switch");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_switch_first");
+        Identifier secondPool = MMCR.id("controller_recipe_pool_switch_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_switch_recipe"), firstPool,
+                20, List.of(), List.of());
+        CraftingRuntime craftingRuntime = controllerRuntime(controller).craftingRuntime();
+
+        assertThat(craftingRuntime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(craftingRuntime.active()).isTrue();
+
+        assertThat(controller.selectRecipePool(MMCR.id("unsupported_recipe_pool"))).isFalse();
+        assertThat(controller.selectRecipePool(firstPool)).isFalse();
+        assertThat(controller.selectRecipePool(secondPool)).isTrue();
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(secondPool);
+        assertThat(craftingRuntime.active()).isFalse();
+    }
+
+    private static MachineControllerBlockEntity recipePoolController(Identifier machineId, Identifier... pools) {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolIds(List.of(pools)).build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.setMachine(new DynamicMachine(machineId, "recipe pool test", new BlockArray(Map.of())));
+        return controller;
+    }
+
+    private static MachineControllerRuntime controllerRuntime(MachineControllerBlockEntity controller) {
+        try {
+            Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+            field.setAccessible(true);
+            return (MachineControllerRuntime) field.get(controller);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to access controller runtime", exception);
+        }
+    }
+
+    @Test
     void loading_a_controller_recipe_lock_does_not_use_a_recipe_from_another_pool() {
         Identifier recipeId = MMCR.id("controller_foreign_lock_recipe");
         Identifier foreignPool = MMCR.id("controller_foreign_lock_pool");

@@ -17,7 +17,6 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
@@ -818,10 +817,9 @@ public final class CraftingRuntime {
         if (!active()) return true;
         StructureSnapshot structure = controller.currentStructureSnapshot();
         ComponentRuntime components = controller.componentRuntime();
-        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         return structureVersion == structure.version()
                 && capabilityVersion == components.capabilityVersion()
-                && recipeBelongsToMachine(activeRecipe.getRecipe(), machine)
+                && recipeBelongsToMachine(activeRecipe.getRecipe(), controller.currentRuntimeSnapshot())
                 && controller.currentRuntimeSnapshot().moduleConnectionStatus()
                 .canRunRecipe(activeRecipe.getRecipe().requiredHostIds());
     }
@@ -955,7 +953,7 @@ public final class CraftingRuntime {
             restoreFailure(readFailure(input, null));
             return;
         }
-        Identifier recipePoolId = recipePoolId(controller.currentRuntimeSnapshot());
+        Identifier recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null) {
             failLoad();
             return;
@@ -1448,20 +1446,9 @@ public final class CraftingRuntime {
         return behavior instanceof RecipeBehavior recipeBehavior ? recipeBehavior : null;
     }
 
-    private static boolean recipeBelongsToMachine(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
-        Identifier recipePoolId = recipePoolId(runtime);
+    private boolean recipeBelongsToMachine(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
+        Identifier recipePoolId = controller.currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
-    }
-
-    private static boolean recipeBelongsToMachine(MachineRecipe recipe, @Nullable Machine machine) {
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
-        return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
-    }
-
-    private static @Nullable Identifier recipePoolId(ControllerRuntimeSnapshot runtime) {
-        Machine machine = runtime.structure().machine() == null
-                ? runtime.structure().configuredMachine() : runtime.structure().machine();
-        return machine == null ? null : MachineRegistry.recipePoolForMachine(machine);
     }
 
     private void logCallbackFailure(String phase, ControllerRuntimeSnapshot runtime, MachineRecipe recipe,

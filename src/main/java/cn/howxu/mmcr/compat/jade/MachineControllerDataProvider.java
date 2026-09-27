@@ -48,6 +48,8 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putInt("factoryThreadLimit", factory.laneLimit());
         data.putInt("tick", machineState.tick());
         data.putInt("totalTick", machineState.totalTick());
+        Identifier recipePoolId = controller.currentRecipePoolId();
+        if (recipePoolId != null) data.putString("recipePool", recipePoolId.toString());
 
         int itemInputs = 0;
         int itemOutputs = 0;

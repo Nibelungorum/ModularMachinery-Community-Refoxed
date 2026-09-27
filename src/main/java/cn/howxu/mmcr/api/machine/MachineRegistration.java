@@ -31,7 +31,7 @@ public record MachineRegistration(
         String displayNameKey,
         MachineControllerSpec controllerSpec,
         MachineAppearanceSpec appearance,
-        Identifier recipePoolId,
+        List<Identifier> recipePoolIds,
         boolean allowModifiers,
         boolean allowMultithreading,
         boolean allowParallelism,
@@ -59,7 +59,7 @@ public record MachineRegistration(
             @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
             Set<Identifier> acceptedModuleIds, NetworkInterfaceSpec networkInterface, BlockArray pattern,
             MachineBehavior behavior) {
-        this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers, allowMultithreading,
+        this(id, displayNameKey, controllerSpec, appearance, singletonPool(recipePoolId), allowModifiers, allowMultithreading,
                 allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                 smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface,
                 pattern, behavior, Map.of(), Map.of(), 1);
@@ -69,7 +69,7 @@ public record MachineRegistration(
         displayNameKey = defaultDisplayNameKey(id, displayNameKey);
         controllerSpec = controllerSpec == null ? MachineControllerSpec.defaultsFor(id) : controllerSpec;
         appearance = appearance == null ? MachineAppearanceSpec.defaults() : appearance;
-        recipePoolId = recipePoolId == null ? id : recipePoolId;
+        recipePoolIds = copyRecipePoolIds(id, recipePoolIds);
         maxParallelAmount = Math.max(1, maxParallelAmount);
         factoryThreadLimit = Math.max(1, factoryThreadLimit);
         smartInterfaceTypes = Collections.unmodifiableMap(new LinkedHashMap<>(smartInterfaceTypes));
@@ -136,7 +136,7 @@ public record MachineRegistration(
     }
 
     public MachineRegistration withPattern(BlockArray pattern) {
-        return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers,
+        return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolIds, allowModifiers,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                  smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior,
                 requestProcessors, requestFailures, factoryThreadLimit);
@@ -150,6 +150,26 @@ public record MachineRegistration(
         if (id == null) throw new IllegalArgumentException("id null");
         if (explicitKey != null && !explicitKey.isBlank()) return explicitKey;
         return id.toLanguageKey("machine");
+    }
+
+    public Identifier recipePoolId() {
+        return recipePoolIds.getFirst();
+    }
+
+    public static List<Identifier> copyRecipePoolIds(Identifier machineId, List<Identifier> recipePoolIds) {
+        if (machineId == null) throw new IllegalArgumentException("id null");
+        if (recipePoolIds == null) return List.of(machineId);
+        if (recipePoolIds.isEmpty()) throw new IllegalArgumentException("recipePool requires at least one id");
+        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
+        for (Identifier recipePoolId : recipePoolIds) {
+            if (recipePoolId == null) throw new IllegalArgumentException("recipe pool id null");
+            if (!copy.add(recipePoolId)) throw new IllegalArgumentException("Duplicate recipe pool id: " + recipePoolId);
+        }
+        return List.copyOf(copy);
+    }
+
+    private static List<Identifier> singletonPool(Identifier recipePoolId) {
+        return recipePoolId == null ? null : List.of(recipePoolId);
     }
 
     private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {
@@ -167,7 +187,7 @@ public record MachineRegistration(
         private String displayNameKey;
         private MachineControllerSpec controllerSpec;
         private MachineAppearanceSpec appearance;
-        private Identifier recipePoolId;
+        private List<Identifier> recipePoolIds;
         private boolean allowModifiers;
         private boolean allowMultithreading;
         private boolean allowParallelism;
@@ -213,7 +233,12 @@ public record MachineRegistration(
         }
 
         public Builder recipePoolId(Identifier recipePoolId) {
-            this.recipePoolId = recipePoolId;
+            this.recipePoolIds = singletonPool(recipePoolId);
+            return this;
+        }
+
+        public Builder recipePoolIds(List<Identifier> recipePoolIds) {
+            this.recipePoolIds = copyRecipePoolIds(id, recipePoolIds);
             return this;
         }
 
@@ -346,7 +371,7 @@ public record MachineRegistration(
                 throw new IllegalArgumentException("Machine roles are mutually exclusive");
             }
             MachineRole role = host ? MachineRole.HOST : module ? MachineRole.MODULE : MachineRole.NORMAL;
-            return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers,
+            return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolIds, allowModifiers,
                     allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                      smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior,
                     requestProcessors, requestFailures, factoryThreadLimit);

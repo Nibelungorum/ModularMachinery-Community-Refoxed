@@ -112,7 +112,8 @@ class RuntimeContentSnapshotTest {
         Map<Identifier, MachineControllerSpec> controllerSpecs = mapWithOpaqueValue(machineId);
         Map<Identifier, MachineAppearanceSpec> appearances = mapWithOpaqueValue(machineId);
         RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
-                structures, recipes, controllerSpecs, appearances, Map.of(machineId, MMCR.id("runtime_pool")), 7L);
+                structures, recipes, controllerSpecs, appearances,
+                Map.of(machineId, List.of(MMCR.id("runtime_pool"), MMCR.id("secondary_pool"))), 7L);
 
         structures.clear();
         recipes.clear();
@@ -123,7 +124,10 @@ class RuntimeContentSnapshotTest {
         assertThat(snapshot.recipes()).containsKey(machineId);
         assertThat(snapshot.controllerSpecs()).containsKey(machineId);
         assertThat(snapshot.appearances()).containsKey(machineId);
-        assertThat(snapshot.machineRecipePools()).containsEntry(machineId, MMCR.id("runtime_pool"));
+        assertThat(snapshot.machineRecipePools()).containsEntry(machineId,
+                List.of(MMCR.id("runtime_pool"), MMCR.id("secondary_pool")));
+        assertThatThrownBy(() -> snapshot.machineRecipePools().get(machineId).add(MMCR.id("third_pool")))
+                .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> snapshot.structures().clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> snapshot.recipes().clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> snapshot.controllerSpecs().clear()).isInstanceOf(UnsupportedOperationException.class);
@@ -236,7 +240,7 @@ class RuntimeContentSnapshotTest {
                 Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
                 Map.of(machineId, new MachineAppearanceSpec(MMCR.id("basic_casing"), null, null,
                         MMCR.id("block/custom_idle"), MMCR.id("block/custom_active"))),
-                Map.of(machineId, machineId),
+                Map.of(machineId, List.of(machineId, MMCR.id("secondary_pool"))),
                 11L);
         PktRuntimeContentPayload payload = new PktRuntimeContentPayload(snapshot);
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
@@ -246,7 +250,8 @@ class RuntimeContentSnapshotTest {
 
         assertThat(decoded.snapshot().structures()).containsOnlyKeys(machineId);
         assertThat(decoded.snapshot().recipes()).containsOnlyKeys(MMCR.id("sync_recipe"));
-        assertThat(decoded.snapshot().machineRecipePools()).containsEntry(machineId, machineId);
+        assertThat(decoded.snapshot().machineRecipePools()).containsEntry(machineId,
+                List.of(machineId, MMCR.id("secondary_pool")));
         assertThat(decoded.snapshot().contentVersion()).isEqualTo(11L);
         assertThat(decoded.snapshot().appearances().get(machineId).controllerIdleOverlayTexture())
                 .isEqualTo(MMCR.id("block/custom_idle"));
@@ -261,7 +266,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
         Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(3);
+        buf.writeVarInt(4);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
@@ -279,7 +284,7 @@ class RuntimeContentSnapshotTest {
         Identifier key = MMCR.id("runtime_test_machine");
         Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(3);
+        buf.writeVarInt(4);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
@@ -298,7 +303,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void runtimeContentPayloadRejectsUnknownPayloadVersion() {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(4);
+        buf.writeVarInt(5);
 
         assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -320,7 +325,7 @@ class RuntimeContentSnapshotTest {
                 Map.of(newMachine, structure(newMachine)),
                 Map.of(newRecipe, recipe(newRecipe, newMachine)),
                 Map.of(newMachine, MachineControllerSpec.defaultsFor(newMachine)),
-                Map.of(), Map.of(newMachine, newMachine), 12L).applyClient();
+                Map.of(), Map.of(newMachine, List.of(newMachine)), 12L).applyClient();
 
         assertThat(MachineStructureRegistry.effectiveSnapshot()).containsOnlyKeys(newMachine);
         assertThat(RecipeRegistry.effectiveSnapshot()).containsOnlyKeys(newRecipe);
@@ -349,7 +354,8 @@ class RuntimeContentSnapshotTest {
         Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         RuntimeContentSnapshot current = new RuntimeContentSnapshot(
-                Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(), Map.of(machineId, machineId), 20L);
+                Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
+                Map.of(machineId, List.of(machineId)), 20L);
 
         current.applyClient();
         new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 19L).applyClient();
@@ -370,7 +376,7 @@ class RuntimeContentSnapshotTest {
         RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
                 Map.of(newMachine, structure(newMachine)),
                 Map.of(MMCR.id("wrong_recipe_key"), invalidRecipe),
-                Map.of(), Map.of(), Map.of(newMachine, newMachine), 30L);
+                Map.of(), Map.of(), Map.of(newMachine, List.of(newMachine)), 30L);
 
         assertThatThrownBy(invalid::applyClient).isInstanceOf(IllegalArgumentException.class);
         assertThat(MachineStructureRegistry.effectiveSnapshot()).isEqualTo(before);
@@ -405,9 +411,11 @@ class RuntimeContentSnapshotTest {
                 List.of(), List.of(), false, List.of(), true, Set.of());
 
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(recipeId, recipe), Map.of(), Map.of(),
-                Map.of(machineId, serverPool), 32L).applyClient();
+                Map.of(machineId, List.of(serverPool, MMCR.id("secondary_server_pool"))), 32L).applyClient();
 
         assertThat(MachineRegistry.recipePoolForMachine(machineId)).isEqualTo(serverPool);
+        assertThat(MachineRegistry.recipePoolsForMachine(machineId))
+                .containsExactly(serverPool, MMCR.id("secondary_server_pool"));
         assertThat(RecipeRegistry.catalogForPool(serverPool).recipes()).contains(recipe);
     }
 
@@ -437,7 +445,7 @@ class RuntimeContentSnapshotTest {
         registerMachineIfMissing(machineId);
 
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
-                Map.of(machineId, machineId), 31L)
+                Map.of(machineId, List.of(machineId)), 31L)
                 .applyClient();
 
         assertThat(RuntimeContentVersion.current()).isEqualTo(before);
@@ -448,13 +456,13 @@ class RuntimeContentSnapshotTest {
         Identifier machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
-                Map.of(machineId, machineId), 90L)
+                Map.of(machineId, List.of(machineId)), 90L)
                 .applyClient();
 
         ClientRuntimeSnapshotBridge.resetForConnection();
 
         assertThat(new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
-                Map.of(machineId, machineId), 1L)
+                Map.of(machineId, List.of(machineId)), 1L)
                 .applyClient()).isTrue();
     }
 
@@ -464,7 +472,7 @@ class RuntimeContentSnapshotTest {
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(),
                 Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
-                Map.of(machineId, MachineAppearanceSpec.defaults()), Map.of(machineId, machineId), 90L).applyClient();
+                Map.of(machineId, MachineAppearanceSpec.defaults()), Map.of(machineId, List.of(machineId)), 90L).applyClient();
 
         ClientRuntimeSnapshotBridge.resetForConnection();
 
@@ -481,7 +489,7 @@ class RuntimeContentSnapshotTest {
         RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
                 Map.of(machineId, structure(machineId)), Map.of(),
                 Map.of(machineId, MachineControllerSpec.defaultsFor(MMCR.id("runtime_test_machine_new"))), Map.of(),
-                Map.of(machineId, machineId), 92L);
+                Map.of(machineId, List.of(machineId)), 92L);
 
         assertThatThrownBy(invalid::applyClient)
                 .isInstanceOf(IllegalArgumentException.class)

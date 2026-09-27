@@ -74,9 +74,25 @@ class PublicMachineBuilderTest {
         assertThat(definition.id()).isEqualTo(MMCR.id("base_machine"));
         assertThat(definition.displayNameKey()).isEqualTo("machine.mmcr.base_machine");
         assertThat(definition.behavior().kind()).isEqualTo(MachineBehavior.Kind.RECIPE);
+        assertThat(definition.recipePoolIds()).containsExactly(MMCR.id("base_machine"));
         assertThat(MachineBuilder.class.getDeclaredMethods()).noneMatch(method ->
                 method.getName().equals("pattern") || method.getName().equals("stage")
                         || method.getName().equals("expandableStructure"));
+    }
+
+    @Test
+    void machine_builder_preserves_ordered_recipe_pools_and_rejects_invalid_lists() {
+        MachineDefinition definition = MachineBuilder.machine(MMCR.id("multi_pool_machine"))
+                .recipePool(MMCR.id("ore_pool"), MMCR.id("alloy_pool"))
+                .build();
+
+        assertThat(definition.recipePoolIds()).containsExactly(MMCR.id("ore_pool"), MMCR.id("alloy_pool"));
+        assertThat(definition.recipePoolId()).isEqualTo(MMCR.id("ore_pool"));
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("empty_pool_machine")).recipePool())
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("at least one");
+        assertThatThrownBy(() -> MachineBuilder.machine(MMCR.id("duplicate_pool_machine"))
+                .recipePool(MMCR.id("ore_pool"), MMCR.id("ore_pool")))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Duplicate");
     }
 
     @Test

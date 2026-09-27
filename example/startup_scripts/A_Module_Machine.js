@@ -11,11 +11,13 @@ MMCREvents.startup(event => {
         .formedPortBaseTexture('minecraft:block/quartz_block_bottom')
         .host("mmcr_kubejs:kubejs_space_reassembler")
 
+    // It can host two kinds of recipe pool if you like
     const space_reassembler = event
         .createMachine("mmcr_kubejs:kubejs_space_reassembler")
         .displayNameKey("machine.mmcr_kubejs.kubejs_space_reassembler")
-        .recipePool("mmcr_kubejs:kubejs_space_reassembler")
+        .recipePool("mmcr_kubejs:kubejs_space_reassembler", "mmcr_kubejs:kubejs_space_miner", "mmcr_kubejs:kubejs_space_1", "mmcr_kubejs:kubejs_space_2", "mmcr_kubejs:kubejs_space_3")
         .appearance('minecraft:quartz_pillar')
+        .allowMultithreading()
         .module()
 
 

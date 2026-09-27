@@ -23,7 +23,7 @@ import java.util.Set;
  */
 public record MachineDefinition(
         Identifier id,
-        Identifier recipePoolId,
+        List<Identifier> recipePoolIds,
         String displayNameKey,
         ControllerSpec controller,
         AppearanceSpec appearance,
@@ -56,7 +56,7 @@ public record MachineDefinition(
             Map<String, SmartInterfaceType> smartInterfaceTypes, boolean shareSmartInterfaces,
             List<SmartInterfaceModifier> smartInterfaceModifiers, Identifier runningSoundId, Identifier finishSoundId,
             BlockArray pattern, MachineBehavior behavior) {
-        this(id, recipePoolId, displayNameKey, controller, appearance, factory, role, acceptedModuleIds, networkInterface,
+        this(id, singletonPool(recipePoolId), displayNameKey, controller, appearance, factory, role, acceptedModuleIds, networkInterface,
                 maxParallelism, parallelizable, failureAction, allowModifiers, allowMultithreading, maxParallelAmount,
                 expandableStructure, smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, pattern, behavior, Map.of(), Map.of());
@@ -104,7 +104,7 @@ public record MachineDefinition(
 
     public MachineDefinition {
         if (id == null) throw new IllegalArgumentException("id null");
-        recipePoolId = recipePoolId == null ? id : recipePoolId;
+        recipePoolIds = MachineRegistration.copyRecipePoolIds(id, recipePoolIds);
         if (displayNameKey != null && displayNameKey.isBlank()) {
             throw new IllegalArgumentException("displayNameKey blank");
         }
@@ -131,6 +131,14 @@ public record MachineDefinition(
         if (role == MachineRole.HOST && acceptedModuleIds.isEmpty()) {
             throw new IllegalStateException("HOST machine must accept at least 1 module");
         }
+    }
+
+    public Identifier recipePoolId() {
+        return recipePoolIds.getFirst();
+    }
+
+    private static List<Identifier> singletonPool(Identifier recipePoolId) {
+        return recipePoolId == null ? null : List.of(recipePoolId);
     }
 
     private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {

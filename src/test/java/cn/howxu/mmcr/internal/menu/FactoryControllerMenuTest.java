@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -107,6 +109,23 @@ class FactoryControllerMenuTest {
 
         assertThat(menu.matchedStage()).isEqualTo(4);
         assertThat(menu.stageCount()).isEqualTo(10);
+    }
+
+    @Test
+    void factory_menu_exposes_the_selected_and_supported_recipe_pools() {
+        var machineId = MMCR.id("factory_menu_recipe_pool_machine");
+        var firstPool = MMCR.id("factory_menu_recipe_pool_first");
+        var secondPool = MMCR.id("factory_menu_recipe_pool_second");
+        MachineRegistry.replaceClientRecipePools(java.util.Map.of(machineId, List.of(firstPool, secondPool)));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 1, 0, 1L, false,
+                List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "Factory", 0, null, List.of(), 0, 1,
+                machineId.toString(), secondPool.toString()));
+
+        assertThat(menu.machineId()).isEqualTo(machineId);
+        assertThat(menu.currentRecipePoolId()).isEqualTo(secondPool);
+        assertThat(menu.recipePoolIds()).containsExactly(firstPool, secondPool);
+        MachineRegistry.clearClientRecipePools();
     }
 
     private static FactorySnapshot snapshot(int... indexes) {
