@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.port;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Arrays;
 import java.util.List;
@@ -14,15 +14,15 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public interface PortDefinition {
-    Identifier id();
+    ResourceLocation id();
 
     List<CapabilityBinding> bindings();
 
-    static PortDefinition of(Identifier id, List<CapabilityBinding> bindings) {
+    static PortDefinition of(ResourceLocation id, List<CapabilityBinding> bindings) {
         return new Immutable(id, bindings);
     }
 
-    static PortDefinition of(Identifier id, CapabilityBinding... bindings) {
+    static PortDefinition of(ResourceLocation id, CapabilityBinding... bindings) {
         return of(id, Arrays.asList(bindings));
     }
 
@@ -31,7 +31,7 @@ public interface PortDefinition {
      *
      * @author howxu <dev@howxu.cn>
      */
-    record Immutable(Identifier id, List<CapabilityBinding> bindings) implements PortDefinition {
+    record Immutable(ResourceLocation id, List<CapabilityBinding> bindings) implements PortDefinition {
         public Immutable {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(bindings, "bindings");

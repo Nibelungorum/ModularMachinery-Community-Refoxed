@@ -152,7 +152,7 @@ public final class AE2ResourceFamily<R> {
                 throw new IllegalStateException("AE2 resource family host is not an IO port");
             }
             return capabilityViewFactory.create(host, storageFactory.apply(host), viewDirection, exposeTransferFacet);
-        }, (_, _) -> true, externalExposure);
+        }, (binding, value) -> true, externalExposure);
     }
 
     /** Builds the MMCR capability view for a storage view of this resource family. */

@@ -30,7 +30,7 @@ import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -52,10 +52,10 @@ import java.util.Set;
  */
 public final class ComponentRuntime {
     private static final ExecutionStatus UNSPECIFIED_TICK_OPERATION_FAILURE = new ExecutionStatus(
-            Identifier.fromNamespaceAndPath("mmcr", "capability_tick_operation_failure"), StatusSeverity.FAILURE,
-            Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
+            ResourceLocation.fromNamespaceAndPath("mmcr", "capability_tick_operation_failure"), StatusSeverity.FAILURE,
+            ResourceLocation.fromNamespaceAndPath("mmcr", "capability_tick"),
             FailureOccurrence.at(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS,
-                    Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
+                    ResourceLocation.fromNamespaceAndPath("mmcr", "capability_tick"),
                     FailurePhase.CAPABILITY_COMMIT, null, null,
                     Map.of("raw_reason_id", "operation_failed_without_status")));
     private List<ProcessingComponent> components = List.of();
@@ -73,13 +73,13 @@ public final class ComponentRuntime {
     private List<ControllerRuntimeSnapshot.CapabilityPresentation> cachedCapabilityPresentations = List.of();
     private Map<String, List<MachineModifier>> foundModifiers = Map.of();
     private List<MachineModifier> flattenedModifiers = List.of();
-    private Map<Identifier, MachineLevel> foundLevels = Map.of();
+    private Map<ResourceLocation, MachineLevel> foundLevels = Map.of();
     private Set<BlockPos> linkedPortPositions = Set.of();
     private ModuleConnectionStatus moduleConnectionStatus = ModuleConnectionStatus.disconnected();
     private int installedModuleCount;
     private List<UpgradeBusSnapshot> upgradeBuses = List.of();
     private List<ItemStack> upgradeItems = List.of();
-    private Map<Identifier, Long> upgradeModifierUnits = Map.of();
+    private Map<ResourceLocation, Long> upgradeModifierUnits = Map.of();
     private List<MachineModifier> upgradeModifiers = List.of();
     private List<MachineModifier> smartInterfaceModifiers = List.of();
     private long upgradeContentRevision;
@@ -262,7 +262,7 @@ public final class ComponentRuntime {
         return copyStacks(upgradeItems);
     }
 
-    public Map<Identifier, Long> upgradeModifierUnits() {
+    public Map<ResourceLocation, Long> upgradeModifierUnits() {
         return upgradeModifierUnits;
     }
 
@@ -288,8 +288,8 @@ public final class ComponentRuntime {
         stateVersion++;
     }
 
-    public boolean replaceLevels(Map<Identifier, MachineLevel> levels) {
-        Map<Identifier, MachineLevel> next = new LinkedHashMap<>(levels == null ? Map.of() : levels);
+    public boolean replaceLevels(Map<ResourceLocation, MachineLevel> levels) {
+        Map<ResourceLocation, MachineLevel> next = new LinkedHashMap<>(levels == null ? Map.of() : levels);
         if (foundLevels.equals(next)) return false;
         foundLevels = immutableMap(next);
         rebuildModifierList();
@@ -299,7 +299,7 @@ public final class ComponentRuntime {
         return true;
     }
 
-    public Map<Identifier, MachineLevel> foundLevels() {
+    public Map<ResourceLocation, MachineLevel> foundLevels() {
         return foundLevels;
     }
 
@@ -337,7 +337,7 @@ public final class ComponentRuntime {
         return installedModuleCount;
     }
 
-    public Optional<Identifier> connectedHostId() {
+    public Optional<ResourceLocation> connectedHostId() {
         return moduleConnectionStatus.connected()
                 ? Optional.of(moduleConnectionStatus.connectedHostId())
                 : Optional.empty();
@@ -410,14 +410,14 @@ public final class ComponentRuntime {
 
         upgradeBuses = next;
         List<ItemStack> items = new ArrayList<>();
-        Map<Identifier, Long> units = new LinkedHashMap<>();
+        Map<ResourceLocation, Long> units = new LinkedHashMap<>();
         for (UpgradeBusSnapshot bus : next) {
             List<ItemStack> stacks = bus.stacks();
             for (int slot = 0; slot < stacks.size(); slot++) {
                 ItemStack stack = stacks.get(slot);
                 if (stack.isEmpty()) continue;
                 items.add(stack.copy());
-                Identifier modifierId = ModifierRegistry.modifierFor(stack);
+                ResourceLocation modifierId = ModifierRegistry.modifierFor(stack);
                 if (modifierId != null) units.merge(modifierId, (long) stack.getCount(), Long::sum);
             }
         }
@@ -431,9 +431,9 @@ public final class ComponentRuntime {
         return true;
     }
 
-    private List<MachineModifier> upgradeModifiers(Map<Identifier, Long> units) {
+    private List<MachineModifier> upgradeModifiers(Map<ResourceLocation, Long> units) {
         List<MachineModifier> result = new ArrayList<>();
-        for (Map.Entry<Identifier, Long> entry : units.entrySet()) {
+        for (Map.Entry<ResourceLocation, Long> entry : units.entrySet()) {
             ModifierDefinition definition = ModifierRegistry.get(entry.getKey());
             if (definition == null) continue;
             for (MachineModifier modifier : definition.modifiers()) {
@@ -446,7 +446,7 @@ public final class ComponentRuntime {
     private void rebuildModifierList() {
         List<MachineModifier> modifiers = new ArrayList<>();
         foundLevels.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(ResourceLocation::toString)))
                 .map(Map.Entry::getValue)
                 .map(MachineLevel::modifier)
                 .forEach(definition -> modifiers.addAll(definition.modifiers()));
@@ -535,7 +535,7 @@ public final class ComponentRuntime {
 
     private record CapabilityState(List<MachineCapability> capabilities, List<CapabilityIdentity> identity) { }
 
-    private record CapabilityIdentity(BlockPos componentPos, Identifier type, IOType ioType, List<String> tags,
+    private record CapabilityIdentity(BlockPos componentPos, ResourceLocation type, IOType ioType, List<String> tags,
         String storageType, Object storageIdentity) {
         private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability, IOType direction) {
             CapabilityStorage storage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);

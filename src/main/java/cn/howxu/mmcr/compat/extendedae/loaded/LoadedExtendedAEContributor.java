@@ -96,9 +96,9 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
         registerInterface(event, OversizeOutputInterfaceKind.INSTANCE.id(), OutputInterfaceBlockEntity.class, false);
         BlockEntityType<?> type = type(ExtendedPatternInterfaceKind.INSTANCE.id());
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, type,
-                (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
+                (be, v) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
-                (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
+                (be, v) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
     }
 
     private static boolean isOversize(IOPortKind kind) {
@@ -113,12 +113,12 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
             RegisterCapabilitiesEvent event, String id, Class<T> hostType, boolean storage) {
         BlockEntityType<?> type = type(id);
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, type,
-                (be, _) -> hostType.isInstance(be) ? hostType.cast(be) : null);
+                (be, v) -> hostType.isInstance(be) ? hostType.cast(be) : null);
         if (storage) {
             event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
-                    (be, _) -> hostType.isInstance(be) ? hostType.cast(be).getInterfaceLogic().getStorage() : null);
+                    (be, direction) -> hostType.isInstance(be) ? hostType.cast(be).getInterfaceLogic().getStorage() : null);
             event.registerBlockEntity(AECapabilities.ME_STORAGE, type,
-                    (be, _) -> hostType.isInstance(be) ? hostType.cast(be).getInterfaceLogic().getInventory() : null);
+                    (be, direction) -> hostType.isInstance(be) ? hostType.cast(be).getInterfaceLogic().getInventory() : null);
         }
     }
 }

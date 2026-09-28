@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -406,10 +406,10 @@ public final class StructureMatcher {
         return Optional.empty();
     }
 
-    public static LevelResolution resolveLevels(Map<BlockPos, Identifier> levelSlots, Level level, BlockPos ctrlPos) {
-        Map<Identifier, MachineLevel> foundLevels = new LinkedHashMap<>();
+    public static LevelResolution resolveLevels(Map<BlockPos, ResourceLocation> levelSlots, Level level, BlockPos ctrlPos) {
+        Map<ResourceLocation, MachineLevel> foundLevels = new LinkedHashMap<>();
         for (var entry : levelSlots.entrySet().stream()
-                .sorted(Comparator.comparingInt((Map.Entry<BlockPos, Identifier> entry) -> entry.getKey().getX())
+                .sorted(Comparator.comparingInt((Map.Entry<BlockPos, ResourceLocation> entry) -> entry.getKey().getX())
                         .thenComparingInt(entry -> entry.getKey().getY())
                         .thenComparingInt(entry -> entry.getKey().getZ()))
                 .toList()) {
@@ -472,7 +472,7 @@ public final class StructureMatcher {
         }
     }
 
-    public record LevelResolution(Map<Identifier, MachineLevel> foundLevels, LevelMismatch mismatch) {
+    public record LevelResolution(Map<ResourceLocation, MachineLevel> foundLevels, LevelMismatch mismatch) {
         public LevelResolution {
             foundLevels = Map.copyOf(foundLevels);
         }

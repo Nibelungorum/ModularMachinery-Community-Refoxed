@@ -9,7 +9,7 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.registration.GameTestRegistration;
 import cn.howxu.mmcr.internal.registration.ModEventRegistration;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.core.registries.Registries;
 import net.neoforged.bus.api.IEventBus;
@@ -47,8 +47,8 @@ public class MMCR {
                 StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS));
     }
 
-    public static Identifier id(String path) {
-        return Identifier.fromNamespaceAndPath(MODID, path);
+    public static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MODID, path);
     }
 
     /** Test-only view of startup lifecycle state. */

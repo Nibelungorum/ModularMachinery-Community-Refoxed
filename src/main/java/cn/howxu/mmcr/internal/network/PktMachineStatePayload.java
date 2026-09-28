@@ -16,7 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
@@ -110,7 +110,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     }
 
     public static PktMachineStatePayload from(BlockPos pos, ControllerRuntimeSnapshot runtime,
-                                              Identifier recipePoolId) {
+                                              ResourceLocation recipePoolId) {
         MachineStateSnapshot machineState = recipePoolId == null
                 ? SYNC_RUNTIME.machineState(runtime) : SYNC_RUNTIME.machineState(runtime, recipePoolId);
         return new PktMachineStatePayload(pos, machineState.activeRecipe(), machineState.formed(), machineState.active(),
@@ -250,8 +250,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                     && menu.controllerPos().equals(pos);
             if (blockEntity instanceof MachineControllerBlockEntity controller) {
                 controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId,
-                        machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole, installedModuleCount,
-                        moduleConnected, connectedHostId.isEmpty() ? null : Identifier.parse(connectedHostId),
+                        machineId.isEmpty() ? null : ResourceLocation.parse(machineId), controllerRole, installedModuleCount,
+                        moduleConnected, connectedHostId.isEmpty() ? null : ResourceLocation.parse(connectedHostId),
                         new CraftingStatus(craftingStatus, craftingMessage), failure, structureAreaLoaded,
                         tick, totalTick, parallelism, maxParallelism, dataStorageValues);
             }

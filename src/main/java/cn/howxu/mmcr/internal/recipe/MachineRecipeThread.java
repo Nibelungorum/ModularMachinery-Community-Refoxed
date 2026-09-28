@@ -14,7 +14,7 @@ import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
@@ -139,7 +139,7 @@ public final class MachineRecipeThread extends RecipeThread {
 
     /** Starts one ordinary-controller candidate search from immutable main-thread captures. */
     public boolean searchAndStartAsyncRecipe(List<MachineRecipe> candidates, long availableParallelism,
-                                             long structureVersion, @Nullable Identifier lockedRecipeId) {
+                                             long structureVersion, @Nullable ResourceLocation lockedRecipeId) {
         if (controller.activeWorkMode() != MachineWorkMode.ASYNC || !(controller.getLevel() instanceof ServerLevel level)) {
             return searchAndStartRecipe(candidates, availableParallelism, structureVersion, lockedRecipeId);
         }
@@ -243,13 +243,13 @@ public final class MachineRecipeThread extends RecipeThread {
     }
 
     private List<MachineRecipe> candidatesForMachine(List<MachineRecipe> candidates) {
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || candidates == null) return List.of();
         return candidates.stream().filter(recipe -> recipe != null && recipePoolId.equals(recipe.recipePoolId())).toList();
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 

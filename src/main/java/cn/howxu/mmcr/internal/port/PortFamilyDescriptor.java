@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.port;
 
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,7 +14,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record PortFamilyDescriptor(
-        Identifier familyId,
+        ResourceLocation familyId,
         IOType ioType,
         int detectionTier,
         List<String> countAliases) {

@@ -24,8 +24,8 @@ import net.neoforged.neoforge.transfer.ResourceHandler;
 public final class OversizeOutputInterfaceKind implements InterfaceLogicKind {
     public static final OversizeOutputInterfaceKind INSTANCE = new OversizeOutputInterfaceKind();
     private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(
-            AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
-            AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))));
+            AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(), ResourceHandler.asClass(), (host, type, direction) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
+            AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(), (host, type, direction) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))));
     private OversizeOutputInterfaceKind() {}
     @Override public String id() { return "eae_me_oversize_output_interface"; }
     @Override public IOType ioType() { return IOType.OUTPUT; }

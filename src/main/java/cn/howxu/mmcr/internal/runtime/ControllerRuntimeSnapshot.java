@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,7 +27,7 @@ public record ControllerRuntimeSnapshot(
         long modifierVersion,
         long stateVersion,
         Map<String, List<MachineModifier>> foundModifiers,
-        Map<Identifier, MachineLevel> foundLevels,
+        Map<ResourceLocation, MachineLevel> foundLevels,
         Set<BlockPos> linkedPortPositions,
         ModuleConnectionStatus moduleConnectionStatus,
         int installedModuleCount,
@@ -51,7 +51,7 @@ public record ControllerRuntimeSnapshot(
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion, long modifierVersion,
                                      long stateVersion, Map<String, List<MachineModifier>> foundModifiers,
-                                     Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
+                                     Map<ResourceLocation, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
                                      List<ComponentPresentation> componentPresentations,
@@ -69,7 +69,7 @@ public record ControllerRuntimeSnapshot(
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
                                      long modifierVersion, long stateVersion, Map<String, List<MachineModifier>> foundModifiers,
-                                     Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
+                                     Map<ResourceLocation, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
                                      List<ComponentPresentation> componentPresentations,
@@ -87,7 +87,7 @@ public record ControllerRuntimeSnapshot(
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
                                      long modifierVersion, long stateVersion, Map<String, List<MachineModifier>> foundModifiers,
-                                     Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
+                                     Map<ResourceLocation, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
                                      List<ComponentPresentation> componentPresentations,
@@ -164,7 +164,7 @@ public record ControllerRuntimeSnapshot(
      *
      * @author howxu <dev@howxu.cn>
      */
-    public record CapabilityPresentation(@Nullable Identifier typeId, @Nullable IOType ioType,
+    public record CapabilityPresentation(@Nullable ResourceLocation typeId, @Nullable IOType ioType,
                                          long amount, long capacity, List<StorageSlot> slots) {
         public CapabilityPresentation {
             if (amount < 0L || capacity < 0L) throw new IllegalArgumentException("Capability values must not be negative");

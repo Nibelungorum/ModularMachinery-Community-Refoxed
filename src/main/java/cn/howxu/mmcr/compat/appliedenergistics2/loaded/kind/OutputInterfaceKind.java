@@ -33,13 +33,13 @@ public final class OutputInterfaceKind implements InterfaceLogicKind {
                     host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true,
                     new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(),
                             ResourceHandler.asClass(),
-                            (host, _, _) -> ModCapabilities.resourceStorageHandler(
+                            (host, type, direction) -> ModCapabilities.resourceStorageHandler(
                                     ((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
             AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(),
                     host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true,
                     new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(),
                             ResourceHandler.asClass(),
-                            (host, _, _) -> ModCapabilities.resourceStorageHandler(
+                            (host, type, direction) -> ModCapabilities.resourceStorageHandler(
                                     ((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))));
 
     private OutputInterfaceKind() {}

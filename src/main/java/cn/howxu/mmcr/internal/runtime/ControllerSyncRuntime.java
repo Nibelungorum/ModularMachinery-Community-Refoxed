@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -23,7 +23,7 @@ public final class ControllerSyncRuntime {
         return machineState(runtime, MachineRegistry.recipePoolForMachine(machine));
     }
 
-    public MachineStateSnapshot machineState(ControllerRuntimeSnapshot runtime, @Nullable Identifier recipePoolId) {
+    public MachineStateSnapshot machineState(ControllerRuntimeSnapshot runtime, @Nullable ResourceLocation recipePoolId) {
         require(runtime);
         ExecutionStatus failure = runtime.factory().failure() == null ? runtime.crafting().failure() : runtime.factory().failure();
         return new MachineStateSnapshot(
@@ -65,7 +65,7 @@ public final class ControllerSyncRuntime {
         return factoryState(runtime, MachineRegistry.recipePoolForMachine(machine));
     }
 
-    public FactorySnapshot factoryState(ControllerRuntimeSnapshot runtime, @Nullable Identifier recipePoolId) {
+    public FactorySnapshot factoryState(ControllerRuntimeSnapshot runtime, @Nullable ResourceLocation recipePoolId) {
         require(runtime);
         FactorySnapshot factory = runtime.factory();
         ExecutionStatus failure = factory.failure() == null ? runtime.crafting().failure() : factory.failure();

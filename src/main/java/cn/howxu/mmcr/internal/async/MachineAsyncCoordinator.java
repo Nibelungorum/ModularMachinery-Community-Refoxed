@@ -5,7 +5,7 @@ import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;

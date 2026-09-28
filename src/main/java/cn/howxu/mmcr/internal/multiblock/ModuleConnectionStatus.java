@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.multiblock;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Set;
 
@@ -9,7 +9,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record ModuleConnectionStatus(boolean required, Identifier connectedHostId) {
+public record ModuleConnectionStatus(boolean required, ResourceLocation connectedHostId) {
     public static ModuleConnectionStatus notRequired() {
         return new ModuleConnectionStatus(false, null);
     }
@@ -18,7 +18,7 @@ public record ModuleConnectionStatus(boolean required, Identifier connectedHostI
         return new ModuleConnectionStatus(true, null);
     }
 
-    public static ModuleConnectionStatus connected(Identifier hostId) {
+    public static ModuleConnectionStatus connected(ResourceLocation hostId) {
         if (hostId == null) throw new IllegalArgumentException("Connected module host id must not be null");
         return new ModuleConnectionStatus(true, hostId);
     }
@@ -27,7 +27,7 @@ public record ModuleConnectionStatus(boolean required, Identifier connectedHostI
         return connectedHostId != null;
     }
 
-    public boolean canRunRecipe(Set<Identifier> requiredHostIds) {
+    public boolean canRunRecipe(Set<ResourceLocation> requiredHostIds) {
         if (!required) return true;
         if (connectedHostId == null) return false;
         return requiredHostIds == null || requiredHostIds.isEmpty() || requiredHostIds.contains(connectedHostId);

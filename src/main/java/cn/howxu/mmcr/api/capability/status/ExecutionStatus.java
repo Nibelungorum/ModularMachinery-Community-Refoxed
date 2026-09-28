@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -10,22 +10,22 @@ import java.util.Objects;
 /**
  * Describes the status of a capability operation.
  *
- * @param id the status identifier
+ * @param id the status ResourceLocation
  * @param severity the status severity
  * @param source the source that produced the status
  * @param failure structured failure details, or {@code null} for a non-failure status
  * @author howxu <dev@howxu.cn>
  */
 public record ExecutionStatus(
-        Identifier id,
+        ResourceLocation id,
         StatusSeverity severity,
-        Identifier source,
+        ResourceLocation source,
         @Nullable FailureOccurrence failure) {
 
     /**
      * Compatibility boundary for existing serialized and producer status data.
      */
-    public ExecutionStatus(Identifier id, StatusSeverity severity, Identifier source,
+    public ExecutionStatus(ResourceLocation id, StatusSeverity severity, ResourceLocation source,
                            Map<String, String> details) {
         this(id, severity, source, legacyFailure(source, details));
     }
@@ -38,11 +38,11 @@ public record ExecutionStatus(
         return failure == null ? Map.of() : failure.details();
     }
 
-    public static ExecutionStatus blocked(Identifier id, Identifier source, FailureOccurrence failure) {
+    public static ExecutionStatus blocked(ResourceLocation id, ResourceLocation source, FailureOccurrence failure) {
         return new ExecutionStatus(id, StatusSeverity.BLOCKED, source, failure);
     }
 
-    private static @Nullable FailureOccurrence legacyFailure(Identifier source, Map<String, String> details) {
+    private static @Nullable FailureOccurrence legacyFailure(ResourceLocation source, Map<String, String> details) {
         Objects.requireNonNull(details, "details");
         Map<String, String> copied = new HashMap<>(details);
         if (copied.isEmpty()) return null;
@@ -54,9 +54,9 @@ public record ExecutionStatus(
 
         FailureReason reason;
         try {
-            Identifier reasonId = rawReason.contains(":")
-                    ? Identifier.parse(rawReason)
-                    : Identifier.fromNamespaceAndPath("mmcr", rawReason);
+            ResourceLocation reasonId = rawReason.contains(":")
+                    ? ResourceLocation.parse(rawReason)
+                    : ResourceLocation.fromNamespaceAndPath("mmcr", rawReason);
             reason = FailureReasonRegistry.find(reasonId);
         } catch (IllegalArgumentException exception) {
             reason = null;

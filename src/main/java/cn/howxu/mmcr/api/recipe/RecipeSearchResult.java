@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailureReport;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -16,7 +16,7 @@ import java.util.Objects;
  */
 public record RecipeSearchResult(
         boolean success,
-        Identifier machineId,
+        ResourceLocation machineId,
         long structureVersion,
         long capabilityVersion,
         long modifierVersion,
@@ -44,7 +44,7 @@ public record RecipeSearchResult(
         }
     }
 
-    public static RecipeSearchResult success(MachineRecipe recipe, Identifier machineId, long structureVersion,
+    public static RecipeSearchResult success(MachineRecipe recipe, ResourceLocation machineId, long structureVersion,
                                               long capabilityVersion, long modifierVersion,
                                               PlanningResult planningResult,
                                               boolean hasMoreSpecificPendingInputCandidate) {
@@ -53,7 +53,7 @@ public record RecipeSearchResult(
                 hasMoreSpecificPendingInputCandidate);
     }
 
-    public static RecipeSearchResult failure(Identifier machineId, long structureVersion,
+    public static RecipeSearchResult failure(ResourceLocation machineId, long structureVersion,
                                                long capabilityVersion, long modifierVersion,
                                                FailureReport failureReport,
                                                float validity) {

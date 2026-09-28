@@ -18,7 +18,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.RecordBuilder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Pair;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.Recipe;
@@ -44,8 +44,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     static final int MAX_CHILD_PAYLOAD = 1_000_000;
 
     private static final MapCodec<MachineRecipe> CANONICAL_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-            Identifier.CODEC.optionalFieldOf("id", MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
-            Identifier.CODEC.fieldOf("recipe_pool").forGetter(MachineRecipe::recipePoolId),
+            ResourceLocation.CODEC.optionalFieldOf("id", MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
+            ResourceLocation.CODEC.fieldOf("recipe_pool").forGetter(MachineRecipe::recipePoolId),
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
             boundedList(MachineOutput.CODEC, "outputs").optionalFieldOf("outputs", List.of()).forGetter(MachineRecipe::outputsWithoutDerivedRequirements),
             boundedList(RecipeModifier.CODEC, "modifiers").optionalFieldOf("modifiers", Collections.emptyList()).forGetter(MachineRecipe::modifiers),
@@ -55,7 +55,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             boundedList(MachineRequirement.CODEC, "requirements").fieldOf("requirements").forGetter(MachineRecipe::requirements),
             Codec.BOOL.optionalFieldOf("parallelized", false).forGetter(MachineRecipe::isParallelized),
             Codec.BOOL.optionalFieldOf("allow_partial_outputs", false).forGetter(MachineRecipe::allowPartialOutputs),
-            boundedList(Identifier.CODEC, "required_host_ids").xmap(MachineRecipe::copyHostIds, List::copyOf)
+            boundedList(ResourceLocation.CODEC, "required_host_ids").xmap(MachineRecipe::copyHostIds, List::copyOf)
             .optionalFieldOf("required_host_ids", Set.of()).forGetter(MachineRecipe::requiredHostIds)
     ).apply(instance, MachineRecipe::create));
 
@@ -82,8 +82,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         }
     };
 
-    private final Identifier id;
-    private final Identifier recipePoolId;
+    private final ResourceLocation id;
+    private final ResourceLocation recipePoolId;
     private final int tickTime;
     private final List<MachineRequirement> requirements;
     private final List<MachineOutput> outputs;
@@ -93,10 +93,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final boolean cancelRecipeOnPerTickFailure;
     private final boolean parallelized;
     private final boolean allowPartialOutputs;
-    private final Set<Identifier> requiredHostIds;
+    private final Set<ResourceLocation> requiredHostIds;
 
-    public MachineRecipe(Identifier id,
-                           Identifier recipePoolId,
+    public MachineRecipe(ResourceLocation id,
+                           ResourceLocation recipePoolId,
                            int tickTime,
                            List<MachineRequirement> requirements,
                           List<MachineOutput> outputs,
@@ -106,7 +106,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                            boolean cancelRecipeOnPerTickFailure,
                            boolean parallelized,
                            boolean allowPartialOutputs,
-                          Set<Identifier> requiredHostIds) {
+                          Set<ResourceLocation> requiredHostIds) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
@@ -158,7 +158,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.requirements = List.copyOf(newRequirements);
     }
 
-    private MachineRecipe(Identifier id, MachineRecipe recipe) {
+    private MachineRecipe(ResourceLocation id, MachineRecipe recipe) {
         this.id = Objects.requireNonNull(id, "id");
         this.recipePoolId = recipe.recipePoolId;
         this.tickTime = recipe.tickTime;
@@ -180,8 +180,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return additionalOutputs.isEmpty() ? recipe : new MachineRecipe(recipe, additionalOutputs);
     }
 
-    public static MachineRecipe fromCanonical(Identifier id,
-                                         Identifier recipePoolId,
+    public static MachineRecipe fromCanonical(ResourceLocation id,
+                                         ResourceLocation recipePoolId,
                                         int tickTime,
                                        List<MachineRequirement> requirements,
                                        List<MachineOutput> outputs,
@@ -191,7 +191,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                         boolean cancelRecipeOnPerTickFailure,
                                         boolean parallelized,
                                         boolean allowPartialOutputs,
-                                        Set<Identifier> requiredHostIds) {
+                                        Set<ResourceLocation> requiredHostIds) {
         List<MachineOutput> effectiveOutputs = appendOutputs(outputs, outputsFromRequirements(requirements));
         return new MachineRecipe(id, recipePoolId, tickTime, requirements, effectiveOutputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, requiredHostIds);
@@ -205,8 +205,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 .toList();
     }
 
-    private static MachineRecipe create(Identifier id,
-                                         Identifier recipePoolId,
+    private static MachineRecipe create(ResourceLocation id,
+                                         ResourceLocation recipePoolId,
                                          int tickTime,
                                          List<MachineOutput> outputs,
                                          List<RecipeModifier> modifiers,
@@ -216,20 +216,20 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                           List<MachineRequirement> requirements,
                                           boolean parallelized,
                                           boolean allowPartialOutputs,
-                                         Set<Identifier> requiredHostIds) {
+                                         Set<ResourceLocation> requiredHostIds) {
         return fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
                  priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                  allowPartialOutputs, requiredHostIds);
     }
 
-    private static Set<Identifier> copyHostIds(List<Identifier> ids) {
+    private static Set<ResourceLocation> copyHostIds(List<ResourceLocation> ids) {
         return copyHostIds(ids == null ? Set.of() : new LinkedHashSet<>(ids));
     }
 
-    private static Set<Identifier> copyHostIds(Set<Identifier> ids) {
+    private static Set<ResourceLocation> copyHostIds(Set<ResourceLocation> ids) {
         if (ids == null || ids.isEmpty()) return Set.of();
-        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
-        for (Identifier id : ids) {
+        LinkedHashSet<ResourceLocation> copy = new LinkedHashSet<>();
+        for (ResourceLocation id : ids) {
             if (id == null) throw new IllegalArgumentException("Required host id must not be null");
             copy.add(id);
         }
@@ -280,7 +280,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (levelRequirementCount > 64) {
             throw new IllegalArgumentException("A recipe may require at most 64 machine levels");
         }
-        var typeIds = new HashSet<Identifier>();
+        var typeIds = new HashSet<ResourceLocation>();
         for (MachineRequirement requirement : requirements) {
             if (!(requirement instanceof LevelRequirement levelRequirement)) continue;
             if (!typeIds.add(levelRequirement.typeId())) {
@@ -297,11 +297,11 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         }
     }
 
-    public Identifier id() {
+    public ResourceLocation id() {
         return id;
     }
 
-    public Identifier recipePoolId() {
+    public ResourceLocation recipePoolId() {
         return recipePoolId;
     }
 
@@ -398,7 +398,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return requirements;
     }
 
-    public MachineRecipe withId(Identifier id) {
+    public MachineRecipe withId(ResourceLocation id) {
         return new MachineRecipe(id, this);
     }
 
@@ -416,11 +416,11 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 .toList();
     }
 
-    public Set<Identifier> requiredHostIds() {
+    public Set<ResourceLocation> requiredHostIds() {
         return requiredHostIds;
     }
 
-    public boolean canRunOnConnectedHost(Identifier hostId) {
+    public boolean canRunOnConnectedHost(ResourceLocation hostId) {
         return hostId != null && (requiredHostIds.isEmpty() || requiredHostIds.contains(hostId));
     }
 
@@ -472,7 +472,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return allowPartialOutputs;
     }
 
-    public Identifier getRegistryName() {
+    public ResourceLocation getRegistryName() {
         return id;
     }
 

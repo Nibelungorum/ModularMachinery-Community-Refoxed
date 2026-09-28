@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -622,7 +622,7 @@ public final class StructureRuntime {
                 matchedStructureStage, formed);
     }
 
-    private record FormationIdentity(@Nullable Identifier machineId, @Nullable Object patternIdentity,
+    private record FormationIdentity(@Nullable ResourceLocation machineId, @Nullable Object patternIdentity,
                                      @Nullable CompiledMachinePattern compiledPattern, @Nullable Direction facing,
                                      Direction rollFacing, int matchedStage, boolean formed) { }
 

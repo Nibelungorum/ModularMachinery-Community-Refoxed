@@ -9,7 +9,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -27,7 +27,7 @@ public class MachineBehaviorContext {
     private final MachineControllerBlockEntity controller;
     private final ServerLevel level;
     private final BlockPos controllerPos;
-    private final @Nullable Identifier machineId;
+    private final @Nullable ResourceLocation machineId;
     private final long gameTime;
     private final ControllerScreenText screenText;
     private final @Nullable DataStorage dataStorage;
@@ -36,21 +36,21 @@ public class MachineBehaviorContext {
     private final JadeText jadeText;
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
-                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  BlockPos controllerPos, ResourceLocation machineId, long gameTime,
                                   ControllerScreenText screenText) {
         this(controller, level, controllerPos, machineId, gameTime, screenText, null, emptyIoView(), List.of(),
                 JadeText.noop());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
-                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  BlockPos controllerPos, ResourceLocation machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage) {
         this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, emptyIoView(), List.of(),
                 JadeText.noop());
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
-                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  BlockPos controllerPos, ResourceLocation machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView) {
         this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, ioView, List.of(),
@@ -58,7 +58,7 @@ public class MachineBehaviorContext {
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
-                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  BlockPos controllerPos, ResourceLocation machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView, List<ItemStack> upgradeItems) {
         this(controller, level, controllerPos, machineId, gameTime, screenText, dataStorage, ioView, upgradeItems,
@@ -66,7 +66,7 @@ public class MachineBehaviorContext {
     }
 
     public MachineBehaviorContext(MachineControllerBlockEntity controller, ServerLevel level,
-                                  BlockPos controllerPos, Identifier machineId, long gameTime,
+                                  BlockPos controllerPos, ResourceLocation machineId, long gameTime,
                                   ControllerScreenText screenText, @Nullable DataStorage dataStorage,
                                   MachineIoView ioView, List<ItemStack> upgradeItems, JadeText jadeText) {
         this.controller = controller;
@@ -93,7 +93,7 @@ public class MachineBehaviorContext {
         return controllerPos;
     }
 
-    public @Nullable Identifier machineId() {
+    public @Nullable ResourceLocation machineId() {
         return machineId;
     }
 
@@ -148,9 +148,9 @@ public class MachineBehaviorContext {
      */
     public long countStructureBlocks(String blockId) {
         if (blockId == null || blockId.isBlank()) throw new IllegalArgumentException("blockId must not be blank");
-        Identifier id;
+        ResourceLocation id;
         try {
-            id = Identifier.parse(blockId);
+            id = ResourceLocation.parse(blockId);
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("Invalid block id: " + blockId, exception);
         }
@@ -174,19 +174,19 @@ public class MachineBehaviorContext {
 
     private static final ControllerScreenText EMPTY_SCREEN_TEXT = new ControllerScreenText() {
         @Override
-        public void append(ControllerScreenTextScope scope, Identifier lineId, Component text) {
+        public void append(ControllerScreenTextScope scope, ResourceLocation lineId, Component text) {
         }
 
         @Override
-        public void appendAfter(ControllerScreenTextScope scope, Identifier lineId, Identifier afterLineId, Component text) {
+        public void appendAfter(ControllerScreenTextScope scope, ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
         }
 
         @Override
-        public void replace(Identifier lineId, Component text) {
+        public void replace(ResourceLocation lineId, Component text) {
         }
 
         @Override
-        public void remove(ControllerScreenTextScope scope, Identifier lineId) {
+        public void remove(ControllerScreenTextScope scope, ResourceLocation lineId) {
         }
 
         @Override

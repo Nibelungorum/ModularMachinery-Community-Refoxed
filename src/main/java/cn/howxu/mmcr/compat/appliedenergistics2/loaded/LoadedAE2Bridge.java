@@ -173,10 +173,10 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, inputInterfaceType,
                 (be, ignored) -> be instanceof InputInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, inputInterfaceType,
-                (be, _) -> be instanceof InputInterfaceBlockEntity host
+                (be, direction) -> be instanceof InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getStorage() : null);
         event.registerBlockEntity(AECapabilities.ME_STORAGE, inputInterfaceType,
-                (be, _) -> be instanceof InputInterfaceBlockEntity host
+                (be, direction) -> be instanceof InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getInventory() : null);
         BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
@@ -191,7 +191,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, patternInterfaceType,
                 (be, ignored) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, patternInterfaceType,
-                (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
+                (be, direction) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
         if (contributor.available()) contributor.registerCapabilities(event);
     }
 

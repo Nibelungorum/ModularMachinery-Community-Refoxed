@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.capability.plan;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -7,7 +8,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.Set;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -25,11 +26,11 @@ import java.util.function.IntPredicate;
  */
 public final class CraftingPlan {
     private static final ExecutionStatus UNSPECIFIED_OPERATION_FAILURE = new ExecutionStatus(
-            Identifier.fromNamespaceAndPath("mmcr", "crafting_plan_operation_failure"),
+            MMCR.id("crafting_plan_operation_failure"),
             StatusSeverity.FAILURE,
-            Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
+            MMCR.id("crafting_plan"),
             FailureOccurrence.at(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS,
-                    Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
+                    MMCR.id("crafting_plan"),
                     FailurePhase.CAPABILITY_COMMIT, null, null,
                     Map.of("raw_reason_id", "operation_failed_without_status")));
     private final List<RequirementPlan> requirements;

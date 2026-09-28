@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.recipe.modifier;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -17,7 +17,7 @@ public class SingleBlockModifierReplacement extends AbstractModifierReplacement 
         this.replacement = Objects.requireNonNull(replacement, "replacement");
     }
 
-    public SingleBlockModifierReplacement(Identifier modifierId, BlockPredicate replacement) {
+    public SingleBlockModifierReplacement(ResourceLocation modifierId, BlockPredicate replacement) {
         this(Objects.requireNonNull(modifierId, "modifierId").toString(), replacement);
     }
 
@@ -34,8 +34,8 @@ public class SingleBlockModifierReplacement extends AbstractModifierReplacement 
         return replacement;
     }
 
-    public Identifier getModifierId() {
-        return Identifier.parse(getModifierName());
+    public ResourceLocation getModifierId() {
+        return ResourceLocation.parse(getModifierName());
     }
 
     @Override

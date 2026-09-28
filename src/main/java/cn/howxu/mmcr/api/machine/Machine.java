@@ -5,14 +5,14 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public interface Machine {
-    Identifier registryName();
+    ResourceLocation registryName();
 
     default String displayNameKey() {
         return MachineRegistration.defaultDisplayNameKey(registryName());
@@ -80,7 +80,7 @@ public interface Machine {
         return MachineRole.NORMAL;
     }
 
-    default Set<Identifier> acceptedModuleIds() {
+    default Set<ResourceLocation> acceptedModuleIds() {
         return Set.of();
     }
 
@@ -100,11 +100,11 @@ public interface Machine {
         return RecipeBehavior.defaults();
     }
 
-    default Map<Identifier, RequestProcess> requestProcessors() {
+    default Map<ResourceLocation, RequestProcess> requestProcessors() {
         return Map.of();
     }
 
-    default Map<Identifier, RequestFailed> requestFailures() {
+    default Map<ResourceLocation, RequestFailed> requestFailures() {
         return Map.of();
     }
 }

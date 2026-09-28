@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Tracks short start delays for recipes that may block a more specific pending input match.
@@ -11,10 +11,10 @@ public final class RecipeStartDelay {
 
     public static final int DELAY_TICKS = 20;
 
-    private Identifier pendingRecipeId;
+    private ResourceLocation pendingRecipeId;
     private long pendingStartTick = Long.MIN_VALUE;
 
-    public boolean shouldDelay(Identifier recipeId, boolean hasMoreSpecificPendingInputCandidate, long gameTime) {
+    public boolean shouldDelay(ResourceLocation recipeId, boolean hasMoreSpecificPendingInputCandidate, long gameTime) {
         if (!hasMoreSpecificPendingInputCandidate || recipeId == null) {
             clear();
             return false;

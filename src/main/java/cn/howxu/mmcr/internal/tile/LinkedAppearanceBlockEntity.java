@@ -12,7 +12,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -51,8 +51,8 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         return appearanceSource;
     }
 
-    public Identifier appearanceBaseTexture() {
-        Identifier overrideTexture = appearanceSource.overrideTexture();
+    public ResourceLocation appearanceBaseTexture() {
+        ResourceLocation overrideTexture = appearanceSource.overrideTexture();
         return overrideTexture == null ? MMCR.id("block/basic_casing") : overrideTexture;
     }
 
@@ -69,7 +69,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         refreshLinkedAppearance();
     }
 
-    public void linkControllerAppearance(BlockPos controllerPos, @Nullable Identifier texture) {
+    public void linkControllerAppearance(BlockPos controllerPos, @Nullable ResourceLocation texture) {
         linkControllerAppearanceSource(controllerPos, texture == null ? null : new MachineAppearanceSpec.TextureSource(
                 DEFAULT_APPEARANCE_SOURCE.blockId(), texture));
     }
@@ -92,7 +92,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         }
     }
 
-    public void setAppearanceBaseTexture(@Nullable Identifier texture) {
+    public void setAppearanceBaseTexture(@Nullable ResourceLocation texture) {
         setAppearanceSource(texture == null ? null : new MachineAppearanceSpec.TextureSource(
                 DEFAULT_APPEARANCE_SOURCE.blockId(), texture));
     }
@@ -117,7 +117,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             controllerOutput.putInt(LINKED_CONTROLLER_Y_KEY, controller.getY());
             controllerOutput.putInt(LINKED_CONTROLLER_Z_KEY, controller.getZ());
             controllerOutput.putString(LINKED_CONTROLLER_SOURCE_BLOCK_KEY, entry.getValue().blockId().toString());
-            Identifier overrideTexture = entry.getValue().overrideTexture();
+            ResourceLocation overrideTexture = entry.getValue().overrideTexture();
             if (overrideTexture != null) {
                 controllerOutput.putString(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY, overrideTexture.toString());
             }
@@ -137,8 +137,8 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
                     DEFAULT_APPEARANCE_SOURCE.blockId().toString());
             String overrideTexture = controllerInput.getStringOr(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY, "");
             linkedControllers.put(controllerPos, new MachineAppearanceSpec.TextureSource(
-                    sourceBlock.isBlank() ? DEFAULT_APPEARANCE_SOURCE.blockId() : Identifier.parse(sourceBlock),
-                    overrideTexture.isBlank() ? null : Identifier.parse(overrideTexture)));
+                    sourceBlock.isBlank() ? DEFAULT_APPEARANCE_SOURCE.blockId() : ResourceLocation.parse(sourceBlock),
+                    overrideTexture.isBlank() ? null : ResourceLocation.parse(overrideTexture)));
         }
         appearanceSource = resolveLinkedAppearance(linkedControllers);
     }

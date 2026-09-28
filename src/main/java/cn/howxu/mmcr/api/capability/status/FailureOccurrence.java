@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -18,15 +18,15 @@ public record FailureOccurrence(@Nullable FailureReason reason, FailureTrace tra
         details = Map.copyOf(Objects.requireNonNull(details, "details"));
     }
 
-    public static FailureOccurrence at(@Nullable FailureReason reason, Identifier source, FailurePhase phase,
-                                       @Nullable Identifier recipeId, @Nullable Integer requirementIndex,
+    public static FailureOccurrence at(@Nullable FailureReason reason, ResourceLocation source, FailurePhase phase,
+                                       @Nullable ResourceLocation recipeId, @Nullable Integer requirementIndex,
                                        Map<String, String> details) {
         return new FailureOccurrence(reason,
                 FailureTrace.single(new FailureTrace.Frame(source, phase, recipeId, requirementIndex)), details);
     }
 
-    public FailureOccurrence append(Identifier source, FailurePhase phase,
-                                    @Nullable Identifier recipeId, @Nullable Integer requirementIndex) {
+    public FailureOccurrence append(ResourceLocation source, FailurePhase phase,
+                                    @Nullable ResourceLocation recipeId, @Nullable Integer requirementIndex) {
         return new FailureOccurrence(reason,
                 trace.append(new FailureTrace.Frame(source, phase, recipeId, requirementIndex)), details);
     }

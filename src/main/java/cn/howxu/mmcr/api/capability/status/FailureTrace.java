@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -36,8 +36,8 @@ public record FailureTrace(List<FailureTrace.Frame> frames) {
      * @param requirementIndex related requirement index, when available
      * @author howxu <dev@howxu.cn>
      */
-    public record Frame(Identifier source, FailurePhase phase,
-                        @Nullable Identifier recipeId, @Nullable Integer requirementIndex) {
+    public record Frame(ResourceLocation source, FailurePhase phase,
+                        @Nullable ResourceLocation recipeId, @Nullable Integer requirementIndex) {
         public Frame {
             Objects.requireNonNull(source, "source");
             Objects.requireNonNull(phase, "phase");

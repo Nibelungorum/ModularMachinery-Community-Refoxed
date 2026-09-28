@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -28,7 +28,7 @@ public record JadeTextSnapshot(List<Line> lines) {
         return new JadeTextSnapshot(List.of());
     }
 
-    public record Line(Identifier lineId, Component text) {
+    public record Line(ResourceLocation lineId, Component text) {
         public Line {
             lineId = Objects.requireNonNull(lineId, "lineId");
             text = Objects.requireNonNull(text, "text").copy();

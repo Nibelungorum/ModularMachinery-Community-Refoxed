@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.data.DataValueType;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -38,7 +38,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private static final String CONTROLLER_MACHINE_KEY = "ControllerMachine";
     private DataStorage storage = new DataStorage(this::onStorageChanged);
     private @Nullable BlockPos controllerPosition;
-    private @Nullable Identifier controllerMachine;
+    private @Nullable ResourceLocation controllerMachine;
     private boolean loading;
     private boolean storageSyncPending;
     private int linkCheckCounter;
@@ -55,7 +55,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
         return storage;
     }
 
-    public boolean claimController(BlockPos controllerPos, Identifier machineId) {
+    public boolean claimController(BlockPos controllerPos, ResourceLocation machineId) {
         if (controllerPos == null || machineId == null) return false;
         if (controllerPosition != null && !controllerPosition.equals(controllerPos)) return false;
         if (controllerMachine != null && !controllerMachine.equals(machineId)) return false;
@@ -131,7 +131,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
                 controllerPosition = new BlockPos(input.getIntOr(CONTROLLER_X_KEY, 0),
                         input.getIntOr(CONTROLLER_Y_KEY, 0), input.getIntOr(CONTROLLER_Z_KEY, 0));
                 String machine = input.getStringOr(CONTROLLER_MACHINE_KEY, "");
-                if (!machine.isBlank()) controllerMachine = Identifier.parse(machine);
+                if (!machine.isBlank()) controllerMachine = ResourceLocation.parse(machine);
             }
             for (ValueInput entry : input.childrenListOrEmpty(VALUES_KEY)) {
                 try {

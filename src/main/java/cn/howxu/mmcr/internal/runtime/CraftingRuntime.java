@@ -56,7 +56,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.LongTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -188,7 +188,7 @@ public final class CraftingRuntime {
         patternStartReserved = false;
     }
 
-    public @Nullable Identifier pendingPatternRecipeId() {
+    public @Nullable ResourceLocation pendingPatternRecipeId() {
         return pendingPatternStart == null ? null : pendingPatternStart.recipe().source().id();
     }
 
@@ -953,7 +953,7 @@ public final class CraftingRuntime {
             restoreFailure(readFailure(input, null));
             return;
         }
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null) {
             failLoad();
             return;
@@ -978,7 +978,7 @@ public final class CraftingRuntime {
         }
     }
 
-    private static @Nullable ExecutionStatus readFailure(ValueInput input, @Nullable Identifier recipeId) {
+    private static @Nullable ExecutionStatus readFailure(ValueInput input, @Nullable ResourceLocation recipeId) {
         var failureInput = input.child("failure");
         if (failureInput.isPresent()) return FailureStatusCodec.read(failureInput.get());
         if (!input.getBooleanOr("has_failure", false)) return null;
@@ -1447,7 +1447,7 @@ public final class CraftingRuntime {
     }
 
     private boolean recipeBelongsToMachine(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 
@@ -1565,7 +1565,7 @@ public final class CraftingRuntime {
     }
 
     private ExecutionStatus failure(FailureReason reason, FailurePhase phase, Map<String, String> details) {
-        Identifier source = MMCR.id("crafting_runtime");
+        ResourceLocation source = MMCR.id("crafting_runtime");
         return ExecutionStatus.blocked(source, source,
                 FailureOccurrence.at(reason, source, phase,
                         activeRecipe == null ? null : activeRecipe.getRecipe().id(), null, details));

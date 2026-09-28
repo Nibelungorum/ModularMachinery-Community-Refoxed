@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine.level;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
@@ -12,7 +12,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record MachineLevel(Identifier id, Identifier typeId, int priority,
+public record MachineLevel(ResourceLocation id, ResourceLocation typeId, int priority,
                            BlockPredicate statePredicate, ItemStack representative,
                             ModifierDefinition modifier) {
     public MachineLevel {

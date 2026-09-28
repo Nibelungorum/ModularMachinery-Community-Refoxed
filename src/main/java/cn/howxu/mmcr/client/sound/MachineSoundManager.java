@@ -8,7 +8,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.level.block.state.BlockState;
@@ -108,8 +108,8 @@ public class MachineSoundManager {
         return descriptorFor(new ControllerKey(level.dimension(), controller.getBlockPos()), controller);
     }
 
-    private static Identifier controllerMachineId(MachineControllerBlockEntity controller) {
-        Identifier stateMachineId = machineIdFromState(controller.getBlockState());
+    private static ResourceLocation controllerMachineId(MachineControllerBlockEntity controller) {
+        ResourceLocation stateMachineId = machineIdFromState(controller.getBlockState());
         if (stateMachineId != null) return stateMachineId;
         var structure = controller.runtimeSnapshot().structure();
         if (structure.configuredMachine() != null) return structure.configuredMachine().registryName();
@@ -117,7 +117,7 @@ public class MachineSoundManager {
         return null;
     }
 
-    static Identifier machineIdFromState(BlockState state) {
+    static ResourceLocation machineIdFromState(BlockState state) {
         if (state.getBlock() instanceof MachineControllerBlock block) return block.machineId();
         return null;
     }
@@ -127,7 +127,7 @@ public class MachineSoundManager {
     }
 
     private static ControllerDescriptor descriptorFor(ControllerKey key, MachineControllerBlockEntity controller) {
-        Identifier soundId = null;
+        ResourceLocation soundId = null;
         MachineRegistration registration = MachineDefinitions.getRegistration(controllerMachineId(controller));
         if (registration != null) soundId = registration.runningSoundId();
         return new ControllerDescriptor(key, soundId, controller.isRuntimeActive());
@@ -136,10 +136,10 @@ public class MachineSoundManager {
     record ControllerKey(ResourceKey<Level> dimension, BlockPos pos) {
     }
 
-    record ControllerDescriptor(ControllerKey key, Identifier soundId, boolean active) {
+    record ControllerDescriptor(ControllerKey key, ResourceLocation soundId, boolean active) {
     }
 
-    private record TrackedSound(Identifier soundId, ReconciledSound sound) {
+    private record TrackedSound(ResourceLocation soundId, ReconciledSound sound) {
     }
 
     interface ReconciledSound {
@@ -147,6 +147,6 @@ public class MachineSoundManager {
     }
 
     interface SoundFactory {
-        ReconciledSound create(ControllerKey key, Identifier soundId);
+        ReconciledSound create(ControllerKey key, ResourceLocation soundId);
     }
 }

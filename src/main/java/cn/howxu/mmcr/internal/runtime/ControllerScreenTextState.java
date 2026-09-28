@@ -8,7 +8,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 
 import java.util.ArrayList;
@@ -28,19 +28,19 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     public static final int MAX_ENCODED_TEXT_BYTES = 64 * 1024;
 
     private final Map<Key, ControllerScreenTextSnapshot.Line> lines = new LinkedHashMap<>();
-    private final Map<Identifier, Component> pendingReplacements = new LinkedHashMap<>();
+    private final Map<ResourceLocation, Component> pendingReplacements = new LinkedHashMap<>();
     private long revision;
     private boolean dirty;
 
     @Override
-    public void append(ControllerScreenTextScope scope, Identifier lineId, Component text) {
+    public void append(ControllerScreenTextScope scope, ResourceLocation lineId, Component text) {
         Objects.requireNonNull(scope, "scope");
         requireNamespaced(lineId);
         appendInternal(new Key(scope, lineId), text);
     }
 
     @Override
-    public void appendAfter(ControllerScreenTextScope scope, Identifier lineId, Identifier afterLineId, Component text) {
+    public void appendAfter(ControllerScreenTextScope scope, ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
         Objects.requireNonNull(scope, "scope");
         requireNamespaced(lineId);
         requireNamespaced(afterLineId);
@@ -70,13 +70,13 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     }
 
     @Override
-    public void replace(Identifier lineId, Component text) {
+    public void replace(ResourceLocation lineId, Component text) {
         requireNamespaced(lineId);
         pendingReplacements.put(lineId, Objects.requireNonNull(text, "text").copy());
     }
 
     @Override
-    public void remove(ControllerScreenTextScope scope, Identifier lineId) {
+    public void remove(ControllerScreenTextScope scope, ResourceLocation lineId) {
         Objects.requireNonNull(scope, "scope");
         requireNamespaced(lineId);
         Key key = new Key(scope, lineId);
@@ -152,7 +152,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     }
 
     private static Key findReplacementKey(Map<Key, ControllerScreenTextSnapshot.Line> candidate,
-                                          Identifier lineId) {
+                                          ResourceLocation lineId) {
         for (Key key : candidate.keySet()) {
             if (key.scope() == ControllerScreenTextScope.CONTROLLER && key.lineId().equals(lineId)) return key;
         }
@@ -162,7 +162,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         return null;
     }
 
-    private static void requireNamespaced(Identifier lineId) {
+    private static void requireNamespaced(ResourceLocation lineId) {
         Objects.requireNonNull(lineId, "lineId");
         if (lineId.getNamespace().isBlank()) {
             throw new IllegalArgumentException("lineId must have a namespace");
@@ -182,7 +182,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         try {
             for (ControllerScreenTextSnapshot.Line line : candidate.values()) {
                 buffer.writeVarInt(line.scope().ordinal());
-                Identifier.STREAM_CODEC.encode(buffer, line.lineId());
+                ResourceLocation.STREAM_CODEC.encode(buffer, line.lineId());
                 ComponentSerialization.STREAM_CODEC.encode(buffer, line.text());
                 if (buffer.writerIndex() > maxEncodedTextBytes()) {
                     throw new IllegalArgumentException("Encoded controller screen text is too large");
@@ -193,7 +193,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         }
     }
 
-    private record Key(ControllerScreenTextScope scope, Identifier lineId) {
+    private record Key(ControllerScreenTextScope scope, ResourceLocation lineId) {
     }
 
     private static int maxLines() {

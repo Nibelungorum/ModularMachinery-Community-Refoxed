@@ -35,7 +35,7 @@ import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -416,7 +416,7 @@ public final class MachineControllerRuntime {
 
     void publishRuntimeState(boolean structureAreaLoaded, boolean formed,
                              @Nullable Machine configuredMachine, int matchedStage,
-                             @Nullable Identifier recipeId, CraftingStatus status,
+                             @Nullable ResourceLocation recipeId, CraftingStatus status,
                              @Nullable ExecutionStatus failure, int tick, int totalTick,
                                long parallelism, long maxParallelism) {
         structure.setStructureAreaLoaded(structureAreaLoaded);
@@ -553,7 +553,7 @@ public final class MachineControllerRuntime {
         return components.maxParallelism(machine);
     }
 
-    void publishClientComponentState(Map<Identifier, MachineLevel> levels,
+    void publishClientComponentState(Map<ResourceLocation, MachineLevel> levels,
                                      ModuleConnectionStatus status, int installedModuleCount) {
         components.replaceLevels(levels);
         components.replaceModuleConnectionState(status, installedModuleCount);
@@ -571,7 +571,7 @@ public final class MachineControllerRuntime {
 
     void publishComponentState(List<ProcessingComponent> nextComponents,
                                Map<String, List<MachineModifier>> modifiers,
-                               Map<Identifier, MachineLevel> levels,
+                               Map<ResourceLocation, MachineLevel> levels,
                                Set<BlockPos> linkedPositions) {
         components.replaceComponents(nextComponents);
         components.replaceModifiers(modifiers);
@@ -632,7 +632,7 @@ public final class MachineControllerRuntime {
                 ModuleConnectionCoordinator.installedModuleCount(controller));
     }
 
-    void publishCraftingState(@Nullable Identifier recipeId, CraftingStatus status,
+    void publishCraftingState(@Nullable ResourceLocation recipeId, CraftingStatus status,
                               @Nullable ExecutionStatus failure, int tick, int totalTick,
                               long parallelism, long maxParallelism) {
         boolean client = controller.getLevel() != null && controller.getLevel().isClientSide();

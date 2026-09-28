@@ -68,7 +68,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
                 }
             };
     private static final IGridNodeListener<StockingInterfaceBlockEntity> UI_NODE_LISTENER =
-            (_, _) -> {
+            (blockEntity, node) -> {
             };
 
     private final IOPortKind kind;

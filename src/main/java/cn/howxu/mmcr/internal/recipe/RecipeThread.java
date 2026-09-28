@@ -22,7 +22,7 @@ import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
@@ -49,7 +49,7 @@ public abstract class RecipeThread {
     private long pendingStartModifierVersion;
     private long pendingStartComponentStateVersion;
     private long pendingStartCatalogVersion;
-    private @Nullable Identifier pendingStartRecipePoolId;
+    private @Nullable ResourceLocation pendingStartRecipePoolId;
     private @Nullable RecipeSearchContextKey pendingStartSearchContextKey;
     private boolean tickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
@@ -58,7 +58,7 @@ public abstract class RecipeThread {
     private long pendingTickCatalogVersion;
 
     private record StartSnapshot(ControllerRuntimeSnapshot runtime, long structureVersion, long catalogVersion,
-                                 Identifier recipePoolId, @Nullable RecipeSearchContextKey searchContextKey) {
+                                 ResourceLocation recipePoolId, @Nullable RecipeSearchContextKey searchContextKey) {
     }
 
     private record PendingAsyncStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
@@ -86,11 +86,11 @@ public abstract class RecipeThread {
     }
 
     protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism,
-                                           long structureVersion, @Nullable Identifier lockedRecipeId) {
+                                           long structureVersion, @Nullable ResourceLocation lockedRecipeId) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
+        ResourceLocation machineId = machine == null ? null : machine.registryName();
         if (machineId == null || availableParallelism <= 0) return false;
         List<MachineRecipe> machineCandidates = candidatesForPool(candidates, controller.currentRecipePoolId());
         RecipeSearchResult result;
@@ -112,12 +112,12 @@ public abstract class RecipeThread {
     }
 
     protected boolean searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
-                                           long structureVersion, @Nullable Identifier lockedRecipeId) {
+                                           long structureVersion, @Nullable ResourceLocation lockedRecipeId) {
         if (context == null) return false;
         ControllerRuntimeSnapshot snapshot = context.snapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
+        ResourceLocation machineId = machine == null ? null : machine.registryName();
         if (machineId == null || context.maxParallelism() <= 0) return false;
         List<MachineRecipe> machineCandidates = candidatesForPool(candidates, controller.currentRecipePoolId());
         RecipeSearchResult result;
@@ -230,7 +230,7 @@ public abstract class RecipeThread {
             }
         }
 
-    private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, Identifier recipePoolId) {
+    private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, ResourceLocation recipePoolId) {
         if (candidates == null || candidates.isEmpty()) return List.of();
         if (recipePoolId == null) return List.of();
         return candidates.stream().filter(recipe -> recipe != null
@@ -245,7 +245,7 @@ public abstract class RecipeThread {
                                   @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0) return false;
         ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (usesFullAsyncContinuation() && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
@@ -312,7 +312,7 @@ public abstract class RecipeThread {
                                                                  @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0 || pendingAsyncStart != null) return null;
         ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())
                 || !(controller.getLevel() instanceof ServerLevel serverLevel)) return null;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();

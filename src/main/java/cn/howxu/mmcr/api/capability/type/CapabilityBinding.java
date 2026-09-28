@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -121,7 +121,7 @@ public record CapabilityBinding(CapabilityType type,
      * @param <T> exposed value type
      * @author howxu <dev@howxu.cn>
      */
-    public record ExternalExposure<T>(Identifier id, Class<T> valueType, Resolver<T> resolver) {
+    public record ExternalExposure<T>(ResourceLocation id, Class<T> valueType, Resolver<T> resolver) {
         public ExternalExposure {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(valueType, "valueType");
