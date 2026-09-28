@@ -3,7 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
@@ -28,16 +28,16 @@ public final class MachineAppearanceCache {
     private static final List<Runnable> INVALIDATION_LISTENERS = new CopyOnWriteArrayList<>();
     private static final AtomicLong REVISION = new AtomicLong();
 
-    private static volatile Map<Identifier, MachineAppearanceSpec> snapshot = Map.of();
+    private static volatile Map<ResourceLocation, MachineAppearanceSpec> snapshot = Map.of();
 
     private MachineAppearanceCache() {
     }
 
-    public static Map<Identifier, MachineAppearanceSpec> snapshot() {
+    public static Map<ResourceLocation, MachineAppearanceSpec> snapshot() {
         return snapshot;
     }
 
-    public static MachineAppearanceSpec specFor(Identifier machineId) {
+    public static MachineAppearanceSpec specFor(ResourceLocation machineId) {
         MachineAppearanceSpec spec = snapshot.get(machineId);
         if (spec != null) {
             return spec;
@@ -50,11 +50,11 @@ public final class MachineAppearanceCache {
         return REVISION.get();
     }
 
-    public static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement) {
+    public static boolean replaceSnapshot(Map<ResourceLocation, MachineAppearanceSpec> replacement) {
         return replaceSnapshot(replacement, revision() + 1, true);
     }
 
-    public static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement, long contentVersion) {
+    public static boolean replaceSnapshot(Map<ResourceLocation, MachineAppearanceSpec> replacement, long contentVersion) {
         return replaceSnapshot(replacement, contentVersion, true);
     }
 
@@ -89,7 +89,7 @@ public final class MachineAppearanceCache {
             return;
         }
 
-        Map<Identifier, MachineAppearanceSpec> replacement = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineAppearanceSpec> replacement = new LinkedHashMap<>();
         for (String key : properties.stringPropertyNames()) {
             String[] values = properties.getProperty(key).split(",", -1);
             if (values.length != 3 && values.length != 5) {
@@ -97,12 +97,12 @@ public final class MachineAppearanceCache {
                 continue;
             }
             try {
-                replacement.put(Identifier.parse(key), new MachineAppearanceSpec(
-                        Identifier.parse(values[0]),
-                        values[1].isEmpty() ? null : Identifier.parse(values[1]),
-                        values[2].isEmpty() ? null : Identifier.parse(values[2]),
-                        values.length == 3 || values[3].isEmpty() ? null : Identifier.parse(values[3]),
-                        values.length == 3 || values[4].isEmpty() ? null : Identifier.parse(values[4])));
+                replacement.put(ResourceLocation.parse(key), new MachineAppearanceSpec(
+                        ResourceLocation.parse(values[0]),
+                        values[1].isEmpty() ? null : ResourceLocation.parse(values[1]),
+                        values[2].isEmpty() ? null : ResourceLocation.parse(values[2]),
+                        values.length == 3 || values[3].isEmpty() ? null : ResourceLocation.parse(values[3]),
+                        values.length == 3 || values[4].isEmpty() ? null : ResourceLocation.parse(values[4])));
             } catch (RuntimeException exception) {
                 MMCR.LOG.warn("Ignoring invalid machine appearance entry '{}'", key, exception);
             }
@@ -137,14 +137,14 @@ public final class MachineAppearanceCache {
         }
     }
 
-    private static boolean replaceSnapshot(Map<Identifier, MachineAppearanceSpec> replacement,
+    private static boolean replaceSnapshot(Map<ResourceLocation, MachineAppearanceSpec> replacement,
                                            long contentVersion, boolean persist) {
         if (replacement == null) {
             return false;
         }
 
-        Map<Identifier, MachineAppearanceSpec> copy = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineAppearanceSpec> entry : replacement.entrySet()) {
+        Map<ResourceLocation, MachineAppearanceSpec> copy = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineAppearanceSpec> entry : replacement.entrySet()) {
             if (entry.getKey() == null || entry.getValue() == null) {
                 return false;
             }

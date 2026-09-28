@@ -2,7 +2,7 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,8 +27,8 @@ class MachineAppearanceCacheTest {
 
     @Test
     void replacement_is_atomic_and_missing_ids_use_defaults() {
-        Identifier id = MMCR.id("press");
-        MachineAppearanceSpec spec = MachineAppearanceSpec.fromBasicBlock(Identifier.parse("kubejs:steel_casing"));
+        ResourceLocation id = MMCR.id("press");
+        MachineAppearanceSpec spec = MachineAppearanceSpec.fromBasicBlock(ResourceLocation.parse("kubejs:steel_casing"));
 
         assertThat(MachineAppearanceCache.replaceSnapshot(Map.of(id, spec))).isTrue();
         assertThat(MachineAppearanceCache.specFor(id)).isEqualTo(spec);
@@ -53,7 +53,7 @@ class MachineAppearanceCacheTest {
 
     @Test
     void synchronized_replacement_uses_content_version() {
-        Identifier id = MMCR.id("versioned_press");
+        ResourceLocation id = MMCR.id("versioned_press");
         MachineAppearanceSpec spec = MachineAppearanceSpec.defaults();
 
         assertThat(MachineAppearanceCache.replaceSnapshot(Map.of(id, spec), 42L)).isTrue();
@@ -62,13 +62,13 @@ class MachineAppearanceCacheTest {
 
     @Test
     void persisted_snapshot_round_trips_complete_appearance_specs() {
-        Identifier id = MMCR.id("press");
+        ResourceLocation id = MMCR.id("press");
         MachineAppearanceSpec spec = new MachineAppearanceSpec(
-                Identifier.parse("kubejs:steel_casing"),
-                Identifier.parse("kubejs:block/controller_casing"),
-                Identifier.parse("kubejs:block/formed_casing"),
-                Identifier.parse("kubejs:block/idle_controller"),
-                Identifier.parse("kubejs:block/active_controller"));
+                ResourceLocation.parse("kubejs:steel_casing"),
+                ResourceLocation.parse("kubejs:block/controller_casing"),
+                ResourceLocation.parse("kubejs:block/formed_casing"),
+                ResourceLocation.parse("kubejs:block/idle_controller"),
+                ResourceLocation.parse("kubejs:block/active_controller"));
         Path file = tempDir.resolve("machine-appearance.properties");
 
         MachineAppearanceCache.replaceSnapshot(Map.of(id, spec));
@@ -82,7 +82,7 @@ class MachineAppearanceCacheTest {
 
     @Test
     void legacy_persisted_snapshot_uses_default_controller_state_overlays() throws Exception {
-        Identifier id = MMCR.id("press");
+        ResourceLocation id = MMCR.id("press");
         Path file = tempDir.resolve("machine-appearance.properties");
         Files.writeString(file, "mmcr\\:press=kubejs:steel_casing,kubejs:block/controller_casing,kubejs:block/formed_casing\n");
 

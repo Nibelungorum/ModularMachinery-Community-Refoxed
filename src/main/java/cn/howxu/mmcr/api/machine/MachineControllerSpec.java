@@ -1,48 +1,48 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.MMCR;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
 public record MachineControllerSpec(
-        Identifier id,
-        Identifier frontTexture,
-        Identifier sideTexture,
-        Identifier topTexture,
-        Identifier bottomTexture,
+        ResourceLocation id,
+        ResourceLocation frontTexture,
+        ResourceLocation sideTexture,
+        ResourceLocation topTexture,
+        ResourceLocation bottomTexture,
         boolean allowVerticalFacing,
         boolean fullyRotationallySymmetric,
         boolean requireVerticalFacing,
         List<String> tooltip) {
 
     public MachineControllerSpec(
-            Identifier id,
-            Identifier frontTexture,
-            Identifier sideTexture,
-            Identifier topTexture,
-            Identifier bottomTexture,
+            ResourceLocation id,
+            ResourceLocation frontTexture,
+            ResourceLocation sideTexture,
+            ResourceLocation topTexture,
+            ResourceLocation bottomTexture,
             boolean allowVerticalFacing) {
         this(id, frontTexture, sideTexture, topTexture, bottomTexture, allowVerticalFacing, false, false);
     }
 
     public MachineControllerSpec(
-            Identifier id,
-            Identifier frontTexture,
-            Identifier sideTexture,
-            Identifier topTexture,
-            Identifier bottomTexture,
+            ResourceLocation id,
+            ResourceLocation frontTexture,
+            ResourceLocation sideTexture,
+            ResourceLocation topTexture,
+            ResourceLocation bottomTexture,
             boolean allowVerticalFacing,
             boolean fullyRotationallySymmetric) {
         this(id, frontTexture, sideTexture, topTexture, bottomTexture, allowVerticalFacing, fullyRotationallySymmetric, false);
     }
 
     public MachineControllerSpec(
-            Identifier id,
-            Identifier frontTexture,
-            Identifier sideTexture,
-            Identifier topTexture,
-            Identifier bottomTexture,
+            ResourceLocation id,
+            ResourceLocation frontTexture,
+            ResourceLocation sideTexture,
+            ResourceLocation topTexture,
+            ResourceLocation bottomTexture,
             boolean allowVerticalFacing,
             boolean fullyRotationallySymmetric,
             boolean requireVerticalFacing) {
@@ -59,11 +59,11 @@ public record MachineControllerSpec(
         tooltip = tooltip == null ? List.of() : List.copyOf(tooltip);
     }
 
-    public static MachineControllerSpec defaultsFor(Identifier machineId) {
+    public static MachineControllerSpec defaultsFor(ResourceLocation machineId) {
         if (machineId == null) throw new IllegalArgumentException("machineId null");
-        Identifier controllerId = machineId.withPath(machineId.getPath() + "_controller");
-        Identifier basicController = MMCR.id("block/basic_controller");
-        Identifier basicCasing = MMCR.id("block/basic_casing");
+        ResourceLocation controllerId = machineId.withPath(machineId.getPath() + "_controller");
+        ResourceLocation basicController = MMCR.id("block/basic_controller");
+        ResourceLocation basicCasing = MMCR.id("block/basic_casing");
         return new MachineControllerSpec(
                 controllerId,
                 basicController,

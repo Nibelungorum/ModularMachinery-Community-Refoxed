@@ -2,6 +2,8 @@ package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.client.MultiblockPreviewClientHandler;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.util.profiling.ProfilerFiller;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -26,8 +28,9 @@ public final class StructurePreviewReloadListener implements PreparableReloadLis
     }
 
     @Override
-    public CompletableFuture<Void> reload(SharedState currentReload, Executor taskExecutor,
-                                          PreparationBarrier preparationBarrier, Executor reloadExecutor) {
+    public CompletableFuture<Void> reload(PreparationBarrier preparationBarrier, ResourceManager resourceManager,
+                                          ProfilerFiller preparationProfiler, ProfilerFiller reloadProfiler,
+                                          Executor preparationExecutor, Executor reloadExecutor) {
         return CompletableFuture.completedFuture(null).thenCompose(preparationBarrier::wait).thenRunAsync(() -> {
             StructurePreviewCompilationCache.instance().clear();
             MultiblockPreviewClientHandler.invalidateWorldPreviewForReload();

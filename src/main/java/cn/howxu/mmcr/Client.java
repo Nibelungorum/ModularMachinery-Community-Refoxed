@@ -24,10 +24,8 @@ import cn.howxu.mmcr.client.model.RuntimeMachineResourcePack;
 import cn.howxu.mmcr.client.renderer.MachineControllerRendererDispatcher;
 import cn.howxu.mmcr.client.sound.MachineSoundManager;
 import cn.howxu.mmcr.client.preview.StructurePreviewReloadListener;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModUIs;
-// import org.nibelungorum.client.ArtificialStarRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -39,12 +37,11 @@ import net.minecraft.server.packs.repository.PackSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
-import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
@@ -62,7 +59,6 @@ public class Client {
     public Client(IEventBus modBus) {
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
-        modBus.addListener(Client::registerItemModels);
         modBus.addListener(Client::registerMachineRenderers);
         // modBus.addListener(ArtificialStarRenderer::registerModel);
         modBus.addListener(Client::registerRuntimeResourcePack);
@@ -88,7 +84,7 @@ public class Client {
 
     private void clearControllerScreenTextCache(ChunkEvent.Unload event) {
         if (event.getLevel().isClientSide()) {
-            ControllerScreenTextCache.clearChunk(event.getChunk().getPos().x(), event.getChunk().getPos().z());
+            ControllerScreenTextCache.clearChunk(event.getChunk().getPos().x, event.getChunk().getPos().z);
         }
     }
 
@@ -147,12 +143,8 @@ public class Client {
         }
     }
 
-    private static void registerModelLoaders(RegisterBlockStateModels event) {
-        RuntimeMachineModelRegistry.registerBlockStateModels(event);
-    }
-
-    private static void registerItemModels(RegisterItemModelsEvent event) {
-        RuntimeMachineModelRegistry.registerItemModels(event);
+    private static void registerModelLoaders(ModelEvent.RegisterGeometryLoaders event) {
+        RuntimeMachineModelRegistry.registerGeometryLoaders(event);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -185,8 +177,8 @@ public class Client {
         }
     }
 
-    private static void registerPreviewReloadListener(AddClientReloadListenersEvent event) {
-        event.addListener(MMCR.id("structure_preview"), new StructurePreviewReloadListener());
+    private static void registerPreviewReloadListener(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener(new StructurePreviewReloadListener());
     }
 
 }

@@ -3,19 +3,17 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackLocationInfo;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackSelectionConfig;
 import net.minecraft.server.packs.PackType;
-import net.minecraft.server.packs.metadata.MetadataSectionType;
-import net.minecraft.server.packs.metadata.pack.PackFormat;
+import net.minecraft.server.packs.metadata.MetadataSectionSerializer;
 import net.minecraft.server.packs.metadata.pack.PackMetadataSection;
 import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.server.packs.repository.RepositorySource;
 import net.minecraft.server.packs.resources.IoSupplier;
-import net.minecraft.util.InclusiveRange;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -55,13 +53,18 @@ public final class RuntimeMachineResourcePack implements PackResources {
         };
     }
 
-    static Map<Identifier, String> resources() {
-        Map<Identifier, String> resources = new LinkedHashMap<>();
+    static Map<ResourceLocation, String> resources() {
+        Map<ResourceLocation, String> resources = new LinkedHashMap<>();
+        resources.put(MMCR.id("models/block/" + DynamicOverlayModelLoader.CONTROLLER_ID.getPath() + ".json"),
+                geometryModelJson(DynamicOverlayModelLoader.CONTROLLER_ID));
+        resources.put(MMCR.id("models/block/" + DynamicOverlayModelLoader.PORT_ID.getPath() + ".json"),
+                geometryModelJson(DynamicOverlayModelLoader.PORT_ID));
         RuntimeMachineModelRegistry.definitions().forEach(definition -> {
             String name = definition.blockName();
             resources.put(MMCR.id("blockstates/" + name + ".json"),
                     RuntimeMachineModelRegistry.blockStateJson(definition.blockStateDefinition()));
-            resources.put(MMCR.id("items/" + name + ".json"), RuntimeMachineModelRegistry.itemDefinitionJson());
+            resources.put(MMCR.id("models/item/" + name + ".json"),
+                    RuntimeMachineModelRegistry.itemModelJson(definition));
         });
         return Map.copyOf(resources);
     }
@@ -69,15 +72,15 @@ public final class RuntimeMachineResourcePack implements PackResources {
     @Override
     public IoSupplier<InputStream> getRootResource(String... path) {
         if (path.length == 1 && PackResources.PACK_META.equals(path[0])) {
-            PackFormat packVersion = SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES);
+            int packVersion = SharedConstants.getCurrentVersion().getPackVersion(PackType.CLIENT_RESOURCES);
             return bytes("{\"pack\":{\"description\":\"MMCR Runtime Dynamical Resources\",\"pack_format\":"
-                    + packVersion.major() + "}}\n");
+                    + packVersion + "}}\n");
         }
         return null;
     }
 
     @Override
-    public IoSupplier<InputStream> getResource(PackType type, Identifier id) {
+    public IoSupplier<InputStream> getResource(PackType type, ResourceLocation id) {
         if (type != PackType.CLIENT_RESOURCES || !MMCR.MODID.equals(id.getNamespace())) {
             return null;
         }
@@ -104,11 +107,11 @@ public final class RuntimeMachineResourcePack implements PackResources {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T getMetadataSection(MetadataSectionType<T> type) throws IOException {
-        if (type == PackMetadataSection.CLIENT_TYPE || type == PackMetadataSection.FALLBACK_TYPE) {
+    public <T> T getMetadataSection(MetadataSectionSerializer<T> type) throws IOException {
+        if (type == PackMetadataSection.TYPE) {
             return (T) new PackMetadataSection(
                     Component.literal("Runtime BuildIn"),
-                    new InclusiveRange<>(SharedConstants.getCurrentVersion().packVersion(PackType.CLIENT_RESOURCES)));
+                    SharedConstants.getCurrentVersion().getPackVersion(PackType.CLIENT_RESOURCES));
         }
         return null;
     }
@@ -125,6 +128,10 @@ public final class RuntimeMachineResourcePack implements PackResources {
     private static IoSupplier<InputStream> bytes(String content) {
         byte[] data = content.getBytes(StandardCharsets.UTF_8);
         return () -> new ByteArrayInputStream(data);
+    }
+
+    private static String geometryModelJson(ResourceLocation loader) {
+        return "{\n  \"loader\": \"" + loader + "\"\n}\n";
     }
 
     private static final class Supplier implements Pack.ResourcesSupplier {

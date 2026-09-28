@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.client.controller.ControllerModelCache;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -41,7 +41,7 @@ class MachineAppearanceInvalidationTest {
 
     @Test
     void controller_model_key_tracks_controller_and_appearance_revisions() {
-        Identifier machineId = MMCR.id("press");
+        ResourceLocation machineId = MMCR.id("press");
         ControllerSpecCache.replaceSnapshot(Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)));
         MachineAppearanceCache.replaceSnapshot(Map.of(machineId, MachineAppearanceSpec.defaults()));
         ControllerModelCache.clear();
@@ -49,13 +49,13 @@ class MachineAppearanceInvalidationTest {
 
         MachineAppearanceCache.replaceSnapshot(Map.of(
                 machineId,
-                MachineAppearanceSpec.fromBasicBlock(Identifier.parse("kubejs:steel_casing"))));
+                MachineAppearanceSpec.fromBasicBlock(ResourceLocation.parse("kubejs:steel_casing"))));
         var second = ControllerModelCache.modelFor(machineId);
 
         assertThat(second).isNotSameAs(first);
         assertThat(second.appearanceRevision()).isGreaterThan(first.appearanceRevision());
         assertThat(second.controllerRevision()).isEqualTo(first.controllerRevision());
-        assertThat(second.appearance()).isEqualTo(MachineAppearanceSpec.fromBasicBlock(Identifier.parse("kubejs:steel_casing")));
+        assertThat(second.appearance()).isEqualTo(MachineAppearanceSpec.fromBasicBlock(ResourceLocation.parse("kubejs:steel_casing")));
         assertThat(ControllerModelCache.size()).isEqualTo(1);
     }
 }

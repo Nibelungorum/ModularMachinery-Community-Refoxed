@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -80,7 +80,7 @@ class DynamicOverlayBakedModelTest {
                 new MachineAppearanceSpec(appearance.machineBasicBlock(), MMCR.id("block/base"), null), defaults)).isFalse();
 
         for (int face = 0; face < 4; face++) {
-            List<Identifier> textures = new ArrayList<>(List.of(
+            List<ResourceLocation> textures = new ArrayList<>(List.of(
                     defaults.frontTexture(), defaults.sideTexture(), defaults.topTexture(), defaults.bottomTexture()));
             textures.set(face, MMCR.id("block/custom_" + face));
             var customized = new MachineControllerSpec(defaults.id(), textures.get(0), textures.get(1),

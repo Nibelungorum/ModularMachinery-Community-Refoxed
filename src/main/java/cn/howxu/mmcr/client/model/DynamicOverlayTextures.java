@@ -15,7 +15,7 @@ import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import com.google.common.collect.ImmutableList;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Resolves the shared overlay texture names used by block and item models.
@@ -26,10 +26,10 @@ public final class DynamicOverlayTextures {
     private DynamicOverlayTextures() {
     }
 
-    public static ImmutableList<Identifier> portOverlayTexture(IOPortKind kind) {
+    public static ImmutableList<ResourceLocation> portOverlayTexture(IOPortKind kind) {
         if (kind == null) return overlay(DynamicOverlayBakedModel.defaultPortOverlayTexture());
         // for ae2
-        Identifier compatibilityOverlay = compatibilityOverlay(kind.id());
+        ResourceLocation compatibilityOverlay = compatibilityOverlay(kind.id());
         if (compatibilityOverlay != null) return overlay(compatibilityOverlay);
         // mekanism
         if (kind instanceof PortKinds.ChemicalKind chemical) {
@@ -74,16 +74,16 @@ public final class DynamicOverlayTextures {
         return overlay(DynamicOverlayBakedModel.defaultPortOverlayTexture());
     }
 
-    public static Identifier controllerOverlayTexture(Identifier machineId) {
+    public static ResourceLocation controllerOverlayTexture(ResourceLocation machineId) {
         MachineControllerSpec spec = ControllerSpecCache.specFor(machineId);
         return spec.frontTexture();
     }
 
-    private static Identifier tieredPortOverlay(IOType ioType, String input, String output, String tier) {
+    private static ResourceLocation tieredPortOverlay(IOType ioType, String input, String output, String tier) {
         return MMCR.id("block/" + (ioType == IOType.INPUT ? input : output) + "_" + tier);
     }
 
-    private static Identifier compatibilityOverlay(String kindId) {
+    private static ResourceLocation compatibilityOverlay(String kindId) {
         return switch (kindId) {
             case "ae2_me_input_interface" -> MMCR.id("block/appliedenergistics2/ae2_input");
             case "ae2_me_stocking_input_interface" -> MMCR.id("block/appliedenergistics2/ae2_stocking_input");
@@ -103,13 +103,13 @@ public final class DynamicOverlayTextures {
         };
     }
 
-    private static ImmutableList<Identifier> overlay(Identifier texture) {
+    private static ImmutableList<ResourceLocation> overlay(ResourceLocation texture) {
         return ImmutableList.of(texture);
     }
 
     // cause we have overlay now, so the overlay is from this DynamicOverlayTextures declare
     // For AE2 we directly use AE2 resource, so it's better create a bridge
-    private static Identifier chemicalOverlay(PortKinds.ChemicalKind kind) {
+    private static ResourceLocation chemicalOverlay(PortKinds.ChemicalKind kind) {
         if (kind.radioactive()) {
             return MMCR.id("block/mekanism/overlay_radioactive_chemical_" + (kind.ioType() == IOType.INPUT ? "input" : "output"));
         }
@@ -118,24 +118,24 @@ public final class DynamicOverlayTextures {
         return MMCR.id("block/mekanism/overlay_" + direction + "_" + tier);
     }
 
-    private static Identifier heatOverlay(IOType ioType) {
+    private static ResourceLocation heatOverlay(IOType ioType) {
         return MMCR.id("block/mekanism/overlay_heat_" + (ioType == IOType.INPUT ? "input" : "output"));
     }
 
     // new textures and multiple overlays helper from here
-    private static Identifier directionOverlay(IOType direction){
+    private static ResourceLocation directionOverlay(IOType direction){
         return MMCR.id("block/overlay/direction/" + (direction == IOType.INPUT ? "input" : "output"));
     }
 
-    private static Identifier tierOverlay(String tierId){
+    private static ResourceLocation tierOverlay(String tierId){
         return MMCR.id("block/overlay/tier/" + tierId);
     }
 
-    private static Identifier typeOverlay(String typeId){
+    private static ResourceLocation typeOverlay(String typeId){
         return MMCR.id("block/overlay/type/" + typeId);
     }
 
-    private static Identifier baseOverlay(String typeId){
+    private static ResourceLocation baseOverlay(String typeId){
         return MMCR.id("block/overlay/base/" + typeId);
     }
 }

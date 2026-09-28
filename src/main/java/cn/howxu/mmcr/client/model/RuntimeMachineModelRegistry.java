@@ -16,10 +16,9 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
-import net.neoforged.neoforge.client.event.RegisterItemModelsEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,13 +44,9 @@ public final class RuntimeMachineModelRegistry {
         definitions = null;
     }
 
-    public static void registerBlockStateModels(RegisterBlockStateModels event) {
-        event.registerModel(DynamicOverlayModelLoader.CONTROLLER_ID, DynamicOverlayModelLoader.CONTROLLER_CODEC);
-        event.registerModel(DynamicOverlayModelLoader.PORT_ID, DynamicOverlayModelLoader.PORT_CODEC);
-    }
-
-    public static void registerItemModels(RegisterItemModelsEvent event) {
-        event.register(DynamicOverlayItemModel.ID, DynamicOverlayItemModel.CODEC);
+    public static void registerGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
+        event.register(DynamicOverlayModelLoader.CONTROLLER_ID, DynamicOverlayModelLoader.CONTROLLER);
+        event.register(DynamicOverlayModelLoader.PORT_ID, DynamicOverlayModelLoader.PORT);
     }
 
     static Stream<Block> dynamicBlocks() {
@@ -196,7 +191,7 @@ public final class RuntimeMachineModelRegistry {
         }
         if (block instanceof ParallelControllerBlock || block instanceof FactorySchedulerBlock
                 || block instanceof SmartInterfaceBlock || block instanceof ModuleCouplerBlock) {
-            Identifier overlay = block instanceof ParallelControllerBlock parallel
+            ResourceLocation overlay = block instanceof ParallelControllerBlock parallel
                     ? parallelControllerOverlayTexture(parallel.tier())
                     : block instanceof SmartInterfaceBlock
                             ? MMCR.id("block/overlay_smartinterface_number")
@@ -213,7 +208,7 @@ public final class RuntimeMachineModelRegistry {
         return null;
     }
 
-    private static Identifier parallelControllerOverlayTexture(ParallelTier tier) {
+    private static ResourceLocation parallelControllerOverlayTexture(ParallelTier tier) {
         return switch (tier) {
             case NORMAL -> MMCR.id("block/overlay_parallel_controller_normal");
             case PLUS -> MMCR.id("block/overlay_parallel_controller_plus");
@@ -232,21 +227,25 @@ public final class RuntimeMachineModelRegistry {
             RuntimeVariant variant = definition.variants().get(i);
             json.append(i == 0 ? "\n" : ",\n")
                     .append("    \"").append(variant.state()).append("\": {\n")
-                    .append("      \"type\": \"").append(variant.modelId()).append("\"\n")
+                    .append("      \"model\": \"").append(variant.modelId().getNamespace())
+                    .append(":block/").append(variant.modelId().getPath()).append("\"\n")
                     .append("    }");
         }
         return json.append("\n  }\n}\n").toString();
     }
 
-    static String itemDefinitionJson() {
-        return "{\n  \"model\": {\n    \"type\": \"" + DynamicOverlayItemModel.ID + "\"\n  }\n}\n";
+    static String itemModelJson(RuntimeBlockModelDefinition definition) {
+        ResourceLocation loader = definition.modelKind() == DynamicOverlayBakedModel.Kind.CONTROLLER
+                ? DynamicOverlayModelLoader.CONTROLLER_ID : DynamicOverlayModelLoader.PORT_ID;
+        ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(definition.block());
+        return "{\n  \"loader\": \"" + loader + "\",\n  \"block\": \"" + blockId + "\"\n}\n";
     }
 
-    public record RuntimeBlockStateDefinition(Identifier id, List<RuntimeVariant> variants) {
+    public record RuntimeBlockStateDefinition(ResourceLocation id, List<RuntimeVariant> variants) {
         public RuntimeBlockStateDefinition {
             variants = List.copyOf(variants);
         }
     }
 
-    public record RuntimeVariant(String state, Identifier modelId) {}
+    public record RuntimeVariant(String state, ResourceLocation modelId) {}
 }

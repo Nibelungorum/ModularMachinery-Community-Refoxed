@@ -3,120 +3,77 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
-import cn.howxu.mmcr.compat.athena.AthenaModelBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import com.google.common.collect.ImmutableList;
-import com.mojang.serialization.MapCodec;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.model.ItemOverrides;
+import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.Material;
 import net.minecraft.client.resources.model.ModelBaker;
-import net.minecraft.client.resources.model.ModelDebugName;
-import net.minecraft.client.resources.model.SimpleModelWrapper;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
-import net.minecraft.client.resources.model.geometry.QuadCollection;
-import net.minecraft.client.resources.model.sprite.Material;
-import net.minecraft.client.resources.model.sprite.MaterialBaker;
+import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
-import net.minecraft.resources.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.client.model.DynamicBlockStateModel;
-import net.neoforged.neoforge.client.model.block.CustomUnbakedBlockStateModel;
+import net.neoforged.neoforge.client.ChunkRenderTypeSet;
+import net.neoforged.neoforge.client.NeoForgeRenderTypes;
+import net.neoforged.neoforge.client.model.IDynamicBakedModel;
+import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.client.model.data.ModelProperty;
+import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
+import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
+import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
 import net.neoforged.neoforge.client.model.pipeline.QuadBakingVertexConsumer;
-import net.neoforged.neoforge.model.data.ModelData;
-import org.joml.Vector3f;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
- * Dynamic block-state model for shared machine controller and I/O port overlays.
+ * 1.21.1 geometry loader and baked model for dynamic machine overlays.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
-    public static final Identifier CONTROLLER_ID = MMCR.id("dynamic_controller_overlay");
-    public static final Identifier PORT_ID = MMCR.id("dynamic_port_overlay");
-    public static final MapCodec<Unbaked> CONTROLLER_CODEC = MapCodec.unit(() -> new Unbaked(DynamicOverlayBakedModel.Kind.CONTROLLER));
-    public static final MapCodec<Unbaked> PORT_CODEC = MapCodec.unit(() -> new Unbaked(DynamicOverlayBakedModel.Kind.PORT));
+public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicOverlayModelLoader.Unbaked> {
+    public static final ResourceLocation CONTROLLER_ID = MMCR.id("dynamic_controller_overlay");
+    public static final ResourceLocation PORT_ID = MMCR.id("dynamic_port_overlay");
+    public static final DynamicOverlayModelLoader CONTROLLER = new DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind.CONTROLLER);
+    public static final DynamicOverlayModelLoader PORT = new DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind.PORT);
 
-    private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/basic_casing"));
+    private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/basic_casing");
+    private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
     static final float OVERLAY_GROW = 0.0005f;
-    private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
+    private static final Set<ResourceLocation> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
-    private final MaterialBaker materials;
-    private final Material.Baked particle;
-    private final ModelDebugName debugName = getClass()::toString;
 
-    private DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind kind, MaterialBaker materials) {
+    private DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind kind) {
         this.kind = kind;
-        this.materials = materials;
-        this.particle = materials.get(FALLBACK_PARTICLE, debugName);
     }
 
     @Override
-    public void collectParts(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
-                             List<BlockStateModelPart> parts) {
-        ModelData modelData = level.getModelData(pos);
-        DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
-        QuadCollection.Builder quads = new QuadCollection.Builder();
-
-        boolean ctmBase = false;
-        MachineAppearanceSpec.TextureSource ctmSource = ctmSource(kind, state, modelData);
-        var sourceState = DynamicOverlayBakedModel.sourceState(ctmSource, level, pos);
-        if (sourceState.isPresent()) {
-            BlockState appearance = sourceState.get();
-            BlockStateModel sourceModel = Minecraft.getInstance().getModelManager()
-                    .getBlockStateModelSet().get(appearance);
-            ctmBase = AthenaModelBridge.get().collectParts(sourceModel, level, pos, appearance, random, parts);
-        }
-
-        Direction overlayFace = overlayFace(state);
-        Direction rollFacing = rollFacing(state);
-        Identifier stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
-                ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
-                        state.getValue(MachineControllerBlock.ACTIVE))
-                : null;
-        ImmutableList<OverlayLayer> overlayLayers = overlayLayers(textures.overlays(), stateOverlay);
-        for (Direction direction : Direction.values()) {
-            if (!ctmBase) {
-                addFace(quads, direction, baseMaterial(textures.base().forFace(direction)), 0.0f, true);
-            }
-            if (direction == overlayFace || overlayFace == null) {
-                for (OverlayLayer layer : overlayLayers) {
-                    addFace(quads, direction, rollFacing, material(layer.texture()), layer.grow(), false);
-                }
-            }
-        }
-
-        parts.add(new SimpleModelWrapper(quads.build(), true, material(textures.base().forFace(Direction.NORTH))));
-    }
-
-    @Override
-    public Material.Baked particleMaterial() {
-        return particle;
-    }
-
-    @Override
-    public int materialFlags() {
-        return BakedQuad.FLAG_TRANSLUCENT;
-    }
-
-    private DynamicOverlayBakedModel.TextureSet textures(BlockState state, ModelData modelData) {
-        Identifier machineId = machineId(state, modelData);
-        if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
-            return DynamicOverlayBakedModel.controllerTextures(machineId);
-        }
-        var source = modelData.get(MachineModelDataKeys.PORT_TEXTURE_SOURCE);
-        return DynamicOverlayBakedModel.portTextures(machineId, source, portOverlayTextures(state));
+    public Unbaked read(JsonObject json, JsonDeserializationContext context) {
+        ResourceLocation blockId = json.has("block")
+                ? ResourceLocation.parse(json.get("block").getAsString()) : null;
+        return new Unbaked(kind, blockId);
     }
 
     static @Nullable MachineAppearanceSpec.TextureSource ctmSource(DynamicOverlayBakedModel.Kind kind,
@@ -129,28 +86,14 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         if (!state.getValue(MachineControllerBlock.FORMED)) {
             return null;
         }
-        Identifier machineId = machineId(state, modelData);
+        ResourceLocation machineId = machineId(state, modelData);
         MachineAppearanceSpec appearance = MachineAppearanceCache.specFor(machineId);
         return DynamicOverlayBakedModel.controllerCtmEligible(machineId, appearance,
                 ControllerSpecCache.specFor(machineId)) ? appearance.controllerTextureSource() : null;
     }
 
-    private Direction overlayFace(BlockState state) {
-        if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER && state.hasProperty(MachineControllerBlock.FACING)) {
-            return state.getValue(MachineControllerBlock.FACING);
-        }
-        return null;
-    }
-
-    private Direction rollFacing(BlockState state) {
-        if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER && state.hasProperty(MachineControllerBlock.ROLL_FACING)) {
-            return state.getValue(MachineControllerBlock.ROLL_FACING);
-        }
-        return Direction.NORTH;
-    }
-
-    private static Identifier machineId(BlockState state, ModelData modelData) {
-        Identifier modelDataId = modelData.get(MachineModelDataKeys.MACHINE_ID);
+    private static ResourceLocation machineId(BlockState state, ModelData modelData) {
+        ResourceLocation modelDataId = modelData.get(MachineModelDataKeys.MACHINE_ID);
         if (modelDataId != null) {
             return modelDataId;
         }
@@ -160,7 +103,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return null;
     }
 
-    private static ImmutableList<Identifier> portOverlayTextures(BlockState state) {
+    private static ImmutableList<ResourceLocation> portOverlayTextures(BlockState state) {
         RuntimeBlockModelDefinition definition = RuntimeMachineModelRegistry.definition(state.getBlock());
         return definition == null
                 ? ImmutableList.of(DynamicOverlayBakedModel.defaultPortOverlayTexture())
@@ -171,7 +114,8 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return OVERLAY_GROW * (index + 1);
     }
 
-    static ImmutableList<OverlayLayer> overlayLayers(List<Identifier> overlays, @Nullable Identifier stateOverlay) {
+    static ImmutableList<OverlayLayer> overlayLayers(List<ResourceLocation> overlays,
+                                                      @Nullable ResourceLocation stateOverlay) {
         ImmutableList.Builder<OverlayLayer> layers = ImmutableList.builder();
         for (int index = 0; index < overlays.size(); index++) {
             layers.add(new OverlayLayer(overlays.get(index), overlayGrow(index)));
@@ -182,63 +126,11 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return layers.build();
     }
 
-    record OverlayLayer(Identifier texture, float grow) {
-    }
-
-    private Material.Baked material(Identifier texture) {
-        return materials.get(new Material(texture), debugName);
-    }
-
-    private Material.Baked baseMaterial(Identifier texture) {
-        Material.Baked baked = material(texture);
-        try (var sprite = baked.sprite()) {
-            if (!sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
-                return baked;
-            }
-        }
-        if (MISSING_BASE_TEXTURES.add(texture)) {
-            MMCR.LOG.warn("Missing dynamic base texture {}; using fallback", texture);
-        }
-        return materials.get(FALLBACK_PARTICLE, debugName);
+    record OverlayLayer(ResourceLocation texture, float grow) {
     }
 
     static void clearMissingBaseTextureWarnings() {
         MISSING_BASE_TEXTURES.clear();
-    }
-
-    static void addFace(QuadCollection.Builder quads, Direction direction, Material.Baked material,
-                        float grow, boolean culled) {
-        addFace(quads, direction, Direction.NORTH, material, grow, culled);
-    }
-
-    static void addFace(QuadCollection.Builder quads, Direction direction, Direction rollFacing, Material.Baked material,
-                        float grow, boolean culled) {
-        QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
-        builder.setSprite(material);
-        builder.setDirection(direction);
-        builder.setShade(true);
-
-        Vec3i normal = direction.getUnitVec3i();
-        for (Vector3f vertex : vertices(direction, grow)) {
-            float[] uv = uv(direction, rollFacing, vertex);
-            putVertex(builder, material, normal, vertex.x(), vertex.y(), vertex.z(), uv[0], uv[1]);
-        }
-
-        if (culled) {
-            quads.addCulledFace(direction, builder.bakeQuad());
-        } else {
-            quads.addUnculledFace(builder.bakeQuad());
-        }
-    }
-
-    private static void putVertex(QuadBakingVertexConsumer builder, Material.Baked material, Vec3i normal,
-                                  float x, float y, float z, float u, float v) {
-        try (var sprite = material.sprite()) {
-            builder.addVertex(x, y, z);
-            builder.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-            builder.setNormal(normal.getX(), normal.getY(), normal.getZ());
-            builder.setUv(sprite.getU(u), sprite.getV(v));
-        }
     }
 
     private static List<Vector3f> vertices(Direction direction, float grow) {
@@ -279,20 +171,203 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return direction.getAxis().isVertical() ? vertex.z() : 1.0f - vertex.y();
     }
 
-    public record Unbaked(DynamicOverlayBakedModel.Kind kind) implements CustomUnbakedBlockStateModel {
+    public record Unbaked(DynamicOverlayBakedModel.Kind kind,
+                          @Nullable ResourceLocation itemBlockId) implements IUnbakedGeometry<Unbaked> {
         @Override
-        public BlockStateModel bake(ModelBaker baker) {
-            return new DynamicOverlayModelLoader(kind, baker.materials());
-        }
-
-        @Override
-        public void resolveDependencies(Resolver resolver) {
-        }
-
-        @Override
-        public MapCodec<Unbaked> codec() {
-            return kind == DynamicOverlayBakedModel.Kind.CONTROLLER ? CONTROLLER_CODEC : PORT_CODEC;
+        public BakedModel bake(IGeometryBakingContext context, ModelBaker baker,
+                               Function<Material, TextureAtlasSprite> spriteGetter,
+                               ModelState modelState, ItemOverrides overrides) {
+            DynamicOverlayItemModel.Description description = null;
+            if (itemBlockId != null) {
+                Block block = BuiltInRegistries.BLOCK.get(itemBlockId);
+                description = block == null ? DynamicOverlayItemModel.Description.staticItem()
+                        : DynamicOverlayItemModel.describeBlock(block);
+            }
+            return new DynamicModel(kind, description, spriteGetter, context.getTransforms(), overrides);
         }
     }
 
+    private record CtmContext(BakedModel model, BlockState state, ModelData data) {
+    }
+
+    private static final class DynamicModel implements IDynamicBakedModel {
+        private final DynamicOverlayBakedModel.Kind kind;
+        private final @Nullable DynamicOverlayItemModel.Description itemDescription;
+        private final Function<Material, TextureAtlasSprite> spriteGetter;
+        private final ItemTransforms transforms;
+        private final ItemOverrides overrides;
+        private final TextureAtlasSprite particle;
+
+        private DynamicModel(DynamicOverlayBakedModel.Kind kind,
+                             @Nullable DynamicOverlayItemModel.Description itemDescription,
+                             Function<Material, TextureAtlasSprite> spriteGetter,
+                             ItemTransforms transforms, ItemOverrides overrides) {
+            this.kind = kind;
+            this.itemDescription = itemDescription;
+            this.spriteGetter = spriteGetter;
+            this.transforms = transforms;
+            this.overrides = overrides;
+            this.particle = sprite(FALLBACK_TEXTURE);
+        }
+
+        @Override
+        public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
+            MachineAppearanceSpec.TextureSource source = ctmSource(kind, state, modelData);
+            var sourceState = DynamicOverlayBakedModel.sourceState(source, level, pos);
+            if (sourceState.isEmpty()) {
+                return modelData;
+            }
+            BlockState appearance = sourceState.get();
+            BakedModel sourceModel = Minecraft.getInstance().getModelManager()
+                    .getBlockModelShaper().getBlockModel(appearance);
+            ModelData sourceData = sourceModel.getModelData(level, pos, appearance, modelData);
+            return modelData.derive().with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData)).build();
+        }
+
+        @Override
+        public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random,
+                                        ModelData modelData, @Nullable RenderType renderType) {
+            if (state == null) {
+                return itemQuads(side);
+            }
+
+            List<BakedQuad> quads = new ArrayList<>();
+            CtmContext ctm = modelData.get(CTM_CONTEXT);
+            if (ctm != null) {
+                quads.addAll(ctm.model().getQuads(ctm.state(), side, random, ctm.data(), renderType));
+            } else if (side != null) {
+                DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
+                quads.add(face(side, Direction.NORTH, baseSprite(textures.base().forFace(side)), 0.0f));
+            }
+            if (side == null) {
+                addBlockOverlays(quads, state, modelData);
+            }
+            return quads;
+        }
+
+        private List<BakedQuad> itemQuads(@Nullable Direction side) {
+            if (side != null || itemDescription == null || itemDescription.kind() == null) {
+                return List.of();
+            }
+            DynamicOverlayBakedModel.FaceTextures base = DynamicOverlayBakedModel.resolveBase(
+                    itemDescription.baseTextureSource());
+            List<BakedQuad> quads = new ArrayList<>();
+            for (Direction direction : Direction.values()) {
+                quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
+            }
+            for (OverlayLayer layer : overlayLayers(itemDescription.overlayTextures(),
+                    itemDescription.stateOverlayTexture())) {
+                for (Direction direction : itemDescription.overlayFaces()) {
+                    quads.add(face(direction, Direction.NORTH, sprite(layer.texture()), layer.grow()));
+                }
+            }
+            return quads;
+        }
+
+        private void addBlockOverlays(List<BakedQuad> quads, BlockState state, ModelData modelData) {
+            DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
+            Direction overlayFace = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
+                    && state.hasProperty(MachineControllerBlock.FACING)
+                    ? state.getValue(MachineControllerBlock.FACING) : null;
+            Direction rollFacing = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
+                    && state.hasProperty(MachineControllerBlock.ROLL_FACING)
+                    ? state.getValue(MachineControllerBlock.ROLL_FACING) : Direction.NORTH;
+            ResourceLocation stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
+                    ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
+                    state.getValue(MachineControllerBlock.ACTIVE)) : null;
+            for (OverlayLayer layer : overlayLayers(textures.overlays(), stateOverlay)) {
+                for (Direction direction : Direction.values()) {
+                    if (overlayFace == null || direction == overlayFace) {
+                        quads.add(face(direction, rollFacing, sprite(layer.texture()), layer.grow()));
+                    }
+                }
+            }
+        }
+
+        private DynamicOverlayBakedModel.TextureSet textures(BlockState state, ModelData modelData) {
+            ResourceLocation id = machineId(state, modelData);
+            if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
+                return DynamicOverlayBakedModel.controllerTextures(id);
+            }
+            return DynamicOverlayBakedModel.portTextures(id,
+                    modelData.get(MachineModelDataKeys.PORT_TEXTURE_SOURCE), portOverlayTextures(state));
+        }
+
+        private TextureAtlasSprite sprite(ResourceLocation texture) {
+            return spriteGetter.apply(new Material(TextureAtlas.LOCATION_BLOCKS, texture));
+        }
+
+        private TextureAtlasSprite baseSprite(ResourceLocation texture) {
+            TextureAtlasSprite sprite = sprite(texture);
+            if (!sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+                return sprite;
+            }
+            if (MISSING_BASE_TEXTURES.add(texture)) {
+                MMCR.LOG.warn("Missing dynamic base texture {}; using fallback", texture);
+            }
+            return sprite(FALLBACK_TEXTURE);
+        }
+
+        private BakedQuad face(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
+                               float grow) {
+            QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
+            builder.setSprite(sprite);
+            builder.setDirection(direction);
+            builder.setShade(true);
+            Vec3i normal = direction.getNormal();
+            for (Vector3f vertex : vertices(direction, grow)) {
+                float[] uv = uv(direction, rollFacing, vertex);
+                builder.addVertex(vertex.x(), vertex.y(), vertex.z());
+                builder.setColor(255, 255, 255, 255);
+                builder.setNormal(normal.getX(), normal.getY(), normal.getZ());
+                builder.setUv(sprite.getU(uv[0]), sprite.getV(uv[1]));
+            }
+            return builder.bakeQuad();
+        }
+
+        @Override
+        public boolean useAmbientOcclusion() {
+            return true;
+        }
+
+        @Override
+        public boolean isGui3d() {
+            return true;
+        }
+
+        @Override
+        public boolean usesBlockLight() {
+            return true;
+        }
+
+        @Override
+        public boolean isCustomRenderer() {
+            return false;
+        }
+
+        @Override
+        public TextureAtlasSprite getParticleIcon() {
+            return particle;
+        }
+
+        @Override
+        public ItemTransforms getTransforms() {
+            return transforms;
+        }
+
+        @Override
+        public ItemOverrides getOverrides() {
+            return overrides;
+        }
+
+        @Override
+        public ChunkRenderTypeSet getRenderTypes(BlockState state, RandomSource random, ModelData data) {
+            return ChunkRenderTypeSet.of(RenderType.translucent());
+        }
+
+        @Override
+        public List<RenderType> getRenderTypes(ItemStack stack, boolean fabulous) {
+            return List.of(NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get());
+        }
+    }
 }

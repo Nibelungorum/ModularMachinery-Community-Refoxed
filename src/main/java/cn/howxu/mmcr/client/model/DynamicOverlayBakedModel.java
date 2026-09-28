@@ -6,19 +6,19 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
-import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -31,16 +31,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author howxu <dev@howxu.cn>
  */
 public final class DynamicOverlayBakedModel {
-    private static final Identifier DEFAULT_PORT_OVERLAY_TEXTURE = Identifier.withDefaultNamespace("block/copper_block");
-    private static final Identifier FALLBACK_BASE_TEXTURE = MMCR.id("block/basic_casing");
+    private static final ResourceLocation DEFAULT_PORT_OVERLAY_TEXTURE = ResourceLocation.withDefaultNamespace("block/copper_block");
+    private static final ResourceLocation FALLBACK_BASE_TEXTURE = MMCR.id("block/basic_casing");
     private static final Map<MachineAppearanceSpec.TextureSource, FaceTextures> BASE_TEXTURES = new ConcurrentHashMap<>();
 
     private DynamicOverlayBakedModel() {
     }
 
-    public record FaceTextures(Identifier down, Identifier up, Identifier north, Identifier south, Identifier west,
-                               Identifier east) {
-        public Identifier forFace(Direction direction) {
+    public record FaceTextures(ResourceLocation down, ResourceLocation up, ResourceLocation north, ResourceLocation south, ResourceLocation west,
+                               ResourceLocation east) {
+        public ResourceLocation forFace(Direction direction) {
             return switch (direction) {
                 case DOWN -> down;
                 case UP -> up;
@@ -51,19 +51,19 @@ public final class DynamicOverlayBakedModel {
             };
         }
 
-        public static FaceTextures uniform(Identifier texture) {
+        public static FaceTextures uniform(ResourceLocation texture) {
             return new FaceTextures(texture, texture, texture, texture, texture, texture);
         }
     }
 
-    public record TextureSet(FaceTextures base, ImmutableList<Identifier> overlays) {
+    public record TextureSet(FaceTextures base, ImmutableList<ResourceLocation> overlays) {
         public TextureSet {
             if (base == null) throw new IllegalArgumentException("base null");
             if (overlays == null || overlays.isEmpty()) throw new IllegalArgumentException("overlays empty");
             overlays = ImmutableList.copyOf(overlays);
         }
 
-        public TextureSet(Identifier base, Identifier overlay) {
+        public TextureSet(ResourceLocation base, ResourceLocation overlay) {
             this(FaceTextures.uniform(base), ImmutableList.of(overlay));
         }
     }
@@ -75,9 +75,9 @@ public final class DynamicOverlayBakedModel {
 
     public record CacheKey(
             Kind kind,
-            Identifier machineId,
+            ResourceLocation machineId,
             FaceTextures baseTextures,
-            ImmutableList<Identifier> overlayTextures,
+            ImmutableList<ResourceLocation> overlayTextures,
             MachineAppearanceSpec.TextureSource explicitPortTextureSource,
             long controllerRevision,
             long appearanceRevision) {
@@ -91,7 +91,7 @@ public final class DynamicOverlayBakedModel {
         }
     }
 
-    public static TextureSet controllerTextures(Identifier machineId) {
+    public static TextureSet controllerTextures(ResourceLocation machineId) {
         MachineAppearanceSpec appearance = machineId == null
                 ? MachineAppearanceSpec.defaults()
                 : MachineAppearanceCache.specFor(machineId);
@@ -101,14 +101,14 @@ public final class DynamicOverlayBakedModel {
         return new TextureSet(resolveBase(appearance.controllerTextureSource()), ImmutableList.of(controller.frontTexture()));
     }
 
-    public static Identifier controllerStateOverlay(Identifier machineId, boolean active) {
+    public static ResourceLocation controllerStateOverlay(ResourceLocation machineId, boolean active) {
         MachineAppearanceSpec appearance = machineId == null
                 ? MachineAppearanceSpec.defaults()
                 : MachineAppearanceCache.specFor(machineId);
         return active ? appearance.controllerActiveOverlayTexture() : appearance.controllerIdleOverlayTexture();
     }
 
-    static boolean controllerCtmEligible(Identifier machineId, MachineAppearanceSpec appearance,
+    static boolean controllerCtmEligible(ResourceLocation machineId, MachineAppearanceSpec appearance,
                                          MachineControllerSpec controller) {
         if (appearance.controllerTextureSource().overrideTexture() != null) {
             return false;
@@ -125,7 +125,7 @@ public final class DynamicOverlayBakedModel {
         if (source == null || source.overrideTexture() != null) {
             return Optional.empty();
         }
-        Block block = BuiltInRegistries.BLOCK.getValue(source.blockId());
+        Block block = BuiltInRegistries.BLOCK.get(source.blockId());
         if (block == null) {
             return Optional.empty();
         }
@@ -133,8 +133,8 @@ public final class DynamicOverlayBakedModel {
         return Block.isShapeFullBlock(state.getShape(level, pos)) ? Optional.of(state) : Optional.empty();
     }
 
-    public static TextureSet portTextures(Identifier machineId, MachineAppearanceSpec.TextureSource explicitSource,
-                                          ImmutableList<Identifier> overlayTextures) {
+    public static TextureSet portTextures(ResourceLocation machineId, MachineAppearanceSpec.TextureSource explicitSource,
+                                          ImmutableList<ResourceLocation> overlayTextures) {
         MachineAppearanceSpec.TextureSource source = explicitSource != null
                 ? explicitSource
                 : machineId == null ? MachineAppearanceSpec.defaults().formedPortTextureSource()
@@ -142,17 +142,17 @@ public final class DynamicOverlayBakedModel {
         return new TextureSet(resolveBase(source), overlayTextures);
     }
 
-    public static TextureSet portTextures(Identifier machineId, Identifier explicitBaseTexture,
-                                          ImmutableList<Identifier> overlayTextures) {
+    public static TextureSet portTextures(ResourceLocation machineId, ResourceLocation explicitBaseTexture,
+                                          ImmutableList<ResourceLocation> overlayTextures) {
         return portTextures(machineId, explicitBaseTexture == null ? null : new MachineAppearanceSpec.TextureSource(
                 MachineAppearanceSpec.defaults().machineBasicBlock(), explicitBaseTexture), overlayTextures);
     }
 
-    public static Identifier defaultPortOverlayTexture() {
+    public static ResourceLocation defaultPortOverlayTexture() {
         return DEFAULT_PORT_OVERLAY_TEXTURE;
     }
 
-    public static CacheKey controllerCacheKey(Identifier machineId) {
+    public static CacheKey controllerCacheKey(ResourceLocation machineId) {
         TextureSet textures = controllerTextures(machineId);
         return new CacheKey(
                 Kind.CONTROLLER,
@@ -164,8 +164,8 @@ public final class DynamicOverlayBakedModel {
                 MachineAppearanceCache.revision());
     }
 
-    public static CacheKey portCacheKey(Identifier machineId, MachineAppearanceSpec.TextureSource explicitSource,
-                                        ImmutableList<Identifier> overlayTextures) {
+    public static CacheKey portCacheKey(ResourceLocation machineId, MachineAppearanceSpec.TextureSource explicitSource,
+                                        ImmutableList<ResourceLocation> overlayTextures) {
         TextureSet textures = portTextures(machineId, explicitSource, overlayTextures);
         return new CacheKey(
                 Kind.PORT,
@@ -198,7 +198,7 @@ public final class DynamicOverlayBakedModel {
         if (minecraft == null || minecraft.getModelManager() == null) {
             return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
         }
-        var block = BuiltInRegistries.BLOCK.getValue(source.blockId());
+        var block = BuiltInRegistries.BLOCK.get(source.blockId());
         if (block == null) {
             MMCR.LOG.warn("Missing appearance source block {}", source.blockId());
             return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
@@ -208,12 +208,11 @@ public final class DynamicOverlayBakedModel {
             return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
         }
 
-        List<BlockStateModelPart> parts = new ArrayList<>();
-        minecraft.getModelManager().getBlockStateModelSet().get(block.defaultBlockState())
-                .collectParts(RandomSource.create(0L), parts);
-        EnumMap<Direction, Identifier> textures = new EnumMap<>(Direction.class);
+        BlockState state = block.defaultBlockState();
+        BakedModel model = minecraft.getModelManager().getBlockModelShaper().getBlockModel(state);
+        EnumMap<Direction, ResourceLocation> textures = new EnumMap<>(Direction.class);
         for (Direction direction : Direction.values()) {
-            Identifier texture = textureForFace(parts, direction);
+            ResourceLocation texture = textureForFace(model, state, direction);
             if (texture == null) {
                 MMCR.LOG.warn("Appearance source block {} has no {} face texture; using fallback", source.blockId(), direction);
                 return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
@@ -223,7 +222,7 @@ public final class DynamicOverlayBakedModel {
         return completeOrFallback(textures);
     }
 
-    static FaceTextures completeOrFallback(Map<Direction, Identifier> textures) {
+    static FaceTextures completeOrFallback(Map<Direction, ResourceLocation> textures) {
         if (textures.size() != Direction.values().length || textures.values().stream().anyMatch(texture -> texture == null)) {
             return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
         }
@@ -231,16 +230,14 @@ public final class DynamicOverlayBakedModel {
                 textures.get(Direction.SOUTH), textures.get(Direction.WEST), textures.get(Direction.EAST));
     }
 
-    private static Identifier textureForFace(List<BlockStateModelPart> parts, Direction direction) {
-        for (BlockStateModelPart part : parts) {
-            List<BakedQuad> quads = part.getQuads(direction);
-            if (!quads.isEmpty()) {
-                return quads.getFirst().materialInfo().sprite().contents().name();
-            }
-            for (BakedQuad quad : part.getQuads(null)) {
-                if (quad.direction() == direction) {
-                    return quad.materialInfo().sprite().contents().name();
-                }
+    private static ResourceLocation textureForFace(BakedModel model, BlockState state, Direction direction) {
+        List<BakedQuad> quads = model.getQuads(state, direction, RandomSource.create(0L), ModelData.EMPTY, null);
+        if (!quads.isEmpty()) {
+            return quads.getFirst().getSprite().contents().name();
+        }
+        for (BakedQuad quad : model.getQuads(state, null, RandomSource.create(0L), ModelData.EMPTY, null)) {
+            if (quad.getDirection() == direction) {
+                return quad.getSprite().contents().name();
             }
         }
         return null;

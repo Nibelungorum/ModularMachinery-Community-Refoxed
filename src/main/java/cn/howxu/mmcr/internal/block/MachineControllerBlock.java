@@ -11,7 +11,7 @@ import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
@@ -49,13 +49,13 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     public static final BooleanProperty FORMED = BooleanProperty.create("formed");
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
 
-    private final Identifier machineId;
+    private final ResourceLocation machineId;
 
     public MachineControllerBlock(Properties props) {
         this(MMCR.id("unknown"), props);
     }
 
-    public MachineControllerBlock(Identifier machineId, Properties props) {
+    public MachineControllerBlock(ResourceLocation machineId, Properties props) {
         super(props.strength(3.5F).sound(SoundType.METAL));
         if (machineId == null) throw new IllegalArgumentException("machineId null");
         this.machineId = machineId;
@@ -66,7 +66,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 .setValue(ACTIVE, false));
     }
 
-    public Identifier machineId() {
+    public ResourceLocation machineId() {
         return machineId;
     }
 
@@ -186,7 +186,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         return new MachineControllerMenu(containerId, playerInventory, controller);
     }
 
-    static Component titleFor(Identifier machineId) {
+    static Component titleFor(ResourceLocation machineId) {
         MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
         return registration == null
                 ? Component.translatable("container.mmcr.machine_controller")

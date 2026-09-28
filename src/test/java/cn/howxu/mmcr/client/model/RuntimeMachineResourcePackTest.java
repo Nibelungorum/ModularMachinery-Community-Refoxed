@@ -24,7 +24,7 @@ class RuntimeMachineResourcePackTest {
             String id = "upgrade_bus_" + size.id();
             assertThat(resources).containsKeys(
                     MMCR.id("blockstates/" + id + ".json"),
-                    MMCR.id("items/" + id + ".json"));
+                    MMCR.id("models/item/" + id + ".json"));
         }
     }
 }
