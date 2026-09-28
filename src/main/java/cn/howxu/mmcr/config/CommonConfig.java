@@ -60,79 +60,79 @@ public final class CommonConfig {
 
     static {
         var builder = new ModConfigSpec.Builder();
-        builder.push("network");
-        builder.push("preview");
-        PREVIEW_MAX_ENTRIES = define(builder, "max_entries", DEFAULT_PREVIEW_MAX_ENTRIES,
+        builder.translation("mmcr.configuration.common.network").push("network");
+        builder.translation("mmcr.configuration.common.network.preview").push("preview");
+        PREVIEW_MAX_ENTRIES = define(builder.translation("mmcr.configuration.common.network.preview.max_entries"), "max_entries", DEFAULT_PREVIEW_MAX_ENTRIES,
                 "Maximum multiblock preview entries; client and server values must match");
-        PREVIEW_DURATION_TICKS = define(builder, "duration_ticks", DEFAULT_PREVIEW_DURATION_TICKS,
+        PREVIEW_DURATION_TICKS = define(builder.translation("mmcr.configuration.common.network.preview.duration_ticks"), "duration_ticks", DEFAULT_PREVIEW_DURATION_TICKS,
                 "Default multiblock preview duration in ticks");
         builder.pop();
-        builder.push("port_storage");
-        PORT_STORAGE_MAX_ENTRIES = define(builder, "max_entries", DEFAULT_PORT_STORAGE_MAX_ENTRIES,
+        builder.translation("mmcr.configuration.common.network.port_storage").push("port_storage");
+        PORT_STORAGE_MAX_ENTRIES = define(builder.translation("mmcr.configuration.common.network.port_storage.max_entries"), "max_entries", DEFAULT_PORT_STORAGE_MAX_ENTRIES,
                 "Maximum port storage entries per payload; client and server values must match");
-        PORT_STORAGE_MAX_PAYLOAD_BYTES = define(builder, "max_payload_bytes", DEFAULT_PORT_STORAGE_MAX_PAYLOAD_BYTES,
+        PORT_STORAGE_MAX_PAYLOAD_BYTES = define(builder.translation("mmcr.configuration.common.network.port_storage.max_payload_bytes"), "max_payload_bytes", DEFAULT_PORT_STORAGE_MAX_PAYLOAD_BYTES,
                 "Maximum encoded port storage payload size; client and server values must match");
         builder.pop();
-        builder.push("data_value");
-        DATA_VALUE_MAX_ENTRIES = define(builder, "max_entries", DEFAULT_DATA_VALUE_MAX_ENTRIES,
+        builder.translation("mmcr.configuration.common.network.data_value").push("data_value");
+        DATA_VALUE_MAX_ENTRIES = define(builder.translation("mmcr.configuration.common.network.data_value.max_entries"), "max_entries", DEFAULT_DATA_VALUE_MAX_ENTRIES,
                 "Maximum entries in one serialized data value collection");
-        DATA_VALUE_MAX_DEPTH = define(builder, "max_depth", DEFAULT_DATA_VALUE_MAX_DEPTH,
+        DATA_VALUE_MAX_DEPTH = define(builder.translation("mmcr.configuration.common.network.data_value.max_depth"), "max_depth", DEFAULT_DATA_VALUE_MAX_DEPTH,
                 "Maximum nesting depth in one serialized data value");
-        MAX_STRING_LENGTH = define(builder, "max_string_length", DEFAULT_MAX_STRING_LENGTH,
+        MAX_STRING_LENGTH = define(builder.translation("mmcr.configuration.common.network.data_value.max_string_length"), "max_string_length", DEFAULT_MAX_STRING_LENGTH,
                 "Maximum UTF-8 string length in data and machine state payloads");
         builder.pop();
-        builder.push("screen_text");
-        SCREEN_TEXT_MAX_LINES = define(builder, "max_lines", DEFAULT_SCREEN_TEXT_MAX_LINES,
+        builder.translation("mmcr.configuration.common.network.screen_text").push("screen_text");
+        SCREEN_TEXT_MAX_LINES = define(builder.translation("mmcr.configuration.common.network.screen_text.max_lines"), "max_lines", DEFAULT_SCREEN_TEXT_MAX_LINES,
                 "Maximum controller screen text lines per payload");
-        SCREEN_TEXT_MAX_ENCODED_BYTES = define(builder, "max_encoded_bytes", DEFAULT_SCREEN_TEXT_MAX_ENCODED_BYTES,
+        SCREEN_TEXT_MAX_ENCODED_BYTES = define(builder.translation("mmcr.configuration.common.network.screen_text.max_encoded_bytes"), "max_encoded_bytes", DEFAULT_SCREEN_TEXT_MAX_ENCODED_BYTES,
                 "Maximum encoded controller screen text size");
         builder.pop();
-        builder.push("runtime_content");
-        RUNTIME_CONTENT_MAX_STRUCTURES = define(builder, "max_structures", DEFAULT_RUNTIME_CONTENT_MAX_STRUCTURES,
+        builder.translation("mmcr.configuration.common.network.runtime_content").push("runtime_content");
+        RUNTIME_CONTENT_MAX_STRUCTURES = define(builder.translation("mmcr.configuration.common.network.runtime_content.max_structures"), "max_structures", DEFAULT_RUNTIME_CONTENT_MAX_STRUCTURES,
                 "Maximum synchronized machine structures");
-        RUNTIME_CONTENT_MAX_RECIPES = define(builder, "max_recipes", DEFAULT_RUNTIME_CONTENT_MAX_RECIPES,
+        RUNTIME_CONTENT_MAX_RECIPES = define(builder.translation("mmcr.configuration.common.network.runtime_content.max_recipes"), "max_recipes", DEFAULT_RUNTIME_CONTENT_MAX_RECIPES,
                 "Maximum synchronized machine recipes");
-        RUNTIME_CONTENT_MAX_SPECS = define(builder, "max_specs", DEFAULT_RUNTIME_CONTENT_MAX_SPECS,
+        RUNTIME_CONTENT_MAX_SPECS = define(builder.translation("mmcr.configuration.common.network.runtime_content.max_specs"), "max_specs", DEFAULT_RUNTIME_CONTENT_MAX_SPECS,
                 "Maximum synchronized controller or appearance specs");
-        RUNTIME_CONTENT_MAX_TOOLTIP_LINES = define(builder, "max_tooltip_lines", DEFAULT_RUNTIME_CONTENT_MAX_TOOLTIP_LINES,
+        RUNTIME_CONTENT_MAX_TOOLTIP_LINES = define(builder.translation("mmcr.configuration.common.network.runtime_content.max_tooltip_lines"), "max_tooltip_lines", DEFAULT_RUNTIME_CONTENT_MAX_TOOLTIP_LINES,
                 "Maximum synchronized tooltip lines");
         builder.pop();
-        builder.push("machine_state");
-        MACHINE_STATE_MAX_LEVEL_SNAPSHOTS = define(builder, "max_level_snapshots", DEFAULT_MACHINE_STATE_MAX_LEVEL_SNAPSHOTS,
+        builder.translation("mmcr.configuration.common.network.machine_state").push("machine_state");
+        MACHINE_STATE_MAX_LEVEL_SNAPSHOTS = define(builder.translation("mmcr.configuration.common.network.machine_state.max_level_snapshots"), "max_level_snapshots", DEFAULT_MACHINE_STATE_MAX_LEVEL_SNAPSHOTS,
                 "Maximum machine level snapshots per payload");
-        MACHINE_STATE_MAX_INSTALLED_MODULES = define(builder, "max_installed_modules", DEFAULT_MACHINE_STATE_MAX_INSTALLED_MODULES,
+        MACHINE_STATE_MAX_INSTALLED_MODULES = define(builder.translation("mmcr.configuration.common.network.machine_state.max_installed_modules"), "max_installed_modules", DEFAULT_MACHINE_STATE_MAX_INSTALLED_MODULES,
                 "Maximum installed modules in one machine state payload");
         builder.pop();
-        builder.push("factory_state");
-        FACTORY_STATE_MAX_THREAD_SNAPSHOTS = define(builder, "max_thread_snapshots", DEFAULT_FACTORY_STATE_MAX_THREAD_SNAPSHOTS,
+        builder.translation("mmcr.configuration.common.network.factory_state").push("factory_state");
+        FACTORY_STATE_MAX_THREAD_SNAPSHOTS = define(builder.translation("mmcr.configuration.common.network.factory_state.max_thread_snapshots"), "max_thread_snapshots", DEFAULT_FACTORY_STATE_MAX_THREAD_SNAPSHOTS,
                 "Maximum factory thread snapshots per payload");
-        FACTORY_STATE_MAX_LANE_SNAPSHOTS = define(builder, "max_lane_snapshots", DEFAULT_FACTORY_STATE_MAX_LANE_SNAPSHOTS,
+        FACTORY_STATE_MAX_LANE_SNAPSHOTS = define(builder.translation("mmcr.configuration.common.network.factory_state.max_lane_snapshots"), "max_lane_snapshots", DEFAULT_FACTORY_STATE_MAX_LANE_SNAPSHOTS,
                 "Maximum factory lane snapshots per payload");
-        FACTORY_STATE_MAX_LEVEL_SNAPSHOTS = define(builder, "max_level_snapshots", DEFAULT_FACTORY_STATE_MAX_LEVEL_SNAPSHOTS,
+        FACTORY_STATE_MAX_LEVEL_SNAPSHOTS = define(builder.translation("mmcr.configuration.common.network.factory_state.max_level_snapshots"), "max_level_snapshots", DEFAULT_FACTORY_STATE_MAX_LEVEL_SNAPSHOTS,
                 "Maximum factory level snapshots per payload");
         builder.pop();
-        builder.push("failure");
-        FAILURE_MAX_DETAILS = define(builder, "max_details", DEFAULT_FAILURE_MAX_DETAILS,
+        builder.translation("mmcr.configuration.common.network.failure").push("failure");
+        FAILURE_MAX_DETAILS = define(builder.translation("mmcr.configuration.common.network.failure.max_details"), "max_details", DEFAULT_FAILURE_MAX_DETAILS,
                 "Maximum failure details in machine state payloads");
         builder.pop();
-        builder.push("terminal_state");
-        TERMINAL_STATE_MAX_PREVIEW_LAYERS = define(builder, "max_preview_layers", DEFAULT_TERMINAL_STATE_MAX_PREVIEW_LAYERS,
+        builder.translation("mmcr.configuration.common.network.terminal_state").push("terminal_state");
+        TERMINAL_STATE_MAX_PREVIEW_LAYERS = define(builder.translation("mmcr.configuration.common.network.terminal_state.max_preview_layers"), "max_preview_layers", DEFAULT_TERMINAL_STATE_MAX_PREVIEW_LAYERS,
                 "Maximum preview layers in terminal state payloads");
         builder.pop();
-        builder.push("structure_sync");
-        STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES = define(builder, "max_collection_entries",
+        builder.translation("mmcr.configuration.common.network.structure_sync").push("structure_sync");
+        STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES = define(builder.translation("mmcr.configuration.common.network.structure_sync.max_collection_entries"), "max_collection_entries",
                 DEFAULT_STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES, "Maximum entries in synchronized structure collections");
-        STRUCTURE_SYNC_MAX_SYMBOL_REQUIREMENTS = define(builder, "max_symbol_requirements",
+        STRUCTURE_SYNC_MAX_SYMBOL_REQUIREMENTS = define(builder.translation("mmcr.configuration.common.network.structure_sync.max_symbol_requirements"), "max_symbol_requirements",
                 DEFAULT_STRUCTURE_SYNC_MAX_SYMBOL_REQUIREMENTS, "Maximum symbol requirements in synchronized structures");
         builder.pop();
-        builder.push("recipe_sync");
-        RECIPE_SYNC_MAX_REQUIREMENTS = define(builder, "max_requirements", DEFAULT_RECIPE_SYNC_MAX_REQUIREMENTS,
+        builder.translation("mmcr.configuration.common.network.recipe_sync").push("recipe_sync");
+        RECIPE_SYNC_MAX_REQUIREMENTS = define(builder.translation("mmcr.configuration.common.network.recipe_sync.max_requirements"), "max_requirements", DEFAULT_RECIPE_SYNC_MAX_REQUIREMENTS,
                 "Maximum requirements in one synchronized recipe");
-        RECIPE_SYNC_MAX_OUTPUTS = define(builder, "max_outputs", DEFAULT_RECIPE_SYNC_MAX_OUTPUTS,
+        RECIPE_SYNC_MAX_OUTPUTS = define(builder.translation("mmcr.configuration.common.network.recipe_sync.max_outputs"), "max_outputs", DEFAULT_RECIPE_SYNC_MAX_OUTPUTS,
                 "Maximum outputs in one synchronized recipe");
-        RECIPE_SYNC_MAX_MODIFIERS = define(builder, "max_modifiers", DEFAULT_STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES,
+        RECIPE_SYNC_MAX_MODIFIERS = define(builder.translation("mmcr.configuration.common.network.recipe_sync.max_modifiers"), "max_modifiers", DEFAULT_STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES,
                 "Maximum modifiers in one synchronized recipe");
-        RECIPE_SYNC_MAX_REQUIRED_HOSTS = define(builder, "max_required_hosts", DEFAULT_STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES,
+        RECIPE_SYNC_MAX_REQUIRED_HOSTS = define(builder.translation("mmcr.configuration.common.network.recipe_sync.max_required_hosts"), "max_required_hosts", DEFAULT_STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES,
                 "Maximum required hosts in one synchronized recipe");
         builder.pop();
         builder.pop();

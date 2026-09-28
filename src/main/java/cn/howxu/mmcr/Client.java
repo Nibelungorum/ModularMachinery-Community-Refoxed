@@ -36,7 +36,11 @@ import net.minecraft.server.packs.repository.Pack;
 import net.minecraft.server.packs.repository.PackSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.client.event.RegisterBlockStateModels;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
@@ -56,7 +60,8 @@ import java.lang.reflect.Constructor;
 public class Client {
     private final MachineSoundManager machineSoundManager = new MachineSoundManager();
 
-    public Client(IEventBus modBus) {
+    public Client(IEventBus modBus, ModContainer modContainer) {
+        modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerMachineRenderers);
