@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Dedicated controller menu for formed machines containing a factory scheduler.
@@ -108,6 +109,11 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         return snapshot.recipePoolId().isEmpty() ? null : Identifier.tryParse(snapshot.recipePoolId());
     }
     public List<Identifier> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
+    public boolean isModuleController() { return snapshot.controllerRole() == 2; }
+    public Optional<Identifier> connectedHostId() {
+        return Optional.ofNullable(snapshot.connectedHostId().isEmpty()
+                ? null : Identifier.tryParse(snapshot.connectedHostId()));
+    }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public int matchedStage() { return snapshot.matchedStage(); }
     public int stageCount() { return snapshot.stageCount(); }

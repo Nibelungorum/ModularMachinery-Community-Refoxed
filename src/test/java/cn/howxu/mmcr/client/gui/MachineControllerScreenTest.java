@@ -111,8 +111,8 @@ class MachineControllerScreenTest {
 
     @Test
     void recipe_pool_entry_uses_the_approved_controller_coordinates() {
-        assertThat(MachineControllerScreen.RECIPE_POOL_BUTTON_X).isEqualTo(160);
-        assertThat(MachineControllerScreen.RECIPE_POOL_BUTTON_Y).isEqualTo(4);
+        assertThat(MachineControllerScreen.RECIPE_POOL_BUTTON_X).isEqualTo(154);
+        assertThat(MachineControllerScreen.RECIPE_POOL_BUTTON_Y).isEqualTo(9);
     }
 
     @Test

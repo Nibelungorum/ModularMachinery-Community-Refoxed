@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -60,8 +61,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int DETAIL_X = 115;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
-    static final int RECIPE_POOL_BUTTON_X = 267;
-    static final int RECIPE_POOL_BUTTON_Y = 4;
+    static final int RECIPE_POOL_BUTTON_X = 258;
+    static final int RECIPE_POOL_BUTTON_Y = 9;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
@@ -82,9 +83,10 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         super.init();
         recipePoolButton = addRenderableWidget(new StyledButton(
                 leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
-                Component.translatable("gui.mmcr.recipe_pool.open"), button -> minecraft.setScreen(
+                Component.literal("M"), button -> minecraft.setScreen(
                         new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
                                 menu.currentRecipePoolId()))));
+        recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         updateRecipePoolButton();
     }
 
@@ -227,6 +229,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
                     Component.translatable(failure)), STATUS_LABEL_COLOR));
         }
+        lines.addAll(MachineControllerScreen.moduleStatusLines(false, menu.isModuleController(),
+                0, menu.connectedHostId()));
         if (menu.parallelSlots() > 0) {
             lines.add(new ControllerTextLine(parallelSlotLine(menu.parallelSlots()), STATUS_LABEL_COLOR));
         }

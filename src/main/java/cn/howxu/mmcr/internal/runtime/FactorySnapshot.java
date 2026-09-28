@@ -26,7 +26,9 @@ public record FactorySnapshot(
         int matchedStage,
         int stageCount,
         String machineId,
-        String recipePoolId) {
+        String recipePoolId,
+        int controllerRole,
+        String connectedHostId) {
 
     public FactorySnapshot(boolean formed, boolean active, List<CraftingStateSnapshot> lanes, int laneLimit,
                            int activeLaneCount, long maxParallelism, boolean paused,
@@ -34,13 +36,24 @@ public record FactorySnapshot(
                            int parallelSlots, @Nullable ExecutionStatus failure, List<String> foundLevelIds,
                            int matchedStage, int stageCount) {
         this(formed, active, lanes, laneLimit, activeLaneCount, maxParallelism, paused, presentationLanes,
-                machineName, parallelSlots, failure, foundLevelIds, matchedStage, stageCount, "", "");
+                machineName, parallelSlots, failure, foundLevelIds, matchedStage, stageCount, "", "", 0, "");
+    }
+
+    public FactorySnapshot(boolean formed, boolean active, List<CraftingStateSnapshot> lanes, int laneLimit,
+                           int activeLaneCount, long maxParallelism, boolean paused,
+                           List<FactoryRuntime.ThreadSnapshot> presentationLanes, String machineName,
+                           int parallelSlots, @Nullable ExecutionStatus failure, List<String> foundLevelIds,
+                           int matchedStage, int stageCount, String machineId, String recipePoolId) {
+        this(formed, active, lanes, laneLimit, activeLaneCount, maxParallelism, paused, presentationLanes,
+                machineName, parallelSlots, failure, foundLevelIds, matchedStage, stageCount, machineId,
+                recipePoolId, 0, "");
     }
 
     public FactorySnapshot {
         machineName = machineName == null ? "" : machineName;
         machineId = machineId == null ? "" : machineId;
         recipePoolId = recipePoolId == null ? "" : recipePoolId;
+        connectedHostId = connectedHostId == null ? "" : connectedHostId;
         lanes = List.copyOf(lanes == null ? List.of() : lanes);
         if (laneLimit < 1) throw new IllegalArgumentException("laneLimit must be positive");
         if (activeLaneCount < 0) throw new IllegalArgumentException("activeLaneCount must not be negative");
@@ -50,10 +63,11 @@ public record FactorySnapshot(
         foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
         if (matchedStage < 0) throw new IllegalArgumentException("matchedStage must not be negative");
         if (stageCount < 1) throw new IllegalArgumentException("stageCount must be positive");
+        if (controllerRole < 0 || controllerRole > 2) throw new IllegalArgumentException("Invalid controller role");
     }
 
     public static FactorySnapshot empty() {
         return new FactorySnapshot(false, false, List.of(), 1, 0, 1L,
-                false, List.of(), "", 0, null, List.of(), 0, 1, "", "");
+                false, List.of(), "", 0, null, List.of(), 0, 1, "", "", 0, "");
     }
 }

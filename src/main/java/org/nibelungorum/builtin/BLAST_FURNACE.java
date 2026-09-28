@@ -3,6 +3,7 @@ package org.nibelungorum.builtin;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRJeiWorkstationsEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.registry.ModBlocks; // I love casings
@@ -103,4 +104,23 @@ public class BLAST_FURNACE {
         event.registerRecipe(recipe);
 
     }
+
+    @SubscribeEvent
+    public static void registerWorkstations(MMCRJeiWorkstationsEvent event) {
+        // 普通方块/物品 -> MMCR recipe pool 页
+        event.addRecipePoolWorkstation(
+                BLAST_FURNACE,
+                Blocks.BLAST_FURNACE
+        );
+
+        // MMCR 机器控制器 -> 任意 JEI 配方类型
+        event.addMachineWorkstation(
+                BLAST_FURNACE,
+                Identifier.parse("minecraft:smelting")
+        );
+    }
+
+    private BLAST_FURNACE() {
+    }
+
 }

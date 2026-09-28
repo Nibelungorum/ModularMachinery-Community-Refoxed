@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -35,8 +36,8 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int PROGRESS_STATUS_COLOR = -1;
     private static final float DETAIL_SCALE = 0.85F;
     private static final int DETAIL_LINE_SPACING = 10;
-    static final int RECIPE_POOL_BUTTON_X = 160;
-    static final int RECIPE_POOL_BUTTON_Y = 4;
+    static final int RECIPE_POOL_BUTTON_X = 154;
+    static final int RECIPE_POOL_BUTTON_Y = 9;
     private StyledButton recipePoolButton;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
@@ -51,9 +52,10 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         super.init();
         recipePoolButton = addRenderableWidget(new StyledButton(
                 leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
-                Component.translatable("gui.mmcr.recipe_pool.open"), button -> minecraft.setScreen(
+                Component.literal("M"), button -> minecraft.setScreen(
                         new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
                                 menu.currentRecipePoolId()))));
+        recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         updateRecipePoolButton();
     }
 

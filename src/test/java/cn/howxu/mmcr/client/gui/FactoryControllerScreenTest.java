@@ -80,8 +80,8 @@ class FactoryControllerScreenTest {
 
     @Test
     void recipe_pool_entry_uses_the_approved_factory_coordinates() {
-        assertThat(FactoryControllerScreen.RECIPE_POOL_BUTTON_X).isEqualTo(267);
-        assertThat(FactoryControllerScreen.RECIPE_POOL_BUTTON_Y).isEqualTo(4);
+        assertThat(FactoryControllerScreen.RECIPE_POOL_BUTTON_X).isEqualTo(258);
+        assertThat(FactoryControllerScreen.RECIPE_POOL_BUTTON_Y).isEqualTo(9);
     }
 
     @Test

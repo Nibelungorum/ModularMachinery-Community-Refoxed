@@ -59,6 +59,24 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void ready_main_step_does_not_dispatch_a_worker() {
+        AtomicBoolean committed = new AtomicBoolean();
+        Executor rejectingWorker = command -> {
+            throw new AssertionError("worker must not run");
+        };
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(rejectingWorker);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
+
+        assertThat(coordinator.submitMainThread(key,
+                new MainThreadStep.TestStep(() -> committed.set(true)), null,
+                MachineAsyncCoordinator.TaskHooks.defaults()))
+                .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
+        coordinator.completeTick();
+
+        assertThat(committed).isTrue();
+    }
+
+    @Test
     void deferred_main_step_resumes_only_after_the_shared_io_grant() {
         List<String> phases = new CopyOnWriteArrayList<>();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);

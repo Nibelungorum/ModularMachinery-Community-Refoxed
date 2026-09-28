@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -65,6 +66,22 @@ class RecipeThreadTest {
         assertThat(thread.runtime().active()).isFalse();
         assertThat(thread.runtime().failure()).isNotNull();
         assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_SEARCH);
+    }
+
+    @Test
+    void main_thread_only_tick_plan_does_not_dispatch_worker_planning() {
+        var plan = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of(0));
+
+        assertThat(RecipeThread.requiresWorkerPlanning(plan)).isFalse();
+    }
+
+    @Test
+    void worker_safe_tick_requirement_dispatches_worker_planning() {
+        var requirement = new AsyncRequirementPlanner.Requirement(0, 1,
+                List.of(new AsyncCapabilityRequest.Scalar(MMCR.id("test"), 1, 1, false)));
+        var plan = new AsyncRequirementPlanner.PreparedPlan(List.of(requirement), List.of(), List.of());
+
+        assertThat(RecipeThread.requiresWorkerPlanning(plan)).isTrue();
     }
 
     @Test

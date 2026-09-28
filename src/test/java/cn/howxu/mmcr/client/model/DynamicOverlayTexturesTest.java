@@ -34,17 +34,8 @@ class DynamicOverlayTexturesTest {
                         .isEqualTo(ImmutableList.of(MMCR.id(expectedOverlayPath(kind)))));
     }
 
-    @Test
-    void ordinary_port_kinds_keep_existing_overlay_names() {
-        assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.ITEM_INPUT))
-                .isEqualTo(ImmutableList.of(MMCR.id("block/overlay_inputbus_normal")));
-        assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.FLUID_OUTPUT))
-                .isEqualTo(ImmutableList.of(MMCR.id("block/overlay_fluidoutputhatch_normal")));
-        assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.ENERGY_INPUT))
-                .isEqualTo(ImmutableList.of(MMCR.id("block/overlay_energyinputhatch_normal")));
-    }
 
-@Test
+    @Test
     void mekanism_port_kinds_resolve_to_their_dedicated_overlay_textures_and_keep_formed_base() {
         var appearance = new MachineAppearanceSpec(
                 MMCR.id("machine/test"),

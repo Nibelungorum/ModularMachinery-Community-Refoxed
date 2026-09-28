@@ -74,7 +74,9 @@ public final class ControllerSyncRuntime {
                 factory.paused(), factory.presentationLanes(), runtime.machineName(),
                 runtime.parallelControllerCount(), failure, runtime.foundLevelIds(),
                 runtime.structure().matchedStage(), stageCount(runtime), runtime.machineId(),
-                recipePoolId == null ? "" : recipePoolId.toString());
+                recipePoolId == null ? "" : recipePoolId.toString(), runtime.controllerRole(),
+                runtime.moduleConnectionStatus().connected()
+                        ? runtime.moduleConnectionStatus().connectedHostId().toString() : "");
     }
 
     public boolean factoryControllerPresent(ControllerRuntimeSnapshot runtime) {

@@ -98,67 +98,74 @@ public class UpgradeBusGameTest {
             controller.onStructureBlockChanged(helper.absolutePos(secondBusPos));
             controller.serverTick();
 
-            helper.assertTrue(controller.structureSnapshot().formed(), "Replacement Upgrade Bus blocks form the machine");
-            helper.assertTrue(controller.runtimeSnapshot().foundModifiers().containsKey(structureModifierId.toString()),
-                    "Replacement block exposes its registered modifier");
-            helper.assertTrue(controller.runtimeSnapshot().upgradeItems().size() == 2,
-                    "Both Upgrade Bus contents are published to the controller");
-            helper.assertTrue(controller.componentRuntime().upgradeModifierUnits().get(modifierId) == 2L,
-                    "Both Upgrade Bus items resolve to two modifier units");
-            helper.assertTrue(controller.componentRuntime().modifierList().stream()
-                            .anyMatch(modifier -> modifier instanceof MachineModifier.Numeric numeric
-                                    && numeric.value() == 2D),
-                    "Upgrade Bus items rebuild the aggregated duration modifier");
+            helper.startSequence()
+                    .thenWaitUntil(() -> {
+                        helper.assertTrue(controller.structureSnapshot().formed(),
+                                "Replacement Upgrade Bus blocks form the machine");
+                        helper.assertTrue(controller.runtimeSnapshot().foundModifiers()
+                                        .containsKey(structureModifierId.toString()),
+                                "Replacement block exposes its registered modifier");
+                    })
+                    .thenExecute(() -> {
+                        helper.assertTrue(controller.runtimeSnapshot().upgradeItems().size() == 2,
+                                "Both Upgrade Bus contents are published to the controller");
+                        helper.assertTrue(controller.componentRuntime().upgradeModifierUnits().get(modifierId) == 2L,
+                                "Both Upgrade Bus items resolve to two modifier units");
+                        helper.assertTrue(controller.componentRuntime().modifierList().stream()
+                                        .anyMatch(modifier -> modifier instanceof MachineModifier.Numeric numeric
+                                                && numeric.value() == 2D),
+                                "Upgrade Bus items rebuild the aggregated duration modifier");
 
-            ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
-            ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-            try (Transaction transaction = Transaction.openRoot()) {
-                input.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
-                transaction.commit();
-            }
-            Identifier recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
-            ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
-            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 20,
-                    List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
-                                    Ingredient.of(Items.IRON_INGOT), 1)),
-                            MachineRequirement.itemOutput(goldNugget)),
-                    List.of(new MachineOutput.ItemOutput(goldNugget, 1F)), List.of(), 0, 1, false, false,
-                    false, Set.of()));
+                        ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
+                        ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
+                        try (Transaction transaction = Transaction.openRoot()) {
+                            input.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
+                            transaction.commit();
+                        }
+                        Identifier recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
+                        ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
+                        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 20,
+                                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
+                                                Ingredient.of(Items.IRON_INGOT), 1)),
+                                        MachineRequirement.itemOutput(goldNugget)),
+                                List.of(new MachineOutput.ItemOutput(goldNugget, 1F)), List.of(), 0, 1, false, false,
+                                false, Set.of()));
 
-            controller.serverTick();
-            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() != null,
-                    "Recipe starts with the formed Upgrade Bus machine");
-            helper.assertTrue(observedUpgradeItems.get() != null && observedUpgradeItems.get().size() == 2
-                            && observedUpgradeItems.get().stream().allMatch(stack -> stack.is(Items.NETHER_STAR)),
-                    "Recipe start callback receives both Upgrade Bus items");
-            helper.assertTrue(observedRequirements.get() != null
-                            && observedRequirements.get().stream()
-                            .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item
-                                    && item.count() == 1),
-                    "Duration modifiers do not alter recipe input quantities: "
-                            + observedRequirements.get());
-            helper.assertTrue(controller.runtimeSnapshot().crafting().totalTick() == 23,
-                    "Recipe starts with the Upgrade Bus effective duration");
+                        controller.serverTick();
+                        helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() != null,
+                                "Recipe starts with the formed Upgrade Bus machine");
+                        helper.assertTrue(observedUpgradeItems.get() != null && observedUpgradeItems.get().size() == 2
+                                        && observedUpgradeItems.get().stream().allMatch(stack -> stack.is(Items.NETHER_STAR)),
+                                "Recipe start callback receives both Upgrade Bus items");
+                        helper.assertTrue(observedRequirements.get() != null
+                                        && observedRequirements.get().stream()
+                                        .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item
+                                                && item.count() == 1),
+                                "Duration modifiers do not alter recipe input quantities: "
+                                        + observedRequirements.get());
+                        helper.assertTrue(controller.runtimeSnapshot().crafting().totalTick() == 23,
+                                "Recipe starts with the Upgrade Bus effective duration");
 
-            try (Transaction transaction = Transaction.openRoot()) {
-                ItemResource current = firstBus.itemStorage().resource(0);
-                if (current != null && !current.isEmpty()) {
-                    firstBus.itemStorage().extract(0, current, firstBus.itemStorage().amount(0), transaction);
-                }
-                firstBus.itemStorage().insert(0, ItemResource.of(Items.DIAMOND), 1L, transaction);
-                transaction.commit();
-            }
-            controller.serverTick();
+                        try (Transaction transaction = Transaction.openRoot()) {
+                            ItemResource current = firstBus.itemStorage().resource(0);
+                            if (current != null && !current.isEmpty()) {
+                                firstBus.itemStorage().extract(0, current, firstBus.itemStorage().amount(0), transaction);
+                            }
+                            firstBus.itemStorage().insert(0, ItemResource.of(Items.DIAMOND), 1L, transaction);
+                            transaction.commit();
+                        }
+                        controller.serverTick();
 
-            helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
-                    "Bus content mutation keeps the active effective recipe snapshot");
-            helper.assertTrue(controller.runtimeSnapshot().crafting().failure() == null,
-                    "Bus content mutation does not fail the active recipe");
-            helper.assertTrue(input.itemStorage().amount(0) == 2L,
-                    "Only the unmodified recipe input is consumed");
-            helper.assertTrue(output.itemStorage().amount(0) == 0L,
-                    "Invalidation does not emit recipe output");
-            helper.succeed();
+                        helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
+                                "Bus content mutation keeps the active effective recipe snapshot");
+                        helper.assertTrue(controller.runtimeSnapshot().crafting().failure() == null,
+                                "Bus content mutation does not fail the active recipe");
+                        helper.assertTrue(input.itemStorage().amount(0) == 2L,
+                                "Only the unmodified recipe input is consumed");
+                        helper.assertTrue(output.itemStorage().amount(0) == 0L,
+                                "Invalidation does not emit recipe output");
+                        helper.succeed();
+                    });
         });
     }
 }

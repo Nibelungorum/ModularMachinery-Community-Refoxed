@@ -24,16 +24,17 @@ public final class RecipePoolScreen extends Screen {
     static final int ROW_X = 4;
     static final int ROW_Y = 6;
     static final int ROW_WIDTH = 86;
-    static final int ROW_HEIGHT = 29;
+    static final int ROW_HEIGHT = 32;
     static final int ROW_GAP = 1;
     static final int VISIBLE_ROWS = 4;
     static final int SCROLLBAR_X = 92;
     static final int SCROLLBAR_Y = 6;
-    static final int SCROLLBAR_RIGHT = 103;
+    static final int SCROLLBAR_RIGHT = 104;
     static final int SCROLLBAR_BOTTOM = 125;
     static final int SCROLLBAR_HANDLE_HEIGHT = 32;
-    static final int RETURN_X = 95;
-    static final int RETURN_Y = 129;
+    static final int RETURN_X = 92;
+    static final int RETURN_Y = 125;
+    static final int RETURN_SIZE = 12;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/gui_recipe_pool.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
@@ -59,7 +60,7 @@ public final class RecipePoolScreen extends Screen {
 
     @Override
     protected void init() {
-        addRenderableWidget(new StyledButton(left() + RETURN_X, top() + RETURN_Y, 9, 9,
+        addRenderableWidget(new StyledButton(left() + RETURN_X, top() + RETURN_Y, RETURN_SIZE, RETURN_SIZE,
                 Component.literal("<"), button -> minecraft.setScreen(parent)));
     }
 
@@ -74,9 +75,10 @@ public final class RecipePoolScreen extends Screen {
             Identifier texture = poolId.equals(selectedRecipePoolId) ? SELECTED_ELEMENTS : ELEMENTS;
             graphics.blit(RenderPipelines.GUI_TEXTURED, texture, left() + ROW_X, y, 0, 0,
                     ROW_WIDTH, ROW_HEIGHT, 256, 256);
-            String label = RecipePoolDisplayName.component(poolId).getString();
-            if (label.length() > 15) label = label.substring(0, 12) + "...";
-            graphics.text(font, Component.literal(label), left() + ROW_X + 3, y + 10, TEXT_COLOR, false);
+            String label = fitLabel(RecipePoolDisplayName.component(poolId).getString(), ROW_WIDTH - 6);
+            int textX = left() + ROW_X + (ROW_WIDTH - font.width(label)) / 2;
+            int textY = y + (ROW_HEIGHT - font.lineHeight) / 2;
+            graphics.text(font, Component.literal(label), textX, textY, TEXT_COLOR, false);
         }
         int handleY = top() + scrollbarHandleY(scrollOffset, recipePoolIds.size());
         graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, left() + SCROLLBAR_X, handleY, 0, 0,
@@ -167,6 +169,14 @@ public final class RecipePoolScreen extends Screen {
         int available = SCROLLBAR_BOTTOM - SCROLLBAR_Y - SCROLLBAR_HANDLE_HEIGHT;
         int handleY = Math.max(0, Math.min(available, scrollbarY - SCROLLBAR_Y - dragOffsetY));
         return clampScrollOffset(Math.round((float) handleY * range / available), poolCount);
+    }
+
+    private String fitLabel(String value, int maxWidth) {
+        if (font.width(value) <= maxWidth) return value;
+        String suffix = "...";
+        int length = value.length();
+        while (length > 0 && font.width(value.substring(0, length) + suffix) > maxWidth) length--;
+        return value.substring(0, length) + suffix;
     }
 
     private int left() {

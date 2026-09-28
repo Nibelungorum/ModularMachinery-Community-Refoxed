@@ -29,6 +29,10 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
 public class SPACE {
     private static final Identifier SPACE_ELEVATOR = id("space_elevator");
     private static final Identifier SPACE_REASSEMBLER = id("space_reassembler");
+    private static final Identifier SPACE_MINER = id("space_miner");
+    private static final Identifier SPACE_POOL_1 = id("space_1");
+    private static final Identifier SPACE_POOL_2 = id("space_2");
+    private static final Identifier SPACE_POOL_3 = id("space_3");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(SPACE_ELEVATOR) && !event.definitions().containsKey(SPACE_REASSEMBLER)) {
@@ -48,9 +52,10 @@ public class SPACE {
 
             machine = MachineBuilder
                     .machine(SPACE_REASSEMBLER)
-                    .recipePool(SPACE_REASSEMBLER)
+                    .recipePool(SPACE_REASSEMBLER, SPACE_MINER, SPACE_POOL_1, SPACE_POOL_2, SPACE_POOL_3)
                     .displayNameKey("machine.mmcr.space_reassembler")
                     .appearance(a -> a.machineBasicBlock("quartz_pillar"))
+                    .allowMultithreading()
                     .role(MachineRole.MODULE)
                     .build();
             event.registerMachine(machine);
@@ -89,7 +94,8 @@ public class SPACE {
                                             block("minecraft:smooth_quartz"),
                                             InterfacePredicates.anyOfItemInput(),
                                             InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput()
+                                            InterfacePredicates.anyOfEnergyInput(),
+                                            InterfacePredicates.factoryController()
                                     ))
                                     .controller('E')
                             )
@@ -144,6 +150,18 @@ public class SPACE {
                 .parallelized(true)
                 .duration(100)
                 .requiredHost(SPACE_ELEVATOR)
+                .build();
+
+        event.registerRecipe(recipe);
+
+        recipe = MachineRecipeBuilder
+                .recipe(SPACE_REASSEMBLER.withSuffix("_space_miner_1"))
+                .recipePool(SPACE_MINER)
+                .inputItem(Items.APPLE, 1)
+                .outputItem(Items.IRON_INGOT, 12)
+                .inputEnergy(100)
+                .parallelized(true)
+                .duration(200)
                 .build();
 
         event.registerRecipe(recipe);

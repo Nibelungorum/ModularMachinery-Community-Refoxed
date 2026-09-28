@@ -72,6 +72,10 @@
     "recipe_pool.mmcr.thermal_smelting_furnace": "Thermal Smelting Furnace",
     "recipe_pool.mmcr.space_elevator": "Space Elevator",
     "recipe_pool.mmcr.space_reassembler": "Space Reassembler",
+    "recipe_pool.mmcr.space_miner": "Space Miner",
+    "recipe_pool.mmcr.space_1": "Pool For Test",
+    "recipe_pool.mmcr.space_2": "Pool For Test 2",
+    "recipe_pool.mmcr.space_3": "Long Name Pool For Test 3",
     "recipe_pool.mmcr.monster_farm": "Monster Farm",
     "recipe_pool.mmcr.recipe_ticker": "Recipe Ticker",
 

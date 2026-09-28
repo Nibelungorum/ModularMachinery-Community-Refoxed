@@ -28,41 +28,36 @@ public final class DynamicOverlayTextures {
 
     public static ImmutableList<Identifier> portOverlayTexture(IOPortKind kind) {
         if (kind == null) return overlay(DynamicOverlayBakedModel.defaultPortOverlayTexture());
+        // for ae2
         Identifier compatibilityOverlay = compatibilityOverlay(kind.id());
         if (compatibilityOverlay != null) return overlay(compatibilityOverlay);
+        // mekanism
         if (kind instanceof PortKinds.ChemicalKind chemical) {
             return overlay(chemicalOverlay(chemical));
         }
         if (kind instanceof PortKinds.HeatKind) {
             return overlay(heatOverlay(kind.ioType()));
         }
+        // vanilla
         if (kind.itemBusSize().isPresent()) {
-            if (kind.itemBusSize().get() == ItemBusSize.TINY){
-                return ImmutableList.of(
-                        MMCR.id("block/overlay/base"),
-                        kind.ioType() == IOType.INPUT ? MMCR.id("block/overlay/direction/input") : MMCR.id("block/overlay/direction/output"),
-                        MMCR.id("block/overlay/type/item"),
-                        MMCR.id("block/overlay/tier/tiny")
-                );
-            }
-            return overlay(tieredPortOverlay(kind.ioType(), "overlay_inputbus", "overlay_outputbus",
-                    kind.itemBusSize().map(ItemBusSize::id).orElseThrow()));
+            // return overlay(tieredPortOverlay(kind.ioType(), "overlay_inputbus", "overlay_outputbus", kind.itemBusSize().map(ItemBusSize::id).orElseThrow()));
+            return ImmutableList.of(baseOverlay("item"),directionOverlay(kind.ioType()),typeOverlay("item"),tierOverlay(kind.itemBusSize().map(ItemBusSize::id).orElseThrow()));
         }
         if (kind.extendedItemBusSize().isPresent()) {
             return overlay(tieredPortOverlay(kind.ioType(), "new/overlay_extended_inputbus", "new/overlay_extended_outputbus",
                     kind.extendedItemBusSize().map(ExtendedItemBusSize::id).orElseThrow()));
         }
         if (kind.fluidHatchSize().isPresent()) {
-            return overlay(tieredPortOverlay(kind.ioType(), "overlay_fluidinputhatch", "overlay_fluidoutputhatch",
-                    kind.fluidHatchSize().map(FluidHatchSize::id).orElseThrow()));
+            //return overlay(tieredPortOverlay(kind.ioType(), "overlay_fluidinputhatch", "overlay_fluidoutputhatch", kind.fluidHatchSize().map(FluidHatchSize::id).orElseThrow()));
+            return ImmutableList.of(baseOverlay("fluid"),directionOverlay(kind.ioType()),typeOverlay("fluid"),tierOverlay(kind.fluidHatchSize().map(FluidHatchSize::id).orElseThrow()));
         }
         if (kind.extendedFluidHatchSize().isPresent()) {
             return overlay(tieredPortOverlay(kind.ioType(), "new/overlay_extended_fluidinputhatch", "new/overlay_extended_fluidoutputhatch",
                     kind.extendedFluidHatchSize().map(ExtendedFluidHatchSize::id).orElseThrow()));
         }
         if (kind.energyHatchSize().isPresent()) {
-            return overlay(tieredPortOverlay(kind.ioType(), "overlay_energyinputhatch", "overlay_energyoutputhatch",
-                    kind.energyHatchSize().map(EnergyHatchSize::id).orElseThrow()));
+            // return overlay(tieredPortOverlay(kind.ioType(), "overlay_energyinputhatch", "overlay_energyoutputhatch", kind.energyHatchSize().map(EnergyHatchSize::id).orElseThrow()));
+            return ImmutableList.of(baseOverlay("energy"),directionOverlay(kind.ioType()),typeOverlay("energy"),tierOverlay(kind.energyHatchSize().map(EnergyHatchSize::id).orElseThrow()));
         }
         if (kind.extendedEnergyHatchSize().isPresent()) {
             return overlay(tieredPortOverlay(kind.ioType(), "new/overlay_extended_energyinputhatch", "new/overlay_extended_energyoutputhatch",
@@ -127,4 +122,20 @@ public final class DynamicOverlayTextures {
         return MMCR.id("block/mekanism/overlay_heat_" + (ioType == IOType.INPUT ? "input" : "output"));
     }
 
+    // new textures and multiple overlays helper from here
+    private static Identifier directionOverlay(IOType direction){
+        return MMCR.id("block/overlay/direction/" + (direction == IOType.INPUT ? "input" : "output"));
+    }
+
+    private static Identifier tierOverlay(String tierId){
+        return MMCR.id("block/overlay/tier/" + tierId);
+    }
+
+    private static Identifier typeOverlay(String typeId){
+        return MMCR.id("block/overlay/type/" + typeId);
+    }
+
+    private static Identifier baseOverlay(String typeId){
+        return MMCR.id("block/overlay/base/" + typeId);
+    }
 }

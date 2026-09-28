@@ -131,6 +131,22 @@ public final class MachineAsyncCoordinator {
         return SubmissionResult.ACCEPTED;
     }
 
+    public SubmissionResult submitMainThread(TaskKey key, MainThreadStep step,
+                                             @Nullable MainThreadStepExecutor mainStepExecutor, TaskHooks hooks) {
+        Task task = new Task(key, hooks);
+        if (tasks.putIfAbsent(key, task) != null) return SubmissionResult.DUPLICATE;
+        TickBatch batch = batches.compute(key.gameTime(), (gameTime, current) -> {
+            TickBatch target = current == null ? new TickBatch(gameTime) : current;
+            target.tasks.put(key, task);
+            return target;
+        });
+        if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
+        batch.pendingMainSteps.add(new PendingMainStep(task, List.of(step), null));
+        readyBatches.add(batch);
+        signalProgress();
+        return SubmissionResult.ACCEPTED;
+    }
+
     public void beginLevelTick(long gameTime) {
         if (budgetGameTime == gameTime) return;
         budgetGameTime = gameTime;
@@ -409,6 +425,10 @@ public final class MachineAsyncCoordinator {
             }
         }
         if (pending.task.terminationRequested.get()) return;
+        if (pending.resume == null) {
+            requestTermination(batch, pending.task, new TaskOutcome.Succeeded());
+            return;
+        }
         AsyncContinuation continuation;
         try {
             continuation = pending.resume.apply(List.copyOf(pending.results));
@@ -573,12 +593,12 @@ public final class MachineAsyncCoordinator {
     private static final class PendingMainStep {
         private final Task task;
         private final List<MainThreadStep> steps;
-        private final Function<List<MainThreadStep.Result>, AsyncContinuation> resume;
+        private final @Nullable Function<List<MainThreadStep.Result>, AsyncContinuation> resume;
         private final List<MainThreadStep.Result> results = new ArrayList<>();
         private int nextStep;
 
         private PendingMainStep(Task task, List<MainThreadStep> steps,
-                                Function<List<MainThreadStep.Result>, AsyncContinuation> resume) {
+                                @Nullable Function<List<MainThreadStep.Result>, AsyncContinuation> resume) {
             this.task = task;
             this.steps = steps;
             this.resume = resume;

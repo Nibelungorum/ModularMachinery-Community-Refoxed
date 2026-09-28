@@ -4,22 +4,27 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.publicapi.event.MMCRJeiRecipeInformationEvent;
+import cn.howxu.mmcr.api.publicapi.event.MMCRJeiWorkstationsEvent;
+import cn.howxu.mmcr.api.publicapi.jei.JeiWorkstationRegistration;
 import cn.howxu.mmcr.client.gui.BlueprintScreen;
+import cn.howxu.mmcr.internal.client.JeiWorkstationRegistry;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
-import java.util.LinkedHashSet;
 import mezz.jei.api.IModPlugin;
-import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.recipe.types.IRecipeType;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeTransferRegistration;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.NeoForge;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -83,10 +88,59 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        machineIdsByPool().forEach((poolId, machineIds) -> machineIds.forEach(machineId -> {
-            ItemStack controller = new ItemStack(ModBlocks.controllerFor(machineId).get());
-            registration.addCraftingStation(JeiMachineRecipeTypes.forPool(poolId), controller);
-        }));
+        Map<Identifier, List<Identifier>> machinesByPool = machineIdsByPool();
+        Map<IRecipeType<?>, List<ItemStack>> workstations = new LinkedHashMap<>();
+        machinesByPool.forEach((poolId, machineIds) -> machineIds.forEach(machineId ->
+                addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolId), controllerFor(machineId))));
+
+        MMCRJeiWorkstationsEvent event = new MMCRJeiWorkstationsEvent();
+        NeoForge.EVENT_BUS.post(event);
+        event.freeze();
+        List<JeiWorkstationRegistration> manualEntries = new ArrayList<>(event.entries());
+        manualEntries.addAll(JeiWorkstationRegistry.kubeJSEntries());
+
+        manualEntries.forEach(entry -> {
+            switch (entry) {
+                case JeiWorkstationRegistration.RecipePoolItem poolItem -> {
+                    if (!machinesByPool.containsKey(poolItem.recipePoolId())) {
+                        MMCR.LOG.warn("Skipping JEI workstation {} for unknown recipe pool {}",
+                                poolItem.itemId(), poolItem.recipePoolId());
+                    } else if (!BuiltInRegistries.ITEM.containsKey(poolItem.itemId())) {
+                        MMCR.LOG.warn("Skipping unknown JEI workstation item {}", poolItem.itemId());
+                    } else {
+                        ItemStack workstation = new ItemStack(BuiltInRegistries.ITEM.getValue(poolItem.itemId()));
+                        if (workstation.isEmpty()) {
+                            MMCR.LOG.warn("Skipping empty JEI workstation item {} for recipe pool {}",
+                                    poolItem.itemId(), poolItem.recipePoolId());
+                        } else {
+                            addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolItem.recipePoolId()),
+                                    workstation);
+                        }
+                    }
+                }
+                case JeiWorkstationRegistration.RecipePoolStack poolStack -> {
+                    if (!machinesByPool.containsKey(poolStack.recipePoolId())) {
+                        MMCR.LOG.warn("Skipping JEI workstation for unknown recipe pool {}", poolStack.recipePoolId());
+                    } else {
+                        addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolStack.recipePoolId()),
+                                poolStack.workstation());
+                    }
+                }
+                case JeiWorkstationRegistration.Machine machine -> {
+                    if (!ModBlocks.hasControllerFor(machine.machineId())) {
+                        MMCR.LOG.warn("Skipping JEI workstation for unknown machine {}", machine.machineId());
+                        return;
+                    }
+                    registration.getJeiHelpers().getRecipeType(machine.recipeTypeId()).ifPresentOrElse(
+                            recipeType -> addWorkstation(workstations, recipeType, controllerFor(machine.machineId())),
+                            () -> MMCR.LOG.warn("Skipping machine {} workstation for unknown JEI recipe type {}",
+                                    machine.machineId(), machine.recipeTypeId()));
+                }
+            }
+        });
+
+        workstations.forEach((recipeType, stacks) ->
+                registration.addCraftingStation(recipeType, stacks.toArray(ItemStack[]::new)));
     }
 
     @Override
@@ -110,10 +164,24 @@ public final class JeiPlugin implements IModPlugin {
     }
 
     static Map<Identifier, List<Identifier>> machineIdsByPool() {
-        return machineIds().stream()
-                .sorted()
-                .collect(Collectors.groupingBy(MachineRegistry::recipePoolForMachine,
-                        java.util.LinkedHashMap::new, Collectors.toList()));
+        Map<Identifier, List<Identifier>> machinesByPool = new LinkedHashMap<>();
+        machineIds().stream().sorted().forEach(machineId ->
+                MachineRegistry.recipePoolsForMachine(machineId).forEach(poolId ->
+                        machinesByPool.computeIfAbsent(poolId, ignored -> new java.util.ArrayList<>()).add(machineId)));
+        machinesByPool.replaceAll((ignored, machineIds) -> List.copyOf(machineIds));
+        return machinesByPool;
+    }
+
+    private static ItemStack controllerFor(Identifier machineId) {
+        return new ItemStack(ModBlocks.controllerFor(machineId).get());
+    }
+
+    private static void addWorkstation(Map<IRecipeType<?>, List<ItemStack>> workstations,
+                                       IRecipeType<?> recipeType, ItemStack workstation) {
+        List<ItemStack> stacks = workstations.computeIfAbsent(recipeType, ignored -> new ArrayList<>());
+        if (stacks.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing, workstation))) {
+            stacks.add(workstation.copyWithCount(1));
+        }
     }
 
 }

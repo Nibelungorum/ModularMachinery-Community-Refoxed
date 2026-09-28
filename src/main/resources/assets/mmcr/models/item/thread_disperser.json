@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "mmcr:item/thread_disperser_1",
+    "layer1": "mmcr:item/thread_disperser_2"
+  }
+}

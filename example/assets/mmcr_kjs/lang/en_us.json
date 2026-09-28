@@ -86,6 +86,11 @@
     "recipe_pool.mmcr_kubejs.kubejs_network_center_machine": "Network Center",
     "recipe_pool.mmcr_kubejs.kubejs_sps": "SPS",
 
+    "recipe_pool.mmcr_kubejs.kubejs_space_miner": "Space Miner",
+    "recipe_pool.mmcr_kubejs.kubejs_space_1": "Pool For Test",
+    "recipe_pool.mmcr_kubejs.kubejs_space_2": "Pool For Test 2",
+    "recipe_pool.mmcr_kubejs.kubejs_space_3": "Long Name Pool For Test 3",
+
     "jei.kubejs.blast_furnace.info_1": "Recipe Pool Information 1",
     "jei.kubejs.blast_furnace.info_2": "Recipe Pool Information 2: %s",
     "jei.kubejs.blast_furnace.info_3": "Single Recipe Information 3",

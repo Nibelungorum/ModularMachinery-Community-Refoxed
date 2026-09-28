@@ -88,6 +88,11 @@
     "recipe_pool.mmcr_kubejs.kubejs_network_center_machine": "算力中心",
     "recipe_pool.mmcr_kubejs.kubejs_sps": "SPS",
 
+    "recipe_pool.mmcr_kubejs.kubejs_space_miner": "太空采矿机",
+    "recipe_pool.mmcr_kubejs.kubejs_space_1": "测试用配方池",
+    "recipe_pool.mmcr_kubejs.kubejs_space_2": "测试用配方2",
+    "recipe_pool.mmcr_kubejs.kubejs_space_3": "超长名称配方池渲染测试3",
+
     "jei.kubejs.blast_furnace.info_1": "配方池示例信息1",
     "jei.kubejs.blast_furnace.info_2": "配方池示例信息2: %s",
     "jei.kubejs.blast_furnace.info_3": "单独配方示例信息3",

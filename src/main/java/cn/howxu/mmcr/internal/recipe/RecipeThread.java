@@ -566,21 +566,30 @@ public abstract class RecipeThread {
             finishAsyncTick();
             return;
         }
-        if (preparedPlan.requirements().isEmpty()
-                && preparedPlan.initialMainThreadRequirements().isEmpty()) {
-            AsyncRequirementPlanner.PlanResult empty = new AsyncRequirementPlanner.PlanResult(List.of(), List.of());
-            boolean committed = runtime.commitAsyncTick(empty);
-            if (committed && runtime.completeAsyncTickAfterInputs()) {
-                runtime.completeAsyncTickAfterRecipe();
-            } else if (!committed) {
-                runtime.discardAsyncTickPreparation();
-            }
-            finishAsyncTick();
-            return;
-        }
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(
                 controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(),
                 asyncLaneId(), lifecycleEpoch);
+        if (!requiresWorkerPlanning(preparedPlan)) {
+            AsyncRequirementPlanner.PlanResult mainThreadPlan = new AsyncRequirementPlanner.PlanResult(
+                    List.of(), preparedPlan.initialMainThreadRequirements());
+            if (preparedPlan.initialMainThreadRequirements().isEmpty()) {
+                boolean committed = runtime.commitAsyncTick(mainThreadPlan);
+                if (committed && runtime.completeAsyncTickAfterInputs()) {
+                    runtime.completeAsyncTickAfterRecipe();
+                } else if (!committed) {
+                    runtime.discardAsyncTickPreparation();
+                }
+                finishAsyncTick();
+                return;
+            }
+            MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(level).submitMainThread(
+                    taskKey, new MainThreadStep.TickTransitionCommit(asyncLaneId(), catalogVersion, mainThreadPlan),
+                    this::executeAsyncMainStep, tickTaskHooks(token, lifecycleEpoch));
+            if (submission != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) {
+                failAsyncTick(token, lifecycleEpoch);
+            }
+            return;
+        }
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -956,6 +965,10 @@ public abstract class RecipeThread {
         if (lifecycleEpoch != controller.lifecycleEpoch() || !tickPending || pendingTickToken != token) return;
         runtime.discardAsyncTickPreparation();
         finishAsyncTick();
+    }
+
+    static boolean requiresWorkerPlanning(AsyncRequirementPlanner.PreparedPlan plan) {
+        return !plan.requirements().isEmpty();
     }
 
     private MachineAsyncCoordinator.TaskHooks tickTaskHooks(long token, long lifecycleEpoch) {

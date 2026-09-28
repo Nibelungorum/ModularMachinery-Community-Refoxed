@@ -72,6 +72,10 @@
     "recipe_pool.mmcr.thermal_smelting_furnace": "热能冶炼炉",
     "recipe_pool.mmcr.space_elevator": "太空电梯",
     "recipe_pool.mmcr.space_reassembler": "太空重组器",
+    "recipe_pool.mmcr.space_miner": "太空采矿机",
+    "recipe_pool.mmcr.space_1": "测试用配方池",
+    "recipe_pool.mmcr.space_2": "测试用配方池 2",
+    "recipe_pool.mmcr.space_3": "超长名称配方池渲染测试 3",
     "recipe_pool.mmcr.monster_farm": "怪物农场",
     "recipe_pool.mmcr.recipe_ticker": "配方Tick测试",
 

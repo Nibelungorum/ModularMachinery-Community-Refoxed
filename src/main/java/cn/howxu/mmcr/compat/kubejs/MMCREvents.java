@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.internal.client.JeiWorkstationRegistry;
 import dev.latvian.mods.kubejs.event.EventGroup;
 import dev.latvian.mods.kubejs.event.EventHandler;
 import dev.latvian.mods.kubejs.script.ScriptType;
@@ -24,7 +25,9 @@ public interface MMCREvents {
     }
 
     static void postStartup() {
-        Holder.STARTUP.post(ScriptType.STARTUP, new MMCRStartupEventJS());
+        MMCRStartupEventJS event = new MMCRStartupEventJS();
+        Holder.STARTUP.post(ScriptType.STARTUP, event);
+        JeiWorkstationRegistry.replaceKubeJS(event.jeiWorkstations());
     }
 
     static void postServer() {
