@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.MultiBufferSource;
 
 /** Renders a machine controller's custom visual state.
  * @author howxu <dev@howxu.cn>
@@ -10,7 +9,7 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 @FunctionalInterface
 public interface ControllerRenderer {
     void render(ControllerRenderContext context, PoseStack poseStack,
-                SubmitNodeCollector nodeCollector, CameraRenderState camera);
+                MultiBufferSource bufferSource, int packedLight, int packedOverlay);
 
     default boolean shouldRenderOffScreen() {
         return false;

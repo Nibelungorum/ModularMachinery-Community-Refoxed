@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -17,8 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class MMCRMachineRendersEventTest {
     @Test
     void acceptsOneRendererPerKnownMachine() {
-        Identifier machine = Identifier.fromNamespaceAndPath("test", "machine");
-        ControllerRenderer renderer = (context, poseStack, collector, camera) -> { };
+        ResourceLocation machine = ResourceLocation.fromNamespaceAndPath("test", "machine");
+        ControllerRenderer renderer = (context, poseStack, buffers, light, overlay) -> { };
         MMCRMachineRendersEvent event = new MMCRMachineRendersEvent(List.of(machine));
 
         event.register(machine, renderer);
@@ -29,7 +29,7 @@ class MMCRMachineRendersEventTest {
 
     @Test
     void rejectsNullAndDuplicateMachineIdsDuringConstruction() {
-        Identifier machine = Identifier.fromNamespaceAndPath("test", "machine");
+        ResourceLocation machine = ResourceLocation.fromNamespaceAndPath("test", "machine");
 
         assertThrows(ApiRegistrationException.class,
                 () -> new MMCRMachineRendersEvent(Arrays.asList(machine, machine)));
@@ -39,9 +39,9 @@ class MMCRMachineRendersEventTest {
 
     @Test
     void rejectsUnknownAndDuplicateMachinesAndFrozenMutation() {
-        Identifier known = Identifier.fromNamespaceAndPath("test", "known");
-        Identifier unknown = Identifier.fromNamespaceAndPath("test", "unknown");
-        ControllerRenderer renderer = (context, poseStack, collector, camera) -> { };
+        ResourceLocation known = ResourceLocation.fromNamespaceAndPath("test", "known");
+        ResourceLocation unknown = ResourceLocation.fromNamespaceAndPath("test", "unknown");
+        ControllerRenderer renderer = (context, poseStack, buffers, light, overlay) -> { };
         MMCRMachineRendersEvent event = new MMCRMachineRendersEvent(List.of(known));
         event.register(known, renderer);
 

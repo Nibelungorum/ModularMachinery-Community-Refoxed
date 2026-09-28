@@ -3,12 +3,11 @@ package cn.howxu.mmcr.client.preview.world;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.renderer.block.BlockStateModelSet;
-import net.minecraft.client.renderer.block.FluidStateModelSet;
+import net.minecraft.client.renderer.block.BlockModelShaper;
+import net.minecraft.client.renderer.block.LiquidBlockRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.world.level.CardinalLighting;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
@@ -32,18 +31,16 @@ import java.util.Set;
  */
 public final class WorldPreviewCompileInput {
     private final BlockAndTintGetter region;
-    private final BlockStateModelSet blockModels;
-    private final FluidStateModelSet fluidModels;
+    private final BlockModelShaper blockModels;
+    private final LiquidBlockRenderer fluidModels;
     private final BlockColors blockColors;
-    private final boolean ambientOcclusion;
 
-    private WorldPreviewCompileInput(BlockAndTintGetter region, BlockStateModelSet blockModels,
-            FluidStateModelSet fluidModels, BlockColors blockColors, boolean ambientOcclusion) {
+    private WorldPreviewCompileInput(BlockAndTintGetter region, BlockModelShaper blockModels,
+            LiquidBlockRenderer fluidModels, BlockColors blockColors) {
         this.region = region;
         this.blockModels = blockModels;
         this.fluidModels = fluidModels;
         this.blockColors = blockColors;
-        this.ambientOcclusion = ambientOcclusion;
     }
 
     public static WorldPreviewCompileInput capture(Level level, BlockPos controllerPos,
@@ -73,17 +70,15 @@ public final class WorldPreviewCompileInput {
 
         Biome defaultBiome = level.getBiome(controllerPos).value();
         return new WorldPreviewCompileInput(new SnapshotRegion(states, biomes, defaultBiome,
-                level.getMinY(), level.getHeight(),
-                level.getLightEngine()), minecraft.getModelManager().getBlockStateModelSet(),
-                minecraft.getModelManager().getFluidStateModelSet(), minecraft.getBlockColors(),
-                minecraft.options.ambientOcclusion().get());
+                level.getMinBuildHeight(), level.getHeight(),
+                level.getLightEngine()), minecraft.getBlockRenderer().getBlockModelShaper(),
+                minecraft.getBlockRenderer().getLiquidBlockRenderer(), minecraft.getBlockColors());
     }
 
     BlockAndTintGetter region() { return region; }
-    BlockStateModelSet blockModels() { return blockModels; }
-    FluidStateModelSet fluidModels() { return fluidModels; }
+    BlockModelShaper blockModels() { return blockModels; }
+    LiquidBlockRenderer fluidModels() { return fluidModels; }
     BlockColors blockColors() { return blockColors; }
-    boolean ambientOcclusion() { return ambientOcclusion; }
 
     private record SnapshotRegion(Map<Long, BlockState> states, Map<Long, Biome> biomes, Biome defaultBiome, int minY,
                                   int height, LevelLightEngine lightEngine) implements BlockAndTintGetter {
@@ -118,7 +113,7 @@ public final class WorldPreviewCompileInput {
             }
 
             @Override
-            public int getMinY() {
+            public int getMinBuildHeight() {
                 return minY;
             }
 
@@ -133,8 +128,8 @@ public final class WorldPreviewCompileInput {
             }
 
             @Override
-            public CardinalLighting cardinalLighting() {
-                return CardinalLighting.DEFAULT;
+            public float getShade(net.minecraft.core.Direction direction, boolean shade) {
+                return 1.0F;
             }
 
             @Override

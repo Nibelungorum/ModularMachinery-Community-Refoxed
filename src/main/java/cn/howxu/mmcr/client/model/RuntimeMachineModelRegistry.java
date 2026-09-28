@@ -238,7 +238,8 @@ public final class RuntimeMachineModelRegistry {
         ResourceLocation loader = definition.modelKind() == DynamicOverlayBakedModel.Kind.CONTROLLER
                 ? DynamicOverlayModelLoader.CONTROLLER_ID : DynamicOverlayModelLoader.PORT_ID;
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(definition.block());
-        return "{\n  \"loader\": \"" + loader + "\",\n  \"block\": \"" + blockId + "\"\n}\n";
+        return "{\n  \"parent\": \"" + definition.itemDescription().baseModel()
+                + "\",\n  \"loader\": \"" + loader + "\",\n  \"block\": \"" + blockId + "\"\n}\n";
     }
 
     public record RuntimeBlockStateDefinition(ResourceLocation id, List<RuntimeVariant> variants) {

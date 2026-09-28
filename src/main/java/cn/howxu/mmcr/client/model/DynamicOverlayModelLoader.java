@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
+import cn.howxu.mmcr.compat.athena.AthenaModelBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonDeserializationContext;
@@ -220,7 +221,10 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             BlockState appearance = sourceState.get();
             BakedModel sourceModel = Minecraft.getInstance().getModelManager()
                     .getBlockModelShaper().getBlockModel(appearance);
-            ModelData sourceData = sourceModel.getModelData(level, pos, appearance, modelData);
+            ModelData sourceData = AthenaModelBridge.get().modelData(sourceModel, level, pos, appearance, modelData);
+            if (sourceData == null) {
+                sourceData = sourceModel.getModelData(level, pos, appearance, modelData);
+            }
             return modelData.derive().with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData)).build();
         }
 
@@ -234,7 +238,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             List<BakedQuad> quads = new ArrayList<>();
             CtmContext ctm = modelData.get(CTM_CONTEXT);
             if (ctm != null) {
-                quads.addAll(ctm.model().getQuads(ctm.state(), side, random, ctm.data(), renderType));
+                quads.addAll(ctm.model().getQuads(ctm.state(), side, random, ctm.data(), null));
             } else if (side != null) {
                 DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
                 quads.add(face(side, Direction.NORTH, baseSprite(textures.base().forFace(side)), 0.0f));
@@ -249,15 +253,18 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             if (side != null || itemDescription == null || itemDescription.kind() == null) {
                 return List.of();
             }
+            DynamicOverlayItemModel.Description description = itemDescription.kind()
+                    == DynamicOverlayBakedModel.Kind.CONTROLLER
+                    ? DynamicOverlayItemModel.Description.controller(itemDescription.machineId()) : itemDescription;
             DynamicOverlayBakedModel.FaceTextures base = DynamicOverlayBakedModel.resolveBase(
-                    itemDescription.baseTextureSource());
+                    description.baseTextureSource());
             List<BakedQuad> quads = new ArrayList<>();
             for (Direction direction : Direction.values()) {
                 quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
             }
-            for (OverlayLayer layer : overlayLayers(itemDescription.overlayTextures(),
-                    itemDescription.stateOverlayTexture())) {
-                for (Direction direction : itemDescription.overlayFaces()) {
+            for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
+                    description.stateOverlayTexture())) {
+                for (Direction direction : description.overlayFaces()) {
                     quads.add(face(direction, Direction.NORTH, sprite(layer.texture()), layer.grow()));
                 }
             }
@@ -314,6 +321,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             builder.setSprite(sprite);
             builder.setDirection(direction);
             builder.setShade(true);
+            builder.setHasAmbientOcclusion(true);
             Vec3i normal = direction.getNormal();
             for (Vector3f vertex : vertices(direction, grow)) {
                 float[] uv = uv(direction, rollFacing, vertex);

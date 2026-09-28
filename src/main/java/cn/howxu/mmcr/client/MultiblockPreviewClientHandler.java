@@ -15,7 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.block.model.BlockModel;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -316,11 +316,13 @@ public final class MultiblockPreviewClientHandler {
             RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
             RenderSystem.getModelViewStack().translate((float) -camera.x, (float) -camera.y, (float) -camera.z);
             if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
-                mesh.draw(ChunkSectionLayer.SOLID);
-                mesh.draw(ChunkSectionLayer.CUTOUT);
+                mesh.draw(RenderType.solid());
+                mesh.draw(RenderType.cutoutMipped());
+                mesh.draw(RenderType.cutout());
             } else {
                 mesh.resortTranslucent(camera);
-                mesh.draw(ChunkSectionLayer.TRANSLUCENT);
+                mesh.draw(RenderType.translucent());
+                mesh.draw(RenderType.tripwire());
             }
         } finally {
             RenderSystem.getModelViewStack().popMatrix();

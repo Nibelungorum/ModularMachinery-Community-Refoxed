@@ -1,13 +1,10 @@
 package cn.howxu.mmcr.compat.athena;
 
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
-
-import java.util.List;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
 /**
  * No-op Athena bridge used when Athena is absent.
@@ -21,8 +18,8 @@ final class UnavailableAthenaModelBridge implements AthenaModelBridge {
     }
 
     @Override
-    public boolean collectParts(BlockStateModel sourceModel, BlockAndTintGetter level, BlockPos pos,
-                                BlockState appearance, RandomSource random, List<BlockStateModelPart> parts) {
-        return false;
+    public ModelData modelData(BakedModel sourceModel, BlockAndTintGetter level, BlockPos pos,
+                               BlockState appearance, ModelData fallback) {
+        return null;
     }
 }

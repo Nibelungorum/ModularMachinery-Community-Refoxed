@@ -10,7 +10,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.*;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Block;
@@ -86,7 +86,7 @@ class WorldPreviewMeshCompilerTest {
         var plan = WorldPreviewMeshCompiler.plan(BlockPos.ZERO,
                 List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE);
 
-        assertThat(plan.entries().getFirst().fluidLayer()).isEqualTo(ChunkSectionLayer.TRANSLUCENT);
+        assertThat(plan.entries().getFirst().fluidLayer()).isEqualTo(RenderType.translucent());
     }
 
     @Test
@@ -99,8 +99,8 @@ class WorldPreviewMeshCompilerTest {
 
     @Test
     void translucentLayerPublishesSortMetadata() {
-        assertThat(WorldPreviewMeshCompiler.hasSortMetadata(ChunkSectionLayer.TRANSLUCENT)).isTrue();
-        assertThat(WorldPreviewMeshCompiler.hasSortMetadata(ChunkSectionLayer.SOLID)).isFalse();
+        assertThat(WorldPreviewMeshCompiler.hasSortMetadata(RenderType.translucent())).isTrue();
+        assertThat(WorldPreviewMeshCompiler.hasSortMetadata(RenderType.solid())).isFalse();
     }
 
     @Test
@@ -123,7 +123,7 @@ class WorldPreviewMeshCompilerTest {
                     resources.set(captured);
                     MeshData mesh = nonEmptyMeshData();
                     intermediateMesh.set(mesh);
-                    captured.meshes().put(ChunkSectionLayer.CUTOUT, mesh);
+                    captured.meshes().put(RenderType.cutout(), mesh);
                     throw new IllegalStateException("injected compile failure");
                 }))
                 .isInstanceOf(IllegalStateException.class)
@@ -140,7 +140,7 @@ class WorldPreviewMeshCompilerTest {
         try (WorldPreviewMesh mesh = WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
                 List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE,
                 new Vec3(0, 0, 0), new AtomicBoolean())) {
-            assertThat(mesh.meshes()).containsKey(ChunkSectionLayer.TRANSLUCENT);
+            assertThat(mesh.meshes()).containsKey(RenderType.translucent());
             assertThat(mesh.translucentSortState()).isNotNull();
         }
     }
@@ -172,7 +172,7 @@ class WorldPreviewMeshCompilerTest {
     void worldPreviewMeshCloseIsIdempotent() {
         var owner = new CloseCounter();
         var meshData = nonEmptyMeshData();
-        var mesh = new WorldPreviewMesh(owner, Map.of(ChunkSectionLayer.SOLID, meshData), null, Set.of());
+        var mesh = new WorldPreviewMesh(owner, Map.of(RenderType.solid(), meshData), null, Set.of());
 
         mesh.close();
         mesh.close();

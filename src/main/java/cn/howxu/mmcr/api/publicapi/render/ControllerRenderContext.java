@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
@@ -18,7 +18,7 @@ import java.util.Objects;
  */
 public record ControllerRenderContext(
         BlockPos controllerPos,
-        Identifier machineId,
+        ResourceLocation machineId,
         @Nullable Direction facing,
         StructureView structure,
         CraftingView crafting,
@@ -46,7 +46,7 @@ public record ControllerRenderContext(
      * @author howxu <dev@howxu.cn>
      */
     public record CraftingView(
-            @Nullable Identifier recipeId,
+            @Nullable ResourceLocation recipeId,
             CraftingStatus.Status status,
             String statusMessage,
             @Nullable ExecutionStatus failure,

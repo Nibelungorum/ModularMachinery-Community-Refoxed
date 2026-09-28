@@ -3,23 +3,23 @@ package cn.howxu.mmcr.client.preview.world;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.color.block.BlockColors;
-import net.minecraft.client.renderer.block.BlockStateModelSet;
-import net.minecraft.client.renderer.block.FluidStateModelSet;
-import net.minecraft.client.renderer.block.BlockQuadOutput;
-import net.minecraft.client.renderer.block.FluidRenderer;
+import net.minecraft.client.renderer.block.BlockModelShaper;
+import net.minecraft.client.renderer.block.LiquidBlockRenderer;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.CardinalLighting;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -65,7 +66,8 @@ public final class WorldPreviewMeshCompiler {
             if (state.isAir()) continue;
             BlockPos position = controllerPos.offset(entry.relativePos()).immutable();
             if (state.hasBlockEntity()) blockEntities.add(position);
-            ChunkSectionLayer fluidLayer = state.getFluidState().isEmpty() ? null : ChunkSectionLayer.TRANSLUCENT;
+            RenderType fluidLayer = state.getFluidState().isEmpty()
+                    ? null : ItemBlockRenderTypes.getRenderLayer(state.getFluidState());
             planned.add(new PlannedEntry(position, state, fluidLayer));
         }
         return new CompilationPlan(planned, blockEntities);
@@ -75,8 +77,8 @@ public final class WorldPreviewMeshCompiler {
         return FULL_BRIGHT_LEVEL;
     }
 
-    static boolean hasSortMetadata(ChunkSectionLayer layer) {
-        return layer == ChunkSectionLayer.TRANSLUCENT;
+    static boolean hasSortMetadata(RenderType layer) {
+        return layer.sortOnUpload();
     }
 
     static boolean needsTranslucentResort(Vec3 previousCamera, Vec3 camera) {
@@ -96,13 +98,13 @@ public final class WorldPreviewMeshCompiler {
         if (cancelled.get()) throw new CancelledCompilation();
         CompilationPlan plan = plan(controllerPos, entries, selectedLayer);
         if (minecraft == null) {
-            return compileInternal(null, null, null, false, null, plan, camera, cancelled, failureInjector);
+            return compileInternal(null, null, null, null, plan, camera, cancelled, failureInjector);
         }
         Map<BlockPos, BlockState> visibleStates = new LinkedHashMap<>();
         plan.entries().forEach(entry -> visibleStates.put(entry.position(), entry.state()));
-        return compileInternal(minecraft.getModelManager().getBlockStateModelSet(),
-                minecraft.getModelManager().getFluidStateModelSet(), minecraft.getBlockColors(),
-                minecraft.options.ambientOcclusion().get(), region(level, visibleStates), plan,
+        return compileInternal(minecraft.getBlockRenderer().getBlockModelShaper(),
+                minecraft.getBlockRenderer().getLiquidBlockRenderer(), minecraft.getBlockColors(),
+                region(level, visibleStates), plan,
                 camera, cancelled, failureInjector);
     }
 
@@ -110,47 +112,51 @@ public final class WorldPreviewMeshCompiler {
             List<MultiblockPreviewSnapshot.Entry> entries, int selectedLayer, Vec3 camera,
             AtomicBoolean cancelled) {
         return compileInternal(input.blockModels(), input.fluidModels(), input.blockColors(),
-                input.ambientOcclusion(), input.region(), plan(controllerPos, entries, selectedLayer),
+                input.region(), plan(controllerPos, entries, selectedLayer),
                 camera, cancelled, ignored -> { });
     }
 
-    private static WorldPreviewMesh compileInternal(BlockStateModelSet modelSet, FluidStateModelSet fluidSet,
-            BlockColors blockColors, boolean ambientOcclusion, BlockAndTintGetter region,
+    private static WorldPreviewMesh compileInternal(BlockModelShaper modelSet, LiquidBlockRenderer fluidRenderer,
+            BlockColors blockColors, BlockAndTintGetter region,
             CompilationPlan plan, Vec3 camera, AtomicBoolean cancelled,
             Consumer<CompilationResources> failureInjector) {
         SectionBufferBuilderPack builders = new SectionBufferBuilderPack();
-        Map<ChunkSectionLayer, BufferBuilder> started = new EnumMap<>(ChunkSectionLayer.class);
-        Map<ChunkSectionLayer, MeshData> meshes = new EnumMap<>(ChunkSectionLayer.class);
+        Map<RenderType, BufferBuilder> started = new LinkedHashMap<>();
+        Map<RenderType, MeshData> meshes = new LinkedHashMap<>();
         Set<BlockPos> blockEntities = new HashSet<>();
         CompilationResources resources = new CompilationResources(builders, meshes);
         try {
             failureInjector.accept(resources);
             if (cancelled.get()) throw new CancelledCompilation();
-            ModelBlockRenderer blockRenderer = new ModelBlockRenderer(
-                    ambientOcclusion, true, blockColors);
-            FluidRenderer fluidRenderer = new FluidRenderer(fluidSet);
+            ModelBlockRenderer blockRenderer = new ModelBlockRenderer(blockColors);
             blockEntities.addAll(plan.blockEntityPositions());
-            Map<BlockState, BlockStateModel> models = new HashMap<>();
+            Map<BlockState, BakedModel> models = new HashMap<>();
             for (PlannedEntry planned : plan.entries()) {
                 if (cancelled.get()) throw new CancelledCompilation();
                 BlockPos position = planned.position();
                 BlockState state = planned.state();
                 if (planned.fluidLayer() != null) {
-                    FluidRenderer.Output fluidOutput = layer -> builderFor(started, builders, planned.fluidLayer());
-                    fluidRenderer.tesselate(region, position, offset(fluidOutput, position), state, state.getFluidState());
+                    fluidRenderer.tesselate(region, position,
+                            offset(builderFor(started, builders, planned.fluidLayer()), position),
+                            state, state.getFluidState());
                 }
                 if (state.getRenderShape() == RenderShape.MODEL) {
-                    BlockStateModel model = models.computeIfAbsent(state, modelSet::get);
-                    BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
-                            quad.materialInfo().layer()).putBlockBakedQuad(x, y, z, quad, instance);
-                    blockRenderer.tesselateBlock(blockOutput, position.getX(), position.getY(), position.getZ(),
-                            region, position, state, model, state.getSeed(position));
+                    BakedModel model = models.computeIfAbsent(state, modelSet::getBlockModel);
+                    ModelData modelData = model.getModelData(region, position, state, region.getModelData(position));
+                    RandomSource random = RandomSource.create(state.getSeed(position));
+                    for (RenderType renderType : model.getRenderTypes(state, random, modelData)) {
+                        PoseStack poseStack = new PoseStack();
+                        poseStack.translate(position.getX(), position.getY(), position.getZ());
+                        blockRenderer.tesselateBlock(region, model, state, position, poseStack,
+                                builderFor(started, builders, renderType), true, random,
+                                state.getSeed(position), OverlayTexture.NO_OVERLAY, modelData, renderType);
+                    }
                 }
             }
             if (cancelled.get()) throw new CancelledCompilation();
             MeshData.SortState sortState = null;
             VertexSorting sorting = VertexSorting.byDistance((float) camera.x, (float) camera.y, (float) camera.z);
-            for (Map.Entry<ChunkSectionLayer, BufferBuilder> entry : started.entrySet()) {
+            for (Map.Entry<RenderType, BufferBuilder> entry : started.entrySet()) {
                 MeshData mesh = entry.getValue().build();
                 if (mesh == null) continue;
                 if (hasSortMetadata(entry.getKey())) {
@@ -188,10 +194,10 @@ public final class WorldPreviewMeshCompiler {
         if (failure != null) throw failure;
     }
 
-    private static BufferBuilder builderFor(Map<ChunkSectionLayer, BufferBuilder> started,
-            SectionBufferBuilderPack builders, ChunkSectionLayer layer) {
+    private static BufferBuilder builderFor(Map<RenderType, BufferBuilder> started,
+            SectionBufferBuilderPack builders, RenderType layer) {
         return started.computeIfAbsent(layer, key -> new BufferBuilder(builders.buffer(key),
-                VertexFormat.Mode.QUADS, key.vertexFormat()));
+                key.mode(), key.format()));
     }
 
     private static BlockAndTintGetter region(Level level, Map<BlockPos, BlockState> states) {
@@ -204,11 +210,13 @@ public final class WorldPreviewMeshCompiler {
             }
             @Override public BlockEntity getBlockEntity(BlockPos position) { return level.getBlockEntity(position); }
             @Override public int getHeight() { return level.getHeight(); }
-            @Override public int getMinY() { return level.getMinY(); }
+            @Override public int getMinBuildHeight() { return level.getMinBuildHeight(); }
             @Override public int getBrightness(LightLayer lightLayer, BlockPos position) {
                 return previewLight(lightLayer, position);
             }
-            @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
+            @Override public float getShade(net.minecraft.core.Direction direction, boolean shade) {
+                return level.getShade(direction, shade);
+            }
             @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
                 return resolver.getColor(level.getBiome(position).value(), position.getX(), position.getZ());
@@ -216,11 +224,11 @@ public final class WorldPreviewMeshCompiler {
         };
     }
 
-    private static FluidRenderer.Output offset(FluidRenderer.Output output, BlockPos position) {
+    private static VertexConsumer offset(VertexConsumer output, BlockPos position) {
         float x = position.getX() & ~15;
         float y = position.getY() & ~15;
         float z = position.getZ() & ~15;
-        return layer -> new SectionOriginConsumer(output.getBuilder(layer), x, y, z);
+        return new SectionOriginConsumer(output, x, y, z);
     }
 
     private record SectionOriginConsumer(VertexConsumer delegate, float x, float y, float z) implements VertexConsumer {
@@ -259,26 +267,22 @@ public final class WorldPreviewMeshCompiler {
             return delegate.setNormal(x, y, z);
         }
 
-        @Override
-        public VertexConsumer setLineWidth(float width) {
-            return delegate.setLineWidth(width);
-        }
         }
 
     static final class CancelledCompilation extends RuntimeException { }
 
     static final class CompilationResources {
         private final SectionBufferBuilderPack builders;
-        private final Map<ChunkSectionLayer, MeshData> meshes;
+        private final Map<RenderType, MeshData> meshes;
         private boolean closed;
 
-        private CompilationResources(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, MeshData> meshes) {
+        private CompilationResources(SectionBufferBuilderPack builders, Map<RenderType, MeshData> meshes) {
             this.builders = builders;
             this.meshes = meshes;
         }
 
         SectionBufferBuilderPack builders() { return builders; }
-        Map<ChunkSectionLayer, MeshData> meshes() { return meshes; }
+        Map<RenderType, MeshData> meshes() { return meshes; }
         boolean closed() { return closed; }
         void markClosed() { closed = true; }
     }
@@ -290,5 +294,5 @@ public final class WorldPreviewMeshCompiler {
         }
     }
 
-    record PlannedEntry(BlockPos position, BlockState state, ChunkSectionLayer fluidLayer) { }
+    record PlannedEntry(BlockPos position, BlockState state, RenderType fluidLayer) { }
 }

@@ -12,12 +12,10 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,39 +40,36 @@ class MachineControllerRendererDispatcherTest {
 
     @Test
     void rendererFailureIsLoggedAndDoesNotEscapeSubmit() {
-        Identifier machine = Identifier.fromNamespaceAndPath("test", "machine");
-        ControllerRenderer renderer = (context, poseStack, collector, camera) -> {
+        ResourceLocation machine = ResourceLocation.fromNamespaceAndPath("test", "machine");
+        ControllerRenderer renderer = (context, poseStack, buffers, light, overlay) -> {
             throw new IllegalStateException("test failure");
         };
         MachineControllerRendererDispatcher dispatcher =
                 new MachineControllerRendererDispatcher(machine, renderer);
 
         assertDoesNotThrow(() -> dispatcher.invokeForTesting(
-                null, new PoseStack(), null, null));
+                null, new PoseStack(), null, 0, 0));
     }
 
     @Test
     void unavailableStructureDoesNotInvokeRenderer() {
-        Identifier machine = MMCR.id("test_cube");
+        ResourceLocation machine = MMCR.id("test_cube");
         AtomicBoolean invoked = new AtomicBoolean();
-        ControllerRenderer renderer = (context, poseStack, collector, camera) -> invoked.set(true);
+        ControllerRenderer renderer = (context, poseStack, buffers, light, overlay) -> invoked.set(true);
         MachineControllerRendererDispatcher dispatcher =
                 new MachineControllerRendererDispatcher(machine, renderer);
         MachineControllerBlockEntity controller = new SnapshotController(machine,
                 snapshot(machine, StructureSnapshot.empty()));
-        MachineControllerRendererDispatcher.ControllerRenderState state = dispatcher.createRenderState();
-
-        dispatcher.extractRenderState(controller, state, 0.0F, Vec3.ZERO, null);
-        dispatcher.submit(state, new PoseStack(), null, null);
+        dispatcher.render(controller, 0.0F, new PoseStack(), null, 0, 0);
 
         assertFalse(invoked.get());
     }
 
     @Test
     void configuredUnformedMachineStillInvokesRenderer() {
-        Identifier machine = MMCR.id("test_cube");
+        ResourceLocation machine = MMCR.id("test_cube");
         AtomicBoolean invoked = new AtomicBoolean();
-        ControllerRenderer renderer = (context, poseStack, collector, camera) -> {
+        ControllerRenderer renderer = (context, poseStack, buffers, light, overlay) -> {
             invoked.set(true);
             assertFalse(context.structure().formed());
             assertTrue(context.structure().structureAreaLoaded());
@@ -85,21 +80,18 @@ class MachineControllerRendererDispatcherTest {
                 new MachineControllerRendererDispatcher(machine, renderer);
         MachineControllerBlockEntity controller = new SnapshotController(machine,
                 snapshot(machine, configuredUnformedStructure(machine)));
-        MachineControllerRendererDispatcher.ControllerRenderState state = dispatcher.createRenderState();
-
-        dispatcher.extractRenderState(controller, state, 0.0F, Vec3.ZERO, null);
-        dispatcher.submit(state, new PoseStack(), null, null);
+        dispatcher.render(controller, 0.0F, new PoseStack(), null, 0, 0);
 
         assertTrue(invoked.get());
     }
 
     @Test
     void rendererMetadataFailureDoesNotEscapeOrExpandRenderRange() {
-        Identifier machine = MMCR.id("test_cube");
+        ResourceLocation machine = MMCR.id("test_cube");
         ControllerRenderer renderer = new ControllerRenderer() {
             @Override
             public void render(ControllerRenderContext context, PoseStack poseStack,
-                               SubmitNodeCollector collector, CameraRenderState camera) {
+                               MultiBufferSource buffers, int light, int overlay) {
             }
 
             @Override
@@ -114,18 +106,20 @@ class MachineControllerRendererDispatcherTest {
         };
         MachineControllerRendererDispatcher dispatcher =
                 new MachineControllerRendererDispatcher(machine, renderer);
+        MachineControllerBlockEntity controller = new SnapshotController(machine,
+                snapshot(machine, StructureSnapshot.empty()));
 
-        assertDoesNotThrow(() -> assertFalse(dispatcher.shouldRenderOffScreen()));
+        assertDoesNotThrow(() -> assertFalse(dispatcher.shouldRenderOffScreen(controller)));
         assertDoesNotThrow(() -> assertEquals(64, dispatcher.getViewDistance()));
     }
 
-    private static ControllerRuntimeSnapshot snapshot(Identifier machine, StructureSnapshot structure) {
+    private static ControllerRuntimeSnapshot snapshot(ResourceLocation machine, StructureSnapshot structure) {
         return new ControllerRuntimeSnapshot(structure, 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 null, 0, null, null, List.of(), List.of(), List.of(),
                 machine.toString(), "", 0, false, false, 0, 0L, 1L);
     }
 
-    private static StructureSnapshot configuredUnformedStructure(Identifier machine) {
+    private static StructureSnapshot configuredUnformedStructure(ResourceLocation machine) {
         return new StructureSnapshot(new DynamicMachine(machine, "test", new BlockArray(Map.of())),
                 null, null, null, null, Direction.SOUTH, 0, false, 0L,
                 null, null, null, true, true, Set.of());
@@ -134,7 +128,7 @@ class MachineControllerRendererDispatcherTest {
     private static final class SnapshotController extends MachineControllerBlockEntity {
         private final ControllerRuntimeSnapshot snapshot;
 
-        private SnapshotController(Identifier machine, ControllerRuntimeSnapshot snapshot) {
+        private SnapshotController(ResourceLocation machine, ControllerRuntimeSnapshot snapshot) {
             super(BlockPos.ZERO, ModBlocks.controllerFor(machine).get().defaultBlockState());
             this.snapshot = snapshot;
         }

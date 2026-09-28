@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 
 import java.util.Collection;
@@ -16,14 +16,14 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public class MMCRMachineRendersEvent extends Event {
-    private final Set<Identifier> machineIds;
-    private final Map<Identifier, ControllerRenderer> renderers = new LinkedHashMap<>();
+    private final Set<ResourceLocation> machineIds;
+    private final Map<ResourceLocation, ControllerRenderer> renderers = new LinkedHashMap<>();
     private boolean frozen;
 
-    public MMCRMachineRendersEvent(Collection<Identifier> machineIds) {
+    public MMCRMachineRendersEvent(Collection<ResourceLocation> machineIds) {
         if (machineIds == null) throw new ApiRegistrationException("machineIds must not be null");
-        LinkedHashSet<Identifier> copied = new LinkedHashSet<>();
-        for (Identifier machineId : machineIds) {
+        LinkedHashSet<ResourceLocation> copied = new LinkedHashSet<>();
+        for (ResourceLocation machineId : machineIds) {
             if (machineId == null) throw new ApiRegistrationException("machine id must not be null");
             if (!copied.add(machineId)) {
                 throw new ApiRegistrationException("Duplicate machine id: " + machineId);
@@ -32,7 +32,7 @@ public class MMCRMachineRendersEvent extends Event {
         this.machineIds = Collections.unmodifiableSet(copied);
     }
 
-    public void register(Identifier machineId, ControllerRenderer renderer) {
+    public void register(ResourceLocation machineId, ControllerRenderer renderer) {
         if (frozen) throw new IllegalStateException("Machine renders are frozen");
         if (machineId == null) throw new ApiRegistrationException("machine id must not be null");
         if (renderer == null) throw new ApiRegistrationException("renderer must not be null");
@@ -44,7 +44,7 @@ public class MMCRMachineRendersEvent extends Event {
         }
     }
 
-    public Map<Identifier, ControllerRenderer> renderers() {
+    public Map<ResourceLocation, ControllerRenderer> renderers() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(renderers));
     }
 

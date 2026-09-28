@@ -7,43 +7,29 @@ import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
-import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
-import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
 
 /** Dispatches a machine controller's published state to its public renderer.
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineControllerRendererDispatcher
-        implements BlockEntityRenderer<MachineControllerBlockEntity, MachineControllerRendererDispatcher.ControllerRenderState> {
-    private final Identifier machineId;
+        implements BlockEntityRenderer<MachineControllerBlockEntity> {
+    private final ResourceLocation machineId;
     private final ControllerRenderer renderer;
 
-    public MachineControllerRendererDispatcher(Identifier machineId, ControllerRenderer renderer) {
+    public MachineControllerRendererDispatcher(ResourceLocation machineId, ControllerRenderer renderer) {
         this.machineId = machineId;
         this.renderer = renderer;
     }
 
     @Override
-    public ControllerRenderState createRenderState() {
-        return new ControllerRenderState();
-    }
-
-    @Override
-    public void extractRenderState(MachineControllerBlockEntity controller, ControllerRenderState state,
-                                   float partialTick, Vec3 cameraPosition,
-                                   @Nullable ModelFeatureRenderer.CrumblingOverlay breakProgress) {
-        BlockEntityRenderer.super.extractRenderState(controller, state, partialTick, cameraPosition, breakProgress);
-        state.context = null;
-
+    public void render(MachineControllerBlockEntity controller, float partialTick, PoseStack poseStack,
+                       MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
         if (!machineId.toString().equals(snapshot.machineId())) return;
 
@@ -56,7 +42,7 @@ public final class MachineControllerRendererDispatcher
             facing = blockState.getValue(MachineControllerBlock.FACING);
         }
 
-        state.context = new ControllerRenderContext(
+        ControllerRenderContext context = new ControllerRenderContext(
                 controller.getBlockPos(), machineId, facing,
                 new ControllerRenderContext.StructureView(
                         structure.formed(), structure.structureAreaLoaded(), structure.matchedStage()),
@@ -66,24 +52,17 @@ public final class MachineControllerRendererDispatcher
                         snapshot.crafting().tick(), snapshot.crafting().totalTick(),
                         snapshot.crafting().parallelism(), snapshot.crafting().maxParallelism(),
                         snapshot.crafting().recipeLocked(), snapshot.crafting().lockedRecipeId()),
-                snapshot.dataStorageValues(), state.lightCoords, partialTick);
+                snapshot.dataStorageValues(), packedLight, partialTick);
+        invokeForTesting(context, poseStack, bufferSource, packedLight, packedOverlay);
     }
 
     @Override
-    public void submit(ControllerRenderState state, PoseStack poseStack,
-                       SubmitNodeCollector nodeCollector, CameraRenderState camera) {
-        if (state.context != null) {
-            invokeForTesting(state.context, poseStack, nodeCollector, camera);
-        }
-    }
-
-    @Override
-    public boolean shouldRenderOffScreen() {
+    public boolean shouldRenderOffScreen(MachineControllerBlockEntity controller) {
         try {
             return renderer.shouldRenderOffScreen();
         } catch (RuntimeException exception) {
             MMCR.LOG.error("Controller renderer off-screen metadata failed for machine {}", machineId, exception);
-            return BlockEntityRenderer.super.shouldRenderOffScreen();
+            return BlockEntityRenderer.super.shouldRenderOffScreen(controller);
         }
     }
 
@@ -99,19 +78,16 @@ public final class MachineControllerRendererDispatcher
 
     @Override
     public AABB getRenderBoundingBox(MachineControllerBlockEntity controller) {
-        return shouldRenderOffScreen() ? AABB.INFINITE : new AABB(controller.getBlockPos());
+        return shouldRenderOffScreen(controller) ? AABB.INFINITE : new AABB(controller.getBlockPos());
     }
 
-    void invokeForTesting(@Nullable ControllerRenderContext context, PoseStack poseStack,
-                          SubmitNodeCollector nodeCollector, CameraRenderState camera) {
+    void invokeForTesting(ControllerRenderContext context, PoseStack poseStack,
+                          MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         try {
-            renderer.render(context, poseStack, nodeCollector, camera);
+            renderer.render(context, poseStack, bufferSource, packedLight, packedOverlay);
         } catch (RuntimeException exception) {
             MMCR.LOG.error("Controller renderer failed for machine {}", machineId, exception);
         }
     }
 
-    public static final class ControllerRenderState extends BlockEntityRenderState {
-        private @Nullable ControllerRenderContext context;
-    }
 }
