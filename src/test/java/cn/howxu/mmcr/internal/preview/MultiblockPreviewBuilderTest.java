@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.MMCR;
 import java.util.Collection;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -152,7 +153,7 @@ class MultiblockPreviewBuilderTest {
 
     @Test
     void preview_state_returns_one_block_for_a_tag_predicate() throws Exception {
-        TagKey<Block> tag = TagKey.create(BuiltInRegistries.BLOCK.key(), Identifier.fromNamespaceAndPath("mmcr", "preview_test"));
+        TagKey<Block> tag = TagKey.create(BuiltInRegistries.BLOCK.key(), MMCR.id("preview_test"));
         var bindTags = Class.forName("net.minecraft.core.Holder$Reference").getDeclaredMethod("bindTags", Collection.class);
         bindTags.setAccessible(true);
         bindTags.invoke(Blocks.OAK_LOG.builtInRegistryHolder(), Set.of(tag));

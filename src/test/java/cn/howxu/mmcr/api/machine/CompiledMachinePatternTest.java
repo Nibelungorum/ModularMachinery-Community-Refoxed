@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -36,7 +37,7 @@ class CompiledMachinePatternTest {
     @Test
     void registering_machine_builds_compiled_pattern_and_prewarms_rotations() {
         BlockArray pattern = pattern();
-        Machine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "compiled_test"), "Compiled Test", pattern);
+        Machine machine = new DynamicMachine(MMCR.id("compiled_test"), "Compiled Test", pattern);
 
         MachineRegistry.register(machine);
 
@@ -70,7 +71,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void clear_for_testing_clears_compiled_patterns() {
-        Machine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "clear_test"), "Clear Test", pattern());
+        Machine machine = new DynamicMachine(MMCR.id("clear_test"), "Clear Test", pattern());
         MachineRegistry.register(machine);
 
         MachineRegistry.clearForTesting();
@@ -80,7 +81,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void compiled_pattern_contains_rotated_replacements_for_horizontal_facing() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "compiled_replacement");
+        Identifier id = MMCR.id("compiled_replacement");
         BlockPos rawPos = new BlockPos(-1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(
@@ -110,7 +111,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void compiler_supports_non_dynamic_machine_without_replacements() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "plain_machine");
+        Identifier id = MMCR.id("plain_machine");
         Machine machine = new PlainMachine(id, "Plain Machine", pattern(), MachineControllerSpec.defaultsFor(id));
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);

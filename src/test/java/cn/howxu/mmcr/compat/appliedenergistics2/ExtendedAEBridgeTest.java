@@ -21,6 +21,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockE
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.MMCR;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -185,7 +186,7 @@ class ExtendedAEBridgeTest {
     }
 
     private static void bindTestEntityType(IOPortKind kind) {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr", kind.id());
+        Identifier id = MMCR.id(kind.id());
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {

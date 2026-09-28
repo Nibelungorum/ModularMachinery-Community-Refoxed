@@ -2047,7 +2047,7 @@ class FactoryRuntimeTest {
     }
 
     private static MachineRecipe cancellingInputRecipe(String path) {
-        return RecipeTestSupport.create(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"), 20,
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                  List.of(), List.of(), List.of(), 0, 1, true, List.of(), List.of(
                  new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                  ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
@@ -2068,7 +2068,7 @@ class FactoryRuntimeTest {
     }
 
     private static MachineRecipe recipe(String path, int duration) {
-        return RecipeTestSupport.create(Identifier.fromNamespaceAndPath(MMCR.MODID, path), MMCR.id("test_cube"),
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"),
                 duration, List.of(), List.of(), List.of(), 0, 2);
     }
 }

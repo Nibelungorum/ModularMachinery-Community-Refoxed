@@ -56,7 +56,7 @@ class StructurePreviewSchemaTest {
 
         assertThatThrownBy(() -> new StructurePreviewSchema(MMCR.id("preview_test"),
                 Map.of(statePosition, Blocks.IRON_BLOCK.defaultBlockState()),
-                Map.of(levelSlotPosition, Identifier.fromNamespaceAndPath("mmcr", "coil"))))
+                Map.of(levelSlotPosition, MMCR.id("coil"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("level slot position is not in preview schema");
     }

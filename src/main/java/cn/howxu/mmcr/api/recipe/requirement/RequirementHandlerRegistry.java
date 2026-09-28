@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
@@ -21,9 +22,9 @@ public final class RequirementHandlerRegistry {
             Identifier.fromNamespaceAndPath("minecraft", "item"),
             Identifier.fromNamespaceAndPath("minecraft", "fluid"),
             Identifier.fromNamespaceAndPath("neoforge", "energy"),
-            Identifier.fromNamespaceAndPath("mmcr", "smart_interface"),
-            Identifier.fromNamespaceAndPath("mmcr", "level"),
-            Identifier.fromNamespaceAndPath("mmcr", "stage"));
+            MMCR.id("smart_interface"),
+            MMCR.id("level"),
+            MMCR.id("stage"));
 
     private RequirementHandlerRegistry() {
     }

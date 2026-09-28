@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.capability.status;
 
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
+import cn.howxu.mmcr.MMCR;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -54,9 +55,9 @@ public record ExecutionStatus(
 
         FailureReason reason;
         try {
-            ResourceLocation reasonId = rawReason.contains(":")
-                    ? ResourceLocation.parse(rawReason)
-                    : ResourceLocation.fromNamespaceAndPath("mmcr", rawReason);
+            Identifier reasonId = rawReason.contains(":")
+                    ? Identifier.parse(rawReason)
+                    : MMCR.id(rawReason);
             reason = FailureReasonRegistry.find(reasonId);
         } catch (IllegalArgumentException exception) {
             reason = null;

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import cn.howxu.mmcr.MMCR;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -44,7 +46,7 @@ class OutputRegistryTest {
         assertThatThrownBy(() -> OutputRegistry.register(type(TEST_ID)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Duplicate output type");
-        assertThatThrownBy(() -> OutputRegistry.register(type(Identifier.fromNamespaceAndPath("mmcr", "item"))))
+        assertThatThrownBy(() -> OutputRegistry.register(type(MMCR.id("item"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reserved");
     }

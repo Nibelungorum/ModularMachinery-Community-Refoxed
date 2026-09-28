@@ -429,7 +429,7 @@ public final class TestBootstrap {
 
 
     private static Identifier id(String path) {
-        return Identifier.fromNamespaceAndPath(MMCR.MODID, path);
+        return MMCR.id(path);
     }
 
     private static void bindController(Identifier machineId) throws Exception {

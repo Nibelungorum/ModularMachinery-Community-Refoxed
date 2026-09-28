@@ -63,8 +63,8 @@ class RecipeApiSmokeTest {
 
     @Test
     void recipe_codec_roundtrip_preserves_modifiers_and_priority() {
-        var id = Identifier.fromNamespaceAndPath("mmcr", "smoke_with_mods");
-        var machineId = Identifier.fromNamespaceAndPath("mmcr", "smoke_machine");
+        var id = MMCR.id("smoke_with_mods");
+        var machineId = MMCR.id("smoke_machine");
         var mods = List.of(
                 new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F, RecipeModifier.Operation.MULTIPLY, false),
                 new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2.0F, RecipeModifier.Operation.ADD, false)
@@ -94,10 +94,10 @@ class RecipeApiSmokeTest {
     void recipe_codec_roundtrip_preserves_fluid_outputs_empty_and_one() {
         var waterHolder = bindFluidComponents(Fluids.WATER);
 
-        var machineId = Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_machine");
+        var machineId = MMCR.id("fluid_outputs_machine");
 
         var emptyRecipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_empty"),
+                MMCR.id("fluid_outputs_empty"),
                 machineId, 20,
                 List.of(),
                 List.of(),
@@ -105,7 +105,7 @@ class RecipeApiSmokeTest {
         );
 
         var oneRecipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "fluid_outputs_one"),
+                MMCR.id("fluid_outputs_one"),
                 machineId, 20,
                 List.of(),
                 List.of(),
@@ -145,8 +145,8 @@ class RecipeApiSmokeTest {
     @Test
     void recipe_codec_optional_fields_have_defaults() {
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "minimal"),
-                Identifier.fromNamespaceAndPath("mmcr", "minimal_machine"),
+                MMCR.id("minimal"),
+                MMCR.id("minimal_machine"),
                 20, List.of(), List.of()
         );
         var json = MachineRecipe.CODEC.codec().encodeStart(JsonOps.INSTANCE, recipe).getOrThrow();
@@ -225,8 +225,8 @@ class RecipeApiSmokeTest {
     @Test
     void active_recipe_uses_derived_duration_but_recipe_tick_time_stays_raw() {
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "duration_runtime"),
-                Identifier.fromNamespaceAndPath("mmcr", "duration_machine"),
+                MMCR.id("duration_runtime"),
+                MMCR.id("duration_machine"),
                 100,
                 List.of(),
                 List.of(),
@@ -246,8 +246,8 @@ class RecipeApiSmokeTest {
         bindFluidComponents(Fluids.WATER);
         bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "runtime_modifiers"),
-                Identifier.fromNamespaceAndPath("mmcr", "runtime_machine"),
+                MMCR.id("runtime_modifiers"),
+                MMCR.id("runtime_machine"),
                 100,
                 List.of(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
@@ -285,9 +285,9 @@ class RecipeApiSmokeTest {
         var machineA = MMCR.id("test_machine_name");
         var machineB = MMCR.id("controller_tick");
 
-        var recipe1 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
-        var recipe2 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
-        var recipe3 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r3"), machineB, 30, List.of(), List.of(), List.of(), 0, 1);
+        var recipe1 = RecipeTestSupport.create(MMCR.id("r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
+        var recipe2 = RecipeTestSupport.create(MMCR.id("r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
+        var recipe3 = RecipeTestSupport.create(MMCR.id("r3"), machineB, 30, List.of(), List.of(), List.of(), 0, 1);
 
         RecipeRegistry.registerStatic(recipe1);
         RecipeRegistry.registerStatic(recipe2);
@@ -297,13 +297,13 @@ class RecipeApiSmokeTest {
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
         assertThat(RecipeRegistry.recipesForPool(machineA)).containsExactly(recipe1, recipe2);
         assertThat(RecipeRegistry.recipesForPool(machineB)).containsExactly(recipe3);
-        assertThat(RecipeRegistry.recipesForPool(Identifier.fromNamespaceAndPath("mmcr", "unknown"))).isEmpty();
+        assertThat(RecipeRegistry.recipesForPool(MMCR.id("unknown"))).isEmpty();
     }
 
     @Test
     void active_recipe_nbt_roundtrip() {
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "active_test"),
+                MMCR.id("active_test"),
                 MMCR.id("test_machine_name"),
                 100, List.of(), List.of()
         );
@@ -333,8 +333,8 @@ class RecipeApiSmokeTest {
     @Test
     void active_recipe_marks_completed_when_tick_reaches_total() {
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "done_test"),
-                Identifier.fromNamespaceAndPath("mmcr", "done_test_machine"),
+                MMCR.id("done_test"),
+                MMCR.id("done_test_machine"),
                 10, List.of(), List.of()
         );
         RecipeRegistry.registerStatic(recipe);
@@ -346,8 +346,8 @@ class RecipeApiSmokeTest {
     @Test
     void active_recipe_does_not_recheck_started_inputs_mid_process() {
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "vanishing_input"),
-                Identifier.fromNamespaceAndPath("mmcr", "vanishing_input_machine"),
+                MMCR.id("vanishing_input"),
+                MMCR.id("vanishing_input_machine"),
                 10,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
                 List.of()
@@ -432,7 +432,7 @@ class RecipeApiSmokeTest {
         RequirementFailure requirementFailure = new RequirementFailure(
                 2, RequirementFailure.Kind.MISSING_OUTPUT, 8L, 5L, 3L,
                 List.of("output_bus"), List.of("output_bus"));
-        var source = Identifier.fromNamespaceAndPath("mmcr", "craft_check");
+        var source = MMCR.id("craft_check");
 
         var occurrence = FailureAdapters.occurrence(requirementFailure, source, FailurePhase.REQUIREMENT_PLAN);
 

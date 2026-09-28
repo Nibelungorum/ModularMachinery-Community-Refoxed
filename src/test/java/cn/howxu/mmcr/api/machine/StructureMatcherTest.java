@@ -4,6 +4,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.MMCR;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -36,7 +37,7 @@ class StructureMatcherTest {
     void matches_compiled_uses_pre_rotated_pattern_for_facing() {
         BlockArray pattern = new BlockArray(Map.of(
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
-        DynamicMachine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "matcher_compiled"), "Matcher Compiled", pattern);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("matcher_compiled"), "Matcher Compiled", pattern);
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
         BlockPos controllerPos = new BlockPos(32, 64, 32);
         Level level = LevelStub.create(Map.of(controllerPos.offset(0, 0, 1), Blocks.STONE));
@@ -49,7 +50,7 @@ class StructureMatcherTest {
         BlockPos rawPos = new BlockPos(1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
         DynamicMachine machine = new DynamicMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "matcher_compiled_replacement"),
+                MMCR.id("matcher_compiled_replacement"),
                 "Matcher Compiled Replacement", pattern);
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
         BlockPos controllerPos = new BlockPos(32, 64, 32);
@@ -131,7 +132,7 @@ class StructureMatcherTest {
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
                 new BlockPos(20, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
-        DynamicMachine machine = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "matcher_area_loaded"), "Matcher Area Loaded", pattern);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("matcher_area_loaded"), "Matcher Area Loaded", pattern);
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
         BlockPos controllerPos = new BlockPos(0, 64, 0);
         Level level = LevelStub.createWithLoadedChunks(
@@ -204,10 +205,10 @@ class StructureMatcherTest {
         var replacement = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
         DynamicMachine machine = new DynamicMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement"),
+                MMCR.id("matcher_rotated_replacement"),
                 "Matcher Rotated Replacement",
                 pattern,
-                MachineControllerSpec.defaultsFor(Identifier.fromNamespaceAndPath("mmcr", "matcher_rotated_replacement")),
+                MachineControllerSpec.defaultsFor(MMCR.id("matcher_rotated_replacement")),
                 PortRequirementSpec.none(),
                 List.of(),
                 Map.of(rawPos, List.of(replacement)));
@@ -227,7 +228,7 @@ class StructureMatcherTest {
         var replacement = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK), List.of(), ItemStack.EMPTY);
         MachineStructureDefinition definition = new MachineStructureDefinition(
-                Identifier.fromNamespaceAndPath("mmcr", "matcher_key_replacement"),
+                MMCR.id("matcher_key_replacement"),
                 List.of(new MachineStructureDefinition.Declaration(
                         MachineStructureDefinition.Declaration.Kind.FULL,
                         pattern,
@@ -292,7 +293,7 @@ class StructureMatcherTest {
                 new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(BlockPredicate.machineCoupler())),
                 new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get())));
         DynamicMachine machine = new DynamicMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "matcher_interfaces"),
+                MMCR.id("matcher_interfaces"),
                 "Matcher Interfaces", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
@@ -309,7 +310,7 @@ class StructureMatcherTest {
         ordered.put(new BlockPos(2, 0, 0), new BlockPredicate.Any());
         BlockArray pattern = new BlockArray(ordered);
         DynamicMachine machine = new DynamicMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "matcher_scan_plan"), "Matcher Scan Plan", pattern);
+                MMCR.id("matcher_scan_plan"), "Matcher Scan Plan", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
         CompiledMachinePattern.ScanPlan first = compiled.scanPlan(Direction.SOUTH, 2);

@@ -28,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.MMCR;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -52,10 +53,10 @@ import java.util.Set;
  */
 public final class ComponentRuntime {
     private static final ExecutionStatus UNSPECIFIED_TICK_OPERATION_FAILURE = new ExecutionStatus(
-            ResourceLocation.fromNamespaceAndPath("mmcr", "capability_tick_operation_failure"), StatusSeverity.FAILURE,
-            ResourceLocation.fromNamespaceAndPath("mmcr", "capability_tick"),
+            MMCR.id("capability_tick_operation_failure"), StatusSeverity.FAILURE,
+            MMCR.id("capability_tick"),
             FailureOccurrence.at(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS,
-                    ResourceLocation.fromNamespaceAndPath("mmcr", "capability_tick"),
+                    MMCR.id("capability_tick"),
                     FailurePhase.CAPABILITY_COMMIT, null, null,
                     Map.of("raw_reason_id", "operation_failed_without_status")));
     private List<ProcessingComponent> components = List.of();

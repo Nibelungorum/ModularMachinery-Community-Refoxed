@@ -61,7 +61,7 @@ public final class OptionalGameTestSource {
         TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment,
                 Identifier.fromNamespaceAndPath("minecraft", "empty"), 1, 0, true,
                 Rotation.NONE, false, 1, 1, false, 0);
-        event.registerTest(Identifier.fromNamespaceAndPath("mmcr", "optional_source_test"),
+        event.registerTest(MMCR.id("optional_source_test"),
                 new FixtureGameTest(data));
     }
 

@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.MMCR;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
@@ -91,11 +92,11 @@ class FailureStatusCodecTest {
     @Test
     void unknown_reason_resolves_to_unknown_and_retains_raw_reason_id() {
         Identifier unknownId = Identifier.fromNamespaceAndPath("legacy", "removed_reason");
-        ExecutionStatus status = new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr", "status"),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr", "source"),
+        ExecutionStatus status = new ExecutionStatus(MMCR.id("status"),
+                StatusSeverity.BLOCKED, MMCR.id("source"),
                 new FailureOccurrence(new FailureReason(unknownId, "gui.mmcr.failure.removed"),
                         FailureTrace.single(new FailureTrace.Frame(
-                                Identifier.fromNamespaceAndPath("mmcr", "source"), FailurePhase.RUNTIME,
+                                MMCR.id("source"), FailurePhase.RUNTIME,
                                 null, null)),
                         Map.of("required", "1")));
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
@@ -145,13 +146,13 @@ class FailureStatusCodecTest {
 
     private static ExecutionStatus fixture() {
         FailureTrace trace = new FailureTrace(List.of(
-                new FailureTrace.Frame(Identifier.fromNamespaceAndPath("mmcr", "planner"),
-                        FailurePhase.REQUIREMENT_PLAN, Identifier.fromNamespaceAndPath("mmcr", "recipe"), 2),
-                new FailureTrace.Frame(Identifier.fromNamespaceAndPath("mmcr", "controller"),
+                new FailureTrace.Frame(MMCR.id("planner"),
+                        FailurePhase.REQUIREMENT_PLAN, MMCR.id("recipe"), 2),
+                new FailureTrace.Frame(MMCR.id("controller"),
                         FailurePhase.RUNTIME, null, null)));
         FailureOccurrence occurrence = new FailureOccurrence(CODEC_REASON, trace,
                 Map.of("required", "4", "available", "1", "raw_reason_id", "legacy:old_reason"));
-        return new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr", "codec_status"),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr", "crafting"), occurrence);
+        return new ExecutionStatus(MMCR.id("codec_status"),
+                StatusSeverity.BLOCKED, MMCR.id("crafting"), occurrence);
     }
 }

@@ -20,6 +20,7 @@ import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.MMCR;
 import java.util.Set;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
@@ -80,7 +81,7 @@ class CapabilityTickContractTest {
                     storage.insert(1L, transaction);
                     return CapabilityResult.successful();
                 }, transaction -> CapabilityResult.failure(blocked)), null, false));
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CapabilityTickContext context = new CapabilityTickContext(0L, CapabilityTickPhase.BEFORE_RECIPE, null, 1L,
                 new CapabilitySnapshot(List.of(capability)), controller.behaviorContext());
 
@@ -94,7 +95,7 @@ class CapabilityTickContractTest {
     void operation_without_status_uses_the_typed_failure_reason() {
         TickCapability capability = new TickCapability(context -> new CapabilityTickResult(
                 List.of(transaction -> null), null, false));
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CapabilityTickContext context = new CapabilityTickContext(0L, CapabilityTickPhase.BEFORE_RECIPE, null, 1L,
                 new CapabilitySnapshot(List.of(capability)), controller.behaviorContext());
 
@@ -116,7 +117,7 @@ class CapabilityTickContractTest {
             phases.add(context.phase());
             return CapabilityTickResult.empty();
         });
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         ComponentRuntime runtime = new ComponentRuntime();
 
         CapabilityTickResult before = runtime.executeTickPhase(new CapabilityTickContext(0L,
@@ -134,7 +135,7 @@ class CapabilityTickContractTest {
     @Test
     void empty_tick_operations_preserve_a_reported_state_change() {
         TickCapability capability = new TickCapability(context -> new CapabilityTickResult(List.of(), null, true));
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
 
         CapabilityTickResult result = new ComponentRuntime().executeTickPhase(new CapabilityTickContext(0L,
                 CapabilityTickPhase.IDLE, null, 1L, new CapabilitySnapshot(List.of(capability)),
@@ -152,7 +153,7 @@ class CapabilityTickContractTest {
             calls.incrementAndGet();
             return CapabilityTickResult.empty();
         });
-        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         new RecipeSearchTask(controller.currentRuntimeSnapshot(), controller.machineId(), 0L, 1L,
                 List.of(), null, List.of(capability)).compute();
 

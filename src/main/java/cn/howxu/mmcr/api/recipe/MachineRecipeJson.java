@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.MMCR;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -25,7 +26,7 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineRecipeJson {
-    public static final Identifier TYPE = Identifier.fromNamespaceAndPath("mmcr", "machine_recipe");
+    public static final Identifier TYPE = MMCR.id("machine_recipe");
 
     private MachineRecipeJson() {
     }

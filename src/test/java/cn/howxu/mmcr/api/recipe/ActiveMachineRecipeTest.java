@@ -104,8 +104,8 @@ class ActiveMachineRecipeTest {
 
     @Test
     void pool_scoped_load_does_not_resolve_a_same_id_recipe_from_another_pool() {
-        Identifier recipeId = Identifier.fromNamespaceAndPath("mmcr", "pool_scoped_active_recipe");
-        Identifier foreignPool = Identifier.fromNamespaceAndPath("mmcr", "foreign_active_pool");
+        Identifier recipeId = MMCR.id("pool_scoped_active_recipe");
+        Identifier foreignPool = MMCR.id("foreign_active_pool");
         RuntimeTestFixtures.registerRecipePool(foreignPool);
         MachineRecipe foreign = new MachineRecipe(recipeId, foreignPool, 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());

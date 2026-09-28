@@ -48,7 +48,7 @@ public final class FailureStatusMigration {
         try {
             reasonId = legacyReason.contains(":")
                     ? Identifier.parse(legacyReason)
-                    : Identifier.fromNamespaceAndPath("mmcr", legacyReason);
+                    : MMCR.id(legacyReason);
         } catch (RuntimeException exception) {
             return null;
         }

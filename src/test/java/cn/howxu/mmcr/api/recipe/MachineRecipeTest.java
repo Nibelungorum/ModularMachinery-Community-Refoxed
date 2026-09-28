@@ -67,8 +67,8 @@ class MachineRecipeTest {
     @Test
     void recipe_codec_roundtrip() {
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "iron_compressor"),
-                Identifier.fromNamespaceAndPath("mmcr", "iron_compressor_machine"),
+                MMCR.id("iron_compressor"),
+                MMCR.id("iron_compressor_machine"),
                 40,
                 List.of(
                         new MachineIngredient.EnergyIngredient(80)
@@ -291,8 +291,8 @@ class MachineRecipeTest {
     void recipe_preserves_canonical_requirements_and_outputs() {
         var nugget = bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "legacy"),
-                Identifier.fromNamespaceAndPath("mmcr", "machine"),
+                MMCR.id("legacy"),
+                MMCR.id("machine"),
                 20,
                 List.of(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
@@ -356,9 +356,9 @@ class MachineRecipeTest {
     void registry_filters_recipes_by_machine_and_rejects_null_id() {
         var machineId = MMCR.id("test_machine_name");
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "iron"), machineId, 20, List.of(), List.of());
+                MMCR.id("iron"), machineId, 20, List.of(), List.of());
         var other = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "gold"),
+                MMCR.id("gold"),
                 MMCR.id("controller_tick"), 20, List.of(), List.of());
 
         var machine = new DynamicMachine(machineId, "Compressor", new BlockArray(Map.of()));
@@ -377,7 +377,7 @@ class MachineRecipeTest {
         var machineId = MMCR.id("test_machine_name");
 
         RecipeRegistry.registerStatic(RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "versioned_recipe"),
+                MMCR.id("versioned_recipe"),
                 machineId,
                 20,
                 List.of(),
@@ -393,8 +393,8 @@ class MachineRecipeTest {
     void fluidOnlyRequirementRecipeAssemblesEmptyItemStack() {
         bindFluidComponents(Fluids.WATER);
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "fluid_only"),
-                Identifier.fromNamespaceAndPath("mmcr", "machine"),
+                MMCR.id("fluid_only"),
+                MMCR.id("machine"),
                 20,
                 List.of(),
                 List.of(),
@@ -519,8 +519,8 @@ class MachineRecipeTest {
     void codec_preserves_raw_values_when_runtime_modifiers_change_derived_values() {
         bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "raw_preserved"),
-                Identifier.fromNamespaceAndPath("mmcr", "machine"),
+                MMCR.id("raw_preserved"),
+                MMCR.id("machine"),
                 100,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(1)),
@@ -557,8 +557,8 @@ class MachineRecipeTest {
     @Test
     void runtime_requirements_accept_structure_modifiers_without_mutating_raw_recipe() {
         MachineRecipe recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "effective_modifiers"),
-                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                MMCR.id("effective_modifiers"),
+                MMCR.id("test_machine"),
                 20,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 List.of(),
@@ -578,8 +578,8 @@ class MachineRecipeTest {
     @Test
     void runtime_requirements_apply_item_input_chance_modifiers() {
         MachineRecipe recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "input_chance_modifier"),
-                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                MMCR.id("input_chance_modifier"),
+                MMCR.id("test_machine"),
                 20,
                 List.of(),
                 List.of(),
@@ -604,8 +604,8 @@ class MachineRecipeTest {
     @Test
     void runtime_requirements_preserve_energy_output_direction() {
         MachineRecipe recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr", "energy_output_direction"),
-                Identifier.fromNamespaceAndPath("mmcr", "test_machine"),
+                MMCR.id("energy_output_direction"),
+                MMCR.id("test_machine"),
                 20,
                 List.of(),
                 List.of(),

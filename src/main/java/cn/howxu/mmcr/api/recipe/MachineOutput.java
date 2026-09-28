@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.MMCR;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -102,7 +103,7 @@ public interface MachineOutput {
 
     record ItemOutput(ItemStack stack, float chance) implements CustomOutput {
         static final OutputType<ItemOutput> TYPE = new OutputType.Definition<>(
-                ResourceLocation.fromNamespaceAndPath("mmcr", "item"),
+                MMCR.id("item"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "item"),
                         RECIPE_ITEM_STACK_CODEC.fieldOf("stack").forGetter(ItemOutput::stack),
@@ -115,7 +116,7 @@ public interface MachineOutput {
                     return new ItemOutput(derived, IntegrationTypeHelper.applyItemOutputChance(modifiers, output.chance()));
                 },
                 output -> new ItemOutput(output.stack(), output.chance()), OutputType.Presentation.defaults(
-                ResourceLocation.fromNamespaceAndPath("mmcr", "item")), "item",
+                MMCR.id("item")), "item",
                 (output, tags) -> new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         output.stack(), output.chance(), tags),
                 requirement -> requirement instanceof ItemRequirement item
@@ -147,7 +148,7 @@ public interface MachineOutput {
 
     record FluidOutput(FluidStack stack, float chance) implements CustomOutput {
         static final OutputType<FluidOutput> TYPE = new OutputType.Definition<>(
-                ResourceLocation.fromNamespaceAndPath("mmcr", "fluid"),
+                MMCR.id("fluid"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "fluid"),
                         RECIPE_FLUID_STACK_CODEC.fieldOf("stack").forGetter(FluidOutput::stack),
@@ -160,7 +161,7 @@ public interface MachineOutput {
                     return new FluidOutput(derived, IntegrationTypeHelper.applyFluidOutputChance(modifiers, output.chance()));
                 },
                 output -> new FluidOutput(output.stack(), output.chance()), OutputType.Presentation.defaults(
-                ResourceLocation.fromNamespaceAndPath("mmcr", "fluid")), "fluid",
+                MMCR.id("fluid")), "fluid",
                 (output, tags) -> new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         output.stack(), output.chance(), tags),
                 requirement -> requirement instanceof FluidRequirement fluid

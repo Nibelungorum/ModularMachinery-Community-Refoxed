@@ -6,6 +6,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import cn.howxu.mmcr.MMCR;
 
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,7 @@ class MachineRegistryTest {
     @Test
     void register_then_get() {
         var machine = new DynamicMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "test"), "Test", new BlockArray(Map.of()));
+                MMCR.id("test"), "Test", new BlockArray(Map.of()));
 
         MachineRegistry.register(machine);
 
@@ -35,13 +36,13 @@ class MachineRegistryTest {
     @Test
     void get_unknown_returns_null() {
         assertThat(MachineRegistry.getMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "missing"))).isNull();
+                MMCR.id("missing"))).isNull();
     }
 
     @Test
     void duplicate_register_throws() {
-        var m1 = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "dup"), "X", new BlockArray(Map.of()));
-        var m2 = new DynamicMachine(Identifier.fromNamespaceAndPath("mmcr", "dup"), "Y", new BlockArray(Map.of()));
+        var m1 = new DynamicMachine(MMCR.id("dup"), "X", new BlockArray(Map.of()));
+        var m2 = new DynamicMachine(MMCR.id("dup"), "Y", new BlockArray(Map.of()));
 
         MachineRegistry.register(m1);
 
@@ -85,9 +86,9 @@ class MachineRegistryTest {
         BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(
-                Identifier.fromNamespaceAndPath("mmcr", "replacement_machine"),
+                MMCR.id("replacement_machine"),
                 "Replacement Machine", new BlockArray(Map.of(position, new BlockPredicate.Any())),
-                MachineControllerSpec.defaultsFor(Identifier.fromNamespaceAndPath("mmcr", "replacement_machine")),
+                MachineControllerSpec.defaultsFor(MMCR.id("replacement_machine")),
                 PortRequirementSpec.none(), List.of(),
                 Map.of(position, List.of(replacement)));
 
@@ -100,7 +101,7 @@ class MachineRegistryTest {
     void dynamic_machine_rejects_replacement_outside_pattern() {
         BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "outside_replacement_machine");
+        Identifier id = MMCR.id("outside_replacement_machine");
 
         assertThatThrownBy(() -> new DynamicMachine(
                 id, "Outside Replacement Machine", new BlockArray(Map.of()),
@@ -113,7 +114,7 @@ class MachineRegistryTest {
     void dynamic_machine_preserves_replacement_metadata() {
         BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr", "copied_replacement_machine");
+        Identifier id = MMCR.id("copied_replacement_machine");
         var machine = new DynamicMachine(
                 id, "Copied Replacement Machine",
                 new BlockArray(Map.of(position, new BlockPredicate.Any())),

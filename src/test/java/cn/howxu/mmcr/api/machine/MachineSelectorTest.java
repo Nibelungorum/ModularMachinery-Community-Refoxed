@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.resources.Identifier;
-
+import cn.howxu.mmcr.MMCR;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -18,7 +18,7 @@ class MachineSelectorTest {
     }
 
     private static Identifier id(String path) {
-        return Identifier.fromNamespaceAndPath("mmcr", path);
+        return MMCR.id(path);
     }
 
     @Test

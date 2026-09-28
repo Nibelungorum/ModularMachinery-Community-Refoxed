@@ -60,10 +60,10 @@ public class E2ERecipeRunGameTest {
         var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
-        Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor");
+        Identifier machineId = MMCR.id("iron_compressor");
         var machine = MachineRegistry.getMachine(machineId);
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(
-                Identifier.fromNamespaceAndPath(MMCR.MODID, "iron_compressor_recipe"), machineId, 40,
+                MMCR.id("iron_compressor_recipe"), machineId, 40,
                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                 Ingredient.of(Items.IRON_INGOT), 2)),
                         MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(80)),
@@ -108,11 +108,11 @@ public class E2ERecipeRunGameTest {
         pattern.put(outputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()));
         pattern.put(energyPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()));
 
-        Identifier machineId = Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor");
+        Identifier machineId = MMCR.id("wide_compressor");
         var machine = new DynamicMachine(machineId, "Wide Compressor", new BlockArray(pattern));
         MachineRegistry.register(machine);
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(
-                Identifier.fromNamespaceAndPath(MMCR.MODID, "wide_compressor_recipe"), machineId, 20,
+                MMCR.id("wide_compressor_recipe"), machineId, 20,
                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                 Ingredient.of(Items.IRON_INGOT), 1)),
                         MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(50)),

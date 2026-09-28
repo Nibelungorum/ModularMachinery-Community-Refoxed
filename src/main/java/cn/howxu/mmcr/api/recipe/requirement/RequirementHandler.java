@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
@@ -78,7 +79,7 @@ public interface RequirementHandler<R extends MachineRequirement> {
             Identifier id;
             try {
                 id = failureReason.contains(":") ? Identifier.parse(failureReason)
-                        : Identifier.fromNamespaceAndPath("mmcr", failureReason);
+                        : MMCR.id(failureReason);
             } catch (IllegalArgumentException exception) {
                 return false;
             }

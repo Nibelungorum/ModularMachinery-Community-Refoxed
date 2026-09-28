@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class BuildPlacementConsistencyTest {
 
-    private static final Identifier MACHINE_ID = Identifier.fromNamespaceAndPath("mmcr", "test_cube");
+    private static final Identifier MACHINE_ID = MMCR.id("test_cube");
 
     @BeforeAll
     static void setup() throws Exception {
