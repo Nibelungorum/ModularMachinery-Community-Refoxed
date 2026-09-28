@@ -43,7 +43,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     private static final int NAVIGATION_WIDTH = 50;
     private static final int NAVIGATION_HEIGHT = 20;
     private static final int NEXT_X = 119;
-    private static final int LABEL_COLOR = 0xFF404040;
+    private static final int LABEL_COLOR = ControllerTextLine.DEFAULT_COLOR;
     private int showing;
     private NumericEditBox valueInput;
     private Button save;

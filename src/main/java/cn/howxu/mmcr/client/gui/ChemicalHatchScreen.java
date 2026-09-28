@@ -28,7 +28,7 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
     private static final int TANK_Y = 10;
     private static final int TANK_W = 20;
     private static final int TANK_H = 61;
-    private static final int TITLE_COLOR = -12566464;
+    private static final int TITLE_COLOR = ControllerTextLine.DEFAULT_COLOR;
 
     public ChemicalHatchScreen(ChemicalPortMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, 166);

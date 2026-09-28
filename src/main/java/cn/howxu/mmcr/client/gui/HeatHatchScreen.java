@@ -23,15 +23,15 @@ import java.util.Locale;
  * @author howxu <dev@howxu.cn>
  */
 public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/guitank.png");
+    private static final Identifier TEXTURE = MMCR.id("textures/gui/mekanism/gui_heatport.png");
     private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
-    private static final Identifier BAR_TEXTURE = MMCR.id("textures/gui/guibar.png");
+    private static final Identifier BAR_TEXTURE = MMCR.id("textures/gui/mekanism/gui_heatport.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int HEAT_X = 15;
     private static final int HEAT_Y = 10;
     private static final int HEAT_W = 20;
     private static final int HEAT_H = 61;
-    private static final int TITLE_COLOR = -12566464;
+    private static final int TITLE_COLOR = ControllerTextLine.DEFAULT_COLOR;
 
     public HeatHatchScreen(HeatPortMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, 166);
@@ -93,8 +93,8 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
                     topPos + HEAT_Y + HEAT_H - filled, 196, HEAT_H - filled, HEAT_W, filled,
                     GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         }
-        graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + HEAT_X, topPos + HEAT_Y,
-                176, 0, HEAT_W, HEAT_H, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
+        // graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + HEAT_X, topPos + HEAT_Y,
+        //         176, 0, HEAT_W, HEAT_H, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }
 
     private static long safeWhole(double value) {

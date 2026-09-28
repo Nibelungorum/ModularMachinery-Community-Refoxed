@@ -10,7 +10,7 @@ public enum FluidHatchSize {
     SMALL("small", 4000L),
     NORMAL("normal", 8000L),
     REINFORCED("reinforced", 16000L),
-    BIG("big", 3200L),
+    BIG("big", 32000L),
     HUGE("huge", 64000L),
     LUDICROUS("ludicrous", 128000L),
     VACUUM("vacuum", 256000L);

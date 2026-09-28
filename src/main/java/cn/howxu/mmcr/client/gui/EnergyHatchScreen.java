@@ -22,7 +22,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/guitank.png");
+    private static final Identifier TEXTURE = MMCR.id("textures/gui/guibar.png");
     private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final Identifier BAR_TEXTURE = MMCR.id("textures/gui/guibar.png");
     private static final int GUI_TEXTURE_SIZE = 256;
@@ -30,7 +30,7 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
     private static final int ENERGY_Y = 10;
     private static final int ENERGY_W = 20;
     private static final int ENERGY_H = 61;
-    private static final int TITLE_COLOR = -12566464;
+    private static final int TITLE_COLOR = ControllerTextLine.DEFAULT_COLOR;
 
     public EnergyHatchScreen(EnergyHatchMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, 166);

@@ -129,7 +129,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
             FluidStorageEntry entry = menu.fluidEntries().stream()
                     .filter(candidate -> candidate.slot() == layout.slot()).findFirst().orElse(null);
             List<Component> tooltip = entry == null || entry.amount() <= 0 || entry.resource().isEmpty()
-                    ? List.of(Component.literal("无"))
+                    ? List.of(Component.translatable("gui.mmcr.port.empty"))
                     : ExtendedFluidScreen.tooltipLines(entry);
             addTooltip(leftPos + layout.x(), topPos + layout.y(), TANK_WIDTH, TANK_HEIGHT, tooltip);
         }
