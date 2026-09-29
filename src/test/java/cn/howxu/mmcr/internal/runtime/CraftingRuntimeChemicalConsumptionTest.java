@@ -10,7 +10,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -47,7 +47,7 @@ class CraftingRuntimeChemicalConsumptionTest {
     @Test
     void chemicalInputIsFlaggedAsConsumedAtStart() throws Exception {
         MachineRequirement chemicalInput = LoadedChemicalRequirement.input(
-                ChemicalIngredient.chemical(Identifier.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L));
+                ChemicalIngredient.chemical(ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L));
         MachineRequirement itemInput = new ItemRequirement(RecipeModifier.IOType.INPUT,
                 Ingredient.of(Items.IRON_INGOT), 1, net.minecraft.world.item.ItemStack.EMPTY, 1F,
                 List.of(), cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY, 1F);
@@ -82,7 +82,7 @@ class CraftingRuntimeChemicalConsumptionTest {
     @Test
     void restoredChemicalInputRemainsConsumedAtStart() throws Exception {
         MachineRequirement chemicalInput = LoadedChemicalRequirement.input(
-                ChemicalIngredient.chemical(Identifier.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L));
+                ChemicalIngredient.chemical(ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L));
         MachineRecipe recipe = new MachineRecipe(MMCR.id("restore_chemical_input"), MMCR.id("test_cube"), 1,
                 List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, false, Set.of());
         cn.howxu.mmcr.api.recipe.ActiveMachineRecipe activeRecipe =

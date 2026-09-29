@@ -8,7 +8,7 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,8 +28,8 @@ public record TerminalData(
         @Nullable GlobalPos container,
         @Nullable GlobalPos ae2AccessPoint,
         TerminalInventoryMode inventoryMode,
-        @Nullable Identifier selectedLevelType,
-        Map<Identifier, Identifier> selectedLevels,
+        @Nullable ResourceLocation selectedLevelType,
+        Map<ResourceLocation, ResourceLocation> selectedLevels,
         int stage,
         boolean previewEnabled,
         int previewLayer) {
@@ -45,8 +45,8 @@ public record TerminalData(
             GlobalPos.CODEC.optionalFieldOf("container").forGetter(data -> Optional.ofNullable(data.container)),
             GlobalPos.CODEC.optionalFieldOf("ae2_access_point").forGetter(data -> Optional.ofNullable(data.ae2AccessPoint)),
             TerminalInventoryMode.CODEC.fieldOf("inventory_mode").forGetter(TerminalData::inventoryMode),
-            Identifier.CODEC.optionalFieldOf("selected_level_type").forGetter(data -> Optional.ofNullable(data.selectedLevelType)),
-            Codec.unboundedMap(Identifier.CODEC, Identifier.CODEC).fieldOf("selected_levels").forGetter(TerminalData::selectedLevels),
+            ResourceLocation.CODEC.optionalFieldOf("selected_level_type").forGetter(data -> Optional.ofNullable(data.selectedLevelType)),
+            Codec.unboundedMap(ResourceLocation.CODEC, ResourceLocation.CODEC).fieldOf("selected_levels").forGetter(TerminalData::selectedLevels),
             Codec.INT.fieldOf("stage").forGetter(TerminalData::stage),
             Codec.BOOL.fieldOf("preview_enabled").forGetter(TerminalData::previewEnabled),
             Codec.INT.fieldOf("preview_layer").forGetter(TerminalData::previewLayer)
@@ -60,8 +60,8 @@ public record TerminalData(
             ByteBufCodecs.optional(GlobalPos.STREAM_CODEC), data -> Optional.ofNullable(data.container),
             ByteBufCodecs.optional(GlobalPos.STREAM_CODEC), data -> Optional.ofNullable(data.ae2AccessPoint),
             TerminalInventoryMode.STREAM_CODEC, TerminalData::inventoryMode,
-            ByteBufCodecs.optional(Identifier.STREAM_CODEC), data -> Optional.ofNullable(data.selectedLevelType),
-            ByteBufCodecs.map(LinkedHashMap::new, Identifier.STREAM_CODEC, Identifier.STREAM_CODEC), TerminalData::selectedLevels,
+            ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), data -> Optional.ofNullable(data.selectedLevelType),
+            ByteBufCodecs.map(LinkedHashMap::new, ResourceLocation.STREAM_CODEC, ResourceLocation.STREAM_CODEC), TerminalData::selectedLevels,
             ByteBufCodecs.VAR_INT, TerminalData::stage,
             ByteBufCodecs.BOOL, TerminalData::previewEnabled,
             ByteBufCodecs.VAR_INT, TerminalData::previewLayer,
@@ -109,8 +109,8 @@ public record TerminalData(
         };
     }
 
-    public TerminalData withSelectedLevel(Identifier type, Identifier level) {
-        LinkedHashMap<Identifier, Identifier> selectedLevels = new LinkedHashMap<>(this.selectedLevels);
+    public TerminalData withSelectedLevel(ResourceLocation type, ResourceLocation level) {
+        LinkedHashMap<ResourceLocation, ResourceLocation> selectedLevels = new LinkedHashMap<>(this.selectedLevels);
         selectedLevels.put(Objects.requireNonNull(type, "type"), Objects.requireNonNull(level, "level"));
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, type, selectedLevels, stage,
                 previewEnabled, previewLayer);
@@ -131,9 +131,9 @@ public record TerminalData(
                 DEFAULT.previewEnabled(), DEFAULT.previewLayer());
     }
 
-    private static Map<Identifier, Identifier> immutableSelectedLevels(Map<Identifier, Identifier> selectedLevels) {
+    private static Map<ResourceLocation, ResourceLocation> immutableSelectedLevels(Map<ResourceLocation, ResourceLocation> selectedLevels) {
         Objects.requireNonNull(selectedLevels, "selectedLevels");
-        LinkedHashMap<Identifier, Identifier> copy = new LinkedHashMap<>();
+        LinkedHashMap<ResourceLocation, ResourceLocation> copy = new LinkedHashMap<>();
         selectedLevels.forEach((type, level) -> copy.put(Objects.requireNonNull(type, "type"),
                 Objects.requireNonNull(level, "level")));
         return Collections.unmodifiableMap(copy);

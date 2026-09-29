@@ -18,7 +18,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Locale;
@@ -40,7 +40,7 @@ public final class MekanismRecipeDeclarations {
                     .forGetter(UnavailableChemicalRequirement::io),
             Codec.STRING.optionalFieldOf("kind", "chemical")
                     .forGetter(value -> value.ingredient().kind().name().toLowerCase(Locale.ROOT)),
-            Identifier.CODEC.fieldOf("id").forGetter(value -> value.ingredient().id()),
+            ResourceLocation.CODEC.fieldOf("id").forGetter(value -> value.ingredient().id()),
             Codec.LONG.fieldOf("amount").forGetter(value -> value.ingredient().amount()),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(UnavailableChemicalRequirement::chance),
              Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(UnavailableChemicalRequirement::tags),
@@ -118,7 +118,7 @@ public final class MekanismRecipeDeclarations {
         OutputRegistry.register(type);
     }
 
-    private static MapCodec<UnavailableHeatRequirement> heatCodec(Identifier id, HeatRequirement.Kind kind) {
+    private static MapCodec<UnavailableHeatRequirement> heatCodec(ResourceLocation id, HeatRequirement.Kind kind) {
         return RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.STRING.fieldOf("type").forGetter(ignored -> id.toString()),
                 RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", kind == HeatRequirement.Kind.OUTPUT_HEAT
@@ -134,7 +134,7 @@ public final class MekanismRecipeDeclarations {
     private static MapCodec<UnavailableChemicalOutput> chemicalOutputCodec() {
         return RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.STRING.fieldOf("type").forGetter(ignored -> MekanismRecipeTypes.CHEMICAL.toString()),
-                Identifier.CODEC.fieldOf("id").forGetter(UnavailableChemicalOutput::id),
+                ResourceLocation.CODEC.fieldOf("id").forGetter(UnavailableChemicalOutput::id),
                 Codec.LONG.fieldOf("amount").forGetter(UnavailableChemicalOutput::amount),
                 Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(UnavailableChemicalOutput::chance)
         ).apply(instance, (ignored, id, amount, chance) -> new UnavailableChemicalOutput(id, amount, chance)));
@@ -178,7 +178,7 @@ public final class MekanismRecipeDeclarations {
             tags = tags == null ? List.of() : List.copyOf(tags);
         }
 
-        static UnavailableChemicalRequirement output(Identifier id, long amount, float chance) {
+        static UnavailableChemicalRequirement output(ResourceLocation id, long amount, float chance) {
             return new UnavailableChemicalRequirement(RecipeModifier.IOType.OUTPUT,
                      ChemicalIngredient.chemical(id, amount), chance, List.of(), 1F);
         }
@@ -214,7 +214,7 @@ public final class MekanismRecipeDeclarations {
         }
     }
 
-    record UnavailableChemicalOutput(Identifier id, long amount, float chance) implements MachineOutput {
+    record UnavailableChemicalOutput(ResourceLocation id, long amount, float chance) implements MachineOutput {
         UnavailableChemicalOutput {
             Objects.requireNonNull(id, "id");
             if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");

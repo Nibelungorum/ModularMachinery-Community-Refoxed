@@ -9,7 +9,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -19,7 +19,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record LoadedChemicalOutput(Identifier id, long amount, float chance) implements MachineOutput {
+public record LoadedChemicalOutput(ResourceLocation id, long amount, float chance) implements MachineOutput {
     public static final OutputType<LoadedChemicalOutput> TYPE = new OutputType.Definition<>(
             MekanismRecipeTypes.CHEMICAL, codec(), LoadedChemicalOutput::withChance,
             (output, ignored) -> output, output -> output, OutputType.Presentation.defaults(MekanismRecipeTypes.CHEMICAL),
@@ -60,7 +60,7 @@ public record LoadedChemicalOutput(Identifier id, long amount, float chance) imp
     private static MapCodec<LoadedChemicalOutput> codec() {
         return RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.STRING.fieldOf("type").forGetter(ignored -> MekanismRecipeTypes.CHEMICAL.toString()),
-                Identifier.CODEC.fieldOf("id").forGetter(LoadedChemicalOutput::id),
+                ResourceLocation.CODEC.fieldOf("id").forGetter(LoadedChemicalOutput::id),
                 Codec.LONG.fieldOf("amount").forGetter(LoadedChemicalOutput::amount),
                 Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(LoadedChemicalOutput::chance)
         ).apply(instance, (ignored, id, amount, chance) -> new LoadedChemicalOutput(id, amount, chance)));

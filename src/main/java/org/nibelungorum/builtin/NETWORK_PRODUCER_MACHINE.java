@@ -14,7 +14,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -35,13 +35,13 @@ import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 @EventBusSubscriber
 public class NETWORK_PRODUCER_MACHINE {
 
-    public static final Identifier NETWORK_PRODUCER_MACHINE = id("network_producer_machine");
-    public static final Identifier NETWORK_CENTER_MACHINE = id("network_center_machine");
-    public static final Identifier REPORT_POWER = id("report_power");
+    public static final ResourceLocation NETWORK_PRODUCER_MACHINE = id("network_producer_machine");
+    public static final ResourceLocation NETWORK_CENTER_MACHINE = id("network_center_machine");
+    public static final ResourceLocation REPORT_POWER = id("report_power");
 
-    public static final Identifier PRODUCER_POWER = id("producer_power");
-    public static final Identifier PRODUCER_WATER = id("producer_water");
-    public static final Identifier PRODUCER_FE = id("producer_fe");
+    public static final ResourceLocation PRODUCER_POWER = id("producer_power");
+    public static final ResourceLocation PRODUCER_WATER = id("producer_water");
+    public static final ResourceLocation PRODUCER_FE = id("producer_fe");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(NETWORK_PRODUCER_MACHINE)) {
@@ -49,7 +49,7 @@ public class NETWORK_PRODUCER_MACHINE {
                     .machine(NETWORK_PRODUCER_MACHINE)
                     .recipePool(NETWORK_PRODUCER_MACHINE)
                     .displayNameKey("machine.mmcr.network_producer_machine")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:white_wool")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:white_wool")))
                     .networkInterface(1, 1)
                     .allowNetworkMachine(NETWORK_CENTER_MACHINE)
                     .tickBehavior(behavior -> behavior.serverTick(context -> {

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -23,14 +23,14 @@ public record ControllerScreenTextSnapshot(long revision, List<Line> lines) {
      *
      * @author howxu <dev@howxu.cn>
      */
-    public record Line(ControllerScreenTextScope scope, Identifier lineId, Component text) {
+    public record Line(ControllerScreenTextScope scope, ResourceLocation lineId, Component text) {
         public Line {
             Objects.requireNonNull(scope, "scope");
             requireNamespaced(lineId);
             Objects.requireNonNull(text, "text");
         }
 
-        private static void requireNamespaced(Identifier lineId) {
+        private static void requireNamespaced(ResourceLocation lineId) {
             Objects.requireNonNull(lineId, "lineId");
             if (lineId.getNamespace().isBlank()) {
                 throw new IllegalArgumentException("lineId must have a namespace");

@@ -41,7 +41,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
@@ -293,7 +293,7 @@ class MachineRecipeDisplayTest {
     void publicConstructorNormalizesMutableUnorderedRequiredHostIds() {
         MachineRecipeDisplay template = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("direct_constructor_host_recipe"), MMCR.id("hosted_module"), 20, List.of(), List.of()));
-        Set<Identifier> requiredHostIds = new LinkedHashSet<>(List.of(
+        Set<ResourceLocation> requiredHostIds = new LinkedHashSet<>(List.of(
                 MMCR.id("zeta_host"), MMCR.id("alpha_host"), MMCR.id("middle_host")));
 
         MachineRecipeDisplay display = new MachineRecipeDisplay(
@@ -711,8 +711,8 @@ class MachineRecipeDisplayTest {
 
     @Test
     void levelRequirementsUseDedicatedJeiRenderingWithoutGenericEntries() {
-        Identifier typeId = MMCR.id("display_level_type");
-        Identifier levelId = MMCR.id("display_level");
+        ResourceLocation typeId = MMCR.id("display_level_type");
+        ResourceLocation levelId = MMCR.id("display_level");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Display Level")));
         registerLevel(levelId, typeId, 1, Blocks.COPPER_BLOCK);
@@ -998,7 +998,7 @@ class MachineRecipeDisplayTest {
         );
     }
 
-    private static MachineRecipeDisplay hostDisplay(Set<Identifier> requiredHostIds) {
+    private static MachineRecipeDisplay hostDisplay(Set<ResourceLocation> requiredHostIds) {
         return MachineRecipeDisplay.from(RecipeTestSupport.create(MMCR.id("jei_required_host_recipe"), MMCR.id("hosted_module"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), requiredHostIds));
     }
@@ -1013,7 +1013,7 @@ class MachineRecipeDisplayTest {
         MachineDefinitions.register(MachineRegistration.builder(MMCR.id(path)).host(MMCR.id("hosted_module")).build());
     }
 
-    private static MachineRecipeDisplay displayFor(SmartInterfaceRequirement requirement, Identifier machineId) {
+    private static MachineRecipeDisplay displayFor(SmartInterfaceRequirement requirement, ResourceLocation machineId) {
         return MachineRecipeDisplay.from(RecipeTestSupport.create(MMCR.id("interface_jei_recipe"), machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(requirement)));
     }
@@ -1027,7 +1027,7 @@ class MachineRecipeDisplayTest {
         }
     }
 
-    private static void registerLevel(Identifier id, Identifier typeId,
+    private static void registerLevel(ResourceLocation id, ResourceLocation typeId,
                                       int priority, Block block) {
         TestBootstrap.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
@@ -1049,7 +1049,7 @@ class MachineRecipeDisplayTest {
 
     private static ResourceKey<Enchantment> sharpnessKey() {
         return ResourceKey.create(Registries.ENCHANTMENT,
-                Identifier.parse("minecraft:sharpness"));
+                ResourceLocation.parse("minecraft:sharpness"));
     }
 
     private static void bindItemComponents(Item... items) {

@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -20,11 +20,11 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record RuntimeContentSnapshot(
-        Map<Identifier, MachineStructureDefinition> structures,
-        Map<Identifier, MachineRecipe> recipes,
-        Map<Identifier, MachineControllerSpec> controllerSpecs,
-        Map<Identifier, MachineAppearanceSpec> appearances,
-        Map<Identifier, List<Identifier>> machineRecipePools,
+        Map<ResourceLocation, MachineStructureDefinition> structures,
+        Map<ResourceLocation, MachineRecipe> recipes,
+        Map<ResourceLocation, MachineControllerSpec> controllerSpecs,
+        Map<ResourceLocation, MachineAppearanceSpec> appearances,
+        Map<ResourceLocation, List<ResourceLocation>> machineRecipePools,
         long contentVersion) {
 
     public RuntimeContentSnapshot {
@@ -33,7 +33,7 @@ public record RuntimeContentSnapshot(
         recipes = Map.copyOf(recipes == null ? Map.of() : recipes);
         controllerSpecs = Map.copyOf(controllerSpecs == null ? Map.of() : controllerSpecs);
         appearances = Map.copyOf(appearances == null ? Map.of() : appearances);
-        Map<Identifier, List<Identifier>> recipePoolCopy = new LinkedHashMap<>();
+        Map<ResourceLocation, List<ResourceLocation>> recipePoolCopy = new LinkedHashMap<>();
         if (machineRecipePools != null) {
             machineRecipePools.forEach((id, pools) -> recipePoolCopy.put(id,
                     pools == null ? null : List.copyOf(pools)));

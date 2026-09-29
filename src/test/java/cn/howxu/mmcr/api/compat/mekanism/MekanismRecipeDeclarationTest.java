@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,17 +37,17 @@ class MekanismRecipeDeclarationTest {
     @Test
     void chemical_declarations_distinguish_exact_id_and_tag() {
         assertEquals(ChemicalIngredient.Kind.CHEMICAL,
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000).kind());
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000).kind());
         assertEquals(ChemicalIngredient.Kind.TAG,
-                ChemicalIngredient.tag(Identifier.parse("mekanism:fuels"), 1_000).kind());
+                ChemicalIngredient.tag(ResourceLocation.parse("mekanism:fuels"), 1_000).kind());
         assertThrows(IllegalArgumentException.class,
-                () -> ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 0));
+                () -> ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 0));
     }
 
     @Test
     void chemical_output_and_heat_declarations_validate_values() {
-        ChemicalOutput output = ChemicalOutput.of(Identifier.parse("mekanism:oxygen"), 1_000, 0.5F);
-        assertEquals(Identifier.parse("mekanism:oxygen"), output.id());
+        ChemicalOutput output = ChemicalOutput.of(ResourceLocation.parse("mekanism:oxygen"), 1_000, 0.5F);
+        assertEquals(ResourceLocation.parse("mekanism:oxygen"), output.id());
         assertEquals(1_000, output.amount());
         assertEquals(0.5F, output.chance());
         assertEquals(HeatRequirement.Kind.MINIMUM_TEMPERATURE, HeatRequirement.minimumTemperature(300D).kind());
@@ -55,15 +55,15 @@ class MekanismRecipeDeclarationTest {
         assertEquals(HeatRequirement.Kind.OUTPUT_HEAT, HeatRequirement.outputHeat(4D).kind());
         assertEquals(4D, HeatRequirement.outputHeat(4D).value());
         assertThrows(IllegalArgumentException.class,
-                () -> ChemicalOutput.of(Identifier.parse("mekanism:oxygen"), 1_000, 1.1F));
+                () -> ChemicalOutput.of(ResourceLocation.parse("mekanism:oxygen"), 1_000, 1.1F));
         assertThrows(IllegalArgumentException.class, () -> HeatRequirement.minimumTemperature(-1D));
     }
 
     @Test
     void port_family_ids_are_stable() {
-        assertEquals(Identifier.parse("mekanism:chemical"), MekanismPortFamilies.CHEMICAL);
-        assertEquals(Identifier.parse("mekanism:temperature"), MekanismPortFamilies.HEAT_TEMPERATURE);
-        assertEquals(Identifier.parse("mekanism:heat"), MekanismPortFamilies.HEAT);
+        assertEquals(ResourceLocation.parse("mekanism:chemical"), MekanismPortFamilies.CHEMICAL);
+        assertEquals(ResourceLocation.parse("mekanism:temperature"), MekanismPortFamilies.HEAT_TEMPERATURE);
+        assertEquals(ResourceLocation.parse("mekanism:heat"), MekanismPortFamilies.HEAT);
     }
 
     @Test
@@ -109,7 +109,7 @@ class MekanismRecipeDeclarationTest {
         FailureReasonRegistry.freeze();
 
         assertThrows(IllegalStateException.class, () -> FailureReasonRegistry.register(
-                new FailureReason(Identifier.parse("mmcr_test:extension_reason"),
+                new FailureReason(ResourceLocation.parse("mmcr_test:extension_reason"),
                         "gui.mmcr.failure.extension_reason", 50)));
     }
 

@@ -1,13 +1,13 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
 /** Public declaration of one machine level.
  * @author howxu <dev@howxu.cn>
  */
-public record MachineLevel(Identifier id, Identifier typeId, int priority,
+public record MachineLevel(ResourceLocation id, ResourceLocation typeId, int priority,
                            BlockPredicate statePredicate, DisplayStack representative,
                             ModifierDefinition modifier) {
     public MachineLevel {

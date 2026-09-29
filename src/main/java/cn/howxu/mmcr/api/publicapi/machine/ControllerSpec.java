@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,11 +12,11 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record ControllerSpec(
-        Identifier id,
-        Identifier frontTexture,
-        Identifier sideTexture,
-        Identifier topTexture,
-        Identifier bottomTexture,
+        ResourceLocation id,
+        ResourceLocation frontTexture,
+        ResourceLocation sideTexture,
+        ResourceLocation topTexture,
+        ResourceLocation bottomTexture,
         boolean allowVerticalFacing,
         boolean fullyRotationallySymmetric,
         boolean requireVerticalFacing,
@@ -36,26 +36,26 @@ public record ControllerSpec(
      * @author howxu <dev@howxu.cn>
      */
     public static final class Builder {
-        private Identifier id;
-        private Identifier frontTexture;
-        private Identifier sideTexture;
-        private Identifier topTexture;
-        private Identifier bottomTexture;
+        private ResourceLocation id;
+        private ResourceLocation frontTexture;
+        private ResourceLocation sideTexture;
+        private ResourceLocation topTexture;
+        private ResourceLocation bottomTexture;
         private boolean allowVerticalFacing;
         private boolean fullyRotationallySymmetric;
         private boolean requireVerticalFacing;
         private final List<String> tooltip = new ArrayList<>();
 
-        public Builder id(Identifier id) {
+        public Builder id(ResourceLocation id) {
             this.id = Objects.requireNonNull(id, "id");
             return this;
         }
 
-        public Builder textures(Identifier frontTexture, Identifier otherFaces) {
+        public Builder textures(ResourceLocation frontTexture, ResourceLocation otherFaces) {
             return textures(frontTexture, otherFaces, otherFaces, otherFaces);
         }
 
-        public Builder textures(Identifier frontTexture, Identifier sideTexture, Identifier topTexture, Identifier bottomTexture) {
+        public Builder textures(ResourceLocation frontTexture, ResourceLocation sideTexture, ResourceLocation topTexture, ResourceLocation bottomTexture) {
             this.frontTexture = Objects.requireNonNull(frontTexture, "frontTexture");
             this.sideTexture = Objects.requireNonNull(sideTexture, "sideTexture");
             this.topTexture = Objects.requireNonNull(topTexture, "topTexture");
@@ -63,22 +63,22 @@ public record ControllerSpec(
             return this;
         }
 
-        public Builder frontTexture(Identifier frontTexture) {
+        public Builder frontTexture(ResourceLocation frontTexture) {
             this.frontTexture = Objects.requireNonNull(frontTexture, "frontTexture");
             return this;
         }
 
-        public Builder sideTexture(Identifier sideTexture) {
+        public Builder sideTexture(ResourceLocation sideTexture) {
             this.sideTexture = Objects.requireNonNull(sideTexture, "sideTexture");
             return this;
         }
 
-        public Builder topTexture(Identifier topTexture) {
+        public Builder topTexture(ResourceLocation topTexture) {
             this.topTexture = Objects.requireNonNull(topTexture, "topTexture");
             return this;
         }
 
-        public Builder bottomTexture(Identifier bottomTexture) {
+        public Builder bottomTexture(ResourceLocation bottomTexture) {
             this.bottomTexture = Objects.requireNonNull(bottomTexture, "bottomTexture");
             return this;
         }

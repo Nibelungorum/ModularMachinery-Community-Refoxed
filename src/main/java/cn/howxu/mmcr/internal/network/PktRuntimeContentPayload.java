@@ -14,7 +14,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
@@ -41,22 +41,22 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
             PktRuntimeContentPayload::readTooltip);
 
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> CONTROLLER_SPEC_CODEC = StreamCodec.composite(
-            Identifier.STREAM_CODEC, MachineControllerSpec::id,
-            Identifier.STREAM_CODEC, MachineControllerSpec::frontTexture,
-            Identifier.STREAM_CODEC, MachineControllerSpec::sideTexture,
-            Identifier.STREAM_CODEC, MachineControllerSpec::topTexture,
-            Identifier.STREAM_CODEC, MachineControllerSpec::bottomTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::id,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::frontTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::sideTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::topTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::bottomTexture,
             ByteBufCodecs.BOOL, MachineControllerSpec::allowVerticalFacing,
             ByteBufCodecs.BOOL, MachineControllerSpec::fullyRotationallySymmetric,
             ByteBufCodecs.BOOL, MachineControllerSpec::requireVerticalFacing,
              TOOLTIP_CODEC, MachineControllerSpec::tooltip,
             MachineControllerSpec::new);
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineAppearanceSpec> APPEARANCE_SPEC_CODEC = StreamCodec.composite(
-            Identifier.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
-            ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.controllerBaseTexture()),
-            ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.formedPortBaseTexture()),
-            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerIdleOverlayTexture,
-            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerActiveOverlayTexture,
+            ResourceLocation.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
+            ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), spec -> Optional.ofNullable(spec.controllerBaseTexture()),
+            ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), spec -> Optional.ofNullable(spec.formedPortBaseTexture()),
+            ResourceLocation.STREAM_CODEC, MachineAppearanceSpec::controllerIdleOverlayTexture,
+            ResourceLocation.STREAM_CODEC, MachineAppearanceSpec::controllerActiveOverlayTexture,
             (blockId, controllerTexture, portTexture, idleOverlay, activeOverlay) -> new MachineAppearanceSpec(blockId,
                     controllerTexture.orElse(null), portTexture.orElse(null), idleOverlay, activeOverlay));
 
@@ -105,12 +105,12 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         }
         int maxStructureBlocks = buf.readVarInt();
         if (maxStructureBlocks <= 0) throw new IllegalArgumentException("Invalid maximum block pattern count: " + maxStructureBlocks);
-        Map<Identifier, MachineStructureDefinition> structures = readMap(buf, maxStructures(),
+        Map<ResourceLocation, MachineStructureDefinition> structures = readMap(buf, maxStructures(),
                 structureBuf -> MachineStructureSyncCodec.decode(structureBuf, maxStructureBlocks));
-        Map<Identifier, MachineRecipe> recipes = readMap(buf, maxRecipes(), MachineRecipeSyncCodec::decode);
-        Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, maxSpecs(), CONTROLLER_SPEC_CODEC::decode);
-        Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, maxSpecs(), APPEARANCE_SPEC_CODEC::decode);
-        Map<Identifier, List<Identifier>> machineRecipePools = readMap(buf, maxStructures(),
+        Map<ResourceLocation, MachineRecipe> recipes = readMap(buf, maxRecipes(), MachineRecipeSyncCodec::decode);
+        Map<ResourceLocation, MachineControllerSpec> controllerSpecs = readMap(buf, maxSpecs(), CONTROLLER_SPEC_CODEC::decode);
+        Map<ResourceLocation, MachineAppearanceSpec> appearances = readMap(buf, maxSpecs(), APPEARANCE_SPEC_CODEC::decode);
+        Map<ResourceLocation, List<ResourceLocation>> machineRecipePools = readMap(buf, maxStructures(),
                 PktRuntimeContentPayload::readRecipePools);
         validateMap(structures, (id, value) -> {
             if (!id.equals(value.machineId())) throw new IllegalArgumentException("Structure key does not match machine id: " + id);
@@ -136,22 +136,22 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
                 structures, recipes, controllerSpecs, appearances, machineRecipePools, contentVersion));
     }
 
-    private static <T> void writeMap(RegistryFriendlyByteBuf buf, Map<Identifier, T> values, int max,
+    private static <T> void writeMap(RegistryFriendlyByteBuf buf, Map<ResourceLocation, T> values, int max,
             EntryWriter<T> writer) {
         checkSize(values.size(), max, "runtime content");
         buf.writeVarInt(values.size());
-        for (Map.Entry<Identifier, T> entry : values.entrySet()) {
-            Identifier.STREAM_CODEC.encode(buf, entry.getKey());
+        for (Map.Entry<ResourceLocation, T> entry : values.entrySet()) {
+            ResourceLocation.STREAM_CODEC.encode(buf, entry.getKey());
             writer.write(buf, entry.getValue());
         }
     }
 
-    private static <T> Map<Identifier, T> readMap(RegistryFriendlyByteBuf buf, int max, EntryReader<T> reader) {
+    private static <T> Map<ResourceLocation, T> readMap(RegistryFriendlyByteBuf buf, int max, EntryReader<T> reader) {
         int count = buf.readVarInt();
         checkSize(count, max, "runtime content");
-        Map<Identifier, T> values = new LinkedHashMap<>();
+        Map<ResourceLocation, T> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
-            Identifier id = Identifier.STREAM_CODEC.decode(buf);
+            ResourceLocation id = ResourceLocation.STREAM_CODEC.decode(buf);
             if (values.containsKey(id)) throw new IllegalArgumentException("Duplicate runtime content key: " + id);
             values.put(id, reader.read(buf));
         }
@@ -172,7 +172,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         return List.copyOf(values);
     }
 
-    private static void writeRecipePools(RegistryFriendlyByteBuf buf, List<Identifier> recipePools) {
+    private static void writeRecipePools(RegistryFriendlyByteBuf buf, List<ResourceLocation> recipePools) {
         if (recipePools == null || recipePools.isEmpty()) {
             throw new IllegalArgumentException("Invalid recipe pool count: 0");
         }
@@ -181,23 +181,23 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
             throw new IllegalArgumentException("Duplicate recipe pool id");
         }
         buf.writeVarInt(recipePools.size());
-        recipePools.forEach(pool -> Identifier.STREAM_CODEC.encode(buf, pool));
+        recipePools.forEach(pool -> ResourceLocation.STREAM_CODEC.encode(buf, pool));
     }
 
-    private static List<Identifier> readRecipePools(RegistryFriendlyByteBuf buf) {
+    private static List<ResourceLocation> readRecipePools(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
         checkSize(count, maxStructures(), "recipe pool");
         if (count == 0) throw new IllegalArgumentException("Invalid recipe pool count: 0");
-        List<Identifier> recipePools = new ArrayList<>(count);
+        List<ResourceLocation> recipePools = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            Identifier pool = Identifier.STREAM_CODEC.decode(buf);
+            ResourceLocation pool = ResourceLocation.STREAM_CODEC.decode(buf);
             if (recipePools.contains(pool)) throw new IllegalArgumentException("Duplicate recipe pool id: " + pool);
             recipePools.add(pool);
         }
         return List.copyOf(recipePools);
     }
 
-    private static <T> void validateMap(Map<Identifier, T> values, BiConsumer<Identifier, T> validator) {
+    private static <T> void validateMap(Map<ResourceLocation, T> values, BiConsumer<ResourceLocation, T> validator) {
         values.forEach(validator);
     }
 

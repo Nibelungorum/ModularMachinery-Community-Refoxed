@@ -8,7 +8,7 @@ import com.mojang.serialization.DynamicOps;
 import com.mojang.datafixers.util.Pair;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -103,9 +103,9 @@ public interface MachineRequirement {
     }
 
     private static <T> DataResult<MachineRequirement> decodeByType(String serializedType, DynamicOps<T> ops, T input) {
-        Identifier typeId;
+        ResourceLocation typeId;
         try {
-            typeId = serializedType.contains(":") ? Identifier.parse(serializedType) : MMCR.id(serializedType);
+            typeId = serializedType.contains(":") ? ResourceLocation.parse(serializedType) : MMCR.id(serializedType);
         } catch (IllegalArgumentException e) {
             return DataResult.error(() -> "Invalid requirement type: " + serializedType);
         }

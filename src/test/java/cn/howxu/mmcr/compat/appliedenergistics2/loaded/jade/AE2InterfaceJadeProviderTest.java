@@ -39,7 +39,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -226,7 +226,7 @@ class AE2InterfaceJadeProviderTest {
     }
 
     private static void bindTestPatternInterfaceEntityType() {
-        Identifier id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
+        ResourceLocation id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {

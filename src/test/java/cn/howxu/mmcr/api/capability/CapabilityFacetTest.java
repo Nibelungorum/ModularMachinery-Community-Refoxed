@@ -10,7 +10,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -84,7 +84,7 @@ class CapabilityFacetTest {
 
         @Override
         public CapabilityType type() {
-            return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "facets"));
+            return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "facets"));
         }
 
         @Override

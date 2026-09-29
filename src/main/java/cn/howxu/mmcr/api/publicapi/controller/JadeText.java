@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.controller;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Optional custom text exposed by a machine controller to Jade.
@@ -9,17 +9,17 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public interface JadeText {
-    void append(Identifier lineId, Component text);
+    void append(ResourceLocation lineId, Component text);
 
-    default void appendAfter(Identifier lineId, Identifier afterLineId, Component text) {
+    default void appendAfter(ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
         append(lineId, text);
     }
 
-    default void replace(Identifier lineId, Component text) {
+    default void replace(ResourceLocation lineId, Component text) {
         append(lineId, text);
     }
 
-    void remove(Identifier lineId);
+    void remove(ResourceLocation lineId);
 
     void clear();
 
@@ -31,11 +31,11 @@ public interface JadeText {
         INSTANCE;
 
         @Override
-        public void append(Identifier lineId, Component text) {
+        public void append(ResourceLocation lineId, Component text) {
         }
 
         @Override
-        public void remove(Identifier lineId) {
+        public void remove(ResourceLocation lineId) {
         }
 
         @Override

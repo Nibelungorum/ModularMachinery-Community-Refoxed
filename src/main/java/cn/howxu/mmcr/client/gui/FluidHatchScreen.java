@@ -11,7 +11,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -23,8 +23,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/guitank.png");
-    private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
+    private static final ResourceLocation TEXTURE = MMCR.id("textures/gui/guitank.png");
+    private static final ResourceLocation AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int TANK_X = 15;
     private static final int TANK_Y = 10;
@@ -41,7 +41,7 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
     @Override protected BlockPos portPos() { return menu.pos(); }
     @Override protected IOType ownerIOType() { return menu.owner() == null ? null : menu.owner().ioType(); }
     @Override protected int portSlotCount() { return 0; }
-    @Override protected Identifier texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
+    @Override protected ResourceLocation texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {

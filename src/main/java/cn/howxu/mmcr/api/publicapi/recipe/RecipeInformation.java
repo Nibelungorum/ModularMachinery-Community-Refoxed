@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,7 +14,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record RecipeInformation(Target target, Identifier targetId, String translationKey, List<Object> arguments) {
+public record RecipeInformation(Target target, ResourceLocation targetId, String translationKey, List<Object> arguments) {
 
     public RecipeInformation {
         Objects.requireNonNull(target, "target");
@@ -26,12 +26,12 @@ public record RecipeInformation(Target target, Identifier targetId, String trans
         arguments = Collections.unmodifiableList(new ArrayList<>(arguments));
     }
 
-    public static RecipeInformation pool(Identifier poolId, String translationKey, Object... arguments) {
+    public static RecipeInformation pool(ResourceLocation poolId, String translationKey, Object... arguments) {
         if (arguments == null) throw new IllegalArgumentException("arguments must not be null");
         return new RecipeInformation(Target.RECIPE_POOL, poolId, translationKey, Arrays.asList(arguments));
     }
 
-    public static RecipeInformation recipe(Identifier recipeId, String translationKey, Object... arguments) {
+    public static RecipeInformation recipe(ResourceLocation recipeId, String translationKey, Object... arguments) {
         if (arguments == null) throw new IllegalArgumentException("arguments must not be null");
         return new RecipeInformation(Target.RECIPE, recipeId, translationKey, Arrays.asList(arguments));
     }

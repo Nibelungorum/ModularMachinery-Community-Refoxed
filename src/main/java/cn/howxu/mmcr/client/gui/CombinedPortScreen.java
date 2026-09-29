@@ -12,7 +12,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
@@ -26,7 +26,7 @@ import java.util.List;
  */
 public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMenu> {
     private static final String COMBINED_TEXTURE_PATH = "textures/gui/combined/";
-    private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
+    private static final ResourceLocation AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int IMAGE_HEIGHT = 166;
     private static final int TANK_WIDTH = 20;
@@ -44,7 +44,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         super(menu, inventory, title, IMAGE_HEIGHT);
     }
 
-    static List<Identifier> capabilityIds() {
+    static List<ResourceLocation> capabilityIds() {
         return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
     }
 
@@ -52,7 +52,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         return LAYOUT;
     }
 
-    static Identifier textureForKind(String kind) {
+    static ResourceLocation textureForKind(String kind) {
         return MMCR.id(COMBINED_TEXTURE_PATH + kind.substring(kind.lastIndexOf('_') + 1) + ".png");
     }
 
@@ -72,7 +72,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     @Override
-    protected Identifier texture(boolean autoIOPage) {
+    protected ResourceLocation texture(boolean autoIOPage) {
         return autoIOPage ? AUTO_IO_TEXTURE : textureForKind(menu.kind());
     }
 
@@ -97,7 +97,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     static List<TankRenderOperation> tankRenderOperations(List<CombinedPortMenu.FluidTankLayout> layouts,
-                                                           List<FluidStorageEntry> entries, Identifier texture) {
+                                                           List<FluidStorageEntry> entries, ResourceLocation texture) {
         List<TankRenderOperation> operations = new ArrayList<>();
         for (CombinedPortMenu.FluidTankLayout layout : layouts) {
             FluidStorageEntry entry = entries.stream()
@@ -160,7 +160,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     record TankRenderOperation(Kind kind, int x, int y, int width, int height,
-                               int sourceX, int sourceY, Identifier texture, FluidStorageEntry entry) {
+                               int sourceX, int sourceY, ResourceLocation texture, FluidStorageEntry entry) {
         enum Kind {
             FILL,
             FRAME

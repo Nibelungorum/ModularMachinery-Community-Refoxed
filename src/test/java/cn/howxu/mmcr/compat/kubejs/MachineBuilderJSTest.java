@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Map;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import dev.latvian.mods.rhino.ContextFactory;
 import dev.latvian.mods.rhino.Wrapper;
 import dev.latvian.mods.rhino.ScriptableObject;
@@ -187,10 +187,10 @@ class MachineBuilderJSTest {
                 .recipePool("mmcr:first_pool", "mmcr:second_pool")
                 .createObject();
         assertThat(pooled.recipePoolIds()).containsExactly(
-                Identifier.parse("mmcr:first_pool"), Identifier.parse("mmcr:second_pool"));
-        assertThat(pooled.recipePoolId()).isEqualTo(Identifier.parse("mmcr:first_pool"));
+                ResourceLocation.parse("mmcr:first_pool"), ResourceLocation.parse("mmcr:second_pool"));
+        assertThat(pooled.recipePoolId()).isEqualTo(ResourceLocation.parse("mmcr:first_pool"));
         assertThat(new MachineBuilderJS("mmcr:default_pool_machine")
-                .createObject().recipePoolIds()).containsExactly(Identifier.parse("mmcr:default_pool_machine"));
+                .createObject().recipePoolIds()).containsExactly(ResourceLocation.parse("mmcr:default_pool_machine"));
         assertThatThrownBy(() -> new MachineBuilderJS("mmcr:empty_pool_machine").recipePool())
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("at least one");
         assertThatThrownBy(() -> new MachineBuilderJS("mmcr:duplicate_pool_machine")
@@ -225,7 +225,7 @@ class MachineBuilderJSTest {
         assertThat(module.isModule()).isTrue();
         assertThat(host.isHost()).isTrue();
         assertThat(host.acceptedModuleIds())
-                .containsExactly(Identifier.parse("mmcr:first"), Identifier.parse("mmcr:second"), Identifier.parse("mmcr:third"));
+                .containsExactly(ResourceLocation.parse("mmcr:first"), ResourceLocation.parse("mmcr:second"), ResourceLocation.parse("mmcr:third"));
     }
 
     @Test
@@ -243,9 +243,9 @@ class MachineBuilderJSTest {
 
     @Test
     void startup_builder_forwards_network_settings_and_request_callbacks() throws Exception {
-        Identifier targetId = MMCR.id("network_target");
-        Identifier processId = MMCR.id("process");
-        Identifier failureId = MMCR.id("failure");
+        ResourceLocation targetId = MMCR.id("network_target");
+        ResourceLocation processId = MMCR.id("process");
+        ResourceLocation failureId = MMCR.id("failure");
         AtomicInteger processCalls = new AtomicInteger();
         AtomicInteger failureCalls = new AtomicInteger();
         RequestProcess process = (body, request, sender, receiver) -> processCalls.incrementAndGet();
@@ -285,7 +285,7 @@ class MachineBuilderJSTest {
 
     @Test
     void registered_machine_keeps_runtime_capabilities_and_sounds() {
-        Identifier id = MMCR.id("registered_capabilities");
+        ResourceLocation id = MMCR.id("registered_capabilities");
         new MachineBuilderJS(id)
                 .allowModifiers()
                 .allowMultithreading()
@@ -307,14 +307,14 @@ class MachineBuilderJSTest {
         assertThat(registration.expandableStructure()).isTrue();
         assertThat(registration.shareSmartInterfaces()).isTrue();
         assertThat(registration.smartInterfaceTypes()).containsKey("speed");
-        assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
-        assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:entity.ender_dragon.growl"));
+        assertThat(registration.runningSoundId()).isEqualTo(ResourceLocation.parse("minecraft:block.furnace.fire_crackle"));
+        assertThat(registration.finishSoundId()).isEqualTo(ResourceLocation.parse("minecraft:entity.ender_dragon.growl"));
     }
 
     @Test
     void registered_machine_retains_explicit_shared_recipe_pool() {
-        Identifier machineId = MMCR.id("shared_pool_machine");
-        Identifier recipePoolId = MMCR.id("shared_recipe_pool");
+        ResourceLocation machineId = MMCR.id("shared_pool_machine");
+        ResourceLocation recipePoolId = MMCR.id("shared_recipe_pool");
 
         new MachineBuilderJS(machineId).recipePool(recipePoolId.toString()).register();
         Plugin.freezeStartupRegistryPhaseForTesting();
@@ -324,7 +324,7 @@ class MachineBuilderJSTest {
 
     @Test
     void registered_machine_preserves_all_recipe_behavior_callbacks() {
-        Identifier id = MMCR.id("registered_recipe_callbacks");
+        ResourceLocation id = MMCR.id("registered_recipe_callbacks");
         AtomicInteger calls = new AtomicInteger();
         new MachineBuilderJS(id)
                 .recipeBehavior(builder -> builder
@@ -370,16 +370,16 @@ class MachineBuilderJSTest {
     @Test
     void builder_maps_direct_registration_settings() {
         MachineControllerSpec controllerSpec = new MachineControllerSpec(
-                Identifier.parse("mmcr_kubejs:explicit_controller"),
-                Identifier.parse("mmcr_kubejs:block/front"),
-                Identifier.parse("mmcr_kubejs:block/side"),
-                Identifier.parse("mmcr_kubejs:block/top"),
-                Identifier.parse("mmcr_kubejs:block/bottom"),
+                ResourceLocation.parse("mmcr_kubejs:explicit_controller"),
+                ResourceLocation.parse("mmcr_kubejs:block/front"),
+                ResourceLocation.parse("mmcr_kubejs:block/side"),
+                ResourceLocation.parse("mmcr_kubejs:block/top"),
+                ResourceLocation.parse("mmcr_kubejs:block/bottom"),
                 true);
         MachineAppearanceSpec appearance = new MachineAppearanceSpec(
-                Identifier.parse("mmcr_kubejs:explicit_casing"),
-                Identifier.parse("mmcr_kubejs:block/controller"),
-                Identifier.parse("mmcr_kubejs:block/port"));
+                ResourceLocation.parse("mmcr_kubejs:explicit_casing"),
+                ResourceLocation.parse("mmcr_kubejs:block/controller"),
+                ResourceLocation.parse("mmcr_kubejs:block/port"));
 
         var registration = new MachineBuilderJS("mmcr_kubejs:kubejs_test")
                 .recipePool("mmcr_kubejs:kubejs_family")
@@ -393,7 +393,7 @@ class MachineBuilderJSTest {
                 .role("MoDuLe")
                 .createObject();
 
-        assertThat(registration.recipePoolId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
+        assertThat(registration.recipePoolId()).isEqualTo(ResourceLocation.parse("mmcr_kubejs:kubejs_family"));
         assertThat(registration.expandableStructure()).isTrue();
         assertThat(registration.maxParallelAmount()).isEqualTo(4);
         assertThat(registration.controllerSpec()).isSameAs(controllerSpec);
@@ -431,7 +431,7 @@ class MachineBuilderJSTest {
                 .createObject();
 
         assertThat(registration.role()).isEqualTo(MachineRole.HOST);
-        assertThat(registration.acceptedModuleIds()).containsExactly(Identifier.parse("mmcr_kubejs:module"));
+        assertThat(registration.acceptedModuleIds()).containsExactly(ResourceLocation.parse("mmcr_kubejs:module"));
     }
 
     @Test
@@ -509,7 +509,7 @@ class MachineBuilderJSTest {
                 .createObject();
 
         assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
-                Identifier.parse("kubejs:steel_casing"),
+                ResourceLocation.parse("kubejs:steel_casing"),
                 null,
                 null));
     }
@@ -526,7 +526,7 @@ class MachineBuilderJSTest {
         var registration = (MachineRegistration) result.unwrap();
 
         assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
-                Identifier.withDefaultNamespace("bricks"),
+                ResourceLocation.withDefaultNamespace("bricks"),
                 null,
                 null));
     }
@@ -550,13 +550,13 @@ class MachineBuilderJSTest {
                 """, "startup-builder-test", 1, null);
         var registration = (MachineRegistration) result.unwrap();
 
-        assertThat(registration.acceptedModuleIds()).containsExactly(Identifier.parse("mmcr:space_reassembler"));
-        assertThat(registration.appearance().machineBasicBlock()).isEqualTo(Identifier.withDefaultNamespace("smooth_quartz"));
-        assertThat(registration.controllerSpec().frontTexture()).isEqualTo(Identifier.parse("minecraft:block/quartz_block_top"));
+        assertThat(registration.acceptedModuleIds()).containsExactly(ResourceLocation.parse("mmcr:space_reassembler"));
+        assertThat(registration.appearance().machineBasicBlock()).isEqualTo(ResourceLocation.withDefaultNamespace("smooth_quartz"));
+        assertThat(registration.controllerSpec().frontTexture()).isEqualTo(ResourceLocation.parse("minecraft:block/quartz_block_top"));
         assertThat(registration.appearance().controllerBaseTexture())
-                .isEqualTo(Identifier.parse("minecraft:block/quartz_block_bottom"));
-        assertThat(registration.runningSoundId()).isEqualTo(Identifier.parse("minecraft:block.furnace.fire_crackle"));
-        assertThat(registration.finishSoundId()).isEqualTo(Identifier.parse("minecraft:entity.ender_dragon.growl"));
+                .isEqualTo(ResourceLocation.parse("minecraft:block/quartz_block_bottom"));
+        assertThat(registration.runningSoundId()).isEqualTo(ResourceLocation.parse("minecraft:block.furnace.fire_crackle"));
+        assertThat(registration.finishSoundId()).isEqualTo(ResourceLocation.parse("minecraft:entity.ender_dragon.growl"));
     }
 
     @Test
@@ -592,7 +592,7 @@ class MachineBuilderJSTest {
                 registration.allowModifiers(), registration.allowMultithreading(), registration.allowParallelism(),
                 registration.maxParallelAmount(), registration.expandableStructure(), registration.smartInterfaceTypes(),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),
-                Identifier.parse("mmcr:not_registered"), null, registration.role(), registration.acceptedModuleIds(),
+                ResourceLocation.parse("mmcr:not_registered"), null, registration.role(), registration.acceptedModuleIds(),
                 registration.pattern()))
                 .isInstanceOf(ApiRegistrationException.class);
     }
@@ -605,9 +605,9 @@ class MachineBuilderJSTest {
                 .formedPortBaseTexture("kubejs:block/clean_steel_casing")
                 .createObject();
 
-        assertThat(registration.appearance().machineBasicBlock()).isEqualTo(Identifier.parse("kubejs:steel_casing"));
+        assertThat(registration.appearance().machineBasicBlock()).isEqualTo(ResourceLocation.parse("kubejs:steel_casing"));
         assertThat(registration.appearance().controllerBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
-        assertThat(registration.appearance().formedPortBaseTexture()).isEqualTo(Identifier.parse("kubejs:block/clean_steel_casing"));
+        assertThat(registration.appearance().formedPortBaseTexture()).isEqualTo(ResourceLocation.parse("kubejs:block/clean_steel_casing"));
     }
 
     @Test
@@ -624,10 +624,10 @@ class MachineBuilderJSTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static Set<Identifier> requestedMachineSoundIds() throws Exception {
+    private static Set<ResourceLocation> requestedMachineSoundIds() throws Exception {
         Method method = MachineSoundRegistry.class.getDeclaredMethod("requestedIds");
         method.setAccessible(true);
-        return (Set<Identifier>) method.invoke(null);
+        return (Set<ResourceLocation>) method.invoke(null);
     }
 
 }

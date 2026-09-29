@@ -11,7 +11,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.Block;
@@ -31,8 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineSoundManagerTest {
     private static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION,
-            Identifier.fromNamespaceAndPath("test", "overworld"));
-    private static final Identifier LOOP_SOUND = Identifier.fromNamespaceAndPath("minecraft", "block.furnace.fire_crackle");
+            ResourceLocation.fromNamespaceAndPath("test", "overworld"));
+    private static final ResourceLocation LOOP_SOUND = ResourceLocation.fromNamespaceAndPath("minecraft", "block.furnace.fire_crackle");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -65,7 +65,7 @@ class MachineSoundManagerTest {
         AtomicInteger stopped = new AtomicInteger();
         manager.reconcile(List.of(activeController(key, LOOP_SOUND)), (trackedKey, soundId) -> stopped::incrementAndGet);
 
-        manager.reconcile(List.of(activeController(key, Identifier.fromNamespaceAndPath("test", "machine.loop.changed"))));
+        manager.reconcile(List.of(activeController(key, ResourceLocation.fromNamespaceAndPath("test", "machine.loop.changed"))));
 
         assertThat(manager.trackedCount()).isEqualTo(1);
         assertThat(stopped).hasValue(1);
@@ -73,7 +73,7 @@ class MachineSoundManagerTest {
 
     @Test
     void machine_id_can_be_derived_from_controller_block_state_without_found_machine() throws Exception {
-        Identifier machineId = Identifier.fromNamespaceAndPath("test", "client_synced_machine");
+        ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("test", "client_synced_machine");
         MachineControllerBlock controllerBlock = testControllerBlock(machineId);
 
         assertThat(MachineSoundManager.machineIdFromState(controllerBlock.defaultBlockState())).isEqualTo(machineId);
@@ -81,7 +81,7 @@ class MachineSoundManagerTest {
 
     @Test
     void descriptor_uses_controller_block_machine_id_when_found_machine_is_not_synced() throws Exception {
-        Identifier machineId = Identifier.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
+        ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(
                 MachineRegistration.builder(machineId).runningSound(LOOP_SOUND).build());
@@ -109,7 +109,7 @@ class MachineSoundManagerTest {
         AtomicInteger stopped = new AtomicInteger();
         manager.reconcile(List.of(activeController(key, LOOP_SOUND)), (trackedKey, soundId) -> stopped::incrementAndGet);
 
-        manager.reconcile(List.of(activeController(key, Identifier.fromNamespaceAndPath("test", "missing.loop"))),
+        manager.reconcile(List.of(activeController(key, ResourceLocation.fromNamespaceAndPath("test", "missing.loop"))),
                 (trackedKey, soundId) -> null);
 
         assertThat(manager.trackedCount()).isZero();
@@ -139,7 +139,7 @@ class MachineSoundManagerTest {
     }
 
     private static MachineSoundManager.ControllerDescriptor activeController(
-            MachineSoundManager.ControllerKey key, Identifier soundId) {
+            MachineSoundManager.ControllerKey key, ResourceLocation soundId) {
         return new MachineSoundManager.ControllerDescriptor(key, soundId, true);
     }
 
@@ -148,13 +148,13 @@ class MachineSoundManagerTest {
                 new MachineSoundManager.ControllerKey(OVERWORLD, new BlockPos(1, 2, 3)), LOOP_SOUND, false);
     }
 
-    private static MachineControllerBlock testControllerBlock(Identifier machineId) throws Exception {
+    private static MachineControllerBlock testControllerBlock(ResourceLocation machineId) throws Exception {
         TestBootstrap.bindControllerForTesting(machineId);
         return (MachineControllerBlock) ModBlocks.controllerFor(machineId).get();
     }
 
     private static MachineControllerBlockEntity controllerBlockEntityWithoutRunningMinecraftConstructor() throws Exception {
-        Identifier machineId = Identifier.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
+        ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("test", "client_synced_descriptor_machine");
         TestBootstrap.bindControllerForTesting(machineId);
         return RuntimeTestFixtures.controllerEntity(machineId, new BlockPos(4, 5, 6));
     }

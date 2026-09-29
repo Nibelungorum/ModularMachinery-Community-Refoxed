@@ -13,7 +13,7 @@ import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -32,7 +32,7 @@ public final class ModBlockEntities {
 
     public static final LinkedHashMap<String, DeferredHolder<BlockEntityType<?>, BlockEntityType<?>>> BES =
             new LinkedHashMap<>();
-    private static final Set<Identifier> CONTROLLER_MACHINE_IDS = new LinkedHashSet<>();
+    private static final Set<ResourceLocation> CONTROLLER_MACHINE_IDS = new LinkedHashSet<>();
 
     static {
         PortKinds.all().forEach(kind -> {
@@ -55,7 +55,7 @@ public final class ModBlockEntities {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> NETWORK_INTERFACE = BES.get("network_interface");
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> MODULE_BRIDGE = BES.get("module_bridge");
 
-    private static void registerMachineController(Identifier machineId) {
+    private static void registerMachineController(ResourceLocation machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         if (BES.containsKey(name)) return;
         CONTROLLER_MACHINE_IDS.add(machineId);
@@ -63,11 +63,11 @@ public final class ModBlockEntities {
                 MachineControllerBlockEntity::new, ModBlocks.controllerFor(machineId).get())));
     }
 
-    public static void registerMachineControllers(Collection<Identifier> machineIds) {
+    public static void registerMachineControllers(Collection<ResourceLocation> machineIds) {
         machineIds.forEach(ModBlockEntities::registerMachineController);
     }
 
-    public static Set<Identifier> controllerMachineIds() {
+    public static Set<ResourceLocation> controllerMachineIds() {
         return Set.copyOf(CONTROLLER_MACHINE_IDS);
     }
 
@@ -112,7 +112,7 @@ public final class ModBlockEntities {
                 ModBlocks.BLOCKS.get(name).get())));
     }
 
-    public static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> controllerFor(Identifier machineId) {
+    public static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> controllerFor(ResourceLocation machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> holder = BES.get(name);
         if (holder == null) throw new IllegalArgumentException("No controller block entity registered for machine: " + machineId);

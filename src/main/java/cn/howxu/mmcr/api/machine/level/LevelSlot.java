@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine.level;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record LevelSlot(Identifier typeId) {
+public record LevelSlot(ResourceLocation typeId) {
     public LevelSlot {
         Objects.requireNonNull(typeId, "typeId");
     }

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.jei.JeiWorkstationRegistration;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
 import net.neoforged.bus.api.Event;
@@ -20,24 +20,24 @@ public final class MMCRJeiWorkstationsEvent extends Event {
     private final List<JeiWorkstationRegistration> entries = new ArrayList<>();
     private boolean frozen;
 
-    public void addRecipePoolWorkstation(Identifier recipePoolId, ItemLike workstation) {
+    public void addRecipePoolWorkstation(ResourceLocation recipePoolId, ItemLike workstation) {
         Objects.requireNonNull(workstation, "workstation");
-        Identifier itemId = BuiltInRegistries.ITEM.getKey(workstation.asItem());
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(workstation.asItem());
         if (itemId == null) throw new IllegalArgumentException("workstation item is not registered");
         addRecipePoolWorkstation(recipePoolId, itemId);
     }
 
-    public void addRecipePoolWorkstation(Identifier recipePoolId, Identifier itemId) {
+    public void addRecipePoolWorkstation(ResourceLocation recipePoolId, ResourceLocation itemId) {
         requireOpen();
         entries.add(new JeiWorkstationRegistration.RecipePoolItem(recipePoolId, itemId));
     }
 
-    public void addRecipePoolWorkstation(Identifier recipePoolId, ItemStack workstation) {
+    public void addRecipePoolWorkstation(ResourceLocation recipePoolId, ItemStack workstation) {
         requireOpen();
         entries.add(new JeiWorkstationRegistration.RecipePoolStack(recipePoolId, workstation));
     }
 
-    public void addMachineWorkstation(Identifier machineId, Identifier recipeTypeId) {
+    public void addMachineWorkstation(ResourceLocation machineId, ResourceLocation recipeTypeId) {
         requireOpen();
         entries.add(new JeiWorkstationRegistration.Machine(machineId, recipeTypeId));
     }

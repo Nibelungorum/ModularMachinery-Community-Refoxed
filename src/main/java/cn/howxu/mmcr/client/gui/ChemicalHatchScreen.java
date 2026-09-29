@@ -10,7 +10,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.Optional;
@@ -21,8 +21,8 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/guitank.png");
-    private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
+    private static final ResourceLocation TEXTURE = MMCR.id("textures/gui/guitank.png");
+    private static final ResourceLocation AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int TANK_X = 15;
     private static final int TANK_Y = 10;
@@ -39,7 +39,7 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
     @Override protected BlockPos portPos() { return menu.pos(); }
     @Override protected IOType ownerIOType() { return menu.owner() == null ? null : menu.owner().ioType(); }
     @Override protected int portSlotCount() { return 0; }
-    @Override protected Identifier texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
+    @Override protected ResourceLocation texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -47,7 +47,7 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
         if (autoIOPage) return;
         graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         Component chemicalName = menu.chemicalName();
-        boolean hasChemical = menu.chemicalIdentifier() != null;
+        boolean hasChemical = menu.chemicalResourceLocation() != null;
         if (hasChemical) {
             graphics.text(font, chemicalName, titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
         }
@@ -79,7 +79,7 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
     }
 
     static ChemicalGuiRenderer.ChemicalRenderState renderState(ChemicalPortMenu menu, int height) {
-        return ChemicalGuiRenderer.state(menu.chemicalIdentifier(), menu.chemicalTint(),
+        return ChemicalGuiRenderer.state(menu.chemicalResourceLocation(), menu.chemicalTint(),
                 menu.chemicalAmount(), menu.chemicalCapacity(), height);
     }
 }

@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.publicapi.recipe.component;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -39,8 +39,8 @@ class ComponentPredicateTest {
         List<ComponentPredicate> predicateListValues = new ArrayList<>();
         predicateListValues.add(predicate);
         ComponentPredicate list = ComponentPredicate.list(predicateListValues);
-        Map<Identifier, ComponentPredicate> componentValues = new LinkedHashMap<>();
-        componentValues.put(Identifier.parse("minecraft:repair_cost"), list);
+        Map<ResourceLocation, ComponentPredicate> componentValues = new LinkedHashMap<>();
+        componentValues.put(ResourceLocation.parse("minecraft:repair_cost"), list);
         DataComponentPredicateSet declarations = new DataComponentPredicateSet(componentValues);
 
         exactValue.addProperty("changed", true);
@@ -49,7 +49,7 @@ class ComponentPredicateTest {
         componentValues.clear();
 
         ComponentPredicate.Exact nested = (ComponentPredicate.Exact) ((ComponentPredicate.MapValue)
-                ((ComponentPredicate.ListValue) declarations.values().get(Identifier.parse("minecraft:repair_cost")))
+                ((ComponentPredicate.ListValue) declarations.values().get(ResourceLocation.parse("minecraft:repair_cost")))
                         .values().getFirst()).values().get("nested");
         assertThat(nested.value())
                 .isEqualTo(JsonParser.parseString("{\"value\":1}"));
@@ -65,9 +65,9 @@ class ComponentPredicateTest {
     @Test
     void detectsExactForms() {
         DataComponentPredicateSet exact = new DataComponentPredicateSet(Map.of(
-                Identifier.parse("minecraft:repair_cost"), ComponentPredicate.exact(new JsonPrimitive(1))));
+                ResourceLocation.parse("minecraft:repair_cost"), ComponentPredicate.exact(new JsonPrimitive(1))));
         DataComponentPredicateSet ranged = new DataComponentPredicateSet(Map.of(
-                Identifier.parse("minecraft:repair_cost"), ComponentPredicate.range(1, 4)));
+                ResourceLocation.parse("minecraft:repair_cost"), ComponentPredicate.range(1, 4)));
 
         assertThat(ComponentPredicate.exact(new JsonPrimitive(1)).isExact()).isTrue();
         assertThat(ComponentPredicate.range(1, 4).isExact()).isFalse();

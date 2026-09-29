@@ -32,7 +32,7 @@ import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.server.level.ServerLevel;
@@ -299,9 +299,9 @@ class KeyCardItemTest {
         publishStructureState.invoke(runtime, true, false, null, 0);
     }
 
-    private static Machine machine(Identifier id, Set<Identifier> allowedMachines) {
+    private static Machine machine(ResourceLocation id, Set<ResourceLocation> allowedMachines) {
         return new Machine() {
-            @Override public Identifier registryName() { return id; }
+            @Override public ResourceLocation registryName() { return id; }
             @Override public BlockArray pattern() { return new BlockArray(Map.of()); }
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public NetworkInterfaceSpec networkInterface() {

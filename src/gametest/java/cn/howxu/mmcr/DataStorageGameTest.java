@@ -41,7 +41,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
@@ -69,7 +69,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class DataStorageGameTest {
-    private static final Identifier MACHINE_ID = MMCR.id("data_storage_tick");
+    private static final ResourceLocation MACHINE_ID = MMCR.id("data_storage_tick");
 
     public void pureTickWritesBoundStorage(GameTestHelper helper) {
         BlockPos controllerBlockPos = new BlockPos(1, 1, 1);
@@ -137,7 +137,7 @@ public final class DataStorageGameTest {
     public void recipeSnapshotLoadsWithoutStartCallbackRerun(GameTestHelper helper) {
         ServerConfig.MACHINE_WORK_MODE.clearCache();
         ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
-        Identifier machineId = MMCR.id("task7_recipe_snapshot");
+        ResourceLocation machineId = MMCR.id("task7_recipe_snapshot");
         BlockPos controllerPos = new BlockPos(3, 1, 3);
         BlockPos inputPos = controllerPos.west();
         BlockPos outputPos = controllerPos.east();

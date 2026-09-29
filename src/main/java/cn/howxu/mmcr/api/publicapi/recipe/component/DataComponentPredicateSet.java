@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.recipe.component;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
 
@@ -9,7 +9,7 @@ import java.util.Map;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record DataComponentPredicateSet(Map<Identifier, ComponentPredicate> values) {
+public record DataComponentPredicateSet(Map<ResourceLocation, ComponentPredicate> values) {
 
     public static final DataComponentPredicateSet EMPTY = new DataComponentPredicateSet(Map.of());
 

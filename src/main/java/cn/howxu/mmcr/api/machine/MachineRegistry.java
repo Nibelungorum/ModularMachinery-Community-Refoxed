@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -10,11 +10,11 @@ import java.util.Map;
 
 public final class MachineRegistry {
 
-    private static final Map<Identifier, Machine> STATIC_MACHINES = new LinkedHashMap<>();
-    private static volatile Map<Identifier, Machine> STRUCTURE_MACHINES = Map.of();
-    private static volatile Map<Identifier, List<CompiledMachinePattern>> COMPILED = Map.of();
-    private static volatile Map<Identifier, Machine> EFFECTIVE_MACHINES = Map.of();
-    private static volatile Map<Identifier, List<Identifier>> CLIENT_RECIPE_POOLS = Map.of();
+    private static final Map<ResourceLocation, Machine> STATIC_MACHINES = new LinkedHashMap<>();
+    private static volatile Map<ResourceLocation, Machine> STRUCTURE_MACHINES = Map.of();
+    private static volatile Map<ResourceLocation, List<CompiledMachinePattern>> COMPILED = Map.of();
+    private static volatile Map<ResourceLocation, Machine> EFFECTIVE_MACHINES = Map.of();
+    private static volatile Map<ResourceLocation, List<ResourceLocation>> CLIENT_RECIPE_POOLS = Map.of();
 
     private MachineRegistry() {
     }
@@ -25,43 +25,43 @@ public final class MachineRegistry {
                 throw new IllegalStateException("Machine already registered: " + machine.registryName());
             }
             STATIC_MACHINES.put(machine.registryName(), machine);
-            Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>(COMPILED);
+            Map<ResourceLocation, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>(COMPILED);
             compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, null));
             COMPILED = Map.copyOf(compiled);
             rebuildEffectiveSnapshot();
         }
     }
 
-    public static Machine getMachine(Identifier id) {
+    public static Machine getMachine(ResourceLocation id) {
         Machine machine = STATIC_MACHINES.get(id);
         return machine != null ? machine : STRUCTURE_MACHINES.get(id);
     }
 
-    public static Identifier recipePoolForMachine(Machine machine) {
+    public static ResourceLocation recipePoolForMachine(Machine machine) {
         return machine == null ? null : recipePoolForMachine(machine.registryName());
     }
 
-    public static Identifier recipePoolForMachine(Identifier machineId) {
-        List<Identifier> recipePools = recipePoolsForMachine(machineId);
+    public static ResourceLocation recipePoolForMachine(ResourceLocation machineId) {
+        List<ResourceLocation> recipePools = recipePoolsForMachine(machineId);
         return recipePools.isEmpty() ? null : recipePools.getFirst();
     }
 
-    public static List<Identifier> recipePoolsForMachine(Machine machine) {
+    public static List<ResourceLocation> recipePoolsForMachine(Machine machine) {
         return machine == null ? List.of() : recipePoolsForMachine(machine.registryName());
     }
 
-    public static List<Identifier> recipePoolsForMachine(Identifier machineId) {
+    public static List<ResourceLocation> recipePoolsForMachine(ResourceLocation machineId) {
         if (machineId == null) return List.of();
-        List<Identifier> clientPools = CLIENT_RECIPE_POOLS.get(machineId);
+        List<ResourceLocation> clientPools = CLIENT_RECIPE_POOLS.get(machineId);
         if (clientPools != null) return clientPools;
         MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
         return registration == null ? List.of(machineId) : registration.recipePoolIds();
     }
 
-    public static void replaceClientRecipePools(Map<Identifier, List<Identifier>> recipePools) {
+    public static void replaceClientRecipePools(Map<ResourceLocation, List<ResourceLocation>> recipePools) {
         synchronized (RuntimeContentVersion.lock()) {
             validateClientRecipePools(recipePools);
-            Map<Identifier, List<Identifier>> copy = new LinkedHashMap<>();
+            Map<ResourceLocation, List<ResourceLocation>> copy = new LinkedHashMap<>();
             recipePools.forEach((id, pools) -> copy.put(id, List.copyOf(pools)));
             CLIENT_RECIPE_POOLS = Map.copyOf(copy);
         }
@@ -73,9 +73,9 @@ public final class MachineRegistry {
         }
     }
 
-    public static void validateClientRecipePools(Map<Identifier, List<Identifier>> recipePools) {
+    public static void validateClientRecipePools(Map<ResourceLocation, List<ResourceLocation>> recipePools) {
         if (recipePools == null) throw new IllegalArgumentException("Invalid machine recipe pool mapping");
-        for (Map.Entry<Identifier, List<Identifier>> entry : recipePools.entrySet()) {
+        for (Map.Entry<ResourceLocation, List<ResourceLocation>> entry : recipePools.entrySet()) {
             if (entry.getKey() == null || entry.getValue() == null || entry.getValue().isEmpty()
                     || entry.getValue().stream().anyMatch(java.util.Objects::isNull)
                     || entry.getValue().stream().distinct().count() != entry.getValue().size()) {
@@ -84,35 +84,35 @@ public final class MachineRegistry {
         }
     }
 
-    public static Map<Identifier, Machine> getAll() {
+    public static Map<ResourceLocation, Machine> getAll() {
         synchronized (RuntimeContentVersion.lock()) {
             return EFFECTIVE_MACHINES;
         }
     }
 
-    public static Map<Identifier, Machine> effectiveSnapshot() {
+    public static Map<ResourceLocation, Machine> effectiveSnapshot() {
         return getAll();
     }
 
-    public static CompiledMachinePattern getCompiled(Identifier id) {
+    public static CompiledMachinePattern getCompiled(ResourceLocation id) {
         return getCompiledStages(id).isEmpty() ? null : getCompiledStages(id).getFirst();
     }
 
-    public static List<CompiledMachinePattern> getCompiledStages(Identifier id) {
+    public static List<CompiledMachinePattern> getCompiledStages(ResourceLocation id) {
         return COMPILED.getOrDefault(id, List.of());
     }
 
-    public static Map<Identifier, CompiledMachinePattern> getAllCompiled() {
-        Map<Identifier, CompiledMachinePattern> firstStages = new LinkedHashMap<>();
+    public static Map<ResourceLocation, CompiledMachinePattern> getAllCompiled() {
+        Map<ResourceLocation, CompiledMachinePattern> firstStages = new LinkedHashMap<>();
         COMPILED.forEach((id, stages) -> { if (!stages.isEmpty()) firstStages.put(id, stages.getFirst()); });
         return Collections.unmodifiableMap(firstStages);
     }
 
-    public static boolean containsStatic(Identifier id) {
+    public static boolean containsStatic(ResourceLocation id) {
         return STATIC_MACHINES.containsKey(id);
     }
 
-    public static boolean containsRecipePool(Identifier recipePoolId) {
+    public static boolean containsRecipePool(ResourceLocation recipePoolId) {
         if (recipePoolId == null) return false;
         if (MachineDefinitions.allRegistrations().stream()
                 .anyMatch(registration -> registration.recipePoolIds().contains(recipePoolId))) return true;
@@ -120,10 +120,10 @@ public final class MachineRegistry {
                 .anyMatch(machine -> recipePoolsForMachine(machine).contains(recipePoolId));
     }
 
-    public static void installStructures(Map<Identifier, MachineStructureDefinition> structures) {
+    public static void installStructures(Map<ResourceLocation, MachineStructureDefinition> structures) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, Machine> structureMachines = new LinkedHashMap<>();
-            for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
+            Map<ResourceLocation, Machine> structureMachines = new LinkedHashMap<>();
+            for (Map.Entry<ResourceLocation, MachineStructureDefinition> entry : structures.entrySet()) {
                 MachineRegistration registration = MachineDefinitions.getRegistration(entry.getKey());
                 if (registration == null) {
                     throw new IllegalStateException("No startup machine registration for structure: " + entry.getKey());
@@ -131,10 +131,10 @@ public final class MachineRegistry {
                 structureMachines.put(entry.getKey(), MachineStructureRegistry.toRuntimeMachine(registration, entry.getValue()));
             }
 
-            Map<Identifier, Machine> allMachines = new LinkedHashMap<>(STATIC_MACHINES);
+            Map<ResourceLocation, Machine> allMachines = new LinkedHashMap<>(STATIC_MACHINES);
             allMachines.putAll(structureMachines);
             Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(allMachines.values());
-            Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
+            Map<ResourceLocation, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
             for (Machine machine : allMachines.values()) {
                 compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
             }
@@ -148,9 +148,9 @@ public final class MachineRegistry {
 
     public static void rebuildCompiledCache() {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, Machine> machines = mergedMachines();
+            Map<ResourceLocation, Machine> machines = mergedMachines();
             Map<BlockArrayCache.Key, BlockArray> cache = BlockArrayCache.buildCacheSnapshot(machines.values());
-            Map<Identifier, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
+            Map<ResourceLocation, List<CompiledMachinePattern>> compiled = new LinkedHashMap<>();
             for (Machine machine : machines.values()) {
                 compiled.put(machine.registryName(), MachinePatternCompiler.compileStages(machine, cache));
             }
@@ -160,8 +160,8 @@ public final class MachineRegistry {
         }
     }
 
-    private static Map<Identifier, Machine> mergedMachines() {
-        Map<Identifier, Machine> machines = new LinkedHashMap<>(STATIC_MACHINES);
+    private static Map<ResourceLocation, Machine> mergedMachines() {
+        Map<ResourceLocation, Machine> machines = new LinkedHashMap<>(STATIC_MACHINES);
         machines.putAll(STRUCTURE_MACHINES);
         return machines;
     }
@@ -170,7 +170,7 @@ public final class MachineRegistry {
         EFFECTIVE_MACHINES = immutableSnapshot(mergedMachines());
     }
 
-    private static Map<Identifier, Machine> immutableSnapshot(Map<Identifier, Machine> machines) {
+    private static Map<ResourceLocation, Machine> immutableSnapshot(Map<ResourceLocation, Machine> machines) {
         return Collections.unmodifiableMap(new LinkedHashMap<>(machines));
     }
 

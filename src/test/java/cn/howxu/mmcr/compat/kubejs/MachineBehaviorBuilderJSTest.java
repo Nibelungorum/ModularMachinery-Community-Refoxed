@@ -20,7 +20,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -62,7 +62,7 @@ class MachineBehaviorBuilderJSTest {
 
     @Test
     void create_object_retains_recipe_callback_context_boundary() {
-        Identifier storagePosId = MMCR.id("kubejs_recipe_context_machine");
+        ResourceLocation storagePosId = MMCR.id("kubejs_recipe_context_machine");
         BlockPos storagePos = new BlockPos(2, 3, 4);
         DataStorage storage = new DataStorage();
         ControllerScreenTextState screenText = new ControllerScreenTextState();

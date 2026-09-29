@@ -18,7 +18,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import com.mojang.serialization.DynamicOps;
 
 import com.google.gson.JsonElement;
@@ -53,8 +53,8 @@ import java.util.stream.Stream;
  */
 public record MachineRecipeDisplay(
         MachineRecipe recipe,
-        Identifier recipeId,
-        Identifier recipePoolId,
+        ResourceLocation recipeId,
+        ResourceLocation recipePoolId,
         int durationTicks,
         List<ItemInputDisplay> itemInputs,
         List<ItemOutputDisplay> itemOutputs,
@@ -67,7 +67,7 @@ public record MachineRecipeDisplay(
         List<SmartInterfaceDisplay> smartInterfaceInputs,
         List<SmartInterfaceDisplay> smartInterfaceOutputs,
         List<SmartInterfaceModifierDisplay> smartInterfaceModifiers,
-        Set<Identifier> requiredHostIds
+        Set<ResourceLocation> requiredHostIds
 ) {
 
     public MachineRecipeDisplay {
@@ -149,10 +149,10 @@ public record MachineRecipeDisplay(
         );
     }
 
-    private static Set<Identifier> sortedHostIds(Set<Identifier> ids) {
+    private static Set<ResourceLocation> sortedHostIds(Set<ResourceLocation> ids) {
         if (ids == null || ids.isEmpty()) return Set.of();
         return ids.stream()
-                .sorted(Comparator.comparing(Identifier::toString))
+                .sorted(Comparator.comparing(ResourceLocation::toString))
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), Collections::unmodifiableSet));
     }
 

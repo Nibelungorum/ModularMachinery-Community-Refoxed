@@ -195,7 +195,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
             return CapabilityResult.successful();
         }
         if (!(operation instanceof AsyncCapabilityOperation.Scalar(
-                net.minecraft.resources.Identifier capabilityId, long amount, boolean insert
+                net.minecraft.resources.ResourceLocation capabilityId, long amount, boolean insert
         ))
                 || !type().id().equals(capabilityId)) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);

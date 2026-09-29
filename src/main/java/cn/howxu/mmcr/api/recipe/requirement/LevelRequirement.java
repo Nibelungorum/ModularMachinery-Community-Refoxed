@@ -5,22 +5,22 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record LevelRequirement(RecipeModifier.IOType io, Identifier typeId, Identifier levelId)
+public record LevelRequirement(RecipeModifier.IOType io, ResourceLocation typeId, ResourceLocation levelId)
         implements MachineRequirement {
-    private static final Identifier TYPE_ID = MMCR.id("level");
+    private static final ResourceLocation TYPE_ID = MMCR.id("level");
     public static final MapCodec<LevelRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
                     .forGetter(LevelRequirement::io),
-            Identifier.CODEC.fieldOf("level_type").forGetter(LevelRequirement::typeId),
-            Identifier.CODEC.fieldOf("level").forGetter(LevelRequirement::levelId)
+            ResourceLocation.CODEC.fieldOf("level_type").forGetter(LevelRequirement::typeId),
+            ResourceLocation.CODEC.fieldOf("level").forGetter(LevelRequirement::levelId)
     ).apply(instance, (ignored, io, typeId, levelId) ->
             new LevelRequirement(io, typeId, levelId)));
     private static final RequirementHandler<LevelRequirement> HANDLER = new LevelRequirementHandler();
@@ -35,7 +35,7 @@ public record LevelRequirement(RecipeModifier.IOType io, Identifier typeId, Iden
         Objects.requireNonNull(levelId, "levelId");
     }
 
-    public static LevelRequirement input(Identifier typeId, Identifier levelId) {
+    public static LevelRequirement input(ResourceLocation typeId, ResourceLocation levelId) {
         return new LevelRequirement(RecipeModifier.IOType.INPUT, typeId, levelId);
     }
 

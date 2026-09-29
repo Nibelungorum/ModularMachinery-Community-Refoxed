@@ -9,7 +9,7 @@ import appeng.api.networking.security.IActionSource;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
@@ -222,10 +222,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
                     continue;
                 }
                 int activeForRecipe = 0;
-                Identifier recipeId = recipe.id();
+                ResourceLocation recipeId = recipe.id();
                 List<CraftingStateSnapshot> lanes = snapshot.factory().lanes();
                 for (int j = 0; j < lanes.size(); j++) {
-                    Identifier laneRecipeId = lanes.get(j).recipeId();
+                    ResourceLocation laneRecipeId = lanes.get(j).recipeId();
                     if (laneRecipeId != null && laneRecipeId.equals(recipeId)) activeForRecipe++;
                 }
                 long cap = ((long) recipe.maxThreads() - activeForRecipe) * parallelism;

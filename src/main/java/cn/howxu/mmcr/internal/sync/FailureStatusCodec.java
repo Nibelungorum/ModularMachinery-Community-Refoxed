@@ -10,7 +10,7 @@ import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.config.CommonConfig;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
@@ -40,9 +40,9 @@ public final class FailureStatusCodec {
         if (status == null) return;
 
         validateStatus(status);
-        putIdentifier(output, "id", status.id());
+        putResourceLocation(output, "id", status.id());
         output.putInt("severity", status.severity().ordinal());
-        putIdentifier(output, "source", status.source());
+        putResourceLocation(output, "source", status.source());
 
         ValueOutput occurrenceOutput = output.child("occurrence");
         FailureOccurrence occurrence = status.failure();
@@ -51,7 +51,7 @@ public final class FailureStatusCodec {
 
         FailureReason reason = occurrence.reason();
         occurrenceOutput.putBoolean("has_reason", reason != null);
-        if (reason != null) putIdentifier(occurrenceOutput, "reason_id", reason.id());
+        if (reason != null) putResourceLocation(occurrenceOutput, "reason_id", reason.id());
 
         List<FailureTrace.Frame> frames = occurrence.trace().frames();
         checkCount(frames.size(), MAX_TRACE_FRAMES, "trace frame");
@@ -59,10 +59,10 @@ public final class FailureStatusCodec {
         for (FailureTrace.Frame frameValue : frames) {
             if (frameValue == null) throw new IllegalArgumentException("trace frame must not be null");
             ValueOutput frame = trace.addChild();
-            putIdentifier(frame, "source", frameValue.source());
+            putResourceLocation(frame, "source", frameValue.source());
             frame.putInt("phase", frameValue.phase().ordinal());
             frame.putBoolean("has_recipe", frameValue.recipeId() != null);
-            if (frameValue.recipeId() != null) putIdentifier(frame, "recipe_id", frameValue.recipeId());
+            if (frameValue.recipeId() != null) putResourceLocation(frame, "recipe_id", frameValue.recipeId());
             frame.putBoolean("has_requirement", frameValue.requirementIndex() != null);
             if (frameValue.requirementIndex() != null) frame.putInt("requirement_index", frameValue.requirementIndex());
         }
@@ -81,16 +81,16 @@ public final class FailureStatusCodec {
         Objects.requireNonNull(input, "input");
         if (!input.getBooleanOr("present", false)) return null;
 
-        Identifier id = getIdentifier(input, "id");
+        ResourceLocation id = getResourceLocation(input, "id");
         StatusSeverity severity = getEnum(StatusSeverity.values(), input.getIntOr("severity", -1), "failure severity");
-        Identifier source = getIdentifier(input, "source");
+        ResourceLocation source = getResourceLocation(input, "source");
         ValueInput occurrenceInput = input.childOrEmpty("occurrence");
         if (!occurrenceInput.getBooleanOr("present", false)) {
             return new ExecutionStatus(id, severity, source, (FailureOccurrence) null);
         }
 
-        Identifier reasonId = occurrenceInput.getBooleanOr("has_reason", false)
-                ? getIdentifier(occurrenceInput, "reason_id") : null;
+        ResourceLocation reasonId = occurrenceInput.getBooleanOr("has_reason", false)
+                ? getResourceLocation(occurrenceInput, "reason_id") : null;
         FailureReason reason = reasonId == null ? null : resolveReason(reasonId);
 
         ValueInput.ValueInputList traceInputs = occurrenceInput.childrenListOrEmpty("trace");
@@ -118,9 +118,9 @@ public final class FailureStatusCodec {
         if (status == null) return;
 
         validateStatus(status);
-        writeIdentifier(buffer, status.id(), "status id");
+        writeResourceLocation(buffer, status.id(), "status id");
         buffer.writeVarInt(status.severity().ordinal());
-        writeIdentifier(buffer, status.source(), "status source");
+        writeResourceLocation(buffer, status.source(), "status source");
 
         FailureOccurrence occurrence = status.failure();
         buffer.writeBoolean(occurrence != null);
@@ -128,17 +128,17 @@ public final class FailureStatusCodec {
 
         FailureReason reason = occurrence.reason();
         buffer.writeBoolean(reason != null);
-        if (reason != null) writeIdentifier(buffer, reason.id(), "failure reason");
+        if (reason != null) writeResourceLocation(buffer, reason.id(), "failure reason");
 
         List<FailureTrace.Frame> frames = occurrence.trace().frames();
         checkCount(frames.size(), MAX_TRACE_FRAMES, "trace frame");
         buffer.writeVarInt(frames.size());
         for (FailureTrace.Frame frame : frames) {
             if (frame == null) throw new IllegalArgumentException("trace frame must not be null");
-            writeIdentifier(buffer, frame.source(), "trace source");
+            writeResourceLocation(buffer, frame.source(), "trace source");
             buffer.writeVarInt(frame.phase().ordinal());
             buffer.writeBoolean(frame.recipeId() != null);
-            if (frame.recipeId() != null) writeIdentifier(buffer, frame.recipeId(), "trace recipe");
+            if (frame.recipeId() != null) writeResourceLocation(buffer, frame.recipeId(), "trace recipe");
             buffer.writeBoolean(frame.requirementIndex() != null);
             if (frame.requirementIndex() != null) buffer.writeVarInt(frame.requirementIndex());
         }
@@ -157,20 +157,20 @@ public final class FailureStatusCodec {
         try {
             if (!buffer.readBoolean()) return null;
 
-            Identifier id = readIdentifier(buffer, "status id");
+            ResourceLocation id = readResourceLocation(buffer, "status id");
             StatusSeverity severity = readEnum(buffer, StatusSeverity.values(), "failure severity");
-            Identifier source = readIdentifier(buffer, "status source");
+            ResourceLocation source = readResourceLocation(buffer, "status source");
             if (!buffer.readBoolean()) return new ExecutionStatus(id, severity, source, (FailureOccurrence) null);
 
-            Identifier reasonId = buffer.readBoolean() ? readIdentifier(buffer, "failure reason") : null;
+            ResourceLocation reasonId = buffer.readBoolean() ? readResourceLocation(buffer, "failure reason") : null;
             FailureReason reason = reasonId == null ? null : resolveReason(reasonId);
 
             int traceCount = readCount(buffer, MAX_TRACE_FRAMES, "trace frame");
             List<FailureTrace.Frame> frames = new ArrayList<>(traceCount);
             for (int index = 0; index < traceCount; index++) {
-                Identifier frameSource = readIdentifier(buffer, "trace source");
+                ResourceLocation frameSource = readResourceLocation(buffer, "trace source");
                 FailurePhase phase = readEnum(buffer, FailurePhase.values(), "failure phase");
-                Identifier recipeId = buffer.readBoolean() ? readIdentifier(buffer, "trace recipe") : null;
+                ResourceLocation recipeId = buffer.readBoolean() ? readResourceLocation(buffer, "trace recipe") : null;
                 Integer requirementIndex = buffer.readBoolean() ? buffer.readVarInt() : null;
                 frames.add(new FailureTrace.Frame(frameSource, phase, recipeId, requirementIndex));
             }
@@ -192,21 +192,21 @@ public final class FailureStatusCodec {
     }
 
     private static FailureTrace.Frame readFrame(ValueInput input) {
-        Identifier source = getIdentifier(input, "source");
+        ResourceLocation source = getResourceLocation(input, "source");
         FailurePhase phase = getEnum(FailurePhase.values(), input.getIntOr("phase", -1), "failure phase");
-        Identifier recipeId = input.getBooleanOr("has_recipe", false)
-                ? getIdentifier(input, "recipe_id") : null;
+        ResourceLocation recipeId = input.getBooleanOr("has_recipe", false)
+                ? getResourceLocation(input, "recipe_id") : null;
         Integer requirementIndex = input.getBooleanOr("has_requirement", false)
                 ? input.getIntOr("requirement_index", 0) : null;
         return new FailureTrace.Frame(source, phase, recipeId, requirementIndex);
     }
 
-    private static FailureReason resolveReason(Identifier reasonId) {
+    private static FailureReason resolveReason(ResourceLocation reasonId) {
         FailureReason resolved = FailureReasonRegistry.resolve(reasonId);
         return resolved == null ? BuiltinFailureReasons.UNKNOWN : resolved;
     }
 
-    private static void addUnknownReasonDetail(@Nullable Identifier reasonId, Map<String, String> details) {
+    private static void addUnknownReasonDetail(@Nullable ResourceLocation reasonId, Map<String, String> details) {
         if (reasonId != null && FailureReasonRegistry.find(reasonId) == null) {
             details.putIfAbsent("raw_reason_id", reasonId.toString());
         }
@@ -225,17 +225,17 @@ public final class FailureStatusCodec {
         }
     }
 
-    private static void putIdentifier(ValueOutput output, String name, Identifier value) {
+    private static void putResourceLocation(ValueOutput output, String name, ResourceLocation value) {
         putString(output, name, value.toString());
     }
 
-    private static Identifier getIdentifier(ValueInput input, String name) {
-        return parseIdentifier(getString(input, name), name);
+    private static ResourceLocation getResourceLocation(ValueInput input, String name) {
+        return parseResourceLocation(getString(input, name), name);
     }
 
-    private static Identifier parseIdentifier(String value, String name) {
+    private static ResourceLocation parseResourceLocation(String value, String name) {
         try {
-            return Identifier.parse(value);
+            return ResourceLocation.parse(value);
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("Invalid " + name + " identifier: " + value, exception);
         }
@@ -252,12 +252,12 @@ public final class FailureStatusCodec {
         return value;
     }
 
-    private static void writeIdentifier(RegistryFriendlyByteBuf buffer, Identifier value, String name) {
+    private static void writeResourceLocation(RegistryFriendlyByteBuf buffer, ResourceLocation value, String name) {
         writeString(buffer, value.toString(), name);
     }
 
-    private static Identifier readIdentifier(RegistryFriendlyByteBuf buffer, String name) {
-        return parseIdentifier(readString(buffer, name), name);
+    private static ResourceLocation readResourceLocation(RegistryFriendlyByteBuf buffer, String name) {
+        return parseResourceLocation(readString(buffer, name), name);
     }
 
     private static void writeString(RegistryFriendlyByteBuf buffer, String value, String name) {

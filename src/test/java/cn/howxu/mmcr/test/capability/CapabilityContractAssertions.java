@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.assertj.core.api.Assertions;
 
@@ -25,7 +25,7 @@ public final class CapabilityContractAssertions {
         return new CapabilityRequest() {
             @Override
             public CapabilityType type() {
-                return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "contract"));
+                return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "contract"));
             }
 
             @Override

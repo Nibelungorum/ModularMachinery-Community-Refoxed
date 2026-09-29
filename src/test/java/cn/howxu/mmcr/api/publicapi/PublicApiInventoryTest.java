@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistryBridge;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Files;
@@ -125,12 +125,12 @@ class PublicApiInventoryTest {
         assertThat(MachineLevelRegistryBridge.class.isAnnotationPresent(Deprecated.class)).isTrue();
         assertThat(ModifierRegistryBridge.class.isAnnotationPresent(Deprecated.class)).isTrue();
 
-        Identifier typeId = Identifier.fromNamespaceAndPath("mmcr_test", "compat_type");
+        ResourceLocation typeId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "compat_type");
         LevelType type = new LevelType(typeId, Component.literal("Compatibility"));
         MachineLevelRegistryBridge.install(List.of(type), List.of());
         assertThat(MachineLevelRegistry.getType(typeId)).isSameAs(type);
 
-        Identifier modifierId = Identifier.fromNamespaceAndPath("mmcr_test", "compat_modifier");
+        ResourceLocation modifierId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "compat_modifier");
         ModifierDefinition definition = new ModifierDefinition(List.of());
         ModifierRegistryBridge.install(Map.of(modifierId, definition));
         assertThat(ModifierRegistry.get(modifierId)).isSameAs(definition);

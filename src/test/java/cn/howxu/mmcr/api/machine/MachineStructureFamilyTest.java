@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -153,7 +153,7 @@ class MachineStructureFamilyTest {
         List<SingleBlockModifierReplacement> replacements = new ArrayList<>();
         Map<BlockPos, List<SingleBlockModifierReplacement>> replacementMap = new LinkedHashMap<>();
         replacementMap.put(pos, replacements);
-        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        Map<BlockPos, ResourceLocation> levelSlots = new LinkedHashMap<>();
         levelSlots.put(pos, MMCR.id("coil"));
         BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, controller(), pos, casing()),
                 Map.of(), Map.of(BlockPos.ZERO, 'C', pos, 'M'));

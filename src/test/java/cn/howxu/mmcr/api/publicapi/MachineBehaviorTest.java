@@ -29,7 +29,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Test;
@@ -55,17 +55,17 @@ class MachineBehaviorTest {
     private static final ControllerScreenText SCREEN_TEXT = new ControllerScreenText() {
         @Override
         public void append(ControllerScreenTextScope scope,
-                           Identifier lineId, Component text) {
+                           ResourceLocation lineId, Component text) {
         }
 
         @Override
         public void appendAfter(ControllerScreenTextScope scope,
-                                Identifier lineId, Identifier afterLineId, Component text) {
+                                ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
         }
 
         @Override
         public void remove(ControllerScreenTextScope scope,
-                           Identifier lineId) {
+                           ResourceLocation lineId) {
         }
 
         @Override

@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import net.minecraft.core.HolderSet;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -45,7 +45,7 @@ public final class RecipeCandidateIndex {
         return EMPTY;
     }
 
-    public static RecipeCandidateIndex build(Identifier recipePoolId, List<MachineRecipe> recipes) {
+    public static RecipeCandidateIndex build(ResourceLocation recipePoolId, List<MachineRecipe> recipes) {
         BUILD_COUNT_FOR_TESTING.incrementAndGet();
         if (recipes == null || recipes.isEmpty()) return EMPTY;
 

@@ -30,7 +30,7 @@ import cn.howxu.mmcr.util.IOType;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -238,7 +238,7 @@ class CapabilityHostTest {
     }
 
     private record TestCapability(String id) implements MachineCapability {
-        @Override public CapabilityType type() { return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", id)); }
+        @Override public CapabilityType type() { return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", id)); }
         @Override public CapabilityDirections directions() {
             return CapabilityDirections.input();
         }

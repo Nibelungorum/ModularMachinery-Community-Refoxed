@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.machine.level;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -10,7 +10,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record LevelType(Identifier id, Component displayName) {
+public record LevelType(ResourceLocation id, Component displayName) {
     public LevelType {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(displayName, "displayName");

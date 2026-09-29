@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.data;
 
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
@@ -54,7 +54,7 @@ class DataRepositoryApiTest {
     void repository_and_context_can_be_implemented_without_world_lookup() {
         DataRepository repository = new DataRepository() {
             @Override
-            public Identifier id() {
+            public ResourceLocation id() {
                 return MMCR.id("future_repository");
             }
 

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,7 +17,7 @@ import java.util.Objects;
  */
 public record MachineStructureRequirements(
         Map<Character, List<SingleBlockModifierReplacement>> modifierReplacements,
-        Map<Character, Identifier> levelSlots) {
+        Map<Character, ResourceLocation> levelSlots) {
 
     public static final MachineStructureRequirements EMPTY = new MachineStructureRequirements(Map.of(), Map.of());
 
@@ -43,7 +43,7 @@ public record MachineStructureRequirements(
                 replacements.forEach(replacement -> builder.modifier(symbol, replacement)));
         previous.levelSlots().forEach(builder::levelSlot);
         extension.levelSlots().forEach((symbol, typeId) -> {
-            Identifier existing = builder.levelSlots.get(symbol);
+            ResourceLocation existing = builder.levelSlots.get(symbol);
             if (existing != null && !existing.equals(typeId)) {
                 throw new IllegalArgumentException("stage " + stageNumber
                         + " has conflicting level slot for symbol " + symbol);
@@ -85,7 +85,7 @@ public record MachineStructureRequirements(
      */
     public static final class Builder {
         private final Map<Character, List<SingleBlockModifierReplacement>> modifiers = new LinkedHashMap<>();
-        private final Map<Character, Identifier> levelSlots = new LinkedHashMap<>();
+        private final Map<Character, ResourceLocation> levelSlots = new LinkedHashMap<>();
 
         public Builder modifier(char symbol, SingleBlockModifierReplacement replacement) {
             Objects.requireNonNull(replacement, "replacement");
@@ -93,13 +93,13 @@ public record MachineStructureRequirements(
             return this;
         }
 
-        public Builder modifier(char symbol, Identifier modifierId, BlockPredicate replacement) {
+        public Builder modifier(char symbol, ResourceLocation modifierId, BlockPredicate replacement) {
             return modifier(symbol, new SingleBlockModifierReplacement(modifierId, replacement));
         }
 
-        public Builder levelSlot(char symbol, Identifier typeId) {
+        public Builder levelSlot(char symbol, ResourceLocation typeId) {
             Objects.requireNonNull(typeId, "typeId");
-            Identifier existing = levelSlots.putIfAbsent(symbol, typeId);
+            ResourceLocation existing = levelSlots.putIfAbsent(symbol, typeId);
             if (existing != null && !existing.equals(typeId)) {
                 throw new IllegalArgumentException("conflicting level slot for symbol " + symbol);
             }

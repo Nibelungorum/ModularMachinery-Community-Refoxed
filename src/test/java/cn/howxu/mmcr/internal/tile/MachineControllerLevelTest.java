@@ -25,7 +25,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -51,8 +51,8 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineControllerLevelTest {
-    private static final Identifier MACHINE_ID = Identifier.parse("test:level_machine");
-    private static final Identifier COIL_TYPE = Identifier.parse("test:coil");
+    private static final ResourceLocation MACHINE_ID = ResourceLocation.parse("test:level_machine");
+    private static final ResourceLocation COIL_TYPE = ResourceLocation.parse("test:coil");
     private MachineLevel copper;
     private MachineLevel kanthal;
 
@@ -298,18 +298,18 @@ class MachineControllerLevelTest {
     private static MachineControllerSpec controllerSpec(boolean allowVerticalFacing, boolean requireVerticalFacing,
                                                         boolean fullyRotationallySymmetric) {
         return new MachineControllerSpec(
-                Identifier.fromNamespaceAndPath(MACHINE_ID.getNamespace(), MACHINE_ID.getPath() + "_controller"),
-                Identifier.parse("mmcr:block/controller_front"),
-                Identifier.parse("mmcr:block/controller_side"),
-                Identifier.parse("mmcr:block/controller_top"),
-                Identifier.parse("mmcr:block/controller_bottom"),
+                ResourceLocation.fromNamespaceAndPath(MACHINE_ID.getNamespace(), MACHINE_ID.getPath() + "_controller"),
+                ResourceLocation.parse("mmcr:block/controller_front"),
+                ResourceLocation.parse("mmcr:block/controller_side"),
+                ResourceLocation.parse("mmcr:block/controller_top"),
+                ResourceLocation.parse("mmcr:block/controller_bottom"),
                 allowVerticalFacing,
                 fullyRotationallySymmetric,
                 requireVerticalFacing);
     }
 
     private static MachineLevel level(String id, int priority, Block block) {
-        return new MachineLevel(Identifier.parse(id), COIL_TYPE, priority,
+        return new MachineLevel(ResourceLocation.parse(id), COIL_TYPE, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY);
     }
 

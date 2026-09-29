@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.capability.async;
 
 import java.util.List;
 import java.util.Objects;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * An immutable capability operation that may be planned off the main thread.
@@ -11,7 +11,7 @@ import net.minecraft.resources.Identifier;
  */
 public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource, AsyncCapabilityOperation.Scalar,
         AsyncCapabilityOperation.Heat, AsyncCapabilityOperation.Group {
-    Identifier capabilityId();
+    ResourceLocation capabilityId();
 
     /**
      * A resource insertion or extraction for one storage slot.
@@ -22,7 +22,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
      * @param amount resource amount
      * @param insert whether the resource is inserted rather than extracted
      */
-    record Resource(Identifier capabilityId, int slot, AsyncResourceValue resource, long amount, boolean insert)
+    record Resource(ResourceLocation capabilityId, int slot, AsyncResourceValue resource, long amount, boolean insert)
             implements AsyncCapabilityOperation {
         public Resource {
             if (slot < 0 || amount <= 0L) {
@@ -45,7 +45,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
             if (operations.stream().anyMatch(Group.class::isInstance)) {
                 throw new IllegalArgumentException("operation groups must not be nested");
             }
-            Identifier groupCapabilityId = operations.getFirst().capabilityId();
+            ResourceLocation groupCapabilityId = operations.getFirst().capabilityId();
             if (operations.stream().map(AsyncCapabilityOperation::capabilityId)
                     .anyMatch(capabilityId -> !capabilityId.equals(groupCapabilityId))) {
                 throw new IllegalArgumentException("operation group capabilities must match");
@@ -53,7 +53,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
         }
 
         @Override
-        public Identifier capabilityId() {
+        public ResourceLocation capabilityId() {
             return operations.getFirst().capabilityId();
         }
     }
@@ -65,7 +65,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
      * @param amount scalar amount
      * @param insert whether the scalar is inserted rather than extracted
      */
-    record Scalar(Identifier capabilityId, long amount, boolean insert) implements AsyncCapabilityOperation {
+    record Scalar(ResourceLocation capabilityId, long amount, boolean insert) implements AsyncCapabilityOperation {
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
@@ -73,7 +73,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
     }
 
     /** A validated minimum-temperature check or output-heat mutation. */
-    record Heat(Identifier capabilityId, double value, boolean minimumTemperature, long accountingAmount)
+    record Heat(ResourceLocation capabilityId, double value, boolean minimumTemperature, long accountingAmount)
             implements AsyncCapabilityOperation {
         public Heat {
             Objects.requireNonNull(capabilityId, "capabilityId");

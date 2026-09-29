@@ -1,16 +1,16 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
 import java.util.Objects;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Immutable public machine level requirement.
  *
  * @author howxu <dev@howxu.cn>
  */
-public record LevelRequirement(RecipeIo io, Identifier typeId, Identifier levelId)
+public record LevelRequirement(RecipeIo io, ResourceLocation typeId, ResourceLocation levelId)
         implements RecipeRequirement {
-    public LevelRequirement(Identifier typeId, Identifier levelId) {
+    public LevelRequirement(ResourceLocation typeId, ResourceLocation levelId) {
         this(RecipeIo.INPUT, typeId, levelId);
     }
 

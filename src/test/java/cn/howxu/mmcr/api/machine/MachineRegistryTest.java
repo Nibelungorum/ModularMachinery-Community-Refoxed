@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -51,8 +51,8 @@ class MachineRegistryTest {
 
     @Test
     void recipe_pool_presence_uses_configured_pool_instead_of_machine_id() {
-        Identifier machineId = Identifier.parse("mmcr:registered_machine");
-        Identifier recipePoolId = Identifier.parse("mmcr:registered_pool");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:registered_machine");
+        ResourceLocation recipePoolId = ResourceLocation.parse("mmcr:registered_pool");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
         MachineRegistry.register(new DynamicMachine(machineId, "Registered", new BlockArray(Map.of())));
@@ -64,11 +64,11 @@ class MachineRegistryTest {
     @Test
     void effective_snapshot_is_reused_until_registry_changes() {
         MachineRegistry.clearForTesting();
-        var first = new DynamicMachine(Identifier.parse("mmcr:first"), "First", new BlockArray(Map.of()));
-        var second = new DynamicMachine(Identifier.parse("mmcr:second"), "Second", new BlockArray(Map.of()));
+        var first = new DynamicMachine(ResourceLocation.parse("mmcr:first"), "First", new BlockArray(Map.of()));
+        var second = new DynamicMachine(ResourceLocation.parse("mmcr:second"), "Second", new BlockArray(Map.of()));
 
         MachineRegistry.register(first);
-        Map<Identifier, Machine> initial = MachineRegistry.effectiveSnapshot();
+        Map<ResourceLocation, Machine> initial = MachineRegistry.effectiveSnapshot();
 
         assertThat(MachineRegistry.effectiveSnapshot()).isSameAs(initial);
 
@@ -101,7 +101,7 @@ class MachineRegistryTest {
     void dynamic_machine_rejects_replacement_outside_pattern() {
         BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
-        Identifier id = MMCR.id("outside_replacement_machine");
+        ResourceLocation id = MMCR.id("outside_replacement_machine");
 
         assertThatThrownBy(() -> new DynamicMachine(
                 id, "Outside Replacement Machine", new BlockArray(Map.of()),
@@ -114,7 +114,7 @@ class MachineRegistryTest {
     void dynamic_machine_preserves_replacement_metadata() {
         BlockPos position = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
-        Identifier id = MMCR.id("copied_replacement_machine");
+        ResourceLocation id = MMCR.id("copied_replacement_machine");
         var machine = new DynamicMachine(
                 id, "Copied Replacement Machine",
                 new BlockArray(Map.of(position, new BlockPredicate.Any())),
@@ -128,8 +128,8 @@ class MachineRegistryTest {
 
     @Test
     void installingStructuresRebuildsMergedCompiledCache() {
-        var staticMachine = new DynamicMachine(Identifier.parse("mmcr:static"), "Static", new BlockArray(Map.of()));
-        var dynamicId = Identifier.parse("mmcr:dynamic");
+        var staticMachine = new DynamicMachine(ResourceLocation.parse("mmcr:static"), "Static", new BlockArray(Map.of()));
+        var dynamicId = ResourceLocation.parse("mmcr:dynamic");
         var dynamicStructure = new MachineStructureDefinition(dynamicId, new BlockArray(Map.of()),
                 PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         MachineRegistry.register(staticMachine);
@@ -137,7 +137,7 @@ class MachineRegistryTest {
 
         MachineStructureRegistry.replaceDynamic(Map.of(dynamicId, dynamicStructure));
 
-        Map<Identifier, Machine> installed = MachineRegistry.effectiveSnapshot();
+        Map<ResourceLocation, Machine> installed = MachineRegistry.effectiveSnapshot();
         assertThat(installed).containsEntry(staticMachine.registryName(), staticMachine).containsKey(dynamicId);
 
         assertThat(MachineRegistry.getCompiled(staticMachine.registryName())).isNotNull();
@@ -153,7 +153,7 @@ class MachineRegistryTest {
 
     @Test
     void dynamic_runtime_machine_preserves_registration_concurrency_capabilities() {
-        var dynamicId = Identifier.parse("mmcr:dynamic_concurrency");
+        var dynamicId = ResourceLocation.parse("mmcr:dynamic_concurrency");
         var registration = MachineRegistration.builder(dynamicId)
                 .allowMultithreading(true)
                 .allowParallelism(true)
@@ -171,7 +171,7 @@ class MachineRegistryTest {
 
     @Test
     void expandable_machine_compiles_every_stage_and_compatibility_returns_stage_one() {
-        Identifier id = Identifier.parse("mmcr:expandable");
+        ResourceLocation id = ResourceLocation.parse("mmcr:expandable");
         MachineDefinitions.register(MachineRegistration.builder(id).expandableStructure().build());
         MachineStructureDefinition definition = new MachineStructureDefinition(id, List.of(
                 MachineStructureDefinition.Declaration.full(new BlockArray(Map.of(
@@ -189,7 +189,7 @@ class MachineRegistryTest {
 
     @Test
     void unmarked_machine_rejects_multiple_structure_stages() {
-        Identifier id = Identifier.parse("mmcr:not_expandable");
+        ResourceLocation id = ResourceLocation.parse("mmcr:not_expandable");
         MachineDefinitions.register(MachineRegistration.builder(id).build());
         MachineStructureDefinition definition = new MachineStructureDefinition(id, List.of(
                 MachineStructureDefinition.Declaration.full(new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()))),

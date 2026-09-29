@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -11,7 +11,7 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class FailureReasonRegistry {
-    private static final Map<Identifier, FailureReason> REASONS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, FailureReason> REASONS = new LinkedHashMap<>();
     private static boolean frozen;
 
     private FailureReasonRegistry() {
@@ -25,11 +25,11 @@ public final class FailureReasonRegistry {
         }
     }
 
-    public static synchronized FailureReason find(Identifier id) {
+    public static synchronized FailureReason find(ResourceLocation id) {
         return id == null ? null : REASONS.get(id);
     }
 
-    public static synchronized FailureReason resolve(Identifier id) {
+    public static synchronized FailureReason resolve(ResourceLocation id) {
         FailureReason reason = find(id);
         return reason == null ? BuiltinFailureReasons.UNKNOWN : reason;
     }

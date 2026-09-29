@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -18,13 +18,13 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class FailureStatusMigration {
-    private static final Identifier CRAFTING_SOURCE = MMCR.id("crafting_runtime");
+    private static final ResourceLocation CRAFTING_SOURCE = MMCR.id("crafting_runtime");
 
     private FailureStatusMigration() {
     }
 
     public static @Nullable ExecutionStatus craftingFailure(@Nullable String legacyReason,
-                                                             @Nullable Identifier recipeId) {
+                                                             @Nullable ResourceLocation recipeId) {
         Resolved resolved = resolve(legacyReason);
         if (resolved == null) return null;
         Map<String, String> details = resolved.rawReasonId() == null
@@ -33,7 +33,7 @@ public final class FailureStatusMigration {
                 FailureOccurrence.at(resolved.reason(), CRAFTING_SOURCE, resolved.phase(), recipeId, null, details));
     }
 
-    public static @Nullable Identifier factoryReasonId(@Nullable String legacyReason) {
+    public static @Nullable ResourceLocation factoryReasonId(@Nullable String legacyReason) {
         Resolved resolved = resolve(legacyReason);
         if (resolved == null || BuiltinFailureReasons.UNKNOWN.id().equals(resolved.reason().id())) return null;
         return resolved.reason().id();
@@ -44,10 +44,10 @@ public final class FailureStatusMigration {
         Resolved known = known(legacyReason);
         if (known != null) return known;
 
-        Identifier reasonId;
+        ResourceLocation reasonId;
         try {
             reasonId = legacyReason.contains(":")
-                    ? Identifier.parse(legacyReason)
+                    ? ResourceLocation.parse(legacyReason)
                     : MMCR.id(legacyReason);
         } catch (RuntimeException exception) {
             return null;
@@ -107,7 +107,7 @@ public final class FailureStatusMigration {
         return FailurePhase.UNKNOWN;
     }
 
-    private static @Nullable FailureReason builtin(Identifier id) {
+    private static @Nullable FailureReason builtin(ResourceLocation id) {
         for (FailureReason reason : new FailureReason[] {
                 BuiltinFailureReasons.UNKNOWN, BuiltinFailureReasons.MISSING_INPUT,
                 BuiltinFailureReasons.MISSING_OUTPUT, BuiltinFailureReasons.MISSING_ENERGY,

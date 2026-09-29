@@ -24,7 +24,7 @@ import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.locale.Language;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -129,8 +129,8 @@ class MenuScreenTest {
     void selected_capability_state_can_choose_a_non_first_capability() throws Exception {
         CapabilitySelectionScreen screen = (CapabilitySelectionScreen) unsafe().allocateInstance(
                 CapabilitySelectionScreen.class);
-        Identifier item = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
-        Identifier fluid = BuiltinCapabilityDefinitions.FLUID_TYPE.id();
+        ResourceLocation item = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
+        ResourceLocation fluid = BuiltinCapabilityDefinitions.FLUID_TYPE.id();
 
         screen.choose(fluid);
 
@@ -150,8 +150,8 @@ class MenuScreenTest {
 
     @Test
     void controller_detail_lines_preserve_snapshot_order() {
-        Identifier levelTypeId = MMCR.id("menu_test_level_type");
-        Identifier levelId = MMCR.id("menu_test_level");
+        ResourceLocation levelTypeId = MMCR.id("menu_test_level_type");
+        ResourceLocation levelId = MMCR.id("menu_test_level");
         LevelType levelType = new LevelType(levelTypeId, Component.literal("Menu Test Level"));
         MachineLevel level = new MachineLevel(levelId, levelTypeId, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
@@ -233,17 +233,17 @@ class MenuScreenTest {
             super(null, null, Component.empty(), 166);
         }
 
-        private void choose(Identifier capabilityId) {
+        private void choose(ResourceLocation capabilityId) {
             selectCapability(capabilityId);
         }
 
-        private Identifier resolve(List<Identifier> capabilityIds) {
+        private ResourceLocation resolve(List<ResourceLocation> capabilityIds) {
             return selectedCapabilityId(capabilityIds);
         }
 
         @Override protected BlockPos portPos() { return BlockPos.ZERO; }
         @Override protected IOType ownerIOType() { return IOType.INPUT; }
         @Override protected int portSlotCount() { return 0; }
-        @Override protected Identifier texture(boolean autoIOPage) { return MMCR.id("textures/gui/test.png"); }
+        @Override protected ResourceLocation texture(boolean autoIOPage) { return MMCR.id("textures/gui/test.png"); }
     }
 }

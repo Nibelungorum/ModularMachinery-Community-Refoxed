@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.network;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -18,7 +18,7 @@ public final class NetworkApi {
                 .map(NetworkInterfaceReference::new).toList();
     }
 
-    public static void sendRequest(NetworkInterfaceReference source, MachineReference target, Identifier requestId,
+    public static void sendRequest(NetworkInterfaceReference source, MachineReference target, ResourceLocation requestId,
                                    RequestBody body) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");

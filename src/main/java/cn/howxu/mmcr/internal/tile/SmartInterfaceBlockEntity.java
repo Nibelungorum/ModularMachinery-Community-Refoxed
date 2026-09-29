@@ -15,7 +15,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -40,7 +40,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     private static final String MACHINE_ID_KEY = "machineId";
     private static final String VALUES_KEY = "values";
     private static final String CONTROLLERS_KEY = "controllers";
-    private @Nullable Identifier machineId;
+    private @Nullable ResourceLocation machineId;
     private final Map<String, Float> values = new LinkedHashMap<>();
     private final Set<BlockPos> controllers = new LinkedHashSet<>();
     private final FloatValueStorage capabilityStorage = new FloatValueStorage(this::applyCapabilityValues);
@@ -51,7 +51,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         super(ModBlockEntities.SMART_INTERFACE.get(), pos, state);
     }
 
-    public Optional<Identifier> machineId() {
+    public Optional<ResourceLocation> machineId() {
         return Optional.ofNullable(machineId);
     }
 
@@ -76,7 +76,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         return Optional.ofNullable(values.get(type));
     }
 
-    public boolean claimController(BlockPos controllerPos, Identifier machineId, Map<String, SmartInterfaceType> types, boolean shared) {
+    public boolean claimController(BlockPos controllerPos, ResourceLocation machineId, Map<String, SmartInterfaceType> types, boolean shared) {
         if (controllerPos == null || machineId == null || types == null || types.isEmpty()) return false;
         if (this.machineId != null && !this.machineId.equals(machineId)) return false;
         if (!shared && !controllers.isEmpty() && !controllers.contains(controllerPos)) return false;
@@ -116,7 +116,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         capabilityStorage.replace(values);
     }
 
-    public boolean bind(BlockPos controllerPos, Identifier machineId, String type, float value) {
+    public boolean bind(BlockPos controllerPos, ResourceLocation machineId, String type, float value) {
         if (type == null || type.isBlank() || !Float.isFinite(value)) return false;
         return claimController(controllerPos, machineId, Map.of(type, new SmartInterfaceType(type, value, 0)), true)
                 && setValue(type, value);
@@ -176,7 +176,7 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     }
 
     private void loadState(ValueInput input) {
-        machineId = input.getString(MACHINE_ID_KEY).map(Identifier::parse).orElse(null);
+        machineId = input.getString(MACHINE_ID_KEY).map(ResourceLocation::parse).orElse(null);
         values.clear();
         controllers.clear();
         input.listOrEmpty(VALUES_KEY, ValueEntry.CODEC).forEach(entry -> {
@@ -237,10 +237,10 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         }
     }
 
-    public record Binding(BlockPos controllerPos, Identifier machineId, String type, float value) {
+    public record Binding(BlockPos controllerPos, ResourceLocation machineId, String type, float value) {
         public static final Codec<Binding> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 BlockPos.CODEC.fieldOf("controllerPos").forGetter(Binding::controllerPos),
-                Identifier.CODEC.fieldOf("machineId").forGetter(Binding::machineId),
+                ResourceLocation.CODEC.fieldOf("machineId").forGetter(Binding::machineId),
                 Codec.STRING.fieldOf("type").forGetter(Binding::type),
                 Codec.FLOAT.fieldOf("value").forGetter(Binding::value)
         ).apply(instance, Binding::new));

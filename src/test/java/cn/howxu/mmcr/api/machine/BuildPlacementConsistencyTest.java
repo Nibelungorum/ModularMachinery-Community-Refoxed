@@ -8,7 +8,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class BuildPlacementConsistencyTest {
 
-    private static final Identifier MACHINE_ID = MMCR.id("test_cube");
+    private static final ResourceLocation MACHINE_ID = MMCR.id("test_cube");
 
     @BeforeAll
     static void setup() throws Exception {
@@ -111,7 +111,7 @@ class BuildPlacementConsistencyTest {
 
     @Test
     void assembly_pattern_selects_explicit_stage_and_uses_active_stage_when_formed() throws Exception {
-        Identifier id = MACHINE_ID;
+        ResourceLocation id = MACHINE_ID;
         BlockArray stage1 = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()),
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
@@ -185,7 +185,7 @@ class BuildPlacementConsistencyTest {
                 Map.of());
     }
 
-    private static Machine stagedFixture(Identifier id, BlockArray... stages) {
+    private static Machine stagedFixture(ResourceLocation id, BlockArray... stages) {
         List<MachineStructureStage> structureStages = IntStream.range(0, stages.length)
                 .mapToObj(index -> new MachineStructureStage(index + 1, stages[index], PortRequirementSpec.none(),
                         PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY))

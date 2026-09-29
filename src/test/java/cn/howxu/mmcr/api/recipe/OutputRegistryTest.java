@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class OutputRegistryTest {
-    private static final Identifier TEST_ID = Identifier.fromNamespaceAndPath("mmcr_test", "registry_output");
+    private static final ResourceLocation TEST_ID = ResourceLocation.fromNamespaceAndPath("mmcr_test", "registry_output");
     private OutputRegistry.TestScope scope;
 
     @BeforeEach
@@ -88,7 +88,7 @@ class OutputRegistryTest {
                 .hasMessageContaining("Copied output does not match registered type");
     }
 
-    private static OutputType<TestOutput> type(Identifier id) {
+    private static OutputType<TestOutput> type(ResourceLocation id) {
         MapCodec<TestOutput> codec = MapCodec.unit(() -> new TestOutput(null, 3, 1F));
         return new OutputType.Definition<>(id, codec,
                 (output, chance) -> new TestOutput(output.outputType(), output.value(), chance),

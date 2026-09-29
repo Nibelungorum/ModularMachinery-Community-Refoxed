@@ -24,7 +24,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -51,13 +51,13 @@ class BlueprintItemTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        bind(ModDataComponents.BLUEPRINT_MACHINE, DataComponentType.<Identifier>builder()
-                .persistent(Identifier.CODEC).networkSynchronized(Identifier.STREAM_CODEC).build());
+        bind(ModDataComponents.BLUEPRINT_MACHINE, DataComponentType.<ResourceLocation>builder()
+                .persistent(ResourceLocation.CODEC).networkSynchronized(ResourceLocation.STREAM_CODEC).build());
     }
 
     @Test
     void requirementsUseLowestPriorityLevel() throws Exception {
-        Identifier levelType = MMCR.id("blueprint_test_level");
+        ResourceLocation levelType = MMCR.id("blueprint_test_level");
         Collection<LevelType> previousTypes = MachineLevelRegistry.types();
         Collection<MachineLevel> previousLevels = previousTypes.stream()
                 .flatMap(type -> MachineLevelRegistry.getLevels(type.id()).stream())
@@ -135,7 +135,7 @@ class BlueprintItemTest {
         assertThat(tooltip.getFirst().getStyle().getColor().getValue()).isEqualTo(ChatFormatting.AQUA.getColor());
     }
 
-    private static MachineLevel level(Identifier id, Identifier type, int priority, net.minecraft.world.level.block.Block block) {
+    private static MachineLevel level(ResourceLocation id, ResourceLocation type, int priority, net.minecraft.world.level.block.Block block) {
         return new MachineLevel(id, type, priority, new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY);
     }
@@ -162,7 +162,7 @@ class BlueprintItemTest {
 
     private record TestMachine(List<MachineStructureStage> stages) implements Machine {
         @Override
-        public Identifier registryName() {
+        public ResourceLocation registryName() {
             return MMCR.id("blueprint_test_machine");
         }
 

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
 import java.util.stream.Collectors;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Set;
@@ -10,8 +10,8 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public record MachineRecipeDefinition(
-        Identifier id,
-        Identifier recipePoolId,
+        ResourceLocation id,
+        ResourceLocation recipePoolId,
         int tickTime,
         int priority,
         int maxThreads,
@@ -26,7 +26,7 @@ public record MachineRecipeDefinition(
         List<EnergyInput> energyOutputs,
         List<RecipeRequirement> requirements,
         List<CustomRecipeIo> customOutputs,
-        List<Identifier> modifierIds,
+        List<ResourceLocation> modifierIds,
         Set<RequiredHost> requiredHosts) {
     public MachineRecipeDefinition {
         if (id == null || recipePoolId == null) throw new IllegalArgumentException("Recipe ids must not be null");
@@ -45,7 +45,7 @@ public record MachineRecipeDefinition(
         requiredHosts = Set.copyOf(requiredHosts == null ? Set.of() : requiredHosts);
     }
 
-    public Set<Identifier> requiredHostIds() {
+    public Set<ResourceLocation> requiredHostIds() {
         return requiredHosts.stream().map(RequiredHost::id).collect(Collectors.toUnmodifiableSet());
     }
 }

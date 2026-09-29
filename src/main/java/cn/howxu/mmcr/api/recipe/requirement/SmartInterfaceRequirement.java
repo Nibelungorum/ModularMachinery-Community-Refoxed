@@ -5,14 +5,14 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * @author howxu <dev@howxu.cn>
  */
 public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfaceType, float minValue, float maxValue)
         implements MachineRequirement {
-    private static final Identifier TYPE_ID = MMCR.id("smart_interface");
+    private static final ResourceLocation TYPE_ID = MMCR.id("smart_interface");
     public static final MapCodec<SmartInterfaceRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

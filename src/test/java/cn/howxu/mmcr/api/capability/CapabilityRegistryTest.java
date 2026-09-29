@@ -12,7 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -59,8 +59,8 @@ class CapabilityRegistryTest {
     void bootstrap_registers_the_builtin_capability_definitions() {
         assertThat(CapabilityRegistry.values())
                 .extracting(definition -> definition.type().id())
-                .containsExactly(Identifier.parse("minecraft:item"), Identifier.parse("minecraft:fluid"),
-                        Identifier.parse("neoforge:energy"));
+                .containsExactly(ResourceLocation.parse("minecraft:item"), ResourceLocation.parse("minecraft:fluid"),
+                        ResourceLocation.parse("neoforge:energy"));
     }
 
     @Test

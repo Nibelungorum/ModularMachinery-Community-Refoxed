@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.MMCR;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -59,7 +59,7 @@ public interface RequirementHandler<R extends MachineRequirement> {
      * @param reason generic resource notification category
      * @param matcher predicate for the changed resource
      */
-    record ResourceWakeup(Set<Identifier> failureReasonIds, WakeupReason reason, Predicate<Object> matcher) {
+    record ResourceWakeup(Set<ResourceLocation> failureReasonIds, WakeupReason reason, Predicate<Object> matcher) {
         public ResourceWakeup {
             failureReasonIds = Set.copyOf(Objects.requireNonNull(failureReasonIds, "failureReasonIds"));
             if (failureReasonIds.isEmpty()) throw new IllegalArgumentException("failureReasonIds must not be empty");
@@ -76,9 +76,9 @@ public interface RequirementHandler<R extends MachineRequirement> {
          */
         public boolean matches(@Nullable String failureReason) {
             if (failureReason == null) return false;
-            Identifier id;
+            ResourceLocation id;
             try {
-                id = failureReason.contains(":") ? Identifier.parse(failureReason)
+                id = failureReason.contains(":") ? ResourceLocation.parse(failureReason)
                         : MMCR.id(failureReason);
             } catch (IllegalArgumentException exception) {
                 return false;

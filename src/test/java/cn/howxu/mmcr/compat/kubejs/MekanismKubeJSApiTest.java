@@ -16,7 +16,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MekanismKubeJSApiTest {
-    private static final Identifier MACHINE = MMCR.id("kubejs_mekanism_machine");
+    private static final ResourceLocation MACHINE = MMCR.id("kubejs_mekanism_machine");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -58,7 +58,7 @@ class MekanismKubeJSApiTest {
                 .chemicalInput("mekanism:oxygen", 1_000L);
 
         ChemicalIngredient ingredient = ChemicalIngredient.chemical(
-                Identifier.parse("mekanism:oxygen"), 1_000L);
+                ResourceLocation.parse("mekanism:oxygen"), 1_000L);
         MachineRequirement expected = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 MachineRecipeBuilder.chemicalInputPayload(ingredient)).getOrThrow();
 
@@ -72,7 +72,7 @@ class MekanismKubeJSApiTest {
                 .chemicalTagInput("mekanism:fuels", 10L);
 
         ChemicalIngredient ingredient = ChemicalIngredient.tag(
-                Identifier.parse("mekanism:fuels"), 10L);
+                ResourceLocation.parse("mekanism:fuels"), 10L);
         MachineRequirement expected = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 MachineRecipeBuilder.chemicalInputPayload(ingredient)).getOrThrow();
 
@@ -86,7 +86,7 @@ class MekanismKubeJSApiTest {
                 .chemicalOutput("mekanism:hydrogen", 200L, 0.5D);
 
         ChemicalOutput output = ChemicalOutput.of(
-                Identifier.parse("mekanism:hydrogen"), 200L, 0.5F);
+                ResourceLocation.parse("mekanism:hydrogen"), 200L, 0.5F);
         JsonObject payload = MachineRecipeBuilder.chemicalOutputPayload(output);
 
         assertThat(builder.customOutputs).singleElement().satisfies(parsed -> {
@@ -130,7 +130,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_input_matches_public_builder_typeId() {
         MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_public")).recipePool(MACHINE)
-                .inputChemical(Identifier.parse("mekanism:oxygen"), 1_000L)
+                .inputChemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L)
                 .build();
         MachineRecipeBuilderJS kubeBuilder = new MachineRecipeBuilderJS("mmcr:parity_kubejs");
         kubeBuilder.recipePool(MACHINE.toString())
@@ -144,7 +144,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_output_matches_public_builder_typeId() {
         MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_public_out")).recipePool(MACHINE)
-                .outputChemical(Identifier.parse("mekanism:hydrogen"), 200L, 0.5F)
+                .outputChemical(ResourceLocation.parse("mekanism:hydrogen"), 200L, 0.5F)
                 .build();
         MachineRecipeBuilderJS kubeBuilder = new MachineRecipeBuilderJS("mmcr:parity_kubejs_out");
         kubeBuilder.recipePool(MACHINE.toString())

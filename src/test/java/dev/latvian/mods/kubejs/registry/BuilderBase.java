@@ -1,11 +1,11 @@
 package dev.latvian.mods.kubejs.registry;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public abstract class BuilderBase<T> {
-    protected final Identifier id;
+    protected final ResourceLocation id;
 
-    protected BuilderBase(Identifier id) {
+    protected BuilderBase(ResourceLocation id) {
         this.id = id;
     }
 

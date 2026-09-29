@@ -13,7 +13,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
@@ -30,7 +30,7 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInterfaceMenu> {
-    private static final Identifier TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
+    private static final ResourceLocation TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int CONTENT_X = 7;
     private static final int TITLE_Y = 6;
     private static final int LINE_HEIGHT = 10;

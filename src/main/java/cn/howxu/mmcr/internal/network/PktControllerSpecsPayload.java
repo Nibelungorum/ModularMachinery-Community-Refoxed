@@ -8,7 +8,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.HashMap;
@@ -18,14 +18,14 @@ import java.util.Map;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record PktControllerSpecsPayload(Map<Identifier, MachineControllerSpec> specs) implements CustomPacketPayload {
+public record PktControllerSpecsPayload(Map<ResourceLocation, MachineControllerSpec> specs) implements CustomPacketPayload {
     private static final int MAX_SPECS = 4096;
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> SPEC_CODEC = StreamCodec.composite(
-            Identifier.STREAM_CODEC, MachineControllerSpec::id,
-            Identifier.STREAM_CODEC, MachineControllerSpec::frontTexture,
-            Identifier.STREAM_CODEC, MachineControllerSpec::sideTexture,
-            Identifier.STREAM_CODEC, MachineControllerSpec::topTexture,
-            Identifier.STREAM_CODEC, MachineControllerSpec::bottomTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::id,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::frontTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::sideTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::topTexture,
+            ResourceLocation.STREAM_CODEC, MachineControllerSpec::bottomTexture,
             ByteBufCodecs.BOOL, MachineControllerSpec::allowVerticalFacing,
             ByteBufCodecs.BOOL, MachineControllerSpec::fullyRotationallySymmetric,
             ByteBufCodecs.BOOL, MachineControllerSpec::requireVerticalFacing,
@@ -55,7 +55,7 @@ public record PktControllerSpecsPayload(Map<Identifier, MachineControllerSpec> s
     private static void write(RegistryFriendlyByteBuf buffer, PktControllerSpecsPayload payload) {
         buffer.writeVarInt(payload.specs.size());
         for (var entry : payload.specs.entrySet()) {
-            Identifier.STREAM_CODEC.encode(buffer, entry.getKey());
+            ResourceLocation.STREAM_CODEC.encode(buffer, entry.getKey());
             SPEC_CODEC.encode(buffer, entry.getValue());
         }
     }
@@ -63,9 +63,9 @@ public record PktControllerSpecsPayload(Map<Identifier, MachineControllerSpec> s
     private static PktControllerSpecsPayload read(RegistryFriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
         if (count < 0 || count > maxSpecs()) throw new IllegalArgumentException("Too many controller specs");
-        Map<Identifier, MachineControllerSpec> specs = new HashMap<>(count);
+        Map<ResourceLocation, MachineControllerSpec> specs = new HashMap<>(count);
         for (int index = 0; index < count; index++) {
-            Identifier id = Identifier.STREAM_CODEC.decode(buffer);
+            ResourceLocation id = ResourceLocation.STREAM_CODEC.decode(buffer);
             if (specs.put(id, SPEC_CODEC.decode(buffer)) != null) {
                 throw new IllegalArgumentException("Duplicate controller spec");
             }

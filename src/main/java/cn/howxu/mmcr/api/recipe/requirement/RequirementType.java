@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -17,7 +17,7 @@ import java.util.function.UnaryOperator;
  * @author howxu <dev@howxu.cn>
  */
 public interface RequirementType<R extends MachineRequirement> {
-    Identifier id();
+    ResourceLocation id();
 
     MapCodec<R> codec();
 
@@ -72,7 +72,7 @@ public interface RequirementType<R extends MachineRequirement> {
             }
         }
 
-        public static Presentation defaults(Identifier id) {
+        public static Presentation defaults(ResourceLocation id) {
             String key = "requirement." + id;
             return new Presentation(key, key + ".description");
         }
@@ -89,43 +89,43 @@ public interface RequirementType<R extends MachineRequirement> {
      * @author howxu <dev@howxu.cn>
      */
     final class Definition<R extends MachineRequirement> implements RequirementType<R> {
-        private final Identifier id;
+        private final ResourceLocation id;
         private final MapCodec<R> codec;
         private final RequirementHandler<R> handler;
         private final Presentation presentation;
         private final UnaryOperator<R> copier;
         private final RecipeSyncCodec<R> syncCodec;
 
-        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler) {
+        public Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler) {
             this(id, codec, handler, Presentation.defaults(id), null);
         }
 
-        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+        public Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler,
                            UnaryOperator<R> copier) {
             this(id, codec, handler, Presentation.defaults(id), copier);
         }
 
-        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+        public Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler,
                           UnaryOperator<R> copier, RecipeSyncCodec<R> syncCodec) {
             this(id, codec, handler, Presentation.defaults(id), copier, syncCodec);
         }
 
-        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+        public Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler,
                           Presentation presentation) {
             this(id, codec, handler, presentation, null);
         }
 
-        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+        public Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler,
                            Presentation presentation, UnaryOperator<R> copier) {
             this(id, codec, handler, presentation, copier, null);
         }
 
-        public Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+        public Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler,
                           RecipeSyncCodec<R> syncCodec) {
             this(id, codec, handler, Presentation.defaults(id), null, syncCodec);
         }
 
-        private Definition(Identifier id, MapCodec<R> codec, RequirementHandler<R> handler,
+        private Definition(ResourceLocation id, MapCodec<R> codec, RequirementHandler<R> handler,
                            Presentation presentation, UnaryOperator<R> copier, RecipeSyncCodec<R> syncCodec) {
             this.id = Objects.requireNonNull(id, "id");
             this.codec = Objects.requireNonNull(codec, "codec");
@@ -136,7 +136,7 @@ public interface RequirementType<R extends MachineRequirement> {
         }
 
         @Override
-        public Identifier id() {
+        public ResourceLocation id() {
             return id;
         }
 

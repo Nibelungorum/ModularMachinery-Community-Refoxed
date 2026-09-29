@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Stable recipe type identities used by the optional Mekanism bridge.
@@ -8,9 +8,9 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public final class MekanismRecipeTypes {
-    public static final Identifier CHEMICAL = Identifier.fromNamespaceAndPath("mekanism", "chemical");
-    public static final Identifier HEAT_TEMPERATURE = Identifier.fromNamespaceAndPath("mekanism", "temperature");
-    public static final Identifier HEAT = Identifier.fromNamespaceAndPath("mekanism", "heat");
+    public static final ResourceLocation CHEMICAL = ResourceLocation.fromNamespaceAndPath("mekanism", "chemical");
+    public static final ResourceLocation HEAT_TEMPERATURE = ResourceLocation.fromNamespaceAndPath("mekanism", "temperature");
+    public static final ResourceLocation HEAT = ResourceLocation.fromNamespaceAndPath("mekanism", "heat");
 
     private MekanismRecipeTypes() {
     }

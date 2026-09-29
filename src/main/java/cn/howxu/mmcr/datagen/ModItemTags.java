@@ -13,7 +13,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.PackOutput;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagEntry;
 import net.minecraft.tags.TagKey;
@@ -32,7 +32,7 @@ public final class ModItemTags extends ItemTagsProvider {
     @Override
     protected void addTags(HolderLookup.Provider provider) {
         tag(Tags.Items.INGOTS).add(ModItems.MODULARIUM.get());
-        tag(ItemTags.create(Identifier.fromNamespaceAndPath("c", "ingots/modularium"))).add(ModItems.MODULARIUM.get());
+        tag(ItemTags.create(ResourceLocation.fromNamespaceAndPath("c", "ingots/modularium"))).add(ModItems.MODULARIUM.get());
         tag(itemTag("machine_casings")).add(ModBlocks.BASIC_CASING.get().asItem());
         tag(itemTag("machines")).add(ModBlocks.BLOCKS.values().stream()
                 .map(holder -> holder.get())
@@ -49,7 +49,7 @@ public final class ModItemTags extends ItemTagsProvider {
 
     private void addPortTags(IOPortKind kind) {
         PortTagSet tags = PortTagSet.forKind(kind);
-        for (Identifier tagId : tags.tags()) {
+        for (ResourceLocation tagId : tags.tags()) {
             if (tags.optionalEntries()) {
                 tag(TagKey.create(Registries.ITEM, tagId)).add(TagEntry.optionalElement(MMCR.id(kind.id())));
             } else {

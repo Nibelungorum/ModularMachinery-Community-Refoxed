@@ -23,7 +23,7 @@ import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
 import net.minecraft.data.recipes.ShapedRecipeBuilder;
 import net.minecraft.data.recipes.ShapelessRecipeBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -221,7 +221,7 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .pattern("EBE")
                 .define('A', ModBlocks.BASIC_CASING.get())
                 .define('B', Tags.Items.GEMS_DIAMOND)
-                .define('C', ItemTags.create(Identifier.withDefaultNamespace("bookshelf_books")))
+                .define('C', ItemTags.create(ResourceLocation.withDefaultNamespace("bookshelf_books")))
                 .define('D', ModItems.MODULARIUM.get())
                 .define('E', Items.COMPARATOR)
                 .define('F', Blocks.OBSERVER)
@@ -645,7 +645,7 @@ public final class ModRecipeProvider extends RecipeProvider {
     }
 
     private ItemLike externalItem(String namespace, String path) {
-        return BuiltInRegistries.ITEM.getValue(Identifier.fromNamespaceAndPath(namespace, path));
+        return BuiltInRegistries.ITEM.getValue(ResourceLocation.fromNamespaceAndPath(namespace, path));
     }
 
     private static String itemInputBusId(ItemBusSize size) {
@@ -673,7 +673,7 @@ public final class ModRecipeProvider extends RecipeProvider {
     }
 
     private static TagKey<Item> itemTag(String path) {
-        return ItemTags.create(Identifier.fromNamespaceAndPath("c", path));
+        return ItemTags.create(ResourceLocation.fromNamespaceAndPath("c", path));
     }
 
     private ShapedRecipeBuilder shaped(ItemLike result, int count) {

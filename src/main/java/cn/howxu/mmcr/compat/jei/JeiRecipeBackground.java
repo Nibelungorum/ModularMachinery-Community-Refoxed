@@ -6,7 +6,7 @@ import mezz.jei.api.gui.drawable.IScalableDrawable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * MMCR-only scalable background for JEI recipe pages.
@@ -27,7 +27,7 @@ public final class JeiRecipeBackground implements IScalableDrawable {
     public void draw(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height) {
         int scale = Math.round(Minecraft.getInstance().getWindow().getGuiScale());
         scale = Math.max(1, Math.min(4, scale));
-        Identifier texture = MMCR.id("textures/gui/jei/" + textureDirectory + "/" + scale + "x.png");
+        ResourceLocation texture = MMCR.id("textures/gui/jei/" + textureDirectory + "/" + scale + "x.png");
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0.0F, 0.0F, width, height, width, height);
         ((GuiGraphicsExtractorAccessor) guiGraphics).mmcr$getGuiRenderState().nextStratum();
     }

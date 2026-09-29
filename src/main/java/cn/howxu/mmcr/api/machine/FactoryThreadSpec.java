@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
@@ -9,7 +9,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record FactoryThreadSpec(String name, List<Identifier> recipeIds) {
+public record FactoryThreadSpec(String name, List<ResourceLocation> recipeIds) {
     public FactoryThreadSpec {
         if (name == null || name.isBlank()) throw new IllegalArgumentException("name blank");
         recipeIds = List.copyOf(recipeIds == null ? List.of() : recipeIds);

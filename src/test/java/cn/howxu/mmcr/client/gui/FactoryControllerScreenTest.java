@@ -22,7 +22,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -44,8 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class FactoryControllerScreenTest {
-    private static final Identifier DETAIL_LEVEL_TYPE_ID = MMCR.id("factory_detail_level_type");
-    private static final List<Identifier> DETAIL_LEVEL_IDS = List.of(
+    private static final ResourceLocation DETAIL_LEVEL_TYPE_ID = MMCR.id("factory_detail_level_type");
+    private static final List<ResourceLocation> DETAIL_LEVEL_IDS = List.of(
             MMCR.id("factory_detail_level_one"),
             MMCR.id("factory_detail_level_two"),
             MMCR.id("factory_detail_level_three"));
@@ -277,11 +277,11 @@ class FactoryControllerScreenTest {
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 3, 2, 8L, true,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 20, 20,
                         4, failure(MMCR.id("selected_failure")))),
-                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList(), 0, 1));
+                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(ResourceLocation::toString).toList(), 0, 1));
          return menu;
     }
 
-    private static ExecutionStatus failure(Identifier id) {
+    private static ExecutionStatus failure(ResourceLocation id) {
         return ExecutionStatus.blocked(id, id, FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, id,
                 FailurePhase.RUNTIME, null, null, Map.of()));
     }

@@ -26,7 +26,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -114,7 +114,7 @@ public class AE2AsyncOutputInterfaceGameTest {
             helper.assertTrue(snapshot.capabilities().size() == 2,
                     "Async output interface exposes exactly item and fluid MMCR capabilities");
             for (MachineCapability capability : snapshot.capabilities()) {
-                Identifier id = capability.type().id();
+                ResourceLocation id = capability.type().id();
                 helper.assertTrue(id.equals(PortFamilyIds.ITEM) || id.equals(PortFamilyIds.FLUID),
                         "Async output capability is bound to the item or fluid family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),

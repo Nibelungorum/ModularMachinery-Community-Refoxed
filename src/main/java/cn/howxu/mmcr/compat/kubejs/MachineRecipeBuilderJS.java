@@ -27,7 +27,7 @@ import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -44,7 +44,7 @@ import java.util.List;
 import java.util.Set;
 
 public class MachineRecipeBuilderJS {
-    public Identifier recipePoolId;
+    public ResourceLocation recipePoolId;
     public int tickTime = 40;
     public final List<MachineIngredient> inputs = new ArrayList<>();
     public final List<ItemStack> outputs = new ArrayList<>();
@@ -57,29 +57,29 @@ public class MachineRecipeBuilderJS {
     private boolean deriveRequirements = true;
     public long energyPerTick = 0L;
     public boolean cancelIfPerTickFails = false;
-    public final Set<Identifier> requiredHostIds = new LinkedHashSet<>();
+    public final Set<ResourceLocation> requiredHostIds = new LinkedHashSet<>();
     final List<MachineRequirement> requirements = new ArrayList<>();
     final List<MachineOutput> customOutputs = new ArrayList<>();
     private boolean allowPartialOutputs = false;
 
-    private Identifier id;
+    private ResourceLocation id;
     private final List<ComponentOutput> componentOutputs = new ArrayList<>();
 
     public MachineRecipeBuilderJS(String id) {
-        this(Identifier.parse(id));
+        this(ResourceLocation.parse(id));
     }
 
-    public MachineRecipeBuilderJS(Identifier id) {
+    public MachineRecipeBuilderJS(ResourceLocation id) {
         this.id = id;
     }
 
     public MachineRecipeBuilderJS id(String id) {
-        this.id = Identifier.parse(id);
+        this.id = ResourceLocation.parse(id);
         return this;
     }
 
     public MachineRecipeBuilderJS recipePool(String id) {
-        var parsed = Identifier.parse(id);
+        var parsed = ResourceLocation.parse(id);
 
         if (!MachineRegistry.containsRecipePool(parsed)) {
             throw new IllegalArgumentException("Recipe pool not found: " + id);
@@ -152,7 +152,7 @@ public class MachineRecipeBuilderJS {
      * @return this builder
      */
     public MachineRecipeBuilderJS custom(String typeId, RecipeIo io, JsonElement payload) {
-        var custom = RecipeApi.custom(Identifier.parse(typeId), io, payload);
+        var custom = RecipeApi.custom(ResourceLocation.parse(typeId), io, payload);
         if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
             requirements.add(MachineRecipeConverter.toRequirement(custom));
         } else customOutputs.add(MachineRecipeConverter.toOutput(custom));
@@ -287,7 +287,7 @@ public class MachineRecipeBuilderJS {
     }
 
     private Fluid fluid(String fluidId) {
-        return BuiltInRegistries.FLUID.getValue(Identifier.parse(fluidId));
+        return BuiltInRegistries.FLUID.getValue(ResourceLocation.parse(fluidId));
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, long count) {
@@ -335,7 +335,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount) {
-        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        ResourceLocation id = requireChemicalId(chemicalId, "chemicalId");
         return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount)));
     }
@@ -350,7 +350,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount, double consumeChance) {
-        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        ResourceLocation id = requireChemicalId(chemicalId, "chemicalId");
         return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount), (float) consumeChance));
     }
@@ -364,7 +364,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount) {
-        Identifier id = requireChemicalId(tagId, "tagId");
+        ResourceLocation id = requireChemicalId(tagId, "tagId");
         return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount)));
     }
@@ -379,7 +379,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount, double consumeChance) {
-        Identifier id = requireChemicalId(tagId, "tagId");
+        ResourceLocation id = requireChemicalId(tagId, "tagId");
         return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount), (float) consumeChance));
     }
@@ -394,7 +394,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalOutput(String chemicalId, long amount, double chance) {
-        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        ResourceLocation id = requireChemicalId(chemicalId, "chemicalId");
         return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(id, amount, (float) chance)));
     }
@@ -423,12 +423,12 @@ public class MachineRecipeBuilderJS {
                 MachineRecipeBuilder.heatOutputPayload(heat));
     }
 
-    private static Identifier requireChemicalId(String value, String name) {
+    private static ResourceLocation requireChemicalId(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be null or blank");
         }
         try {
-            return Identifier.parse(value);
+            return ResourceLocation.parse(value);
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("Invalid " + name + ": " + value, exception);
         }
@@ -494,8 +494,8 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS requiresLevel(String typeId, String levelId) {
-        var type = Identifier.parse(typeId);
-        var level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+        var type = ResourceLocation.parse(typeId);
+        var level = MachineLevelRegistry.getLevel(ResourceLocation.parse(levelId));
         if (level == null) {
             throw new IllegalArgumentException("Machine level not found: " + levelId);
         }
@@ -512,7 +512,7 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS requiredHost(String hostId) {
-        requiredHostIds.add(Identifier.parse(hostId));
+        requiredHostIds.add(ResourceLocation.parse(hostId));
         return this;
     }
 
@@ -530,7 +530,7 @@ public class MachineRecipeBuilderJS {
     }
 
     private Item item(String itemId) {
-        return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+        return BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
     }
 
     private DataComponentPredicateSet componentPredicates(JsonElement components) {
@@ -538,7 +538,7 @@ public class MachineRecipeBuilderJS {
     }
 
     private HolderSet.Named<Item> tagItems(String tagId) {
-        var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
+        var tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(tagId));
         return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
     }
 

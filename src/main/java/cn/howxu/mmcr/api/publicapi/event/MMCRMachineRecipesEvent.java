@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 
 import java.util.Collections;
@@ -14,7 +14,7 @@ import java.util.Objects;
  */
 public class MMCRMachineRecipesEvent extends Event {
     private boolean frozen;
-    private final Map<Identifier, MachineRecipeDefinition> recipes = new LinkedHashMap<>();
+    private final Map<ResourceLocation, MachineRecipeDefinition> recipes = new LinkedHashMap<>();
 
     public void registerRecipe(MachineRecipeDefinition definition) {
         if (frozen) throw new IllegalStateException("Machine recipes are frozen");
@@ -28,7 +28,7 @@ public class MMCRMachineRecipesEvent extends Event {
         frozen = true;
     }
 
-    public Map<Identifier, MachineRecipeDefinition> recipes() {
+    public Map<ResourceLocation, MachineRecipeDefinition> recipes() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(recipes));
     }
 }

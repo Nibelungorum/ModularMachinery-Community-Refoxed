@@ -13,7 +13,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -97,7 +97,7 @@ public final class MachinePatternCompiler {
     }
 
     private record StageMachine(Machine parent, MachineStructureStage stage) implements Machine {
-        @Override public Identifier registryName() { return parent.registryName(); }
+        @Override public ResourceLocation registryName() { return parent.registryName(); }
         @Override public BlockArray pattern() { return stage.pattern(); }
         @Override public MachineControllerSpec controller() { return parent.controller(); }
         @Override public MachineAppearanceSpec appearance() { return parent.appearance(); }
@@ -106,13 +106,13 @@ public final class MachinePatternCompiler {
         @Override public List<DynamicPatternSpec> dynamicPatterns() { return stage.dynamicPatterns(); }
         @Override public List<MachineStructureStage> structureStages() { return List.of(stage); }
         @Override public MachineRole role() { return parent.role(); }
-        @Override public Set<Identifier> acceptedModuleIds() { return parent.acceptedModuleIds(); }
+        @Override public Set<ResourceLocation> acceptedModuleIds() { return parent.acceptedModuleIds(); }
         @Override public NetworkInterfaceSpec networkInterface() { return parent.networkInterface(); }
         @Override public MachineBehavior behavior() { return parent.behavior(); }
     }
 
-    public static Map<Identifier, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
-        LinkedHashMap<Identifier, CompiledMachinePattern> compiled = new LinkedHashMap<>();
+    public static Map<ResourceLocation, CompiledMachinePattern> compileAll(Collection<Machine> machines) {
+        LinkedHashMap<ResourceLocation, CompiledMachinePattern> compiled = new LinkedHashMap<>();
         for (Machine machine : machines) {
             compiled.put(machine.registryName(), compile(machine));
         }

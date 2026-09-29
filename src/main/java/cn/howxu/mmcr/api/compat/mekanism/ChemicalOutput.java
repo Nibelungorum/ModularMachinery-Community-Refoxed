@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.compat.mekanism;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -12,7 +12,7 @@ import java.util.Objects;
  * @param chance the production chance
  * @author howxu <dev@howxu.cn>
  */
-public record ChemicalOutput(Identifier id, long amount, float chance) {
+public record ChemicalOutput(ResourceLocation id, long amount, float chance) {
     public ChemicalOutput {
         Objects.requireNonNull(id, "id");
         if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
@@ -22,7 +22,7 @@ public record ChemicalOutput(Identifier id, long amount, float chance) {
         }
     }
 
-    public static ChemicalOutput of(Identifier id, long amount, float chance) {
+    public static ChemicalOutput of(ResourceLocation id, long amount, float chance) {
         return new ChemicalOutput(id, amount, chance);
     }
 }

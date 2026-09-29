@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -21,7 +21,7 @@ public final class MachineReferenceHasher {
     private MachineReferenceHasher() {
     }
 
-    static long hash(Identifier dimension, Identifier machineType, BlockPos controllerPos) {
+    static long hash(ResourceLocation dimension, ResourceLocation machineType, BlockPos controllerPos) {
         Objects.requireNonNull(dimension, "dimension");
         Objects.requireNonNull(machineType, "machineType");
         Objects.requireNonNull(controllerPos, "controllerPos");
@@ -92,7 +92,7 @@ public final class MachineReferenceHasher {
     /**
      * Bridges the package-local hash implementation to the internal controller package.
      */
-    public static long hashForController(Identifier dimension, Identifier machineType, BlockPos controllerPos) {
+    public static long hashForController(ResourceLocation dimension, ResourceLocation machineType, BlockPos controllerPos) {
         return hash(dimension, machineType, controllerPos);
     }
 
@@ -114,7 +114,7 @@ public final class MachineReferenceHasher {
         return hash ^ (hash >>> 32);
     }
 
-    private static int readInt(int offset, Identifier dimension, Identifier machineType, BlockPos controllerPos,
+    private static int readInt(int offset, ResourceLocation dimension, ResourceLocation machineType, BlockPos controllerPos,
                                int dimensionNamespaceLength, int dimensionPathLength,
                                int machineNamespaceLength, int machinePathLength) {
         return byteAt(offset, dimension, machineType, controllerPos,
@@ -127,7 +127,7 @@ public final class MachineReferenceHasher {
                 dimensionNamespaceLength, dimensionPathLength, machineNamespaceLength, machinePathLength) << 24;
     }
 
-    private static long readLong(int offset, Identifier dimension, Identifier machineType, BlockPos controllerPos,
+    private static long readLong(int offset, ResourceLocation dimension, ResourceLocation machineType, BlockPos controllerPos,
                                 int dimensionNamespaceLength, int dimensionPathLength,
                                 int machineNamespaceLength, int machinePathLength) {
         return (long) byteAt(offset, dimension, machineType, controllerPos,
@@ -148,7 +148,7 @@ public final class MachineReferenceHasher {
                 dimensionNamespaceLength, dimensionPathLength, machineNamespaceLength, machinePathLength) << 56;
     }
 
-    private static int byteAt(int offset, Identifier dimension, Identifier machineType, BlockPos controllerPos,
+    private static int byteAt(int offset, ResourceLocation dimension, ResourceLocation machineType, BlockPos controllerPos,
                               int dimensionNamespaceLength, int dimensionPathLength,
                               int machineNamespaceLength, int machinePathLength) {
         if (offset == 0) return 0x01;

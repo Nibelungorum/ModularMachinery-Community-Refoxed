@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -24,7 +24,7 @@ import static cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement.input
 @EventBusSubscriber
 public class PURPUR_FURNACE {
 
-    private static final Identifier PURPUR_FURNACE = id("purpur_furnace");
+    private static final ResourceLocation PURPUR_FURNACE = id("purpur_furnace");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(PURPUR_FURNACE)) {
@@ -32,7 +32,7 @@ public class PURPUR_FURNACE {
                     .machine(PURPUR_FURNACE)
                     .recipePool(PURPUR_FURNACE)
                     .displayNameKey("machine.mmcr.purpur_furnace")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("end_stone_bricks")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("end_stone_bricks")))
                     .maxParallelism(32).parallelizable(true)
                     .smartInterface(new SmartInterfaceType("mode", 1F, 3F, 1, SmartInterfaceType.ValueType.INTEGER))
                     .smartInterface(new SmartInterfaceType("conversation", 0F, 1F, 0))
@@ -40,8 +40,8 @@ public class PURPUR_FURNACE {
                     .smartInterfaceModifier(SmartInterfaceModifier.energy("mode", 2F, 3F, 2F, 4F, RecipeModifier.Operation.MULTIPLY))
                     .smartInterfaceModifier(SmartInterfaceModifier.duration("conversation", 0F, .5F, 1F, 1.5F, RecipeModifier.Operation.MULTIPLY))
                     .smartInterfaceModifier(SmartInterfaceModifier.duration("conversation", .5F, 1F, 1.5F, 2.5F, RecipeModifier.Operation.MULTIPLY))
-                    .runningSound(Identifier.parse("minecraft:block.furnace.fire_crackle"))
-                    .finishSound(Identifier.parse("minecraft:entity.ender_dragon.growl"))
+                    .runningSound(ResourceLocation.parse("minecraft:block.furnace.fire_crackle"))
+                    .finishSound(ResourceLocation.parse("minecraft:entity.ender_dragon.growl"))
                     .build();
             event.registerMachine(machine);
         }

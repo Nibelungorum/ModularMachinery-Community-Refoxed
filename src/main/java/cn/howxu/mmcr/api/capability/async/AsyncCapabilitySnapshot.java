@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.capability.async;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * An immutable capability state captured on the main thread for asynchronous planning.
@@ -18,7 +18,7 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
      * @param capabilityId capability type identifier
       * @param slots immutable slot contents in planning order
      */
-    record Resource(Identifier capabilityId, List<ResourceSlot> slots) implements AsyncCapabilitySnapshot {
+    record Resource(ResourceLocation capabilityId, List<ResourceSlot> slots) implements AsyncCapabilitySnapshot {
         public Resource {
             Objects.requireNonNull(capabilityId, "capabilityId");
             slots = List.copyOf(Objects.requireNonNull(slots, "slots"));
@@ -33,7 +33,7 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
      * @param capacity scalar capacity
      * @param transferLimit maximum scalar amount transferable in one storage operation
      */
-    record Scalar(Identifier capabilityId, long amount, long capacity, long transferLimit)
+    record Scalar(ResourceLocation capabilityId, long amount, long capacity, long transferLimit)
             implements AsyncCapabilitySnapshot {
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
@@ -44,7 +44,7 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
     }
 
     /** Immutable Mekanism heat values used for temperature checks and heat output planning. */
-    record Heat(Identifier capabilityId, double heat, double temperature, double capacity)
+    record Heat(ResourceLocation capabilityId, double heat, double temperature, double capacity)
             implements AsyncCapabilitySnapshot {
         public Heat {
             Objects.requireNonNull(capabilityId, "capabilityId");

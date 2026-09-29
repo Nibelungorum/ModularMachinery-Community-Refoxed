@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jspecify.annotations.NonNull;
@@ -31,7 +31,7 @@ import java.util.stream.Stream;
 public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccessor> {
     INSTANCE;
 
-    static final Identifier UID = MMCR.id("ae2_input_interface_grid");
+    static final ResourceLocation UID = MMCR.id("ae2_input_interface_grid");
     static final String STATE = "gridNodeState";
     private static final String OUTPUTS = "outputPresentation";
     private static final String LABEL = "label";
@@ -39,7 +39,7 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
     private static final String UNIT = "unit";
 
     @Override
-    public @NonNull Identifier getUid() {
+    public @NonNull ResourceLocation getUid() {
         return UID;
     }
 

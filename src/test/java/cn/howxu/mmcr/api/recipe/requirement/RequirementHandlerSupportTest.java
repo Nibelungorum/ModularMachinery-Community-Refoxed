@@ -13,7 +13,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -59,7 +59,7 @@ class RequirementHandlerSupportTest {
 
     private static final class RecordingCapability implements MachineCapability, OperationFacet {
         private static final CapabilityType TYPE = new CapabilityType(
-                Identifier.fromNamespaceAndPath("mmcr_test", "resource_direction"));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "resource_direction"));
         private CapabilityRequests.ResourceRequest<?> request;
         private final int outputPriority;
 

@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.InterfaceTiers;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /** Script-safe interface predicates and requirement factories.
  * @author howxu <dev@howxu.cn>
@@ -59,7 +59,7 @@ public final class KubeJSInterfaceHelpers {
         throw new IllegalArgumentException("At least one port is required");
     }
 
-    public static BlockPredicate anyOfPort(Identifier... ids) {
+    public static BlockPredicate anyOfPort(ResourceLocation... ids) {
         return convert(InterfacePredicates.anyOfPort(ids));
     }
 
@@ -86,7 +86,7 @@ public final class KubeJSInterfaceHelpers {
         return convert(InterfacePredicates.anyOfPort(id));
     }
 
-    public static BlockPredicate port(Identifier id) {
+    public static BlockPredicate port(ResourceLocation id) {
         return port(id.toString());
     }
 

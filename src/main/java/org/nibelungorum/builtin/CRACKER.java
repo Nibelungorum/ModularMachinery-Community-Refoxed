@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
@@ -27,7 +27,7 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
  */
 @EventBusSubscriber
 public class CRACKER {
-    private static final Identifier CRACKER = id("cracker");
+    private static final ResourceLocation CRACKER = id("cracker");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(CRACKER)) {

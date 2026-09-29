@@ -38,7 +38,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.fml.config.IConfigSpec;
@@ -80,7 +80,7 @@ class AsyncCraftingExecutionTest {
     @Test
     void async_finish_release_commits_its_continuation_in_the_same_shared_io_fence() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
                 new DynamicMachine(machineId, "async execution", new BlockArray(Map.of())));
@@ -113,7 +113,7 @@ class AsyncCraftingExecutionTest {
     @Test
     void finished_async_lane_restarts_on_the_next_tick_through_the_shared_io_fence() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
                 new DynamicMachine(machineId, "async restart", new BlockArray(Map.of())));
@@ -146,7 +146,7 @@ class AsyncCraftingExecutionTest {
     @Test
     void async_last_recipe_restarts_inside_the_finish_shared_io_fence() throws InterruptedException {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
                 new DynamicMachine(machineId, "same fence restart", new BlockArray(Map.of())));
@@ -183,7 +183,7 @@ class AsyncCraftingExecutionTest {
     @Test
     void empty_per_tick_workset_completes_without_shared_io_resolution() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
                 new DynamicMachine(machineId, "empty tick workset", new BlockArray(Map.of())));
@@ -208,7 +208,7 @@ class AsyncCraftingExecutionTest {
     @Test
     void failed_async_tick_releases_the_lane_for_the_next_tick() throws Exception {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
                 new DynamicMachine(machineId, "failed async tick", new BlockArray(Map.of())));
@@ -253,7 +253,7 @@ class AsyncCraftingExecutionTest {
     @Test
     void async_start_prefetches_only_during_the_main_thread_shared_io_commit() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
                 new DynamicMachine(machineId, "async prefetch", new BlockArray(Map.of())));

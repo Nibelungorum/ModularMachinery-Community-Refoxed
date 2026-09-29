@@ -34,7 +34,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -457,7 +457,7 @@ class MachineIoPlanTest {
 
         @Override
         public CapabilityType type() {
-            return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "machine_io"));
+            return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "machine_io"));
         }
 
         @Override

@@ -17,7 +17,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +52,7 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
                     .forGetter(LoadedChemicalRequirement::io),
             Codec.STRING.optionalFieldOf("kind", "chemical")
                     .forGetter(value -> value.ingredient().kind().name().toLowerCase(Locale.ROOT)),
-            Identifier.CODEC.fieldOf("id").forGetter(value -> value.ingredient().id()),
+            ResourceLocation.CODEC.fieldOf("id").forGetter(value -> value.ingredient().id()),
             Codec.LONG.fieldOf("amount").forGetter(value -> value.ingredient().amount()),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(LoadedChemicalRequirement::chance),
              Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(LoadedChemicalRequirement::tags),
@@ -83,7 +83,7 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
         return new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT, ingredient, 1F, List.of(), 1F);
     }
 
-    public static LoadedChemicalRequirement output(Identifier id, long amount, float chance) {
+    public static LoadedChemicalRequirement output(ResourceLocation id, long amount, float chance) {
         return new LoadedChemicalRequirement(RecipeModifier.IOType.OUTPUT,
                 ChemicalIngredient.chemical(id, amount), chance, List.of(), 1F);
     }

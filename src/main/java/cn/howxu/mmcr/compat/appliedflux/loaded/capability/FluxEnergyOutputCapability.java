@@ -226,7 +226,7 @@ public final class FluxEnergyOutputCapability implements MachineCapability, Scal
             return CapabilityResult.successful();
         }
         if (!(operation instanceof AsyncCapabilityOperation.Scalar(
-                net.minecraft.resources.Identifier capabilityId, long amount, boolean insert
+                net.minecraft.resources.ResourceLocation capabilityId, long amount, boolean insert
         ))
                 || !type().id().equals(capabilityId) || !insert) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);

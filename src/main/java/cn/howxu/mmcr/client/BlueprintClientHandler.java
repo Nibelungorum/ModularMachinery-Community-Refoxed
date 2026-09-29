@@ -9,7 +9,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
@@ -40,7 +40,7 @@ public final class BlueprintClientHandler {
                 miss, minecraft.player.getMainHandItem().is(ModItems.BLUEPRINT.get()))) return;
 
         ItemStack stack = minecraft.player.getMainHandItem();
-        Identifier machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
+        ResourceLocation machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
         Machine machine = machineId == null ? null : MachineRegistry.getMachine(machineId);
         if (machine == null) {
             minecraft.gui.getChat().addClientSystemMessage(

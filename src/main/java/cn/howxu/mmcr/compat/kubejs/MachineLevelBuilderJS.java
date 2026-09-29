@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -18,21 +18,21 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
-    public transient Identifier typeId;
+    public transient ResourceLocation typeId;
     public transient int priority;
     public transient BlockState state;
     public transient ModifierDefinition modifier = ModifierDefinition.EMPTY;
 
-    public MachineLevelBuilderJS(Identifier id) {
+    public MachineLevelBuilderJS(ResourceLocation id) {
         super(id);
     }
 
     public MachineLevelBuilderJS(String id) {
-        this(Identifier.parse(id));
+        this(ResourceLocation.parse(id));
     }
 
     public MachineLevelBuilderJS type(String typeId) {
-        this.typeId = Identifier.parse(typeId);
+        this.typeId = ResourceLocation.parse(typeId);
         return this;
     }
 
@@ -43,7 +43,7 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
 
     public MachineLevelBuilderJS state(Object state) {
         this.state = switch (state) {
-            case String blockId -> BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId)).defaultBlockState();
+            case String blockId -> BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId)).defaultBlockState();
             case BlockState blockState -> blockState;
             default -> throw new IllegalArgumentException("Machine level state must be a block id or BlockState: " + state);
         };

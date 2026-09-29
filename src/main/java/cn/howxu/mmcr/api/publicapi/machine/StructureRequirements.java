@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
@@ -17,7 +17,7 @@ import java.util.Objects;
  */
 public record StructureRequirements(
         Map<Character, List<ModifierUse>> modifierReplacements,
-        Map<Character, Identifier> levelSlots) {
+        Map<Character, ResourceLocation> levelSlots) {
 
     public static final StructureRequirements EMPTY = new StructureRequirements(Map.of(), Map.of());
 
@@ -41,9 +41,9 @@ public record StructureRequirements(
      */
     public static final class Builder {
         private final Map<Character, List<ModifierUse>> modifiers = new LinkedHashMap<>();
-        private final Map<Character, Identifier> levelSlots = new LinkedHashMap<>();
+        private final Map<Character, ResourceLocation> levelSlots = new LinkedHashMap<>();
 
-        public Builder modifier(char symbol, Identifier modifierId) {
+        public Builder modifier(char symbol, ResourceLocation modifierId) {
             return modifier(symbol, ModifierUse.of(modifierId, BlockPredicate.block(Blocks.AIR)));
         }
 
@@ -53,9 +53,9 @@ public record StructureRequirements(
             return this;
         }
 
-        public Builder levelSlot(char symbol, Identifier typeId) {
+        public Builder levelSlot(char symbol, ResourceLocation typeId) {
             Objects.requireNonNull(typeId, "typeId");
-            Identifier existing = levelSlots.putIfAbsent(symbol, typeId);
+            ResourceLocation existing = levelSlots.putIfAbsent(symbol, typeId);
             if (existing != null && !existing.equals(typeId)) {
                 throw new IllegalArgumentException("conflicting level slot for symbol " + symbol);
             }

@@ -10,7 +10,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -117,7 +117,7 @@ public class ModuleCouplerBlockEntity extends BlockEntity {
     private static GlobalPos readGlobalPos(ValueInput input) {
         String dimension = input.getStringOr(DIMENSION_KEY, "");
         if (dimension.isBlank()) return null;
-        ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension));
+        ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimension));
         return GlobalPos.of(key, new BlockPos(
                 input.getIntOr(X_KEY, 0),
                 input.getIntOr(Y_KEY, 0),

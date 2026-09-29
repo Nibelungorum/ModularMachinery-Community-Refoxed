@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -23,8 +23,8 @@ import java.util.function.Consumer;
  */
 public final class JeiRuntimeReloader {
 
-    private static final Set<Identifier> REGISTERED_RECIPE_POOL_CATEGORIES = ConcurrentHashMap.newKeySet();
-    private static volatile Map<Identifier, List<MachineRecipeDisplay>> visibleDisplaysByPool = Map.of();
+    private static final Set<ResourceLocation> REGISTERED_RECIPE_POOL_CATEGORIES = ConcurrentHashMap.newKeySet();
+    private static volatile Map<ResourceLocation, List<MachineRecipeDisplay>> visibleDisplaysByPool = Map.of();
     private static volatile boolean categoriesCaptured;
     private static volatile IJeiRuntime runtime;
     private static volatile long lastReloadedVersion = Long.MIN_VALUE;
@@ -34,13 +34,13 @@ public final class JeiRuntimeReloader {
     private JeiRuntimeReloader() {
     }
 
-    static void markRegisteredRecipePoolCategories(Collection<Identifier> poolIds) {
+    static void markRegisteredRecipePoolCategories(Collection<ResourceLocation> poolIds) {
         REGISTERED_RECIPE_POOL_CATEGORIES.clear();
         REGISTERED_RECIPE_POOL_CATEGORIES.addAll(poolIds);
         categoriesCaptured = true;
     }
 
-    static void captureInitialDisplays(Map<Identifier, List<MachineRecipeDisplay>> displaysByPool) {
+    static void captureInitialDisplays(Map<ResourceLocation, List<MachineRecipeDisplay>> displaysByPool) {
         visibleDisplaysByPool = copyDisplays(displaysByPool);
     }
 
@@ -72,12 +72,12 @@ public final class JeiRuntimeReloader {
         scheduledReloadVersion = snapshot.contentVersion();
         Runnable reload = () -> {
             try {
-                Map<Identifier, List<MachineRecipeDisplay>> displaysByPool = MachineRecipeDisplays.byPool(snapshot);
-                Map<Identifier, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByPool;
-                Map<Identifier, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>();
-                Set<Identifier> refreshedPoolIds = new LinkedHashSet<>(previousVisible.keySet());
+                Map<ResourceLocation, List<MachineRecipeDisplay>> displaysByPool = MachineRecipeDisplays.byPool(snapshot);
+                Map<ResourceLocation, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByPool;
+                Map<ResourceLocation, List<MachineRecipeDisplay>> updatedVisible = new LinkedHashMap<>();
+                Set<ResourceLocation> refreshedPoolIds = new LinkedHashSet<>(previousVisible.keySet());
                 refreshedPoolIds.addAll(displaysByPool.keySet());
-                for (Identifier poolId : refreshedPoolIds) {
+                for (ResourceLocation poolId : refreshedPoolIds) {
                     if (categoriesCaptured && !REGISTERED_RECIPE_POOL_CATEGORIES.contains(poolId)) {
                         MMCR.LOG.warn("JEI category for synced recipe pool {} was not registered; restart or reload JEI to view it", poolId);
                         continue;
@@ -108,9 +108,9 @@ public final class JeiRuntimeReloader {
         minecraft.execute(runnable);
     }
 
-    private static Map<Identifier, List<MachineRecipeDisplay>> copyDisplays(
-            Map<Identifier, List<MachineRecipeDisplay>> displaysByMachine) {
-        Map<Identifier, List<MachineRecipeDisplay>> copy = new LinkedHashMap<>();
+    private static Map<ResourceLocation, List<MachineRecipeDisplay>> copyDisplays(
+            Map<ResourceLocation, List<MachineRecipeDisplay>> displaysByMachine) {
+        Map<ResourceLocation, List<MachineRecipeDisplay>> copy = new LinkedHashMap<>();
         displaysByMachine.forEach((machineId, displays) -> copy.put(machineId, List.copyOf(displays)));
         return Map.copyOf(copy);
     }

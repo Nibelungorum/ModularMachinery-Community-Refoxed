@@ -22,7 +22,7 @@ import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import java.util.ArrayList;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
@@ -40,14 +40,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class CapabilityOperationTest {
     private static final ExecutionStatus TYPED_FAILURE = new ExecutionStatus(
-            Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation_failure"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "opaque_operation_failure"),
             StatusSeverity.BLOCKED,
-            Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
             FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
-                    Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
+                    ResourceLocation.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
                     FailurePhase.CAPABILITY_COMMIT, null, null, Map.of()));
     private static final OpaqueType TYPE = new OpaqueType(
-            Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation_requirement"));
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "opaque_operation_requirement"));
 
     @Test
     void default_parallelism_adaptation_keeps_an_opaque_operation_reusable() {
@@ -135,17 +135,17 @@ class CapabilityOperationTest {
     }
 
     private static final class OpaqueType implements RequirementType<OpaqueRequirement> {
-        private final Identifier id;
+        private final ResourceLocation id;
         private final MapCodec<OpaqueRequirement> codec;
         private RequirementHandler<OpaqueRequirement> handler;
 
-        private OpaqueType(Identifier id) {
+        private OpaqueType(ResourceLocation id) {
             this.id = id;
             this.codec = MapCodec.unit(() -> new OpaqueRequirement(this, RecipeModifier.IOType.INPUT));
         }
 
         @Override
-        public Identifier id() {
+        public ResourceLocation id() {
             return id;
         }
 

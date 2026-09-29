@@ -12,7 +12,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -88,7 +88,7 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_does_not_publish_recipe_owned_by_active_kubejs_transaction_as_datapack_content() {
-        Identifier id = MMCR.id("transaction_recipe");
+        ResourceLocation id = MMCR.id("transaction_recipe");
         MachineRecipe recipe = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         KubeJSContentReloadTransaction transaction = new KubeJSContentReloadTransaction();
         transaction.registerRecipe(recipe);
@@ -102,7 +102,7 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_kubejs_recipe_overrides_dynamic_recipe_with_same_id_and_pool() {
-        Identifier id = MMCR.id("dynamic_recipe");
+        ResourceLocation id = MMCR.id("dynamic_recipe");
         MachineRecipe dynamic = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         MachineRecipe kubeJS = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 2, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(id, dynamic));
@@ -118,7 +118,7 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_keeps_dynamic_recipe_when_kubejs_same_id_belongs_to_another_pool() {
-        Identifier id = MMCR.id("cross_pool_dynamic_recipe");
+        ResourceLocation id = MMCR.id("cross_pool_dynamic_recipe");
         MachineRecipe dynamic = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         MachineRecipe kubeJS = RecipeTestSupport.create(id, MMCR.id("controller_tick"), 2, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(id, dynamic));
@@ -133,13 +133,13 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_does_not_replace_explicit_kubejs_id_with_generated_holder_id() {
-        Identifier explicitId = MMCR.id("explicit_recipe");
+        ResourceLocation explicitId = MMCR.id("explicit_recipe");
         MachineRecipe explicit = RecipeTestSupport.create(explicitId, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         KubeJSContentReloadTransaction transaction = new KubeJSContentReloadTransaction();
         transaction.registerRecipe(explicit);
         KubeJSContentReloadTransaction.activate(transaction);
 
-        Identifier generatedId = MMCR.id("generated_recipe");
+        ResourceLocation generatedId = MMCR.id("generated_recipe");
         MachineRecipe generated = explicit.withId(generatedId);
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(ResourceKey.create(
                 Registries.RECIPE, generatedId), generated)));

@@ -8,7 +8,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,7 +112,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         }
 
         private Optional<PortFamilyDescriptor> family(IOPortKind port) {
-            Identifier familyId = switch (category) {
+            ResourceLocation familyId = switch (category) {
                 case ITEM -> PortFamilyIds.ITEM;
                 case FLUID -> PortFamilyIds.FLUID;
                 case ENERGY -> PortFamilyIds.ENERGY;

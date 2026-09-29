@@ -36,7 +36,7 @@ import net.minecraft.gametest.framework.TestData;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ClientInformation;
@@ -66,23 +66,23 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class NetworkInterfaceGameTests {
-    private static final Identifier KEY_SOURCE_ID = MMCR.id("network_key_source");
-    private static final Identifier KEY_TARGET_ID = MMCR.id("network_key_target");
-    private static final Identifier MULTI_SOURCE_ID = MMCR.id("network_multi_source");
-    private static final Identifier MULTI_TARGET_ID = MMCR.id("network_multi_target");
-    private static final Identifier CAPACITY_SOURCE_ID = MMCR.id("network_capacity_source");
-    private static final Identifier CAPACITY_TARGET_ID = MMCR.id("network_capacity_target");
-    private static final Identifier CAPACITY_BAD_ID = MMCR.id("network_capacity_bad");
-    private static final Identifier REPLACEMENT_SOURCE_ID = MMCR.id("network_replacement_source");
-    private static final Identifier REPLACEMENT_TARGET_ID = MMCR.id("network_replacement_target");
-    private static final Identifier REQUEST_SOURCE_ID = MMCR.id("network_request_source");
-    private static final Identifier REQUEST_TARGET_ID = MMCR.id("network_request_target");
-    private static final Identifier NULL_REQUEST_SOURCE_ID = MMCR.id("network_null_request_source");
-    private static final Identifier NULL_REQUEST_TARGET_ID = MMCR.id("network_null_request_target");
-    private static final Identifier SAME_SOURCE_ID = MMCR.id("network_same_source");
-    private static final Identifier SAME_TARGET_ID = MMCR.id("network_same_target");
-    private static final Identifier REQUEST_ID = MMCR.id("network_test_request");
-    private static final Identifier FORMED_TEXTURE = MMCR.id("block/network_formed_casing");
+    private static final ResourceLocation KEY_SOURCE_ID = MMCR.id("network_key_source");
+    private static final ResourceLocation KEY_TARGET_ID = MMCR.id("network_key_target");
+    private static final ResourceLocation MULTI_SOURCE_ID = MMCR.id("network_multi_source");
+    private static final ResourceLocation MULTI_TARGET_ID = MMCR.id("network_multi_target");
+    private static final ResourceLocation CAPACITY_SOURCE_ID = MMCR.id("network_capacity_source");
+    private static final ResourceLocation CAPACITY_TARGET_ID = MMCR.id("network_capacity_target");
+    private static final ResourceLocation CAPACITY_BAD_ID = MMCR.id("network_capacity_bad");
+    private static final ResourceLocation REPLACEMENT_SOURCE_ID = MMCR.id("network_replacement_source");
+    private static final ResourceLocation REPLACEMENT_TARGET_ID = MMCR.id("network_replacement_target");
+    private static final ResourceLocation REQUEST_SOURCE_ID = MMCR.id("network_request_source");
+    private static final ResourceLocation REQUEST_TARGET_ID = MMCR.id("network_request_target");
+    private static final ResourceLocation NULL_REQUEST_SOURCE_ID = MMCR.id("network_null_request_source");
+    private static final ResourceLocation NULL_REQUEST_TARGET_ID = MMCR.id("network_null_request_target");
+    private static final ResourceLocation SAME_SOURCE_ID = MMCR.id("network_same_source");
+    private static final ResourceLocation SAME_TARGET_ID = MMCR.id("network_same_target");
+    private static final ResourceLocation REQUEST_ID = MMCR.id("network_test_request");
+    private static final ResourceLocation FORMED_TEXTURE = MMCR.id("block/network_formed_casing");
 
     private NetworkInterfaceGameTests() {
     }
@@ -331,18 +331,18 @@ public final class NetworkInterfaceGameTests {
     }
 
     private static MachineFixture placeMachineWithStorage(GameTestHelper helper, BlockPos controllerPos,
-                                                           Identifier id, NetworkInterfaceSpec network,
-                                                           Map<Identifier, RequestProcess> processors,
-                                                           Map<Identifier, RequestFailed> failures) {
+                                                           ResourceLocation id, NetworkInterfaceSpec network,
+                                                           Map<ResourceLocation, RequestProcess> processors,
+                                                           Map<ResourceLocation, RequestFailed> failures) {
         return placeMachine(helper, controllerPos, id,
                 List.of(new BlockPos(1, 0, 0)), true, network, processors, failures);
     }
 
-    private static MachineFixture placeMachine(GameTestHelper helper, BlockPos controllerPos, Identifier id,
+    private static MachineFixture placeMachine(GameTestHelper helper, BlockPos controllerPos, ResourceLocation id,
                                                 List<BlockPos> interfaceOffsets, boolean storage,
                                                 NetworkInterfaceSpec network,
-                                                Map<Identifier, RequestProcess> processors,
-                                                Map<Identifier, RequestFailed> failures) {
+                                                Map<ResourceLocation, RequestProcess> processors,
+                                                Map<ResourceLocation, RequestFailed> failures) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         for (BlockPos offset : interfaceOffsets) {
             helper.setBlock(controllerPos.offset(offset), ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());
@@ -380,19 +380,19 @@ public final class NetworkInterfaceGameTests {
         level.setChunkForced(position.getX() >> 4, position.getZ() >> 4, true);
     }
 
-    private static Machine machine(Identifier id, BlockArray pattern, NetworkInterfaceSpec network,
-                                   Map<Identifier, RequestProcess> processors,
-                                   Map<Identifier, RequestFailed> failures) {
+    private static Machine machine(ResourceLocation id, BlockArray pattern, NetworkInterfaceSpec network,
+                                   Map<ResourceLocation, RequestProcess> processors,
+                                   Map<ResourceLocation, RequestFailed> failures) {
         return new Machine() {
-            @Override public Identifier registryName() { return id; }
+            @Override public ResourceLocation registryName() { return id; }
             @Override public BlockArray pattern() { return pattern; }
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public MachineAppearanceSpec appearance() {
                 return new MachineAppearanceSpec(MMCR.id("network_casing"), MMCR.id("block/network_controller"), FORMED_TEXTURE);
             }
             @Override public NetworkInterfaceSpec networkInterface() { return network; }
-            @Override public Map<Identifier, RequestProcess> requestProcessors() { return processors; }
-            @Override public Map<Identifier, RequestFailed> requestFailures() { return failures; }
+            @Override public Map<ResourceLocation, RequestProcess> requestProcessors() { return processors; }
+            @Override public Map<ResourceLocation, RequestFailed> requestFailures() { return failures; }
         };
     }
 
@@ -422,14 +422,14 @@ public final class NetworkInterfaceGameTests {
                                   Consumer<GameTestHelper> test) {
         Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
         TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment,
-                Identifier.fromNamespaceAndPath("minecraft", "empty"), maxTicks, 0, true,
+                ResourceLocation.fromNamespaceAndPath("minecraft", "empty"), maxTicks, 0, true,
                 Rotation.NONE, false, 1, 1, false, 128);
         registerTest(event, MMCR.id(name), new SimpleGameTest(data, name, test));
     }
 
-    private static void registerTest(RegisterGameTestsEvent event, Identifier id, GameTestInstance instance) {
+    private static void registerTest(RegisterGameTestsEvent event, ResourceLocation id, GameTestInstance instance) {
         try {
-            event.getClass().getMethod("registerTest", Identifier.class, GameTestInstance.class).invoke(event, id, instance);
+            event.getClass().getMethod("registerTest", ResourceLocation.class, GameTestInstance.class).invoke(event, id, instance);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("Unable to register GameTest " + id, exception);
         }

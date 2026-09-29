@@ -94,7 +94,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -929,7 +929,7 @@ class CraftingRuntimeTest {
                 20, List.of(), List.of());
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        Identifier foreignMachineId = MMCR.id("runtime_foreign_pool_machine");
+        ResourceLocation foreignMachineId = MMCR.id("runtime_foreign_pool_machine");
         RuntimeTestFixtures.registerRecipePool(foreignMachineId);
         controller.setMachine(new DynamicMachine(foreignMachineId, "foreign pool machine", new BlockArray(Map.of())));
 
@@ -1751,7 +1751,7 @@ class CraftingRuntimeTest {
         assertThat(runtime.shouldRetryFinish()).isFalse();
     }
 
-    private static Machine machine(Identifier id, MachineBehavior behavior) {
+    private static Machine machine(ResourceLocation id, MachineBehavior behavior) {
         return new DynamicMachine(id, id.toString(), new BlockArray(Map.of()),
                 MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL,
@@ -2099,7 +2099,7 @@ class CraftingRuntimeTest {
     }
 
     private record CustomRequirement(RecipeModifier.IOType io, int value) implements MachineRequirement {
-        private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath(
+        private static final ResourceLocation TYPE_ID = ResourceLocation.fromNamespaceAndPath(
                 "mmcr_test", "runtime_custom_requirement");
         private static final MapCodec<CustomRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),

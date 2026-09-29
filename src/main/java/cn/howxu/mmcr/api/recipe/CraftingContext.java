@@ -29,7 +29,7 @@ import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -81,7 +81,7 @@ public final class CraftingContext {
         return captureAsyncCapabilities(null);
     }
 
-    public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities(@Nullable Set<Identifier> capabilityIds) {
+    public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities(@Nullable Set<ResourceLocation> capabilityIds) {
         List<AsyncRequirementPlanner.Capability> asyncCapabilities = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
             if (capabilityIds != null && !capabilityIds.contains(capability.type().id())) continue;
@@ -385,7 +385,7 @@ public final class CraftingContext {
         return null;
     }
 
-    private static AsyncCapabilityRequest.Resource resourceRequest(net.minecraft.resources.Identifier capabilityId,
+    private static AsyncCapabilityRequest.Resource resourceRequest(net.minecraft.resources.ResourceLocation capabilityId,
                                                                     long parallelism, AsyncResourceValue resource,
                                                                     long amount, boolean insert) {
         return new AsyncCapabilityRequest.Resource(capabilityId, parallelism,
@@ -393,13 +393,13 @@ public final class CraftingContext {
     }
 
     private static List<AsyncResourceValue> resources(List<AsyncRequirementPlanner.Capability> capabilities,
-                                                       net.minecraft.resources.Identifier capabilityId,
+                                                       net.minecraft.resources.ResourceLocation capabilityId,
                                                        IOType direction) {
         List<AsyncResourceValue> values = new ArrayList<>();
         for (AsyncRequirementPlanner.Capability capability : capabilities) {
             if (!capability.directions().contains(direction)
                     || !(capability.snapshot() instanceof AsyncCapabilitySnapshot.Resource(
-                    Identifier id, List<AsyncCapabilitySnapshot.ResourceSlot> slots
+                    ResourceLocation id, List<AsyncCapabilitySnapshot.ResourceSlot> slots
             ))
                     || !capabilityId.equals(id)) continue;
             slots.stream().map(AsyncCapabilitySnapshot.ResourceSlot::resource)

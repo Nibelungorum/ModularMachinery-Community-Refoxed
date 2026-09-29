@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.LinkedHashMap;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StructureMatcherTest {

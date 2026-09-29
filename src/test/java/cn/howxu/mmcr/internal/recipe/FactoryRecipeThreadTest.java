@@ -24,7 +24,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -59,7 +59,7 @@ class FactoryRecipeThreadTest {
     @Test
     void delegates_custom_requirement_wakeups_without_concrete_requirement_dispatch() {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
-            Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "factory_wakeup");
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "factory_wakeup");
             RequirementHandler<TestRequirement> handler = new RequirementHandler<>() {
                 @Override
                 public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
@@ -161,9 +161,9 @@ class FactoryRecipeThreadTest {
 
     @Test
     void factory_search_uses_the_controller_selected_recipe_pool() {
-        Identifier machineId = MMCR.id("factory_selected_pool_machine");
-        Identifier firstPool = MMCR.id("factory_selected_pool_first");
-        Identifier secondPool = MMCR.id("factory_selected_pool_second");
+        ResourceLocation machineId = MMCR.id("factory_selected_pool_machine");
+        ResourceLocation firstPool = MMCR.id("factory_selected_pool_first");
+        ResourceLocation secondPool = MMCR.id("factory_selected_pool_second");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .recipePoolIds(List.of(firstPool, secondPool)).build());

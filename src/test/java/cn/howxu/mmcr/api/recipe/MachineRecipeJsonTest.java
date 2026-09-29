@@ -21,7 +21,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -189,11 +189,11 @@ class MachineRecipeJsonTest {
         assertThat(recipe.isParallelized()).isTrue();
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isTrue();
         assertThat(recipe.allowPartialOutputs()).isTrue();
-        assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:factory_controller"));
+        assertThat(recipe.requiredHostIds()).containsExactly(ResourceLocation.parse("mmcr:factory_controller"));
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
             assertThat(level.io()).isEqualTo(RecipeModifier.IOType.INPUT);
-            assertThat(level.typeId()).isEqualTo(Identifier.parse("mmcr:test_level_type"));
-            assertThat(level.levelId()).isEqualTo(Identifier.parse("mmcr:test_level"));
+            assertThat(level.typeId()).isEqualTo(ResourceLocation.parse("mmcr:test_level_type"));
+            assertThat(level.levelId()).isEqualTo(ResourceLocation.parse("mmcr:test_level"));
         });
         assertThat(recipe.requirements()).anyMatch(LevelRequirement.class::isInstance);
         assertThat(recipe.stageRequirements()).containsExactly(StageRequirement.input(2));
@@ -516,7 +516,7 @@ class MachineRecipeJsonTest {
         return array;
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 }

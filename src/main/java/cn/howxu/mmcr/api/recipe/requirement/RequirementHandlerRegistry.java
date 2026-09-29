@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.MMCR;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Map;
@@ -16,12 +16,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RequirementHandlerRegistry {
     private static final Map<RequirementType<?>, RequirementHandler<?>> HANDLERS = new ConcurrentHashMap<>();
-    private static final Map<Identifier, RequirementType<?>> CANONICAL_TYPES = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, RequirementType<?>> CANONICAL_TYPES = new ConcurrentHashMap<>();
     private static final Object MUTATION_LOCK = new Object();
-    private static final List<Identifier> BUILT_IN_IDS = List.of(
-            Identifier.fromNamespaceAndPath("minecraft", "item"),
-            Identifier.fromNamespaceAndPath("minecraft", "fluid"),
-            Identifier.fromNamespaceAndPath("neoforge", "energy"),
+    private static final List<ResourceLocation> BUILT_IN_IDS = List.of(
+            ResourceLocation.fromNamespaceAndPath("minecraft", "item"),
+            ResourceLocation.fromNamespaceAndPath("minecraft", "fluid"),
+            ResourceLocation.fromNamespaceAndPath("neoforge", "energy"),
             MMCR.id("smart_interface"),
             MMCR.id("level"),
             MMCR.id("stage"));
@@ -62,7 +62,7 @@ public final class RequirementHandlerRegistry {
         return canonical;
     }
 
-    public static RequirementType<?> typeFor(Identifier id) {
+    public static RequirementType<?> typeFor(ResourceLocation id) {
         if (id == null) throw new IllegalArgumentException("id must not be null");
         RequirementType<?> type = CANONICAL_TYPES.get(id);
         if (type == null && isBuiltIn(id)) {
@@ -148,7 +148,7 @@ public final class RequirementHandlerRegistry {
         HANDLERS.keySet().removeIf(type -> !isBuiltIn(type.id()));
     }
 
-    private static boolean isBuiltIn(Identifier id) {
+    private static boolean isBuiltIn(ResourceLocation id) {
         return BUILT_IN_IDS.contains(id);
     }
 

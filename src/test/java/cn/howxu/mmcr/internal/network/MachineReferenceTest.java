@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -36,8 +36,8 @@ class MachineReferenceTest {
 
     @Test
     void sameMachineInputsProduceStableIdentity() {
-        Identifier dimension = Identifier.parse("minecraft:overworld");
-        Identifier type = Identifier.parse("mmcr:assembler");
+        ResourceLocation dimension = ResourceLocation.parse("minecraft:overworld");
+        ResourceLocation type = ResourceLocation.parse("mmcr:assembler");
         BlockPos pos = new BlockPos(12, 64, -8);
 
         assertEquals(MachineReferenceHasher.hash(dimension, type, pos),
@@ -48,15 +48,15 @@ class MachineReferenceTest {
 
     @Test
     void eachMachineInputChangesTheIdentity() {
-        Identifier dimension = Identifier.parse("minecraft:overworld");
-        Identifier type = Identifier.parse("mmcr:assembler");
+        ResourceLocation dimension = ResourceLocation.parse("minecraft:overworld");
+        ResourceLocation type = ResourceLocation.parse("mmcr:assembler");
         BlockPos pos = new BlockPos(12, 64, -8);
         long original = MachineReferenceHasher.hash(dimension, type, pos);
 
-        assertNotEquals(original, MachineReferenceHasher.hash(Identifier.parse("minecraft:the_nether"), type, pos));
-        assertNotEquals(MachineReferenceHasher.hash(Identifier.parse("a:bc"), type, pos),
-                MachineReferenceHasher.hash(Identifier.parse("ab:c"), type, pos));
-        assertNotEquals(original, MachineReferenceHasher.hash(dimension, Identifier.parse("mmcr:foundry"), pos));
+        assertNotEquals(original, MachineReferenceHasher.hash(ResourceLocation.parse("minecraft:the_nether"), type, pos));
+        assertNotEquals(MachineReferenceHasher.hash(ResourceLocation.parse("a:bc"), type, pos),
+                MachineReferenceHasher.hash(ResourceLocation.parse("ab:c"), type, pos));
+        assertNotEquals(original, MachineReferenceHasher.hash(dimension, ResourceLocation.parse("mmcr:foundry"), pos));
         assertNotEquals(original, MachineReferenceHasher.hash(dimension, type, new BlockPos(13, 64, -8)));
         assertNotEquals(original, MachineReferenceHasher.hash(dimension, type, new BlockPos(12, 65, -8)));
         assertNotEquals(original, MachineReferenceHasher.hash(dimension, type, new BlockPos(12, 64, -7)));
@@ -69,8 +69,8 @@ class MachineReferenceTest {
 
     @Test
     void hasherRejectsNullInputs() {
-        Identifier dimension = Identifier.parse("minecraft:overworld");
-        Identifier type = Identifier.parse("mmcr:assembler");
+        ResourceLocation dimension = ResourceLocation.parse("minecraft:overworld");
+        ResourceLocation type = ResourceLocation.parse("mmcr:assembler");
         BlockPos pos = new BlockPos(12, 64, -8);
 
         assertThrows(NullPointerException.class, () -> MachineReferenceHasher.hash(null, type, pos));
@@ -80,7 +80,7 @@ class MachineReferenceTest {
 
     @Test
     void formedControllerCachesAndResetsItsMachineReference() {
-        Identifier machineType = MMCR.id("machine_reference_test");
+        ResourceLocation machineType = MMCR.id("machine_reference_test");
         BlockPos controllerPos = new BlockPos(12, 64, -8);
         DynamicMachine machine = new DynamicMachine(machineType, "Machine Reference Test",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
@@ -94,7 +94,7 @@ class MachineReferenceTest {
         assertNotNull(reference);
         assertSame(reference, controller.machineReference());
         assertEquals(machineType, reference.type());
-        assertEquals(MachineReferenceHasher.hash(Identifier.parse("minecraft:overworld"), machineType, controllerPos),
+        assertEquals(MachineReferenceHasher.hash(ResourceLocation.parse("minecraft:overworld"), machineType, controllerPos),
                 reference.hash());
 
         controller.requestImmediateStructureCheck();

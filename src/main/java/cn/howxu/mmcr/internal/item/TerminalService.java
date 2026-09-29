@@ -20,7 +20,7 @@ import java.util.Comparator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -90,7 +90,7 @@ public final class TerminalService {
     }
 
     public static Result execute(ServerPlayer player, ItemStack stack, TerminalAction action, int value,
-                                 Identifier firstId, Identifier secondId) {
+                                 ResourceLocation firstId, ResourceLocation secondId) {
         if (!isHeldTerminal(player, stack)) return rejected(player, stack, "message.mmcr.terminal.not_held");
         if (action == null) return rejected(player, stack, "message.mmcr.terminal.invalid_action");
         TerminalData data = TerminalData.from(stack);
@@ -196,17 +196,17 @@ public final class TerminalService {
     private static TerminalData normalize(MachineControllerBlockEntity controller, TerminalData data) {
         List<Integer> stages = controller.availableStructureStages();
         int stage = stages.contains(data.stage()) ? data.stage() : stages.getFirst();
-        List<Identifier> levelTypes = controller.boundMachine().map(machine -> machine.structureStages().stream()
+        List<ResourceLocation> levelTypes = controller.boundMachine().map(machine -> machine.structureStages().stream()
                 .filter(structureStage -> structureStage.number() == stage)
                 .flatMap(structureStage -> structureStage.levelSlots().values().stream())
                 .distinct().toList()).orElse(List.of());
-        LinkedHashMap<Identifier, Identifier> levels = new LinkedHashMap<>();
+        LinkedHashMap<ResourceLocation, ResourceLocation> levels = new LinkedHashMap<>();
         for (LevelType type : MachineLevelRegistry.types()) {
             if (!levelTypes.contains(type.id())) continue;
             List<MachineLevel> available = MachineLevelRegistry.levelsForType(type.id()).stream()
                     .sorted(Comparator.comparingInt(MachineLevel::priority)).toList();
             if (available.isEmpty()) continue;
-            Identifier selected = data.selectedLevels().get(type.id());
+            ResourceLocation selected = data.selectedLevels().get(type.id());
             boolean validSelection = false;
             for (MachineLevel level : available) {
                 if (level.id().equals(selected)) {
@@ -217,7 +217,7 @@ public final class TerminalService {
             if (!validSelection) selected = available.getFirst().id();
             levels.put(type.id(), selected);
         }
-        Identifier selectedType = data.selectedLevelType();
+        ResourceLocation selectedType = data.selectedLevelType();
         if (selectedType == null || !levels.containsKey(selectedType)) selectedType = levels.isEmpty() ? null : levels.keySet().iterator().next();
         return new TerminalData(data.controller(), data.container(), data.ae2AccessPoint(), data.inventoryMode(), selectedType,
                 levels, stage, data.previewEnabled(), data.previewLayer());

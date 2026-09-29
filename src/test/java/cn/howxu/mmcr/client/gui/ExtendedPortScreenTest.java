@@ -14,7 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.Holder;
@@ -239,7 +239,7 @@ class ExtendedPortScreenTest {
 
         private Button createPageButton() throws Exception {
             Method method = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton",
-                    int.class, int.class, Identifier.class);
+                    int.class, int.class, ResourceLocation.class);
             method.setAccessible(true);
             return (Button) method.invoke(this, 0, 0, BuiltinCapabilityDefinitions.ITEM_TYPE.id());
         }
@@ -264,7 +264,7 @@ class ExtendedPortScreenTest {
         }
 
         @Override
-        protected Identifier texture(boolean autoIOPage) {
+        protected ResourceLocation texture(boolean autoIOPage) {
             return MMCR.id("textures/gui/test.png");
         }
 

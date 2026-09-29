@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.controller;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -10,7 +10,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record ControllerRuntimeContext(Identifier machineId, BlockPos controllerPos,
+public record ControllerRuntimeContext(ResourceLocation machineId, BlockPos controllerPos,
                                        ControllerScreenText screenText) {
     public ControllerRuntimeContext {
         Objects.requireNonNull(machineId, "machineId");

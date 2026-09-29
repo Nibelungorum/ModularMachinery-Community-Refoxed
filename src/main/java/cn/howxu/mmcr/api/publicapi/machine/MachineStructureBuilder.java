@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /** Builder for the structure phase of a public machine declaration.
  * @author howxu <dev@howxu.cn>
@@ -48,7 +48,7 @@ public final class MachineStructureBuilder {
         return this;
     }
 
-    public MachineStructureDefinition build(Identifier machineId) {
+    public MachineStructureDefinition build(ResourceLocation machineId) {
         List<StructureStage> boundStages = stages.stream()
                 .map(stage -> new StructureStage(stage.kind(), stage.pattern().bindController(machineId),
                         stage.portRequirements(), stage.portTiers(), stage.requirements()))

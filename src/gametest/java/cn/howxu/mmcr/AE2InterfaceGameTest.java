@@ -47,7 +47,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
@@ -88,8 +88,8 @@ import java.util.*;
  */
 public class AE2InterfaceGameTest {
 
-    private static final Identifier MACHINE_ID = MMCR.id("ae2_interface_integration_test");
-    private static final Identifier RECIPE_ID = MMCR.id("ae2_interface_integration_recipe");
+    private static final ResourceLocation MACHINE_ID = MMCR.id("ae2_interface_integration_test");
+    private static final ResourceLocation RECIPE_ID = MMCR.id("ae2_interface_integration_recipe");
     private static final long INITIAL_ITEM_COUNT = 16L;
     private static final long INITIAL_FLUID_AMOUNT = 2_000L;
     private static final long NETWORK_ITEM_AMOUNT = 16L;

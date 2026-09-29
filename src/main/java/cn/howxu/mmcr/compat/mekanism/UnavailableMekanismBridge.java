@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism;
 
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Inert bridge used when Mekanism is unavailable.
@@ -20,17 +20,17 @@ final class UnavailableMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public boolean supportsPortFamily(Identifier familyId) {
+    public boolean supportsPortFamily(ResourceLocation familyId) {
         return false;
     }
 
     @Override
-    public Identifier unavailableReason() {
+    public ResourceLocation unavailableReason() {
         return MekanismFailureReasons.MEKANISM_UNAVAILABLE.id();
     }
 
     @Override
-    public void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat) {
+    public void registerRecipeTypes(ResourceLocation chemical, ResourceLocation heatTemperature, ResourceLocation heat) {
         MekanismRecipeDeclarations.registerUnavailable();
     }
 }

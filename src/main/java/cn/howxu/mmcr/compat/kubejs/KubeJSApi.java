@@ -35,7 +35,7 @@ import cn.howxu.mmcr.util.IOType;
 import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -140,8 +140,8 @@ public final class KubeJSApi {
         return ReadableNumber.formatForSlot(value, scale, unit);
     }
 
-    public Identifier id(String id) {
-        return Identifier.parse(id);
+    public ResourceLocation id(String id) {
+        return ResourceLocation.parse(id);
     }
 
     public List<NetworkInterfaceReference> networkInterfaces(MachineBehaviorContext context) {
@@ -152,7 +152,7 @@ public final class KubeJSApi {
         DataValue value = dataValue(body);
         Map<String, DataValue> values = value.asMap().orElseThrow(() ->
                 new IllegalArgumentException("Network request body must be a map"));
-        NetworkApi.sendRequest(source, target, Identifier.parse(requestId), RequestBody.of(values));
+        NetworkApi.sendRequest(source, target, ResourceLocation.parse(requestId), RequestBody.of(values));
     }
 
     public DataValue dataValue(Object value) {
@@ -209,7 +209,7 @@ public final class KubeJSApi {
     }
 
     public BlockPredicate tag(String tagId) {
-        var tag = TagKey.create(Registries.BLOCK, Identifier.parse(tagId));
+        var tag = TagKey.create(Registries.BLOCK, ResourceLocation.parse(tagId));
         return new BlockPredicate.OfTag(tag);
     }
 
@@ -246,7 +246,7 @@ public final class KubeJSApi {
     }
 
     public MachineIngredient tagInput(String tagId, long count, float consumeChance) {
-        var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
+        var tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(tagId));
         var items = RegistryAccessContainer.current.lookup(Registries.ITEM)
                 .orElseThrow(() -> new IllegalStateException("Item registry unavailable"));
         return new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(tag)), MachineOutput.recipeStackAmount(count), null, consumeChance);
@@ -257,7 +257,7 @@ public final class KubeJSApi {
     }
 
     public MachineIngredient fluidInput(String fluidId, long amount) {
-        Identifier identifier = Identifier.parse(fluidId);
+        ResourceLocation identifier = ResourceLocation.parse(fluidId);
         if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
         return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(identifier)), MachineOutput.recipeStackAmount(amount));
     }
@@ -267,7 +267,7 @@ public final class KubeJSApi {
     }
 
     public FluidStack fluidStack(String fluidId, long amount) {
-        Identifier identifier = Identifier.parse(fluidId);
+        ResourceLocation identifier = ResourceLocation.parse(fluidId);
         if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
         return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), MachineOutput.recipeStackAmount(amount));
     }
@@ -295,7 +295,7 @@ public final class KubeJSApi {
      * @return validated custom recipe IO
      */
     public CustomRecipeIo customRecipeIo(String typeId, RecipeIo io, JsonElement payload) {
-        return RecipeApi.custom(Identifier.parse(typeId), io, payload);
+        return RecipeApi.custom(ResourceLocation.parse(typeId), io, payload);
     }
 
     public MachineModifier.Numeric modifier(String target, String scope, double value, String operation, boolean chance) {
@@ -314,13 +314,13 @@ public final class KubeJSApi {
     }
 
     public ModifierUse modifierUse(String modifierId, BlockPredicate replacement) {
-        Identifier id = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
+        ResourceLocation id = ControllerScreenTextEventJS.parseResourceLocation(modifierId, "modifierId");
         return new ModifierUse(id, toPublicBlockPredicate(replacement));
     }
 
     public LevelRequirement levelRequirement(String typeId, String levelId) {
-        Identifier type = Identifier.parse(typeId);
-        Identifier level = Identifier.parse(levelId);
+        ResourceLocation type = ResourceLocation.parse(typeId);
+        ResourceLocation level = ResourceLocation.parse(levelId);
         var registered = MachineLevelRegistry.getLevel(level);
         if (MachineLevelRegistry.getType(type) == null || registered == null
                 || !registered.typeId().equals(type)) {
@@ -334,7 +334,7 @@ public final class KubeJSApi {
     }
 
     public LevelSlot levelSlot(String typeId) {
-        Identifier type = Identifier.parse(typeId);
+        ResourceLocation type = ResourceLocation.parse(typeId);
         if (MachineLevelRegistry.getType(type) == null) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
@@ -393,13 +393,13 @@ public final class KubeJSApi {
     }
 
     private static Block requireBlock(String id) {
-        Identifier identifier = Identifier.parse(id);
+        ResourceLocation identifier = ResourceLocation.parse(id);
         if (!BuiltInRegistries.BLOCK.containsKey(identifier)) throw new IllegalArgumentException("Unknown block: " + id);
         return BuiltInRegistries.BLOCK.getValue(identifier);
     }
 
     private static Item requireItem(String id) {
-        Identifier identifier = Identifier.parse(id);
+        ResourceLocation identifier = ResourceLocation.parse(id);
         if (!BuiltInRegistries.ITEM.containsKey(identifier)) throw new IllegalArgumentException("Unknown item: " + id);
         return BuiltInRegistries.ITEM.getValue(identifier);
     }

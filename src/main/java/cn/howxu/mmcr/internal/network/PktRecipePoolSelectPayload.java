@@ -9,7 +9,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -18,12 +18,12 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktRecipePoolSelectPayload(BlockPos controllerPos, Identifier recipePoolId)
+public record PktRecipePoolSelectPayload(BlockPos controllerPos, ResourceLocation recipePoolId)
         implements CustomPacketPayload {
     public static final Type<PktRecipePoolSelectPayload> TYPE = new Type<>(MMCR.id("recipe_pool_select"));
     public static final StreamCodec<ByteBuf, PktRecipePoolSelectPayload> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, PktRecipePoolSelectPayload::controllerPos,
-            Identifier.STREAM_CODEC, PktRecipePoolSelectPayload::recipePoolId,
+            ResourceLocation.STREAM_CODEC, PktRecipePoolSelectPayload::recipePoolId,
             PktRecipePoolSelectPayload::new);
 
     public PktRecipePoolSelectPayload {

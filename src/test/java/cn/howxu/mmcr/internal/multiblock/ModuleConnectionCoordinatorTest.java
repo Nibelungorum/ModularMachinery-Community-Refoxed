@@ -19,7 +19,7 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -50,9 +50,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class ModuleConnectionCoordinatorTest {
-    private static final Identifier HOST_ID = Identifier.fromNamespaceAndPath("mmcr_test", "host");
-    private static final Identifier MODULE_ID = Identifier.fromNamespaceAndPath("mmcr_test", "module");
-    private static final Identifier OTHER_MODULE_ID = Identifier.fromNamespaceAndPath("mmcr_test", "other_module");
+    private static final ResourceLocation HOST_ID = ResourceLocation.fromNamespaceAndPath("mmcr_test", "host");
+    private static final ResourceLocation MODULE_ID = ResourceLocation.fromNamespaceAndPath("mmcr_test", "module");
+    private static final ResourceLocation OTHER_MODULE_ID = ResourceLocation.fromNamespaceAndPath("mmcr_test", "other_module");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -130,7 +130,7 @@ class ModuleConnectionCoordinatorTest {
     void refresh_keeps_valid_existing_connection_from_being_stolen_by_extra_candidates() throws Exception {
         FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
         BlockPos extraHostPos = fixture.hostPos().west(8);
-        Machine extraHostMachine = machine(Identifier.fromNamespaceAndPath("mmcr_test", "extra_host"),
+        Machine extraHostMachine = machine(ResourceLocation.fromNamespaceAndPath("mmcr_test", "extra_host"),
                 MachineRole.HOST, Set.of(MODULE_ID), extraHostPos, fixture.couplerPos(), fixture.couplerPos().east(),
                 fixture.couplerPos().east(2));
         MachineControllerBlockEntity extraHost = controller(extraHostPos, extraHostMachine, true);
@@ -193,7 +193,7 @@ class ModuleConnectionCoordinatorTest {
         BlockPos unrelatedCoupler = new BlockPos(40, 64, 10);
         BlockPos unrelatedNormal = new BlockPos(41, 64, 10);
         BlockPos sharedModuleInterface = new BlockPos(12, 64, 10);
-        Machine unrelatedHostMachine = machine(Identifier.fromNamespaceAndPath("mmcr_test", "unrelated_host"),
+        Machine unrelatedHostMachine = machine(ResourceLocation.fromNamespaceAndPath("mmcr_test", "unrelated_host"),
                 MachineRole.HOST, Set.of(MODULE_ID), unrelatedHostPos, unrelatedCoupler, unrelatedNormal, sharedModuleInterface);
         MachineControllerBlockEntity unrelatedHost = controller(unrelatedHostPos, unrelatedHostMachine, true);
          RuntimeTestFixtures.attachLevel(unrelatedHost, fixture.level());
@@ -265,13 +265,13 @@ class ModuleConnectionCoordinatorTest {
         assertThat(ModuleConnectionCoordinator.installedModuleCount(fixture.host())).isZero();
     }
 
-    private static FormationFixture formedFixture(Identifier hostId, Identifier moduleId, boolean hostFormed,
+    private static FormationFixture formedFixture(ResourceLocation hostId, ResourceLocation moduleId, boolean hostFormed,
                                                   boolean moduleFormed, boolean sharedInterface,
                                                   BlockPos moduleCouplerOverride) throws Exception {
         return formedFixture(hostId, moduleId, hostFormed, moduleFormed, sharedInterface, moduleCouplerOverride, true);
     }
 
-    private static FormationFixture formedFixture(Identifier hostId, Identifier moduleId, boolean hostFormed,
+    private static FormationFixture formedFixture(ResourceLocation hostId, ResourceLocation moduleId, boolean hostFormed,
                                                   boolean moduleFormed, boolean sharedInterface,
                                                   BlockPos moduleCouplerOverride, boolean chunksLoaded) throws Exception {
         MachineRegistry.clearForTesting();
@@ -318,7 +318,7 @@ class ModuleConnectionCoordinatorTest {
         return new FormationFixture(level, host, module, coupler, hostPos, modulePos, couplerPos);
     }
 
-    private static DynamicMachine machine(Identifier id, MachineRole role, Set<Identifier> acceptedModules,
+    private static DynamicMachine machine(ResourceLocation id, MachineRole role, Set<ResourceLocation> acceptedModules,
                                           BlockPos controllerPos, BlockPos couplerWorldPos,
                                           BlockPos normalWorldPos, BlockPos interfaceWorldPos) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
@@ -351,7 +351,7 @@ class ModuleConnectionCoordinatorTest {
                 Direction.SOUTH, Direction.NORTH, 1);
     }
 
-    private static MachineControllerBlock controllerBlock(Identifier machineId) throws Exception {
+    private static MachineControllerBlock controllerBlock(ResourceLocation machineId) throws Exception {
         MachineControllerBlock block = (MachineControllerBlock) unsafe().allocateInstance(MachineControllerBlock.class);
         setField(MachineControllerBlock.class, block, "machineId", machineId);
         setField(BlockBehaviour.class, block, "properties", Blocks.IRON_BLOCK.properties());

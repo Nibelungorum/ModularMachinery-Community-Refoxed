@@ -27,7 +27,7 @@ import mekanism.api.resource.LargeResourceStack;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.AfterAll;
@@ -43,7 +43,7 @@ class ChemicalConsumeChanceTest {
     @Test
     void loaded_chemical_codec_round_trips_consume_chance() {
         LoadedChemicalRequirement original = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.25F);
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.25F);
 
         var encoded = LoadedChemicalRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, original).getOrThrow();
         var decoded = LoadedChemicalRequirement.CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow();
@@ -54,7 +54,7 @@ class ChemicalConsumeChanceTest {
     @Test
     void loaded_chemical_codec_defaults_consume_chance_when_missing() {
         LoadedChemicalRequirement original = LoadedChemicalRequirement.input(
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L));
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L));
 
         var encoded = LoadedChemicalRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, original).getOrThrow();
         var json = encoded.getAsJsonObject();
@@ -69,7 +69,7 @@ class ChemicalConsumeChanceTest {
         var encoded = MekanismRecipeDeclarations.CHEMICAL_CODEC.codec()
                 .encodeStart(JsonOps.INSTANCE,
                         new MekanismRecipeDeclarations.UnavailableChemicalRequirement(RecipeModifier.IOType.INPUT,
-                                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.5F))
+                                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.5F))
                 .getOrThrow();
         var decoded = MekanismRecipeDeclarations.CHEMICAL_CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow();
         assertThat(decoded.consumeChance()).isEqualTo(0.5F);
@@ -78,7 +78,7 @@ class ChemicalConsumeChanceTest {
     @Test
     void unavailable_chemical_codec_defaults_consume_chance_when_missing() {
         var original = new MekanismRecipeDeclarations.UnavailableChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.5F);
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.5F);
 
         var encoded = MekanismRecipeDeclarations.CHEMICAL_CODEC.codec().encodeStart(JsonOps.INSTANCE, original).getOrThrow();
         var json = encoded.getAsJsonObject();
@@ -146,7 +146,7 @@ class ChemicalConsumeChanceTest {
     @Test
     void chemical_handler_apply_modifiers_rewrites_consume_chance_for_input() {
         LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
         RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
         List<RecipeModifier> modifiers = List.of(new RecipeModifier("chemical",
                 RecipeModifier.IOType.INPUT, -0.5F, RecipeModifier.Operation.ADD, true));
@@ -162,7 +162,7 @@ class ChemicalConsumeChanceTest {
 
     private static Holder.Reference<Chemical> registerChemical(String path) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.fromNamespaceAndPath("mmcr_test", path));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);

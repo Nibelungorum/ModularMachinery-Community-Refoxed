@@ -28,7 +28,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import com.google.gson.JsonObject;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -179,8 +179,8 @@ class MachineIngredientCodecTest {
 
     @Test void machineRecipe_inputs_excludes_output_energy_and_energyOutputs_exposes_it() {
         var recipe = RecipeTestSupport.create(
-                Identifier.parse("mmcr:test_energy_output"),
-                Identifier.parse("mmcr:test_machine"),
+                ResourceLocation.parse("mmcr:test_energy_output"),
+                ResourceLocation.parse("mmcr:test_machine"),
                 20,
                 List.of(new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 100)),
                 List.of()

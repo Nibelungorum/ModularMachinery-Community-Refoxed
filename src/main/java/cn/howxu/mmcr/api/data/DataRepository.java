@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.data;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /** Public extension point for future lazy data repositories.
  *
@@ -11,7 +11,7 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public interface DataRepository {
-    Identifier id();
+    ResourceLocation id();
 
     DataRepositoryRequest request(DataRepositoryContext context);
 }

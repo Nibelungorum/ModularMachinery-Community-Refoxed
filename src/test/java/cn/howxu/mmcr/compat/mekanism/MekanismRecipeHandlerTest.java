@@ -57,7 +57,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -115,7 +115,7 @@ class MekanismRecipeHandlerTest {
         LoadedChemicalRequirement.installUnavailableHandler();
 
         LoadedChemicalRequirement requirement = LoadedChemicalRequirement.input(
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000));
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000));
         RequirementPlan result = chemicalHandler().plan(requirement, List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -295,7 +295,7 @@ class MekanismRecipeHandlerTest {
 
         RequirementPlan result = chemicalHandler().plan(
                 LoadedChemicalRequirement.input(
-                        ChemicalIngredient.chemical(Identifier.parse("mekanism:not_registered"), 1L)),
+                        ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:not_registered"), 1L)),
                 List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -613,7 +613,7 @@ class MekanismRecipeHandlerTest {
 
     @Test
     void chemical_declarations_cap_long_amounts_at_the_native_stack_limit() {
-        Identifier id = Identifier.parse("mekanism:oxygen");
+        ResourceLocation id = ResourceLocation.parse("mekanism:oxygen");
 
         assertThat(ChemicalIngredient.chemical(id, Long.MAX_VALUE).amount()).isEqualTo((long) Integer.MAX_VALUE);
         assertThat(cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput.of(id, Long.MAX_VALUE, 1F).amount())
@@ -651,7 +651,7 @@ class MekanismRecipeHandlerTest {
 
     private static Holder.Reference<Chemical> registerChemical(String path, boolean radioactive) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.fromNamespaceAndPath("mmcr_test", path));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);

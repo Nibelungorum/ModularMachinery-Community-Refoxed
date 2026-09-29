@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Set;
 
@@ -21,7 +21,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class TestResourceFacet implements MachineCapability, ResourceFacet<TestResource> {
-    private final CapabilityType type = new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "resource"));
+    private final CapabilityType type = new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "resource"));
     private final ResourceStorage<TestResource> storage = new LongResourceStorage<>(
             TestResource.class, 1, 10L, resource -> false, null);
     private final CapabilityView view = new CapabilityView() {

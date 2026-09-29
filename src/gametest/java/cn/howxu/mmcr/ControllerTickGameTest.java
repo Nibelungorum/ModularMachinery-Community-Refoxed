@@ -44,7 +44,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
@@ -74,7 +74,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ControllerTickGameTest {
 
     public void structureForms3x3Casing(GameTestHelper helper) {
-        Identifier machineId = MMCR.id("controller_tick");
+        ResourceLocation machineId = MMCR.id("controller_tick");
         helper.assertTrue(MachineRegistry.getMachine(machineId) != null,
                 "GameTest startup installs the machine registry entry");
         helper.assertTrue(MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
@@ -159,7 +159,7 @@ public class ControllerTickGameTest {
     }
 
     public void recipeMachineHooksPublishTextAndRespectRedstone(GameTestHelper helper) {
-        Identifier machineId = MMCR.id("controller_tick");
+        ResourceLocation machineId = MMCR.id("controller_tick");
         helper.assertTrue(MachineRegistry.getMachine(machineId) != null,
                 "GameTest startup installs the machine registry entry");
         helper.assertTrue(MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
@@ -305,7 +305,7 @@ public class ControllerTickGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         insert(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).itemStorage(), 0,
                 new ItemStack(Items.IRON_INGOT));
-        Identifier recipeId = MMCR.id("controller_tick_redstone_pause");
+        ResourceLocation recipeId = MMCR.id("controller_tick_redstone_pause");
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("controller_tick"), 20,
                 List.of(MachineRequirement.fromInput(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))), List.of(),
@@ -334,7 +334,7 @@ public class ControllerTickGameTest {
     }
 
     public void formedTickCommitsPartialOutputAndDataAtomically(GameTestHelper helper) {
-        Identifier machineId = MMCR.id("task7_tick_io");
+        ResourceLocation machineId = MMCR.id("task7_tick_io");
         BlockPos controllerPos = new BlockPos(3, 1, 3);
         BlockPos firstInputPos = controllerPos.west();
         BlockPos secondInputPos = controllerPos.west(2);

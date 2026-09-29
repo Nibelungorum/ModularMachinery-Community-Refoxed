@@ -11,7 +11,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -133,7 +133,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
 
     public List<CapabilityDisplay> displayEntries() { return displayEntries; }
 
-    public Identifier selectedCapabilityId() { return BuiltinCapabilityDefinitions.ITEM_TYPE.id(); }
+    public ResourceLocation selectedCapabilityId() { return BuiltinCapabilityDefinitions.ITEM_TYPE.id(); }
 
     public boolean matches(BlockPos targetPos, String targetKind) {
         return pos.equals(targetPos) && kind.equals(targetKind);

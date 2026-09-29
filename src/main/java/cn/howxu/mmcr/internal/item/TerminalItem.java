@@ -12,7 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -200,10 +200,10 @@ public class TerminalItem extends Item {
         return Component.literal(name.getString() + " @ " + pos.toShortString());
     }
 
-    private static void appendLevels(Map<Identifier, Identifier> selectedLevels, Consumer<Component> tooltip) {
-        for (Map.Entry<Identifier, Identifier> entry : selectedLevels.entrySet()) {
-            Identifier typeId = entry.getKey();
-            Identifier levelId = entry.getValue();
+    private static void appendLevels(Map<ResourceLocation, ResourceLocation> selectedLevels, Consumer<Component> tooltip) {
+        for (Map.Entry<ResourceLocation, ResourceLocation> entry : selectedLevels.entrySet()) {
+            ResourceLocation typeId = entry.getKey();
+            ResourceLocation levelId = entry.getValue();
             MachineLevel levelEntry = MachineLevelRegistry.getLevel(levelId);
             if (levelEntry == null || !levelEntry.typeId().equals(typeId)) continue;
             LevelType type = MachineLevelRegistry.getType(typeId);

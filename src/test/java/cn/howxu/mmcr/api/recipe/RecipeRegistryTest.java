@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.mojang.serialization.MapCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -59,17 +59,17 @@ class RecipeRegistryTest {
         RecipeRegistry.registerStatic(recipe("mmcr:static_reload_recipe", "mmcr:test_machine_name"));
 
         assertThat(RecipeRegistry.effectiveSnapshot()).containsEntry(
-                Identifier.parse("mmcr:static_reload_recipe"),
-                RecipeRegistry.getRecipe(Identifier.parse("mmcr:static_reload_recipe")));
+                ResourceLocation.parse("mmcr:static_reload_recipe"),
+                RecipeRegistry.getRecipe(ResourceLocation.parse("mmcr:static_reload_recipe")));
         assertThat(RecipeRegistry.reloadVersion()).isEqualTo(version);
         assertThat(RecipeRegistry.registryVersion()).isGreaterThan(registryVersion);
     }
 
     @Test
     void machineCatalogResolvesConfiguredRecipePoolAndDefaultsToMachineId() {
-        Identifier machineId = Identifier.parse("mmcr:shared_pool_machine");
-        Identifier recipePoolId = Identifier.parse("mmcr:shared_pool");
-        Identifier defaultMachineId = Identifier.parse("mmcr:self_pool_machine");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:shared_pool_machine");
+        ResourceLocation recipePoolId = ResourceLocation.parse("mmcr:shared_pool");
+        ResourceLocation defaultMachineId = ResourceLocation.parse("mmcr:self_pool_machine");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
         MachineDefinitions.register(MachineRegistration.builder(defaultMachineId).build());
@@ -85,8 +85,8 @@ class RecipeRegistryTest {
 
     @Test
     void catalogForMachineUsesRegisteredPoolAndRejectsUnknownMachineIds() {
-        Identifier machineId = Identifier.parse("mmcr:catalog_api_machine");
-        Identifier recipePoolId = Identifier.parse("mmcr:catalog_api_pool");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:catalog_api_machine");
+        ResourceLocation recipePoolId = ResourceLocation.parse("mmcr:catalog_api_pool");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
         MachineRecipe recipe = recipe("mmcr:catalog_api_recipe", recipePoolId.toString());
@@ -99,11 +99,11 @@ class RecipeRegistryTest {
 
     @Test
     void higherPriorityLayerCannotMoveRecipeToAnotherPool() {
-        Identifier firstMachineId = Identifier.parse("mmcr:pool_boundary_machine_a");
-        Identifier secondMachineId = Identifier.parse("mmcr:pool_boundary_machine_b");
-        Identifier firstPoolId = Identifier.parse("mmcr:pool_boundary_a");
-        Identifier secondPoolId = Identifier.parse("mmcr:pool_boundary_b");
-        Identifier recipeId = Identifier.parse("mmcr:pool_boundary_recipe");
+        ResourceLocation firstMachineId = ResourceLocation.parse("mmcr:pool_boundary_machine_a");
+        ResourceLocation secondMachineId = ResourceLocation.parse("mmcr:pool_boundary_machine_b");
+        ResourceLocation firstPoolId = ResourceLocation.parse("mmcr:pool_boundary_a");
+        ResourceLocation secondPoolId = ResourceLocation.parse("mmcr:pool_boundary_b");
+        ResourceLocation recipeId = ResourceLocation.parse("mmcr:pool_boundary_recipe");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(firstMachineId).recipePoolId(firstPoolId).build());
         MachineDefinitions.register(MachineRegistration.builder(secondMachineId).recipePoolId(secondPoolId).build());
@@ -121,9 +121,9 @@ class RecipeRegistryTest {
 
     @Test
     void dynamicLayerOnlyFillsARecipeGapWithinItsPool() {
-        Identifier machineId = Identifier.parse("mmcr:dynamic_gap_machine");
-        Identifier poolId = Identifier.parse("mmcr:dynamic_gap_pool");
-        Identifier recipeId = Identifier.parse("mmcr:dynamic_gap_recipe");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:dynamic_gap_machine");
+        ResourceLocation poolId = ResourceLocation.parse("mmcr:dynamic_gap_pool");
+        ResourceLocation recipeId = ResourceLocation.parse("mmcr:dynamic_gap_recipe");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(poolId).build());
         MachineRecipe kubeJSRecipe = recipe(recipeId.toString(), poolId.toString(), 1);
@@ -138,10 +138,10 @@ class RecipeRegistryTest {
 
     @Test
     void dynamicReplacementDropsOrphanPoolsWithoutDroppingValidRecipes() {
-        Identifier machineId = Identifier.parse("mmcr:dynamic_pool_machine");
-        Identifier poolId = Identifier.parse("mmcr:dynamic_pool");
-        Identifier validId = Identifier.parse("mmcr:dynamic_valid_recipe");
-        Identifier orphanId = Identifier.parse("mmcr:dynamic_orphan_recipe");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:dynamic_pool_machine");
+        ResourceLocation poolId = ResourceLocation.parse("mmcr:dynamic_pool");
+        ResourceLocation validId = ResourceLocation.parse("mmcr:dynamic_valid_recipe");
+        ResourceLocation orphanId = ResourceLocation.parse("mmcr:dynamic_orphan_recipe");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(poolId).build());
         MachineRecipe valid = recipe(validId.toString(), poolId.toString());
@@ -155,8 +155,8 @@ class RecipeRegistryTest {
 
     @Test
     void dynamicReplacementRejectsMismatchedMapKeyBeforePublishing() {
-        Identifier recipeId = Identifier.parse("mmcr:dynamic_key_recipe");
-        Identifier mismatchedKey = Identifier.parse("mmcr:dynamic_wrong_key");
+        ResourceLocation recipeId = ResourceLocation.parse("mmcr:dynamic_key_recipe");
+        ResourceLocation mismatchedKey = ResourceLocation.parse("mmcr:dynamic_wrong_key");
         MachineRecipe recipe = recipe(recipeId.toString(), "mmcr:test_machine_name");
 
         assertThatThrownBy(() -> RecipeRegistry.replaceDynamic(Map.of(mismatchedKey, recipe)))
@@ -168,7 +168,7 @@ class RecipeRegistryTest {
 
     @Test
     void dataPackRecipeOverridesStaticRecipeAndWarns() {
-        var id = Identifier.parse("mmcr:layered_recipe");
+        var id = ResourceLocation.parse("mmcr:layered_recipe");
         var staticRecipe = recipe("mmcr:layered_recipe", "mmcr:test_machine_name");
         var dataPackRecipe = recipe("mmcr:layered_recipe", "mmcr:test_machine_name");
         RecipeRegistry.registerStatic(staticRecipe);
@@ -185,13 +185,13 @@ class RecipeRegistryTest {
 
     @Test
     void dataPackRecipeCannotMoveAnExistingRecipeToAnotherPool() {
-        Identifier recipeId = Identifier.parse("mmcr:cross_pool_datapack_recipe");
-        Identifier firstPoolId = Identifier.parse("mmcr:cross_pool_datapack_a");
-        Identifier secondPoolId = Identifier.parse("mmcr:cross_pool_datapack_b");
+        ResourceLocation recipeId = ResourceLocation.parse("mmcr:cross_pool_datapack_recipe");
+        ResourceLocation firstPoolId = ResourceLocation.parse("mmcr:cross_pool_datapack_a");
+        ResourceLocation secondPoolId = ResourceLocation.parse("mmcr:cross_pool_datapack_b");
         MachineDefinitions.clearForTesting();
-        MachineDefinitions.register(MachineRegistration.builder(Identifier.parse("mmcr:cross_pool_datapack_machine_a"))
+        MachineDefinitions.register(MachineRegistration.builder(ResourceLocation.parse("mmcr:cross_pool_datapack_machine_a"))
                 .recipePoolId(firstPoolId).build());
-        MachineDefinitions.register(MachineRegistration.builder(Identifier.parse("mmcr:cross_pool_datapack_machine_b"))
+        MachineDefinitions.register(MachineRegistration.builder(ResourceLocation.parse("mmcr:cross_pool_datapack_machine_b"))
                 .recipePoolId(secondPoolId).build());
         MachineRecipe staticRecipe = recipe(recipeId.toString(), firstPoolId.toString());
         MachineRecipe dataPackRecipe = recipe(recipeId.toString(), secondPoolId.toString());
@@ -206,21 +206,21 @@ class RecipeRegistryTest {
 
     @Test
     void dataPackKeyIsAuthoritativeWhenRecipeValueCarriesGeneratedId() {
-        Identifier holderId = Identifier.parse("mmcr:explicit_datapack_recipe");
+        ResourceLocation holderId = ResourceLocation.parse("mmcr:explicit_datapack_recipe");
         MachineRecipe generated = recipe("mmcr:generated_recipe", "mmcr:test_machine_name");
 
         RecipeRegistry.replaceDataPack(Map.of(holderId, generated));
 
         assertThat(RecipeRegistry.getRecipe(holderId).id()).isEqualTo(holderId);
-        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:generated_recipe"))).isNull();
+        assertThat(RecipeRegistry.getRecipe(ResourceLocation.parse("mmcr:generated_recipe"))).isNull();
         assertThat(RecipeRegistry.recipesForPool(generated.recipePoolId())).extracting(MachineRecipe::id)
                 .containsExactly(holderId);
     }
 
     @Test
     void replacingDataPackSnapshotRemovesDeletedRecipes() {
-        var oldId = Identifier.parse("mmcr:old_datapack_recipe");
-        var newId = Identifier.parse("mmcr:new_datapack_recipe");
+        var oldId = ResourceLocation.parse("mmcr:old_datapack_recipe");
+        var newId = ResourceLocation.parse("mmcr:new_datapack_recipe");
         RecipeRegistry.replaceDataPack(Map.of(oldId, recipe(oldId.toString(), "mmcr:test_machine_name")));
 
         RecipeRegistry.replaceDataPack(Map.of(newId, recipe(newId.toString(), "mmcr:test_machine_name")));
@@ -253,7 +253,7 @@ class RecipeRegistryTest {
 
     @Test
     void replacingRecipeContentPublishesNewMachineCatalogVersion() {
-        Identifier machineA = Identifier.parse("mmcr:test_machine_name");
+        ResourceLocation machineA = ResourceLocation.parse("mmcr:test_machine_name");
         MachineRecipe first = recipe("mmcr:catalog_recipe_a", machineA.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(first.id(), first));
         long firstVersion = RecipeRegistry.catalogForPool(machineA).version();
@@ -268,8 +268,8 @@ class RecipeRegistryTest {
 
     @Test
     void changingOneMachineKeepsUnchangedMachineCatalogVersion() {
-        Identifier machineA = Identifier.parse("mmcr:test_machine_name");
-        Identifier machineB = Identifier.parse("mmcr:controller_tick");
+        ResourceLocation machineA = ResourceLocation.parse("mmcr:test_machine_name");
+        ResourceLocation machineB = ResourceLocation.parse("mmcr:controller_tick");
         MachineRecipe firstA = recipe("mmcr:catalog_tick_recipe_a", machineA.toString(), 20);
         MachineRecipe firstB = recipe("mmcr:catalog_tick_recipe_b", machineB.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(firstA.id(), firstA, firstB.id(), firstB));
@@ -285,8 +285,8 @@ class RecipeRegistryTest {
 
     @Test
     void changingOnePoolReusesTheUnchangedPoolCatalogAndCandidateIndex() {
-        Identifier poolA = Identifier.parse("mmcr:test_machine_name");
-        Identifier poolB = Identifier.parse("mmcr:controller_tick");
+        ResourceLocation poolA = ResourceLocation.parse("mmcr:test_machine_name");
+        ResourceLocation poolB = ResourceLocation.parse("mmcr:controller_tick");
         MachineRecipe firstA = recipe("mmcr:catalog_reuse_recipe_a", poolA.toString(), 20);
         MachineRecipe firstB = recipe("mmcr:catalog_reuse_recipe_b", poolB.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(firstA.id(), firstA, firstB.id(), firstB));
@@ -302,7 +302,7 @@ class RecipeRegistryTest {
 
     @Test
     void removingLastRecipePublishesVersionedEmptyMachineCatalog() {
-        Identifier machine = Identifier.parse("mmcr:test_machine_name");
+        ResourceLocation machine = ResourceLocation.parse("mmcr:test_machine_name");
         MachineRecipe recipe = recipe("mmcr:catalog_empty_recipe", machine.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
         long populatedVersion = RecipeRegistry.catalogForPool(machine).version();
@@ -318,7 +318,7 @@ class RecipeRegistryTest {
 
     @Test
     void clearAllPublishesNewVersionedEmptyCatalogsForKnownMachines() {
-        Identifier machine = Identifier.parse("mmcr:test_machine_name");
+        ResourceLocation machine = ResourceLocation.parse("mmcr:test_machine_name");
         MachineRecipe recipe = recipe("mmcr:catalog_clear_recipe", machine.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
         long populatedVersion = RecipeRegistry.catalogForPool(machine).version();
@@ -330,12 +330,12 @@ class RecipeRegistryTest {
         assertThat(emptyCatalog.recipes()).isEmpty();
         assertThat(emptyCatalog.orderedRecipes()).isEmpty();
         assertThat(emptyCatalog.inputIndex().allCandidates()).isEmpty();
-        assertThat(RecipeRegistry.catalogForPool(Identifier.parse("mmcr:catalog_never_seen")).recipes()).isEmpty();
+        assertThat(RecipeRegistry.catalogForPool(ResourceLocation.parse("mmcr:catalog_never_seen")).recipes()).isEmpty();
     }
 
     @Test
     void dynamicRecipeCannotConflictWithStaticRecipe() {
-        var id = Identifier.parse("mmcr:dynamic_static_conflict");
+        var id = ResourceLocation.parse("mmcr:dynamic_static_conflict");
         RecipeRegistry.registerStatic(recipe(id.toString(), "mmcr:test_machine_name"));
 
         assertThatThrownBy(() -> RecipeRegistry.replaceDynamic(Map.of(id, recipe(id.toString(), "mmcr:test_machine_name"))))
@@ -346,7 +346,7 @@ class RecipeRegistryTest {
 
     @Test
     void dynamicRecipeCannotConflictWithDataPackRecipe() {
-        var id = Identifier.parse("mmcr:dynamic_datapack_conflict");
+        var id = ResourceLocation.parse("mmcr:dynamic_datapack_conflict");
         RecipeRegistry.replaceDataPack(Map.of(id, recipe(id.toString(), "mmcr:test_machine_name")));
 
         assertThatThrownBy(() -> RecipeRegistry.replaceDynamic(Map.of(id, recipe(id.toString(), "mmcr:test_machine_name"))))
@@ -357,7 +357,7 @@ class RecipeRegistryTest {
 
     @Test
     void staticAndDataPackSnapshotsAreImmutablePublishedLayers() {
-        var id = Identifier.parse("mmcr:immutable_layers");
+        var id = ResourceLocation.parse("mmcr:immutable_layers");
         var recipe = recipe(id.toString(), "mmcr:test_machine_name");
         RecipeRegistry.registerStatic(recipe);
         RecipeRegistry.replaceDataPack(Map.of(id, recipe("mmcr:immutable_layers", "mmcr:test_machine_name")));
@@ -369,7 +369,7 @@ class RecipeRegistryTest {
 
     @Test
     void dataPackOverridePublishesObservableSourceWarning() {
-        var id = Identifier.parse("mmcr:warning_recipe");
+        var id = ResourceLocation.parse("mmcr:warning_recipe");
         RecipeRegistry.registerStatic(recipe(id.toString(), "mmcr:test_machine_name"));
 
         RecipeRegistry.replaceDataPack(Map.of(id, recipe(id.toString(), "mmcr:test_machine_name")));
@@ -382,11 +382,11 @@ class RecipeRegistryTest {
     void dataPackAcceptsRegisteredOutputWithoutExecutionRequirement() {
         try (var scope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(INVALID_OUTPUT_TYPE);
-            Identifier previousId = Identifier.parse("mmcr:valid_output_recipe");
+            ResourceLocation previousId = ResourceLocation.parse("mmcr:valid_output_recipe");
             RecipeRegistry.replaceDataPack(Map.of(previousId, recipe(previousId.toString(), "mmcr:test_machine_name")));
-            Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
-            Identifier invalidId = Identifier.parse("mmcr:invalid_output_recipe");
-            MachineRecipe invalid = MachineRecipe.fromCanonical(invalidId, Identifier.parse("mmcr:test_machine_name"),
+            Map<ResourceLocation, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+            ResourceLocation invalidId = ResourceLocation.parse("mmcr:invalid_output_recipe");
+            MachineRecipe invalid = MachineRecipe.fromCanonical(invalidId, ResourceLocation.parse("mmcr:test_machine_name"),
                     20, List.of(), List.of(new InvalidOutput(7, 1F)), List.of(), 0, 1, false, false,
                     false, Set.of());
 
@@ -399,7 +399,7 @@ class RecipeRegistryTest {
 
     @Test
     void recipe_layer_publish_discards_pooled_planning_contexts() {
-        Identifier recipeId = Identifier.parse("mmcr:pool_reload_recipe");
+        ResourceLocation recipeId = ResourceLocation.parse("mmcr:pool_reload_recipe");
         CraftingContextPool pool = CraftingContextPool.global();
         CraftingContext context = pool.borrow(recipeId, new CapabilitySnapshot(List.of()), List.of());
         pool.returnContext(recipeId, context);
@@ -416,10 +416,10 @@ class RecipeRegistryTest {
     }
 
     private static MachineRecipe recipe(String id, String machineId, int tickTime) {
-        return RecipeTestSupport.create(Identifier.parse(id), Identifier.parse(machineId), tickTime, List.of(), List.of());
+        return RecipeTestSupport.create(ResourceLocation.parse(id), ResourceLocation.parse(machineId), tickTime, List.of(), List.of());
     }
 
-    private static final Identifier INVALID_OUTPUT_ID = Identifier.parse("mmcr_test:invalid_output");
+    private static final ResourceLocation INVALID_OUTPUT_ID = ResourceLocation.parse("mmcr_test:invalid_output");
     private static final OutputType<InvalidOutput> INVALID_OUTPUT_TYPE = new OutputType.Definition<>(
             INVALID_OUTPUT_ID, MapCodec.unit(() -> new InvalidOutput(7, 1F)),
             (output, chance) -> new InvalidOutput(output.value(), chance),

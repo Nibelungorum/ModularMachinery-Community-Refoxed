@@ -20,7 +20,7 @@ import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,10 +31,10 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class ContentRegistrationCoordinator {
-    private static final Map<Identifier, MachineDefinition> MACHINES = new LinkedHashMap<>();
-    private static final Map<Identifier, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition> STRUCTURES =
+    private static final Map<ResourceLocation, MachineDefinition> MACHINES = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition> STRUCTURES =
             new LinkedHashMap<>();
-    private static final Map<Identifier, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
     private static MMCRMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
     private static State state = State.BEFORE_BEGIN;
     private static int testCommitCount;
@@ -98,7 +98,7 @@ public final class ContentRegistrationCoordinator {
 
     /**
      * Validates and publishes machines, structures, levels, and modifiers. After this call,
-     * {@link MachineDefinitions#getRegistration(Identifier)} and
+     * {@link MachineDefinitions#getRegistration(ResourceLocation)} and
      * {@link MachineLevelRegistry} are populated for downstream consumers that run between
      * structure collection and recipe collection (e.g. KubeJS server script reload, datapack
      * recipe parsing). Recipes are not yet committed.
@@ -106,8 +106,8 @@ public final class ContentRegistrationCoordinator {
     public static synchronized void commitStructures() {
         requireCollecting();
 
-        Map<Identifier, MachineRegistration> registrations = validateAndConvertMachines();
-        Map<Identifier, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
+        Map<ResourceLocation, MachineRegistration> registrations = validateAndConvertMachines();
+        Map<ResourceLocation, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
         ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.modifierItems());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
@@ -125,7 +125,7 @@ public final class ContentRegistrationCoordinator {
     public static synchronized void commitRecipes() {
         requireCollecting();
 
-        Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
+        Map<ResourceLocation, MachineRecipe> recipes = validateAndConvertRecipes();
         validateRecipeDuplicates(recipes);
 
         // Prepare and publish recipes before any other registry is changed. The batch validates the
@@ -144,8 +144,8 @@ public final class ContentRegistrationCoordinator {
     /** Test-only declaration snapshot for comparing complete bootstrap paths.
      * @author howxu <dev@howxu.cn>
      */
-    public record StartupSnapshotForTesting(Set<Identifier> machines, Set<Identifier> structures,
-            Set<Identifier> recipes) {
+    public record StartupSnapshotForTesting(Set<ResourceLocation> machines, Set<ResourceLocation> structures,
+            Set<ResourceLocation> recipes) {
     }
 
     public static synchronized StartupSnapshotForTesting startupSnapshotForTesting() {
@@ -176,21 +176,21 @@ public final class ContentRegistrationCoordinator {
         RecipeRegistry.clearForTesting();
     }
 
-    private static Map<Identifier, MachineRegistration> validateAndConvertMachines() {
-        Map<Identifier, MachineRegistration> registrations = new LinkedHashMap<>();
+    private static Map<ResourceLocation, MachineRegistration> validateAndConvertMachines() {
+        Map<ResourceLocation, MachineRegistration> registrations = new LinkedHashMap<>();
         MACHINES.forEach((id, definition) -> registrations.put(id,
                 MachineDefinitionConverter.toStartupRegistration(definition, STRUCTURES.get(id))));
-        Map<Identifier, MachineRegistration> all = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRegistration> all = new LinkedHashMap<>();
         MachineDefinitions.allRegistrations().forEach(registration -> all.put(registration.id(), registration));
         all.putAll(registrations);
         MachineRoleValidator.validate(all.values(), all::get);
         return registrations;
     }
 
-    private static Map<Identifier, MachineStructureDefinition> validateAndConvertStructures(
-            Map<Identifier, MachineRegistration> registrations) {
+    private static Map<ResourceLocation, MachineStructureDefinition> validateAndConvertStructures(
+            Map<ResourceLocation, MachineRegistration> registrations) {
         MMCRMachineStructuresEvent.Snapshot snapshot = STRUCTURE_SNAPSHOT;
-        Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineStructureDefinition> structures = new LinkedHashMap<>();
         STRUCTURES.forEach((id, structure) -> {
             if (!registrations.containsKey(id) && MachineDefinitions.getRegistration(id) == null) {
                 throw new ApiRegistrationException("Structure " + id + " refers to unknown machine " + id);
@@ -204,17 +204,17 @@ public final class ContentRegistrationCoordinator {
         return structures;
     }
 
-    private static Map<Identifier, MachineRecipe> validateAndConvertRecipes() {
+    private static Map<ResourceLocation, MachineRecipe> validateAndConvertRecipes() {
         MMCRMachineStructuresEvent.Snapshot snapshot = STRUCTURE_SNAPSHOT;
-        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         RECIPES.forEach((id, definition) -> {
             recipes.put(id, MachineRecipeConverter.toRecipe(definition, snapshot));
         });
         return recipes;
     }
 
-    private static void validateDuplicates(Map<Identifier, MachineRegistration> registrations,
-            Map<Identifier, MachineStructureDefinition> structures, Map<Identifier, MachineRecipe> recipes) {
+    private static void validateDuplicates(Map<ResourceLocation, MachineRegistration> registrations,
+            Map<ResourceLocation, MachineStructureDefinition> structures, Map<ResourceLocation, MachineRecipe> recipes) {
         structures.keySet().forEach(id -> {
             if (!id.equals(structures.get(id).machineId())) {
                 throw new ApiRegistrationException("Structure key does not match machine id: " + id);
@@ -225,7 +225,7 @@ public final class ContentRegistrationCoordinator {
         });
     }
 
-    private static void validateRecipeDuplicates(Map<Identifier, MachineRecipe> recipes) {
+    private static void validateRecipeDuplicates(Map<ResourceLocation, MachineRecipe> recipes) {
         recipes.keySet().forEach(id -> {
             if (RecipeRegistry.containsStatic(id)) throw duplicate(id, "recipe");
         });
@@ -235,11 +235,11 @@ public final class ContentRegistrationCoordinator {
         return new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
     }
 
-    private static <V> void putUnique(Map<Identifier, V> target, Identifier id, V value, String kind) {
+    private static <V> void putUnique(Map<ResourceLocation, V> target, ResourceLocation id, V value, String kind) {
         if (target.putIfAbsent(id, value) != null) throw duplicate(id, kind);
     }
 
-    private static ApiRegistrationException duplicate(Identifier id, String kind) {
+    private static ApiRegistrationException duplicate(ResourceLocation id, String kind) {
         return new ApiRegistrationException("Duplicate " + kind + " ID " + id + " during startup collection");
     }
 

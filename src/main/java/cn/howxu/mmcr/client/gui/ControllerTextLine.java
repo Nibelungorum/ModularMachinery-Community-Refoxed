@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -63,7 +63,7 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
         }
     }
 
-    public record ChemicalIcon(Identifier chemicalId, long amount) implements Icon {
+    public record ChemicalIcon(ResourceLocation chemicalId, long amount) implements Icon {
         public ChemicalIcon {
             if (chemicalId == null || amount <= 0L) throw new IllegalArgumentException("Invalid chemical icon");
         }

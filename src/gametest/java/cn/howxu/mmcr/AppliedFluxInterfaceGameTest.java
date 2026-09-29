@@ -18,7 +18,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -35,8 +35,8 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public class AppliedFluxInterfaceGameTest {
 
-    private static final Identifier INPUT_PORT_ID = MMCR.id("appflux_me_flux_input_interface");
-    private static final Identifier OUTPUT_PORT_ID = MMCR.id("appflux_me_flux_output_interface");
+    private static final ResourceLocation INPUT_PORT_ID = MMCR.id("appflux_me_flux_input_interface");
+    private static final ResourceLocation OUTPUT_PORT_ID = MMCR.id("appflux_me_flux_output_interface");
 
     public void portBlocksResolveToFluxBlockEntities(GameTestHelper helper) {
         assertBridgesAvailable();

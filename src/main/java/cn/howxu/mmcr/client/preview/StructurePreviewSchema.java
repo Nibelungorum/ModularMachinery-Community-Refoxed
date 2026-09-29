@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.ItemStack;
 
@@ -21,9 +21,9 @@ import java.util.stream.Collectors;
  * @author howxu <dev@howxu.cn>
  */
 public final class StructurePreviewSchema {
-    private final Identifier machineId;
+    private final ResourceLocation machineId;
     private final Map<BlockPos, BlockState> states;
-    private final Map<BlockPos, Identifier> levelSlots;
+    private final Map<BlockPos, ResourceLocation> levelSlots;
     private final Map<BlockPos, List<Candidate>> candidates;
     private final CandidateResolver candidateResolver;
     private final BlockPos min;
@@ -31,25 +31,25 @@ public final class StructurePreviewSchema {
     private final List<Float> center;
     private final List<Integer> layers;
 
-    public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
-            Map<BlockPos, Identifier> levelSlots) {
+    public StructurePreviewSchema(ResourceLocation machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, ResourceLocation> levelSlots) {
         this(machineId, states, levelSlots, Map.of());
     }
 
-    public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
-            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<ItemStack>> candidates) {
+    public StructurePreviewSchema(ResourceLocation machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, ResourceLocation> levelSlots, Map<BlockPos, List<ItemStack>> candidates) {
         this(machineId, states, levelSlots, candidates.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey, entry -> entry.getValue().stream().map(stack -> new Candidate(stack, false)).toList(),
                 (left, right) -> left, LinkedHashMap::new)), true);
     }
 
-    public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
-            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates, boolean markedCandidates) {
+    public StructurePreviewSchema(ResourceLocation machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, ResourceLocation> levelSlots, Map<BlockPos, List<Candidate>> candidates, boolean markedCandidates) {
         this(machineId, states, levelSlots, candidates, null);
     }
 
-    private StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
-            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates,
+    private StructurePreviewSchema(ResourceLocation machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, ResourceLocation> levelSlots, Map<BlockPos, List<Candidate>> candidates,
             CandidateResolver candidateResolver) {
         this.machineId = Objects.requireNonNull(machineId, "machineId");
         this.states = copyPositions(states);
@@ -91,7 +91,7 @@ public final class StructurePreviewSchema {
         layers = List.copyOf(yLayers);
     }
 
-    public Identifier machineId() {
+    public ResourceLocation machineId() {
         return machineId;
     }
 
@@ -103,11 +103,11 @@ public final class StructurePreviewSchema {
         return states;
     }
 
-    public Identifier levelSlotAt(BlockPos position) {
+    public ResourceLocation levelSlotAt(BlockPos position) {
         return levelSlots.get(position);
     }
 
-    public Map<BlockPos, Identifier> levelSlots() {
+    public Map<BlockPos, ResourceLocation> levelSlots() {
         return levelSlots;
     }
 
@@ -134,8 +134,8 @@ public final class StructurePreviewSchema {
         return copyCandidates(candidates);
     }
 
-    static StructurePreviewSchema withCandidateResolver(Identifier machineId, Map<BlockPos, BlockState> states,
-            Map<BlockPos, Identifier> levelSlots, CandidateResolver candidateResolver) {
+    static StructurePreviewSchema withCandidateResolver(ResourceLocation machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, ResourceLocation> levelSlots, CandidateResolver candidateResolver) {
         return new StructurePreviewSchema(machineId, states, levelSlots, Map.of(),
                 Objects.requireNonNull(candidateResolver, "candidateResolver"));
     }

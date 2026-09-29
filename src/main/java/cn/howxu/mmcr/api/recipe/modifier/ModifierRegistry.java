@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.recipe.modifier;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
@@ -17,9 +17,9 @@ import java.util.Objects;
 public final class ModifierRegistry {
 
     private static final Map<String, AbstractModifierReplacement> REPLACEMENTS = new HashMap<>();
-    private static Map<Identifier, ModifierDefinition> DEFINITIONS = Map.of();
-    private static Map<ModifierItemKey, Identifier> ITEM_BINDINGS = Map.of();
-    private static Map<Identifier, List<ItemStack>> ITEM_BINDING_SNAPSHOT = Map.of();
+    private static Map<ResourceLocation, ModifierDefinition> DEFINITIONS = Map.of();
+    private static Map<ModifierItemKey, ResourceLocation> ITEM_BINDINGS = Map.of();
+    private static Map<ResourceLocation, List<ItemStack>> ITEM_BINDING_SNAPSHOT = Map.of();
 
     private ModifierRegistry() {
     }
@@ -44,16 +44,16 @@ public final class ModifierRegistry {
         ITEM_BINDING_SNAPSHOT = Map.of();
     }
 
-    public static void installSnapshot(Map<Identifier, ModifierDefinition> definitions) {
+    public static void installSnapshot(Map<ResourceLocation, ModifierDefinition> definitions) {
         installSnapshot(definitions, Map.of());
     }
 
-    public static void installSnapshot(Map<Identifier, ModifierDefinition> definitions,
-            Map<Identifier, List<ItemStack>> itemBindings) {
-        Map<Identifier, ModifierDefinition> nextDefinitions = Map.copyOf(
+    public static void installSnapshot(Map<ResourceLocation, ModifierDefinition> definitions,
+            Map<ResourceLocation, List<ItemStack>> itemBindings) {
+        Map<ResourceLocation, ModifierDefinition> nextDefinitions = Map.copyOf(
                 definitions == null ? Map.of() : definitions);
-        Map<ModifierItemKey, Identifier> nextBindings = new LinkedHashMap<>();
-        Map<Identifier, List<ItemStack>> nextSnapshot = new LinkedHashMap<>();
+        Map<ModifierItemKey, ResourceLocation> nextBindings = new LinkedHashMap<>();
+        Map<ResourceLocation, List<ItemStack>> nextSnapshot = new LinkedHashMap<>();
         if (itemBindings != null) {
             itemBindings.forEach((modifierId, stacks) -> {
                 if (!nextDefinitions.containsKey(modifierId)) {
@@ -77,26 +77,26 @@ public final class ModifierRegistry {
         ITEM_BINDING_SNAPSHOT = immutableItemBindings(nextSnapshot);
     }
 
-    public static ModifierDefinition get(Identifier id) {
+    public static ModifierDefinition get(ResourceLocation id) {
         return DEFINITIONS.get(id);
     }
 
-    public static Map<Identifier, ModifierDefinition> definitions() {
+    public static Map<ResourceLocation, ModifierDefinition> definitions() {
         return DEFINITIONS;
     }
 
-    public static @Nullable Identifier modifierFor(ItemStack stack) {
+    public static @Nullable ResourceLocation modifierFor(ItemStack stack) {
         if (stack == null) return null;
         return ITEM_BINDINGS.get(ModifierItemKey.of(stack));
     }
 
-    public static Map<Identifier, List<ItemStack>> modifierItems() {
+    public static Map<ResourceLocation, List<ItemStack>> modifierItems() {
         return immutableItemBindings(ITEM_BINDING_SNAPSHOT);
     }
 
-    private static Map<Identifier, List<ItemStack>> immutableItemBindings(
-            Map<Identifier, List<ItemStack>> source) {
-        Map<Identifier, List<ItemStack>> copy = new LinkedHashMap<>();
+    private static Map<ResourceLocation, List<ItemStack>> immutableItemBindings(
+            Map<ResourceLocation, List<ItemStack>> source) {
+        Map<ResourceLocation, List<ItemStack>> copy = new LinkedHashMap<>();
         source.forEach((modifierId, stacks) -> copy.put(modifierId,
                 List.copyOf(stacks.stream().map(ItemStack::copy).toList())));
         return Collections.unmodifiableMap(copy);

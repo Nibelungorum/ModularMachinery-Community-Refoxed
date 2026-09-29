@@ -36,7 +36,7 @@ import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -176,7 +176,7 @@ public final class MachineDefinitionConverter {
 
     public static MachineStructureDefinition toStructureDefinition(
             cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure,
-            Map<Identifier, ModifierDefinition> ignoredModifiers) {
+            Map<ResourceLocation, ModifierDefinition> ignoredModifiers) {
         return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
                 .map(stage -> toDeclaration(stage, structure.stateSensitive())).toList());
     }
@@ -209,13 +209,13 @@ public final class MachineDefinitionConverter {
                 predicate.alternatives().stream().map(MachineDefinitionConverter::toBlockPredicate).toList());
     }
 
-    private static MachineControllerSpec toControllerSpec(Identifier machineId, ControllerSpec spec) {
+    private static MachineControllerSpec toControllerSpec(ResourceLocation machineId, ControllerSpec spec) {
         MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
-        Identifier id = spec.id() != null ? spec.id() : defaults.id();
-        Identifier front = spec.frontTexture() != null ? spec.frontTexture() : defaults.frontTexture();
-        Identifier side = spec.sideTexture() != null ? spec.sideTexture() : defaults.sideTexture();
-        Identifier top = spec.topTexture() != null ? spec.topTexture() : defaults.topTexture();
-        Identifier bottom = spec.bottomTexture() != null ? spec.bottomTexture() : defaults.bottomTexture();
+        ResourceLocation id = spec.id() != null ? spec.id() : defaults.id();
+        ResourceLocation front = spec.frontTexture() != null ? spec.frontTexture() : defaults.frontTexture();
+        ResourceLocation side = spec.sideTexture() != null ? spec.sideTexture() : defaults.sideTexture();
+        ResourceLocation top = spec.topTexture() != null ? spec.topTexture() : defaults.topTexture();
+        ResourceLocation bottom = spec.bottomTexture() != null ? spec.bottomTexture() : defaults.bottomTexture();
         return new MachineControllerSpec(id, front, side, top, bottom, spec.allowVerticalFacing(),
                 spec.fullyRotationallySymmetric(), spec.requireVerticalFacing(), spec.tooltip());
     }
@@ -273,14 +273,14 @@ public final class MachineDefinitionConverter {
         return MachineRole.valueOf(role.name());
     }
 
-    private static Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> toInternalRequestFailures(
-            Map<Identifier, cn.howxu.mmcr.api.publicapi.network.RequestFailed> failures) {
+    private static Map<ResourceLocation, cn.howxu.mmcr.api.network.RequestFailed> toInternalRequestFailures(
+            Map<ResourceLocation, cn.howxu.mmcr.api.publicapi.network.RequestFailed> failures) {
         return failures.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
                 entry -> toInternalRequestFailed(entry.getValue()), (first, ignored) -> first, LinkedHashMap::new));
     }
 
-    public static Map<Identifier, cn.howxu.mmcr.api.publicapi.network.RequestFailed> fromInternalRequestFailures(
-            Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> failures) {
+    public static Map<ResourceLocation, cn.howxu.mmcr.api.publicapi.network.RequestFailed> fromInternalRequestFailures(
+            Map<ResourceLocation, cn.howxu.mmcr.api.network.RequestFailed> failures) {
         return failures.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
                 entry -> (body, request, senderStorage, reason) -> entry.getValue().fail(
                         (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue(),

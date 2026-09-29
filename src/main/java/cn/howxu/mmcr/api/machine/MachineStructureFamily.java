@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,7 +39,7 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
         List<DynamicPatternSpec> dynamicPatterns = List.of();
         MachineStructureRequirements requirements = MachineStructureRequirements.EMPTY;
         Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements = Map.of();
-        Map<BlockPos, Identifier> levelSlots = Map.of();
+        Map<BlockPos, ResourceLocation> levelSlots = Map.of();
 
         for (int index = 0; index < declarations.size(); index++) {
             int stageNumber = index + 1;

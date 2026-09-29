@@ -17,7 +17,7 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NumericTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -263,16 +263,16 @@ public final class ActiveMachineRecipe {
         return load(input, null);
     }
 
-    public static LoadResult loadForPool(ValueInput input, Identifier recipePoolId) {
+    public static LoadResult loadForPool(ValueInput input, ResourceLocation recipePoolId) {
         return load(input, Objects.requireNonNull(recipePoolId, "recipePoolId"));
     }
 
-    private static LoadResult load(ValueInput input, @Nullable Identifier recipePoolId) {
+    private static LoadResult load(ValueInput input, @Nullable ResourceLocation recipePoolId) {
         HolderLookup.Provider registries = input.lookup();
         String recipeName = input.getStringOr("recipeName", "");
-        Identifier recipeId;
+        ResourceLocation recipeId;
         try {
-            recipeId = recipeName.isEmpty() ? null : Identifier.parse(recipeName);
+            recipeId = recipeName.isEmpty() ? null : ResourceLocation.parse(recipeName);
         } catch (IllegalArgumentException exception) {
             return new LoadResult(null);
         }

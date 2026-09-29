@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collections;
 import java.util.List;
@@ -191,7 +191,7 @@ public final class PreparedRecipe {
         List<MachineOutput> canonicalOutputs = new ArrayList<>();
         outputs.forEach(output -> canonicalOutputs.add(new MachineOutput.ItemOutput(output, 1F)));
         fluidOutputs.forEach(output -> canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F)));
-        return MachineRecipe.fromCanonical(Identifier.parse(registryName), Identifier.parse(recipePoolId), tickTime,
+        return MachineRecipe.fromCanonical(ResourceLocation.parse(registryName), ResourceLocation.parse(recipePoolId), tickTime,
                 requirements, canonicalOutputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
                 parallelized, allowPartialOutputs, Set.of());
     }

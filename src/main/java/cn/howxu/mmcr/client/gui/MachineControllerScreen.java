@@ -11,7 +11,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.text.NumberFormat;
@@ -27,7 +27,7 @@ import java.util.Optional;
 public final class MachineControllerScreen extends AbstractScrollableTextScreen<MachineControllerMenu> {
     private static final int IMAGE_WIDTH = 176;
     private static final int IMAGE_HEIGHT = 213;
-    private static final Identifier BACKGROUND = MMCR.id("textures/gui/guicontroller_large.png");
+    private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/guicontroller_large.png");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
     static final int STATUS_LABEL_COLOR = ControllerTextLine.DEFAULT_COLOR;
     static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
@@ -66,7 +66,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     private void updateRecipePoolButton() {
-        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        List<ResourceLocation> recipePoolIds = menu.recipePoolIds();
         if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
@@ -133,7 +133,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         boolean tickMachine = menu.isTickMachine();
         List<ControllerTextLine> lines = new ArrayList<>();
         lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
-        Identifier recipePoolId = displayedRecipePoolId(menu.currentRecipePoolId(), menu.recipePoolIds());
+        ResourceLocation recipePoolId = displayedRecipePoolId(menu.currentRecipePoolId(), menu.recipePoolIds());
         if (recipePoolId != null) {
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
                     RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
@@ -142,7 +142,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
             lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
         }
         for (String levelId : menu.foundLevelIds()) {
-            MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+            MachineLevel level = MachineLevelRegistry.getLevel(ResourceLocation.parse(levelId));
             if (level == null) continue;
             lines.add(new ControllerTextLine(levelLine(level), STATUS_LABEL_COLOR));
         }
@@ -175,7 +175,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return lines;
     }
 
-    static Identifier displayedRecipePoolId(Identifier current, List<Identifier> supported) {
+    static ResourceLocation displayedRecipePoolId(ResourceLocation current, List<ResourceLocation> supported) {
         return current != null ? current : supported.isEmpty() ? null : supported.getFirst();
     }
 
@@ -212,14 +212,14 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return Math.clamp((int) ((long) tick * 100 / totalTick), 0, 100);
     }
 
-    static List<ControllerTextLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<Identifier> connectedHostId) {
+    static List<ControllerTextLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<ResourceLocation> connectedHostId) {
         if (hostController) return List.of(new ControllerTextLine(Component.translatable("gui.mmcr.controller.installed_modules", Component.literal(NUMBER_FORMAT.format(installedModuleCount))), STATUS_LABEL_COLOR));
         if (!moduleController) return List.of();
         Component host = connectedHostId.isEmpty() ? Component.translatable("gui.mmcr.controller.module_unconnected") : Component.translatable("gui.mmcr.controller.module_connected", hostName(connectedHostId.get()));
         return List.of(new ControllerTextLine(host, connectedHostId.isPresent() ? STATUS_LABEL_COLOR : UNFORMED_STATUS_COLOR));
     }
 
-    private static Component hostName(Identifier id) {
+    private static Component hostName(ResourceLocation id) {
         var machine = MachineRegistry.getMachine(id);
         return machine == null ? Component.literal(id.toString()) : machine.displayName();
     }

@@ -20,7 +20,7 @@ import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -173,7 +173,7 @@ class MachineRecipeTest {
                 .findFirst().orElseThrow();
         ItemStack stack = outputRequirement.stack(componentJsonOps());
         var enchantment = stack.get(DataComponents.ENCHANTMENTS).keySet().iterator().next();
-        assertThat(enchantment.unwrapKey().orElseThrow().identifier()).isEqualTo(Identifier.parse("minecraft:sharpness"));
+        assertThat(enchantment.unwrapKey().orElseThrow().identifier()).isEqualTo(ResourceLocation.parse("minecraft:sharpness"));
     }
 
     @Test
@@ -200,7 +200,7 @@ class MachineRecipeTest {
         assertThat(requirement.components().matches(actual)).isTrue();
         assertThat(actual.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(2);
         assertThat(actual.get(DataComponents.ENCHANTMENTS).keySet().iterator().next().unwrapKey().orElseThrow().identifier())
-                .isEqualTo(Identifier.parse("minecraft:sharpness"));
+                .isEqualTo(ResourceLocation.parse("minecraft:sharpness"));
         assertThat(actual.get(DataComponents.REPAIR_COST)).isEqualTo(1);
     }
 
@@ -230,15 +230,15 @@ class MachineRecipeTest {
 
     @Test
     void codec_roundtrips_level_requirements() {
-        var coilType = Identifier.parse("test:coil");
-        var kanthal = Identifier.parse("test:kanthal");
+        var coilType = ResourceLocation.parse("test:coil");
+        var kanthal = ResourceLocation.parse("test:kanthal");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(kanthal, coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         var recipe = RecipeTestSupport.create(
-                Identifier.parse("test:levelled"),
-                Identifier.parse("test:machine"),
+                ResourceLocation.parse("test:levelled"),
+                ResourceLocation.parse("test:machine"),
                 20,
                 List.of(),
                 List.of(),
@@ -260,27 +260,27 @@ class MachineRecipeTest {
 
     @Test
     void rejects_duplicate_level_requirement_types() {
-        var coilType = Identifier.parse("test:coil");
+        var coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
-        TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:kanthal"), coilType, 1,
+        TestBootstrap.registerLevel(new MachineLevel(ResourceLocation.parse("test:kanthal"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
-        TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:nichrome"), coilType, 2,
+        TestBootstrap.registerLevel(new MachineLevel(ResourceLocation.parse("test:nichrome"), coilType, 2,
                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         assertThatThrownBy(() -> RecipeTestSupport.create(
-                Identifier.parse("test:duplicate_levels"), Identifier.parse("test:machine"), 20,
+                ResourceLocation.parse("test:duplicate_levels"), ResourceLocation.parse("test:machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(LevelRequirement.input(coilType, Identifier.parse("test:kanthal")),
-                        LevelRequirement.input(coilType, Identifier.parse("test:nichrome")))))
+                List.of(LevelRequirement.input(coilType, ResourceLocation.parse("test:kanthal")),
+                        LevelRequirement.input(coilType, ResourceLocation.parse("test:nichrome")))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_more_than_64_level_requirements_before_validating_individual_levels() {
         List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements =
-                java.util.Collections.nCopies(65, LevelRequirement.input(Identifier.parse("test:coil"),
-                        Identifier.parse("test:kanthal")));
+                java.util.Collections.nCopies(65, LevelRequirement.input(ResourceLocation.parse("test:coil"),
+                        ResourceLocation.parse("test:kanthal")));
 
         assertThatThrownBy(() -> MachineRecipe.validateLevelRequirements(requirements))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -640,8 +640,8 @@ class MachineRecipeTest {
 
     private static MachineRecipe partialOutputRecipe() {
         return RecipeTestSupport.create(
-                Identifier.parse("mmcr:partial_outputs"),
-                Identifier.parse("mmcr:machine"),
+                ResourceLocation.parse("mmcr:partial_outputs"),
+                ResourceLocation.parse("mmcr:machine"),
                 20,
                 List.of(),
                 List.of(),
@@ -744,7 +744,7 @@ class MachineRecipeTest {
     private static Holder<Enchantment> enchantment(String id) {
         return VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT)
                 .getOrThrow(ResourceKey.create(
-                        Registries.ENCHANTMENT, Identifier.parse(id)));
+                        Registries.ENCHANTMENT, ResourceLocation.parse(id)));
     }
 
     private static DynamicOps<JsonElement> componentJsonOps() {

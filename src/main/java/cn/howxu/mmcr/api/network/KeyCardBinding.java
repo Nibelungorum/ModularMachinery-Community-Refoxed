@@ -6,7 +6,7 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -16,14 +16,14 @@ import java.util.Objects;
 public record KeyCardBinding(GlobalPos interfacePos, MachineReference machine) {
     public static final Codec<KeyCardBinding> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             GlobalPos.CODEC.fieldOf("interfacePos").forGetter(KeyCardBinding::interfacePos),
-            Identifier.CODEC.fieldOf("machineType").forGetter(binding -> binding.machine().type()),
+            ResourceLocation.CODEC.fieldOf("machineType").forGetter(binding -> binding.machine().type()),
             Codec.LONG.fieldOf("machineHash").forGetter(binding -> binding.machine().hash())
     ).apply(instance, (interfacePos, machineType, machineHash) ->
             new KeyCardBinding(interfacePos, new MachineReference(machineType, machineHash))));
 
     public static final StreamCodec<FriendlyByteBuf, KeyCardBinding> STREAM_CODEC =
             StreamCodec.composite(GlobalPos.STREAM_CODEC, KeyCardBinding::interfacePos,
-                    Identifier.STREAM_CODEC, binding -> binding.machine().type(),
+                    ResourceLocation.STREAM_CODEC, binding -> binding.machine().type(),
                     ByteBufCodecs.LONG, binding -> binding.machine().hash(),
                     (interfacePos, machineType, machineHash) ->
                             new KeyCardBinding(interfacePos, new MachineReference(machineType, machineHash)));

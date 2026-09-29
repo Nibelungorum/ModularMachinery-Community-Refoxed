@@ -17,7 +17,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -183,7 +183,7 @@ public class ExtendedPortGameTest {
             port.fluidStorage().insert(0, FluidResource.of(Fluids.WATER), 1L, transaction);
             transaction.commit();
         }
-        Identifier texture = MMCR.id("block/extended_combined_test_casing");
+        ResourceLocation texture = MMCR.id("block/extended_combined_test_casing");
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("extended_combined_appearance_test"),
                 "extended combined appearance test",

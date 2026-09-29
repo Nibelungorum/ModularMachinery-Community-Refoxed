@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -18,8 +18,8 @@ public final class MachineRoleValidator {
     }
 
     public static void validate(Collection<MachineRegistration> registrations,
-                                Function<Identifier, MachineRegistration> resolver) {
-        Map<Identifier, MachineRegistration> byId = new LinkedHashMap<>();
+                                Function<ResourceLocation, MachineRegistration> resolver) {
+        Map<ResourceLocation, MachineRegistration> byId = new LinkedHashMap<>();
         for (MachineRegistration registration : registrations) {
             byId.put(registration.id(), registration);
         }
@@ -30,7 +30,7 @@ public final class MachineRoleValidator {
     }
 
     public static void validateCouplerCounts(Collection<MachineRegistration> registrations,
-                                              Function<Identifier, BlockArray> patternResolver) {
+                                              Function<ResourceLocation, BlockArray> patternResolver) {
         for (MachineRegistration registration : registrations) {
             BlockArray pattern = patternResolver.apply(registration.id());
             validateCouplerCount(registration, pattern == null ? 0 : countCouplers(pattern));
@@ -41,7 +41,7 @@ public final class MachineRoleValidator {
         validateCouplerCount(registration.id(), registration.role(), couplers);
     }
 
-    private static void validateCouplerCount(Identifier id, MachineRole role, int couplers) {
+    private static void validateCouplerCount(ResourceLocation id, MachineRole role, int couplers) {
         switch (role) {
             case NORMAL -> {
                 if (couplers != 0) throw new IllegalArgumentException("NORMAL machine must declare 0 couplers: " + id);
@@ -56,12 +56,12 @@ public final class MachineRoleValidator {
     }
 
     private static void validateAcceptedModules(MachineRegistration host,
-                                                Map<Identifier, MachineRegistration> byId,
-                                                Function<Identifier, MachineRegistration> resolver) {
+                                                Map<ResourceLocation, MachineRegistration> byId,
+                                                Function<ResourceLocation, MachineRegistration> resolver) {
         if (host.acceptedModuleIds().isEmpty()) {
             throw new IllegalArgumentException("HOST machine must accept at least 1 module: " + host.id());
         }
-        for (Identifier moduleId : host.acceptedModuleIds()) {
+        for (ResourceLocation moduleId : host.acceptedModuleIds()) {
             MachineRegistration module = byId.get(moduleId);
             if (module == null && resolver != null) module = resolver.apply(moduleId);
             if (module == null) throw new IllegalArgumentException("Unknown module reference: " + host.id() + " -> " + moduleId);

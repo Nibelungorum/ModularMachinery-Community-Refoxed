@@ -51,7 +51,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -169,7 +169,7 @@ class PublicApiLifecycleTest {
     @Test
     void unknown_recipe_machine_and_after_freeze_registration_are_rejected() {
         PublicApiBootstrap.begin();
-        Identifier unknown = id("unknown_machine");
+        ResourceLocation unknown = id("unknown_machine");
         registerRecipe(recipe("unknown_recipe", unknown));
         collectStructures();
         assertThatCode(ContentRegistrationCoordinator::commitStartup).doesNotThrowAnyException();
@@ -192,7 +192,7 @@ class PublicApiLifecycleTest {
     @Test
     void lifecycle_events_are_ordered_and_each_phase_freezes_before_the_next() {
         List<String> observedEvents = new ArrayList<>();
-        Identifier machineId = id("ordered_machine");
+        ResourceLocation machineId = id("ordered_machine");
         var definitions = new AtomicReference<MMCRMachineDefinationsEvent>();
         var structures = new AtomicReference<MMCRMachineStructuresEvent>();
         var recipes = new AtomicReference<MMCRMachineRecipesEvent>();
@@ -228,10 +228,10 @@ class PublicApiLifecycleTest {
 
     @Test
     void structure_event_freeze_validates_modifier_and_level_references_and_returns_snapshot() {
-        Identifier machineId = id("snapshot_machine");
-        Identifier typeId = id("snapshot_type");
-        Identifier levelId = id("snapshot_level");
-        Identifier modifierId = id("snapshot_modifier");
+        ResourceLocation machineId = id("snapshot_machine");
+        ResourceLocation typeId = id("snapshot_type");
+        ResourceLocation levelId = id("snapshot_level");
+        ResourceLocation modifierId = id("snapshot_modifier");
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerLevelType(new cn.howxu.mmcr.api.machine.level.LevelType(typeId,
                 Component.literal("Snapshot")));
@@ -256,7 +256,7 @@ class PublicApiLifecycleTest {
 
     @Test
     void structure_event_rejects_unknown_references_at_freeze() {
-        Identifier machineId = id("invalid_snapshot_machine");
+        ResourceLocation machineId = id("invalid_snapshot_machine");
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerModifier(id("known_modifier"), new ModifierDefinition(List.of()));
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
@@ -271,7 +271,7 @@ class PublicApiLifecycleTest {
     @Test
     void coordinator_commit_installs_modifier_item_bindings_after_collection() {
         PublicApiBootstrap.begin();
-        Identifier modifierId = id("lifecycle_modifier");
+        ResourceLocation modifierId = id("lifecycle_modifier");
         ItemStack stack = new ItemStack(Items.EMERALD, 1);
         stack.set(DataComponents.MAX_STACK_SIZE, 32);
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
@@ -288,8 +288,8 @@ class PublicApiLifecycleTest {
 
     @Test
     void public_level_declarations_convert_to_canonical_runtime_levels() {
-        Identifier typeId = id("public_type");
-        Identifier levelId = id("public_level");
+        ResourceLocation typeId = id("public_type");
+        ResourceLocation levelId = id("public_level");
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
         event.registerLevelType(new LevelType(typeId, Component.literal("Public")));
         event.registerLevel(new MachineLevel(levelId, typeId, 2,
@@ -448,11 +448,11 @@ class PublicApiLifecycleTest {
         return builder.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F');
     }
 
-    private static MachineRecipeDefinition recipe(String path, Identifier machineId) {
+    private static MachineRecipeDefinition recipe(String path, ResourceLocation machineId) {
         return MachineRecipeBuilder.recipe(id(path)).recipePool(machineId).duration(1).build();
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 }

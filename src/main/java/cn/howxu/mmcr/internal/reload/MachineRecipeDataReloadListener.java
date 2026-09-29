@@ -12,7 +12,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.util.ArrayList;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
@@ -32,14 +32,14 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineRecipeDataReloadListener extends ContextAwareReloadListener {
-    private volatile Map<Identifier, MachineRecipe> snapshot = Map.of();
+    private volatile Map<ResourceLocation, MachineRecipe> snapshot = Map.of();
     private volatile List<MachineRecipeJson.RecipeJsonException> errors = List.of();
 
     public static void register(AddServerReloadListenersEvent event) {
         event.addListener(MMCR.id("machine_recipes"), new MachineRecipeDataReloadListener());
     }
 
-    public Map<Identifier, MachineRecipe> snapshot() {
+    public Map<ResourceLocation, MachineRecipe> snapshot() {
         return snapshot;
     }
 
@@ -71,16 +71,16 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
         }
     }
 
-    static Map<Identifier, MachineRecipe> load(ResourceManager resourceManager, HolderLookup.Provider registries) {
+    static Map<ResourceLocation, MachineRecipe> load(ResourceManager resourceManager, HolderLookup.Provider registries) {
         return loadCandidate(resourceManager, registries).recipes();
     }
 
     static PreparedRecipes loadCandidate(ResourceManager resourceManager, HolderLookup.Provider registries) {
-        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
-        for (Map.Entry<Identifier, Resource> entry : resourceManager.listResources("recipes", path -> path.getPath().endsWith(".json")).entrySet()) {
-            Identifier resourceLocation = entry.getKey();
-            Identifier recipeId = recipeIdFromResource(resourceLocation);
+        for (Map.Entry<ResourceLocation, Resource> entry : resourceManager.listResources("recipes", path -> path.getPath().endsWith(".json")).entrySet()) {
+            ResourceLocation resourceLocation = entry.getKey();
+            ResourceLocation recipeId = recipeIdFromResource(resourceLocation);
             try (Reader reader = entry.getValue().openAsReader()) {
                 JsonElement element = JsonParser.parseReader(reader);
                 if (!element.isJsonObject()) continue;
@@ -96,11 +96,11 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
                         exception.getMessage() == null ? "invalid recipe" : exception.getMessage(), exception));
             }
         }
-        Map<Identifier, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
+        Map<ResourceLocation, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
         return new PreparedRecipes(Map.copyOf(validRecipes), List.copyOf(errors));
     }
 
-    static Identifier recipeIdFromResource(Identifier resourceId) {
+    static ResourceLocation recipeIdFromResource(ResourceLocation resourceId) {
         String path = resourceId.getPath();
         if (!path.startsWith("recipes/") || !path.endsWith(".json")) {
             throw new IllegalArgumentException("Expected recipe resource under recipes/ ending in .json: " + resourceId);
@@ -108,7 +108,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
         return resourceId.withPath(path.substring("recipes/".length(), path.length() - ".json".length()));
     }
 
-    void applySnapshot(Map<Identifier, MachineRecipe> recipes) {
+    void applySnapshot(Map<ResourceLocation, MachineRecipe> recipes) {
         PreparedRecipes candidate = prepareCandidate(recipes);
         logErrors(candidate.errors());
         try {
@@ -126,15 +126,15 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
     /**
      * Applies the data-pack layer for a reload hook that can close over MinecraftServer and run runtime sync.
      */
-    void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes, Runnable sync) {
+    void applySnapshotFromServerReloadHook(Map<ResourceLocation, MachineRecipe> recipes, Runnable sync) {
         applySnapshotFromServerReloadHook(recipes, snapshot -> sync.run());
     }
 
-    void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes,
+    void applySnapshotFromServerReloadHook(Map<ResourceLocation, MachineRecipe> recipes,
                                            Consumer<RuntimeContentSnapshot> sync) {
         PreparedRecipes candidate = prepareCandidate(recipes);
         logErrors(candidate.errors());
-        Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+        Map<ResourceLocation, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
         List<MachineRecipeJson.RecipeJsonException> previousErrors = errors;
         boolean published = false;
         try {
@@ -160,27 +160,27 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
         }
     }
 
-    private RuntimeContentSnapshot publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
-        Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
+    private RuntimeContentSnapshot publishSnapshot(Map<ResourceLocation, MachineRecipe> recipes) {
+        Map<ResourceLocation, MachineRecipe> replacement = Map.copyOf(recipes);
         RecipeRegistry.validateDataPackCandidate(replacement);
         RuntimeContentSnapshot committed = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(replacement);
         snapshot = RecipeRegistry.dataPackSnapshot();
         return committed;
     }
 
-    private static PreparedRecipes prepareCandidate(Map<Identifier, MachineRecipe> recipes) {
+    private static PreparedRecipes prepareCandidate(Map<ResourceLocation, MachineRecipe> recipes) {
         if (recipes == null) throw new IllegalArgumentException("Machine recipe snapshot must not be null");
         List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
-        Map<Identifier, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
+        Map<ResourceLocation, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
         return new PreparedRecipes(validRecipes, errors);
     }
 
-    private static Map<Identifier, MachineRecipe> validateAndFilter(
-            Map<Identifier, MachineRecipe> recipes,
+    private static Map<ResourceLocation, MachineRecipe> validateAndFilter(
+            Map<ResourceLocation, MachineRecipe> recipes,
             List<MachineRecipeJson.RecipeJsonException> errors) {
-        Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            Identifier recipeId = entry.getKey();
+        Map<ResourceLocation, MachineRecipe> validRecipes = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
+            ResourceLocation recipeId = entry.getKey();
             try {
                 MachineRecipe recipe = entry.getValue();
                 if (recipeId == null || recipe == null || recipe.id() == null) {
@@ -212,7 +212,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
     }
 
     private static MachineRecipe conflictingLayerRecipe(MachineRecipe recipe) {
-        for (Map<Identifier, MachineRecipe> layer : List.of(RecipeRegistry.staticSnapshot(),
+        for (Map<ResourceLocation, MachineRecipe> layer : List.of(RecipeRegistry.staticSnapshot(),
                 RecipeRegistry.kubeJSSnapshot(), RecipeRegistry.dynamicSnapshot())) {
             MachineRecipe existing = layer.get(recipe.id());
             if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
@@ -231,7 +231,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
         return new MachineRecipeJson.RecipeJsonException(MMCR.id("machine_recipe_reload"), "$", message, exception);
     }
 
-    record PreparedRecipes(Map<Identifier, MachineRecipe> recipes,
+    record PreparedRecipes(Map<ResourceLocation, MachineRecipe> recipes,
                            List<MachineRecipeJson.RecipeJsonException> errors) {
         PreparedRecipes {
             recipes = Map.copyOf(recipes == null ? Map.of() : recipes);

@@ -25,7 +25,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -188,7 +188,7 @@ public class SharedMultiblockIoGameTest {
     private static MachineControllerBlockEntity placeController(GameTestHelper helper, BlockPos controllerPos,
                                                                  BlockPos sharedPort, String path,
                                                                  boolean allowParallelReplacement) {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         List<BlockPredicate> sharedChoices = allowParallelReplacement

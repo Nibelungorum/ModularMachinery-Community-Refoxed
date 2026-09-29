@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
@@ -65,7 +65,7 @@ public final class RecipeStartContext {
         return machineContext;
     }
 
-    public Identifier recipeId() {
+    public ResourceLocation recipeId() {
         return recipe.id();
     }
 

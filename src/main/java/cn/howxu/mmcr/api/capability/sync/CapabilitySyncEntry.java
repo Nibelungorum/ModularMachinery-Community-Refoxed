@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.sync;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Arrays;
 
@@ -9,7 +9,7 @@ import java.util.Arrays;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record CapabilitySyncEntry(Identifier typeId, int capabilityIndex, byte[] payload) {
+public record CapabilitySyncEntry(ResourceLocation typeId, int capabilityIndex, byte[] payload) {
     public static final int MAX_PAYLOAD_BYTES = 65_536;
 
     public CapabilitySyncEntry {

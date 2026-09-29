@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -8,8 +8,8 @@ import java.util.Objects;
 /** Immutable public structure declaration kept separate from machine properties.
  * @author howxu <dev@howxu.cn>
  */
-public record MachineStructureDefinition(Identifier machineId, List<StructureStage> stages, boolean stateSensitive) {
-    public MachineStructureDefinition(Identifier machineId, List<StructureStage> stages) {
+public record MachineStructureDefinition(ResourceLocation machineId, List<StructureStage> stages, boolean stateSensitive) {
+    public MachineStructureDefinition(ResourceLocation machineId, List<StructureStage> stages) {
         this(machineId, stages, false);
     }
 

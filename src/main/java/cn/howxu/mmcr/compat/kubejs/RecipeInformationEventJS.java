@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation;
 import dev.latvian.mods.kubejs.event.KubeEvent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,12 +31,12 @@ public final class RecipeInformationEventJS implements KubeEvent {
 
     public void addRecipePoolInfo(String poolId, String translationKey, Object... arguments) {
         if (!available()) return;
-        entries.add(RecipeInformation.pool(parseIdentifier(poolId, "poolId"), translationKey, arguments));
+        entries.add(RecipeInformation.pool(parseResourceLocation(poolId, "poolId"), translationKey, arguments));
     }
 
     public void addRecipeInfo(String recipeId, String translationKey, Object... arguments) {
         if (!available()) return;
-        entries.add(RecipeInformation.recipe(parseIdentifier(recipeId, "recipeId"), translationKey, arguments));
+        entries.add(RecipeInformation.recipe(parseResourceLocation(recipeId, "recipeId"), translationKey, arguments));
     }
 
     List<RecipeInformation> entries() {
@@ -52,11 +52,11 @@ public final class RecipeInformationEventJS implements KubeEvent {
         return false;
     }
 
-    private static Identifier parseIdentifier(String value, String name) {
+    private static ResourceLocation parseResourceLocation(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be null or blank");
         }
-        Identifier identifier = Identifier.tryParse(value);
+        ResourceLocation identifier = ResourceLocation.tryParse(value);
         if (identifier == null) throw new IllegalArgumentException("Invalid " + name + ": " + value);
         return identifier;
     }

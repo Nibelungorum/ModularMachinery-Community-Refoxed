@@ -7,7 +7,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +30,7 @@ class PortTagSetTest {
     @Test
     void classifiesOptionalExternalPort() {
         IOPortKind kind = new TestPortKind("test_port", IOType.INPUT,
-                List.of(new PortFamilyDescriptor(Identifier.fromNamespaceAndPath("mekanism", "chemical"),
+                List.of(new PortFamilyDescriptor(ResourceLocation.fromNamespaceAndPath("mekanism", "chemical"),
                         IOType.INPUT, 0, List.of())), List.of("mekanism"));
 
         PortTagSet tags = PortTagSet.forKind(kind);

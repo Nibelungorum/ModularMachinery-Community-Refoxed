@@ -19,7 +19,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
@@ -33,7 +33,7 @@ import java.util.Map;
  */
 public final class RecipeSearchTask {
     private final ControllerRuntimeSnapshot snapshot;
-    private final Identifier machineId;
+    private final ResourceLocation machineId;
     private final long structureVersion;
     private final long maxParallelism;
     private final List<MachineRecipe> candidates;
@@ -41,20 +41,20 @@ public final class RecipeSearchTask {
     private final List<RecipeModifier> modifiers;
     private final @Nullable List<PlanningValue> planningValues;
 
-    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, long structureVersion,
                             long maxParallelism, List<MachineRecipe> candidates, List<MachineCapability> capabilities) {
         this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
                 maxParallelism, orderedCandidates(candidates),
                 capabilities, flattenModifiers(snapshot));
     }
 
-    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, Identifier recipePoolId,
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, ResourceLocation recipePoolId,
                             long structureVersion, long maxParallelism, List<MachineRecipe> candidates, List<MachineCapability> capabilities) {
         this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates(candidates),
                 capabilities, flattenModifiers(snapshot));
     }
 
-    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, long structureVersion,
                             long maxParallelism, List<MachineRecipe> orderedCandidates, List<MachineCapability> capabilities,
                             List<RecipeModifier> modifiers) {
         this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
@@ -62,15 +62,15 @@ public final class RecipeSearchTask {
                 capabilities, modifiers, null);
     }
 
-    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, Identifier recipePoolId,
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, ResourceLocation recipePoolId,
                             long structureVersion, long maxParallelism, List<MachineRecipe> orderedCandidates, List<MachineCapability> capabilities,
                             List<RecipeModifier> modifiers) {
         this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates,
                 capabilities, modifiers, null);
     }
 
-    private RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId,
-                             @Nullable Identifier recipePoolId, long structureVersion,
+    private RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId,
+                             @Nullable ResourceLocation recipePoolId, long structureVersion,
                              long maxParallelism, List<MachineRecipe> orderedCandidates, List<MachineCapability> capabilities,
                              List<RecipeModifier> modifiers, @Nullable List<PlanningValue> planningValues) {
         if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
@@ -86,7 +86,7 @@ public final class RecipeSearchTask {
     }
 
     /** Creates a worker-safe search task from immutable candidate planning values. */
-    public static RecipeSearchTask forPlanningValues(ControllerRuntimeSnapshot snapshot, Identifier machineId,
+    public static RecipeSearchTask forPlanningValues(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId,
                                                        long structureVersion, long maxParallelism,
                                                        List<MachineRecipe> candidates,
                                                        List<PlanningValue> planningValues) {
@@ -196,7 +196,7 @@ public final class RecipeSearchTask {
                 .toList();
     }
 
-    private static List<MachineRecipe> poolCandidates(@Nullable Identifier recipePoolId,
+    private static List<MachineRecipe> poolCandidates(@Nullable ResourceLocation recipePoolId,
                                                        List<MachineRecipe> candidates) {
         if (recipePoolId == null || candidates == null || candidates.isEmpty()) return List.of();
         return candidates.stream().filter(recipe -> recipe != null
@@ -258,7 +258,7 @@ public final class RecipeSearchTask {
     }
 
     /** Immutable worker result for one candidate's captured capability planning. */
-    public record PlanningValue(Identifier recipeId, boolean successful, boolean requiresMainThread,
+    public record PlanningValue(ResourceLocation recipeId, boolean successful, boolean requiresMainThread,
                                 @Nullable FailureReason failureReason, @Nullable Integer failureRequirementIndex,
                                 boolean inputInsufficientWithFeasibleOutputs) {
         public PlanningValue {
@@ -274,15 +274,15 @@ public final class RecipeSearchTask {
             }
         }
 
-        public static PlanningValue success(Identifier recipeId) {
+        public static PlanningValue success(ResourceLocation recipeId) {
             return new PlanningValue(recipeId, true, false, null, null, false);
         }
 
-        public static PlanningValue mainThread(Identifier recipeId) {
+        public static PlanningValue mainThread(ResourceLocation recipeId) {
             return new PlanningValue(recipeId, true, true, null, null, false);
         }
 
-        public static PlanningValue failure(Identifier recipeId, FailureReason reason, int requirementIndex,
+        public static PlanningValue failure(ResourceLocation recipeId, FailureReason reason, int requirementIndex,
                                             boolean inputInsufficientWithFeasibleOutputs) {
             return new PlanningValue(recipeId, false, false, reason, requirementIndex,
                     inputInsufficientWithFeasibleOutputs);

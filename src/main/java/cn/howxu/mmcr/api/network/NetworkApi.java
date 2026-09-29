@@ -5,7 +5,7 @@ import cn.howxu.mmcr.internal.network.NetworkServerState;
 import cn.howxu.mmcr.internal.network.PendingRequest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.ArrayList;
@@ -44,7 +44,7 @@ public final class NetworkApi {
         return List.copyOf(references);
     }
 
-    public static void sendRequest(NetworkInterfaceReference source, MachineReference target, Identifier requestId,
+    public static void sendRequest(NetworkInterfaceReference source, MachineReference target, ResourceLocation requestId,
                                    RequestBody body) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");

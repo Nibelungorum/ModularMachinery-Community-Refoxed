@@ -18,7 +18,7 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -118,7 +118,7 @@ public class CombinedPortGameTest {
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         CombinedPortBlockEntity port = helper.getBlockEntity(portPos, CombinedPortBlockEntity.class);
-        Identifier texture = MMCR.id("block/combined_test_casing");
+        ResourceLocation texture = MMCR.id("block/combined_test_casing");
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("combined_appearance_test"),
                 "combined appearance test",

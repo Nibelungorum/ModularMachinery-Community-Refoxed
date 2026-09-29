@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -467,7 +467,7 @@ class PatternStartReservationTest {
     }
 
     private static MachineControllerBlockEntity factoryController() {
-        Identifier machineId = MMCR.id("reservation_factory");
+        ResourceLocation machineId = MMCR.id("reservation_factory");
         RuntimeTestFixtures.registerRecipePool(machineId);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);

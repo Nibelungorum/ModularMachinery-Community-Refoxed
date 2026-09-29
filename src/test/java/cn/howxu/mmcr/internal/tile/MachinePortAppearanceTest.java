@@ -17,7 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -61,7 +61,7 @@ class MachinePortAppearanceTest {
     @Test
     void reset_restores_basic_casing_base_texture() {
         IOPortBlockEntity port = itemInputBus();
-        port.setAppearanceBaseTexture(Identifier.parse("kubejs:block/steel_casing"));
+        port.setAppearanceBaseTexture(ResourceLocation.parse("kubejs:block/steel_casing"));
 
         port.resetAppearanceBaseTexture();
 
@@ -71,7 +71,7 @@ class MachinePortAppearanceTest {
     @Test
     void io_port_saves_formed_base_texture_to_update_tag() {
         IOPortBlockEntity port = itemInputBus();
-        Identifier texture = Identifier.parse("kubejs:block/steel_casing");
+        ResourceLocation texture = ResourceLocation.parse("kubejs:block/steel_casing");
 
         port.linkControllerAppearance(new BlockPos(12, 4, 12), texture);
 
@@ -91,8 +91,8 @@ class MachinePortAppearanceTest {
         IOPortBlockEntity source = itemInputBus();
         BlockPos first = new BlockPos(0, 64, 0);
         BlockPos second = new BlockPos(4, 64, 0);
-        Identifier firstTexture = Identifier.parse("kubejs:block/first_casing");
-        Identifier secondTexture = Identifier.parse("kubejs:block/second_casing");
+        ResourceLocation firstTexture = ResourceLocation.parse("kubejs:block/first_casing");
+        ResourceLocation secondTexture = ResourceLocation.parse("kubejs:block/second_casing");
         source.linkControllerAppearance(second, secondTexture);
         source.linkControllerAppearance(first, firstTexture);
 
@@ -117,8 +117,8 @@ class MachinePortAppearanceTest {
         IOPortBlockEntity port = itemInputBus();
         BlockPos first = new BlockPos(0, 64, 0);
         BlockPos second = new BlockPos(4, 64, 0);
-        Identifier firstTexture = MMCR.id("block/first");
-        Identifier secondTexture = MMCR.id("block/second");
+        ResourceLocation firstTexture = MMCR.id("block/first");
+        ResourceLocation secondTexture = MMCR.id("block/second");
 
         port.linkControllerAppearance(first, firstTexture);
         port.linkControllerAppearance(second, secondTexture);
@@ -145,8 +145,8 @@ class MachinePortAppearanceTest {
         IOPortBlockEntity port = itemInputBus();
         BlockPos invalid = new BlockPos(0, 64, 0);
         BlockPos valid = new BlockPos(4, 64, 0);
-        Identifier invalidTexture = MMCR.id("block/invalid");
-        Identifier validTexture = MMCR.id("block/valid");
+        ResourceLocation invalidTexture = MMCR.id("block/invalid");
+        ResourceLocation validTexture = MMCR.id("block/valid");
         MachineControllerBlockEntity invalidController = controller(invalid, false, Set.of(port.getBlockPos()));
         MachineControllerBlockEntity validController = controller(valid, true, Set.of(port.getBlockPos()));
         Level level = LevelStub.create(Map.of(
@@ -169,7 +169,7 @@ class MachinePortAppearanceTest {
     @Test
     void model_data_exposes_formed_base_texture() {
         IOPortBlockEntity port = itemInputBus();
-        Identifier texture = Identifier.parse("kubejs:block/steel_casing");
+        ResourceLocation texture = ResourceLocation.parse("kubejs:block/steel_casing");
 
         port.setAppearanceBaseTexture(texture);
         ModelData data = port.getModelData();

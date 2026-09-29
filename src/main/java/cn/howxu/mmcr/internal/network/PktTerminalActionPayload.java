@@ -8,7 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -19,7 +19,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktTerminalActionPayload(TerminalAction action, int value, Identifier firstId, Identifier secondId)
+public record PktTerminalActionPayload(TerminalAction action, int value, ResourceLocation firstId, ResourceLocation secondId)
         implements CustomPacketPayload {
     private static final int MIN_VALUE = -(1 << (BlockPos.PACKED_Y_LENGTH - 1));
     private static final int MAX_VALUE = (1 << (BlockPos.PACKED_Y_LENGTH - 1)) - 1;
@@ -27,8 +27,8 @@ public record PktTerminalActionPayload(TerminalAction action, int value, Identif
     public static final StreamCodec<ByteBuf, PktTerminalActionPayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.idMapper(index -> readAction(index), TerminalAction::ordinal), PktTerminalActionPayload::action,
             ByteBufCodecs.VAR_INT, PktTerminalActionPayload::value,
-            ByteBufCodecs.optional(Identifier.STREAM_CODEC), payload -> Optional.ofNullable(payload.firstId),
-            ByteBufCodecs.optional(Identifier.STREAM_CODEC), payload -> Optional.ofNullable(payload.secondId),
+            ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), payload -> Optional.ofNullable(payload.firstId),
+            ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), payload -> Optional.ofNullable(payload.secondId),
             (action, value, firstId, secondId) -> new PktTerminalActionPayload(action, value,
                     firstId.orElse(null), secondId.orElse(null)));
 

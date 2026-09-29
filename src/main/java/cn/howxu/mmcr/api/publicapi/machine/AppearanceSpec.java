@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -10,13 +10,13 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record AppearanceSpec(
-        Identifier machineBasicBlock,
-        Identifier controllerBaseTexture,
-        Identifier formedPortBaseTexture,
-        Identifier controllerIdleOverlayTexture,
-        Identifier controllerActiveOverlayTexture) {
+        ResourceLocation machineBasicBlock,
+        ResourceLocation controllerBaseTexture,
+        ResourceLocation formedPortBaseTexture,
+        ResourceLocation controllerIdleOverlayTexture,
+        ResourceLocation controllerActiveOverlayTexture) {
 
-    public AppearanceSpec(Identifier machineBasicBlock, Identifier controllerBaseTexture, Identifier formedPortBaseTexture) {
+    public AppearanceSpec(ResourceLocation machineBasicBlock, ResourceLocation controllerBaseTexture, ResourceLocation formedPortBaseTexture) {
         this(machineBasicBlock, controllerBaseTexture, formedPortBaseTexture, null, null);
     }
 
@@ -30,45 +30,45 @@ public record AppearanceSpec(
      * @author howxu <dev@howxu.cn>
      */
     public static final class Builder {
-        private Identifier machineBasicBlock;
-        private Identifier controllerBaseTexture;
-        private Identifier formedPortBaseTexture;
-        private Identifier controllerIdleOverlayTexture;
-        private Identifier controllerActiveOverlayTexture;
+        private ResourceLocation machineBasicBlock;
+        private ResourceLocation controllerBaseTexture;
+        private ResourceLocation formedPortBaseTexture;
+        private ResourceLocation controllerIdleOverlayTexture;
+        private ResourceLocation controllerActiveOverlayTexture;
 
-        public Builder appearance(Identifier machineBasicBlock) {
+        public Builder appearance(ResourceLocation machineBasicBlock) {
             return machineBasicBlock(machineBasicBlock);
         }
 
         public Builder appearance(String machineBasicBlock) {
-            return appearance(Identifier.parse(machineBasicBlock));
+            return appearance(ResourceLocation.parse(machineBasicBlock));
         }
 
-        public Builder machineBasicBlock(Identifier machineBasicBlock) {
+        public Builder machineBasicBlock(ResourceLocation machineBasicBlock) {
             this.machineBasicBlock = Objects.requireNonNull(machineBasicBlock, "machineBasicBlock");
             return this;
         }
 
         public Builder machineBasicBlock(String machineBasicBlock) {
-            return machineBasicBlock(Identifier.parse(machineBasicBlock));
+            return machineBasicBlock(ResourceLocation.parse(machineBasicBlock));
         }
 
-        public Builder controllerBaseTexture(Identifier controllerBaseTexture) {
+        public Builder controllerBaseTexture(ResourceLocation controllerBaseTexture) {
             this.controllerBaseTexture = Objects.requireNonNull(controllerBaseTexture, "controllerBaseTexture");
             return this;
         }
 
-        public Builder formedPortBaseTexture(Identifier formedPortBaseTexture) {
+        public Builder formedPortBaseTexture(ResourceLocation formedPortBaseTexture) {
             this.formedPortBaseTexture = Objects.requireNonNull(formedPortBaseTexture, "formedPortBaseTexture");
             return this;
         }
 
-        public Builder controllerIdleOverlayTexture(Identifier controllerIdleOverlayTexture) {
+        public Builder controllerIdleOverlayTexture(ResourceLocation controllerIdleOverlayTexture) {
             this.controllerIdleOverlayTexture = Objects.requireNonNull(controllerIdleOverlayTexture, "controllerIdleOverlayTexture");
             return this;
         }
 
-        public Builder controllerActiveOverlayTexture(Identifier controllerActiveOverlayTexture) {
+        public Builder controllerActiveOverlayTexture(ResourceLocation controllerActiveOverlayTexture) {
             this.controllerActiveOverlayTexture = Objects.requireNonNull(controllerActiveOverlayTexture, "controllerActiveOverlayTexture");
             return this;
         }

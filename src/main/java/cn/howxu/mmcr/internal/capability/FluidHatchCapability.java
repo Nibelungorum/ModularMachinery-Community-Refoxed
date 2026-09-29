@@ -220,7 +220,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
             return CapabilityResult.successful();
         }
         if (!(operation instanceof AsyncCapabilityOperation.Resource(
-                net.minecraft.resources.Identifier capabilityId, int slot,
+                net.minecraft.resources.ResourceLocation capabilityId, int slot,
                 cn.howxu.mmcr.api.capability.async.AsyncResourceValue resource1, long amount, boolean insert
         ))
                 || !type().id().equals(capabilityId)) {

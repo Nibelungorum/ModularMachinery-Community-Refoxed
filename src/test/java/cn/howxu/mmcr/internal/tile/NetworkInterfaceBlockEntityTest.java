@@ -11,7 +11,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.Level;
@@ -136,7 +136,7 @@ class NetworkInterfaceBlockEntityTest {
     }
 
     private static GlobalPos global(String dimension, BlockPos pos) {
-        return GlobalPos.of(ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension)), pos);
+        return GlobalPos.of(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimension)), pos);
     }
 
     private static CompoundTag connection(String dimension, BlockPos endpoint, String machine,

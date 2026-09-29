@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,7 +31,7 @@ public final class FailureAdapters {
     }
 
     public static FailureOccurrence occurrence(RequirementFailure failure,
-                                                Identifier source,
+                                                ResourceLocation source,
                                                 FailurePhase phase) {
         Objects.requireNonNull(failure, "failure");
         Map<String, String> details = new LinkedHashMap<>();
@@ -43,7 +43,7 @@ public final class FailureAdapters {
     }
 
     public static FailureOccurrence legacyMessage(String message,
-                                                   Identifier source,
+                                                   ResourceLocation source,
                                                    FailurePhase phase) {
         return FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, phase,
                 null, null, Map.of("legacy_message", Objects.requireNonNull(message, "message")));

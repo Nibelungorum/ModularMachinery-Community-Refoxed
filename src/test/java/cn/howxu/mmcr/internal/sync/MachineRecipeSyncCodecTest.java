@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Test;
@@ -43,8 +43,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MachineRecipeSyncCodecTest {
-    private static final Identifier SYNC_LEVEL_TYPE = MMCR.id("sync_level_type");
-    private static final Identifier SYNC_LEVEL = MMCR.id("sync_level");
+    private static final ResourceLocation SYNC_LEVEL_TYPE = MMCR.id("sync_level_type");
+    private static final ResourceLocation SYNC_LEVEL = MMCR.id("sync_level");
 
     @BeforeAll
     static void bootstrap() throws Exception {
@@ -96,7 +96,7 @@ class MachineRecipeSyncCodecTest {
     @Test
     void rejectsLegacyRequirementWireFormats() {
         RegistryFriendlyByteBuf buffer = buffer();
-        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("legacy"));
+        ResourceLocation.STREAM_CODEC.encode(buffer, MMCR.id("legacy"));
 
         assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(buffer))
                 .isInstanceOf(DecoderException.class)
@@ -132,18 +132,18 @@ class MachineRecipeSyncCodecTest {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     }
 
-    private static RegistryFriendlyByteBuf newRequirementBuffer(Identifier type, int size,
+    private static RegistryFriendlyByteBuf newRequirementBuffer(ResourceLocation type, int size,
                                                                   Consumer<RegistryFriendlyByteBuf> writer) {
         RegistryFriendlyByteBuf buffer = buffer();
         RegistryFriendlyByteBuf payload = buffer();
         writer.accept(payload);
         buffer.writeVarInt(-1);
         buffer.writeVarInt(3);
-        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("new"));
-        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("recipe_pool"));
+        ResourceLocation.STREAM_CODEC.encode(buffer, MMCR.id("new"));
+        ResourceLocation.STREAM_CODEC.encode(buffer, MMCR.id("recipe_pool"));
         buffer.writeVarInt(20);
         buffer.writeVarInt(1);
-        Identifier.STREAM_CODEC.encode(buffer, type);
+        ResourceLocation.STREAM_CODEC.encode(buffer, type);
         int payloadSize = size < 0 ? payload.writerIndex() : size;
         buffer.writeVarInt(payloadSize);
         if (payloadSize <= payload.writerIndex()) buffer.writeBytes(payload, 0, payloadSize);

@@ -253,7 +253,7 @@ class AsyncRequirementPlannerTest {
     }
 
     private static AsyncRequirementPlanner.Requirement resourceRequirement(int index,
-                                                                            net.minecraft.resources.Identifier capabilityId,
+                                                                            net.minecraft.resources.ResourceLocation capabilityId,
                                                                             AsyncResourceValue resource,
                                                                             long amount, boolean insert) {
         return new AsyncRequirementPlanner.Requirement(index, amount, List.of(
@@ -261,7 +261,7 @@ class AsyncRequirementPlannerTest {
                         List.of(new AsyncResourceAction(resource, amount, insert)))));
     }
 
-    private static AsyncRequirementPlanner.Capability resourceCapability(net.minecraft.resources.Identifier capabilityId,
+    private static AsyncRequirementPlanner.Capability resourceCapability(net.minecraft.resources.ResourceLocation capabilityId,
                                                                           AsyncResourceValue resource,
                                                                           long amount, long capacity) {
         return new AsyncRequirementPlanner.Capability(new AsyncCapabilityPlanner.Resource(capabilityId),

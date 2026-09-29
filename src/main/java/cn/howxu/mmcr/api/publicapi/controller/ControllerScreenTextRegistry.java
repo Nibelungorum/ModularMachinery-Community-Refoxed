@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.controller;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
@@ -18,12 +18,12 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class ControllerScreenTextRegistry {
-    private static final Map<Identifier, List<Entry>> HANDLERS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, List<Entry>> HANDLERS = new LinkedHashMap<>();
 
     private ControllerScreenTextRegistry() {
     }
 
-    public static synchronized Registration register(Identifier machineId,
+    public static synchronized Registration register(ResourceLocation machineId,
                                                      ControllerScreenTextHandler handler) {
         requireMutationThread("register");
         return add(machineId, handler);
@@ -51,7 +51,7 @@ public final class ControllerScreenTextRegistry {
         HANDLERS.clear();
     }
 
-    private static Registration add(Identifier machineId, ControllerScreenTextHandler handler) {
+    private static Registration add(ResourceLocation machineId, ControllerScreenTextHandler handler) {
         Objects.requireNonNull(machineId, "machineId");
         Objects.requireNonNull(handler, "handler");
         Entry entry = new Entry(machineId, handler);
@@ -86,16 +86,16 @@ public final class ControllerScreenTextRegistry {
     }
 
     private static final class Entry implements Registration {
-        private final Identifier machineId;
+        private final ResourceLocation machineId;
         private final ControllerScreenTextHandler handler;
         private boolean registered = true;
 
-        private Entry(Identifier machineId, ControllerScreenTextHandler handler) {
+        private Entry(ResourceLocation machineId, ControllerScreenTextHandler handler) {
             this.machineId = machineId;
             this.handler = handler;
         }
 
-        private Identifier machineId() {
+        private ResourceLocation machineId() {
             return machineId;
         }
 

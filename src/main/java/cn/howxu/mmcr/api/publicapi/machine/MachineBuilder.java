@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.publicapi.network.RequestBody;
 import cn.howxu.mmcr.api.publicapi.network.RequestInfo;
 import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
 import java.util.Map;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashSet;
 import java.util.Objects;
@@ -28,14 +28,14 @@ import java.util.function.UnaryOperator;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineBuilder {
-    private final Identifier id;
-    private List<Identifier> recipePoolIds;
+    private final ResourceLocation id;
+    private List<ResourceLocation> recipePoolIds;
     private String displayNameKey;
     private ControllerSpec controller = ControllerSpec.builder().build();
     private AppearanceSpec appearance = AppearanceSpec.builder().build();
     private FactorySpec factory = FactorySpec.builder().build();
     private MachineRole role = MachineRole.NORMAL;
-    private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+    private final Set<ResourceLocation> acceptedModuleIds = new LinkedHashSet<>();
     private NetworkInterfaceSpec networkInterface = NetworkInterfaceSpec.disabled();
     private long maxParallelism = 1L;
     private boolean parallelizable;
@@ -46,19 +46,19 @@ public final class MachineBuilder {
     private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
     private boolean shareSmartInterfaces;
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
-    private Identifier runningSoundId;
-    private Identifier finishSoundId;
+    private ResourceLocation runningSoundId;
+    private ResourceLocation finishSoundId;
     private MachineBehavior behavior = RecipeBehavior.defaults();
     private MachineBehavior.MachineCallback preServerTick;
     private MachineBehavior.MachineCallback postServerTick;
-    private final Map<Identifier, RequestProcess> requestProcessors = new LinkedHashMap<>();
-    private final Map<Identifier, RequestFailed> requestFailures = new LinkedHashMap<>();
+    private final Map<ResourceLocation, RequestProcess> requestProcessors = new LinkedHashMap<>();
+    private final Map<ResourceLocation, RequestFailed> requestFailures = new LinkedHashMap<>();
 
-    private MachineBuilder(Identifier id) {
+    private MachineBuilder(ResourceLocation id) {
         this.id = Objects.requireNonNull(id, "id");
     }
 
-    public static MachineBuilder machine(Identifier id) {
+    public static MachineBuilder machine(ResourceLocation id) {
         return new MachineBuilder(id);
     }
 
@@ -67,7 +67,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder recipePool(Identifier... recipePoolIds) {
+    public MachineBuilder recipePool(ResourceLocation... recipePoolIds) {
         this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id, List.of(recipePoolIds));
         return this;
     }
@@ -125,7 +125,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder acceptedModule(Identifier moduleId) {
+    public MachineBuilder acceptedModule(ResourceLocation moduleId) {
         acceptedModuleIds.add(Objects.requireNonNull(moduleId, "moduleId"));
         return this;
     }
@@ -135,7 +135,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder allowNetworkMachine(Identifier machineId) {
+    public MachineBuilder allowNetworkMachine(ResourceLocation machineId) {
         networkInterface = networkInterface.withAllowedMachine(Objects.requireNonNull(machineId, "machineId"));
         return this;
     }
@@ -190,12 +190,12 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder runningSound(Identifier soundId) {
+    public MachineBuilder runningSound(ResourceLocation soundId) {
         this.runningSoundId = soundId;
         return this;
     }
 
-    public MachineBuilder finishSound(Identifier soundId) {
+    public MachineBuilder finishSound(ResourceLocation soundId) {
         this.finishSoundId = soundId;
         return this;
     }
@@ -205,7 +205,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder requestProcessInternal(Identifier requestId, RequestProcess process) {
+    public MachineBuilder requestProcessInternal(ResourceLocation requestId, RequestProcess process) {
         if (requestProcessors.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
                 Objects.requireNonNull(process, "process")) != null) {
             throw new IllegalArgumentException("Duplicate request processor: " + requestId);
@@ -213,7 +213,7 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder requestProcess(Identifier requestId, cn.howxu.mmcr.api.publicapi.network.RequestProcess process) {
+    public MachineBuilder requestProcess(ResourceLocation requestId, cn.howxu.mmcr.api.publicapi.network.RequestProcess process) {
         Objects.requireNonNull(process, "process");
         return requestProcessInternal(requestId, (body, request, senderStorage, receiverStorage) -> process.process(
                 RequestBody.fromInternal(body),
@@ -223,7 +223,7 @@ public final class MachineBuilder {
                 receiverStorage == null ? null : DataStorage.view(receiverStorage)));
     }
 
-    public MachineBuilder requestFailed(Identifier requestId, RequestFailed failure) {
+    public MachineBuilder requestFailed(ResourceLocation requestId, RequestFailed failure) {
         if (requestFailures.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
                 Objects.requireNonNull(failure, "failure")) != null) {
             throw new IllegalArgumentException("Duplicate request failure handler: " + requestId);
@@ -231,9 +231,9 @@ public final class MachineBuilder {
         return this;
     }
 
-    /** @deprecated Use {@link #requestFailed(Identifier, RequestFailed)}. */
+    /** @deprecated Use {@link #requestFailed(ResourceLocation, RequestFailed)}. */
     @Deprecated(forRemoval = true)
-    public MachineBuilder requestFailedLegacy(Identifier requestId, cn.howxu.mmcr.api.network.RequestFailed failure) {
+    public MachineBuilder requestFailedLegacy(ResourceLocation requestId, cn.howxu.mmcr.api.network.RequestFailed failure) {
         Objects.requireNonNull(failure, "failure");
         return requestFailed(requestId, (body, request, senderStorage, reason) -> failure.fail(
                 (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue(),

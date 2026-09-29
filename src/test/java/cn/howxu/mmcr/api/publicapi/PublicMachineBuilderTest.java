@@ -29,7 +29,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -213,15 +213,15 @@ class PublicMachineBuilderTest {
 
     @Test
     void alloy_furnace_builtin_registers_modifier_items_and_base_replacements() {
-        Identifier machineId = MMCR.id("alloy_furnace");
+        ResourceLocation machineId = MMCR.id("alloy_furnace");
         var definitions = new MMCRMachineDefinationsEvent();
         ALLOY_FURNACE.registerDefinitions(definitions);
 
         var structures = new MMCRMachineStructuresEvent(List.of(machineId));
         ALLOY_FURNACE.registerStructures(structures);
 
-        Identifier diamondId = MMCR.id("alloy_furnace_diamond_speedup");
-        Identifier goldId = MMCR.id("alloy_furnace_gold_doubling");
+        ResourceLocation diamondId = MMCR.id("alloy_furnace_diamond_speedup");
+        ResourceLocation goldId = MMCR.id("alloy_furnace_gold_doubling");
         assertThat(definitions.definitions()).containsKey(machineId);
         assertThat(structures.modifierItems().get(diamondId)).singleElement()
                 .satisfies(stack -> assertThat(stack.is(Items.DIAMOND_BLOCK)).isTrue());
@@ -248,7 +248,7 @@ class PublicMachineBuilderTest {
         bind.invoke(null, ModItems.MODULARIUM, modularium);
         installRecipeTestTags();
 
-        Map<Identifier, Recipe<?>> recipes = new LinkedHashMap<>();
+        Map<ResourceLocation, Recipe<?>> recipes = new LinkedHashMap<>();
         RecipeOutput output = new RecipeOutput() {
             @Override
             public void accept(ResourceKey<Recipe<?>> id, Recipe<?> recipe, AdvancementHolder advancement,
@@ -299,7 +299,7 @@ class PublicMachineBuilderTest {
         tags.put(Tags.Items.INGOTS_GOLD, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.GOLD_INGOT)));
         tags.put(Tags.Items.INGOTS_NETHERITE, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.NETHERITE_INGOT)));
         tags.put(Tags.Items.NETHER_STARS, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.NETHER_STAR)));
-        tags.put(ItemTags.create(Identifier.withDefaultNamespace("bookshelf_books")),
+        tags.put(ItemTags.create(ResourceLocation.withDefaultNamespace("bookshelf_books")),
                 List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.BOOK)));
         BuiltInRegistries.ITEM.prepareTagReload(new TagLoader.LoadResult<>(Registries.ITEM, tags)).apply();
         assertThat(BuiltInRegistries.ITEM.get(Tags.Items.INGOTS_COPPER)).isPresent();

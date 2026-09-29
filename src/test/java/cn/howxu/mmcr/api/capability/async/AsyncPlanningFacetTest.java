@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
@@ -67,7 +67,7 @@ class AsyncPlanningFacetTest {
         assertThat(operation.amount()).isEqualTo(32L);
         assertThat(AsyncCapabilityOperation.Scalar.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
-                .containsExactly(Identifier.class, long.class, boolean.class);
+                .containsExactly(ResourceLocation.class, long.class, boolean.class);
     }
 
     @Test
@@ -102,13 +102,13 @@ class AsyncPlanningFacetTest {
                         AsyncCapabilityPlanner.Heat.class);
         assertThat(AsyncCapabilityPlanner.Resource.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
-                .containsExactly(Identifier.class);
+                .containsExactly(ResourceLocation.class);
         assertThat(AsyncCapabilityPlanner.Scalar.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
-                .containsExactly(Identifier.class);
+                .containsExactly(ResourceLocation.class);
         assertThat(AsyncCapabilityPlanner.Heat.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
-                .containsExactly(Identifier.class);
+                .containsExactly(ResourceLocation.class);
     }
 
     @Test

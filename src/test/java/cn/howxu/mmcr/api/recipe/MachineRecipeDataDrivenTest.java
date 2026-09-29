@@ -20,7 +20,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -41,8 +41,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MachineRecipeDataDrivenTest {
-    private static final Identifier REQUIREMENT_ID = Identifier.parse("mmcr_test:scalar_requirement");
-    private static final Identifier OUTPUT_ID = Identifier.parse("mmcr_test:scalar_output");
+    private static final ResourceLocation REQUIREMENT_ID = ResourceLocation.parse("mmcr_test:scalar_requirement");
+    private static final ResourceLocation OUTPUT_ID = ResourceLocation.parse("mmcr_test:scalar_output");
     private static HolderLookup.Provider registries;
 
     @BeforeAll
@@ -76,7 +76,7 @@ class MachineRecipeDataDrivenTest {
             output.addProperty("chance", 0.5F);
             json.add("outputs", array(output));
 
-            MachineRecipe recipe = MachineRecipeJson.parse(Identifier.parse("mmcr_test:canonical"), json,
+            MachineRecipe recipe = MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:canonical"), json,
                     registries, ignored -> true);
 
             assertThat(recipe.requirements()).singleElement().isEqualTo(new TestRequirement(17));
@@ -98,7 +98,7 @@ class MachineRecipeDataDrivenTest {
         json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
         json.addProperty("energy_per_tick", 40);
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:legacy"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:legacy"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
                         error -> assertThat(error.path()).isEqualTo("inputs"));
@@ -117,7 +117,7 @@ class MachineRecipeDataDrivenTest {
         json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
         json.addProperty("energy_per_tick", 40);
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:empty_requirements"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:empty_requirements"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
                         error -> assertThat(error.path()).isEqualTo("inputs"));
@@ -133,7 +133,7 @@ class MachineRecipeDataDrivenTest {
         json.add("outputs", array(canonicalOutput));
         json.add("fluid_outputs", array(fluidStack("minecraft:water", 250)));
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:canonical_and_fluid"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:canonical_and_fluid"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
                         error -> assertThat(error.path()).isEqualTo("fluid_outputs"));
@@ -236,7 +236,7 @@ class MachineRecipeDataDrivenTest {
         json.add("outputs", array(output));
         json.add("machine_outputs", array(output.deepCopy()));
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:deduplicated"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:deduplicated"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class,
                         error -> assertThat(error.path()).isEqualTo("machine_outputs"));
@@ -249,10 +249,10 @@ class MachineRecipeDataDrivenTest {
         requirement.addProperty("type", "mmcr_test:missing_requirement");
         json.add("requirements", array(requirement));
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:bad_type"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:bad_type"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(Identifier.parse("mmcr_test:bad_type"));
+                    assertThat(error.recipeId()).isEqualTo(ResourceLocation.parse("mmcr_test:bad_type"));
                     assertThat(error.path()).isEqualTo("requirements[0]");
                     assertThat(error.getMessage()).contains("Unknown requirement type");
                 });
@@ -265,10 +265,10 @@ class MachineRecipeDataDrivenTest {
         output.addProperty("type", "mmcr_test:missing_output");
         json.add("outputs", array(output));
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:bad_output_type"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:bad_output_type"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(Identifier.parse("mmcr_test:bad_output_type"));
+                    assertThat(error.recipeId()).isEqualTo(ResourceLocation.parse("mmcr_test:bad_output_type"));
                     assertThat(error.path()).isEqualTo("outputs[0]");
                     assertThat(error.getMessage()).contains("Unknown output type");
                 });
@@ -281,10 +281,10 @@ class MachineRecipeDataDrivenTest {
         for (int index = 0; index <= 4096; index++) requirements.add(new JsonObject());
         json.add("requirements", requirements);
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:too_many_requirements"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:too_many_requirements"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(Identifier.parse("mmcr_test:too_many_requirements"));
+                    assertThat(error.recipeId()).isEqualTo(ResourceLocation.parse("mmcr_test:too_many_requirements"));
                     assertThat(error.path()).isEqualTo("requirements");
                     assertThat(error.getMessage()).contains("too many entries");
                 });
@@ -300,10 +300,10 @@ class MachineRecipeDataDrivenTest {
         requirement.addProperty("payload", "x".repeat(1_000_001));
         json.add("requirements", array(requirement));
 
-        assertThatThrownBy(() -> MachineRecipeJson.parse(Identifier.parse("mmcr_test:large_requirement"), json,
+        assertThatThrownBy(() -> MachineRecipeJson.parse(ResourceLocation.parse("mmcr_test:large_requirement"), json,
                 registries, ignored -> true))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(Identifier.parse("mmcr_test:large_requirement"));
+                    assertThat(error.recipeId()).isEqualTo(ResourceLocation.parse("mmcr_test:large_requirement"));
                     assertThat(error.path()).isEqualTo("requirements[0]");
                     assertThat(error.getMessage()).contains("payload exceeds limit");
                 });
@@ -313,8 +313,8 @@ class MachineRecipeDataDrivenTest {
     void custom_output_survives_with_id_equality_hash_code_and_serializer() {
         try (var outputScope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(TEST_OUTPUT_TYPE);
-            Identifier recipeId = Identifier.parse("mmcr_test:custom_output_round_trip");
-            MachineRecipe base = MachineRecipe.fromCanonical(recipeId, Identifier.parse("mmcr:test_machine_name"),
+            ResourceLocation recipeId = ResourceLocation.parse("mmcr_test:custom_output_round_trip");
+            MachineRecipe base = MachineRecipe.fromCanonical(recipeId, ResourceLocation.parse("mmcr:test_machine_name"),
                     20, List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
             MachineRecipe recipe = MachineRecipe.withAdditionalOutputs(base, List.of(new TestOutput(23, 0.5F)));
             MachineRecipe equalRecipe = MachineRecipe.fromCanonical(recipeId, recipe.recipePoolId(), recipe.tickTime(),
@@ -323,7 +323,7 @@ class MachineRecipeDataDrivenTest {
 
             assertThat(recipe).isEqualTo(equalRecipe);
             assertThat(recipe.hashCode()).isEqualTo(equalRecipe.hashCode());
-            assertThat(recipe.withId(Identifier.parse("mmcr_test:renamed")).machineOutputs())
+            assertThat(recipe.withId(ResourceLocation.parse("mmcr_test:renamed")).machineOutputs())
                     .containsExactly(new TestOutput(23, 0.5F));
 
             JsonElement encoded = MachineRecipeSerializer.INSTANCE.codec().codec()
@@ -341,7 +341,7 @@ class MachineRecipeDataDrivenTest {
     void canonical_builtin_output_is_not_added_twice_to_runtime_requirements() {
         ItemStack stack = new ItemStack(Items.IRON_NUGGET, 3);
         MachineRecipe recipe = MachineRecipe.fromCanonical(
-                Identifier.parse("mmcr_test:output_requirement_once"), Identifier.parse("mmcr:test_machine_name"), 20,
+                ResourceLocation.parse("mmcr_test:output_requirement_once"), ResourceLocation.parse("mmcr:test_machine_name"), 20,
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, 1F,
                         List.of("output-tag"))),
                 List.of(new MachineOutput.ItemOutput(stack, 1F)), List.of(), 0, 1, false, false,
@@ -354,8 +354,8 @@ class MachineRecipeDataDrivenTest {
     @Test
     void different_canonical_builtin_outputs_remain_distinct_runtime_requirements() {
         MachineRecipe recipe = MachineRecipe.fromCanonical(
-                Identifier.parse("mmcr_test:distinct_output_requirements"),
-                Identifier.parse("mmcr:test_machine_name"), 20,
+                ResourceLocation.parse("mmcr_test:distinct_output_requirements"),
+                ResourceLocation.parse("mmcr:test_machine_name"), 20,
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new ItemStack(Items.IRON_NUGGET, 1), 1F, List.of())),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET, 1), 1F)),

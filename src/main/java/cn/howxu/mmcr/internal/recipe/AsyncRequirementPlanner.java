@@ -22,7 +22,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -53,7 +53,7 @@ public final class AsyncRequirementPlanner {
                         .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
                         .thenComparing(MachineRecipe::id))
                 .toList();
-        Set<Identifier> capabilityIds = new java.util.LinkedHashSet<>();
+        Set<ResourceLocation> capabilityIds = new java.util.LinkedHashSet<>();
         for (MachineRecipe candidate : orderedCandidates) {
             for (MachineRequirement requirement : candidate.requirements()) {
                 capabilityIds.add(requirement instanceof cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement
@@ -111,14 +111,14 @@ public final class AsyncRequirementPlanner {
 
     private static AsyncCapabilityRequest forAmount(AsyncCapabilityRequest request, long amount) {
         if (request instanceof AsyncCapabilityRequest.Resource(
-                Identifier id, long parallelism1, List<AsyncResourceAction> actions
+                ResourceLocation id, long parallelism1, List<AsyncResourceAction> actions
         ) && actions.size() == 1) {
             AsyncResourceAction action = actions.getFirst();
             return new AsyncCapabilityRequest.Resource(id, parallelism1, List.of(
                     new AsyncResourceAction(action.resource(), Math.min(action.amount(), amount), action.insert())));
         }
         if (request instanceof AsyncCapabilityRequest.Scalar(
-                Identifier capabilityId, long parallelism, long amount1, boolean insert
+                ResourceLocation capabilityId, long parallelism, long amount1, boolean insert
         )) {
             return new AsyncCapabilityRequest.Scalar(capabilityId, parallelism,
                     Math.min(amount1, amount), insert);
@@ -136,14 +136,14 @@ public final class AsyncRequirementPlanner {
 
     public static AsyncCapabilitySnapshot apply(AsyncCapabilitySnapshot snapshot, AsyncCapabilityOperation operation) {
         if (snapshot instanceof AsyncCapabilitySnapshot.Resource(
-                Identifier id, List<AsyncCapabilitySnapshot.ResourceSlot> slots1
+                ResourceLocation id, List<AsyncCapabilitySnapshot.ResourceSlot> slots1
         )) {
             List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(slots1);
             applyResource(slots, operation);
             return new AsyncCapabilitySnapshot.Resource(id, slots);
         }
         if (snapshot instanceof AsyncCapabilitySnapshot.Scalar(
-                Identifier capabilityId, long amount1, long capacity, long transferLimit
+                ResourceLocation capabilityId, long amount1, long capacity, long transferLimit
         )
                 && operation instanceof AsyncCapabilityOperation.Scalar value) {
             long amount = value.insert() ? amount1 + value.amount() : amount1 - value.amount();
@@ -256,7 +256,7 @@ public final class AsyncRequirementPlanner {
     /** Immutable main-thread capture whose worker method performs only pure planning. */
     public static final class RecipeSearchRequest {
         private final ControllerRuntimeSnapshot snapshot;
-        private final Identifier machineId;
+        private final ResourceLocation machineId;
         private final long structureVersion;
         private final long maxParallelism;
         private final List<MachineRecipe> candidates;
@@ -266,7 +266,7 @@ public final class AsyncRequirementPlanner {
         private final EffectiveRecipeSet.Cache effectiveRecipeCache;
         private volatile @Nullable EffectiveRecipeSet effectiveRecipes;
 
-        private RecipeSearchRequest(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+        private RecipeSearchRequest(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, long structureVersion,
                                      long maxParallelism, List<MachineRecipe> candidates,
                                      List<MachineModifier> modifiers, List<Capability> capabilities,
                                      long catalogVersion, EffectiveRecipeSet.Cache effectiveRecipeCache) {

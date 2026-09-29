@@ -67,7 +67,7 @@ class JadeTextStateTest {
     }
 
     @Test
-    void stateRejectsNullIdentifiersAndText() {
+    void stateRejectsNullResourceLocationsAndText() {
         JadeTextState state = new JadeTextState();
 
         assertThatThrownBy(() -> state.append(null, Component.literal("text")))

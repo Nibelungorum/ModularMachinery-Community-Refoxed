@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /** Public startup recipe lifecycle status API.
  * @author howxu <dev@howxu.cn>
@@ -35,7 +35,7 @@ public final class RecipeApi {
      * @param payload codec payload
      * @return validated immutable custom IO declaration
      */
-    public static CustomRecipeIo custom(Identifier typeId, RecipeIo ioType, JsonElement payload) {
+    public static CustomRecipeIo custom(ResourceLocation typeId, RecipeIo ioType, JsonElement payload) {
         CustomRecipeIo custom = new CustomRecipeIo(typeId, ioType, payload);
         if (ioType.isInput() && RequirementHandlerRegistry.typeFor(typeId) == null) {
             throw new IllegalArgumentException("Unknown requirement type: " + typeId);

@@ -17,7 +17,7 @@ import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Set;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,8 +33,8 @@ public final class RuntimeContentCoordinator {
     }
 
     public static DynamicContentReloadService.ReloadResult commitDynamic(
-            Map<Identifier, MachineStructureDefinition> structures,
-            Map<Identifier, MachineRecipe> recipes) {
+            Map<ResourceLocation, MachineStructureDefinition> structures,
+            Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
             return commitDynamicLocked(structures, recipes).result();
         }
@@ -47,23 +47,23 @@ public final class RuntimeContentCoordinator {
     }
 
     private static CommitResult commitDynamicLocked(
-            Map<Identifier, MachineStructureDefinition> structures,
-            Map<Identifier, MachineRecipe> recipes) {
-        Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
-        Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
-        Map<Identifier, MachineStructureDefinition> structureReplacement = Map.copyOf(new LinkedHashMap<>(structures));
-        Map<Identifier, MachineRecipe> candidateRecipes = Map.copyOf(new LinkedHashMap<>(recipes));
+            Map<ResourceLocation, MachineStructureDefinition> structures,
+            Map<ResourceLocation, MachineRecipe> recipes) {
+        Map<ResourceLocation, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
+        Map<ResourceLocation, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
+        Map<ResourceLocation, MachineStructureDefinition> structureReplacement = Map.copyOf(new LinkedHashMap<>(structures));
+        Map<ResourceLocation, MachineRecipe> candidateRecipes = Map.copyOf(new LinkedHashMap<>(recipes));
         validate(structureReplacement, candidateRecipes);
-        Predicate<Identifier> poolAvailable = poolId -> recipePoolAvailable(poolId, structureReplacement);
+        Predicate<ResourceLocation> poolAvailable = poolId -> recipePoolAvailable(poolId, structureReplacement);
         RecipeRegistry.DynamicCandidate dynamicCandidate = RecipeRegistry.validateDynamicCandidate(
                 candidateRecipes, poolAvailable);
         List<MachineRecipeJson.RecipeJsonException> recipeErrors = new ArrayList<>(dynamicCandidate.errors());
-        Map<Identifier, MachineRecipe> recipeReplacement = dynamicCandidate.acceptedRecipes();
+        Map<ResourceLocation, MachineRecipe> recipeReplacement = dynamicCandidate.acceptedRecipes();
 
         try {
             MachineStructureRegistry.replaceDynamic(structureReplacement);
             RecipeRegistry.replaceDynamic(recipeReplacement, poolAvailable);
-            Map<Identifier, MachineRecipe> publishedRecipes = RecipeRegistry.dynamicSnapshot();
+            Map<ResourceLocation, MachineRecipe> publishedRecipes = RecipeRegistry.dynamicSnapshot();
             DynamicContentReloadService.ReloadResult result = DynamicContentReloadService.ReloadResult.fromSnapshots(
                     oldStructures, structureReplacement, oldRecipes, publishedRecipes, recipeErrors);
             return new CommitResult(result, snapshotLocked());
@@ -79,21 +79,21 @@ public final class RuntimeContentCoordinator {
     }
 
     public static CommitResult commitDynamicAndSnapshot(
-            Map<Identifier, MachineStructureDefinition> structures,
-            Map<Identifier, MachineRecipe> recipes) {
+            Map<ResourceLocation, MachineStructureDefinition> structures,
+            Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
             return commitDynamicLocked(structures, recipes);
         }
     }
 
     public static boolean hasPublishableDynamicContent(
-            Map<Identifier, MachineStructureDefinition> structures,
-            Map<Identifier, MachineRecipe> recipes,
-            Set<Identifier> transactionStructureIds,
-            Set<Identifier> transactionRecipeIds) {
+            Map<ResourceLocation, MachineStructureDefinition> structures,
+            Map<ResourceLocation, MachineRecipe> recipes,
+            Set<ResourceLocation> transactionStructureIds,
+            Set<ResourceLocation> transactionRecipeIds) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineStructureDefinition> structureCandidate = Map.copyOf(new LinkedHashMap<>(structures));
-            Map<Identifier, MachineRecipe> recipeCandidate = Map.copyOf(new LinkedHashMap<>(recipes));
+            Map<ResourceLocation, MachineStructureDefinition> structureCandidate = Map.copyOf(new LinkedHashMap<>(structures));
+            Map<ResourceLocation, MachineRecipe> recipeCandidate = Map.copyOf(new LinkedHashMap<>(recipes));
             validate(structureCandidate, recipeCandidate);
             if (!transactionStructureIds.isEmpty()) return true;
             return RecipeRegistry.validateDynamicCandidate(recipeCandidate,
@@ -102,16 +102,16 @@ public final class RuntimeContentCoordinator {
         }
     }
 
-    public static void replaceDataPackRecipes(Map<Identifier, MachineRecipe> recipes) {
+    public static void replaceDataPackRecipes(Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
             replaceDataPackLocked(recipes);
         }
     }
 
     public static RuntimeContentSnapshot replaceDataPackRecipesAndSnapshot(
-            Map<Identifier, MachineRecipe> recipes) {
+            Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+            Map<ResourceLocation, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
             boolean published = false;
             try {
                 RecipeRegistry.validateDataPackCandidate(recipes);
@@ -132,9 +132,9 @@ public final class RuntimeContentCoordinator {
     }
 
     public static RuntimeContentSnapshot replaceKubeJSRecipesAndSnapshot(
-            Map<Identifier, MachineRecipe> recipes) {
+            Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineRecipe> previous = RecipeRegistry.kubeJSSnapshot();
+            Map<ResourceLocation, MachineRecipe> previous = RecipeRegistry.kubeJSSnapshot();
             boolean published = false;
             try {
                 RecipeRegistry.replaceKubeJS(recipes);
@@ -169,22 +169,22 @@ public final class RuntimeContentCoordinator {
                 RuntimeContentVersion.current());
     }
 
-    private static Map<Identifier, List<Identifier>> machineRecipePools() {
-        Map<Identifier, List<Identifier>> pools = new LinkedHashMap<>();
+    private static Map<ResourceLocation, List<ResourceLocation>> machineRecipePools() {
+        Map<ResourceLocation, List<ResourceLocation>> pools = new LinkedHashMap<>();
         MachineDefinitions.allRegistrations().forEach(registration ->
                 pools.put(registration.id(), registration.recipePoolIds()));
         return Map.copyOf(pools);
     }
 
-    private static void replaceDataPackLocked(Map<Identifier, MachineRecipe> recipes) {
+    private static void replaceDataPackLocked(Map<ResourceLocation, MachineRecipe> recipes) {
         RecipeRegistry.replaceDataPack(recipes);
     }
 
-    private static void validate(Map<Identifier, MachineStructureDefinition> structures,
-                                 Map<Identifier, MachineRecipe> recipes) {
-        Map<Identifier, MachineRegistration> registrations = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
-            Identifier id = entry.getKey();
+    private static void validate(Map<ResourceLocation, MachineStructureDefinition> structures,
+                                 Map<ResourceLocation, MachineRecipe> recipes) {
+        Map<ResourceLocation, MachineRegistration> registrations = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineStructureDefinition> entry : structures.entrySet()) {
+            ResourceLocation id = entry.getKey();
             MachineStructureDefinition structure = entry.getValue();
             MachineRegistration registration = MachineDefinitions.getRegistration(id);
             if (registration == null) {
@@ -196,7 +196,7 @@ public final class RuntimeContentCoordinator {
             structure.declarations().forEach(declaration -> declaration.requirements().modifierReplacements().values()
                     .stream().flatMap(Collection::stream)
                     .forEach(replacement -> {
-                        Identifier modifierId = replacement.getModifierId();
+                        ResourceLocation modifierId = replacement.getModifierId();
                         if (ModifierRegistry.get(modifierId) == null) {
                             throw new IllegalStateException("Structure " + id
                                     + " refers to unknown machine modifier " + modifierId);
@@ -209,8 +209,8 @@ public final class RuntimeContentCoordinator {
             MachineStructureDefinition structure = structures.get(id);
             return structure == null ? null : structure.pattern();
         });
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            Identifier recipeId = entry.getKey();
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
+            ResourceLocation recipeId = entry.getKey();
             MachineRecipe recipe = entry.getValue();
             if (recipeId == null || recipe == null || recipe.id() == null || !recipeId.equals(recipe.id())) {
                 throw new IllegalStateException("Recipe key does not match recipe id: "
@@ -225,8 +225,8 @@ public final class RuntimeContentCoordinator {
         }
     }
 
-    private static boolean recipePoolAvailable(Identifier recipePoolId,
-                                               Map<Identifier, MachineStructureDefinition> structures) {
+    private static boolean recipePoolAvailable(ResourceLocation recipePoolId,
+                                               Map<ResourceLocation, MachineStructureDefinition> structures) {
         MachineRegistration directRegistration = MachineDefinitions.getRegistration(recipePoolId);
         if (MachineRegistry.containsStatic(recipePoolId)
                 && (directRegistration == null || directRegistration.recipePoolIds().contains(recipePoolId))) return true;

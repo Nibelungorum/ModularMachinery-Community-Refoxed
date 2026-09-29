@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -141,6 +141,6 @@ class ControllerScreenTextCacheTest {
 
     private static ControllerScreenTextSnapshot.Line line(String id, String text) {
         return new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
-                Identifier.parse(id), Component.literal(text));
+                ResourceLocation.parse(id), Component.literal(text));
     }
 }

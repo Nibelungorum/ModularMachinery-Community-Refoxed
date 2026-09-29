@@ -14,7 +14,7 @@ import net.minecraft.core.WritableRegistry;
 import net.minecraft.gametest.framework.GameTestInstance;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import com.mojang.serialization.Lifecycle;
@@ -58,23 +58,23 @@ class GameTestRegistrationTest {
     @Test
     void forwards_register_tests_to_present_source() {
         WritableRegistry<TestEnvironmentDefinition<?>> environments = new MappedRegistry<>(
-                ResourceKey.createRegistryKey(Identifier.parse("mmcr:test_environments")), Lifecycle.stable());
+                ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_environments")), Lifecycle.stable());
         WritableRegistry<GameTestInstance> tests = new MappedRegistry<>(
-                ResourceKey.createRegistryKey(Identifier.parse("mmcr:test_instances")), Lifecycle.stable());
+                ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_instances")), Lifecycle.stable());
         RegisterGameTestsEvent event = new RegisterGameTestsEvent(environments, tests);
 
         GameTestRegistration.registerTests("cn.howxu.mmcr.OptionalGameTestSource", event);
 
         assertThat(OptionalGameTestSource.testsInvoked()).isTrue();
-        assertThat(tests.getValue(Identifier.parse("mmcr:optional_source_test"))).isNotNull();
+        assertThat(tests.getValue(ResourceLocation.parse("mmcr:optional_source_test"))).isNotNull();
     }
 
     @Test
     void ignores_absent_register_tests_source() {
         assertThatCode(() -> GameTestRegistration.registerTests(
                 "cn.howxu.mmcr.MissingGameTestRegistry", new RegisterGameTestsEvent(
-                        new MappedRegistry<>(ResourceKey.createRegistryKey(Identifier.parse("mmcr:test_environments")), Lifecycle.stable()),
-                        new MappedRegistry<>(ResourceKey.createRegistryKey(Identifier.parse("mmcr:test_instances")), Lifecycle.stable()))))
+                        new MappedRegistry<>(ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_environments")), Lifecycle.stable()),
+                        new MappedRegistry<>(ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_instances")), Lifecycle.stable()))))
                 .doesNotThrowAnyException();
     }
 

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.data;
 
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +40,7 @@ class DataRepositoryApiTest {
     void repository_uses_only_public_context_and_can_return_unavailable_request() {
         DataRepository repository = new DataRepository() {
             @Override
-            public Identifier id() {
+            public ResourceLocation id() {
                 return MMCR.id("repository");
             }
 

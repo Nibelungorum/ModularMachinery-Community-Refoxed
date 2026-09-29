@@ -23,7 +23,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -43,14 +43,14 @@ public class UpgradeBusGameTest {
     public void optionalBusesPreserveActiveRecipe(GameTestHelper helper) {
         ServerConfig.MACHINE_WORK_MODE.clearCache();
         ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
-        Identifier machineId = MMCR.id("upgrade_bus_test");
-        Identifier modifierId = MMCR.id("upgrade_bus_test_modifier");
+        ResourceLocation machineId = MMCR.id("upgrade_bus_test");
+        ResourceLocation modifierId = MMCR.id("upgrade_bus_test_modifier");
         BlockPos controllerPos = new BlockPos(2, 1, 2);
         BlockPos firstBusPos = controllerPos.west(2);
         BlockPos inputPos = controllerPos.west();
         BlockPos outputPos = controllerPos.east();
         BlockPos secondBusPos = controllerPos.east(2);
-        Identifier structureModifierId = MMCR.id("upgrade_bus_test_block_modifier");
+        ResourceLocation structureModifierId = MMCR.id("upgrade_bus_test_block_modifier");
 
         helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
@@ -122,7 +122,7 @@ public class UpgradeBusGameTest {
                             input.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
                             transaction.commit();
                         }
-                        Identifier recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
+                        ResourceLocation recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
                         ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
                         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 20,
                                 List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(

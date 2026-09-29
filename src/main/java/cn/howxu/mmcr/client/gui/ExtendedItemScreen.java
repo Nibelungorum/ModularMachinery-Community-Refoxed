@@ -10,7 +10,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.ArrayList;
@@ -23,8 +23,8 @@ import java.util.List;
  */
 public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMenu> {
     static final String TEXTURE_PATH = "textures/gui/guicontroller_large.png";
-    private static final Identifier TEXTURE = MMCR.id(TEXTURE_PATH);
-    private static final Identifier AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
+    private static final ResourceLocation TEXTURE = MMCR.id(TEXTURE_PATH);
+    private static final ResourceLocation AUTO_IO_TEXTURE = MMCR.id("textures/gui/guismartinterface.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int IMAGE_HEIGHT = 213;
     private static final int TITLE_X = 12;
@@ -52,7 +52,7 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     }
 
     @Override
-    protected Identifier texture(boolean autoIOPage) {
+    protected ResourceLocation texture(boolean autoIOPage) {
         return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE;
     }
 

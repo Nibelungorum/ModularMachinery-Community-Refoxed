@@ -5,13 +5,13 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * @author howxu <dev@howxu.cn>
  */
 public record StageRequirement(RecipeModifier.IOType io, int minStage) implements MachineRequirement {
-    private static final Identifier TYPE_ID = MMCR.id("stage");
+    private static final ResourceLocation TYPE_ID = MMCR.id("stage");
     public static final MapCodec<StageRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.fieldOf("io").orElse(RecipeModifier.IOType.INPUT)

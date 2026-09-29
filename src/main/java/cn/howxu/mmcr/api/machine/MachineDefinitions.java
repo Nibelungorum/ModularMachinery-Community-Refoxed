@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -23,7 +23,7 @@ import java.util.function.Supplier;
  */
 public final class MachineDefinitions {
 
-    private static final Map<Identifier, MachineRegistration> STATIC_REGISTRATIONS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, MachineRegistration> STATIC_REGISTRATIONS = new LinkedHashMap<>();
     private static final List<Supplier<MachineRegistration>> BUILTIN_SUPPLIERS = new CopyOnWriteArrayList<>();
     private static boolean registryPhaseOpen = false;
 
@@ -97,7 +97,7 @@ public final class MachineDefinitions {
         BUILTIN_SUPPLIERS.clear();
     }
 
-    public static MachineRegistration getRegistration(Identifier id) {
+    public static MachineRegistration getRegistration(ResourceLocation id) {
         return STATIC_REGISTRATIONS.get(id);
     }
 
@@ -105,11 +105,11 @@ public final class MachineDefinitions {
         return Collections.unmodifiableCollection(STATIC_REGISTRATIONS.values());
     }
 
-    public static Map<Identifier, MachineRegistration> effectiveSnapshot() {
+    public static Map<ResourceLocation, MachineRegistration> effectiveSnapshot() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(STATIC_REGISTRATIONS));
     }
 
-    public static boolean containsStatic(Identifier id) {
+    public static boolean containsStatic(ResourceLocation id) {
         return STATIC_REGISTRATIONS.containsKey(id);
     }
 

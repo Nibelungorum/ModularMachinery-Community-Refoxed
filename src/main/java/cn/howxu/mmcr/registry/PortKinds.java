@@ -35,7 +35,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.Collections;
@@ -330,7 +330,7 @@ public final class PortKinds {
             if (entityFactory == null) throw new IllegalArgumentException("entityFactory null");
             if (definition == null) throw new IllegalArgumentException("definition null");
             List<PortFamilyDescriptor> copiedFamilies = List.copyOf(families);
-            Set<Identifier> familyIds = new HashSet<>();
+            Set<ResourceLocation> familyIds = new HashSet<>();
             for (PortFamilyDescriptor family : copiedFamilies) {
                 if (family.ioType() != ioType) {
                     throw new IllegalArgumentException("combined kind families must use the kind IO direction");
@@ -342,7 +342,7 @@ public final class PortKinds {
                     throw new IllegalArgumentException("combined kind cannot expose the energy family");
                 }
             }
-            Set<Identifier> builtInFamilies = Set.of(
+            Set<ResourceLocation> builtInFamilies = Set.of(
                     PortFamilyIds.ITEM, PortFamilyIds.FLUID, PortFamilyIds.ENERGY);
             if (familyIds.stream().anyMatch(builtInFamilies::contains)
                     && !familyIds.equals(Set.of(PortFamilyIds.ITEM, PortFamilyIds.FLUID))) {
@@ -351,7 +351,7 @@ public final class PortKinds {
             if (definition.bindings().size() != copiedFamilies.size()) {
                 throw new IllegalArgumentException("combined kind family and binding counts must match");
             }
-            Set<Identifier> bindingIds = new HashSet<>();
+            Set<ResourceLocation> bindingIds = new HashSet<>();
             definition.bindings().forEach(binding -> {
                 if (!binding.directions().supports(ioType)) {
                     throw new IllegalArgumentException("combined kind bindings must use the kind IO direction");

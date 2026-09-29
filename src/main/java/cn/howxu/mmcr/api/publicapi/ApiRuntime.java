@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,7 +13,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class ApiRuntime {
-    private static final Map<Identifier, CapabilityDefinition> CAPABILITY_DEFINITIONS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, CapabilityDefinition> CAPABILITY_DEFINITIONS = new LinkedHashMap<>();
     private static volatile Hook hook;
     private static boolean capabilitiesFrozen;
 
@@ -47,7 +47,7 @@ public final class ApiRuntime {
             if (hook == null) {
                 throw new IllegalStateException("Capability registration rejected: startup registration is closed");
             }
-            Identifier id = definition.type().id();
+            ResourceLocation id = definition.type().id();
             if (CAPABILITY_DEFINITIONS.putIfAbsent(id, definition) != null) {
                 throw new IllegalStateException("Capability already registered: " + id);
             }

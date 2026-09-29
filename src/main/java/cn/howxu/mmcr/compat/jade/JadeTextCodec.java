@@ -6,7 +6,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.nbt.NbtOps;
 
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ public final class JadeTextCodec {
             Tag encodedText = encodedLine.get(TEXT_KEY);
             if (serializedId.isEmpty() || encodedText == null) continue;
             try {
-                Identifier.parse(serializedId);
+                ResourceLocation.parse(serializedId);
             } catch (RuntimeException ignored) {
                 continue;
             }

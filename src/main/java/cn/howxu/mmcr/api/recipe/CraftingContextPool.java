@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -16,7 +16,7 @@ public final class CraftingContextPool {
 
     private static final CraftingContextPool GLOBAL = new CraftingContextPool();
 
-    private final Map<Identifier, ArrayDeque<CraftingContext>> planningContexts = new HashMap<>();
+    private final Map<ResourceLocation, ArrayDeque<CraftingContext>> planningContexts = new HashMap<>();
 
     public static CraftingContextPool global() {
         return GLOBAL;
@@ -26,7 +26,7 @@ public final class CraftingContextPool {
         GLOBAL.onReload();
     }
 
-    public synchronized CraftingContext borrow(Identifier recipeId, CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
+    public synchronized CraftingContext borrow(ResourceLocation recipeId, CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
         if (recipeId == null || snapshot == null) throw new IllegalArgumentException("recipeId and snapshot are required");
         ArrayDeque<CraftingContext> bucket = planningContexts.get(recipeId);
         while (bucket != null && !bucket.isEmpty()) {
@@ -37,7 +37,7 @@ public final class CraftingContextPool {
         return new CraftingContext(snapshot, modifiers);
     }
 
-    public synchronized void returnContext(Identifier recipeId, CraftingContext context) {
+    public synchronized void returnContext(ResourceLocation recipeId, CraftingContext context) {
         if (recipeId == null || context == null) return;
         planningContexts.computeIfAbsent(recipeId, ignored -> new ArrayDeque<>())
                 .addFirst(context);

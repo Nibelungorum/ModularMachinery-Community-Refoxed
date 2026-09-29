@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +28,7 @@ class FailureReasonRegistryTest {
 
     @Test
     void duplicate_failure_reason_ids_are_rejected() {
-        FailureReason reason = new FailureReason(Identifier.fromNamespaceAndPath("mmcr_test", "duplicate_reason"),
+        FailureReason reason = new FailureReason(ResourceLocation.fromNamespaceAndPath("mmcr_test", "duplicate_reason"),
                 "gui.mmcr.failure.duplicate_reason", 10);
         FailureReasonRegistry.register(reason);
         assertThrows(IllegalArgumentException.class, () -> FailureReasonRegistry.register(reason));
@@ -37,7 +37,7 @@ class FailureReasonRegistryTest {
 
     @Test
     void frozen_registry_rejects_new_registrations() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "frozen_reason");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "frozen_reason");
         FailureReasonRegistry.register(new FailureReason(id, "gui.mmcr.failure.frozen_reason", 10));
 
         FailureReasonRegistry.freeze();
@@ -45,13 +45,13 @@ class FailureReasonRegistryTest {
         assertEquals(true, FailureReasonRegistry.isFrozen());
         assertThrows(IllegalStateException.class,
                 () -> FailureReasonRegistry.register(new FailureReason(
-                        Identifier.fromNamespaceAndPath("mmcr_test", "after_freeze"),
+                        ResourceLocation.fromNamespaceAndPath("mmcr_test", "after_freeze"),
                         "gui.mmcr.failure.after_freeze", 10)));
     }
 
     @Test
     void execution_status_exposes_a_registered_typed_reason_without_reason_detail() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "registered_reason");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "registered_reason");
         FailureReason reason = new FailureReason(id, "gui.mmcr.failure.registered_reason", 10);
         FailureReasonRegistry.register(reason);
         FailureOccurrence occurrence = FailureOccurrence.at(reason, id, FailurePhase.CAPABILITY_COMMIT,
@@ -67,6 +67,6 @@ class FailureReasonRegistryTest {
     void resolve_returns_unknown_for_null_or_missing_ids() {
         assertEquals(BuiltinFailureReasons.UNKNOWN, FailureReasonRegistry.resolve(null));
         assertEquals(BuiltinFailureReasons.UNKNOWN,
-                FailureReasonRegistry.resolve(Identifier.fromNamespaceAndPath("old", "removed_reason")));
+                FailureReasonRegistry.resolve(ResourceLocation.fromNamespaceAndPath("old", "removed_reason")));
     }
 }

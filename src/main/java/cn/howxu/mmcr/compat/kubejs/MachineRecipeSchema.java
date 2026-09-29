@@ -36,7 +36,7 @@ import dev.latvian.mods.kubejs.util.JsonUtils;
 import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.resources.ResourceKey;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jspecify.annotations.Nullable;
 
 import com.google.gson.JsonArray;
@@ -150,7 +150,7 @@ public final class MachineRecipeSchema {
                                 case "output" -> RecipeIo.OUTPUT;
                                 default -> throw new IllegalArgumentException("Unknown recipe IO: " + args.get(1));
                             };
-                            var custom = RecipeApi.custom(Identifier.parse((String) args.get(0)), io,
+                            var custom = RecipeApi.custom(ResourceLocation.parse((String) args.get(0)), io,
                                     (JsonElement) args.get(2));
                             if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
                                  appendRequirement(cx.recipe(), MachineRecipeConverter.toRequirement(custom));
@@ -187,12 +187,12 @@ public final class MachineRecipeSchema {
                         public void execute(RecipeScriptContext cx, List<Object> args) {
                             var typeId = (String) args.get(0);
                             var levelId = (String) args.get(1);
-                            var level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
-                            if (level == null || !level.typeId().equals(Identifier.parse(typeId))) {
+                            var level = MachineLevelRegistry.getLevel(ResourceLocation.parse(levelId));
+                            if (level == null || !level.typeId().equals(ResourceLocation.parse(typeId))) {
                                 throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
                             }
                             appendRequirement(cx.recipe(), LevelRequirement.input(
-                                    Identifier.parse(typeId), Identifier.parse(levelId)));
+                                    ResourceLocation.parse(typeId), ResourceLocation.parse(levelId)));
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalInput",
@@ -205,7 +205,7 @@ public final class MachineRecipeSchema {
 
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
-                            Identifier id = requireChemicalId((String) args.get(0), "chemicalId");
+                            ResourceLocation id = requireChemicalId((String) args.get(0), "chemicalId");
                             long amount = ((Number) args.get(1)).longValue();
                             appendChemicalInput(cx.recipe(),
                                     ChemicalIngredient.chemical(id, amount));
@@ -221,7 +221,7 @@ public final class MachineRecipeSchema {
 
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
-                            Identifier id = requireChemicalId((String) args.get(0), "tagId");
+                            ResourceLocation id = requireChemicalId((String) args.get(0), "tagId");
                             long amount = ((Number) args.get(1)).longValue();
                             appendChemicalInput(cx.recipe(),
                                     ChemicalIngredient.tag(id, amount));
@@ -238,7 +238,7 @@ public final class MachineRecipeSchema {
 
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
-                            Identifier id = requireChemicalId((String) args.get(0), "chemicalId");
+                            ResourceLocation id = requireChemicalId((String) args.get(0), "chemicalId");
                             long amount = ((Number) args.get(1)).longValue();
                             float consumeChance = ((Number) args.get(2)).floatValue();
                             appendChemicalInput(cx.recipe(),
@@ -256,7 +256,7 @@ public final class MachineRecipeSchema {
 
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
-                            Identifier id = requireChemicalId((String) args.get(0), "tagId");
+                            ResourceLocation id = requireChemicalId((String) args.get(0), "tagId");
                             long amount = ((Number) args.get(1)).longValue();
                             float consumeChance = ((Number) args.get(2)).floatValue();
                             appendChemicalInput(cx.recipe(),
@@ -274,7 +274,7 @@ public final class MachineRecipeSchema {
 
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
-                            Identifier id = requireChemicalId((String) args.get(0), "chemicalId");
+                            ResourceLocation id = requireChemicalId((String) args.get(0), "chemicalId");
                             long amount = ((Number) args.get(1)).longValue();
                             double chance = ((Number) args.get(2)).doubleValue();
                             if (!Double.isFinite(chance)) {
@@ -351,14 +351,14 @@ public final class MachineRecipeSchema {
         appendRequirement(recipe, MachineRecipeConverter.toRequirement(custom));
     }
 
-    private static void appendChemicalOutput(KubeRecipe recipe, Identifier id, long amount, double chance) {
+    private static void appendChemicalOutput(KubeRecipe recipe, ResourceLocation id, long amount, double chance) {
         var output = ChemicalOutput.of(id, amount, (float) chance);
         var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(output));
         appendOutput(recipe, MachineRecipeConverter.toOutput(custom));
     }
 
-    private static void appendHeatRequirement(KubeRecipe recipe, Identifier typeId, RecipeIo io,
+    private static void appendHeatRequirement(KubeRecipe recipe, ResourceLocation typeId, RecipeIo io,
                                               HeatRequirement requirement) {
         var custom = RecipeApi.custom(typeId, io,
                 MachineRecipeBuilder.heatPayload(requirement, typeId, io));
@@ -369,12 +369,12 @@ public final class MachineRecipeSchema {
         }
     }
 
-    private static Identifier requireChemicalId(String value, String name) {
+    private static ResourceLocation requireChemicalId(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be null or blank");
         }
         try {
-            return Identifier.parse(value);
+            return ResourceLocation.parse(value);
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("Invalid " + name + ": " + value, exception);
         }

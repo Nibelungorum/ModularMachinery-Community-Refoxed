@@ -37,7 +37,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -87,11 +87,11 @@ class ComponentRuntimeTest {
         ProcessingComponent component = new ProcessingComponent(null, "input", BlockPos.ZERO);
         Map<String, List<MachineModifier>> modifiers = Map.of("modifier", List.of(
                 MachineModifier.numeric("duration", "input", 1D, "add", false)));
-        Identifier levelId = Identifier.fromNamespaceAndPath("mmcr_test", "replacement_level");
+        ResourceLocation levelId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "replacement_level");
         MachineLevel level = new MachineLevel(levelId, levelId, 1, new BlockPredicate.Any(),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY);
         ModuleConnectionStatus connection = ModuleConnectionStatus.connected(
-                Identifier.fromNamespaceAndPath("mmcr_test", "host"));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "host"));
 
         assertThat(runtime.replaceComponents(List.of(component))).isTrue();
         assertThat(runtime.replaceComponents(List.of(component))).isFalse();
@@ -240,7 +240,7 @@ class ComponentRuntimeTest {
 
     @Test
     void structure_normalization_preserves_capacity_above_integer_maximum() {
-        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr_test", "long_parallel_machine");
+        ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "long_parallel_machine");
         var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
         ParallelControllerBlockEntity first = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
                 new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
@@ -251,7 +251,7 @@ class ComponentRuntimeTest {
 
         Machine machine = new Machine() {
             @Override
-            public Identifier registryName() {
+            public ResourceLocation registryName() {
                 return machineId;
             }
 
@@ -281,8 +281,8 @@ class ComponentRuntimeTest {
 
     @Test
     void negative_level_parallelism_bonus_reduces_the_effective_limit_without_wrapping() {
-        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr_test", "negative_parallel_machine");
-        Identifier levelId = Identifier.fromNamespaceAndPath("mmcr_test", "negative_parallel_level");
+        ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "negative_parallel_machine");
+        ResourceLocation levelId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "negative_parallel_level");
         var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
         ParallelControllerBlockEntity controller = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
                 new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
@@ -367,7 +367,7 @@ class ComponentRuntimeTest {
 
     @Test
     void levels_links_and_module_state_are_published_in_immutable_component_views() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "level");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "level");
         MachineLevel level = new MachineLevel(id, id, 1, new BlockPredicate.Any(),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY);
         ComponentRuntime runtime = new ComponentRuntime();
@@ -382,7 +382,7 @@ class ComponentRuntimeTest {
 
     @Test
     void controller_snapshot_publishes_module_state_and_count_together() {
-        Identifier hostId = Identifier.fromNamespaceAndPath("mmcr_test", "host");
+        ResourceLocation hostId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "host");
         ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
                 StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.connected(hostId), 2,
@@ -398,7 +398,7 @@ class ComponentRuntimeTest {
 
     @Test
     void upgrade_bus_items_aggregate_modifier_units_across_buses_without_merging_snapshots() {
-        Identifier speedupId = Identifier.fromNamespaceAndPath("mmcr_test", "speedup");
+        ResourceLocation speedupId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "speedup");
         ItemStack speedup = new ItemStack(Items.IRON_INGOT, 2);
         ItemStack sameSpeedup = new ItemStack(Items.IRON_INGOT, 3);
         ItemStack differentSpeedup = new ItemStack(Items.IRON_INGOT, 7);
@@ -440,10 +440,10 @@ class ComponentRuntimeTest {
         return new ProcessingComponent(null, host, BlockPos.ZERO, BlockPos.ZERO, List.of(tag), null);
     }
 
-    private static Machine parallelizableMachine(Identifier id) {
+    private static Machine parallelizableMachine(ResourceLocation id) {
         return new Machine() {
             @Override
-            public Identifier registryName() {
+            public ResourceLocation registryName() {
                 return id;
             }
 
@@ -507,7 +507,7 @@ class ComponentRuntimeTest {
 
         @Override
         public CapabilityType type() {
-            return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", id));
+            return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", id));
         }
 
         @Override
@@ -548,7 +548,7 @@ class ComponentRuntimeTest {
 
     private static final class ViewBidirectionalCapability implements MachineCapability {
         private static final CapabilityType TYPE = new CapabilityType(
-                Identifier.fromNamespaceAndPath("mmcr_test", "view_bidirectional"));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "view_bidirectional"));
 
         @Override
         public CapabilityType type() {

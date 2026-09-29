@@ -21,7 +21,7 @@ import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import java.util.stream.Collectors;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
@@ -59,8 +59,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     private int failureStreak;
     private long nextSearchTick = Long.MIN_VALUE;
     private @Nullable RecipeSearchContextKey lastSearchFailureKey;
-    private @Nullable Identifier lastSearchFailureReason;
-    private @Nullable Identifier searchFailureRecipePoolId;
+    private @Nullable ResourceLocation lastSearchFailureReason;
+    private @Nullable ResourceLocation searchFailureRecipePoolId;
     private @Nullable RecipeSearchContextKey currentSearchContextKey;
     private boolean resourceWakePending;
     private long recipeSetVersion;
@@ -146,7 +146,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public boolean isCoreThread() { return coreThread; }
-    public @Nullable Identifier lastRecipeId() { return lastRecipe == null ? null : lastRecipe.id(); }
+    public @Nullable ResourceLocation lastRecipeId() { return lastRecipe == null ? null : lastRecipe.id(); }
     public long searchGameTime() { return currentSearchGameTime; }
     public boolean isBaseThread() { return baseThread; }
     public String threadName() { return threadName; }
@@ -201,7 +201,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         failureCandidates = List.of();
     }
 
-    public @Nullable Identifier searchFailureReason() {
+    public @Nullable ResourceLocation searchFailureReason() {
         return lastSearchFailureReason;
     }
 
@@ -362,9 +362,9 @@ public final class FactoryRecipeThread extends RecipeThread {
         if (context == null) return new SearchResult(null, null, false);
         Machine machine = context.snapshot().structure().machine() == null
                 ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
+        ResourceLocation machineId = machine == null ? null : machine.registryName();
         if (machineId == null || context.maxParallelism() <= 0) return new SearchResult(null, null, false);
-        Identifier recipePoolId = candidates == null ? null : candidates.stream()
+        ResourceLocation recipePoolId = candidates == null ? null : candidates.stream()
                 .filter(Objects::nonNull).map(MachineRecipe::recipePoolId).findFirst().orElse(null);
         try {
             return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId,
@@ -511,7 +511,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         recordSearchFailure(key, gameTime);
     }
 
-    private @Nullable Identifier failureReason() {
+    private @Nullable ResourceLocation failureReason() {
         return runtime.failure() == null || runtime.failure().reason() == null
                 ? null : runtime.failure().reason().id();
     }
@@ -555,7 +555,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     static void addRequirementMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
-                                       MachineRequirement requirement, Identifier failureReason) {
+                                       MachineRequirement requirement, ResourceLocation failureReason) {
         for (RequirementHandler.ResourceWakeup wakeup : RequirementHandlerRegistry.resourceWakeupsFor(requirement)) {
             if (!wakeup.failureReasonIds().contains(failureReason)) continue;
             ResourceAvailabilityNotifier.Reason reason = ResourceAvailabilityNotifier.Reason.valueOf(
@@ -680,7 +680,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         thread.idleTicks = input.getIntOr("idle_ticks", 0);
         if (input.getBooleanOr("has_last", false)) {
             String recipeName = input.getStringOr("last_recipe", "");
-            Identifier recipeId = recipeName.isEmpty() ? null : Identifier.parse(recipeName);
+            ResourceLocation recipeId = recipeName.isEmpty() ? null : ResourceLocation.parse(recipeName);
             thread.lastRecipe = recipeId == null ? null : availableCandidates.stream()
                     .filter(candidate -> candidate != null && recipeId.equals(candidate.id()))
                     .findFirst().orElse(null);
@@ -706,10 +706,10 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
         int restoredStreak = Math.max(0, input.getIntOr("search_failure_streak", 0));
         int restoredRemaining = Math.max(0, Math.min(100, input.getIntOr("search_retry_remaining", 0)));
-        Identifier restoredReason = readSearchFailureReason(input);
+        ResourceLocation restoredReason = readSearchFailureReason(input);
         String restoredPoolName = input.getStringOr("search_failure_pool", "");
-        Identifier restoredPool = restoredPoolName.isEmpty()
-                ? thread.currentRecipePoolId() : Identifier.parse(restoredPoolName);
+        ResourceLocation restoredPool = restoredPoolName.isEmpty()
+                ? thread.currentRecipePoolId() : ResourceLocation.parse(restoredPoolName);
         if (!thread.coreThread && restoredStreak > 0 && restoredKey != null
                 && restoredKey.equals(thread.currentSearchContextKey())
                 && Objects.equals(restoredPool, thread.currentRecipePoolId()) && restoredReason != null) {
@@ -728,7 +728,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         return thread;
     }
 
-    private static @Nullable Identifier readSearchFailureReason(ValueInput input) {
+    private static @Nullable ResourceLocation readSearchFailureReason(ValueInput input) {
         var typedReason = input.getString("search_failure_reason_id");
         if (typedReason.isPresent()) return FailureStatusMigration.factoryReasonId(typedReason.get());
         return FailureStatusMigration.factoryReasonId(input.getStringOr("search_failure_reason", ""));
@@ -739,7 +739,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null) return List.of();
         List<MachineRecipe> source = candidates == null
                 ? RecipeRegistry.catalogForMachine(machine).recipes() : candidates;
@@ -748,11 +748,11 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
-        Identifier recipePoolId = currentRecipePoolId();
+        ResourceLocation recipePoolId = currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 
-    private @Nullable Identifier currentRecipePoolId() {
+    private @Nullable ResourceLocation currentRecipePoolId() {
         return controller.currentRecipePoolId();
     }
 

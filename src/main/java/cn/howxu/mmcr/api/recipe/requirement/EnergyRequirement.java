@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
@@ -14,7 +14,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record EnergyRequirement(RecipeModifier.IOType io, long fePerTick, List<String> tags) implements MachineRequirement {
-    private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("neoforge", "energy");
+    private static final ResourceLocation TYPE_ID = ResourceLocation.fromNamespaceAndPath("neoforge", "energy");
     public static final MapCodec<EnergyRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

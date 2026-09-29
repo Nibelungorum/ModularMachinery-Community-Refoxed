@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,7 +44,7 @@ class MachineRoleValidationTest {
 
     @Test
     void builderStoresImmutableMachineRolesAndAcceptedModuleIds() {
-        Identifier moduleId = MMCR.id("module_machine");
+        ResourceLocation moduleId = MMCR.id("module_machine");
         MachineRegistration normal = MachineRegistration.builder(MMCR.id("normal_machine")).build();
         MachineRegistration host = MachineRegistration.builder(MMCR.id("host_machine"))
                 .host(moduleId)
@@ -72,7 +72,7 @@ class MachineRoleValidationTest {
 
     @Test
     void validatesCouplerCountsForNormalModuleAndHostMachines() {
-        Identifier moduleId = MMCR.id("module_machine");
+        ResourceLocation moduleId = MMCR.id("module_machine");
         MachineRegistration normal = MachineRegistration.builder(MMCR.id("normal_machine")).build();
         MachineRegistration host = MachineRegistration.builder(MMCR.id("host_machine"))
                 .host(moduleId)
@@ -127,7 +127,7 @@ class MachineRoleValidationTest {
 
     @Test
     void rejectsHostReferencesToMissingOrNonModuleMachines() {
-        Identifier missing = MMCR.id("missing_module");
+        ResourceLocation missing = MMCR.id("missing_module");
         MachineRegistration host = MachineRegistration.builder(MMCR.id("host_machine"))
                 .host(missing)
                 .pattern(patternWithCouplers(1))
@@ -145,9 +145,9 @@ class MachineRoleValidationTest {
 
     @Test
     void dynamicReloadValidationFailureRetainsPreviousSnapshot() {
-        Identifier oldId = MMCR.id("old_machine");
-        Identifier badHostId = MMCR.id("bad_host");
-        Identifier moduleId = MMCR.id("module_machine");
+        ResourceLocation oldId = MMCR.id("old_machine");
+        ResourceLocation badHostId = MMCR.id("bad_host");
+        ResourceLocation moduleId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(oldId).build());
         MachineDefinitions.register(MachineRegistration.builder(badHostId).host(moduleId).build());
         MachineDefinitions.register(MachineRegistration.builder(moduleId).module().build());
@@ -165,8 +165,8 @@ class MachineRoleValidationTest {
 
     @Test
     void dynamicReloadValidatesHostsAgainstCandidateModulesOnly() {
-        Identifier hostId = MMCR.id("host_machine");
-        Identifier moduleId = MMCR.id("module_machine");
+        ResourceLocation hostId = MMCR.id("host_machine");
+        ResourceLocation moduleId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(hostId).host(moduleId).build());
         MachineDefinitions.register(MachineRegistration.builder(moduleId).module().build());
         DynamicContentReloadService.reload(candidate -> {
@@ -185,7 +185,7 @@ class MachineRoleValidationTest {
 
     @Test
     void dynamicReloadKeepsExplicitMissingRegistrationError() {
-        Identifier unknownId = MMCR.id("unknown_machine");
+        ResourceLocation unknownId = MMCR.id("unknown_machine");
 
         assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate ->
                 candidate.registerStructure(structure(unknownId, patternWithCouplers(0)))))
@@ -195,8 +195,8 @@ class MachineRoleValidationTest {
 
     @Test
     void freezeRegistryValidationUsesStaticRegistrationPattern() {
-        Identifier hostId = MMCR.id("static_host");
-        Identifier moduleId = MMCR.id("static_module");
+        ResourceLocation hostId = MMCR.id("static_host");
+        ResourceLocation moduleId = MMCR.id("static_module");
         MachineDefinitions.register(MachineRegistration.builder(hostId)
                 .host(moduleId)
                 .pattern(patternWithCouplers(1))
@@ -216,7 +216,7 @@ class MachineRoleValidationTest {
         assertThat(BlockPredicate.machineCoupler().matches(Blocks.IRON_BLOCK.defaultBlockState())).isFalse();
     }
 
-    private static MachineStructureDefinition structure(Identifier id, BlockArray pattern) {
+    private static MachineStructureDefinition structure(ResourceLocation id, BlockArray pattern) {
         return new MachineStructureDefinition(id, pattern, PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
     }

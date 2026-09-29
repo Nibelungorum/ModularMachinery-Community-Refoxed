@@ -9,7 +9,7 @@ import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.TerminalItem;
 import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
@@ -44,7 +44,7 @@ public final class ModItems {
             REGISTER.register("blueprint", BlueprintItem::new);
 
     public static final LinkedHashMap<String, DeferredHolder<Item, Item>> ITEMS = new LinkedHashMap<>();
-    private static Map<Item, Identifier> controllerMachineIds = Map.of();
+    private static Map<Item, ResourceLocation> controllerMachineIds = Map.of();
 
     static {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
@@ -53,9 +53,9 @@ public final class ModItems {
                         Item item = new InterfaceBlockItem(blockHolder.get(),
                                 new Item.Properties().setId(
                                         ResourceKey.create(Registries.ITEM, MMCR.id(name))));
-                        Identifier machineId = ModBlocks.machineIdForController(blockHolder.get());
+                        ResourceLocation machineId = ModBlocks.machineIdForController(blockHolder.get());
                         if (machineId != null) {
-                            Map<Item, Identifier> ids = new LinkedHashMap<>(controllerMachineIds);
+                            Map<Item, ResourceLocation> ids = new LinkedHashMap<>(controllerMachineIds);
                             ids.put(item, machineId);
                             controllerMachineIds = Map.copyOf(ids);
                         }
@@ -71,11 +71,11 @@ public final class ModItems {
         ITEMS.put("blueprint", BLUEPRINT);
     }
 
-    public static Identifier machineIdForControllerItem(Item item) {
+    public static ResourceLocation machineIdForControllerItem(Item item) {
         return controllerMachineIds.get(item);
     }
 
-    public static void registerMachineControllerItems(Collection<Identifier> machineIds) {
+    public static void registerMachineControllerItems(Collection<ResourceLocation> machineIds) {
         machineIds.forEach(machineId -> {
             String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
             if (ITEMS.containsKey(name)) return;

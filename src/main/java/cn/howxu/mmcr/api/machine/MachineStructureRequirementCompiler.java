@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,13 +24,13 @@ public final class MachineStructureRequirementCompiler {
         Objects.requireNonNull(pattern, "pattern");
         Objects.requireNonNull(requirements, "requirements").validate(pattern);
         Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers = new LinkedHashMap<>();
-        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        Map<BlockPos, ResourceLocation> levelSlots = new LinkedHashMap<>();
         for (var entry : pattern.symbolsByPosition().entrySet()) {
             BlockPos pos = entry.getKey();
             Character symbol = entry.getValue();
             List<SingleBlockModifierReplacement> replacements = requirements.modifierReplacements().get(symbol);
             if (replacements != null) modifiers.put(pos, new ArrayList<>(replacements));
-            Identifier typeId = requirements.levelSlots().get(symbol);
+            ResourceLocation typeId = requirements.levelSlots().get(symbol);
             if (typeId != null) levelSlots.put(pos, typeId);
         }
         return new Compiled(copyNestedMap(modifiers), Map.copyOf(levelSlots));
@@ -50,6 +50,6 @@ public final class MachineStructureRequirementCompiler {
      */
     public record Compiled(
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+            Map<BlockPos, ResourceLocation> levelSlots) {
     }
 }

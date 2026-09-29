@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Set;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,8 +46,8 @@ class MachineLevelBuilderJSTest {
 
         var event = MMCRMachineStructuresEvent.current();
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
-        var level = MachineLevelRegistry.getLevel(Identifier.parse("test:copper_coil"));
-        assertThat(level.typeId()).isEqualTo(Identifier.parse("test:coil"));
+        var level = MachineLevelRegistry.getLevel(ResourceLocation.parse("test:copper_coil"));
+        assertThat(level.typeId()).isEqualTo(ResourceLocation.parse("test:coil"));
         assertThat(level.priority()).isEqualTo(2);
         assertThat(level.statePredicate().matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
         assertThat(level.modifier()).isEqualTo(new ModifierDefinition(List.of(
@@ -62,7 +62,7 @@ class MachineLevelBuilderJSTest {
                 .registerObject();
 
         var displayName = MMCRMachineStructuresEvent.current().levelTypes()
-                .get(Identifier.parse("test:coil"))
+                .get(ResourceLocation.parse("test:coil"))
                 .displayName();
 
         assertThat(displayName.getContents()).isInstanceOf(TranslatableContents.class);

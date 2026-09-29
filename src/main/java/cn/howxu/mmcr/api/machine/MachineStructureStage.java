@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,7 +26,7 @@ public final class MachineStructureStage {
     private final List<DynamicPatternSpec> dynamicPatterns;
     private final MachineStructureRequirements requirements;
     private final Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements;
-    private final Map<BlockPos, Identifier> levelSlots;
+    private final Map<BlockPos, ResourceLocation> levelSlots;
     private final boolean stateSensitive;
 
     public MachineStructureStage(int number, BlockArray pattern, PortRequirementSpec portRequirements,
@@ -39,7 +39,7 @@ public final class MachineStructureStage {
     static MachineStructureStage withCompiledRequirements(int number, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+            Map<BlockPos, ResourceLocation> levelSlots) {
         return withCompiledRequirements(number, Declaration.Kind.FULL, pattern, portRequirements, portTierRequirements,
                 dynamicPatterns, requirements, modifierReplacements, levelSlots);
     }
@@ -48,7 +48,7 @@ public final class MachineStructureStage {
             PortRequirementSpec portRequirements, PortTierRequirementSpec portTierRequirements,
             List<DynamicPatternSpec> dynamicPatterns, MachineStructureRequirements requirements,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots) {
+            Map<BlockPos, ResourceLocation> levelSlots) {
         return withCompiledRequirements(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
                 requirements, modifierReplacements, levelSlots, false);
     }
@@ -57,7 +57,7 @@ public final class MachineStructureStage {
             PortRequirementSpec portRequirements, PortTierRequirementSpec portTierRequirements,
             List<DynamicPatternSpec> dynamicPatterns, MachineStructureRequirements requirements,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots, boolean stateSensitive) {
+            Map<BlockPos, ResourceLocation> levelSlots, boolean stateSensitive) {
         return new MachineStructureStage(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
                 requirements, modifierReplacements, levelSlots, stateSensitive);
     }
@@ -65,7 +65,7 @@ public final class MachineStructureStage {
     private MachineStructureStage(int number, Declaration.Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             MachineStructureRequirements requirements, Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements,
-            Map<BlockPos, Identifier> levelSlots, boolean stateSensitive) {
+            Map<BlockPos, ResourceLocation> levelSlots, boolean stateSensitive) {
         if (number < 1) throw new IllegalArgumentException("stage number must be positive");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(pattern, "pattern");
@@ -117,7 +117,7 @@ public final class MachineStructureStage {
         return modifierReplacements;
     }
 
-    public Map<BlockPos, Identifier> levelSlots() {
+    public Map<BlockPos, ResourceLocation> levelSlots() {
         return levelSlots;
     }
 

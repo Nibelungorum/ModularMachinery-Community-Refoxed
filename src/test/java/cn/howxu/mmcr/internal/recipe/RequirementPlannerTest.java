@@ -47,7 +47,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import com.mojang.serialization.MapCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -1585,8 +1585,8 @@ class RequirementPlannerTest {
     void full_context_plan_start_honors_partial_outputs() {
         BulkItemStorage storage = new BulkItemStorage(2, null);
         MachineRecipe recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr_test", "partial_context_start"),
-                Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "partial_context_start"),
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         ironStack(4))),
@@ -1683,8 +1683,8 @@ class RequirementPlannerTest {
         BulkItemStorage storage = new BulkItemStorage(64, null);
         storage.insert(ironResource(), 1, false);
         MachineRecipe recipe = RecipeTestSupport.create(
-                Identifier.fromNamespaceAndPath("mmcr_test", "indexed_requirements"),
-                Identifier.fromNamespaceAndPath("mmcr_test", "machine"), 20,
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "indexed_requirements"),
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output, input), true);
 
         var result = new CraftingContext(new CapabilitySnapshot(List.of(
@@ -2245,7 +2245,7 @@ class RequirementPlannerTest {
     }
 
     private static TestType type(String path) {
-        return new TestType(Identifier.fromNamespaceAndPath("mmcr_test", path));
+        return new TestType(ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
     }
 
     private static void register(TestType type, RequirementHandler<TestRequirement> handler) {
@@ -2292,17 +2292,17 @@ class RequirementPlannerTest {
     }
 
     private static final class TestType implements RequirementType<TestRequirement> {
-        private final Identifier id;
+        private final ResourceLocation id;
         private final MapCodec<TestRequirement> codec;
         private RequirementHandler<TestRequirement> handler;
 
-        private TestType(Identifier id) {
+        private TestType(ResourceLocation id) {
             this.id = id;
             this.codec = MapCodec.unit(() -> new TestRequirement(this, RecipeModifier.IOType.INPUT));
         }
 
         @Override
-        public Identifier id() {
+        public ResourceLocation id() {
             return id;
         }
 
@@ -2348,11 +2348,11 @@ class RequirementPlannerTest {
         private final List<String> tags;
         private final ArrayList<Long> requestedParallelisms = new ArrayList<>();
 
-        private TestCapability(Identifier type, IOType ioType, int limit) {
+        private TestCapability(ResourceLocation type, IOType ioType, int limit) {
             this(type, ioType, limit, List.of());
         }
 
-        private TestCapability(Identifier type, IOType ioType, int limit, List<String> tags) {
+        private TestCapability(ResourceLocation type, IOType ioType, int limit, List<String> tags) {
             this.type = new CapabilityType(type);
             this.ioType = ioType;
             this.limit = limit;
@@ -2532,11 +2532,11 @@ class RequirementPlannerTest {
         private final List<CapabilityRequest> requests = new ArrayList<>();
         private final List<IOType> committedRequestDirections = new ArrayList<>();
 
-        private StorageCapability(Identifier type, CapabilityDirections directions, CapabilityStorage storage) {
+        private StorageCapability(ResourceLocation type, CapabilityDirections directions, CapabilityStorage storage) {
             this(type, directions, storage, List.of());
         }
 
-        private StorageCapability(Identifier type, CapabilityDirections directions, CapabilityStorage storage,
+        private StorageCapability(ResourceLocation type, CapabilityDirections directions, CapabilityStorage storage,
                                   List<String> tags) {
             this.type = new CapabilityType(type);
             this.directions = directions;
@@ -2653,7 +2653,7 @@ class RequirementPlannerTest {
     private static final class FailingOutputStorageCapability extends StorageCapability {
         private final BulkItemStorage storage;
 
-        private FailingOutputStorageCapability(Identifier type, CapabilityDirections directions,
+        private FailingOutputStorageCapability(ResourceLocation type, CapabilityDirections directions,
                                                CapabilityStorage storage) {
             super(type, directions, storage);
             this.storage = (BulkItemStorage) storage;
@@ -2676,11 +2676,11 @@ class RequirementPlannerTest {
         }
     }
 
-    private static ExecutionStatus unknownFailure(Identifier source, StatusSeverity severity, FailurePhase phase) {
+    private static ExecutionStatus unknownFailure(ResourceLocation source, StatusSeverity severity, FailurePhase phase) {
         return unknownFailure(source, severity, phase, Map.of());
     }
 
-    private static ExecutionStatus unknownFailure(Identifier source, StatusSeverity severity, FailurePhase phase,
+    private static ExecutionStatus unknownFailure(ResourceLocation source, StatusSeverity severity, FailurePhase phase,
                                                   Map<String, String> details) {
         return new ExecutionStatus(source, severity, source,
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, phase, null, null, details));

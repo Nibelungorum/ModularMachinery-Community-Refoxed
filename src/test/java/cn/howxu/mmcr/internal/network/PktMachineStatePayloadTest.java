@@ -16,7 +16,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.BeforeAll;
@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class PktMachineStatePayloadTest {
     private static final FailureReason CUSTOM_REASON = new FailureReason(
-            Identifier.fromNamespaceAndPath("mmcr_test", "custom_packet_reason"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "custom_packet_reason"),
             "gui.mmcr.failure.custom_packet_reason", 10);
 
     @BeforeAll
@@ -86,7 +86,7 @@ class PktMachineStatePayloadTest {
     @Test
     void unknown_reason_uses_the_unknown_translation_key_in_the_client_snapshot() {
         FailureReason unknown = new FailureReason(
-                Identifier.fromNamespaceAndPath("legacy", "removed_machine_reason"),
+                ResourceLocation.fromNamespaceAndPath("legacy", "removed_machine_reason"),
                 "gui.mmcr.failure.removed_machine_reason");
         PktMachineStatePayload payload = payload(List.of(), failure(unknown, 1));
         RegistryFriendlyByteBuf buffer = buffer();

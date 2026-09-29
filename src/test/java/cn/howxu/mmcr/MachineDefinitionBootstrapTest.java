@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class MachineDefinitionBootstrapTest {
 
     @Test
     void startupRegistrationsRejectDuplicateIds() {
-        var staticId = Identifier.parse("mmcr:static_machine");
+        var staticId = ResourceLocation.parse("mmcr:static_machine");
         MachineDefinitions.register(MachineRegistration.builder(staticId).build());
 
         assertThat(MachineDefinitions.getRegistration(staticId)).isNotNull();
@@ -91,7 +91,7 @@ class MachineDefinitionBootstrapTest {
     }
 
     private static MachineStructureDefinition structure(String id) {
-        return new MachineStructureDefinition(Identifier.parse(id), new BlockArray(Map.of()),
+        return new MachineStructureDefinition(ResourceLocation.parse(id), new BlockArray(Map.of()),
                 PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
     }
 }

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Plans a logical capability operation from immutable values on a worker thread.
@@ -27,7 +27,7 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
      *
      * @param capabilityId capability type identifier
      */
-    record Resource(Identifier capabilityId) implements AsyncCapabilityPlanner {
+    record Resource(ResourceLocation capabilityId) implements AsyncCapabilityPlanner {
         public Resource {
             Objects.requireNonNull(capabilityId, "capabilityId");
         }
@@ -35,7 +35,7 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
         @Override
         public Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, AsyncCapabilityRequest request) {
             if (!(snapshot instanceof AsyncCapabilitySnapshot.Resource(
-                    Identifier id, List<AsyncCapabilitySnapshot.ResourceSlot> slots1
+                    ResourceLocation id, List<AsyncCapabilitySnapshot.ResourceSlot> slots1
             ))
                     || !(request instanceof AsyncCapabilityRequest.Resource resourceRequest)
                     || !capabilityId.equals(id)
@@ -93,7 +93,7 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
      *
      * @param capabilityId capability type identifier
      */
-    record Scalar(Identifier capabilityId) implements AsyncCapabilityPlanner {
+    record Scalar(ResourceLocation capabilityId) implements AsyncCapabilityPlanner {
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
         }
@@ -101,10 +101,10 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
         @Override
         public Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, AsyncCapabilityRequest request) {
             if (!(snapshot instanceof AsyncCapabilitySnapshot.Scalar(
-                    Identifier capabilityId1, long amount2, long capacity, long transferLimit
+                    ResourceLocation capabilityId1, long amount2, long capacity, long transferLimit
             ))
                     || !(request instanceof AsyncCapabilityRequest.Scalar(
-                    Identifier id, long parallelism, long amount1, boolean insert
+                    ResourceLocation id, long parallelism, long amount1, boolean insert
             ))
                     || !capabilityId.equals(capabilityId1)
                     || !capabilityId.equals(id)) {
@@ -133,7 +133,7 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
     }
 
     /** Pure planner for Mekanism heat checks and output mutations. */
-    record Heat(Identifier capabilityId) implements AsyncCapabilityPlanner {
+    record Heat(ResourceLocation capabilityId) implements AsyncCapabilityPlanner {
         public Heat {
             Objects.requireNonNull(capabilityId, "capabilityId");
         }

@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
@@ -71,7 +71,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
         int textStart = buffer.writerIndex();
         for (ControllerScreenTextSnapshot.Line line : payload.lines) {
             buffer.writeVarInt(line.scope().ordinal());
-            Identifier.STREAM_CODEC.encode(buffer, line.lineId());
+            ResourceLocation.STREAM_CODEC.encode(buffer, line.lineId());
             ComponentSerialization.STREAM_CODEC.encode(buffer, line.text());
             if (buffer.writerIndex() - textStart > maxEncodedTextBytes()) {
                 throw new IllegalArgumentException("Encoded controller screen text is too large");
@@ -98,7 +98,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
         Set<LineKey> seen = new HashSet<>();
         for (int index = 0; index < lineCount; index++) {
             ControllerScreenTextScope scope = readScope(buffer.readVarInt());
-            Identifier lineId = Identifier.STREAM_CODEC.decode(buffer);
+            ResourceLocation lineId = ResourceLocation.STREAM_CODEC.decode(buffer);
             validateLineId(lineId);
             if (!seen.add(new LineKey(scope, lineId))) {
                 throw new IllegalArgumentException("Duplicate controller screen text line");
@@ -126,7 +126,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
         }
     }
 
-    private static void validateLineId(Identifier lineId) {
+    private static void validateLineId(ResourceLocation lineId) {
         Objects.requireNonNull(lineId, "lineId");
         if (lineId.getNamespace().isBlank()) {
             throw new IllegalArgumentException("lineId must have a namespace");
@@ -152,6 +152,6 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
         return CommonConfig.valueOrDefault(CommonConfig.SCREEN_TEXT_MAX_ENCODED_BYTES, MAX_ENCODED_TEXT_BYTES);
     }
 
-    private record LineKey(ControllerScreenTextScope scope, Identifier lineId) {
+    private record LineKey(ControllerScreenTextScope scope, ResourceLocation lineId) {
     }
 }

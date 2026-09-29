@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -18,7 +18,7 @@ import java.util.Set;
 import java.util.Collections;
 
 public record DynamicMachine(
-        Identifier registryName,
+        ResourceLocation registryName,
         String displayNameKey,
         BlockArray pattern,
         MachineControllerSpec controller,
@@ -33,20 +33,20 @@ public record DynamicMachine(
         int factoryThreadLimit,
         List<FactoryThreadSpec> factoryThreads,
         MachineRole role,
-        Set<Identifier> acceptedModuleIds,
+        Set<ResourceLocation> acceptedModuleIds,
         NetworkInterfaceSpec networkInterface,
         List<MachineStructureStage> structureStages,
         RecipeFailureActions failureAction,
         MachineBehavior behavior,
-        Map<Identifier, RequestProcess> requestProcessors,
-        Map<Identifier, RequestFailed> requestFailures
+        Map<ResourceLocation, RequestProcess> requestProcessors,
+        Map<ResourceLocation, RequestFailed> requestFailures
 ) implements Machine {
-    public DynamicMachine(Identifier registryName, String displayNameKey, BlockArray pattern,
+    public DynamicMachine(ResourceLocation registryName, String displayNameKey, BlockArray pattern,
             MachineControllerSpec controller, MachineAppearanceSpec appearance, PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
             Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements, long maxParallelism,
             boolean parallelizable, boolean hasFactory, int factoryThreadLimit, List<FactoryThreadSpec> factoryThreads,
-            MachineRole role, Set<Identifier> acceptedModuleIds, NetworkInterfaceSpec networkInterface,
+            MachineRole role, Set<ResourceLocation> acceptedModuleIds, NetworkInterfaceSpec networkInterface,
             List<MachineStructureStage> structureStages, RecipeFailureActions failureAction, MachineBehavior behavior) {
         this(registryName, displayNameKey, pattern, controller, appearance, portRequirements, portTierRequirements,
                 dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory, factoryThreadLimit,
@@ -54,7 +54,7 @@ public record DynamicMachine(
                 Map.of(), Map.of());
     }
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -72,19 +72,19 @@ public record DynamicMachine(
                 MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
     }
 
-    public DynamicMachine(Identifier registryName, String displayNameKey, BlockArray pattern) {
+    public DynamicMachine(ResourceLocation registryName, String displayNameKey, BlockArray pattern) {
         this(registryName, displayNameKey, pattern, MachineControllerSpec.defaultsFor(registryName), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
     }
 
-    public DynamicMachine(Identifier registryName, String displayNameKey, BlockArray pattern, MachineControllerSpec controller) {
+    public DynamicMachine(ResourceLocation registryName, String displayNameKey, BlockArray pattern, MachineControllerSpec controller) {
         this(registryName, displayNameKey, pattern, controller, MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
     }
 
-    public DynamicMachine(Identifier registryName, String displayNameKey, BlockArray pattern, List<DynamicPatternSpec> dynamicPatterns) {
+    public DynamicMachine(ResourceLocation registryName, String displayNameKey, BlockArray pattern, List<DynamicPatternSpec> dynamicPatterns) {
         this(registryName, displayNameKey, pattern, MachineControllerSpec.defaultsFor(registryName), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(), PortTierRequirementSpec.none(), dynamicPatterns, Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
     }
 
-    public DynamicMachine(Identifier registryName, String displayNameKey, BlockArray pattern, MachineControllerSpec controller, PortRequirementSpec portRequirements) {
+    public DynamicMachine(ResourceLocation registryName, String displayNameKey, BlockArray pattern, MachineControllerSpec controller, PortRequirementSpec portRequirements) {
         this(registryName, displayNameKey, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
     }
 
@@ -118,7 +118,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -133,7 +133,7 @@ public record DynamicMachine(
             int factoryThreadLimit,
             List<FactoryThreadSpec> factoryThreads,
             MachineRole role,
-            Set<Identifier> acceptedModuleIds,
+            Set<ResourceLocation> acceptedModuleIds,
             List<MachineStructureStage> structureStages,
             RecipeFailureActions failureAction,
             MachineBehavior behavior) {
@@ -144,7 +144,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -159,7 +159,7 @@ public record DynamicMachine(
             int factoryThreadLimit,
             List<FactoryThreadSpec> factoryThreads,
             MachineRole role,
-            Set<Identifier> acceptedModuleIds,
+            Set<ResourceLocation> acceptedModuleIds,
             List<MachineStructureStage> structureStages,
             RecipeFailureActions failureAction) {
         this(registryName, displayNameKey, pattern, controller, appearance, portRequirements, portTierRequirements,
@@ -168,7 +168,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -183,7 +183,7 @@ public record DynamicMachine(
             int factoryThreadLimit,
             List<FactoryThreadSpec> factoryThreads,
             MachineRole role,
-            Set<Identifier> acceptedModuleIds,
+            Set<ResourceLocation> acceptedModuleIds,
             List<MachineStructureStage> structureStages) {
         this(registryName, displayNameKey, pattern, controller, appearance, portRequirements, portTierRequirements,
                 dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory, factoryThreadLimit,
@@ -191,7 +191,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -211,7 +211,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -232,7 +232,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -245,7 +245,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -256,7 +256,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -271,7 +271,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -281,7 +281,7 @@ public record DynamicMachine(
     }
 
     public DynamicMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String displayNameKey,
             BlockArray pattern,
             MachineControllerSpec controller,
@@ -292,7 +292,7 @@ public record DynamicMachine(
         this(registryName, displayNameKey, pattern, controller, MachineAppearanceSpec.defaults(), portRequirements, portTierRequirements, dynamicPatterns, modifierReplacements, 1, false, false, 1, List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
     }
 
-    public DynamicMachine withRole(MachineRole role, Set<Identifier> acceptedModuleIds) {
+    public DynamicMachine withRole(MachineRole role, Set<ResourceLocation> acceptedModuleIds) {
         return new DynamicMachine(registryName, displayNameKey, pattern, controller, appearance, portRequirements,
                 portTierRequirements, dynamicPatterns, modifierReplacements, maxParallelism, parallelizable, hasFactory,
                 factoryThreadLimit, factoryThreads, role, acceptedModuleIds, networkInterface, structureStages,
@@ -344,10 +344,10 @@ public record DynamicMachine(
         return Collections.unmodifiableMap(copy);
     }
 
-    private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {
+    private static Set<ResourceLocation> copyAcceptedModuleIds(Set<ResourceLocation> acceptedModuleIds) {
         if (acceptedModuleIds == null || acceptedModuleIds.isEmpty()) return Set.of();
-        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
-        for (Identifier acceptedModuleId : acceptedModuleIds) {
+        LinkedHashSet<ResourceLocation> copy = new LinkedHashSet<>();
+        for (ResourceLocation acceptedModuleId : acceptedModuleIds) {
             if (acceptedModuleId == null) throw new IllegalArgumentException("accepted module id null");
             copy.add(acceptedModuleId);
         }

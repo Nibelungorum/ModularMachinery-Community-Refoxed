@@ -14,7 +14,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.ArrayList;
@@ -63,10 +63,10 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final float THREAD_TEXT_SCALE = 0.85F;
     static final int RECIPE_POOL_BUTTON_X = 258;
     static final int RECIPE_POOL_BUTTON_Y = 9;
-    private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
-    private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
-    private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
-    private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
+    private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/guifactory.png");
+    private static final ResourceLocation ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
+    private static final ResourceLocation SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
+    private static final ResourceLocation SCROLLER = MMCR.id("textures/gui/scroller.png");
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
@@ -97,7 +97,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     private void updateRecipePoolButton() {
-        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        List<ResourceLocation> recipePoolIds = menu.recipePoolIds();
         if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
@@ -184,7 +184,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static List<Component> levelLines(List<String> levelIds) {
         List<Component> lines = new ArrayList<>();
         for (String levelId : levelIds) {
-            MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+            MachineLevel level = MachineLevelRegistry.getLevel(ResourceLocation.parse(levelId));
             if (level != null) lines.add(levelLine(level));
         }
         return List.copyOf(lines);
@@ -212,7 +212,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                         .append(Component.literal(" "))
                         .append(Component.translatable(controllerStatusKey(menu.isFormed(), selected.active()))),
                 controllerStatusColor(menu.isFormed(), selected.active())));
-        Identifier recipePoolId = MachineControllerScreen.displayedRecipePoolId(
+        ResourceLocation recipePoolId = MachineControllerScreen.displayedRecipePoolId(
                 menu.currentRecipePoolId(), menu.recipePoolIds());
         if (recipePoolId != null) {
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
@@ -308,7 +308,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             int elementX = leftPos + THREAD_ROW_X;
             int progressOverlayX = progressOverlayX(elementX);
             int progressOverlayY = progressOverlayY(y);
-            Identifier elements = thread.index() == menu.selectedThread().index() ? SELECTED_ELEMENTS : ELEMENTS;
+            ResourceLocation elements = thread.index() == menu.selectedThread().index() ? SELECTED_ELEMENTS : ELEMENTS;
             graphics.blit(RenderPipelines.GUI_TEXTURED, elements, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
                     THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
             int progress = progressWidth(thread.tick(), thread.totalTick());

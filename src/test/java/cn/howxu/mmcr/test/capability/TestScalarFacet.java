@@ -15,7 +15,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
@@ -54,7 +54,7 @@ public final class TestScalarFacet implements MachineCapability, ScalarFacet {
     public TestScalarFacet(IOType ioType) {
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.ioType = ioType;
-        this.type = new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "scalar_" + ioType.name().toLowerCase()));
+        this.type = new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "scalar_" + ioType.name().toLowerCase()));
     }
 
     public long amount() {
@@ -105,9 +105,9 @@ public final class TestScalarFacet implements MachineCapability, ScalarFacet {
     }
 
     private static CapabilityResult failed(String reason) {
-        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "scalar");
+        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "scalar");
         return CapabilityResult.failure(ExecutionStatus.blocked(
-                Identifier.fromNamespaceAndPath("mmcr_test", reason), source,
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", reason), source,
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
                         null, null, Map.of())));
     }

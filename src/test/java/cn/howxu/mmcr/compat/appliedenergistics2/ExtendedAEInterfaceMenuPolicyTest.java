@@ -23,7 +23,7 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -141,7 +141,7 @@ class ExtendedAEInterfaceMenuPolicyTest {
 
     @SuppressWarnings("unchecked")
     private static <T extends BlockEntity> void bindTestEntityType(String kind, BlockEntityType.BlockEntitySupplier<T> factory) {
-        Identifier id = MMCR.id(kind);
+        ResourceLocation id = MMCR.id(kind);
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {
@@ -157,7 +157,7 @@ class ExtendedAEInterfaceMenuPolicyTest {
 
     @SuppressWarnings("unchecked")
     private static void bindTestAE2InterfaceItem() {
-        Identifier id = Identifier.fromNamespaceAndPath("ae2", "interface");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("ae2", "interface");
         MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
         registry.unfreeze(true);
         try {

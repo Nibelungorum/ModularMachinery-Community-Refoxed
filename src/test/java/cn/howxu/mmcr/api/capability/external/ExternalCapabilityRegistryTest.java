@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.capability.external;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -53,7 +53,7 @@ class ExternalCapabilityRegistryTest {
         ExternalCapabilityRegistry registry = new ExternalCapabilityRegistry();
         registry.register(new ExternalCapabilityAdapter() {
             @Override
-            public Identifier id() {
+            public ResourceLocation id() {
                 return MMCR.id("handler");
             }
 
@@ -86,7 +86,7 @@ class ExternalCapabilityRegistryTest {
         CapabilityType unsupportedType = new CapabilityType(MMCR.id("unsupported_external_adapter_test"));
         registry.register(new ExternalCapabilityAdapter() {
             @Override
-            public Identifier id() {
+            public ResourceLocation id() {
                 return MMCR.id("unsupported_handler");
             }
 
@@ -115,7 +115,7 @@ class ExternalCapabilityRegistryTest {
     private static ExternalCapabilityAdapter adapter(String id, boolean available, AtomicInteger calls) {
         return new ExternalCapabilityAdapter() {
             @Override
-            public Identifier id() {
+            public ResourceLocation id() {
                 return MMCR.id(id);
             }
 

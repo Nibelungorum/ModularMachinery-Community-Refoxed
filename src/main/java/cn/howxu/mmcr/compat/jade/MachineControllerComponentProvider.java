@@ -5,7 +5,7 @@ import cn.howxu.mmcr.client.gui.RecipePoolDisplayName;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -23,10 +23,10 @@ import java.util.List;
 public enum MachineControllerComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
-    static final Identifier UID = MMCR.id("machine_controller");
+    static final ResourceLocation UID = MMCR.id("machine_controller");
 
     @Override
-    public Identifier getUid() {
+    public ResourceLocation getUid() {
         return UID;
     }
 
@@ -131,7 +131,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             int fluidOutputs,
             int energyInputs,
             int energyOutputs,
-            Identifier recipePoolId
+            ResourceLocation recipePoolId
     ) {
 
         static Snapshot from(CompoundTag tag) {
@@ -155,11 +155,11 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getIntOr("fluidOutputs", 0),
                     tag.getIntOr("energyInputs", 0),
                     tag.getIntOr("energyOutputs", 0),
-                    parseIdentifier(tag.getStringOr("recipePool", "")));
+                    parseResourceLocation(tag.getStringOr("recipePool", "")));
         }
 
-        private static Identifier parseIdentifier(String value) {
-            return value == null || value.isEmpty() ? null : Identifier.tryParse(value);
+        private static ResourceLocation parseResourceLocation(String value) {
+            return value == null || value.isEmpty() ? null : ResourceLocation.tryParse(value);
         }
 
         String status() {

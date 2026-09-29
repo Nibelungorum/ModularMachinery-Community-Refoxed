@@ -11,7 +11,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -174,7 +174,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
                 long sequence = serialized.getLong(SEQUENCE_KEY).orElseThrow();
                 if (sequence < 0L) continue;
                 MachineReference machineReference = new MachineReference(
-                        Identifier.parse(machine), serialized.getLong(HASH_KEY).orElseThrow());
+                        ResourceLocation.parse(machine), serialized.getLong(HASH_KEY).orElseThrow());
                 connections.put(new ConnectionKey(endpoint, machineReference),
                         new Connection(endpoint, machineReference, sequence));
             } catch (RuntimeException ignored) {
@@ -215,7 +215,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     private static @Nullable GlobalPos readGlobalPos(ValueInput input) {
         String dimension = input.getStringOr(DIMENSION_KEY, "");
         if (dimension.isBlank()) return null;
-        Identifier dimensionId = Identifier.parse(dimension);
+        ResourceLocation dimensionId = ResourceLocation.parse(dimension);
         ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, dimensionId);
         return GlobalPos.of(key, new BlockPos(
                 input.getIntOr(X_KEY, 0), input.getIntOr(Y_KEY, 0), input.getIntOr(Z_KEY, 0)));

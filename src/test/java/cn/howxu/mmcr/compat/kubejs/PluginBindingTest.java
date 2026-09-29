@@ -63,7 +63,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -926,12 +926,12 @@ class PluginBindingTest {
         }
     }
 
-    private static MachineStructureDefinition structure(Identifier id) {
+    private static MachineStructureDefinition structure(ResourceLocation id) {
         return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
     }
 
-    private static MachineStructureDefinition modifierStructure(Identifier id) {
+    private static MachineStructureDefinition modifierStructure(ResourceLocation id) {
         ModifierRegistry.installSnapshot(Map.of(MMCR.id("speed"), new ModifierDefinition(List.of())));
         BlockArray pattern = BlockArray.builder()
                 .pattern("M")

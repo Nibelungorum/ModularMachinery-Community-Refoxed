@@ -3,7 +3,7 @@ package cn.howxu.mmcr.client.preview;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -65,9 +65,9 @@ class StructurePreviewSchemaTest {
     void schema_copies_mutable_positions_and_level_slots() {
         BlockPos.MutableBlockPos mutablePosition = new BlockPos.MutableBlockPos(2, 3, 4);
         BlockState state = Blocks.IRON_BLOCK.defaultBlockState();
-        Identifier slot = MMCR.id("coil");
+        ResourceLocation slot = MMCR.id("coil");
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
-        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        Map<BlockPos, ResourceLocation> levelSlots = new LinkedHashMap<>();
         states.put(mutablePosition, state);
         levelSlots.put(mutablePosition, slot);
 

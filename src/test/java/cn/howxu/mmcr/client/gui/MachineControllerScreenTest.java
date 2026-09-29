@@ -21,7 +21,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MachineControllerScreenTest {
     private static final BlockPos CONTROLLER_POS = new BlockPos(11, 22, 33);
-    private static final Identifier TICK_MACHINE_ID = Identifier.parse("mmcr:screen_tick_machine");
+    private static final ResourceLocation TICK_MACHINE_ID = ResourceLocation.parse("mmcr:screen_tick_machine");
     private static final ExecutionStatus FAILURE = ExecutionStatus.blocked(
             MMCR.id("screen_tick_failure"), MMCR.id("screen_tick_controller"),
             FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, MMCR.id("screen_tick_controller"),
@@ -181,14 +181,14 @@ class MachineControllerScreenTest {
 
     private static ControllerScreenTextSnapshot.Line line(String id, String text) {
         return new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
-                Identifier.parse(id), Component.literal(text));
+                ResourceLocation.parse(id), Component.literal(text));
     }
 
-    private static MachineControllerMenu menuWithState(Identifier machineId) {
+    private static MachineControllerMenu menuWithState(ResourceLocation machineId) {
         return menuWithState(machineId, true, 0, 1);
     }
 
-    private static MachineControllerMenu menuWithState(Identifier machineId, boolean formed,
+    private static MachineControllerMenu menuWithState(ResourceLocation machineId, boolean formed,
                                                        int matchedStage, int stageCount) {
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS,
                 machineId, null, 0, true, 0);
@@ -202,7 +202,7 @@ class MachineControllerScreenTest {
     private static Machine screenTickMachine() {
         return new Machine() {
             @Override
-            public Identifier registryName() {
+            public ResourceLocation registryName() {
                 return TICK_MACHINE_ID;
             }
 

@@ -12,7 +12,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachineStructureRequirementsTest {
 
-    private static final Identifier COIL_TYPE = MMCR.id("coil_requirement_test");
+    private static final ResourceLocation COIL_TYPE = MMCR.id("coil_requirement_test");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -137,7 +137,7 @@ class MachineStructureRequirementsTest {
         if (!(type instanceof ParameterizedType parameterized) || parameterized.getRawType() != Map.class) return false;
         Type[] arguments = parameterized.getActualTypeArguments();
         return arguments.length == 2 && arguments[0] == BlockPos.class
-                && (arguments[1] == Identifier.class || isSingleBlockModifierReplacementList(arguments[1]));
+                && (arguments[1] == ResourceLocation.class || isSingleBlockModifierReplacementList(arguments[1]));
     }
 
     private static boolean isSingleBlockModifierReplacementList(Type type) {

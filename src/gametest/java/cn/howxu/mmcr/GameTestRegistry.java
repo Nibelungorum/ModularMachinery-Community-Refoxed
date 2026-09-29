@@ -25,7 +25,7 @@ import net.minecraft.gametest.framework.TestData;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -260,7 +260,7 @@ public final class GameTestRegistry {
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
-            Identifier id = MMCR.id(name);
+            ResourceLocation id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
             builder.displayNameKey("machine.mmcr_test." + name);
             if (name.equals("data_storage_tick")) {
@@ -301,16 +301,16 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
-        Identifier upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
+        ResourceLocation upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
-        Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
+        ResourceLocation upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
         event.registerModifier(upgradeBusModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
         event.registerModifierItem(new ItemStack(Items.NETHER_STAR), upgradeBusModifierId);
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
-            Identifier id = MMCR.id(name);
+            ResourceLocation id = MMCR.id(name);
             event.registerStructure(id, structure -> {
                 BlockPredicate casing = BlockPredicate.deferredBlock(() -> ModBlocks.CASING.get());
                 BlockPredicate controller = BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(id).get());
@@ -449,7 +449,7 @@ public final class GameTestRegistry {
         Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
         TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(
                 environment,
-                Identifier.fromNamespaceAndPath("minecraft", "empty"),
+                ResourceLocation.fromNamespaceAndPath("minecraft", "empty"),
                 maxTicks,
                 0,
                 true,
@@ -462,9 +462,9 @@ public final class GameTestRegistry {
         registerTest(event, MMCR.id(name), new SimpleGameTest(data, name, test));
     }
 
-    private static void registerTest(RegisterGameTestsEvent event, Identifier id, GameTestInstance instance) {
+    private static void registerTest(RegisterGameTestsEvent event, ResourceLocation id, GameTestInstance instance) {
         try {
-            event.getClass().getMethod("registerTest", Identifier.class, GameTestInstance.class).invoke(event, id, instance);
+            event.getClass().getMethod("registerTest", ResourceLocation.class, GameTestInstance.class).invoke(event, id, instance);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Unable to register GameTest " + id, e);
         }

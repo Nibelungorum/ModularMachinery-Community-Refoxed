@@ -11,7 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -60,9 +60,9 @@ class MachineControllerMenuTest {
 
     @Test
     void client_menu_exposes_the_selected_and_supported_recipe_pools() {
-        Identifier machineId = MMCR.id("menu_recipe_pool_machine");
-        Identifier firstPool = MMCR.id("menu_recipe_pool_first");
-        Identifier secondPool = MMCR.id("menu_recipe_pool_second");
+        ResourceLocation machineId = MMCR.id("menu_recipe_pool_machine");
+        ResourceLocation firstPool = MMCR.id("menu_recipe_pool_first");
+        ResourceLocation secondPool = MMCR.id("menu_recipe_pool_second");
         MachineRegistry.replaceClientRecipePools(Map.of(machineId, List.of(firstPool, secondPool)));
         MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applyClientSnapshot(new PktMachineStatePayload(BlockPos.ZERO, "", true, false, List.of(),
@@ -145,8 +145,8 @@ class MachineControllerMenuTest {
         assertThat(menu.stageCount()).isEqualTo(1);
     }
 
-    private static RegistryFriendlyByteBuf menuBuffer(BlockPos pos, Identifier machineId,
-                                                      Identifier connectedHostId, int role,
+    private static RegistryFriendlyByteBuf menuBuffer(BlockPos pos, ResourceLocation machineId,
+                                                      ResourceLocation connectedHostId, int role,
                                                       boolean formed, int installedModules) {
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 RegistryAccess.EMPTY, ConnectionType.NEOFORGE);

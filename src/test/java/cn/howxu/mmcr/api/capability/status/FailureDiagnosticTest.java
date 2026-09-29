@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.status;
 
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -18,8 +18,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class FailureDiagnosticTest {
-    private static final Identifier TEST_ID = Identifier.parse("mmcr_test:failure");
-    private static final Identifier TEST_RECIPE = Identifier.parse("mmcr_test:recipe");
+    private static final ResourceLocation TEST_ID = ResourceLocation.parse("mmcr_test:failure");
+    private static final ResourceLocation TEST_RECIPE = ResourceLocation.parse("mmcr_test:recipe");
 
     @Test
     void report_selects_larger_reason_priority_before_validity() {
@@ -99,7 +99,7 @@ class FailureDiagnosticTest {
 
     @Test
     void unknown_reason_resolution_returns_unknown_and_keeps_raw_id_in_details() {
-        Identifier rawReason = Identifier.parse("old:removed_reason");
+        ResourceLocation rawReason = ResourceLocation.parse("old:removed_reason");
         ExecutionStatus restored = FailureStatusFixtures.unknownStatus(rawReason);
 
         assertThat(restored.reason()).isSameAs(BuiltinFailureReasons.UNKNOWN);
@@ -122,7 +122,7 @@ class FailureDiagnosticTest {
     }
 
     private static final class FailureStatusFixtures {
-        private static ExecutionStatus unknownStatus(Identifier rawReason) {
+        private static ExecutionStatus unknownStatus(ResourceLocation rawReason) {
             FailureReason reason = FailureReasonRegistry.resolve(rawReason);
             FailureOccurrence occurrence = FailureOccurrence.at(reason, TEST_ID, FailurePhase.UNKNOWN,
                     null, null, Map.of("raw_reason_id", rawReason.toString()));

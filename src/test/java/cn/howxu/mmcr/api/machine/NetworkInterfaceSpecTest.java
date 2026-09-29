@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -38,31 +38,31 @@ class NetworkInterfaceSpecTest {
         assertThatThrownBy(() -> new NetworkInterfaceSpec(1, -1, Set.of()))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        MachineDefinition definition = MachineBuilder.machine(Identifier.parse("mmcr:source"))
+        MachineDefinition definition = MachineBuilder.machine(ResourceLocation.parse("mmcr:source"))
                 .networkInterface(2, 3)
-                .allowNetworkMachine(Identifier.parse("mmcr:target"))
+                .allowNetworkMachine(ResourceLocation.parse("mmcr:target"))
                 .build();
         assertThat(definition.networkInterface().maxCount()).isEqualTo(2);
         assertThat(definition.networkInterface().allowedMachineIds())
-                .contains(Identifier.parse("mmcr:target"));
+                .contains(ResourceLocation.parse("mmcr:target"));
     }
 
     @Test
     void allowlistIsDefensivelyCopiedInInsertionOrder() {
-        Identifier first = Identifier.parse("mmcr:first");
-        Identifier second = Identifier.parse("mmcr:second");
-        Set<Identifier> source = new LinkedHashSet<>(List.of(first, second));
+        ResourceLocation first = ResourceLocation.parse("mmcr:first");
+        ResourceLocation second = ResourceLocation.parse("mmcr:second");
+        Set<ResourceLocation> source = new LinkedHashSet<>(List.of(first, second));
         NetworkInterfaceSpec spec = new NetworkInterfaceSpec(1, 2, source);
 
         source.clear();
         assertThat(spec.allowedMachineIds()).containsExactly(first, second);
-        assertThatThrownBy(() -> spec.allowedMachineIds().add(Identifier.parse("mmcr:third")))
+        assertThatThrownBy(() -> spec.allowedMachineIds().add(ResourceLocation.parse("mmcr:third")))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
     void duplicateAllowedMachineIdsRemainHarmlessSetEntries() {
-        Identifier target = Identifier.parse("mmcr:target");
+        ResourceLocation target = ResourceLocation.parse("mmcr:target");
         NetworkInterfaceSpec spec = new NetworkInterfaceSpec(2, 3,
                 new LinkedHashSet<>(List.of(target, target)));
         NetworkInterfaceSpec added = spec.withAllowedMachine(target);
@@ -74,7 +74,7 @@ class NetworkInterfaceSpecTest {
 
     @Test
     void compilerKeeps_network_positions_separate_from_component_and_port_positions() {
-        Identifier id = Identifier.parse("mmcr:network_compilation");
+        ResourceLocation id = ResourceLocation.parse("mmcr:network_compilation");
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, networkInterface(),
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
@@ -91,7 +91,7 @@ class NetworkInterfaceSpecTest {
 
     @Test
     void compilerKeeps_network_any_of_positions_separate_from_component_and_port_positions() {
-        Identifier id = Identifier.parse("mmcr:network_any_of_compilation");
+        ResourceLocation id = ResourceLocation.parse("mmcr:network_any_of_compilation");
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.AnyOf(List.of(networkInterface()))));
         Machine machine = new DynamicMachine(id, "Network Any Of Compilation", pattern);
@@ -108,7 +108,7 @@ class NetworkInterfaceSpecTest {
         BlockPos sharedPosition = BlockPos.ZERO;
         BlockArray pattern = new BlockArray(Map.of(sharedPosition, new BlockPredicate.AnyOf(List.of(
                 networkInterface(), new BlockPredicate.OfBlock(ModBlocks.DATA_STORAGE.get())))));
-        Machine machine = new DynamicMachine(Identifier.parse("mmcr:network_data_storage_compilation"),
+        Machine machine = new DynamicMachine(ResourceLocation.parse("mmcr:network_data_storage_compilation"),
                 "Network Data Storage Compilation", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
@@ -118,7 +118,7 @@ class NetworkInterfaceSpecTest {
 
     @Test
     void old_complete_constructor_defaults_network_positions_to_empty() {
-        Identifier id = Identifier.parse("mmcr:legacy_compiled_pattern");
+        ResourceLocation id = ResourceLocation.parse("mmcr:legacy_compiled_pattern");
         BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()));
         Machine machine = new DynamicMachine(id, "Legacy Compiled Pattern", pattern);
 
@@ -174,7 +174,7 @@ class NetworkInterfaceSpecTest {
                 ordinaryInterface, new BlockPredicate.AnyOf(List.of(
                         smartInterface, new BlockPredicate.AnyOf(List.of(smartInterface))))));
         Machine machine = new DynamicMachine(
-                Identifier.parse("mmcr:mixed_network_indexes"), "Mixed Network Indexes", pattern);
+                ResourceLocation.parse("mmcr:mixed_network_indexes"), "Mixed Network Indexes", pattern);
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
 

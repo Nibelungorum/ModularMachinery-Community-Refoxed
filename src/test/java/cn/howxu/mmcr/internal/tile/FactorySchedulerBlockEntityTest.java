@@ -16,7 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -168,7 +168,7 @@ class FactorySchedulerBlockEntityTest {
 
     private static MachineControllerBlockEntity createController() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         DynamicMachine machine = new DynamicMachine(machineId, "Factory Capacity Notification Test",
                 new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(),
                 List.of(), Map.of(), 1, false, true, 4);

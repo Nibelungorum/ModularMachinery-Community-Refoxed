@@ -8,7 +8,7 @@ import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IServerDataProvider;
 
@@ -21,7 +21,7 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     @Override
-    public Identifier getUid() {
+    public ResourceLocation getUid() {
         return MachineControllerComponentProvider.UID;
     }
 
@@ -48,7 +48,7 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putInt("factoryThreadLimit", factory.laneLimit());
         data.putInt("tick", machineState.tick());
         data.putInt("totalTick", machineState.totalTick());
-        Identifier recipePoolId = controller.currentRecipePoolId();
+        ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId != null) data.putString("recipePool", recipePoolId.toString());
 
         int itemInputs = 0;

@@ -10,7 +10,7 @@ import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
@@ -24,7 +24,7 @@ public final class NativeAsyncResourceValues {
     }
 
     public static AsyncResourceValue item(ItemResource resource) {
-        return new AsyncResourceValue(Identifier.parse(resource.typeHolder().getRegisteredName()),
+        return new AsyncResourceValue(ResourceLocation.parse(resource.typeHolder().getRegisteredName()),
                 patch(resource.getComponentsPatch()));
     }
 
@@ -35,7 +35,7 @@ public final class NativeAsyncResourceValues {
     }
 
     public static AsyncResourceValue fluid(FluidResource resource) {
-        return new AsyncResourceValue(Identifier.parse(resource.typeHolder().getRegisteredName()),
+        return new AsyncResourceValue(ResourceLocation.parse(resource.typeHolder().getRegisteredName()),
                 patch(resource.getComponentsPatch()));
     }
 
@@ -46,7 +46,7 @@ public final class NativeAsyncResourceValues {
     }
 
     public static AsyncResourceValue chemical(ChemicalResource resource) {
-        return new AsyncResourceValue(Identifier.parse(resource.typeHolder().getRegisteredName()), "");
+        return new AsyncResourceValue(ResourceLocation.parse(resource.typeHolder().getRegisteredName()), "");
     }
 
     public static ChemicalResource chemical(AsyncResourceValue value) {

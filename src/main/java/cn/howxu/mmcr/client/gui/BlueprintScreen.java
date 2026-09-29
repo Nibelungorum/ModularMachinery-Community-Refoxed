@@ -16,7 +16,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.NonNull;
@@ -73,9 +73,9 @@ public final class BlueprintScreen extends Screen {
     private static final int MATERIAL_LIST_TEXTURE_HEIGHT = 118;
     private static final int SELECTED_LIST_TEXTURE_WIDTH = 126;
     private static final int SELECTED_LIST_TEXTURE_HEIGHT = 148;
-    private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
-    private static final Identifier MATERIAL_LIST = MMCR.id("textures/gui/blueprint/material_list.png");
-    private static final Identifier SELECTED_LIST = MMCR.id("textures/gui/blueprint/selected_list.png");
+    private static final ResourceLocation SCROLLER = MMCR.id("textures/gui/scroller.png");
+    private static final ResourceLocation MATERIAL_LIST = MMCR.id("textures/gui/blueprint/material_list.png");
+    private static final ResourceLocation SELECTED_LIST = MMCR.id("textures/gui/blueprint/selected_list.png");
 
     private final Machine machine;
     private final ItemStack blueprint;

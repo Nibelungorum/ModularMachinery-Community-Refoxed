@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +21,7 @@ public record FactorySpec(boolean hasFactory, int threadLimit, List<ThreadSpec> 
         return new Builder();
     }
 
-    public record ThreadSpec(String name, List<Identifier> recipeIds) {
+    public record ThreadSpec(String name, List<ResourceLocation> recipeIds) {
         public ThreadSpec {
             if (name == null || name.isBlank()) throw new IllegalArgumentException("name blank");
             recipeIds = List.copyOf(recipeIds == null ? List.of() : recipeIds);
@@ -48,7 +48,7 @@ public record FactorySpec(boolean hasFactory, int threadLimit, List<ThreadSpec> 
             return this;
         }
 
-        public Builder thread(String name, Identifier... recipeIds) {
+        public Builder thread(String name, ResourceLocation... recipeIds) {
             threads.add(new ThreadSpec(name, recipeIds == null ? List.of() : List.of(recipeIds)));
             return this;
         }

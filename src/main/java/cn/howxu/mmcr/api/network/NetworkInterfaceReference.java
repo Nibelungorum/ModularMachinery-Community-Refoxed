@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.List;
@@ -20,7 +20,7 @@ public final class NetworkInterfaceReference {
     private final MinecraftServer server;
     private final GlobalPos source;
     private final GlobalPos sourceController;
-    private final Map<Identifier, RequestFailed> sourceFailures;
+    private final Map<ResourceLocation, RequestFailed> sourceFailures;
 
     NetworkInterfaceReference(MinecraftServer server, GlobalPos source, GlobalPos sourceController, Machine sourceMachine) {
         this.server = Objects.requireNonNull(server, "server");
@@ -55,7 +55,7 @@ public final class NetworkInterfaceReference {
         return sourceController;
     }
 
-    RequestFailed sourceFailure(Identifier requestId) {
+    RequestFailed sourceFailure(ResourceLocation requestId) {
         return sourceFailures.get(requestId);
     }
 

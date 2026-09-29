@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.recipe.requirement;
 
 import com.google.gson.JsonElement;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Public codec-backed custom recipe requirement.
@@ -9,7 +9,7 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public interface CustomRequirement extends MachineRequirement {
-    Identifier typeId();
+    ResourceLocation typeId();
 
     JsonElement payload();
 }

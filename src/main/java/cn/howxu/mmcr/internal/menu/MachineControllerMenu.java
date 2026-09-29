@@ -13,7 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
@@ -48,8 +48,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot moduleConnected;
     private final DataSlot controllerRole;
     private int clientControllerRole;
-    private @Nullable Identifier clientMachineId;
-    private @Nullable Identifier clientConnectedHostId;
+    private @Nullable ResourceLocation clientMachineId;
+    private @Nullable ResourceLocation clientConnectedHostId;
     private @Nullable PktMachineStatePayload clientSnapshot;
     private @Nullable PktMachineStatePayload lastSentSnapshot;
 
@@ -102,12 +102,12 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.clientControllerRole = controllerRoleSyncValue(owner);
         this.clientMachineId = machineIdFor(owner);
         this.clientConnectedHostId = owner == null ? null
-                : machineState(owner).connectedHostId().isEmpty() ? null : Identifier.parse(machineState(owner).connectedHostId());
+                : machineState(owner).connectedHostId().isEmpty() ? null : ResourceLocation.parse(machineState(owner).connectedHostId());
         addControllerPlayerSlots(playerInv);
     }
 
-    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable Identifier machineId,
-                                 @Nullable Identifier connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
+    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable ResourceLocation machineId,
+                                 @Nullable ResourceLocation connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = null;
         this.serverPlayer = null;
@@ -160,20 +160,20 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public static MachineControllerMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
         BlockPos pos = buf.readBlockPos();
-        Identifier machineId = readOptionalIdentifier(buf);
-        Identifier connectedHostId = readOptionalIdentifier(buf);
+        ResourceLocation machineId = readOptionalResourceLocation(buf);
+        ResourceLocation connectedHostId = readOptionalResourceLocation(buf);
         int controllerRole = buf.readVarInt();
         boolean formed = buf.readBoolean();
         int installedModuleCount = buf.readVarInt();
         return new MachineControllerMenu(containerId, playerInv, pos, machineId, connectedHostId, controllerRole, formed, installedModuleCount);
     }
 
-    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable Identifier machineId,
-                                           @Nullable Identifier connectedHostId, int controllerRole, boolean formed,
+    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable ResourceLocation machineId,
+                                           @Nullable ResourceLocation connectedHostId, int controllerRole, boolean formed,
                                            int installedModuleCount) {
         buf.writeBlockPos(pos);
-        writeOptionalIdentifier(buf, machineId);
-        writeOptionalIdentifier(buf, connectedHostId);
+        writeOptionalResourceLocation(buf, machineId);
+        writeOptionalResourceLocation(buf, connectedHostId);
         buf.writeVarInt(controllerRole);
         buf.writeBoolean(formed);
         buf.writeVarInt(Math.max(0, installedModuleCount));
@@ -190,23 +190,23 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return be instanceof MachineControllerBlockEntity controller ? controller : null;
     }
 
-    public @Nullable Identifier machineId() {
+    public @Nullable ResourceLocation machineId() {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.machineId());
         MachineStateSnapshot state = localState();
         return state == null ? clientMachineId : identifierOrNull(state.machineId());
     }
 
-    public @Nullable Identifier currentRecipePoolId() {
+    public @Nullable ResourceLocation currentRecipePoolId() {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.recipePoolId());
         return owner == null ? null : owner.currentRecipePoolId();
     }
 
-    public List<Identifier> recipePoolIds() {
+    public List<ResourceLocation> recipePoolIds() {
         return MachineRegistry.recipePoolsForMachine(machineId());
     }
 
     public boolean isTickMachine() {
-        Identifier machineId = machineId();
+        ResourceLocation machineId = machineId();
         if (machineId == null) return false;
         Machine machine = MachineRegistry.getMachine(machineId);
         return machine != null && machine.behavior() instanceof TickBehavior;
@@ -241,9 +241,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? activeTotalTick.get() : state.totalTick();
     }
 
-    public @Nullable Identifier activeRecipeId() {
+    public @Nullable ResourceLocation activeRecipeId() {
         String recipeId = clientSnapshot != null ? clientSnapshot.recipeName() : "";
-        return recipeId.isEmpty() ? null : Identifier.tryParse(recipeId);
+        return recipeId.isEmpty() ? null : ResourceLocation.tryParse(recipeId);
     }
 
     public ControllerRecipePresentation recipePresentation() {
@@ -312,7 +312,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? installedModuleCount.get() : state.installedModuleCount();
     }
 
-    public Optional<Identifier> connectedHostId() {
+    public Optional<ResourceLocation> connectedHostId() {
         if (clientSnapshot != null) return Optional.ofNullable(identifierOrNull(clientSnapshot.connectedHostId()));
         MachineStateSnapshot state = localState();
         if (state == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
@@ -385,17 +385,17 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return controller == null ? 0 : SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).controllerRole();
     }
 
-    private static @Nullable Identifier machineIdFor(@Nullable MachineControllerBlockEntity controller) {
+    private static @Nullable ResourceLocation machineIdFor(@Nullable MachineControllerBlockEntity controller) {
         return controller == null ? null : identifierOrNull(SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).machineId());
     }
 
-    private static void writeOptionalIdentifier(RegistryFriendlyByteBuf buf, @Nullable Identifier id) {
+    private static void writeOptionalResourceLocation(RegistryFriendlyByteBuf buf, @Nullable ResourceLocation id) {
         buf.writeBoolean(id != null);
-        if (id != null) Identifier.STREAM_CODEC.encode(buf, id);
+        if (id != null) ResourceLocation.STREAM_CODEC.encode(buf, id);
     }
 
-    private static @Nullable Identifier readOptionalIdentifier(FriendlyByteBuf buf) {
-        return buf.readBoolean() ? Identifier.STREAM_CODEC.decode(buf) : null;
+    private static @Nullable ResourceLocation readOptionalResourceLocation(FriendlyByteBuf buf) {
+        return buf.readBoolean() ? ResourceLocation.STREAM_CODEC.decode(buf) : null;
     }
 
     private @Nullable MachineStateSnapshot localState() {
@@ -413,8 +413,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return SYNC_RUNTIME.machineState(controller.runtimeSnapshot(), controller.currentRecipePoolId());
     }
 
-    private static @Nullable Identifier identifierOrNull(String value) {
-        return value == null || value.isEmpty() ? null : Identifier.parse(value);
+    private static @Nullable ResourceLocation identifierOrNull(String value) {
+        return value == null || value.isEmpty() ? null : ResourceLocation.parse(value);
     }
 
     @Override

@@ -10,7 +10,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.SystemReport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.server.permissions.LevelBasedPermissionSet;
@@ -38,8 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class ControllerScreenTextRegistryTest {
-    private static final Identifier MACHINE_ID = MMCR.id("test_cube");
-    private static final Identifier OTHER_MACHINE_ID = MMCR.id("other_machine");
+    private static final ResourceLocation MACHINE_ID = MMCR.id("test_cube");
+    private static final ResourceLocation OTHER_MACHINE_ID = MMCR.id("other_machine");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -69,7 +69,7 @@ class ControllerScreenTextRegistryTest {
             calls.add("first");
             assertThat(received).isSameAs(context);
             received.screenText().append(ControllerScreenTextScope.CONTROLLER,
-                    Identifier.parse("example:first"), Component.literal("first"));
+                    ResourceLocation.parse("example:first"), Component.literal("first"));
         });
         ControllerScreenTextRegistry.register(OTHER_MACHINE_ID, received -> calls.add("other"));
         ControllerScreenTextRegistry.register(MACHINE_ID, received -> calls.add("second"));
@@ -93,7 +93,7 @@ class ControllerScreenTextRegistryTest {
         ControllerScreenTextRegistry.register(MACHINE_ID, received -> {
             calls.add("continued");
             received.screenText().append(ControllerScreenTextScope.OPERATION,
-                    Identifier.parse("example:continued"), Component.literal("continued"));
+                    ResourceLocation.parse("example:continued"), Component.literal("continued"));
         });
 
         ControllerScreenTextRegistry.apply(context);
@@ -138,7 +138,7 @@ class ControllerScreenTextRegistryTest {
         assertThat(context.controllerPos()).isEqualTo(controller.getBlockPos());
         assertThat(context.screenText()).isSameAs(runtime.screenText());
         context.screenText().append(ControllerScreenTextScope.CONTROLLER,
-                Identifier.parse("example:runtime"), Component.literal("runtime"));
+                ResourceLocation.parse("example:runtime"), Component.literal("runtime"));
         assertThat(runtime.screenText().snapshot().lines()).singleElement()
                 .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("runtime")));
     }
@@ -147,14 +147,14 @@ class ControllerScreenTextRegistryTest {
     void runtimeCleanupSeparatesOperationTextFromControllerText() throws Exception {
         MachineControllerRuntime runtime = runtimeOf(RuntimeTestFixtures.controller(MACHINE_ID));
         runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
-                Identifier.parse("example:controller"), Component.literal("controller"));
+                ResourceLocation.parse("example:controller"), Component.literal("controller"));
         runtime.screenText().append(ControllerScreenTextScope.OPERATION,
-                Identifier.parse("example:operation"), Component.literal("operation"));
+                ResourceLocation.parse("example:operation"), Component.literal("operation"));
 
         runtime.clearOperationText();
 
         assertThat(runtime.screenText().snapshot().lines()).singleElement()
-                .satisfies(line -> assertThat(line.lineId()).isEqualTo(Identifier.parse("example:controller")));
+                .satisfies(line -> assertThat(line.lineId()).isEqualTo(ResourceLocation.parse("example:controller")));
         runtime.clearAllText();
         assertThat(runtime.screenText().snapshot().lines()).isEmpty();
     }
@@ -164,7 +164,7 @@ class ControllerScreenTextRegistryTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MACHINE_ID);
         MachineControllerRuntime runtime = runtimeOf(controller);
         ControllerScreenTextRegistry.register(MACHINE_ID, context -> context.screenText().append(
-                ControllerScreenTextScope.CONTROLLER, Identifier.parse("example:controller"), Component.literal("controller")));
+                ControllerScreenTextScope.CONTROLLER, ResourceLocation.parse("example:controller"), Component.literal("controller")));
 
         applyControllerScreenText(controller);
 
@@ -209,7 +209,7 @@ class ControllerScreenTextRegistryTest {
         assertThat(Modifier.isPublic(modifiers)).isFalse();
     }
 
-    private static ControllerRuntimeContext context(Identifier machineId, ControllerScreenTextState state) {
+    private static ControllerRuntimeContext context(ResourceLocation machineId, ControllerScreenTextState state) {
         return new ControllerRuntimeContext(machineId, new BlockPos(3, 4, 5), state);
     }
 

@@ -26,7 +26,7 @@ import io.netty.buffer.Unpooled;
 import java.util.Map;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -58,8 +58,8 @@ public final class MachineRecipeSyncCodec {
     public static void encode(RegistryFriendlyByteBuf buf, MachineRecipe value) {
         buf.writeVarInt(FORMAT_MARKER);
         buf.writeVarInt(FORMAT_VERSION);
-        Identifier.STREAM_CODEC.encode(buf, value.id());
-        Identifier.STREAM_CODEC.encode(buf, value.recipePoolId());
+        ResourceLocation.STREAM_CODEC.encode(buf, value.id());
+        ResourceLocation.STREAM_CODEC.encode(buf, value.recipePoolId());
         buf.writeVarInt(value.tickTime());
         writeRequirements(buf, value.requirements());
         writeOutputs(buf, value.outputsWithoutDerivedRequirements());
@@ -83,8 +83,8 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static MachineRecipe decodeCurrent(RegistryFriendlyByteBuf buf) {
-        Identifier id = Identifier.STREAM_CODEC.decode(buf);
-        Identifier recipePoolId = Identifier.STREAM_CODEC.decode(buf);
+        ResourceLocation id = ResourceLocation.STREAM_CODEC.decode(buf);
+        ResourceLocation recipePoolId = ResourceLocation.STREAM_CODEC.decode(buf);
         int tickTime = buf.readVarInt();
         List<MachineRequirement> requirements = readRequirements(buf);
         List<MachineOutput> outputs = readOutputs(buf);
@@ -94,7 +94,7 @@ public final class MachineRecipeSyncCodec {
         boolean cancelIfPerTickFails = buf.readBoolean();
         boolean parallelized = buf.readBoolean();
         boolean allowPartialOutputs = buf.readBoolean();
-        Set<Identifier> hosts = readRequiredHosts(buf);
+        Set<ResourceLocation> hosts = readRequiredHosts(buf);
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
                 priority, maxThreads, cancelIfPerTickFails, parallelized, allowPartialOutputs, hosts);
         RecipeRegistry.validateClientSnapshot(Map.of(id, recipe));
@@ -128,7 +128,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static MachineRequirement readRequirement(RegistryFriendlyByteBuf buf) {
-        Identifier typeId = Identifier.STREAM_CODEC.decode(buf);
+        ResourceLocation typeId = ResourceLocation.STREAM_CODEC.decode(buf);
         int payloadSize = readPayloadSize(buf, "requirement");
         RequirementType<?> type = RequirementHandlerRegistry.typeFor(typeId);
         if (type == null || RequirementHandlerRegistry.handlerFor(type) == null) {
@@ -164,7 +164,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     public static MachineOutput readOutput(RegistryFriendlyByteBuf buf) {
-        Identifier typeId = Identifier.STREAM_CODEC.decode(buf);
+        ResourceLocation typeId = ResourceLocation.STREAM_CODEC.decode(buf);
         int payloadSize = readPayloadSize(buf, "output");
         OutputType<?> type = OutputRegistry.typeFor(typeId);
         if (type == null) throw new DecoderException("Unknown machine output type: " + typeId);
@@ -175,13 +175,13 @@ public final class MachineRecipeSyncCodec {
         return output;
     }
 
-    private static void writeTyped(RegistryFriendlyByteBuf buf, Identifier typeId, RecipeSyncCodec<?> codec,
+    private static void writeTyped(RegistryFriendlyByteBuf buf, ResourceLocation typeId, RecipeSyncCodec<?> codec,
                                    Object value, String label) {
         writeTypedUnchecked(buf, typeId, codec, value, label);
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> void writeTypedUnchecked(RegistryFriendlyByteBuf buf, Identifier typeId, RecipeSyncCodec<?> codec,
+    private static <T> void writeTypedUnchecked(RegistryFriendlyByteBuf buf, ResourceLocation typeId, RecipeSyncCodec<?> codec,
                                                 Object value, String label) {
         RecipeSyncCodec<T> typedCodec = (RecipeSyncCodec<T>) codec;
         RegistryFriendlyByteBuf payload = new RegistryFriendlyByteBuf(Unpooled.buffer(), buf.registryAccess());
@@ -193,7 +193,7 @@ public final class MachineRecipeSyncCodec {
             if (size < 0 || size > RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE || size > typedCodec.maxPayloadSize()) {
                 throw new IllegalArgumentException("Invalid " + label + " payload size: " + size);
             }
-            Identifier.STREAM_CODEC.encode(buf, typeId);
+            ResourceLocation.STREAM_CODEC.encode(buf, typeId);
             buf.writeVarInt(size);
             buf.writeBytes(payload, 0, size);
         } finally {
@@ -247,20 +247,20 @@ public final class MachineRecipeSyncCodec {
         return List.copyOf(values);
     }
 
-    private static void writeRequiredHosts(RegistryFriendlyByteBuf buf, Set<Identifier> values) {
+    private static void writeRequiredHosts(RegistryFriendlyByteBuf buf, Set<ResourceLocation> values) {
         checkSize(values.size(), maxRequiredHosts(), "required host");
         buf.writeVarInt(values.size());
-        for (Identifier value : values) {
-            Identifier.STREAM_CODEC.encode(buf, value);
+        for (ResourceLocation value : values) {
+            ResourceLocation.STREAM_CODEC.encode(buf, value);
         }
     }
 
-    private static Set<Identifier> readRequiredHosts(RegistryFriendlyByteBuf buf) {
+    private static Set<ResourceLocation> readRequiredHosts(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
         checkSize(count, maxRequiredHosts(), "required host");
-        Set<Identifier> values = new LinkedHashSet<>();
+        Set<ResourceLocation> values = new LinkedHashSet<>();
         for (int i = 0; i < count; i++) {
-            values.add(Identifier.STREAM_CODEC.decode(buf));
+            values.add(ResourceLocation.STREAM_CODEC.decode(buf));
         }
         return Collections.unmodifiableSet(values);
     }

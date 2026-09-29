@@ -6,7 +6,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 /**
@@ -27,7 +27,7 @@ public final class UpgradeBusScreen extends AbstractContainerScreen<UpgradeBusMe
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        Identifier texture = MMCR.id(menu.texturePath());
+        ResourceLocation texture = MMCR.id(menu.texturePath());
         for (int destY = 0; destY < imageHeight;) {
             int height = destY == 0 ? Math.min(BASE_BACKGROUND_HEIGHT, imageHeight)
                     : Math.min(SLOT_SIZE, imageHeight - destY);

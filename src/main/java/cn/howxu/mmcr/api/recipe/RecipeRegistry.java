@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -30,7 +30,7 @@ import java.util.function.Predicate;
  */
 public final class RecipeRegistry {
 
-    private static final Map<Identifier, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, MachineRecipe> STATIC_RECIPES = new LinkedHashMap<>();
     private static volatile State STATE = State.empty();
     private static long reloadVersion;
     private static long registryVersion;
@@ -46,7 +46,7 @@ public final class RecipeRegistry {
 
     public static void registerStaticBatch(Collection<MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-        Map<Identifier, MachineRecipe> candidate = new LinkedHashMap<>(STATIC_RECIPES);
+        Map<ResourceLocation, MachineRecipe> candidate = new LinkedHashMap<>(STATIC_RECIPES);
         for (MachineRecipe recipe : recipes) {
             if (recipe == null) {
                 throw new IllegalArgumentException("Recipe must not be null");
@@ -82,7 +82,7 @@ public final class RecipeRegistry {
         registerStatic(recipe);
     }
 
-    public static MachineRecipe getRecipe(Identifier id) {
+    public static MachineRecipe getRecipe(ResourceLocation id) {
         if (id == null) return null;
         State state = STATE;
         MachineRecipe recipe = state.effective().get(id);
@@ -93,7 +93,7 @@ public final class RecipeRegistry {
         return catalogForMachine(machine).recipes();
     }
 
-    public static List<MachineRecipe> recipesForPool(Identifier recipePoolId) {
+    public static List<MachineRecipe> recipesForPool(ResourceLocation recipePoolId) {
         return catalogForPool(recipePoolId).recipes();
     }
 
@@ -101,7 +101,7 @@ public final class RecipeRegistry {
         return catalogForPool(MachineRegistry.recipePoolForMachine(machine));
     }
 
-    public static MachineRecipeCatalog catalogForMachine(Identifier machineId) {
+    public static MachineRecipeCatalog catalogForMachine(ResourceLocation machineId) {
         if (machineId == null || (MachineDefinitions.getRegistration(machineId) == null
                 && MachineRegistry.getMachine(machineId) == null)) {
             return EMPTY_CATALOG;
@@ -109,7 +109,7 @@ public final class RecipeRegistry {
         return catalogForPool(MachineRegistry.recipePoolForMachine(machineId));
     }
 
-    public static MachineRecipeCatalog catalogForPool(Identifier recipePoolId) {
+    public static MachineRecipeCatalog catalogForPool(ResourceLocation recipePoolId) {
         if (recipePoolId == null) return EMPTY_CATALOG;
         return STATE.poolCatalogs().getOrDefault(recipePoolId, EMPTY_CATALOG);
     }
@@ -118,7 +118,7 @@ public final class RecipeRegistry {
         return STATE.effectiveValues();
     }
 
-    public static Map<Identifier, MachineRecipe> effectiveSnapshot() {
+    public static Map<ResourceLocation, MachineRecipe> effectiveSnapshot() {
         synchronized (RuntimeContentVersion.lock()) {
             return STATE.effective();
         }
@@ -136,14 +136,14 @@ public final class RecipeRegistry {
         return registryVersion;
     }
 
-    public static boolean containsStatic(Identifier id) {
+    public static boolean containsStatic(ResourceLocation id) {
         return STATE.staticRecipes().containsKey(id);
     }
 
-    public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes) {
+    public static void replaceDynamic(Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
         DynamicCandidate candidate = validateDynamicCandidate(recipes);
-        Map<Identifier, MachineRecipe> replacement = candidate.acceptedRecipes();
+        Map<ResourceLocation, MachineRecipe> replacement = candidate.acceptedRecipes();
         publish(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS(), replacement);
         reloadVersion++;
         registryVersion++;
@@ -152,11 +152,11 @@ public final class RecipeRegistry {
     }
 
     /** Publishes a dynamic layer using the supplied pool-membership rule. */
-    public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes,
-                                      Predicate<Identifier> poolAvailable) {
+    public static void replaceDynamic(Map<ResourceLocation, MachineRecipe> recipes,
+                                      Predicate<ResourceLocation> poolAvailable) {
         synchronized (RuntimeContentVersion.lock()) {
         DynamicCandidate candidate = validateDynamicCandidate(recipes, poolAvailable);
-        Map<Identifier, MachineRecipe> replacement = candidate.acceptedRecipes();
+        Map<ResourceLocation, MachineRecipe> replacement = candidate.acceptedRecipes();
         publish(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS(), replacement);
         reloadVersion++;
         registryVersion++;
@@ -165,18 +165,18 @@ public final class RecipeRegistry {
     }
 
     /** Validates a dynamic layer and returns only recipes that can be published. */
-    public static DynamicCandidate validateDynamicCandidate(Map<Identifier, MachineRecipe> recipes) {
+    public static DynamicCandidate validateDynamicCandidate(Map<ResourceLocation, MachineRecipe> recipes) {
         return validateDynamicCandidate(recipes, MachineRegistry::containsRecipePool);
     }
 
     /** Validates a dynamic layer with the pool-membership rule used by its publisher. */
-    public static DynamicCandidate validateDynamicCandidate(Map<Identifier, MachineRecipe> recipes,
-                                                            Predicate<Identifier> poolAvailable) {
+    public static DynamicCandidate validateDynamicCandidate(Map<ResourceLocation, MachineRecipe> recipes,
+                                                            Predicate<ResourceLocation> poolAvailable) {
         if (recipes == null) throw new IllegalArgumentException("Dynamic recipes must not be null");
         if (poolAvailable == null) throw new IllegalArgumentException("Pool membership predicate must not be null");
-        Map<Identifier, MachineRecipe> acceptedRecipes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipe> acceptedRecipes = new LinkedHashMap<>();
         List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
             try {
                 validateDynamicEntry(entry, poolAvailable);
                 acceptedRecipes.put(entry.getKey(), entry.getValue());
@@ -188,9 +188,9 @@ public final class RecipeRegistry {
         return new DynamicCandidate(acceptedRecipes, errors);
     }
 
-    private static void validateDynamicEntry(Map.Entry<Identifier, MachineRecipe> entry,
-                                             Predicate<Identifier> poolAvailable) {
-        Identifier id = entry.getKey();
+    private static void validateDynamicEntry(Map.Entry<ResourceLocation, MachineRecipe> entry,
+                                             Predicate<ResourceLocation> poolAvailable) {
+        ResourceLocation id = entry.getKey();
         MachineRecipe recipe = entry.getValue();
         if (id == null || recipe == null || recipe.id() == null || !id.equals(recipe.id())) {
             throw new IllegalArgumentException("Recipe key does not match recipe id: " + id);
@@ -223,7 +223,7 @@ public final class RecipeRegistry {
     }
 
     public record DynamicCandidate(
-            Map<Identifier, MachineRecipe> acceptedRecipes,
+            Map<ResourceLocation, MachineRecipe> acceptedRecipes,
             List<MachineRecipeJson.RecipeJsonException> errors) {
         public DynamicCandidate {
             acceptedRecipes = immutable(acceptedRecipes == null ? Map.of() : acceptedRecipes);
@@ -231,23 +231,23 @@ public final class RecipeRegistry {
         }
     }
 
-    public static Map<Identifier, MachineRecipe> dynamicSnapshot() {
+    public static Map<ResourceLocation, MachineRecipe> dynamicSnapshot() {
         return STATE.dynamic();
     }
 
-    public static Map<Identifier, MachineRecipe> dataPackSnapshot() {
+    public static Map<ResourceLocation, MachineRecipe> dataPackSnapshot() {
         return STATE.dataPack();
     }
 
-    public static Map<Identifier, MachineRecipe> kubeJSSnapshot() {
+    public static Map<ResourceLocation, MachineRecipe> kubeJSSnapshot() {
         return STATE.kubeJS();
     }
 
-    public static Map<Identifier, MachineRecipe> staticSnapshot() {
+    public static Map<ResourceLocation, MachineRecipe> staticSnapshot() {
         return STATE.staticRecipes();
     }
 
-    public static void replaceClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
+    public static void replaceClientSnapshot(Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
         validateClientSnapshot(recipes);
         publish(Map.of(), Map.of(), Map.of(), recipes);
@@ -256,9 +256,9 @@ public final class RecipeRegistry {
         }
     }
 
-    public static void validateClientSnapshot(Map<Identifier, MachineRecipe> recipes) {
+    public static void validateClientSnapshot(Map<ResourceLocation, MachineRecipe> recipes) {
         if (recipes == null) throw new IllegalArgumentException("recipes null");
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
             if (entry.getKey() == null || entry.getValue() == null
                     || !entry.getKey().equals(entry.getValue().id())) {
                 throw new IllegalArgumentException("Recipe key does not match recipe id: " + entry.getKey());
@@ -271,12 +271,12 @@ public final class RecipeRegistry {
         return STATE.warnings();
     }
 
-    public static void replaceDataPack(Map<Identifier, MachineRecipe> recipes) {
+    public static void replaceDataPack(Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
         validateDataPackCandidate(recipes);
-        Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipe> replacement = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
             MachineRecipe recipe = entry.getKey().equals(entry.getValue().id())
                     ? entry.getValue() : entry.getValue().withId(entry.getKey());
             replacement.put(entry.getKey(), recipe);
@@ -284,7 +284,7 @@ public final class RecipeRegistry {
         replacement = filterRecipesWithValidPools(replacement);
         replacement = filterRecipesWithPoolConflicts(replacement,
                 List.of(STATE.staticRecipes(), STATE.kubeJS(), STATE.dynamic()));
-        for (Identifier id : replacement.keySet()) {
+        for (ResourceLocation id : replacement.keySet()) {
             if (STATE.staticRecipes().containsKey(id)) {
                 String warning = "data-pack layer recipe " + id + " overrides static layer recipe " + id;
                 warnings.add(warning);
@@ -299,14 +299,14 @@ public final class RecipeRegistry {
     }
 
     /** Validates a complete data-pack layer without changing any published state. */
-    public static void validateDataPackCandidate(Map<Identifier, MachineRecipe> recipes) {
+    public static void validateDataPackCandidate(Map<ResourceLocation, MachineRecipe> recipes) {
         if (recipes == null) throw new IllegalArgumentException("Data-pack recipes must not be null");
         validateRecipeTypes(recipes);
     }
 
-    private static void validateRecipeTypes(Map<Identifier, MachineRecipe> recipes) {
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            Identifier id = entry.getKey();
+    private static void validateRecipeTypes(Map<ResourceLocation, MachineRecipe> recipes) {
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
+            ResourceLocation id = entry.getKey();
             MachineRecipe recipe = entry.getValue();
             if (id == null || recipe == null || recipe.id() == null) {
                 throw new MachineRecipeJson.RecipeJsonException(
@@ -338,7 +338,7 @@ public final class RecipeRegistry {
         }
     }
 
-    private static void validateRequirement(Identifier recipeId, String path,
+    private static void validateRequirement(ResourceLocation recipeId, String path,
                                             MachineRequirement requirement) {
         if (requirement == null || requirement.type() == null) {
             throw new MachineRecipeJson.RecipeJsonException(recipeId, path,
@@ -362,10 +362,10 @@ public final class RecipeRegistry {
         }
     }
 
-    public static void replaceKubeJS(Map<Identifier, MachineRecipe> recipes) {
+    public static void replaceKubeJS(Map<ResourceLocation, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
-            for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            Map<ResourceLocation, MachineRecipe> replacement = new LinkedHashMap<>();
+            for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
                 MachineRecipe recipe = entry.getKey().equals(entry.getValue().id())
                         ? entry.getValue() : entry.getValue().withId(entry.getKey());
                 replacement.put(entry.getKey(), recipe);
@@ -380,17 +380,17 @@ public final class RecipeRegistry {
         }
     }
 
-    private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
-                                Map<Identifier, MachineRecipe> dataPack,
-                                Map<Identifier, MachineRecipe> kubeJS,
-                                Map<Identifier, MachineRecipe> dynamic) {
+    private static void publish(Map<ResourceLocation, MachineRecipe> staticRecipes,
+                                Map<ResourceLocation, MachineRecipe> dataPack,
+                                Map<ResourceLocation, MachineRecipe> kubeJS,
+                                Map<ResourceLocation, MachineRecipe> dynamic) {
         publish(staticRecipes, dataPack, kubeJS, dynamic, List.of());
     }
 
-    private static void publish(Map<Identifier, MachineRecipe> staticRecipes,
-                                Map<Identifier, MachineRecipe> dataPack,
-                                Map<Identifier, MachineRecipe> kubeJS,
-                                Map<Identifier, MachineRecipe> dynamic,
+    private static void publish(Map<ResourceLocation, MachineRecipe> staticRecipes,
+                                Map<ResourceLocation, MachineRecipe> dataPack,
+                                Map<ResourceLocation, MachineRecipe> kubeJS,
+                                Map<ResourceLocation, MachineRecipe> dynamic,
                                 List<String> warnings) {
         State previous = STATE;
         long previousCatalogGeneration = catalogGeneration;
@@ -415,24 +415,24 @@ public final class RecipeRegistry {
         }
     }
 
-    private static State buildState(Map<Identifier, MachineRecipe> staticRecipes,
-                                    Map<Identifier, MachineRecipe> dataPack,
-                                    Map<Identifier, MachineRecipe> kubeJS,
-                                    Map<Identifier, MachineRecipe> dynamic,
+    private static State buildState(Map<ResourceLocation, MachineRecipe> staticRecipes,
+                                    Map<ResourceLocation, MachineRecipe> dataPack,
+                                    Map<ResourceLocation, MachineRecipe> kubeJS,
+                                    Map<ResourceLocation, MachineRecipe> dynamic,
                                     List<String> warnings) {
-        Map<Identifier, List<MachineRecipe>> recipesByPool = new LinkedHashMap<>();
-        Map<Identifier, Identifier> poolByRecipeId = new LinkedHashMap<>();
+        Map<ResourceLocation, List<MachineRecipe>> recipesByPool = new LinkedHashMap<>();
+        Map<ResourceLocation, ResourceLocation> poolByRecipeId = new LinkedHashMap<>();
         mergeLayer(recipesByPool, poolByRecipeId, staticRecipes, false);
         mergeLayer(recipesByPool, poolByRecipeId, kubeJS, true);
         mergeLayer(recipesByPool, poolByRecipeId, dataPack, true);
         mergeLayer(recipesByPool, poolByRecipeId, dynamic, false);
 
-        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         recipesByPool.values().forEach(poolRecipes -> poolRecipes.forEach(recipe -> recipes.put(recipe.id(), recipe)));
-        Map<Identifier, MachineRecipeCatalog> poolCatalogs = new LinkedHashMap<>();
-        Set<Identifier> poolIds = new LinkedHashSet<>(STATE.poolCatalogs().keySet());
+        Map<ResourceLocation, MachineRecipeCatalog> poolCatalogs = new LinkedHashMap<>();
+        Set<ResourceLocation> poolIds = new LinkedHashSet<>(STATE.poolCatalogs().keySet());
         poolIds.addAll(recipesByPool.keySet());
-        for (Identifier poolId : poolIds) {
+        for (ResourceLocation poolId : poolIds) {
             List<MachineRecipe> poolRecipes = recipesByPool.getOrDefault(poolId, List.of()).stream()
                     .sorted(Comparator.comparingInt(MachineRecipe::priority)
                             .thenComparing(MachineRecipe::id))
@@ -458,15 +458,15 @@ public final class RecipeRegistry {
                 immutable(recipes), immutable(poolCatalogs), List.copyOf(warnings));
     }
 
-    private static void mergeLayer(Map<Identifier, List<MachineRecipe>> recipesByPool,
-                                   Map<Identifier, Identifier> poolByRecipeId,
-                                   Map<Identifier, MachineRecipe> layer,
+    private static void mergeLayer(Map<ResourceLocation, List<MachineRecipe>> recipesByPool,
+                                   Map<ResourceLocation, ResourceLocation> poolByRecipeId,
+                                   Map<ResourceLocation, MachineRecipe> layer,
                                    boolean overridesSamePool) {
-        for (Map.Entry<Identifier, MachineRecipe> entry : layer.entrySet()) {
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : layer.entrySet()) {
             MachineRecipe recipe = entry.getValue();
-            Identifier recipeId = entry.getKey();
-            Identifier poolId = recipe.recipePoolId();
-            Identifier existingPoolId = poolByRecipeId.get(recipeId);
+            ResourceLocation recipeId = entry.getKey();
+            ResourceLocation poolId = recipe.recipePoolId();
+            ResourceLocation existingPoolId = poolByRecipeId.get(recipeId);
             if (existingPoolId != null && !existingPoolId.equals(poolId)) {
                 MMCR.LOG.warn("Skipping recipe {} from pool {}: recipe already belongs to pool {}",
                         recipeId, poolId, existingPoolId);
@@ -489,10 +489,10 @@ public final class RecipeRegistry {
         }
     }
 
-    private static Map<Identifier, MachineRecipe> filterRecipesWithValidPools(
-            Map<Identifier, MachineRecipe> recipes) {
-        Map<Identifier, MachineRecipe> valid = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+    private static Map<ResourceLocation, MachineRecipe> filterRecipesWithValidPools(
+            Map<ResourceLocation, MachineRecipe> recipes) {
+        Map<ResourceLocation, MachineRecipe> valid = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
             MachineRecipe recipe = entry.getValue();
             if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
                 MMCR.LOG.warn("Skipping recipe {}: unknown recipe pool {} at recipe_pool",
@@ -504,11 +504,11 @@ public final class RecipeRegistry {
         return valid;
     }
 
-    private static Map<Identifier, MachineRecipe> filterRecipesWithPoolConflicts(
-            Map<Identifier, MachineRecipe> recipes,
-            List<Map<Identifier, MachineRecipe>> otherLayers) {
-        Map<Identifier, MachineRecipe> valid = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+    private static Map<ResourceLocation, MachineRecipe> filterRecipesWithPoolConflicts(
+            Map<ResourceLocation, MachineRecipe> recipes,
+            List<Map<ResourceLocation, MachineRecipe>> otherLayers) {
+        Map<ResourceLocation, MachineRecipe> valid = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
             if (!hasConflictingPool(entry.getValue(), otherLayers)) {
                 valid.put(entry.getKey(), entry.getValue());
             }
@@ -517,7 +517,7 @@ public final class RecipeRegistry {
     }
 
     private static boolean hasConflictingPool(MachineRecipe recipe,
-                                               List<Map<Identifier, MachineRecipe>> otherLayers) {
+                                               List<Map<ResourceLocation, MachineRecipe>> otherLayers) {
         MachineRecipe existing = conflictingPoolRecipe(recipe, otherLayers);
         if (existing != null) {
             MMCR.LOG.warn("Skipping recipe {} from pool {}: recipe already belongs to pool {}",
@@ -528,8 +528,8 @@ public final class RecipeRegistry {
     }
 
     private static MachineRecipe conflictingPoolRecipe(MachineRecipe recipe,
-                                                        List<Map<Identifier, MachineRecipe>> otherLayers) {
-        for (Map<Identifier, MachineRecipe> layer : otherLayers) {
+                                                        List<Map<ResourceLocation, MachineRecipe>> otherLayers) {
+        for (Map<ResourceLocation, MachineRecipe> layer : otherLayers) {
             MachineRecipe existing = layer.get(recipe.id());
             if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
                 return existing;
@@ -541,12 +541,12 @@ public final class RecipeRegistry {
     public static void clearAll() {
         synchronized (RuntimeContentVersion.lock()) {
         State previous = STATE;
-        Map<Identifier, MachineRecipe> previousStatic = new LinkedHashMap<>(STATIC_RECIPES);
+        Map<ResourceLocation, MachineRecipe> previousStatic = new LinkedHashMap<>(STATIC_RECIPES);
         long previousCatalogGeneration = catalogGeneration;
-        Map<Identifier, MachineRecipeCatalog> emptyCatalogs = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipeCatalog> emptyCatalogs = new LinkedHashMap<>();
         State next;
         try {
-            for (Identifier poolId : STATE.poolCatalogs().keySet()) {
+            for (ResourceLocation poolId : STATE.poolCatalogs().keySet()) {
                 emptyCatalogs.put(poolId, new MachineRecipeCatalog(++catalogGeneration,
                         List.of(), List.of(), RecipeCandidateIndex.empty()));
             }
@@ -580,18 +580,18 @@ public final class RecipeRegistry {
         return Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
-    private record State(Map<Identifier, MachineRecipe> staticRecipes,
-                         Map<Identifier, MachineRecipe> dataPack,
-                         Map<Identifier, MachineRecipe> kubeJS,
-                          Map<Identifier, MachineRecipe> dynamic,
-                          Map<Identifier, MachineRecipe> effective,
-                          Map<Identifier, MachineRecipeCatalog> poolCatalogs,
+    private record State(Map<ResourceLocation, MachineRecipe> staticRecipes,
+                         Map<ResourceLocation, MachineRecipe> dataPack,
+                         Map<ResourceLocation, MachineRecipe> kubeJS,
+                          Map<ResourceLocation, MachineRecipe> dynamic,
+                          Map<ResourceLocation, MachineRecipe> effective,
+                          Map<ResourceLocation, MachineRecipeCatalog> poolCatalogs,
                           List<String> warnings) {
         private static State empty() {
             return empty(Map.of());
         }
 
-        private static State empty(Map<Identifier, MachineRecipeCatalog> poolCatalogs) {
+        private static State empty(Map<ResourceLocation, MachineRecipeCatalog> poolCatalogs) {
             return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), immutable(poolCatalogs), List.of());
         }
 

@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.jei.JeiWorkstationRegistration;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import dev.latvian.mods.kubejs.event.KubeEvent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public void registerControllerScreenText(String machineId, Consumer<ControllerScreenTextEventJS> handler) {
-        ControllerScreenTextRegistry.register(ControllerScreenTextEventJS.parseIdentifier(machineId, "machineId"),
+        ControllerScreenTextRegistry.register(ControllerScreenTextEventJS.parseResourceLocation(machineId, "machineId"),
                 ControllerScreenTextEventJS.handler(handler));
     }
 
@@ -46,7 +46,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public LevelSlot levelSlot(String typeId) {
-        var id = Identifier.parse(typeId);
+        var id = ResourceLocation.parse(typeId);
         if (MachineLevelRegistry.getType(id) == null) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
@@ -54,28 +54,28 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public void registerModifier(String id, ModifierDefinition definition) {
-        Identifier modifierId = ControllerScreenTextEventJS.parseIdentifier(id, "modifierId");
+        ResourceLocation modifierId = ControllerScreenTextEventJS.parseResourceLocation(id, "modifierId");
         MMCRMachineStructuresEvent.current().registerModifier(modifierId, definition);
     }
 
     public void registerModifierItem(ItemStack stack, String modifierId) {
-        Identifier parsedModifierId = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
+        ResourceLocation parsedModifierId = ControllerScreenTextEventJS.parseResourceLocation(modifierId, "modifierId");
         MMCRMachineStructuresEvent.current().registerModifierItem(stack, parsedModifierId);
     }
 
     public void addRecipePoolWorkstation(String recipePoolId, String itemId) {
         jeiWorkstations.add(new JeiWorkstationRegistration.RecipePoolItem(
-                parseIdentifier(recipePoolId, "recipePoolId"), parseIdentifier(itemId, "itemId")));
+                parseResourceLocation(recipePoolId, "recipePoolId"), parseResourceLocation(itemId, "itemId")));
     }
 
     public void addRecipePoolWorkstation(String recipePoolId, ItemStack workstation) {
         jeiWorkstations.add(new JeiWorkstationRegistration.RecipePoolStack(
-                parseIdentifier(recipePoolId, "recipePoolId"), workstation));
+                parseResourceLocation(recipePoolId, "recipePoolId"), workstation));
     }
 
     public void addMachineWorkstation(String machineId, String recipeTypeId) {
         jeiWorkstations.add(new JeiWorkstationRegistration.Machine(
-                parseIdentifier(machineId, "machineId"), parseIdentifier(recipeTypeId, "recipeTypeId")));
+                parseResourceLocation(machineId, "machineId"), parseResourceLocation(recipeTypeId, "recipeTypeId")));
     }
 
     public void addMachineWorkStation(String machineId, String recipeTypeId) {
@@ -86,7 +86,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
         return List.copyOf(jeiWorkstations);
     }
 
-    private static Identifier parseIdentifier(String value, String name) {
-        return ControllerScreenTextEventJS.parseIdentifier(value, name);
+    private static ResourceLocation parseResourceLocation(String value, String name) {
+        return ControllerScreenTextEventJS.parseResourceLocation(value, name);
     }
 }

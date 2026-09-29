@@ -7,7 +7,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.loot.BlockLootSubProvider;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -48,7 +48,7 @@ public final class BlockLoot extends BlockLootSubProvider {
     }
 
     private static List<ModLoadedCondition> conditionsFor(Block block) {
-        Identifier id = BuiltInRegistries.BLOCK.getKey(block);
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
         if (!MMCR.MODID.equals(id.getNamespace())) return List.of();
         return PortKinds.all().stream()
                 .filter(kind -> kind.id().equals(id.getPath()))

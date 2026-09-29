@@ -14,7 +14,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -34,13 +34,13 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
     private PortRequirementSpec portRequirements = PortRequirementSpec.none();
     private PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
 
-    public MachineStructureStageBuilderJS(Identifier id) {
+    public MachineStructureStageBuilderJS(ResourceLocation id) {
         super(Objects.requireNonNull(id, "id"));
         sliceBuilder.noController();
     }
 
     public MachineStructureStageBuilderJS(String id) {
-        this(Identifier.parse(id));
+        this(ResourceLocation.parse(id));
     }
 
     public MachineStructureStageBuilderJS pattern(String... rows) {
@@ -69,7 +69,7 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
         }
         MachineStructureBuilderJS.PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(symbol.charAt(0), entry.base());
-        if (value instanceof LevelSlot(Identifier typeId)) {
+        if (value instanceof LevelSlot(ResourceLocation typeId)) {
             stageRequirements.levelSlot(symbol.charAt(0), typeId);
         }
         return this;
@@ -136,7 +136,7 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
     public BlockPredicate anyOfHeatPorts() { return KubeJSInterfaceHelpers.anyOfHeatPorts(); }
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
-    public BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
@@ -162,7 +162,7 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
         return switch (value) {
             case MachineStructureBuilderJS.PatternEntry entry -> entry;
             case String blockId -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(
-                    BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))));
+                    BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId))));
             case Block block -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(block));
             case BlockState state -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlockState(state));
             case BlockPredicate predicate -> new MachineStructureBuilderJS.PatternEntry(predicate);

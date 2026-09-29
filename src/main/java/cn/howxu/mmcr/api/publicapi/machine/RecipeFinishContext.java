@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +47,7 @@ public final class RecipeFinishContext {
         return machineContext;
     }
 
-    public Identifier recipeId() {
+    public ResourceLocation recipeId() {
         return recipe.id();
     }
 

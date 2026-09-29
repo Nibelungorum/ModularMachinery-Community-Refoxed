@@ -15,7 +15,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FailureStatusCodecTest {
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private static final FailureReason CODEC_REASON = new FailureReason(
-            Identifier.fromNamespaceAndPath("mmcr_test", "codec_reason"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "codec_reason"),
             "gui.mmcr.failure.codec_reason", 10);
 
     @BeforeAll
@@ -91,7 +91,7 @@ class FailureStatusCodecTest {
 
     @Test
     void unknown_reason_resolves_to_unknown_and_retains_raw_reason_id() {
-        Identifier unknownId = Identifier.fromNamespaceAndPath("legacy", "removed_reason");
+        ResourceLocation unknownId = ResourceLocation.fromNamespaceAndPath("legacy", "removed_reason");
         ExecutionStatus status = new ExecutionStatus(MMCR.id("status"),
                 StatusSeverity.BLOCKED, MMCR.id("source"),
                 new FailureOccurrence(new FailureReason(unknownId, "gui.mmcr.failure.removed"),

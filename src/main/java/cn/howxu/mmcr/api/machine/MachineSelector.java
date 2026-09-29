@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
 
@@ -14,7 +14,7 @@ public final class MachineSelector {
 
     private MachineSelector() {}
 
-    public static Result select(Identifier requested, Map<Identifier, Machine> registry) {
+    public static Result select(ResourceLocation requested, Map<ResourceLocation, Machine> registry) {
         if (requested != null) {
             Machine exact = registry.get(requested);
             return new Result(exact, false);

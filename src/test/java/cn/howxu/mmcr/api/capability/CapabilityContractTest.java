@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -122,7 +122,7 @@ class CapabilityContractTest {
     private record TestRequest(IOType ioType, long parallelism) implements CapabilityRequest {
         @Override
         public CapabilityType type() {
-            return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "test"));
+            return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "test"));
         }
 
     }
@@ -160,7 +160,7 @@ class CapabilityContractTest {
 
         @Override
         public CapabilityType type() {
-            return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "test"));
+            return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "test"));
         }
 
         @Override

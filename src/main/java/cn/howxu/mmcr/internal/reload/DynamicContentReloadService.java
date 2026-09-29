@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -44,11 +44,11 @@ public final class DynamicContentReloadService {
 
     public static final class Candidate {
 
-        private final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
-        private final Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        private final Map<ResourceLocation, MachineStructureDefinition> structures = new LinkedHashMap<>();
+        private final Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
 
         public void registerStructure(MachineStructureDefinition structure) {
-            Identifier id = structure.machineId();
+            ResourceLocation id = structure.machineId();
             if (!MachineDefinitions.containsStatic(id)) {
                 throw new IllegalStateException("No startup machine registration for structure: " + id);
             }
@@ -59,7 +59,7 @@ public final class DynamicContentReloadService {
         }
 
         public void registerRecipe(MachineRecipe recipe) {
-            Identifier id = recipe.id();
+            ResourceLocation id = recipe.id();
             if (recipes.containsKey(id)) {
                 throw new IllegalStateException("Dynamic recipe already registered: " + id);
             }
@@ -68,9 +68,9 @@ public final class DynamicContentReloadService {
     }
 
     public record ReloadResult(
-            Set<Identifier> addedStructures,
-            Set<Identifier> updatedStructures,
-            Set<Identifier> removedStructures,
+            Set<ResourceLocation> addedStructures,
+            Set<ResourceLocation> updatedStructures,
+            Set<ResourceLocation> removedStructures,
             int addedRecipes,
             int updatedRecipes,
             int removedRecipes,
@@ -79,10 +79,10 @@ public final class DynamicContentReloadService {
             errors = List.copyOf(errors == null ? List.of() : errors);
         }
 
-        public static ReloadResult fromSnapshots(Map<Identifier, MachineStructureDefinition> oldStructures,
-                                                  Map<Identifier, MachineStructureDefinition> newStructures,
-                                                  Map<Identifier, MachineRecipe> oldRecipes,
-                                                  Map<Identifier, MachineRecipe> newRecipes,
+        public static ReloadResult fromSnapshots(Map<ResourceLocation, MachineStructureDefinition> oldStructures,
+                                                  Map<ResourceLocation, MachineStructureDefinition> newStructures,
+                                                  Map<ResourceLocation, MachineRecipe> oldRecipes,
+                                                  Map<ResourceLocation, MachineRecipe> newRecipes,
                                                   List<MachineRecipeJson.RecipeJsonException> errors) {
             return new ReloadResult(
                     addedIds(oldStructures, newStructures),
@@ -94,15 +94,15 @@ public final class DynamicContentReloadService {
                     errors);
         }
 
-        private static <T> Set<Identifier> addedIds(Map<Identifier, T> oldValues, Map<Identifier, T> newValues) {
-            Set<Identifier> ids = new LinkedHashSet<>(newValues.keySet());
+        private static <T> Set<ResourceLocation> addedIds(Map<ResourceLocation, T> oldValues, Map<ResourceLocation, T> newValues) {
+            Set<ResourceLocation> ids = new LinkedHashSet<>(newValues.keySet());
             ids.removeAll(oldValues.keySet());
             return Set.copyOf(ids);
         }
 
-        private static <T> Set<Identifier> updatedIds(Map<Identifier, T> oldValues, Map<Identifier, T> newValues) {
-            Set<Identifier> ids = new LinkedHashSet<>();
-            for (Identifier id : newValues.keySet()) {
+        private static <T> Set<ResourceLocation> updatedIds(Map<ResourceLocation, T> oldValues, Map<ResourceLocation, T> newValues) {
+            Set<ResourceLocation> ids = new LinkedHashSet<>();
+            for (ResourceLocation id : newValues.keySet()) {
                 if (oldValues.containsKey(id) && oldValues.get(id) != newValues.get(id)) {
                     ids.add(id);
                 }
@@ -110,8 +110,8 @@ public final class DynamicContentReloadService {
             return Set.copyOf(ids);
         }
 
-        private static <T> Set<Identifier> removedIds(Map<Identifier, T> oldValues, Map<Identifier, T> newValues) {
-            Set<Identifier> ids = new LinkedHashSet<>(oldValues.keySet());
+        private static <T> Set<ResourceLocation> removedIds(Map<ResourceLocation, T> oldValues, Map<ResourceLocation, T> newValues) {
+            Set<ResourceLocation> ids = new LinkedHashSet<>(oldValues.keySet());
             ids.removeAll(newValues.keySet());
             return Set.copyOf(ids);
         }

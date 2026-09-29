@@ -13,11 +13,11 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.arguments.IdentifierArgument;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -32,13 +32,13 @@ public final class BuildCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         SuggestionProvider<CommandSourceStack> machineSuggestions = (ctx, builder) ->
                 SharedSuggestionProvider.suggest(
-                        MachineRegistry.effectiveSnapshot().keySet().stream().map(Identifier::toString),
+                        MachineRegistry.effectiveSnapshot().keySet().stream().map(ResourceLocation::toString),
                         builder);
 
         dispatcher.register(Commands.literal("mmcr")
                 .then(Commands.literal("build")
                         .executes(BuildCommand::buildDefault)
-                        .then(Commands.argument("machineId", IdentifierArgument.id())
+                        .then(Commands.argument("machineId", ResourceLocationArgument.id())
                                 .suggests(machineSuggestions)
                                 .executes(BuildCommand::buildNamed))));
     }
@@ -48,11 +48,11 @@ public final class BuildCommand {
     }
 
     private static int buildNamed(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-        Identifier parsed = IdentifierArgument.getId(ctx, "machineId");
+        ResourceLocation parsed = ResourceLocationArgument.getId(ctx, "machineId");
         return run(ctx, parsed);
     }
 
-    private static int run(CommandContext<CommandSourceStack> ctx, Identifier requested) throws CommandSyntaxException {
+    private static int run(CommandContext<CommandSourceStack> ctx, ResourceLocation requested) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         ServerLevel level = player.level();
         MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.effectiveSnapshot());

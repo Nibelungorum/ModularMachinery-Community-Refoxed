@@ -27,7 +27,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.fml.config.IConfigSpec;
 import net.neoforged.neoforge.event.level.LevelEvent;
@@ -195,7 +195,7 @@ class MachineWorkModeIntegrationTest {
     @ParameterizedTest
     @EnumSource(MachineWorkMode.class)
     void work_modes_produce_the_same_observable_recipe_progress(MachineWorkMode mode) {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(machineId, "work mode recipe progress",
@@ -219,7 +219,7 @@ class MachineWorkModeIntegrationTest {
     @EnumSource(MachineWorkMode.class)
     void submitted_recipe_tick_is_surrounded_by_server_tick_hooks(MachineWorkMode mode) {
         List<String> phases = new ArrayList<>();
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder()
@@ -280,7 +280,7 @@ class MachineWorkModeIntegrationTest {
 
     @Test
     void sync_starts_the_recipe_in_the_originating_main_tick() {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(machineId, "sync main tick",
@@ -301,7 +301,7 @@ class MachineWorkModeIntegrationTest {
     @ParameterizedTest
     @EnumSource(MachineWorkMode.class)
     void normal_controller_schedules_start_tick_and_finish_by_work_mode(MachineWorkMode mode) throws Exception {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         List<String> phases = new ArrayList<>();
@@ -353,7 +353,7 @@ class MachineWorkModeIntegrationTest {
     }
 
     private void assertNormalControllerContinuesLastRecipe(MachineWorkMode mode) {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         AtomicInteger starts = new AtomicInteger();
@@ -384,7 +384,7 @@ class MachineWorkModeIntegrationTest {
         assertThat(starts).hasValueGreaterThanOrEqualTo(2);
     }
 
-    private static DynamicMachine normalMachine(Identifier machineId, RecipeBehavior behavior) {
+    private static DynamicMachine normalMachine(ResourceLocation machineId, RecipeBehavior behavior) {
         return new DynamicMachine(machineId, "normal mode lifecycle", new BlockArray(Map.of()),
                 MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(),
@@ -411,7 +411,7 @@ class MachineWorkModeIntegrationTest {
 
     private void assertLifecycleInterruptCancelsRecipeThreadSharedIo(
             java.util.function.Consumer<MachineControllerBlockEntity> interrupt) throws Exception {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(machineId, "recipe thread lifecycle",

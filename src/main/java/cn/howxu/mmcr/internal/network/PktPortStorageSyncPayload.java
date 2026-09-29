@@ -18,7 +18,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -160,7 +160,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
         int totalBytes = 0;
         for (CapabilitySyncEntry entry : entries) {
             totalBytes = checkedPayloadTotal(totalBytes, entry.payload().length);
-            buffer.writeIdentifier(entry.typeId());
+            buffer.writeResourceLocation(entry.typeId());
             buffer.writeVarInt(entry.capabilityIndex());
             buffer.writeByteArray(entry.payload());
         }
@@ -171,7 +171,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
         List<CapabilitySyncEntry> entries = new ArrayList<>(count);
         int totalBytes = 0;
         for (int index = 0; index < count; index++) {
-            Identifier typeId = buffer.readIdentifier();
+            ResourceLocation typeId = buffer.readResourceLocation();
             int capabilityIndex = buffer.readVarInt();
             int payloadLength = buffer.readVarInt();
             totalBytes = checkedPayloadTotal(totalBytes, payloadLength);

@@ -12,7 +12,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class FluidChemicalConsumeChanceJSTest {
-    private static final Identifier MACHINE = MMCR.id("kubejs_consume_chance_machine");
+    private static final ResourceLocation MACHINE = MMCR.id("kubejs_consume_chance_machine");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -61,7 +61,7 @@ class FluidChemicalConsumeChanceJSTest {
 
         var expected = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 MachineRecipeBuilder.chemicalInputPayload(
-                        ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 0.5F)).getOrThrow();
+                        ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 0.5F)).getOrThrow();
 
         assertThat(builder.requirements).singleElement().isEqualTo(expected);
     }

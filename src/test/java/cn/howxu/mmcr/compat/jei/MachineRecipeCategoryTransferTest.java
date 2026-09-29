@@ -27,7 +27,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -120,9 +120,9 @@ class MachineRecipeCategoryTransferTest {
     @Test
     void transferSlotsContainChemicalInputAndOutputWithRecipeAmounts() throws Exception {
         MachineRequirement chemicalInput = LoadedChemicalRequirement.input(
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_250L));
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_250L));
         MachineRequirement chemicalOutput = LoadedChemicalRequirement.output(
-                Identifier.parse("mekanism:hydrogen"), 750L, 1F);
+                ResourceLocation.parse("mekanism:hydrogen"), 750L, 1F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(
                 MMCR.id("jei_chemical_transfer_slots"), MMCR.id("chemical_transfer_machine"), 20,
                 List.of(chemicalInput, chemicalOutput), List.of(), List.of(), 0, 1,
@@ -154,9 +154,9 @@ class MachineRecipeCategoryTransferTest {
     @Test
     void levelRequirementUsesRenderOnlySlotAndMinimumLevelTooltip() throws Exception {
         TestBootstrap.beginRegistration();
-        Identifier typeId = MMCR.id("slot_coil_type");
-        Identifier copperId = MMCR.id("slot_copper");
-        Identifier ironId = MMCR.id("slot_iron");
+        ResourceLocation typeId = MMCR.id("slot_coil_type");
+        ResourceLocation copperId = MMCR.id("slot_copper");
+        ResourceLocation ironId = MMCR.id("slot_iron");
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Coils")));
         registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
         registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
@@ -216,7 +216,7 @@ class MachineRecipeCategoryTransferTest {
         method.invoke(null, builder, display);
     }
 
-    private static void registerLevel(Identifier id, Identifier typeId, int priority, Block block) {
+    private static void registerLevel(ResourceLocation id, ResourceLocation typeId, int priority, Block block) {
         TestBootstrap.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 new ItemStack(block.asItem()), ModifierDefinition.EMPTY));
@@ -313,7 +313,7 @@ class MachineRecipeCategoryTransferTest {
     @SuppressWarnings("unchecked")
     private static void registerChemical(String path) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.parse("mekanism:" + path));
+                ResourceLocation.parse("mekanism:" + path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         if (registry.get(key).isPresent()) return;
         registry.unfreeze(true);

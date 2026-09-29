@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 
 import java.util.ArrayList;
@@ -16,12 +16,12 @@ public final class MMCRJeiRecipeInformationEvent extends Event {
     private final List<RecipeInformation> entries = new ArrayList<>();
     private boolean frozen;
 
-    public void registerRecipePool(Identifier poolId, String translationKey, Object... arguments) {
+    public void registerRecipePool(ResourceLocation poolId, String translationKey, Object... arguments) {
         requireOpen();
         entries.add(RecipeInformation.pool(poolId, translationKey, arguments));
     }
 
-    public void registerRecipe(Identifier recipeId, String translationKey, Object... arguments) {
+    public void registerRecipe(ResourceLocation recipeId, String translationKey, Object... arguments) {
         requireOpen();
         entries.add(RecipeInformation.recipe(recipeId, translationKey, arguments));
     }

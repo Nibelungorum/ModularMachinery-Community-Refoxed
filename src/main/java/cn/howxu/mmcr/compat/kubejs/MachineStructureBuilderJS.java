@@ -16,7 +16,7 @@ import dev.latvian.mods.kubejs.registry.BuilderBase;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -47,13 +47,13 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     private StructureApiMode structureApiMode;
     private boolean stateSensitive;
 
-    public MachineStructureBuilderJS(Identifier id) {
+    public MachineStructureBuilderJS(ResourceLocation id) {
         super(id);
         sliceBuilder.noController();
     }
 
     public MachineStructureBuilderJS(String id) {
-        this(Identifier.parse(id));
+        this(ResourceLocation.parse(id));
     }
 
     public MachineStructureBuilderJS stateSensitive() {
@@ -99,7 +99,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         }
         PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(key, entry.base());
-        if (value instanceof LevelSlot(Identifier typeId)) {
+        if (value instanceof LevelSlot(ResourceLocation typeId)) {
             sliceRequirements.levelSlot(key, validateLevelType(typeId));
         }
         return this;
@@ -273,7 +273,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate anyOfHeatPorts() { return KubeJSInterfaceHelpers.anyOfHeatPorts(); }
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
-    public BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
@@ -314,7 +314,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return switch (value) {
             case PatternEntry entry -> entry;
             case String blockId -> new PatternEntry(
-                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId))));
+                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId))));
             case Block block -> new PatternEntry(new BlockPredicate.OfBlock(block));
             case BlockState state -> new PatternEntry(new BlockPredicate.OfBlockState(state));
             case BlockPredicate predicate -> new PatternEntry(predicate);
@@ -387,7 +387,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return new BlockPredicate.AnyOf(levels.stream().map(level -> level.statePredicate()).toList());
     }
 
-    private static Identifier validateLevelType(Identifier typeId) {
+    private static ResourceLocation validateLevelType(ResourceLocation typeId) {
         Objects.requireNonNull(typeId, "typeId");
         if (MachineLevelRegistry.getType(typeId) == null) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);

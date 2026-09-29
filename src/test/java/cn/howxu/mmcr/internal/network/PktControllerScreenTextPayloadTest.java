@@ -12,7 +12,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -51,14 +51,14 @@ class PktControllerScreenTextPayloadTest {
         assertThat(decoded.revision()).isEqualTo(payload.revision());
         assertThat(decoded.lines()).hasSize(2);
         assertThat(decoded.lines().get(0).scope()).isEqualTo(ControllerScreenTextScope.CONTROLLER);
-        assertThat(decoded.lines().get(0).lineId()).isEqualTo(Identifier.parse("addon:status"));
+        assertThat(decoded.lines().get(0).lineId()).isEqualTo(ResourceLocation.parse("addon:status"));
         assertThat(decoded.lines().get(0).text()).isInstanceOf(Component.class);
         assertThat(((TranslatableContents) decoded.lines().get(0).text().getContents()).getKey())
                 .isEqualTo("example.progress");
         assertThat(((TranslatableContents) decoded.lines().get(0).text().getContents()).getArgs())
                 .containsExactly("75%");
         assertThat(decoded.lines().get(1).scope()).isEqualTo(ControllerScreenTextScope.OPERATION);
-        assertThat(decoded.lines().get(1).lineId()).isEqualTo(Identifier.parse("addon:operation"));
+        assertThat(decoded.lines().get(1).lineId()).isEqualTo(ResourceLocation.parse("addon:operation"));
         assertThat(decoded.lines().get(1).text()).isEqualTo(Component.literal("running"));
         buffer.release();
     }
@@ -160,7 +160,7 @@ class PktControllerScreenTextPayloadTest {
 
     private static ControllerScreenTextSnapshot.Line line(ControllerScreenTextScope scope, String id,
                                                            Component text) {
-        return new ControllerScreenTextSnapshot.Line(scope, Identifier.parse(id), text);
+        return new ControllerScreenTextSnapshot.Line(scope, ResourceLocation.parse(id), text);
     }
 
     private static void writeHeader(RegistryFriendlyByteBuf buffer, int lineCount) {
@@ -173,7 +173,7 @@ class PktControllerScreenTextPayloadTest {
     private static void writeLine(RegistryFriendlyByteBuf buffer, ControllerScreenTextScope scope, String id,
                                   Component text) {
         buffer.writeVarInt(scope.ordinal());
-        Identifier.STREAM_CODEC.encode(buffer, Identifier.parse(id));
+        ResourceLocation.STREAM_CODEC.encode(buffer, ResourceLocation.parse(id));
         ComponentSerialization.STREAM_CODEC.encode(buffer, text);
     }
 

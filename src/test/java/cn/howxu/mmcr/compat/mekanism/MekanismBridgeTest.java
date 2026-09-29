@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,17 +47,17 @@ class MekanismBridgeTest {
             }
 
             @Override
-            public boolean supportsPortFamily(Identifier familyId) {
+            public boolean supportsPortFamily(ResourceLocation familyId) {
                 return true;
             }
 
             @Override
-            public Identifier unavailableReason() {
+            public ResourceLocation unavailableReason() {
                 return MMCR.id("unused");
             }
 
             @Override
-            public void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat) {
+            public void registerRecipeTypes(ResourceLocation chemical, ResourceLocation heatTemperature, ResourceLocation heat) {
             }
         };
 

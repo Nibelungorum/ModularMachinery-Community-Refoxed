@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.external;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Set;
 
@@ -9,7 +9,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public interface ExternalCapabilityAdapter {
-    Identifier id();
+    ResourceLocation id();
 
     Set<CapabilityType> capabilityTypes();
 

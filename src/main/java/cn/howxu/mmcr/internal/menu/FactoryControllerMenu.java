@@ -6,7 +6,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -102,17 +102,17 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     }
     public long maxParallelism() { return snapshot.maxParallelism(); }
     public String machineName() { return snapshot.machineName(); }
-    public @Nullable Identifier machineId() {
-        return snapshot.machineId().isEmpty() ? null : Identifier.tryParse(snapshot.machineId());
+    public @Nullable ResourceLocation machineId() {
+        return snapshot.machineId().isEmpty() ? null : ResourceLocation.tryParse(snapshot.machineId());
     }
-    public @Nullable Identifier currentRecipePoolId() {
-        return snapshot.recipePoolId().isEmpty() ? null : Identifier.tryParse(snapshot.recipePoolId());
+    public @Nullable ResourceLocation currentRecipePoolId() {
+        return snapshot.recipePoolId().isEmpty() ? null : ResourceLocation.tryParse(snapshot.recipePoolId());
     }
-    public List<Identifier> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
+    public List<ResourceLocation> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
     public boolean isModuleController() { return snapshot.controllerRole() == 2; }
-    public Optional<Identifier> connectedHostId() {
+    public Optional<ResourceLocation> connectedHostId() {
         return Optional.ofNullable(snapshot.connectedHostId().isEmpty()
-                ? null : Identifier.tryParse(snapshot.connectedHostId()));
+                ? null : ResourceLocation.tryParse(snapshot.connectedHostId()));
     }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public int matchedStage() { return snapshot.matchedStage(); }

@@ -16,7 +16,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.phys.Vec2;
@@ -58,7 +58,7 @@ class ReloadCommandTest {
 
     @Test
     void reloadCommandPreservesDynamicStructuresAndSynchronizesEffectiveSnapshot() throws Exception {
-        Identifier removed = Identifier.parse("mmcr:removed");
+        ResourceLocation removed = ResourceLocation.parse("mmcr:removed");
         MachineDefinitions.register(MachineRegistration.builder(removed).build());
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(structure(removed)));
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
@@ -106,7 +106,7 @@ class ReloadCommandTest {
                 "test", Component.literal("test"), null, null);
     }
 
-    private static MachineStructureDefinition structure(Identifier id) {
+    private static MachineStructureDefinition structure(ResourceLocation id) {
         return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
     }

@@ -16,7 +16,7 @@ import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -56,25 +56,25 @@ public final class ModBlocks {
     /** Compatibility alias for {@link #BASIC_CASING}; the block id was renamed from {@code casing} to {@code basic_casing}. */
     public static final DeferredHolder<Block, Block> CASING = BASIC_CASING;
 
-    private static void registerMachineController(Identifier machineId) {
+    private static void registerMachineController(ResourceLocation machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         if (BLOCKS.containsKey(name)) return;
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new MachineControllerBlock(machineId, properties)));
     }
 
-    public static DeferredHolder<Block, Block> controllerFor(Identifier machineId) {
+    public static DeferredHolder<Block, Block> controllerFor(ResourceLocation machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         DeferredHolder<Block, Block> holder = BLOCKS.get(name);
         if (holder == null) throw new IllegalArgumentException("No controller registered for machine: " + machineId);
         return holder;
     }
 
-    public static void registerMachineControllers(Collection<Identifier> machineIds) {
+    public static void registerMachineControllers(Collection<ResourceLocation> machineIds) {
         machineIds.forEach(ModBlocks::registerMachineController);
     }
 
-    public static boolean hasControllerFor(Identifier machineId) {
+    public static boolean hasControllerFor(ResourceLocation machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         DeferredHolder<Block, Block> holder = BLOCKS.get(name);
         return holder != null && holder.isBound()
@@ -82,7 +82,7 @@ public final class ModBlocks {
                 && controller.machineId().equals(machineId);
     }
 
-    public static Identifier machineIdForController(Block block) {
+    public static ResourceLocation machineIdForController(Block block) {
         if (block instanceof MachineControllerBlock controller) {
             return controller.machineId();
         }

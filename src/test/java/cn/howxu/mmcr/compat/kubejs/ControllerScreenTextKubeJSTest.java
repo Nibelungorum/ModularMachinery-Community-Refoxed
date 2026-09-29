@@ -8,7 +8,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class ControllerScreenTextKubeJSTest {
-    private static final Identifier MACHINE_ID = MMCR.id("kubejs_controller_text_machine");
+    private static final ResourceLocation MACHINE_ID = MMCR.id("kubejs_controller_text_machine");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -87,7 +87,7 @@ class ControllerScreenTextKubeJSTest {
     @Test
     void append_after_translatable_exposes_relative_ordering_to_kubejs() {
         ControllerScreenTextState state = new ControllerScreenTextState();
-        state.append(CONTROLLER, Identifier.parse("example:target"), Component.literal("target"));
+        state.append(CONTROLLER, ResourceLocation.parse("example:target"), Component.literal("target"));
         ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
                 new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
 
@@ -102,7 +102,7 @@ class ControllerScreenTextKubeJSTest {
     @Test
     void replace_updates_controller_text_after_append() {
         ControllerScreenTextState state = new ControllerScreenTextState();
-        state.append(CONTROLLER, Identifier.parse("example:progress"), Component.literal("old"));
+        state.append(CONTROLLER, ResourceLocation.parse("example:progress"), Component.literal("old"));
         ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
                 new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
 
@@ -117,7 +117,7 @@ class ControllerScreenTextKubeJSTest {
     @Test
     void replace_translatable_preserves_all_kubejs_arguments() {
         ControllerScreenTextState state = new ControllerScreenTextState();
-        state.append(CONTROLLER, Identifier.parse("example:progress"), Component.literal("old"));
+        state.append(CONTROLLER, ResourceLocation.parse("example:progress"), Component.literal("old"));
         ControllerScreenTextEventJS event = new ControllerScreenTextEventJS(
                 new ControllerRuntimeContext(MACHINE_ID, BlockPos.ZERO, state));
         Object[] arguments = {Component.literal("75%"), 4};

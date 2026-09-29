@@ -20,7 +20,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
@@ -74,9 +74,9 @@ class DynamicContentReloadServiceTest {
             throw new IllegalStateException("script failed");
         })).isInstanceOf(IllegalStateException.class);
 
-        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:test_cube"))).isNotNull();
-        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:old_recipe"))).isNotNull();
-        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:controller_tick"))).isNull();
+        assertThat(MachineRegistry.getMachine(ResourceLocation.parse("mmcr:test_cube"))).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(ResourceLocation.parse("mmcr:old_recipe"))).isNotNull();
+        assertThat(MachineRegistry.getMachine(ResourceLocation.parse("mmcr:controller_tick"))).isNull();
     }
 
     @Test
@@ -92,9 +92,9 @@ class DynamicContentReloadServiceTest {
         var result = DynamicContentReloadService.reload(candidate ->
                 candidate.registerStructure(structure("mmcr:controller_tick")));
 
-        assertThat(result.removedStructures()).containsExactly(Identifier.parse("mmcr:test_cube"));
-        assertThat(MachineRegistry.getCompiled(Identifier.parse("mmcr:test_cube"))).isNull();
-        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:old_recipe"))).isNull();
+        assertThat(result.removedStructures()).containsExactly(ResourceLocation.parse("mmcr:test_cube"));
+        assertThat(MachineRegistry.getCompiled(ResourceLocation.parse("mmcr:test_cube"))).isNull();
+        assertThat(RecipeRegistry.getRecipe(ResourceLocation.parse("mmcr:old_recipe"))).isNull();
     }
 
     @Test
@@ -103,7 +103,7 @@ class DynamicContentReloadServiceTest {
         register("mmcr:controller_tick");
         var oldStructure = structure("mmcr:test_cube");
         DynamicContentReloadService.reload(candidate -> candidate.registerStructure(oldStructure));
-        var oldMachine = MachineRegistry.getMachine(Identifier.parse("mmcr:test_cube"));
+        var oldMachine = MachineRegistry.getMachine(ResourceLocation.parse("mmcr:test_cube"));
         var oldCompiled = MachineRegistry.getCompiled(oldMachine.registryName());
         var oldRotated = BlockArrayCache.get(oldMachine.pattern(), Direction.NORTH);
 
@@ -115,35 +115,35 @@ class DynamicContentReloadServiceTest {
         assertThat(MachineRegistry.getCompiled(oldMachine.registryName())).isSameAs(oldCompiled);
         assertThat(BlockArrayCache.get(oldMachine.pattern(), Direction.NORTH))
                 .isSameAs(oldRotated);
-        assertThat(MachineRegistry.getMachine(Identifier.parse("mmcr:controller_tick"))).isNull();
+        assertThat(MachineRegistry.getMachine(ResourceLocation.parse("mmcr:controller_tick"))).isNull();
     }
 
     @Test
     void candidateRecipeCanReferenceStaticMachine() {
-        var staticMachine = new DynamicMachine(Identifier.parse("mmcr:static"), "mmcr:static", new BlockArray(Map.of()));
+        var staticMachine = new DynamicMachine(ResourceLocation.parse("mmcr:static"), "mmcr:static", new BlockArray(Map.of()));
         MachineRegistry.register(staticMachine);
         DynamicContentReloadService.reload(candidate ->
                 candidate.registerRecipe(recipe("mmcr:static_recipe", "mmcr:static")));
-        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:static_recipe"))).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(ResourceLocation.parse("mmcr:static_recipe"))).isNotNull();
     }
 
     @Test
     void candidateRecipeCanReferenceStartupMachineDefinitionWithoutDynamicStructure() {
-        Identifier machineId = Identifier.parse("mmcr:startup_definition_only");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:startup_definition_only");
         register(machineId.toString());
         MachineStructureRegistry.replaceStartup(Map.of(machineId, structure(machineId.toString())));
 
         DynamicContentReloadService.reload(candidate ->
                 candidate.registerRecipe(recipe("mmcr:startup_definition_recipe", machineId.toString())));
 
-        assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:startup_definition_recipe"))).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(ResourceLocation.parse("mmcr:startup_definition_recipe"))).isNotNull();
     }
 
     @Test
     void orphan_dynamic_recipe_is_reported_while_valid_recipe_continues_publishing() {
-        Identifier machineId = Identifier.parse("mmcr:dynamic_pool_validation_machine");
-        Identifier validId = Identifier.parse("mmcr:dynamic_pool_validation_valid");
-        Identifier orphanId = Identifier.parse("mmcr:dynamic_pool_validation_orphan");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:dynamic_pool_validation_machine");
+        ResourceLocation validId = ResourceLocation.parse("mmcr:dynamic_pool_validation_valid");
+        ResourceLocation orphanId = ResourceLocation.parse("mmcr:dynamic_pool_validation_orphan");
         register(machineId.toString());
 
         var result = DynamicContentReloadService.reload(candidate -> {
@@ -163,9 +163,9 @@ class DynamicContentReloadServiceTest {
 
     @Test
     void invalid_dynamic_recipe_is_reported_while_valid_recipe_continues_publishing() {
-        Identifier machineId = Identifier.parse("mmcr:dynamic_recipe_validation_machine");
-        Identifier validId = Identifier.parse("mmcr:dynamic_recipe_validation_valid");
-        Identifier invalidId = Identifier.parse("mmcr:dynamic_recipe_validation_invalid");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:dynamic_recipe_validation_machine");
+        ResourceLocation validId = ResourceLocation.parse("mmcr:dynamic_recipe_validation_valid");
+        ResourceLocation invalidId = ResourceLocation.parse("mmcr:dynamic_recipe_validation_invalid");
         register(machineId.toString());
         MachineRecipe invalid;
         try (var scope = OutputRegistry.openTestScope()) {
@@ -189,10 +189,10 @@ class DynamicContentReloadServiceTest {
 
     @Test
     void dynamic_reload_uses_registry_pool_membership_and_counts_only_published_recipes() {
-        Identifier machineId = Identifier.parse("mmcr:dynamic_pool_alias_machine");
-        Identifier registeredPoolId = Identifier.parse("mmcr:dynamic_pool_alias_registered");
-        Identifier validId = Identifier.parse("mmcr:dynamic_pool_alias_valid");
-        Identifier invalidId = Identifier.parse("mmcr:dynamic_pool_alias_invalid");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:dynamic_pool_alias_machine");
+        ResourceLocation registeredPoolId = ResourceLocation.parse("mmcr:dynamic_pool_alias_registered");
+        ResourceLocation validId = ResourceLocation.parse("mmcr:dynamic_pool_alias_valid");
+        ResourceLocation invalidId = ResourceLocation.parse("mmcr:dynamic_pool_alias_invalid");
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .recipePoolId(registeredPoolId).build());
@@ -218,12 +218,12 @@ class DynamicContentReloadServiceTest {
 
     @Test
     void dynamic_reload_reports_cross_pool_rejection_and_keeps_valid_recipe() {
-        Identifier firstMachineId = Identifier.parse("mmcr:dynamic_cross_pool_machine_a");
-        Identifier secondMachineId = Identifier.parse("mmcr:dynamic_cross_pool_machine_b");
-        Identifier firstPoolId = Identifier.parse("mmcr:dynamic_cross_pool_a");
-        Identifier secondPoolId = Identifier.parse("mmcr:dynamic_cross_pool_b");
-        Identifier conflictingId = Identifier.parse("mmcr:dynamic_cross_pool_recipe");
-        Identifier validId = Identifier.parse("mmcr:dynamic_cross_pool_valid");
+        ResourceLocation firstMachineId = ResourceLocation.parse("mmcr:dynamic_cross_pool_machine_a");
+        ResourceLocation secondMachineId = ResourceLocation.parse("mmcr:dynamic_cross_pool_machine_b");
+        ResourceLocation firstPoolId = ResourceLocation.parse("mmcr:dynamic_cross_pool_a");
+        ResourceLocation secondPoolId = ResourceLocation.parse("mmcr:dynamic_cross_pool_b");
+        ResourceLocation conflictingId = ResourceLocation.parse("mmcr:dynamic_cross_pool_recipe");
+        ResourceLocation validId = ResourceLocation.parse("mmcr:dynamic_cross_pool_valid");
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.register(MachineRegistration.builder(firstMachineId)
                 .recipePoolId(firstPoolId).build());
@@ -251,10 +251,10 @@ class DynamicContentReloadServiceTest {
 
     @Test
     void dynamic_reload_uses_registered_pool_for_static_machine_and_rejects_machine_alias() {
-        Identifier machineId = Identifier.parse("mmcr:static_pool_alias_machine");
-        Identifier registeredPoolId = Identifier.parse("mmcr:static_pool_alias_registered");
-        Identifier validId = Identifier.parse("mmcr:static_pool_alias_valid");
-        Identifier invalidId = Identifier.parse("mmcr:static_pool_alias_invalid");
+        ResourceLocation machineId = ResourceLocation.parse("mmcr:static_pool_alias_machine");
+        ResourceLocation registeredPoolId = ResourceLocation.parse("mmcr:static_pool_alias_registered");
+        ResourceLocation validId = ResourceLocation.parse("mmcr:static_pool_alias_valid");
+        ResourceLocation invalidId = ResourceLocation.parse("mmcr:static_pool_alias_invalid");
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .recipePoolId(registeredPoolId).build());
@@ -282,14 +282,14 @@ class DynamicContentReloadServiceTest {
                 candidate.registerStructure(structure(machineId)));
 
         assertThat(commit.result()).isNotNull();
-        assertThat(commit.snapshot().structures()).containsKey(Identifier.parse(machineId));
+        assertThat(commit.snapshot().structures()).containsKey(ResourceLocation.parse(machineId));
         assertThat(commit.snapshot().contentVersion()).isGreaterThan(0L);
         assertThat(commit.snapshot().structures()).isEqualTo(MachineStructureRegistry.effectiveSnapshot());
         assertThat(commit.snapshot().recipes()).isEqualTo(RecipeRegistry.effectiveSnapshot());
     }
 
     private static void register(String id) {
-        Identifier identifier = Identifier.parse(id);
+        ResourceLocation identifier = ResourceLocation.parse(id);
         if (MachineDefinitions.getRegistration(identifier) == null) {
             MachineDefinitions.beginRegistryPhase();
             MachineDefinitions.register(MachineRegistration.builder(identifier).build());
@@ -297,28 +297,28 @@ class DynamicContentReloadServiceTest {
     }
 
     private static MachineRecipe recipe(String id, String machineId) {
-        return RecipeTestSupport.create(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
+        return RecipeTestSupport.create(ResourceLocation.parse(id), ResourceLocation.parse(machineId), 1, List.of(), List.of());
     }
 
-    private static MachineRecipe recipe(Identifier id, Identifier recipePoolId) {
+    private static MachineRecipe recipe(ResourceLocation id, ResourceLocation recipePoolId) {
         return RecipeTestSupport.create(id, recipePoolId, 1, List.of(), List.of());
     }
 
     private static MachineStructureDefinition structure(String id) {
-        Identifier identifier = Identifier.parse(id);
+        ResourceLocation identifier = ResourceLocation.parse(id);
         return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
     }
 
     private static MachineStructureDefinition failingStructure(String id) {
-        Identifier identifier = Identifier.parse(id);
+        ResourceLocation identifier = ResourceLocation.parse(id);
         BlockPos outsidePattern = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("invalid", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.builder().modifier('X', replacement).build());
     }
 
-    private static final Identifier INVALID_OUTPUT_ID = Identifier.parse("mmcr_test:dynamic_invalid_output");
+    private static final ResourceLocation INVALID_OUTPUT_ID = ResourceLocation.parse("mmcr_test:dynamic_invalid_output");
     private static final OutputType<InvalidOutput> INVALID_OUTPUT_TYPE = new OutputType.Definition<>(
             INVALID_OUTPUT_ID, com.mojang.serialization.MapCodec.unit(() -> new InvalidOutput(1, 1F)),
             (output, chance) -> new InvalidOutput(output.value(), chance),

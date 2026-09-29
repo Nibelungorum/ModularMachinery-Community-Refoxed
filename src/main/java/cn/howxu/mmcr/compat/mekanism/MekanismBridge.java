@@ -8,7 +8,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
@@ -31,11 +31,11 @@ public interface MekanismBridge {
 
     boolean available();
 
-    boolean supportsPortFamily(Identifier familyId);
+    boolean supportsPortFamily(ResourceLocation familyId);
 
-    Identifier unavailableReason();
+    ResourceLocation unavailableReason();
 
-    default ChemicalRenderData chemicalRenderData(Identifier chemicalId) {
+    default ChemicalRenderData chemicalRenderData(ResourceLocation chemicalId) {
         return null;
     }
 
@@ -47,7 +47,7 @@ public interface MekanismBridge {
         return false;
     }
 
-    void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat);
+    void registerRecipeTypes(ResourceLocation chemical, ResourceLocation heatTemperature, ResourceLocation heat);
 
     default List<PortDeclaration> portDeclarations() {
         return List.of();
@@ -74,7 +74,7 @@ public interface MekanismBridge {
     }
 
     /** Returns the optional capability identity represented by a menu, or {@code null}. */
-    default Identifier capabilityIdForMenu(AbstractContainerMenu menu) {
+    default ResourceLocation capabilityIdForMenu(AbstractContainerMenu menu) {
         return null;
     }
 
@@ -124,7 +124,7 @@ public interface MekanismBridge {
         HEAT
     }
 
-    record ChemicalRenderData(Identifier spriteLocation, int tint, Component displayName) {
+    record ChemicalRenderData(ResourceLocation spriteLocation, int tint, Component displayName) {
         public ChemicalRenderData {
             if (spriteLocation == null || displayName == null) throw new IllegalArgumentException("chemical data is incomplete");
         }

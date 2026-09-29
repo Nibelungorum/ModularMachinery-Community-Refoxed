@@ -10,7 +10,7 @@ import cn.howxu.mmcr.internal.item.TerminalAction;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -26,11 +26,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class TerminalScreenTest {
-    private static final Identifier TYPE_A = Identifier.parse("test:terminal_type_a");
-    private static final Identifier TYPE_B = Identifier.parse("test:terminal_type_b");
-    private static final Identifier LEVEL_A = Identifier.parse("test:terminal_level_a");
-    private static final Identifier LEVEL_B = Identifier.parse("test:terminal_level_b");
-    private static final Identifier LEVEL_B_ALT = Identifier.parse("test:terminal_level_b_alt");
+    private static final ResourceLocation TYPE_A = ResourceLocation.parse("test:terminal_type_a");
+    private static final ResourceLocation TYPE_B = ResourceLocation.parse("test:terminal_type_b");
+    private static final ResourceLocation LEVEL_A = ResourceLocation.parse("test:terminal_level_a");
+    private static final ResourceLocation LEVEL_B = ResourceLocation.parse("test:terminal_level_b");
+    private static final ResourceLocation LEVEL_B_ALT = ResourceLocation.parse("test:terminal_level_b_alt");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -75,7 +75,7 @@ class TerminalScreenTest {
     void invalid_selected_type_falls_back_to_first_available_type() {
         TerminalScreen.LevelView view = TerminalScreen.levelView(
                 List.of(MachineLevelRegistry.getType(TYPE_A), MachineLevelRegistry.getType(TYPE_B)),
-                Identifier.parse("test:missing_type"), Map.of(TYPE_A, LEVEL_A, TYPE_B, LEVEL_B));
+                ResourceLocation.parse("test:missing_type"), Map.of(TYPE_A, LEVEL_A, TYPE_B, LEVEL_B));
 
         assertThat(view.typeId()).isEqualTo(TYPE_A);
         assertThat(view.levelId()).isEqualTo(LEVEL_A);
@@ -97,7 +97,7 @@ class TerminalScreenTest {
     void expired_selected_level_falls_back_to_another_valid_type_and_level() {
         TerminalScreen.LevelView view = TerminalScreen.levelView(
                 List.of(MachineLevelRegistry.getType(TYPE_A), MachineLevelRegistry.getType(TYPE_B)), TYPE_A,
-                Map.of(TYPE_A, Identifier.parse("test:expired_level"), TYPE_B, LEVEL_B));
+                Map.of(TYPE_A, ResourceLocation.parse("test:expired_level"), TYPE_B, LEVEL_B));
 
         assertThat(view.typeId()).isEqualTo(TYPE_B);
         assertThat(view.levelId()).isEqualTo(LEVEL_B);

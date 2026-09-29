@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 
 import java.util.LinkedHashMap;
@@ -13,24 +13,24 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineStructureRegistry {
-    private static volatile Map<Identifier, MachineStructureDefinition> STARTUP_STRUCTURES = Map.of();
-    private static volatile Map<Identifier, MachineStructureDefinition> DYNAMIC_STRUCTURES = Map.of();
+    private static volatile Map<ResourceLocation, MachineStructureDefinition> STARTUP_STRUCTURES = Map.of();
+    private static volatile Map<ResourceLocation, MachineStructureDefinition> DYNAMIC_STRUCTURES = Map.of();
 
     private MachineStructureRegistry() {
     }
 
-    public static void replaceStartup(Map<Identifier, MachineStructureDefinition> structures) {
+    public static void replaceStartup(Map<ResourceLocation, MachineStructureDefinition> structures) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+            Map<ResourceLocation, MachineStructureDefinition> replacement = validate(structures);
             MachineRegistry.installStructures(effective(replacement, DYNAMIC_STRUCTURES));
             STARTUP_STRUCTURES = replacement;
             RuntimeContentVersion.advance();
         }
     }
 
-    public static void replaceDynamic(Map<Identifier, MachineStructureDefinition> structures) {
+    public static void replaceDynamic(Map<ResourceLocation, MachineStructureDefinition> structures) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineStructureDefinition> replacement = validate(structures);
+            Map<ResourceLocation, MachineStructureDefinition> replacement = validate(structures);
             validateDynamicRoles(replacement);
             MachineRegistry.installStructures(effective(STARTUP_STRUCTURES, replacement));
             DYNAMIC_STRUCTURES = replacement;
@@ -38,11 +38,11 @@ public final class MachineStructureRegistry {
         }
     }
 
-    private static Map<Identifier, MachineStructureDefinition> validate(
-            Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, MachineStructureDefinition> replacement = new LinkedHashMap<>();
+    private static Map<ResourceLocation, MachineStructureDefinition> validate(
+            Map<ResourceLocation, MachineStructureDefinition> structures) {
+        Map<ResourceLocation, MachineStructureDefinition> replacement = new LinkedHashMap<>();
         for (var entry : structures.entrySet()) {
-            Identifier id = entry.getKey();
+            ResourceLocation id = entry.getKey();
             MachineStructureDefinition structure = entry.getValue();
             if (MachineDefinitions.getRegistration(id) == null) {
                 throw new IllegalStateException("No startup machine registration for structure: " + id);
@@ -55,39 +55,39 @@ public final class MachineStructureRegistry {
         return Map.copyOf(replacement);
     }
 
-    private static Map<Identifier, MachineStructureDefinition> effective(
-            Map<Identifier, MachineStructureDefinition> startup,
-            Map<Identifier, MachineStructureDefinition> dynamic) {
-        Map<Identifier, MachineStructureDefinition> effective = new LinkedHashMap<>(startup);
+    private static Map<ResourceLocation, MachineStructureDefinition> effective(
+            Map<ResourceLocation, MachineStructureDefinition> startup,
+            Map<ResourceLocation, MachineStructureDefinition> dynamic) {
+        Map<ResourceLocation, MachineStructureDefinition> effective = new LinkedHashMap<>(startup);
         effective.putAll(dynamic);
         return Map.copyOf(effective);
     }
 
-    public static Map<Identifier, MachineStructureDefinition> dynamicSnapshot() {
+    public static Map<ResourceLocation, MachineStructureDefinition> dynamicSnapshot() {
         return Map.copyOf(DYNAMIC_STRUCTURES);
     }
 
-    public static Map<Identifier, MachineStructureDefinition> startupSnapshot() {
+    public static Map<ResourceLocation, MachineStructureDefinition> startupSnapshot() {
         return Map.copyOf(STARTUP_STRUCTURES);
     }
 
-    public static Map<Identifier, MachineStructureDefinition> effectiveSnapshot() {
+    public static Map<ResourceLocation, MachineStructureDefinition> effectiveSnapshot() {
         synchronized (RuntimeContentVersion.lock()) {
             return effective(STARTUP_STRUCTURES, DYNAMIC_STRUCTURES);
         }
     }
 
-    public static void replaceClientSnapshot(Map<Identifier, MachineStructureDefinition> structures) {
+    public static void replaceClientSnapshot(Map<ResourceLocation, MachineStructureDefinition> structures) {
         synchronized (RuntimeContentVersion.lock()) {
-            Map<Identifier, MachineStructureDefinition> replacement = validateClientSnapshot(structures);
+            Map<ResourceLocation, MachineStructureDefinition> replacement = validateClientSnapshot(structures);
             MachineRegistry.installStructures(replacement);
             STARTUP_STRUCTURES = replacement;
             DYNAMIC_STRUCTURES = Map.of();
         }
     }
 
-    public static Map<Identifier, MachineStructureDefinition> validateClientSnapshot(
-            Map<Identifier, MachineStructureDefinition> structures) {
+    public static Map<ResourceLocation, MachineStructureDefinition> validateClientSnapshot(
+            Map<ResourceLocation, MachineStructureDefinition> structures) {
         return validate(structures);
     }
 
@@ -120,10 +120,10 @@ public final class MachineStructureRegistry {
                 registration.behavior(), registration.requestProcessors(), registration.requestFailures());
     }
 
-    public static void validateDynamicRoles(Map<Identifier, MachineStructureDefinition> structures) {
-        Map<Identifier, MachineRegistration> registrations = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineStructureDefinition> entry : structures.entrySet()) {
-            Identifier id = entry.getKey();
+    public static void validateDynamicRoles(Map<ResourceLocation, MachineStructureDefinition> structures) {
+        Map<ResourceLocation, MachineRegistration> registrations = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineStructureDefinition> entry : structures.entrySet()) {
+            ResourceLocation id = entry.getKey();
             MachineStructureDefinition structure = entry.getValue();
             MachineRegistration registration = MachineDefinitions.getRegistration(id);
             if (registration == null) {

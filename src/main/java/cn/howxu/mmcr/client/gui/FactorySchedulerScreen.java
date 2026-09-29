@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 /**
@@ -20,7 +20,7 @@ public final class FactorySchedulerScreen extends AbstractContainerScreen<Factor
     private static final int IMAGE_HEIGHT = 166;
     private static final int BACKGROUND_TEXTURE_WIDTH = 256;
     private static final int BACKGROUND_TEXTURE_HEIGHT = 256;
-    private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactorycontroller.png");
+    private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/guifactorycontroller.png");
 
     public FactorySchedulerScreen(FactorySchedulerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);

@@ -16,7 +16,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -85,7 +85,7 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
         delegate = UNAVAILABLE;
     }
 
-    private static RequirementType<LoadedHeatRequirement> type(Identifier id, HeatRequirement.Kind kind) {
+    private static RequirementType<LoadedHeatRequirement> type(ResourceLocation id, HeatRequirement.Kind kind) {
         MapCodec<LoadedHeatRequirement> codec = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.STRING.fieldOf("type").forGetter(ignored -> id.toString()),
                 RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", kind == HeatRequirement.Kind.OUTPUT_HEAT

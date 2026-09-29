@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,7 +26,7 @@ class RequirementHandlerRegistryTest {
     private static final RequirementHandler<TestRequirement> TEST_HANDLER = (value, capabilities, context) ->
             new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
     private static final RequirementType<TestRequirement> TEST_TYPE = new RequirementType.Definition<>(
-            Identifier.fromNamespaceAndPath("mmcr_test", "registered_requirement"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "registered_requirement"),
             MapCodec.unit(() -> new TestRequirement(null, RecipeModifier.IOType.INPUT)), TEST_HANDLER);
 
     @BeforeAll
@@ -71,7 +71,7 @@ class RequirementHandlerRegistryTest {
 
     @Test
     void rejects_different_type_implementations_with_the_same_stable_identifier() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "same_identifier");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "same_identifier");
         RequirementType<TestRequirement> first = new IdentityType(id);
         RequirementType<TestRequirement> second = new IdentityType(id);
 
@@ -96,7 +96,7 @@ class RequirementHandlerRegistryTest {
 
     @Test
     void canonical_codec_rejects_an_equal_identifier_substitute_type() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "canonical_codec");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "canonical_codec");
         RequirementType<TestRequirement> canonical = new IdentityType(id);
         RequirementType<TestRequirement> substitute = new IdentityType(id);
         RequirementHandlerRegistry.register(canonical);
@@ -112,33 +112,33 @@ class RequirementHandlerRegistryTest {
     void built_in_requirement_types_use_external_registry_identifiers() {
         RequirementHandlerRegistry.registerBuiltIns();
 
-        assertThat(ItemRequirement.TYPE.id()).isEqualTo(Identifier.parse("minecraft:item"));
-        assertThat(FluidRequirement.TYPE.id()).isEqualTo(Identifier.parse("minecraft:fluid"));
-        assertThat(EnergyRequirement.TYPE.id()).isEqualTo(Identifier.parse("neoforge:energy"));
-        assertThat(SmartInterfaceRequirement.TYPE.id()).isEqualTo(Identifier.parse("mmcr:smart_interface"));
-        assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("minecraft:item")))
+        assertThat(ItemRequirement.TYPE.id()).isEqualTo(ResourceLocation.parse("minecraft:item"));
+        assertThat(FluidRequirement.TYPE.id()).isEqualTo(ResourceLocation.parse("minecraft:fluid"));
+        assertThat(EnergyRequirement.TYPE.id()).isEqualTo(ResourceLocation.parse("neoforge:energy"));
+        assertThat(SmartInterfaceRequirement.TYPE.id()).isEqualTo(ResourceLocation.parse("mmcr:smart_interface"));
+        assertThat(RequirementHandlerRegistry.typeFor(ResourceLocation.parse("minecraft:item")))
                 .isSameAs(ItemRequirement.TYPE);
-        assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("minecraft:fluid")))
+        assertThat(RequirementHandlerRegistry.typeFor(ResourceLocation.parse("minecraft:fluid")))
                 .isSameAs(FluidRequirement.TYPE);
-        assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("neoforge:energy")))
+        assertThat(RequirementHandlerRegistry.typeFor(ResourceLocation.parse("neoforge:energy")))
                 .isSameAs(EnergyRequirement.TYPE);
     }
 
     private static RequirementType<TestRequirement> type(String path) {
         return new RequirementType.Definition<>(
-                Identifier.fromNamespaceAndPath("mmcr_test", path),
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", path),
                 MapCodec.unit(() -> new TestRequirement(null, RecipeModifier.IOType.INPUT)), TEST_HANDLER);
     }
 
     private static final class IdentityType implements RequirementType<TestRequirement> {
-        private final Identifier id;
+        private final ResourceLocation id;
 
-        private IdentityType(Identifier id) {
+        private IdentityType(ResourceLocation id) {
             this.id = id;
         }
 
         @Override
-        public Identifier id() {
+        public ResourceLocation id() {
             return id;
         }
 

@@ -16,7 +16,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -147,10 +147,10 @@ class InterfaceHelpersTest {
         assertThatThrownBy(() -> InterfacePredicates.anyOfPort(new String[0]))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("At least one port is required");
-        assertThatThrownBy(() -> InterfacePredicates.anyOfPort((Identifier[]) null))
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort((ResourceLocation[]) null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("At least one port is required");
-        assertThatThrownBy(() -> InterfacePredicates.anyOfPort(new Identifier[0]))
+        assertThatThrownBy(() -> InterfacePredicates.anyOfPort(new ResourceLocation[0]))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("At least one port is required");
         assertThatThrownBy(() -> InterfacePredicates.anyOfPort((BlockPredicate[]) null))
@@ -206,7 +206,7 @@ class InterfaceHelpersTest {
 
     @Test
     void kubejs_port_overloads_preserve_registered_block_identity() {
-        var identifierPredicate = KubeJSInterfaceHelpers.anyOfPort(Identifier.parse("mmcr:item_input_bus"));
+        var identifierPredicate = KubeJSInterfaceHelpers.anyOfPort(ResourceLocation.parse("mmcr:item_input_bus"));
         var publicPredicate = KubeJSInterfaceHelpers.anyOfPort(InterfacePredicates.smartInterface());
         var registeredPort = ModBlocks.BLOCKS.get("item_input_bus").get();
         var smartInterface = ModBlocks.BLOCKS.get("smart_interface").get();
@@ -261,7 +261,7 @@ class InterfaceHelpersTest {
     @Test
     void identifier_lookup_preserves_namespace() {
         assertThat(BuiltinRegistration.block(
-                Identifier.parse("minecraft:stone")).get()).isSameAs(Blocks.STONE);
+                ResourceLocation.parse("minecraft:stone")).get()).isSameAs(Blocks.STONE);
     }
 
     @Test
@@ -293,7 +293,7 @@ class InterfaceHelpersTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private static void assertFamilyPortsMatch(BlockPredicate predicate, Identifier familyId, IOType ioType) {
+    private static void assertFamilyPortsMatch(BlockPredicate predicate, ResourceLocation familyId, IOType ioType) {
         PortKinds.all().stream()
                 .filter(kind -> kind.ioType() == ioType)
                 .filter(kind -> kind.families().stream()

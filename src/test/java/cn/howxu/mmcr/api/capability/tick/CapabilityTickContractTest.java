@@ -22,7 +22,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.MMCR;
 import java.util.Set;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,8 +58,8 @@ class CapabilityTickContractTest {
 
     @Test
     void failure_result_has_no_implicit_operations_or_state_change() {
-        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "facet");
-        ExecutionStatus failure = ExecutionStatus.blocked(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"), source,
+        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "facet");
+        ExecutionStatus failure = ExecutionStatus.blocked(ResourceLocation.fromNamespaceAndPath("mmcr_test", "blocked"), source,
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
                         null, null, Map.of()));
         CapabilityTickResult result = new CapabilityTickResult(List.of(), failure, false);
@@ -72,8 +72,8 @@ class CapabilityTickContractTest {
     @Test
     void rejected_operation_rolls_back_earlier_operations_in_the_same_phase() {
         LongValueStorage storage = new LongValueStorage(10L, 10L, null);
-        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "facet");
-        ExecutionStatus blocked = ExecutionStatus.blocked(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"), source,
+        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "facet");
+        ExecutionStatus blocked = ExecutionStatus.blocked(ResourceLocation.fromNamespaceAndPath("mmcr_test", "blocked"), source,
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
                         null, null, Map.of()));
         TickCapability capability = new TickCapability(context -> new CapabilityTickResult(List.of(
@@ -163,7 +163,7 @@ class CapabilityTickContractTest {
     private record TickCapability(TickFacet tickFacet) implements MachineCapability, TickFacet {
         @Override
         public CapabilityType type() {
-            return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "tick"));
+            return new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "tick"));
         }
 
         @Override

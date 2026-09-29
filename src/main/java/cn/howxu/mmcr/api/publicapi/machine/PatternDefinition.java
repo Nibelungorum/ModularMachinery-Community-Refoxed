@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import java.util.LinkedHashMap;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Map;
@@ -66,7 +66,7 @@ public record PatternDefinition(List<List<String>> layers, Map<Character, BlockP
         }
     }
 
-    PatternDefinition bindController(Identifier machineId) {
+    PatternDefinition bindController(ResourceLocation machineId) {
         Map<Character, BlockPredicate> boundPredicates = new LinkedHashMap<>(predicates);
         if (predicates.get(controllerSymbol).isAutomaticController()) {
             boundPredicates.put(controllerSymbol,

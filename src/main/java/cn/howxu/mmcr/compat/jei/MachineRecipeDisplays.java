@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.RegistryAccess;
 
 import java.util.Comparator;
@@ -39,14 +39,14 @@ public final class MachineRecipeDisplays {
                 .toList();
     }
 
-    public static Map<Identifier, List<MachineRecipeDisplay>> byPool() {
+    public static Map<ResourceLocation, List<MachineRecipeDisplay>> byPool() {
         return all().stream().collect(Collectors.groupingBy(
                 MachineRecipeDisplay::recipePoolId,
                 LinkedHashMap::new,
                 Collectors.toList()));
     }
 
-    public static Map<Identifier, List<MachineRecipeDisplay>> byPool(RuntimeContentSnapshot snapshot) {
+    public static Map<ResourceLocation, List<MachineRecipeDisplay>> byPool(RuntimeContentSnapshot snapshot) {
         RegistryAccess registryAccess = registryAccess();
         return snapshot.recipes().values().stream()
                 .map(recipe -> MachineRecipeDisplay.from(recipe, registryAccess))

@@ -7,7 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -31,7 +31,7 @@ class ModuleCouplerBlockEntityTest {
 
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private static final ResourceKey<Level> MODULE_DIMENSION = ResourceKey.create(
-            Registries.DIMENSION, Identifier.fromNamespaceAndPath("mmcr_test", "module"));
+            Registries.DIMENSION, ResourceLocation.fromNamespaceAndPath("mmcr_test", "module"));
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {

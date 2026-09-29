@@ -12,7 +12,7 @@ import com.mojang.serialization.JsonOps;
 
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
@@ -26,17 +26,17 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineRecipeJson {
-    public static final Identifier TYPE = MMCR.id("machine_recipe");
+    public static final ResourceLocation TYPE = MMCR.id("machine_recipe");
 
     private MachineRecipeJson() {
     }
 
-    public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries) {
+    public static MachineRecipe parse(ResourceLocation id, JsonElement json, HolderLookup.Provider registries) {
         return parse(id, json, registries, MachineRegistry::containsRecipePool);
     }
 
-    public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries,
-                                      Predicate<Identifier> recipePoolExists) {
+    public static MachineRecipe parse(ResourceLocation id, JsonElement json, HolderLookup.Provider registries,
+                                      Predicate<ResourceLocation> recipePoolExists) {
         if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
         if (json == null || !json.isJsonObject()) fail(id, "$", "recipe must be an object", null);
         if (registries == null) fail(id, "$", "registry lookup must not be null", null);
@@ -45,7 +45,7 @@ public final class MachineRecipeJson {
         rejectLegacyFields(id, object);
         if (!object.has("requirements")) fail(id, "requirements", "is required", null);
 
-        Identifier recipePoolId = parseIdentifier(id, object, "recipe_pool");
+        ResourceLocation recipePoolId = parseResourceLocation(id, object, "recipe_pool");
         if (!recipePoolExists.test(recipePoolId)) {
             fail(id, "recipe_pool", "unknown recipe pool " + recipePoolId, null);
         }
@@ -57,7 +57,7 @@ public final class MachineRecipeJson {
         List<RecipeModifier> modifiers = parseList(id, object, "modifiers", RecipeModifier.CODEC, ops);
         List<MachineRequirement> requirements = new ArrayList<>(
                 parseList(id, object, "requirements", MachineRequirement.CODEC, ops));
-        Set<Identifier> hosts = new LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
+        Set<ResourceLocation> hosts = new LinkedHashSet<>(parseList(id, object, "required_host_ids", ResourceLocation.CODEC, ops));
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
 
@@ -87,14 +87,14 @@ public final class MachineRecipeJson {
                 boolField(id, object, "allow_partial_outputs", false), hosts);
     }
 
-    private static void rejectLegacyFields(Identifier id, JsonObject object) {
+    private static void rejectLegacyFields(ResourceLocation id, JsonObject object) {
         for (String field : List.of("machine", "inputs", "fluid_outputs", "energy_per_tick",
                 "machine_outputs", "level_requirements")) {
             if (object.has(field)) fail(id, field, "field is no longer supported", null);
         }
     }
 
-    private static void requireType(Identifier id, JsonObject object) {
+    private static void requireType(ResourceLocation id, JsonObject object) {
         if (!object.has("type")) {
             fail(id, "type", "expected " + TYPE, null);
         }
@@ -108,20 +108,20 @@ public final class MachineRecipeJson {
         }
     }
 
-    private static Identifier parseIdentifier(Identifier id, JsonObject object, String field) {
+    private static ResourceLocation parseResourceLocation(ResourceLocation id, JsonObject object, String field) {
         if (!object.has(field)) fail(id, field, "is required", null);
         try {
             if (!object.get(field).isJsonPrimitive() || !object.get(field).getAsJsonPrimitive().isString()) {
                 fail(id, field, "must be a string", null);
             }
-            return Identifier.parse(object.get(field).getAsString());
+            return ResourceLocation.parse(object.get(field).getAsString());
         } catch (RuntimeException exception) {
             fail(id, field, "invalid identifier", exception);
             throw exception;
         }
     }
 
-    private static int intField(Identifier id, JsonObject object, String field, boolean required, int defaultValue) {
+    private static int intField(ResourceLocation id, JsonObject object, String field, boolean required, int defaultValue) {
         if (!object.has(field)) {
             if (required) fail(id, field, "is required");
             return defaultValue;
@@ -146,7 +146,7 @@ public final class MachineRecipeJson {
         }
     }
 
-    private static boolean boolField(Identifier id, JsonObject object, String field, boolean defaultValue) {
+    private static boolean boolField(ResourceLocation id, JsonObject object, String field, boolean defaultValue) {
         if (!object.has(field)) return defaultValue;
         try {
             if (!object.get(field).isJsonPrimitive() || !object.get(field).getAsJsonPrimitive().isBoolean()) {
@@ -159,7 +159,7 @@ public final class MachineRecipeJson {
         }
     }
 
-    private static <T> List<T> parseList(Identifier id, JsonObject object, String field, Codec<T> codec,
+    private static <T> List<T> parseList(ResourceLocation id, JsonObject object, String field, Codec<T> codec,
                                          DynamicOps<JsonElement> ops) {
         if (!object.has(field)) return List.of();
         try {
@@ -183,15 +183,15 @@ public final class MachineRecipeJson {
         }
     }
 
-    private static void fail(Identifier id, String path, String message) {
+    private static void fail(ResourceLocation id, String path, String message) {
         fail(id, path, message, null);
     }
 
-    private static void fail(Identifier id, String path, String message, Throwable cause) {
+    private static void fail(ResourceLocation id, String path, String message, Throwable cause) {
         throw new RecipeJsonException(id, path, message, cause);
     }
 
-    private static void enforceListBounds(Identifier id, String field, JsonArray array) {
+    private static void enforceListBounds(ResourceLocation id, String field, JsonArray array) {
         if (array.size() > MAX_LIST_ENTRIES) {
             fail(id, field, "contains too many entries", null);
         }
@@ -202,20 +202,20 @@ public final class MachineRecipeJson {
 
     /** Structured error raised while decoding a machine recipe JSON document. */
     public static final class RecipeJsonException extends IllegalArgumentException {
-        private final Identifier recipeId;
+        private final ResourceLocation recipeId;
         private final String path;
 
-        public RecipeJsonException(Identifier id, String path, String message) {
+        public RecipeJsonException(ResourceLocation id, String path, String message) {
             this(id, path, message, null);
         }
 
-        public RecipeJsonException(Identifier id, String path, String message, Throwable cause) {
+        public RecipeJsonException(ResourceLocation id, String path, String message, Throwable cause) {
             super("Recipe " + id + " at " + path + ": " + message, cause);
             this.recipeId = id;
             this.path = path;
         }
 
-        public Identifier recipeId() {
+        public ResourceLocation recipeId() {
             return recipeId;
         }
 

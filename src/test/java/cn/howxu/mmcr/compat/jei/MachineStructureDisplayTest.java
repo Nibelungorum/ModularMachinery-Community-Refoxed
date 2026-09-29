@@ -10,7 +10,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -81,7 +81,7 @@ class MachineStructureDisplayTest {
     @Test
     void materialsDoNotBuildTheFullDefaultPreviewSchema() {
         Machine machine = new Machine() {
-            @Override public Identifier registryName() { return MMCR.id("test_materials_only"); }
+            @Override public ResourceLocation registryName() { return MMCR.id("test_materials_only"); }
             @Override public BlockArray pattern() {
                 Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
                 pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE));
@@ -100,7 +100,7 @@ class MachineStructureDisplayTest {
 
     private static Machine testMachineWithBlocks() {
         return new Machine() {
-            @Override public Identifier registryName() { return MMCR.id("test_cube"); }
+            @Override public ResourceLocation registryName() { return MMCR.id("test_cube"); }
             @Override public BlockArray pattern() {
                 Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
                 pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE));

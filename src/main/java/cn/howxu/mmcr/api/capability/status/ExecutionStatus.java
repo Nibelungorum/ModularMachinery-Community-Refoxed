@@ -55,8 +55,8 @@ public record ExecutionStatus(
 
         FailureReason reason;
         try {
-            Identifier reasonId = rawReason.contains(":")
-                    ? Identifier.parse(rawReason)
+            ResourceLocation reasonId = rawReason.contains(":")
+                    ? ResourceLocation.parse(rawReason)
                     : MMCR.id(rawReason);
             reason = FailureReasonRegistry.find(reasonId);
         } catch (IllegalArgumentException exception) {

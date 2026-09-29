@@ -7,7 +7,7 @@ import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -38,10 +38,10 @@ class JeiIngredientAdapterRegistryTest {
 
     @Test
     void registeredAdapterPreservesRoleCountAndTransferCapability() {
-        Identifier typeId = MMCR.id("test_jei_adapter");
+        ResourceLocation typeId = MMCR.id("test_jei_adapter");
         JeiIngredientAdapter adapter = new JeiIngredientAdapter() {
             @Override
-            public Identifier typeId() {
+            public ResourceLocation typeId() {
                 return typeId;
             }
 

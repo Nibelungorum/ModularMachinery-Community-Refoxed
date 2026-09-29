@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.recipe.FailureAdapters;
 import cn.howxu.mmcr.api.recipe.RequirementFailure;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -19,7 +19,7 @@ public final class CraftCheck {
         INVALID_SKIP
     }
 
-    private static final Identifier SOURCE = MMCR.id("craft_check");
+    private static final ResourceLocation SOURCE = MMCR.id("craft_check");
     private static final CraftCheck SUCCESS = new CraftCheck(ResultType.SUCCESS, null);
     private static final CraftCheck PARTIAL_SUCCESS = new CraftCheck(ResultType.PARTIAL_SUCCESS, null);
     private static final CraftCheck INVALID_SKIP = new CraftCheck(ResultType.INVALID_SKIP, null);

@@ -80,7 +80,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerPlayer;
@@ -178,7 +178,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void idle_runtime_work_reuses_the_published_snapshot() {
-        Identifier machineId = MMCR.id("idle_runtime_snapshot");
+        ResourceLocation machineId = MMCR.id("idle_runtime_snapshot");
         DynamicMachine machine = new DynamicMachine(machineId, "Idle Runtime Snapshot",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
                 MachineControllerSpec.defaultsFor(machineId));
@@ -230,7 +230,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void data_storage_change_in_idle_recipe_batch_broadcasts_the_flushed_payload() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
-        Identifier machineId = MMCR.id("idle_data_storage_batch");
+        ResourceLocation machineId = MMCR.id("idle_data_storage_batch");
         RuntimeTestFixtures.formStructureWithComponents(controller, new DynamicMachine(machineId,
                 "Idle Data Storage Batch", new BlockArray(Map.of(new BlockPos(1, 0, 0),
                 new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), MachineControllerSpec.defaultsFor(machineId)));
@@ -261,7 +261,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void runtime_update_invokes_matching_handlers_and_coalesces_same_component_updates() throws Exception {
-        Identifier machineId = MMCR.id("controller_text_runtime");
+        ResourceLocation machineId = MMCR.id("controller_text_runtime");
         MachineControllerBlockEntity controller = textController(machineId);
         MachineControllerRuntime runtime = runtimeOf(controller);
         ServerLevel level = (ServerLevel) controller.getLevel();
@@ -459,7 +459,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void completed_recipe_clears_operation_text_but_keeps_controller_text() throws Exception {
-        Identifier machineId = MMCR.id("controller_text_operation");
+        ResourceLocation machineId = MMCR.id("controller_text_operation");
         MachineControllerBlockEntity controller = textController(machineId);
         MachineControllerRuntime runtime = runtimeOf(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_text_operation_recipe"), machineId, 1,
@@ -506,7 +506,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void smart_interface_change_keeps_active_operation_text() throws Exception {
         EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
-        Identifier machineId = MMCR.id("controller_text_cancelled_operation");
+        ResourceLocation machineId = MMCR.id("controller_text_cancelled_operation");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         DynamicMachine machine = new DynamicMachine(machineId, "cancelled text test",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -537,7 +537,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void custom_tick_updates_one_controller_line_without_duplicates() throws Exception {
-        Identifier machineId = MMCR.id("controller_text_custom_tick");
+        ResourceLocation machineId = MMCR.id("controller_text_custom_tick");
         MachineControllerBlockEntity controller = textController(machineId);
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer player = player(level, controller.getBlockPos());
@@ -571,7 +571,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void handler_exception_does_not_interrupt_controller_runtime_update() throws Exception {
-        Identifier machineId = MMCR.id("controller_text_handler_exception");
+        ResourceLocation machineId = MMCR.id("controller_text_handler_exception");
         MachineControllerBlockEntity controller = textController(machineId);
         AtomicInteger invocations = new AtomicInteger();
         textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
@@ -733,7 +733,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void server_tick_runs_factory_work_when_structure_forms_earlier_in_the_same_batch() {
-        Identifier machineId = MMCR.id("same_tick_factory_formation");
+        ResourceLocation machineId = MMCR.id("same_tick_factory_formation");
         DynamicMachine machine = new DynamicMachine(machineId, "Same Tick Factory Formation",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
@@ -758,7 +758,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void tick_machine_accepts_an_ignored_factory_controller() {
-        Identifier machineId = MMCR.id("tick_machine_ignored_factory");
+        ResourceLocation machineId = MMCR.id("tick_machine_ignored_factory");
         BlockPos schedulerPos = new BlockPos(1, 0, 0);
         DynamicMachine machine = new DynamicMachine(machineId, "Tick Machine Ignored Factory",
                 new BlockArray(Map.of(schedulerPos,
@@ -781,7 +781,7 @@ class MachineControllerBlockEntityTest {
     // @Test
     // This is one unstable test, run it directly do not cause problems, but will cause problem with full test
     void server_tick_does_not_run_factory_after_structure_resets_earlier_in_the_same_batch() {
-        Identifier machineId = MMCR.id("same_tick_factory_reset");
+        ResourceLocation machineId = MMCR.id("same_tick_factory_reset");
         DynamicMachine machine = new DynamicMachine(machineId, "Same Tick Factory Reset",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
@@ -836,8 +836,8 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void formation_batch_sends_the_final_factory_snapshot_to_an_open_menu() throws Exception {
-        Identifier firstMachineId = MMCR.id("factory_menu_first");
-        Identifier secondMachineId = MMCR.id("factory_menu_second");
+        ResourceLocation firstMachineId = MMCR.id("factory_menu_first");
+        ResourceLocation secondMachineId = MMCR.id("factory_menu_second");
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
         DynamicMachine firstMachine = new DynamicMachine(firstMachineId, "Factory Menu First", pattern,
@@ -917,7 +917,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void expandStructure_blockDirty_after_forming_lowest_stage_keeps_lowest_stage() throws Exception {
         BlockPos controllerPos = new BlockPos(0, 0, 0);
-        Identifier machineId = MMCR.id("expand_structure_block_dirty");
+        ResourceLocation machineId = MMCR.id("expand_structure_block_dirty");
         BlockArray firstStage = new BlockArray(Map.of(
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
                 new BlockPos(3, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
@@ -944,7 +944,7 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.structureSnapshot().matchedStage()).isEqualTo(1);
     }
 
-    private MachineControllerBlockEntity expandStructureControllerWith(Identifier machineId, BlockPos controllerPos,
+    private MachineControllerBlockEntity expandStructureControllerWith(ResourceLocation machineId, BlockPos controllerPos,
                                                                   BlockArray firstStage, BlockArray secondStage) throws Exception {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).expandableStructure().build());
@@ -990,7 +990,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void unformed_structure_mismatch_waits_for_the_next_check_interval() {
         BlockPos controllerPos = BlockPos.ZERO;
-        Identifier machineId = MMCR.id("controller_mismatch_interval");
+        ResourceLocation machineId = MMCR.id("controller_mismatch_interval");
         DynamicMachine machine = new DynamicMachine(machineId, "Controller Mismatch Interval",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
                 MachineControllerSpec.defaultsFor(machineId));
@@ -1177,7 +1177,7 @@ class MachineControllerBlockEntityTest {
         BlockPos controllerPos = BlockPos.ZERO;
         BlockPos inputPos = controllerPos.offset(-1, 0, 0);
         var input = RuntimeTestFixtures.itemInput(inputPos);
-        Identifier machineId = MMCR.id("task7_component_transition");
+        ResourceLocation machineId = MMCR.id("task7_component_transition");
         DynamicMachine machine = new DynamicMachine(machineId, "Task 7 Component Transition",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))),
@@ -1220,7 +1220,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void unrelated_chunk_load_does_not_force_a_redundant_full_match() {
         TestBootstrap.registerRuntimeBuiltins();
-        Identifier machineId = MMCR.id("unrelated_chunk_scan");
+        ResourceLocation machineId = MMCR.id("unrelated_chunk_scan");
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         for (int index = 0; index < 20; index++) {
             entries.put(new BlockPos(index + 1, 0, 0), new BlockPredicate.Any());
@@ -1253,7 +1253,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void verify_stage_diagnostic_fires_without_a_second_full_match() throws Exception {
         TestBootstrap.registerRuntimeBuiltins();
-        Identifier machineId = MMCR.id("late_scan_mismatch");
+        ResourceLocation machineId = MMCR.id("late_scan_mismatch");
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         Map<BlockPos, Block> blocks = new LinkedHashMap<>();
         for (int index = 0; index < 10; index++) {
@@ -1305,7 +1305,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void every_structure_chunk_is_tracked_for_loaded_area_invalidation() {
         BlockPos controllerPos = new BlockPos(0, 1, 1);
-        Identifier machineId = MMCR.id("controller_structure_chunk");
+        ResourceLocation machineId = MMCR.id("controller_structure_chunk");
         DynamicMachine machine = new DynamicMachine(machineId, "Controller Structure Chunk",
                 new BlockArray(Map.of(new BlockPos(20, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE))),
                 MachineControllerSpec.defaultsFor(machineId));
@@ -1361,9 +1361,9 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void recipe_pool_defaults_to_the_first_supported_pool_when_no_selection_was_saved() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_default");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_first");
-        Identifier secondPool = MMCR.id("controller_recipe_pool_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_default");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_first");
+        ResourceLocation secondPool = MMCR.id("controller_recipe_pool_second");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
 
         assertThat(controller.supportedRecipePoolIds()).containsExactly(firstPool, secondPool);
@@ -1372,9 +1372,9 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void selected_recipe_pool_round_trips_through_value_persistence() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_persistence");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_persistence_first");
-        Identifier secondPool = MMCR.id("controller_recipe_pool_persistence_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_persistence");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_persistence_first");
+        ResourceLocation secondPool = MMCR.id("controller_recipe_pool_persistence_second");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
         assertThat(controller.selectRecipePool(secondPool)).isTrue();
 
@@ -1390,9 +1390,9 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void malformed_saved_recipe_pool_falls_back_to_the_first_supported_pool() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_malformed");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_malformed_first");
-        Identifier secondPool = MMCR.id("controller_recipe_pool_malformed_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_malformed");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_malformed_first");
+        ResourceLocation secondPool = MMCR.id("controller_recipe_pool_malformed_second");
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));
         output.putString("selected_recipe_pool", "not an identifier");
@@ -1406,9 +1406,9 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void removed_saved_recipe_pool_falls_back_to_the_first_replacement_pool() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_removed");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_removed_first");
-        Identifier removedPool = MMCR.id("controller_recipe_pool_removed_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_removed");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_removed_first");
+        ResourceLocation removedPool = MMCR.id("controller_recipe_pool_removed_second");
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));
         output.putString("selected_recipe_pool", removedPool.toString());
@@ -1422,9 +1422,9 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void removed_current_recipe_pool_discards_active_work_when_falling_back() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_removed_active");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_removed_active_first");
-        Identifier removedPool = MMCR.id("controller_recipe_pool_removed_active_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_removed_active");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_removed_active_first");
+        ResourceLocation removedPool = MMCR.id("controller_recipe_pool_removed_active_second");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
         controller.selectRecipePool(removedPool);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_removed_active_recipe"),
@@ -1440,9 +1440,9 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void selecting_a_recipe_pool_discards_active_controller_work() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_switch");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_switch_first");
-        Identifier secondPool = MMCR.id("controller_recipe_pool_switch_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_switch");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_switch_first");
+        ResourceLocation secondPool = MMCR.id("controller_recipe_pool_switch_second");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_switch_recipe"), firstPool,
                 20, List.of(), List.of());
@@ -1459,7 +1459,7 @@ class MachineControllerBlockEntityTest {
         assertThat(craftingRuntime.active()).isFalse();
     }
 
-    private static MachineControllerBlockEntity recipePoolController(Identifier machineId, Identifier... pools) {
+    private static MachineControllerBlockEntity recipePoolController(ResourceLocation machineId, ResourceLocation... pools) {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolIds(List.of(pools)).build());
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
@@ -1493,7 +1493,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void factory_runtime_survives_initial_structure_recheck_after_load() {
-        Identifier machineId = MMCR.id("controller_factory_persistence");
+        ResourceLocation machineId = MMCR.id("controller_factory_persistence");
         DynamicMachine machine = new DynamicMachine(machineId, "Factory Persistence",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
@@ -1539,7 +1539,7 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void restored_factory_runtime_is_cleared_when_the_factory_component_is_removed_before_recheck() {
-        Identifier machineId = MMCR.id("controller_factory_removed_after_load");
+        ResourceLocation machineId = MMCR.id("controller_factory_removed_after_load");
         BlockPos controllerPos = BlockPos.ZERO;
         BlockPos schedulerPos = controllerPos.offset(-1, 0, 0);
         DynamicMachine machine = new DynamicMachine(machineId, "Factory Removed After Load",
@@ -1744,7 +1744,7 @@ class MachineControllerBlockEntityTest {
     void structure_validation_does_not_count_multiple_aliases_from_one_bidirectional_family_twice() {
         BlockPos controllerPos = BlockPos.ZERO;
         BlockPos portPos = controllerPos.offset(-1, 0, 0);
-        Identifier machineId = MMCR.id("single_family_bidirectional_count");
+        ResourceLocation machineId = MMCR.id("single_family_bidirectional_count");
         DynamicMachine machine = new DynamicMachine(machineId, "Single Family Bidirectional Count",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))),
@@ -1940,7 +1940,7 @@ class MachineControllerBlockEntityTest {
         return (NetworkInterfaceBlockEntity) entity;
     }
 
-    private static DynamicMachine networkMachine(Identifier machineId, int maxCount,
+    private static DynamicMachine networkMachine(ResourceLocation machineId, int maxCount,
                                                   Map<BlockPos, BlockPredicate> pattern) {
         return new DynamicMachine(machineId, "network test", new BlockArray(pattern),
                 MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(),
@@ -1952,10 +1952,10 @@ class MachineControllerBlockEntityTest {
 
     private static GlobalPos globalPos(String dimension, BlockPos pos) {
         return GlobalPos.of(ResourceKey.create(
-                Registries.DIMENSION, Identifier.parse(dimension)), pos);
+                Registries.DIMENSION, ResourceLocation.parse(dimension)), pos);
     }
 
-    private static MachineControllerBlockEntity textController(Identifier machineId) {
+    private static MachineControllerBlockEntity textController(ResourceLocation machineId) {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         DynamicMachine machine = new DynamicMachine(machineId, "text test",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
@@ -1965,7 +1965,7 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
-    private static MachineControllerBlockEntity factoryTextController(Identifier machineId) {
+    private static MachineControllerBlockEntity factoryTextController(ResourceLocation machineId) {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(1, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
@@ -1982,7 +1982,7 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
-    private static ChangeCountingController changeCountingFactoryController(Identifier machineId) {
+    private static ChangeCountingController changeCountingFactoryController(ResourceLocation machineId) {
         ChangeCountingController controller = new ChangeCountingController(BlockPos.ZERO,
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         BlockPos schedulerPos = controller.getBlockPos().offset(1, 0, 0);

@@ -6,7 +6,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -340,7 +340,7 @@ class BlockArrayTest {
 
     @Test
     void vertical_roll_uses_same_coordinate_transform_as_block_array() {
-        Identifier id = MMCR.id("compiled_vertical_replacement");
+        ResourceLocation id = MMCR.id("compiled_vertical_replacement");
         BlockPos rawPos = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.Any(), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(id, "Compiled Vertical Replacement",

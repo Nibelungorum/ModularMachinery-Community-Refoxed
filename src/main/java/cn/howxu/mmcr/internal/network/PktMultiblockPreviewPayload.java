@@ -11,7 +11,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -59,14 +59,14 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     }
 
     private static void write(RegistryFriendlyByteBuf buf, PktMultiblockPreviewPayload payload) {
-        Identifier.STREAM_CODEC.encode(buf, payload.dimension.identifier());
+        ResourceLocation.STREAM_CODEC.encode(buf, payload.dimension.identifier());
         buf.writeBlockPos(payload.controllerPos);
         ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, maxEntries()).encode(buf, new ArrayList<>(payload.entries));
         ByteBufCodecs.VAR_INT.encode(buf, payload.durationTicks);
     }
 
     private static PktMultiblockPreviewPayload read(RegistryFriendlyByteBuf buf) {
-        Identifier dimension = Identifier.STREAM_CODEC.decode(buf);
+        ResourceLocation dimension = ResourceLocation.STREAM_CODEC.decode(buf);
         BlockPos controllerPos = buf.readBlockPos();
         List<MultiblockPreviewSnapshot.Entry> entries = ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, maxEntries()).decode(buf);
         int durationTicks = ByteBufCodecs.VAR_INT.decode(buf);
@@ -74,7 +74,7 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     }
 
     private static void writeBlockState(RegistryFriendlyByteBuf buf, BlockState state) {
-        Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        ResourceLocation.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(state.getBlock()));
         buf.writeVarInt(state.getProperties().size());
         for (Property<?> property : state.getProperties()) {
             ByteBufCodecs.STRING_UTF8.encode(buf, property.getName());
@@ -83,7 +83,7 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     }
 
     private static BlockState readBlockState(RegistryFriendlyByteBuf buf) {
-        BlockState state = BuiltInRegistries.BLOCK.getValue(Identifier.STREAM_CODEC.decode(buf)).defaultBlockState();
+        BlockState state = BuiltInRegistries.BLOCK.getValue(ResourceLocation.STREAM_CODEC.decode(buf)).defaultBlockState();
         int propertyCount = buf.readVarInt();
         for (int i = 0; i < propertyCount; i++) {
             String propertyName = ByteBufCodecs.STRING_UTF8.decode(buf);

@@ -17,7 +17,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -52,7 +52,7 @@ public final class MachineStructureSyncCodec {
     public static void encode(RegistryFriendlyByteBuf buf, MachineStructureDefinition value, int maxBlocks) {
         validateMaximumBlockPatternCount(maxBlocks);
         BlockPatternLimit blockPatternLimit = new BlockPatternLimit(value.machineId(), maxBlocks);
-        Identifier.STREAM_CODEC.encode(buf, value.machineId());
+        ResourceLocation.STREAM_CODEC.encode(buf, value.machineId());
         checkSize(value.declarations().size(), maxCollectionEntries(), "declaration");
         buf.writeVarInt(value.declarations().size());
         for (MachineStructureDefinition.Declaration declaration : value.declarations()) {
@@ -67,7 +67,7 @@ public final class MachineStructureSyncCodec {
     public static MachineStructureDefinition decode(RegistryFriendlyByteBuf buf, int maxBlocks) {
         validateMaximumBlockPatternCount(maxBlocks);
         BlockPatternLimit blockPatternLimit = new BlockPatternLimit(null, maxBlocks);
-        Identifier machineId = Identifier.STREAM_CODEC.decode(buf);
+        ResourceLocation machineId = ResourceLocation.STREAM_CODEC.decode(buf);
         int count = buf.readVarInt();
         checkSize(count, maxCollectionEntries(), "declaration");
         List<MachineStructureDefinition.Declaration> declarations = new ArrayList<>(count);
@@ -85,7 +85,7 @@ public final class MachineStructureSyncCodec {
         }
     }
 
-    private static void writeDeclaration(RegistryFriendlyByteBuf buf, Identifier machineId,
+    private static void writeDeclaration(RegistryFriendlyByteBuf buf, ResourceLocation machineId,
             MachineStructureDefinition.Declaration declaration, BlockPatternLimit blockPatternLimit) {
         buf.writeEnum(declaration.kind());
         writeBlockArray(buf, machineId, declaration.pattern(), blockPatternLimit);
@@ -108,7 +108,7 @@ public final class MachineStructureSyncCodec {
                 dynamicPatterns, requirements, buf.readBoolean());
     }
 
-    private static void writeBlockArray(RegistryFriendlyByteBuf buf, Identifier machineId, BlockArray value,
+    private static void writeBlockArray(RegistryFriendlyByteBuf buf, ResourceLocation machineId, BlockArray value,
             BlockPatternLimit blockPatternLimit) {
         int blockCount = value.pattern().size();
         blockPatternLimit.add(blockCount);
@@ -165,11 +165,11 @@ public final class MachineStructureSyncCodec {
             case BlockPredicate.Any ignored -> buf.writeEnum(PredicateKind.ANY);
             case BlockPredicate.OfBlock ofBlock -> {
                 buf.writeEnum(PredicateKind.BLOCK);
-                Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(ofBlock.block()));
+                ResourceLocation.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(ofBlock.block()));
             }
             case BlockPredicate.DeferredBlock deferredBlock -> {
                 buf.writeEnum(PredicateKind.BLOCK);
-                Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(deferredBlock.supplier().get()));
+                ResourceLocation.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(deferredBlock.supplier().get()));
             }
             case BlockPredicate.OfBlockState ofState -> {
                 buf.writeEnum(PredicateKind.BLOCK_STATE);
@@ -177,7 +177,7 @@ public final class MachineStructureSyncCodec {
             }
             case BlockPredicate.OfTag ofTag -> {
                 buf.writeEnum(PredicateKind.TAG);
-                Identifier.STREAM_CODEC.encode(buf, ofTag.tag().location());
+                ResourceLocation.STREAM_CODEC.encode(buf, ofTag.tag().location());
             }
             case BlockPredicate.AnyOf anyOf -> {
                 buf.writeEnum(PredicateKind.ANY_OF);
@@ -195,10 +195,10 @@ public final class MachineStructureSyncCodec {
             case MACHINE_COUPLER -> BlockPredicate.machineCoupler();
             case AIR -> new BlockPredicate.Air();
             case ANY -> new BlockPredicate.Any();
-            case BLOCK -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.STREAM_CODEC.decode(buf)));
+            case BLOCK -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(ResourceLocation.STREAM_CODEC.decode(buf)));
             case BLOCK_STATE -> new BlockPredicate.OfBlockState(readBlockState(buf));
             case TAG -> new BlockPredicate.OfTag(TagKey.create(Registries.BLOCK,
-                    Identifier.STREAM_CODEC.decode(buf)));
+                    ResourceLocation.STREAM_CODEC.decode(buf)));
             case ANY_OF -> {
                 int count = buf.readVarInt();
                 checkSize(count, maxCollectionEntries(), "child predicate");
@@ -212,7 +212,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeBlockState(RegistryFriendlyByteBuf buf, BlockState state) {
-        Identifier.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        ResourceLocation.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(state.getBlock()));
         checkSize(state.getProperties().size(), 64, "block state property");
         buf.writeVarInt(state.getProperties().size());
         for (Property<?> property : state.getProperties()) {
@@ -222,7 +222,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static BlockState readBlockState(RegistryFriendlyByteBuf buf) {
-        Block block = BuiltInRegistries.BLOCK.getValue(Identifier.STREAM_CODEC.decode(buf));
+        Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.STREAM_CODEC.decode(buf));
         BlockState state = block.defaultBlockState();
         int propertyCount = buf.readVarInt();
         checkSize(propertyCount, 64, "block state property");
@@ -290,7 +290,7 @@ public final class MachineStructureSyncCodec {
         return requirements.isEmpty() ? PortTierRequirementSpec.none() : new PortTierRequirementSpec(requirements);
     }
 
-    private static void writeDynamicPatterns(RegistryFriendlyByteBuf buf, Identifier machineId,
+    private static void writeDynamicPatterns(RegistryFriendlyByteBuf buf, ResourceLocation machineId,
             List<DynamicPatternSpec> values, BlockPatternLimit blockPatternLimit) {
         checkSize(values.size(), maxCollectionEntries(), "dynamic pattern");
         buf.writeVarInt(values.size());
@@ -377,30 +377,30 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeReplacement(RegistryFriendlyByteBuf buf, SingleBlockModifierReplacement replacement) {
-        Identifier.STREAM_CODEC.encode(buf, replacement.getModifierId());
+        ResourceLocation.STREAM_CODEC.encode(buf, replacement.getModifierId());
         writeBlockPredicate(buf, replacement.getReplacement());
     }
 
     private static SingleBlockModifierReplacement readReplacement(RegistryFriendlyByteBuf buf) {
-        return new SingleBlockModifierReplacement(Identifier.STREAM_CODEC.decode(buf),
+        return new SingleBlockModifierReplacement(ResourceLocation.STREAM_CODEC.decode(buf),
                 readBlockPredicate(buf));
     }
 
-    private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<Character, Identifier> values) {
+    private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<Character, ResourceLocation> values) {
         checkSize(values.size(), maxSymbolRequirements(), "level slot");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
             buf.writeChar(entry.getKey());
-            Identifier.STREAM_CODEC.encode(buf, entry.getValue());
+            ResourceLocation.STREAM_CODEC.encode(buf, entry.getValue());
         }
     }
 
-    private static Map<Character, Identifier> readLevelSlots(RegistryFriendlyByteBuf buf) {
+    private static Map<Character, ResourceLocation> readLevelSlots(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
         checkSize(count, maxSymbolRequirements(), "level slot");
-        Map<Character, Identifier> values = new LinkedHashMap<>();
+        Map<Character, ResourceLocation> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
-            values.put(buf.readChar(), Identifier.STREAM_CODEC.decode(buf));
+            values.put(buf.readChar(), ResourceLocation.STREAM_CODEC.decode(buf));
         }
         return Map.copyOf(values);
     }
@@ -439,17 +439,17 @@ public final class MachineStructureSyncCodec {
         if (maxBlocks <= 0) throw new IllegalArgumentException("Invalid maximum block pattern count: " + maxBlocks);
     }
 
-    private static void logExceededBlockLimit(Identifier machineId, String label, int count, int maxBlocks) {
+    private static void logExceededBlockLimit(ResourceLocation machineId, String label, int count, int maxBlocks) {
         MMCR.LOG.error("Cannot synchronize machine structure {}: {} count {} exceeds configured maximum {}",
                 machineId, label, count, maxBlocks);
     }
 
     private static final class BlockPatternLimit {
-        private final Identifier machineId;
+        private final ResourceLocation machineId;
         private final int maxBlocks;
         private long count;
 
-        private BlockPatternLimit(Identifier machineId, int maxBlocks) {
+        private BlockPatternLimit(ResourceLocation machineId, int maxBlocks) {
             this.machineId = machineId;
             this.maxBlocks = maxBlocks;
         }

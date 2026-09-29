@@ -7,7 +7,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 /**
@@ -42,7 +42,7 @@ public final class ItemBusScreen extends AbstractPortScreen<ItemBusMenu> {
     }
 
     @Override
-    protected Identifier texture(boolean autoIOPage) {
+    protected ResourceLocation texture(boolean autoIOPage) {
         return autoIOPage ? MMCR.id("textures/gui/guismartinterface.png") : MMCR.id(menu.texturePath());
     }
 

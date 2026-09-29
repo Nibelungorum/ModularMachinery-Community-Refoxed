@@ -3,17 +3,17 @@ package cn.howxu.mmcr.api.publicapi.data;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Immutable public data repository request result.
  *
  * @author howxu <dev@howxu.cn>
  */
-public record DataRepositoryRequest(Identifier repositoryId, BlockPos controllerPos, String key,
+public record DataRepositoryRequest(ResourceLocation repositoryId, BlockPos controllerPos, String key,
                                     DataValueType requestedType, DataValue requestedValue,
                                     Optional<DataReservation> reservation) {
-    public DataRepositoryRequest(Identifier repositoryId, BlockPos controllerPos, String key,
+    public DataRepositoryRequest(ResourceLocation repositoryId, BlockPos controllerPos, String key,
                                  DataValueType requestedType, DataValue requestedValue) {
         this(repositoryId, controllerPos, key, requestedType, requestedValue, Optional.empty());
     }
@@ -31,14 +31,14 @@ public record DataRepositoryRequest(Identifier repositoryId, BlockPos controller
         if (reservation == null) throw new IllegalArgumentException("reservation must not be null");
     }
 
-    public static DataRepositoryRequest available(Identifier repositoryId, BlockPos controllerPos, String key,
+    public static DataRepositoryRequest available(ResourceLocation repositoryId, BlockPos controllerPos, String key,
                                                    DataValueType requestedType, DataValue requestedValue,
                                                    DataReservation reservation) {
         return new DataRepositoryRequest(repositoryId, controllerPos, key, requestedType, requestedValue,
                 Optional.of(Objects.requireNonNull(reservation, "reservation")));
     }
 
-    public static DataRepositoryRequest unavailable(Identifier repositoryId, BlockPos controllerPos, String key,
+    public static DataRepositoryRequest unavailable(ResourceLocation repositoryId, BlockPos controllerPos, String key,
                                                      DataValueType requestedType, DataValue requestedValue) {
         return new DataRepositoryRequest(repositoryId, controllerPos, key, requestedType, requestedValue);
     }

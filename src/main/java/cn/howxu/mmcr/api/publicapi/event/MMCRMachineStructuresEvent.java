@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierItemKey;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 import net.minecraft.world.item.ItemStack;
 
@@ -27,21 +27,21 @@ import java.util.function.UnaryOperator;
  */
 public class MMCRMachineStructuresEvent extends Event {
     protected static MMCRMachineStructuresEvent current;
-    protected Set<Identifier> machineIds;
-    protected final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
-    protected final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
-    protected final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
-    protected final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
-    protected final Map<Identifier, List<ItemStack>> modifierItems = new LinkedHashMap<>();
-    private final Map<ModifierItemKey, Identifier> modifierItemKeys = new LinkedHashMap<>();
+    protected Set<ResourceLocation> machineIds;
+    protected final Map<ResourceLocation, MachineStructureDefinition> structures = new LinkedHashMap<>();
+    protected final Map<ResourceLocation, LevelType> levelTypes = new LinkedHashMap<>();
+    protected final Map<ResourceLocation, MachineLevel> levels = new LinkedHashMap<>();
+    protected final Map<ResourceLocation, ModifierDefinition> modifiers = new LinkedHashMap<>();
+    protected final Map<ResourceLocation, List<ItemStack>> modifierItems = new LinkedHashMap<>();
+    private final Map<ModifierItemKey, ResourceLocation> modifierItemKeys = new LinkedHashMap<>();
     private boolean frozen;
     private Snapshot snapshot;
 
-    public MMCRMachineStructuresEvent(Collection<Identifier> machineIds) {
+    public MMCRMachineStructuresEvent(Collection<ResourceLocation> machineIds) {
         this.machineIds = Set.copyOf(Objects.requireNonNull(machineIds, "machineIds"));
     }
 
-    public static MMCRMachineStructuresEvent prepare(Collection<Identifier> machineIds) {
+    public static MMCRMachineStructuresEvent prepare(Collection<ResourceLocation> machineIds) {
         MMCRMachineStructuresEvent prepared = new MMCRMachineStructuresEvent(machineIds);
         if (current != null) {
             prepared.levelTypes.putAll(current.levelTypes);
@@ -63,7 +63,7 @@ public class MMCRMachineStructuresEvent extends Event {
         current = null;
     }
 
-    public void registerStructure(Identifier machineId, UnaryOperator<MachineStructureBuilder> consumer) {
+    public void registerStructure(ResourceLocation machineId, UnaryOperator<MachineStructureBuilder> consumer) {
         requireOpen();
         require(machineId, "machine id");
         if (!machineIds.contains(machineId)) {
@@ -125,7 +125,7 @@ public class MMCRMachineStructuresEvent extends Event {
         registerLevel(MachineDefinitionConverter.toMachineLevel(require(level, "level")));
     }
 
-    public void registerModifier(Identifier id, ModifierDefinition definition) {
+    public void registerModifier(ResourceLocation id, ModifierDefinition definition) {
         requireOpen();
         require(id, "modifier id");
         require(definition, "modifier definition");
@@ -134,7 +134,7 @@ public class MMCRMachineStructuresEvent extends Event {
         }
     }
 
-    public void registerModifierItem(ItemStack stack, Identifier modifierId) {
+    public void registerModifierItem(ItemStack stack, ResourceLocation modifierId) {
         requireOpen();
         require(stack, "modifier item");
         require(modifierId, "modifier id");
@@ -146,23 +146,23 @@ public class MMCRMachineStructuresEvent extends Event {
         modifierItems.computeIfAbsent(modifierId, ignored -> new ArrayList<>()).add(normalized);
     }
 
-    public Map<Identifier, MachineStructureDefinition> structures() {
+    public Map<ResourceLocation, MachineStructureDefinition> structures() {
         return snapshot == null ? immutable(structures) : snapshot.structures();
     }
 
-    public Map<Identifier, LevelType> levelTypes() {
+    public Map<ResourceLocation, LevelType> levelTypes() {
         return snapshot == null ? immutable(levelTypes) : snapshot.levelTypes();
     }
 
-    public Map<Identifier, MachineLevel> levels() {
+    public Map<ResourceLocation, MachineLevel> levels() {
         return snapshot == null ? immutable(levels) : snapshot.levels();
     }
 
-    public Map<Identifier, ModifierDefinition> modifiers() {
+    public Map<ResourceLocation, ModifierDefinition> modifiers() {
         return snapshot == null ? immutable(modifiers) : snapshot.modifiers();
     }
 
-    public Map<Identifier, List<ItemStack>> modifierItems() {
+    public Map<ResourceLocation, List<ItemStack>> modifierItems() {
         return snapshot == null ? immutableItemBindings(modifierItems) : snapshot.modifierItems();
     }
 
@@ -202,21 +202,21 @@ public class MMCRMachineStructuresEvent extends Event {
         return Collections.unmodifiableMap(new LinkedHashMap<>(source));
     }
 
-    private static Map<Identifier, List<ItemStack>> immutableItemBindings(
-            Map<Identifier, List<ItemStack>> source) {
-        Map<Identifier, List<ItemStack>> copy = new LinkedHashMap<>();
+    private static Map<ResourceLocation, List<ItemStack>> immutableItemBindings(
+            Map<ResourceLocation, List<ItemStack>> source) {
+        Map<ResourceLocation, List<ItemStack>> copy = new LinkedHashMap<>();
         source.forEach((modifierId, stacks) -> copy.put(modifierId,
                 List.copyOf(stacks.stream().map(ItemStack::copy).toList())));
         return Collections.unmodifiableMap(copy);
     }
 
-    public record Snapshot(Map<Identifier, MachineStructureDefinition> structures,
-            Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
-            Map<Identifier, ModifierDefinition> modifiers,
-            Map<Identifier, List<ItemStack>> modifierItems) {
-        public Snapshot(Map<Identifier, MachineStructureDefinition> structures,
-                Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
-                Map<Identifier, ModifierDefinition> modifiers) {
+    public record Snapshot(Map<ResourceLocation, MachineStructureDefinition> structures,
+            Map<ResourceLocation, LevelType> levelTypes, Map<ResourceLocation, MachineLevel> levels,
+            Map<ResourceLocation, ModifierDefinition> modifiers,
+            Map<ResourceLocation, List<ItemStack>> modifierItems) {
+        public Snapshot(Map<ResourceLocation, MachineStructureDefinition> structures,
+                Map<ResourceLocation, LevelType> levelTypes, Map<ResourceLocation, MachineLevel> levels,
+                Map<ResourceLocation, ModifierDefinition> modifiers) {
             this(structures, levelTypes, levels, modifiers, Map.of());
         }
 
@@ -229,7 +229,7 @@ public class MMCRMachineStructuresEvent extends Event {
         }
 
         @Override
-        public Map<Identifier, List<ItemStack>> modifierItems() {
+        public Map<ResourceLocation, List<ItemStack>> modifierItems() {
             return immutableItemBindings(modifierItems);
         }
     }

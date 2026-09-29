@@ -26,7 +26,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
@@ -68,7 +68,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected static final int TEXT_VIEW_BOTTOM = 123;
 
     protected boolean autoIOPage;
-    private Identifier selectedCapabilityId;
+    private ResourceLocation selectedCapabilityId;
     private Button autoIOPageButton;
     private Button secondaryAutoIOPageButton;
     private Button autoIOToggleButton;
@@ -102,7 +102,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     protected abstract int portSlotCount();
 
-    protected abstract Identifier texture(boolean autoIOPage);
+    protected abstract ResourceLocation texture(boolean autoIOPage);
 
     @Override
     protected final void init() {
@@ -141,7 +141,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         return (resolvedIOType == null ? ownerIOType : resolvedIOType) == IOType.OUTPUT;
     }
 
-    protected final void selectCapability(Identifier capabilityId) {
+    protected final void selectCapability(ResourceLocation capabilityId) {
         selectedCapabilityId = capabilityId;
     }
 
@@ -176,7 +176,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             autoIOPageButtonX += TEXT_UI_PAGE_BUTTON_OFFSET_X;
             autoIOPageButtonY += TEXT_UI_PAGE_BUTTON_OFFSET_Y;
         }
-        List<Identifier> capabilityIds = supportedCapabilityIds();
+        List<ResourceLocation> capabilityIds = supportedCapabilityIds();
         autoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY, capabilityIds.getFirst());
         if (capabilityIds.size() > 1) {
             secondaryAutoIOPageButton = createAutoIOPageButton(autoIOPageButtonX,
@@ -223,7 +223,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         updateAutoIOWidgets();
     }
 
-    private Button createAutoIOPageButton(int x, int y, Identifier capabilityId) {
+    private Button createAutoIOPageButton(int x, int y, ResourceLocation capabilityId) {
         return addRenderableWidget(new StyledButton(x, y, 12, 12, Component.translatable("mmcr.auto_io.page"), button -> {
             if (autoIOPage) {
                 autoIOPage = false;
@@ -247,7 +247,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                     : Component.translatable(autoIOControlTooltipKey(supportedCapabilityIds().getFirst(), isOutputPort()))));
         }
         if (secondaryAutoIOPageButton != null) {
-            List<Identifier> capabilityIds = supportedCapabilityIds();
+            List<ResourceLocation> capabilityIds = supportedCapabilityIds();
             secondaryAutoIOPageButton.visible = !autoIOPage && capabilityIds.size() > 1;
             secondaryAutoIOPageButton.active = secondaryAutoIOPageButton.visible;
             if (capabilityIds.size() > 1) {
@@ -365,11 +365,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         return port.autoIOConfig(new CapabilityType(selectedCapabilityId()));
     }
 
-    private Identifier selectedCapabilityId() {
-        List<Identifier> capabilityIds = supportedCapabilityIds();
+    private ResourceLocation selectedCapabilityId() {
+        List<ResourceLocation> capabilityIds = supportedCapabilityIds();
         IOPortBlockEntity port = portEntity();
         if (port != null) {
-            List<Identifier> available = port.capabilitySnapshot().capabilities().stream()
+            List<ResourceLocation> available = port.capabilitySnapshot().capabilities().stream()
                     .map(capability -> capability.type().id())
                     .toList();
             capabilityIds = capabilityIds.stream().filter(available::contains).toList();
@@ -377,7 +377,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         return selectedCapabilityId(capabilityIds);
     }
 
-    protected List<Identifier> supportedCapabilityIds() {
+    protected List<ResourceLocation> supportedCapabilityIds() {
         if (menu instanceof CombinedPortMenu || menu instanceof ExtendedCombinedMenu) {
             return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
         }
@@ -385,7 +385,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE.id());
         }
         if (menu instanceof EnergyHatchMenu) return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE.id());
-        Identifier mekanismCapabilityId = MekanismBridge.get().capabilityIdForMenu(menu);
+        ResourceLocation mekanismCapabilityId = MekanismBridge.get().capabilityIdForMenu(menu);
         if (mekanismCapabilityId != null) return List.of(mekanismCapabilityId);
         return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
     }
@@ -394,11 +394,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         return true;
     }
 
-    static String autoIOControlTooltipKey(Identifier capabilityId, boolean outputPort) {
+    static String autoIOControlTooltipKey(ResourceLocation capabilityId, boolean outputPort) {
         return "mmcr.auto_io." + capabilityId.getPath() + (outputPort ? "_output" : "_input") + "_control";
     }
 
-    protected final Identifier selectedCapabilityId(List<Identifier> capabilityIds) {
+    protected final ResourceLocation selectedCapabilityId(List<ResourceLocation> capabilityIds) {
         if (selectedCapabilityId != null && capabilityIds.contains(selectedCapabilityId)) return selectedCapabilityId;
         return capabilityIds.stream().findFirst().orElse(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
     }

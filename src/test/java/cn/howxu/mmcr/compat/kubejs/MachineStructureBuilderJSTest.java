@@ -23,7 +23,7 @@ import dev.latvian.mods.rhino.ScriptableObject;
 import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
@@ -69,7 +69,7 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void controller_symbol_normalizes_pattern_around_controller() {
-        var machineId = Identifier.parse("mmcr_test:iron_compressor");
+        var machineId = ResourceLocation.parse("mmcr_test:iron_compressor");
         var structure = new MachineStructureBuilderJS(machineId.toString())
                 .pattern("XIX")
                 .set("X", Blocks.BLUE_ICE)
@@ -85,7 +85,7 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void stage_builder_converts_chained_pattern_set_and_controller_to_declaration() {
-        var machineId = Identifier.parse("mmcr_test:iron_compressor");
+        var machineId = ResourceLocation.parse("mmcr_test:iron_compressor");
         var declaration = new MachineStructureStageBuilderJS(machineId)
                 .pattern("XIX")
                 .set("X", Blocks.BLUE_ICE)
@@ -125,11 +125,11 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void stage_builder_set_retains_level_slot_requirement() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(
-                Identifier.parse("test:copper_coil"), coilType, 1,
+                ResourceLocation.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
@@ -171,11 +171,11 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void pattern_retains_level_slot_coordinates_and_uses_the_type_predicate() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(
-                Identifier.parse("test:copper_coil"), coilType, 1,
+                ResourceLocation.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
@@ -208,10 +208,10 @@ class MachineStructureBuilderJSTest {
                 .containsEntry(new BlockPos(0, 0, 0), new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
         var replacements = definition.requirements().modifierReplacements().get('M');
         assertThat(replacements).hasSize(2);
-        assertThat(replacements.getFirst().getModifierId()).isEqualTo(Identifier.parse("mmcr:diamond_speedup"));
+        assertThat(replacements.getFirst().getModifierId()).isEqualTo(ResourceLocation.parse("mmcr:diamond_speedup"));
         assertThat(replacements.getFirst().getReplacement().matches(Blocks.DIAMOND_BLOCK.defaultBlockState())).isTrue();
         assertThat(replacements.getFirst().getModifiers()).isEmpty();
-        assertThat(replacements.get(1).getModifierId()).isEqualTo(Identifier.parse("mmcr:gold_doubling"));
+        assertThat(replacements.get(1).getModifierId()).isEqualTo(ResourceLocation.parse("mmcr:gold_doubling"));
         assertThat(replacements.get(1).getReplacement().matches(Blocks.GOLD_BLOCK.defaultBlockState())).isTrue();
         assertThat(replacements.get(1).getModifiers()).isEmpty();
     }
@@ -229,7 +229,7 @@ class MachineStructureBuilderJSTest {
 
         var replacements = definition.declarations().getFirst().requirements().modifierReplacements().get('M');
         assertThat(replacements).singleElement().satisfies(replacement -> {
-            assertThat(replacement.getModifierId()).isEqualTo(Identifier.parse("mmcr:callback_speedup"));
+            assertThat(replacement.getModifierId()).isEqualTo(ResourceLocation.parse("mmcr:callback_speedup"));
             assertThat(replacement.getModifiers()).isEmpty();
         });
     }
@@ -254,11 +254,11 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void pattern_expands_repeated_level_slot_entries_to_every_matching_key() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(
-                Identifier.parse("test:copper_coil"), coilType, 1,
+                ResourceLocation.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
@@ -416,11 +416,11 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void callback_conversion_retains_stage_metadata() {
-        Identifier coilType = Identifier.parse("test:callback_coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:callback_coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Callback Coils")));
         TestBootstrap.registerLevel(new MachineLevel(
-                Identifier.parse("test:callback_copper_coil"), coilType, 1,
+                ResourceLocation.parse("test:callback_copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY));
         PortRequirementSpec ports = PortRequirementSpec.builder().min("item_input_bus", 1).build();
@@ -485,7 +485,7 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void builder_retains_complete_metadata_for_each_structure_declaration() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         BlockPos modifierPosition = new BlockPos(1, 0, 0);
@@ -526,7 +526,7 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void full_structure_rejects_absent_character_level_slot() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
@@ -543,7 +543,7 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void builder_applies_declaration_metadata_to_compatible_pattern() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         DynamicPatternSpec dynamic = new DynamicPatternSpec("length", new BlockArray(Map.of()), null,
@@ -565,7 +565,7 @@ class MachineStructureBuilderJSTest {
 
     @Test
     void builder_applies_class_metadata_set_after_full_structure() {
-        Identifier coilType = Identifier.parse("test:coil");
+        ResourceLocation coilType = ResourceLocation.parse("test:coil");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         BlockArray full = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));

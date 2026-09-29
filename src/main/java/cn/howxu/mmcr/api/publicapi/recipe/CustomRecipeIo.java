@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.recipe;
 
 import cn.howxu.mmcr.api.publicapi.recipe.requirement.CustomRequirement;
 import com.google.gson.JsonElement;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -11,7 +11,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record CustomRecipeIo(Identifier typeId, RecipeIo ioType, JsonElement payload)
+public record CustomRecipeIo(ResourceLocation typeId, RecipeIo ioType, JsonElement payload)
         implements CustomRequirement {
     public CustomRecipeIo {
         Objects.requireNonNull(typeId, "typeId");

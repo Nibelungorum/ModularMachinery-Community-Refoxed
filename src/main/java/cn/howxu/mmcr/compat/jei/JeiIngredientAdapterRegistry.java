@@ -16,7 +16,7 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.Holder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -38,7 +38,7 @@ import java.util.stream.Stream;
  * @author howxu <dev@howxu.cn>
  */
 public final class JeiIngredientAdapterRegistry {
-    private static final Map<Identifier, JeiIngredientAdapter> ADAPTERS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, JeiIngredientAdapter> ADAPTERS = new LinkedHashMap<>();
 
     static {
         registerBuiltIns();
@@ -54,7 +54,7 @@ public final class JeiIngredientAdapterRegistry {
         }
     }
 
-    public static synchronized Optional<JeiIngredientAdapter> get(Identifier typeId) {
+    public static synchronized Optional<JeiIngredientAdapter> get(ResourceLocation typeId) {
         return Optional.ofNullable(ADAPTERS.get(typeId));
     }
 
@@ -84,7 +84,7 @@ public final class JeiIngredientAdapterRegistry {
 
     private static final class ItemAdapter implements JeiIngredientAdapter {
         @Override
-        public Identifier typeId() {
+        public ResourceLocation typeId() {
             return ItemRequirement.TYPE.id();
         }
 
@@ -119,7 +119,7 @@ public final class JeiIngredientAdapterRegistry {
 
     private static final class FluidAdapter implements JeiIngredientAdapter {
         @Override
-        public Identifier typeId() {
+        public ResourceLocation typeId() {
             return FluidRequirement.TYPE.id();
         }
 
@@ -149,7 +149,7 @@ public final class JeiIngredientAdapterRegistry {
 
     private static final class ChemicalAdapter implements JeiIngredientAdapter {
         @Override
-        public Identifier typeId() {
+        public ResourceLocation typeId() {
             return MekanismRecipeTypes.CHEMICAL;
         }
 

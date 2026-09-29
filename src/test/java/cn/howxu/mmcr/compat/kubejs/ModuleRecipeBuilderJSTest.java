@@ -19,7 +19,7 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -72,13 +72,13 @@ class ModuleRecipeBuilderJSTest {
                 .requiredHosts("mmcr:second", "mmcr:first", "mmcr:third");
 
         assertThat(builder.requiredHostIds)
-                .containsExactly(Identifier.parse("mmcr:first"), Identifier.parse("mmcr:second"), Identifier.parse("mmcr:third"));
+                .containsExactly(ResourceLocation.parse("mmcr:first"), ResourceLocation.parse("mmcr:second"), ResourceLocation.parse("mmcr:third"));
     }
 
     @Test
     void build_preserves_required_host_declaration_order() {
-        Identifier machineId = MMCR.id("module_machine");
-        Identifier recipeId = MMCR.id("module_recipe");
+        ResourceLocation machineId = MMCR.id("module_machine");
+        ResourceLocation recipeId = MMCR.id("module_recipe");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         new MachineRecipeBuilderJS(recipeId)
@@ -87,12 +87,12 @@ class ModuleRecipeBuilderJSTest {
                 .build();
 
         assertThat(RecipeRegistry.getRecipe(recipeId).requiredHostIds())
-                .containsExactly(Identifier.parse("mmcr:first"), Identifier.parse("mmcr:second"), Identifier.parse("mmcr:third"));
+                .containsExactly(ResourceLocation.parse("mmcr:first"), ResourceLocation.parse("mmcr:second"), ResourceLocation.parse("mmcr:third"));
     }
 
     @Test
     void public_recipe_builder_creates_recipe_object() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         var recipe = new MachineRecipeBuilderJS("mmcr:event_recipe")
@@ -105,7 +105,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void recipe_builder_requires_explicit_recipe_pool_without_machine_ownership_api() {
-        Identifier poolId = MMCR.id("explicit_recipe_pool");
+        ResourceLocation poolId = MMCR.id("explicit_recipe_pool");
         MachineDefinitions.register(MachineRegistration.builder(poolId).build());
 
         assertThat(new MachineRecipeBuilderJS("mmcr:explicit_pool_recipe")
@@ -121,7 +121,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void create_object_preserves_complete_public_recipe_values() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         Items.DIAMOND.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
@@ -159,12 +159,12 @@ class ModuleRecipeBuilderJSTest {
         assertThat(recipe.requirements()).contains(smartRequirement);
         assertThat(recipe.doesCancelRecipeOnPerTickFailure()).isTrue();
         assertThat(recipe.allowPartialOutputs()).isTrue();
-        assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:space_elevator"));
+        assertThat(recipe.requiredHostIds()).containsExactly(ResourceLocation.parse("mmcr:space_elevator"));
     }
 
     @Test
     void energy_input_and_output_shortcuts_emit_per_tick_requirements_with_correct_io() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:energy_io_shortcuts")
@@ -182,7 +182,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void energy_output_shortcut_alone_produces_output_directed_requirement() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:energy_output_alone")
@@ -198,8 +198,8 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void create_object_matches_shared_json_parser_for_complete_recipe_values() {
-        Identifier machineId = MMCR.id("module_machine");
-        Identifier recipeId = MMCR.id("shared_parser_recipe");
+        ResourceLocation machineId = MMCR.id("module_machine");
+        ResourceLocation recipeId = MMCR.id("shared_parser_recipe");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         MachineRegistry.register(new DynamicMachine(machineId, "Module Machine", new BlockArray(Map.of())));
         var input = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2, null, 0.5F);
@@ -231,8 +231,8 @@ class ModuleRecipeBuilderJSTest {
         json.addProperty("parallelized", true);
         json.addProperty("cancelIfPerTickFails", true);
         json.addProperty("allow_partial_outputs", true);
-        json.add("required_host_ids", Identifier.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
-                List.of(Identifier.parse("mmcr:space_elevator"))).getOrThrow());
+        json.add("required_host_ids", ResourceLocation.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
+                List.of(ResourceLocation.parse("mmcr:space_elevator"))).getOrThrow());
         json.add("requirements", MachineRequirement.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
                 List.of(MachineRequirement.fromInput(input))).getOrThrow());
 
@@ -242,7 +242,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void create_object_rejects_negative_ingredient_counts() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:negative_input")
@@ -255,7 +255,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void direct_output_lists_preserve_non_negative_normalized_values() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         Items.DIAMOND.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
@@ -281,7 +281,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void builder_preserves_component_tag_inputs_and_explicit_requirements() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         Items.EMERALD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
@@ -318,7 +318,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void builder_maps_parallelized_and_keeps_false_as_the_compatible_default() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         assertThat(new MachineRecipeBuilderJS("mmcr:serial")
@@ -331,7 +331,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void explicit_requirements_can_disable_automatic_input_derivation() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
         var apple = new MachineIngredient.ItemIngredient(Ingredient.of(Items.APPLE), 1);
@@ -349,7 +349,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void derive_requirements_false_with_empty_requirements_keeps_recipe_requirements_empty() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
 
@@ -364,7 +364,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void create_object_rejects_zero_tick_time() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:zero_tick")
@@ -377,7 +377,7 @@ class ModuleRecipeBuilderJSTest {
 
     @Test
     void machine_recipe_constructor_rejects_zero_tick_time() {
-        Identifier machineId = MMCR.id("module_machine");
+        ResourceLocation machineId = MMCR.id("module_machine");
 
         assertThatThrownBy(() -> RecipeTestSupport.create(MMCR.id("zero_tick_constructor"), machineId, 0, List.of(), List.of()))
                 .isInstanceOf(IllegalArgumentException.class)

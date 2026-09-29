@@ -16,7 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -79,7 +79,7 @@ public final class TerminalScreen extends Screen {
                 layout.levelTypeWidth(), button -> {
                     LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
                     if (!view.typeButtonActive()) return;
-                    Identifier nextType = nextType(view.typeId());
+                    ResourceLocation nextType = nextType(view.typeId());
                     send(TerminalAction.SET_LEVEL, 0, nextType, data.selectedLevels().get(nextType));
                 }));
         levelButton = addRenderableWidget(button("gui.mmcr.terminal.level", left() + layout.levelX(), top() + 54,
@@ -155,18 +155,18 @@ public final class TerminalScreen extends Screen {
         updateWidgets();
     }
 
-    static LevelView levelView(List<LevelType> types, Identifier selectedType,
-            Map<Identifier, Identifier> selectedLevels) {
+    static LevelView levelView(List<LevelType> types, ResourceLocation selectedType,
+            Map<ResourceLocation, ResourceLocation> selectedLevels) {
         if (types.isEmpty() || selectedLevels.isEmpty()) {
             return new LevelView(false, false, null, null, ItemStack.EMPTY);
         }
-        Identifier typeId = types.stream().map(LevelType::id)
+        ResourceLocation typeId = types.stream().map(LevelType::id)
                 .filter(id -> id.equals(selectedType) && validLevelSelection(id, selectedLevels))
                 .findFirst()
                 .orElseGet(() -> types.stream().map(LevelType::id).filter(id -> validLevelSelection(id, selectedLevels))
                         .findFirst().orElse(null));
         if (typeId == null) return new LevelView(false, false, null, null, ItemStack.EMPTY);
-        Identifier levelId = selectedLevels.get(typeId);
+        ResourceLocation levelId = selectedLevels.get(typeId);
         MachineLevel level = MachineLevelRegistry.getLevel(levelId);
         boolean multipleLevels = MachineLevelRegistry.levelsForType(typeId).size() > 1;
         return new LevelView(true, level != null && multipleLevels, typeId, levelId,
@@ -179,7 +179,7 @@ public final class TerminalScreen extends Screen {
                 .orElse(ItemStack.EMPTY);
     }
 
-    private static boolean validLevelSelection(Identifier typeId, Map<Identifier, Identifier> selectedLevels) {
+    private static boolean validLevelSelection(ResourceLocation typeId, Map<ResourceLocation, ResourceLocation> selectedLevels) {
         MachineLevel level = MachineLevelRegistry.getLevel(selectedLevels.get(typeId));
         return level != null && level.typeId().equals(typeId);
     }
@@ -214,7 +214,7 @@ public final class TerminalScreen extends Screen {
                 action == TerminalAction.SET_PREVIEW_ENABLED && !data.previewEnabled() ? 1 : 0, null, null));
     }
 
-    private void send(TerminalAction action, int value, Identifier firstId, Identifier secondId) {
+    private void send(TerminalAction action, int value, ResourceLocation firstId, ResourceLocation secondId) {
         if (!canSend(action)) return;
         ClientPacketDistributor.sendToServer(new PktTerminalActionPayload(action, value, firstId, secondId));
         if (closesAfter(action)) Minecraft.getInstance().setScreen(null);
@@ -265,13 +265,13 @@ public final class TerminalScreen extends Screen {
         return levelTypes().size() > 1 && view.typeButtonActive();
     }
 
-    private Identifier nextType(Identifier current) {
+    private ResourceLocation nextType(ResourceLocation current) {
         List<LevelType> types = levelTypes();
         int index = types.stream().map(LevelType::id).toList().indexOf(current);
         return types.get(index < 0 || index + 1 == types.size() ? 0 : index + 1).id();
     }
 
-    private Identifier nextLevel(Identifier typeId, Identifier current) {
+    private ResourceLocation nextLevel(ResourceLocation typeId, ResourceLocation current) {
         List<MachineLevel> levels = MachineLevelRegistry.levelsForType(typeId);
         int index = levels.stream().map(MachineLevel::id).toList().indexOf(current);
         return levels.get(index < 0 || index + 1 == levels.size() ? 0 : index + 1).id();
@@ -392,7 +392,7 @@ public final class TerminalScreen extends Screen {
         graphics.text(font, text, left() + x, top() + y, TEXT_COLOR, false);
     }
 
-    record LevelView(boolean typeButtonActive, boolean levelButtonActive, Identifier typeId, Identifier levelId,
+    record LevelView(boolean typeButtonActive, boolean levelButtonActive, ResourceLocation typeId, ResourceLocation levelId,
             ItemStack slotStack) {}
 
     record ControlState(boolean stageActive, boolean layerActive, boolean resetActive) {}

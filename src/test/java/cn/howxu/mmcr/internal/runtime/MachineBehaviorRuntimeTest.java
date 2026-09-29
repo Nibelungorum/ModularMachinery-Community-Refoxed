@@ -75,7 +75,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -108,7 +108,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * @author howxu <dev@howxu.cn>
  */
 class MachineBehaviorRuntimeTest {
-    private static final Identifier TEST_MACHINE_ID = MMCR.id("test_cube");
+    private static final ResourceLocation TEST_MACHINE_ID = MMCR.id("test_cube");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -439,7 +439,7 @@ class MachineBehaviorRuntimeTest {
 
     @Test
     void tick_context_exposes_effective_factory_threads_and_parallelism() {
-        Identifier machineId = MMCR.id("tick_context_components");
+        ResourceLocation machineId = MMCR.id("tick_context_components");
         BlockPos factoryPos = new BlockPos(1, 0, 0);
         BlockPos parallelPos = new BlockPos(2, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
@@ -480,7 +480,7 @@ class MachineBehaviorRuntimeTest {
 
     @Test
     void tick_context_uses_neutral_component_values_when_features_are_disabled() {
-        Identifier machineId = MMCR.id("tick_context_disabled_components");
+        ResourceLocation machineId = MMCR.id("tick_context_disabled_components");
         BlockPos factoryPos = new BlockPos(1, 0, 0);
         BlockPos parallelPos = new BlockPos(2, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
@@ -672,7 +672,7 @@ class MachineBehaviorRuntimeTest {
 
     @Test
     void recipe_machine_hooks_surround_existing_recipe_work_with_fresh_contexts() {
-        Identifier machineId = MMCR.id("recipe_hook_lifecycle_machine");
+        ResourceLocation machineId = MMCR.id("recipe_hook_lifecycle_machine");
         List<String> phases = new ArrayList<>();
         List<MachineBehaviorContext> preContexts = new ArrayList<>();
         List<MachineBehaviorContext> postContexts = new ArrayList<>();
@@ -741,7 +741,7 @@ class MachineBehaviorRuntimeTest {
 
     @Test
     void async_recipe_tick_callback_runs_on_the_controller_tick_thread() {
-        Identifier machineId = TEST_MACHINE_ID;
+        ResourceLocation machineId = TEST_MACHINE_ID;
         AtomicReference<Thread> callbackThread = new AtomicReference<>();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
@@ -820,11 +820,11 @@ class MachineBehaviorRuntimeTest {
         assertThat(output.itemStorage().amount(0)).isZero();
     }
 
-    private static Machine machine(Identifier id, MachineBehavior behavior) {
+    private static Machine machine(ResourceLocation id, MachineBehavior behavior) {
         return machine(id, new BlockArray(Map.of()), behavior);
     }
 
-    private static Machine machine(Identifier id, BlockArray pattern,
+    private static Machine machine(ResourceLocation id, BlockArray pattern,
                                    MachineBehavior behavior) {
         return new DynamicMachine(id, id.toString(), pattern,
                 MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
@@ -836,7 +836,7 @@ class MachineBehaviorRuntimeTest {
         return recipe(path, TEST_MACHINE_ID, requirements);
     }
 
-    private static MachineRecipe recipe(String path, Identifier machineId, ItemRequirement... requirements) {
+    private static MachineRecipe recipe(String path, ResourceLocation machineId, ItemRequirement... requirements) {
         return RecipeTestSupport.create(MMCR.id(path), machineId, 1, List.of(), List.of(),
                 List.of(), 0, 1, false, List.of(), List.of(requirements));
     }

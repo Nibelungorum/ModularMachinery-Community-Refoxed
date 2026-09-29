@@ -16,7 +16,7 @@ import mekanism.api.chemical.ChemicalBuilder;
 import mekanism.api.chemical.ChemicalStack;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class FluidChemicalConsumeChanceDisplayTest {
-    private static final Identifier MACHINE = MMCR.id("display_consume_chance");
+    private static final ResourceLocation MACHINE = MMCR.id("display_consume_chance");
 
     @BeforeAll
     static void bootstrap() throws Exception {
@@ -48,7 +48,7 @@ class FluidChemicalConsumeChanceDisplayTest {
     @SuppressWarnings("unchecked")
     private static void registerOxygen() {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.parse("mekanism:oxygen"));
+                ResourceLocation.parse("mekanism:oxygen"));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         if (registry.get(key).isPresent()) return;
         registry.unfreeze(true);
@@ -79,7 +79,7 @@ class FluidChemicalConsumeChanceDisplayTest {
     @Test
     void chemical_input_display_carries_consume_chance() {
         MachineRequirement chemicalInput = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0F);
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("chemical_consume"), MACHINE, 20,
                 List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, false, Set.of());
 
@@ -94,7 +94,7 @@ class FluidChemicalConsumeChanceDisplayTest {
     @Test
     void chemical_display_stack_uses_full_render_amount() {
         MachineRequirement chemicalInput = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("chemical_render_amount"), MACHINE, 20,
                 List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, false, Set.of());
 

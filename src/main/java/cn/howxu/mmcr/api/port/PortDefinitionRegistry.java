@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.port;
 
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +15,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class PortDefinitionRegistry {
-    private static final Map<Identifier, PortDefinition> DEFINITIONS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, PortDefinition> DEFINITIONS = new LinkedHashMap<>();
     private static boolean frozen;
 
     private PortDefinitionRegistry() {
@@ -29,7 +29,7 @@ public final class PortDefinitionRegistry {
         }
     }
 
-    public static synchronized PortDefinition get(Identifier id) {
+    public static synchronized PortDefinition get(ResourceLocation id) {
         return id == null ? null : DEFINITIONS.get(id);
     }
 
@@ -37,7 +37,7 @@ public final class PortDefinitionRegistry {
         return List.copyOf(DEFINITIONS.values());
     }
 
-    public static synchronized List<CapabilityBinding> resolve(Identifier id, IOType ioType, int tier) {
+    public static synchronized List<CapabilityBinding> resolve(ResourceLocation id, IOType ioType, int tier) {
         Objects.requireNonNull(ioType, "ioType");
         PortDefinition definition = get(id);
         if (definition == null) return List.of();

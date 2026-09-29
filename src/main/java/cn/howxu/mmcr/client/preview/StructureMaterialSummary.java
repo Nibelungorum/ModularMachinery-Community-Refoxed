@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -46,7 +46,7 @@ public final class StructureMaterialSummary {
         int levelRank = highestSharedLevelRank(stage);
         List<BlockState> states = new ArrayList<>();
         stage.pattern().pattern().forEach((position, predicate) -> {
-            Identifier levelSlot = stage.levelSlots().get(position);
+            ResourceLocation levelSlot = stage.levelSlots().get(position);
             BlockState state = levelSlot == null
                     ? predicate instanceof BlockPredicate.MachineCoupler
                             ? MultiblockPreviewPredicates.machineCouplerState().orElse(null)
@@ -87,7 +87,7 @@ public final class StructureMaterialSummary {
                 .max().orElse(-1);
     }
 
-    private static BlockState levelState(Identifier typeId, int levelRank) {
+    private static BlockState levelState(ResourceLocation typeId, int levelRank) {
         return MachineLevelRegistry.levelsForType(typeId).stream()
                 .filter(level -> level.priority() == levelRank)
                 .findFirst()

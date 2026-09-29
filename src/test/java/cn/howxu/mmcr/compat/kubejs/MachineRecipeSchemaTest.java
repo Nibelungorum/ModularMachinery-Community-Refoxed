@@ -36,7 +36,7 @@ import dev.latvian.mods.kubejs.recipe.component.StringComponent;
 import dev.latvian.mods.kubejs.util.ErrorStack;
 import dev.latvian.mods.rhino.Context;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.component.DataComponentMap;
@@ -187,12 +187,12 @@ class MachineRecipeSchemaTest {
 
     @Test
     void builder_rejects_level_outside_declared_type() {
-        var coilType = Identifier.parse("test:coil");
-        var laserType = Identifier.parse("test:laser");
+        var coilType = ResourceLocation.parse("test:coil");
+        var laserType = ResourceLocation.parse("test:laser");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerType(new LevelType(laserType, Component.literal("Lasers")));
-        TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:laser"), laserType, 1,
+        TestBootstrap.registerLevel(new MachineLevel(ResourceLocation.parse("test:laser"), laserType, 1,
                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         assertThatIllegalArgumentException().isThrownBy(
@@ -201,9 +201,9 @@ class MachineRecipeSchemaTest {
 
     @Test
     void builder_requires_level_adds_canonical_requirement() {
-        Identifier typeId = Identifier.parse("test:requires_level_type");
-        Identifier levelId = Identifier.parse("test:requires_level");
-        Identifier recipePoolId = Identifier.parse("test:requires_level_pool");
+        ResourceLocation typeId = ResourceLocation.parse("test:requires_level_type");
+        ResourceLocation levelId = ResourceLocation.parse("test:requires_level");
+        ResourceLocation recipePoolId = ResourceLocation.parse("test:requires_level_pool");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Requires Level")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, typeId, 1,
@@ -234,8 +234,8 @@ class MachineRecipeSchemaTest {
     void schema_requires_level_function_appends_canonical_requirement() {
         var recipe = new KubeRecipe();
         recipe.json = new JsonObject();
-        Identifier typeId = Identifier.parse("test:schema_level_type");
-        Identifier levelId = Identifier.parse("test:schema_level");
+        ResourceLocation typeId = ResourceLocation.parse("test:schema_level_type");
+        ResourceLocation levelId = ResourceLocation.parse("test:schema_level");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Schema Level")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, typeId, 1,

@@ -31,7 +31,7 @@ import java.util.Arrays;
 import java.util.Set;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -55,8 +55,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class KubeJSApiTest {
-    private static final Identifier TEST_LEVEL_TYPE = MMCR.id("api_test_level_type");
-    private static final Identifier TEST_LEVEL = MMCR.id("api_test_level");
+    private static final ResourceLocation TEST_LEVEL_TYPE = MMCR.id("api_test_level_type");
+    private static final ResourceLocation TEST_LEVEL = MMCR.id("api_test_level");
     private final KubeJSApi api = new KubeJSApi();
 
     @BeforeAll
@@ -408,7 +408,7 @@ class KubeJSApiTest {
 
         ModifierUse use = api.modifierUse("mmcr_kubejs:diamond_speedup", replacement);
 
-        assertThat(use.modifierId()).isEqualTo(Identifier.parse("mmcr_kubejs:diamond_speedup"));
+        assertThat(use.modifierId()).isEqualTo(ResourceLocation.parse("mmcr_kubejs:diamond_speedup"));
         assertThat(use.replacement().block()).contains(Blocks.DIAMOND_BLOCK);
     }
 
@@ -449,7 +449,7 @@ class KubeJSApiTest {
 
         assertThat(definition.pattern().pattern()).hasSize(9);
         assertThat(definition.pattern().pattern().get(BlockPos.ZERO)
-                .matches(ModBlocks.controllerFor(Identifier.parse("mmcr_test:iron_compressor")).get().defaultBlockState())).isTrue();
+                .matches(ModBlocks.controllerFor(ResourceLocation.parse("mmcr_test:iron_compressor")).get().defaultBlockState())).isTrue();
         assertThat(definition.pattern().symbolsByPosition()).containsEntry(BlockPos.ZERO, 'C');
         assertThat(definition.requirements().modifierReplacements()).containsKeys('X', 'C');
     }
@@ -471,7 +471,7 @@ class KubeJSApiTest {
 
         assertThat(builder.createObject().pattern().pattern()).hasSize(9);
         assertThat(builder.createObject().pattern().pattern().get(BlockPos.ZERO)
-                .matches(ModBlocks.controllerFor(Identifier.parse("mmcr_test:iron_compressor")).get().defaultBlockState())).isTrue();
+                .matches(ModBlocks.controllerFor(ResourceLocation.parse("mmcr_test:iron_compressor")).get().defaultBlockState())).isTrue();
     }
 
     @Test

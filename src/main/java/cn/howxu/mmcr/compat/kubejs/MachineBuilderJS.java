@@ -23,7 +23,7 @@ import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import java.util.Map;
 import java.util.stream.Collectors;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,10 +37,10 @@ import java.util.function.Consumer;
 
 public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient String displayNameKey;
-    public transient Identifier controllerFrontTexture;
-    public transient Identifier controllerSideTexture;
-    public transient Identifier controllerTopTexture;
-    public transient Identifier controllerBottomTexture;
+    public transient ResourceLocation controllerFrontTexture;
+    public transient ResourceLocation controllerSideTexture;
+    public transient ResourceLocation controllerTopTexture;
+    public transient ResourceLocation controllerBottomTexture;
     public transient boolean allowVerticalFacing = false;
     public transient boolean fullyRotationallySymmetric = false;
     public transient boolean requireVerticalFacing = false;
@@ -49,23 +49,23 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient boolean allowParallelism = false;
     public transient long maxParallelAmount = 1L;
     private transient int factoryThreadLimit = 1;
-    public transient Identifier machineBasicBlock;
-    public transient Identifier controllerBaseTexture;
-    public transient Identifier formedPortBaseTexture;
-    public transient Identifier controllerIdleOverlayTexture;
-    public transient Identifier controllerActiveOverlayTexture;
-    public transient Identifier runningSoundId;
-    public transient Identifier finishSoundId;
-    private List<Identifier> recipePoolIds;
+    public transient ResourceLocation machineBasicBlock;
+    public transient ResourceLocation controllerBaseTexture;
+    public transient ResourceLocation formedPortBaseTexture;
+    public transient ResourceLocation controllerIdleOverlayTexture;
+    public transient ResourceLocation controllerActiveOverlayTexture;
+    public transient ResourceLocation runningSoundId;
+    public transient ResourceLocation finishSoundId;
+    private List<ResourceLocation> recipePoolIds;
     private boolean expandableStructure;
     private MachineControllerSpec explicitControllerSpec;
     private MachineAppearanceSpec explicitAppearance;
     private MachineRole role = MachineRole.NORMAL;
     private boolean explicitRole;
-    private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+    private final Set<ResourceLocation> acceptedModuleIds = new LinkedHashSet<>();
     private int networkInterfaceMaxCount;
     private int networkInterfaceMaxConnections;
-    private final Set<Identifier> allowedNetworkMachineIds = new LinkedHashSet<>();
+    private final Set<ResourceLocation> allowedNetworkMachineIds = new LinkedHashSet<>();
     private boolean module;
     private final List<String> controllerTooltip = new ArrayList<>();
     private final List<SmartInterfaceType> smartInterfaceTypes = new ArrayList<>();
@@ -77,13 +77,13 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     private MachineBehavior.MachineCallback postServerTick;
     private final MachineBuilder callbackBuilder;
 
-    public MachineBuilderJS(Identifier id) {
+    public MachineBuilderJS(ResourceLocation id) {
         super(id);
         callbackBuilder = MachineBuilder.machine(id);
     }
 
     public MachineBuilderJS(String id) {
-        this(Identifier.parse(id));
+        this(ResourceLocation.parse(id));
     }
 
     public MachineBuilderJS displayNameKey(String key) {
@@ -119,17 +119,17 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS allowNetworkMachine(String machineId) {
-        allowedNetworkMachineIds.add(Identifier.parse(machineId));
+        allowedNetworkMachineIds.add(ResourceLocation.parse(machineId));
         return this;
     }
 
     public MachineBuilderJS requestProcess(String requestId, RequestProcess process) {
-        callbackBuilder.requestProcessInternal(Identifier.parse(requestId), process);
+        callbackBuilder.requestProcessInternal(ResourceLocation.parse(requestId), process);
         return this;
     }
 
     public MachineBuilderJS requestFailed(String requestId, RequestFailed failure) {
-        callbackBuilder.requestFailed(Identifier.parse(requestId), failure);
+        callbackBuilder.requestFailed(ResourceLocation.parse(requestId), failure);
         return this;
     }
 
@@ -217,7 +217,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
             throw new IllegalArgumentException("recipePool requires at least one id");
         }
         this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id,
-                Arrays.stream(recipePoolIds).map(Identifier::parse).toList());
+                Arrays.stream(recipePoolIds).map(ResourceLocation::parse).toList());
         return this;
     }
 
@@ -259,22 +259,22 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS runningSound(String soundId) {
-        return runningSound(Identifier.parse(soundId));
+        return runningSound(ResourceLocation.parse(soundId));
     }
 
     @HideFromJS
-    public MachineBuilderJS runningSound(Identifier soundId) {
+    public MachineBuilderJS runningSound(ResourceLocation soundId) {
         MachineRegistration.validateSound(soundId);
         this.runningSoundId = soundId;
         return this;
     }
 
     public MachineBuilderJS finishSound(String soundId) {
-        return finishSound(Identifier.parse(soundId));
+        return finishSound(ResourceLocation.parse(soundId));
     }
 
     @HideFromJS
-    public MachineBuilderJS finishSound(Identifier soundId) {
+    public MachineBuilderJS finishSound(ResourceLocation soundId) {
         MachineRegistration.validateSound(soundId);
         this.finishSoundId = soundId;
         return this;
@@ -283,7 +283,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public MachineBuilderJS host(String... moduleIds) {
         if (moduleIds == null) return this;
         for (String moduleId : moduleIds) {
-            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+            if (moduleId != null) acceptedModuleIds.add(ResourceLocation.parse(moduleId));
         }
         return this;
     }
@@ -292,7 +292,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public MachineBuilderJS host(Collection<String> moduleIds) {
         if (moduleIds == null) return this;
         for (String moduleId : moduleIds) {
-            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+            if (moduleId != null) acceptedModuleIds.add(ResourceLocation.parse(moduleId));
         }
         return this;
     }
@@ -315,11 +315,11 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS controllerTextures(String front, String otherFive) {
-        return controllerTextures(Identifier.parse(front), Identifier.parse(otherFive));
+        return controllerTextures(ResourceLocation.parse(front), ResourceLocation.parse(otherFive));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerTextures(Identifier front, Identifier otherFive) {
+    public MachineBuilderJS controllerTextures(ResourceLocation front, ResourceLocation otherFive) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = otherFive;
         this.controllerTopTexture = otherFive;
@@ -328,7 +328,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerTextures(Identifier front, Identifier side, Identifier top, Identifier bottom) {
+    public MachineBuilderJS controllerTextures(ResourceLocation front, ResourceLocation side, ResourceLocation top, ResourceLocation bottom) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = side;
         this.controllerTopTexture = top;
@@ -337,61 +337,61 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS controllerFrontTexture(String texture) {
-        return controllerFrontTexture(Identifier.parse(texture));
+        return controllerFrontTexture(ResourceLocation.parse(texture));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerFrontTexture(Identifier texture) {
+    public MachineBuilderJS controllerFrontTexture(ResourceLocation texture) {
         this.controllerFrontTexture = texture;
         return this;
     }
 
     public MachineBuilderJS controllerSideTexture(String texture) {
-        return controllerSideTexture(Identifier.parse(texture));
+        return controllerSideTexture(ResourceLocation.parse(texture));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerSideTexture(Identifier texture) {
+    public MachineBuilderJS controllerSideTexture(ResourceLocation texture) {
         this.controllerSideTexture = texture;
         return this;
     }
 
     public MachineBuilderJS controllerTopTexture(String texture) {
-        return controllerTopTexture(Identifier.parse(texture));
+        return controllerTopTexture(ResourceLocation.parse(texture));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerTopTexture(Identifier texture) {
+    public MachineBuilderJS controllerTopTexture(ResourceLocation texture) {
         this.controllerTopTexture = texture;
         return this;
     }
 
     public MachineBuilderJS controllerBottomTexture(String texture) {
-        return controllerBottomTexture(Identifier.parse(texture));
+        return controllerBottomTexture(ResourceLocation.parse(texture));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerBottomTexture(Identifier texture) {
+    public MachineBuilderJS controllerBottomTexture(ResourceLocation texture) {
         this.controllerBottomTexture = texture;
         return this;
     }
 
     public MachineBuilderJS controllerIdleOverlayTexture(String texture) {
-        return controllerIdleOverlayTexture(Identifier.parse(texture));
+        return controllerIdleOverlayTexture(ResourceLocation.parse(texture));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerIdleOverlayTexture(Identifier texture) {
+    public MachineBuilderJS controllerIdleOverlayTexture(ResourceLocation texture) {
         this.controllerIdleOverlayTexture = texture;
         return this;
     }
 
     public MachineBuilderJS controllerActiveOverlayTexture(String texture) {
-        return controllerActiveOverlayTexture(Identifier.parse(texture));
+        return controllerActiveOverlayTexture(ResourceLocation.parse(texture));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerActiveOverlayTexture(Identifier texture) {
+    public MachineBuilderJS controllerActiveOverlayTexture(ResourceLocation texture) {
         this.controllerActiveOverlayTexture = texture;
         return this;
     }
@@ -461,31 +461,31 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS machineBasicBlock(String blockId) {
-        return machineBasicBlock(Identifier.parse(blockId));
+        return machineBasicBlock(ResourceLocation.parse(blockId));
     }
 
     @HideFromJS
-    public MachineBuilderJS machineBasicBlock(Identifier blockId) {
+    public MachineBuilderJS machineBasicBlock(ResourceLocation blockId) {
         this.machineBasicBlock = blockId;
         return this;
     }
 
     public MachineBuilderJS controllerBaseTexture(String textureId) {
-        return controllerBaseTexture(Identifier.parse(textureId));
+        return controllerBaseTexture(ResourceLocation.parse(textureId));
     }
 
     @HideFromJS
-    public MachineBuilderJS controllerBaseTexture(Identifier textureId) {
+    public MachineBuilderJS controllerBaseTexture(ResourceLocation textureId) {
         this.controllerBaseTexture = textureId;
         return this;
     }
 
     public MachineBuilderJS formedPortBaseTexture(String textureId) {
-        return formedPortBaseTexture(Identifier.parse(textureId));
+        return formedPortBaseTexture(ResourceLocation.parse(textureId));
     }
 
     @HideFromJS
-    public MachineBuilderJS formedPortBaseTexture(Identifier textureId) {
+    public MachineBuilderJS formedPortBaseTexture(ResourceLocation textureId) {
         this.formedPortBaseTexture = textureId;
         return this;
     }
@@ -528,7 +528,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
-    public BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
@@ -633,7 +633,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineRegistration registration = createObject();
         MachineBuilder builder = MachineBuilder.machine(id)
                 .displayNameKey(registration.displayNameKey())
-                .recipePool(registration.recipePoolIds().toArray(Identifier[]::new))
+                .recipePool(registration.recipePoolIds().toArray(ResourceLocation[]::new))
                 .controller(controller -> controller
                         .id(registration.controllerSpec().id())
                         .frontTexture(registration.controllerSpec().frontTexture())

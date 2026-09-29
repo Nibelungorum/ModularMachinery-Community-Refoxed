@@ -30,7 +30,7 @@ class MachineControllerComponentProviderTest {
     }
 
     @Test
-    void lineKeysDoNotIncludeMachineIdentifier() {
+    void lineKeysDoNotIncludeMachineResourceLocation() {
         CompoundTag tag = new CompoundTag();
         tag.putString("machine", "mmcr:machine");
 

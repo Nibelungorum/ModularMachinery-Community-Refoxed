@@ -4,7 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.data.AtlasIds;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Renders the client-neutral chemical state supplied by the loaded Mekanism menu.
@@ -15,10 +15,10 @@ public final class ChemicalGuiRenderer {
     private ChemicalGuiRenderer() {
     }
 
-    public record ChemicalRenderState(Identifier identifier, int tint, int fillHeight) {
+    public record ChemicalRenderState(ResourceLocation identifier, int tint, int fillHeight) {
     }
 
-    public static ChemicalRenderState state(Identifier identifier, int tint, long amount, long capacity, int height) {
+    public static ChemicalRenderState state(ResourceLocation identifier, int tint, long amount, long capacity, int height) {
         int fillHeight = identifier == null ? 0 : FluidGuiRenderer.fillHeight(amount, capacity, height);
         return new ChemicalRenderState(identifier, tint, fillHeight);
     }

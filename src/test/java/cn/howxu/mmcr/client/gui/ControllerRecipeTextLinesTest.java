@@ -145,12 +145,12 @@ class ControllerRecipeTextLinesTest {
     void fluidAndChemicalOutputsUseNativeIconDescriptors() {
         MekanismBridgeBootstrap.installForTesting(new MekanismBridge() {
             @Override public boolean available() { return true; }
-            @Override public boolean supportsPortFamily(net.minecraft.resources.Identifier familyId) { return false; }
-            @Override public net.minecraft.resources.Identifier unavailableReason() { return null; }
-            @Override public void registerRecipeTypes(net.minecraft.resources.Identifier chemical,
-                                                      net.minecraft.resources.Identifier heatTemperature,
-                                                      net.minecraft.resources.Identifier heat) {}
-            @Override public ChemicalRenderData chemicalRenderData(net.minecraft.resources.Identifier chemicalId) {
+            @Override public boolean supportsPortFamily(net.minecraft.resources.ResourceLocation familyId) { return false; }
+            @Override public net.minecraft.resources.ResourceLocation unavailableReason() { return null; }
+            @Override public void registerRecipeTypes(net.minecraft.resources.ResourceLocation chemical,
+                                                      net.minecraft.resources.ResourceLocation heatTemperature,
+                                                      net.minecraft.resources.ResourceLocation heat) {}
+            @Override public ChemicalRenderData chemicalRenderData(net.minecraft.resources.ResourceLocation chemicalId) {
                 return new ChemicalRenderData(chemicalId, 0xFFFFFFFF, Component.literal("Test chemical"));
             }
         });

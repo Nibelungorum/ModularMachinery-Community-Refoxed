@@ -16,7 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -40,9 +40,9 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public class BlueprintItem extends Item {
-    private static final Map<Identifier, CachedRequirements> REQUIREMENT_TEXT_CACHE = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, CachedRequirements> REQUIREMENT_TEXT_CACHE = new ConcurrentHashMap<>();
 
-    public BlueprintItem(Identifier id) {
+    public BlueprintItem(ResourceLocation id) {
         super(new Item.Properties().stacksTo(1).setId(ResourceKey.create(Registries.ITEM, id)));
     }
 
@@ -68,7 +68,7 @@ public class BlueprintItem extends Item {
 
     @Override
     public Component getName(ItemStack stack) {
-        Identifier machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
+        ResourceLocation machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
         Machine machine = machineId == null ? null : MachineRegistry.getMachine(machineId);
         return machine == null ? super.getName(stack) : machine.displayName();
     }
@@ -81,7 +81,7 @@ public class BlueprintItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
             Consumer<Component> tooltip, TooltipFlag flag) {
-        Identifier machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
+        ResourceLocation machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
         if (machineId == null) return;
         Machine machine = MachineRegistry.getMachine(machineId);
         if (machine == null) return;
@@ -93,7 +93,7 @@ public class BlueprintItem extends Item {
     }
 
     private static List<Component> requirementText(Machine machine) {
-        Identifier machineId = machine.registryName();
+        ResourceLocation machineId = machine.registryName();
         CachedRequirements cached = REQUIREMENT_TEXT_CACHE.get(machineId);
         if (cached != null && cached.machine() == machine) return cached.lines();
         List<Component> lines = requirements(machine).stream()

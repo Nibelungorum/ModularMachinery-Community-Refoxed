@@ -1,14 +1,14 @@
 package cn.howxu.mmcr.api.publicapi.data;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Immutable input supplied when a public data repository is queried.
  *
  * @author howxu <dev@howxu.cn>
  */
-public record DataRepositoryContext(Identifier machineId, BlockPos controllerPos, String key,
+public record DataRepositoryContext(ResourceLocation machineId, BlockPos controllerPos, String key,
                                     DataValueType requestedType) {
     public DataRepositoryContext {
         if (machineId == null) throw new IllegalArgumentException("machineId must not be null");

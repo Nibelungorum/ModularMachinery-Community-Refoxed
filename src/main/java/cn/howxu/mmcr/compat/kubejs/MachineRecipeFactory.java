@@ -6,10 +6,10 @@ import dev.latvian.mods.kubejs.recipe.KubeRecipe;
 import dev.latvian.mods.kubejs.recipe.schema.KubeRecipeFactory;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public final class MachineRecipeFactory {
-    public static final Identifier TYPE = MMCR.id("machine_recipe");
+    public static final ResourceLocation TYPE = MMCR.id("machine_recipe");
     public static final KubeRecipeFactory INSTANCE = new KubeRecipeFactory(TYPE, KubeRecipe.class, KubeRecipe::new);
 
     private MachineRecipeFactory() {

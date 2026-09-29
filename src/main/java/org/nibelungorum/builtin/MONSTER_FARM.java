@@ -3,7 +3,7 @@ package org.nibelungorum.builtin;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -19,7 +19,7 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
  */
 @EventBusSubscriber
 public class MONSTER_FARM {
-    private static final Identifier MONSTER_FARM = id("monster_farm");
+    private static final ResourceLocation MONSTER_FARM = id("monster_farm");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(MONSTER_FARM)) {

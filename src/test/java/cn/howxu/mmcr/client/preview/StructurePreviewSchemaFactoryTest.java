@@ -25,7 +25,7 @@ import java.util.Collection;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.Rotation;
@@ -56,8 +56,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class StructurePreviewSchemaFactoryTest {
-    private static final Identifier TEST_LEVEL_TYPE = MMCR.id("preview_test_level_type");
-    private static final Identifier TEST_LEVEL = MMCR.id("preview_test_level");
+    private static final ResourceLocation TEST_LEVEL_TYPE = MMCR.id("preview_test_level_type");
+    private static final ResourceLocation TEST_LEVEL = MMCR.id("preview_test_level");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -133,7 +133,7 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_rotates_directional_state_with_the_corrected_controller_facing() {
-        Identifier machineId = MMCR.id("directional_preview");
+        ResourceLocation machineId = MMCR.id("directional_preview");
         BlockState southFacing = Blocks.DISPENSER.defaultBlockState()
                 .setValue(DirectionalBlock.FACING, Direction.SOUTH);
         BlockArray pattern = new BlockArray(Map.of(
@@ -175,7 +175,7 @@ class StructurePreviewSchemaFactoryTest {
         BlockArray pattern = new BlockArray(Map.of());
         Machine machine = new Machine() {
             @Override
-            public Identifier registryName() {
+            public ResourceLocation registryName() {
                 return MMCR.id("empty_stages");
             }
 
@@ -351,7 +351,7 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_rotates_level_slots_and_modifier_candidates_with_the_pattern() {
-        Identifier levelType = MMCR.id("rotated_preview_level");
+        ResourceLocation levelType = MMCR.id("rotated_preview_level");
         registerLevels(Map.of(levelType, List.of(Blocks.COPPER_BLOCK)));
         BlockPos rawPosition = new BlockPos(1, 0, 0);
         BlockArray pattern = new BlockArray(
@@ -377,7 +377,7 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_rotates_directional_level_state_with_the_pattern() {
-        Identifier levelType = MMCR.id("rotated_directional_level");
+        ResourceLocation levelType = MMCR.id("rotated_directional_level");
         BlockState southState = Blocks.DISPENSER.defaultBlockState().setValue(
                 BlockStateProperties.FACING, Direction.SOUTH);
         TestBootstrap.beginRegistration();
@@ -401,7 +401,7 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_keeps_base_candidate_first_when_modifiers_have_higher_level_priority() {
-        Identifier modifierLevels = MMCR.id("preview_modifier_priority");
+        ResourceLocation modifierLevels = MMCR.id("preview_modifier_priority");
         registerLevels(Map.of(modifierLevels, List.of(Blocks.IRON_BLOCK, Blocks.DIAMOND_BLOCK)));
         BlockArray pattern = BlockArray.builder()
                 .pattern("H")
@@ -450,7 +450,7 @@ class StructurePreviewSchemaFactoryTest {
                 PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         Machine machine = new Machine() {
             @Override
-            public Identifier registryName() {
+            public ResourceLocation registryName() {
                 return MMCR.id("vertical_preview");
             }
 
@@ -481,7 +481,7 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_uses_one_shared_highest_level_for_all_slots() {
-        Identifier coil = MMCR.id("preview_coil");
+        ResourceLocation coil = MMCR.id("preview_coil");
         registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK)));
         BlockPos first = BlockPos.ZERO;
         BlockPos second = new BlockPos(1, 0, 0);
@@ -496,8 +496,8 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_uses_air_when_a_shared_level_is_missing_for_a_slot() {
-        Identifier coil = MMCR.id("preview_coil_missing");
-        Identifier casing = MMCR.id("preview_casing_missing");
+        ResourceLocation coil = MMCR.id("preview_coil_missing");
+        ResourceLocation casing = MMCR.id("preview_casing_missing");
         registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK), casing, List.of(Blocks.GOLD_BLOCK)));
         BlockPos first = BlockPos.ZERO;
         BlockPos second = new BlockPos(1, 0, 0);
@@ -510,7 +510,7 @@ class StructurePreviewSchemaFactoryTest {
         assertThat(schema.stateAt(second)).isEqualTo(Blocks.AIR.defaultBlockState());
     }
 
-    private static MachineStructureStage stageWithSlots(Map<BlockPos, Identifier> slots) {
+    private static MachineStructureStage stageWithSlots(Map<BlockPos, ResourceLocation> slots) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         Map<BlockPos, Character> symbols = new LinkedHashMap<>();
         MachineStructureRequirements.Builder requirements = MachineStructureRequirements.builder();
@@ -540,9 +540,9 @@ class StructurePreviewSchemaFactoryTest {
                 List.of(), new ItemStack(block));
     }
 
-    private static void registerLevels(Map<Identifier, List<Block>> levelsByType) {
+    private static void registerLevels(Map<ResourceLocation, List<Block>> levelsByType) {
         TestBootstrap.beginRegistration();
-        for (Identifier type : levelsByType.keySet()) {
+        for (ResourceLocation type : levelsByType.keySet()) {
             TestBootstrap.registerType(new LevelType(type, Component.literal(type.toString())));
         }
         for (var entry : levelsByType.entrySet()) {
@@ -558,7 +558,7 @@ class StructurePreviewSchemaFactoryTest {
     private static Machine machineWithStages(BlockArray pattern, List<MachineStructureStage> stages) {
         return new Machine() {
             @Override
-            public Identifier registryName() {
+            public ResourceLocation registryName() {
                 return MMCR.id("multi_stage");
             }
 

@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -19,10 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author howxu <dev@howxu.cn>
  */
 public final class OutputRegistry {
-    private static final Map<Identifier, OutputType<?>> TYPES = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, OutputType<?>> TYPES = new ConcurrentHashMap<>();
     private static final Map<String, OutputType<?>> SERIALIZED_TYPES = new ConcurrentHashMap<>();
     private static final Object MUTATION_LOCK = new Object();
-    private static final List<Identifier> BUILT_IN_IDS = List.of(MachineOutput.ItemOutput.TYPE.id(), MachineOutput.FluidOutput.TYPE.id());
+    private static final List<ResourceLocation> BUILT_IN_IDS = List.of(MachineOutput.ItemOutput.TYPE.id(), MachineOutput.FluidOutput.TYPE.id());
 
     private OutputRegistry() {
     }
@@ -41,7 +41,7 @@ public final class OutputRegistry {
         }
     }
 
-    public static OutputType<?> typeFor(Identifier id) {
+    public static OutputType<?> typeFor(ResourceLocation id) {
         if (id == null) throw new IllegalArgumentException("id must not be null");
         registerBuiltIns();
         return TYPES.get(id);
@@ -171,7 +171,7 @@ public final class OutputRegistry {
         OutputType<?> type = SERIALIZED_TYPES.get(serializedId);
         if (type != null) return type;
         try {
-            Identifier id = serializedId.contains(":") ? Identifier.parse(serializedId) : MMCR.id(serializedId);
+            ResourceLocation id = serializedId.contains(":") ? ResourceLocation.parse(serializedId) : MMCR.id(serializedId);
             return TYPES.get(id);
         } catch (IllegalArgumentException ignored) {
             return null;
@@ -212,7 +212,7 @@ public final class OutputRegistry {
         SERIALIZED_TYPES.entrySet().removeIf(entry -> !isBuiltIn(entry.getValue().id()));
     }
 
-    private static boolean isBuiltIn(Identifier id) {
+    private static boolean isBuiltIn(ResourceLocation id) {
         return BUILT_IN_IDS.contains(id);
     }
 

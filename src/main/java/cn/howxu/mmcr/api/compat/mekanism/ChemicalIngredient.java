@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.compat.mekanism;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -12,7 +12,7 @@ import java.util.Objects;
  * @param amount the required amount
  * @author howxu <dev@howxu.cn>
  */
-public record ChemicalIngredient(Kind kind, Identifier id, long amount) {
+public record ChemicalIngredient(Kind kind, ResourceLocation id, long amount) {
     public ChemicalIngredient {
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(id, "id");
@@ -25,11 +25,11 @@ public record ChemicalIngredient(Kind kind, Identifier id, long amount) {
         TAG
     }
 
-    public static ChemicalIngredient chemical(Identifier id, long amount) {
+    public static ChemicalIngredient chemical(ResourceLocation id, long amount) {
         return new ChemicalIngredient(Kind.CHEMICAL, id, amount);
     }
 
-    public static ChemicalIngredient tag(Identifier id, long amount) {
+    public static ChemicalIngredient tag(ResourceLocation id, long amount) {
         return new ChemicalIngredient(Kind.TAG, id, amount);
     }
 }

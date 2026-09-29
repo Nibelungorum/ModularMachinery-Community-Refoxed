@@ -12,7 +12,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -32,12 +32,12 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
  */
 @EventBusSubscriber
 public class THERMAL_SMELTING_FURNACE {
-    private static final Identifier THERMAL_SMELTING_FURNACE = id("thermal_smelting_furnace");
+    private static final ResourceLocation THERMAL_SMELTING_FURNACE = id("thermal_smelting_furnace");
 
-    public static final Identifier THERMAL_SMELTING_COIL_TYPE = id("thermal_smelting_coil");
-    public static final Identifier IRON_COIL = id("thermal_smelting_coil_iron");
-    public static final Identifier GOLD_COIL = id("thermal_smelting_coil_gold");
-    public static final Identifier DIAMOND_COIL = id("thermal_smelting_coil_diamond");
+    public static final ResourceLocation THERMAL_SMELTING_COIL_TYPE = id("thermal_smelting_coil");
+    public static final ResourceLocation IRON_COIL = id("thermal_smelting_coil_iron");
+    public static final ResourceLocation GOLD_COIL = id("thermal_smelting_coil_gold");
+    public static final ResourceLocation DIAMOND_COIL = id("thermal_smelting_coil_diamond");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(THERMAL_SMELTING_FURNACE)) {
@@ -45,7 +45,7 @@ public class THERMAL_SMELTING_FURNACE {
                     .machine(THERMAL_SMELTING_FURNACE)
                     .recipePool(THERMAL_SMELTING_FURNACE)
                     .displayNameKey("machine.mmcr.thermal_smelting_furnace")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:smooth_basalt")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:smooth_basalt")))
                     .allowModifiers()
                     .parallelizable(true)
                     .maxParallelism(4)
@@ -169,7 +169,7 @@ public class THERMAL_SMELTING_FURNACE {
         // some build register data, like enchantment, must use JSON
         JsonObject enchantments_data = new JsonObject();
         enchantments_data.addProperty("minecraft:sharpness", 4);
-        DataComponentPredicateSet data_extra = new DataComponentPredicateSet(Map.of(Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments_data)));
+        DataComponentPredicateSet data_extra = new DataComponentPredicateSet(Map.of(ResourceLocation.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments_data)));
 
         recipe = MachineRecipeBuilder
                 .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_3"))

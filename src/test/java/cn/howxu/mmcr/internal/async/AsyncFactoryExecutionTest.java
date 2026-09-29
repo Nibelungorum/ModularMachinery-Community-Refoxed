@@ -36,7 +36,7 @@ import cn.howxu.mmcr.test.ConfigTestSupport;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -330,8 +330,8 @@ class AsyncFactoryExecutionTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = factoryController(input, output);
-        Identifier levelType = MMCR.id("factory_pending_input_level_type");
-        Identifier requiredLevel = MMCR.id("factory_pending_input_level");
+        ResourceLocation levelType = MMCR.id("factory_pending_input_level_type");
+        ResourceLocation requiredLevel = MMCR.id("factory_pending_input_level");
         TestBootstrap.registerType(new LevelType(levelType, Component.literal("Factory Test Level")));
         TestBootstrap.registerLevel(new MachineLevel(requiredLevel, levelType, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,

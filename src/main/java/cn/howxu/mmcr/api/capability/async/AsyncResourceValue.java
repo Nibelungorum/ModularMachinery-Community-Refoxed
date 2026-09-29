@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.async;
 
 import java.util.Objects;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * A worker-safe resource value encoded by a capability adapter.
@@ -10,7 +10,7 @@ import net.minecraft.resources.Identifier;
  * @param data immutable canonical resource data
  * @author howxu <dev@howxu.cn>
  */
-public record AsyncResourceValue(Identifier resourceId, String data) {
+public record AsyncResourceValue(ResourceLocation resourceId, String data) {
     public AsyncResourceValue {
         Objects.requireNonNull(resourceId, "resourceId");
         Objects.requireNonNull(data, "data");

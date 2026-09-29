@@ -2,7 +2,7 @@ package cn.howxu.mmcr.client.gui;
 
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Resolves client-side recipe-pool display names.
@@ -13,7 +13,7 @@ public final class RecipePoolDisplayName {
     private RecipePoolDisplayName() {
     }
 
-    public static Component component(Identifier poolId) {
+    public static Component component(ResourceLocation poolId) {
         if (poolId == null) return Component.empty();
         String key = "recipe_pool." + poolId.getNamespace() + "." + poolId.getPath().replace('/', '.');
         return I18n.exists(key) ? Component.translatable(key) : Component.literal(poolId.toString());

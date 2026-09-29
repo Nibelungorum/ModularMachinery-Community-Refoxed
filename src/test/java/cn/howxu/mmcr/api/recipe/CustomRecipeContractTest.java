@@ -22,7 +22,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -104,8 +104,8 @@ class CustomRecipeContractTest {
         }
     }
 
-    private static final Identifier TEST_REQUIREMENT_ID = id("custom_contract_requirement");
-    private static final Identifier TEST_OUTPUT_ID = id("custom_contract_output");
+    private static final ResourceLocation TEST_REQUIREMENT_ID = id("custom_contract_requirement");
+    private static final ResourceLocation TEST_OUTPUT_ID = id("custom_contract_output");
     private static final MapCodec<TestRequirement> TEST_REQUIREMENT_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> TEST_REQUIREMENT_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(TestRequirement::io),
@@ -150,7 +150,7 @@ class CustomRecipeContractTest {
         }
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 }

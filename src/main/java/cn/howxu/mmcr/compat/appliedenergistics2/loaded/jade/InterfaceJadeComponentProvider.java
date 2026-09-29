@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jspecify.annotations.NonNull;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
@@ -20,7 +20,7 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
     INSTANCE;
 
     @Override
-    public @NonNull Identifier getUid() {
+    public @NonNull ResourceLocation getUid() {
         return InterfaceJadeDataProvider.UID;
     }
 

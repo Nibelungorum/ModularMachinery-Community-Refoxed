@@ -1,17 +1,17 @@
 package cn.howxu.mmcr.api.recipe;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class ComponentType {
 
-    private Identifier registryName;
+    private ResourceLocation registryName;
 
-    public Identifier getRegistryName() {
+    public ResourceLocation getRegistryName() {
         return registryName;
     }
 
-    public void setRegistryName(Identifier name) {
+    public void setRegistryName(ResourceLocation name) {
         this.registryName = name;
     }
 

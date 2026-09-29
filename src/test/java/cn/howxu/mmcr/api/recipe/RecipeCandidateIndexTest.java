@@ -44,7 +44,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -67,9 +67,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RecipeCandidateIndexTest {
 
-    private static final Identifier MACHINE = Identifier.fromNamespaceAndPath("test", "machine");
-    private static final Identifier LEVEL_TYPE = Identifier.fromNamespaceAndPath("test", "recipe_search_level_type");
-    private static final Identifier LEVEL = Identifier.fromNamespaceAndPath("test", "recipe_search_level");
+    private static final ResourceLocation MACHINE = ResourceLocation.fromNamespaceAndPath("test", "machine");
+    private static final ResourceLocation LEVEL_TYPE = ResourceLocation.fromNamespaceAndPath("test", "recipe_search_level_type");
+    private static final ResourceLocation LEVEL = ResourceLocation.fromNamespaceAndPath("test", "recipe_search_level");
     private RequirementHandlerRegistry.TestScope requirementScope;
 
     @BeforeAll
@@ -267,7 +267,7 @@ class RecipeCandidateIndexTest {
     void mixed_pool_recipes_cannot_share_a_candidate_index() {
         MachineRecipe firstPoolRecipe = itemRecipe("first_pool", Ingredient.of(Items.IRON_INGOT));
         MachineRecipe secondPoolRecipe = RecipeTestSupport.create(id("second_pool"),
-                Identifier.fromNamespaceAndPath("test", "other_pool"), 20,
+                ResourceLocation.fromNamespaceAndPath("test", "other_pool"), 20,
                 List.of(), List.of(), List.of(), 0, 1);
 
         assertThatThrownBy(() -> RecipeCandidateIndex.build(MACHINE, List.of(firstPoolRecipe, secondPoolRecipe)))
@@ -327,7 +327,7 @@ class RecipeCandidateIndexTest {
     @Test
     void search_task_does_not_select_a_candidate_from_another_recipe_pool() {
         MachineRecipe foreign = RecipeTestSupport.create(id("foreign_pool_search"),
-                Identifier.fromNamespaceAndPath("test", "other_pool"), 20,
+                ResourceLocation.fromNamespaceAndPath("test", "other_pool"), 20,
                 List.of(), List.of(), List.of(), 0, 1);
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
@@ -462,7 +462,7 @@ class RecipeCandidateIndexTest {
 
     @Test
     void search_failure_report_keeps_first_equal_priority_and_validity_candidate() {
-        Identifier requiredHost = id("required_host");
+        ResourceLocation requiredHost = id("required_host");
         MachineRecipe first = RecipeTestSupport.create(id("first_module_failure"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
                 List.of(), false, Set.of(requiredHost));
@@ -504,7 +504,7 @@ class RecipeCandidateIndexTest {
 
     private static Ingredient singleMemberTagIngredient() {
         MappedRegistry<Item> registry = new MappedRegistry<>(
-                ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath("mmcr_test", "tag_items")),
+                ResourceKey.createRegistryKey(ResourceLocation.fromNamespaceAndPath("mmcr_test", "tag_items")),
                 Lifecycle.stable(), true);
         Holder.Reference<Item> holder = registry.createIntrusiveHolder(Items.IRON_INGOT);
         registry.register(ResourceKey.create(registry.key(), id("tagged_item")), Items.IRON_INGOT, RegistrationInfo.BUILT_IN);
@@ -519,8 +519,8 @@ class RecipeCandidateIndexTest {
         return Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
     }
 
-    private static Identifier id(String path) {
-        return Identifier.fromNamespaceAndPath("test", path);
+    private static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath("test", path);
     }
 
     private static void bindComponents(Item... items) {

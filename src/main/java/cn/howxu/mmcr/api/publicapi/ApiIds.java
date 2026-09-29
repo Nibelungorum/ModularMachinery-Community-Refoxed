@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /** Public factory for MMCR-owned identifiers.
  *
@@ -11,7 +11,7 @@ public final class ApiIds {
     private ApiIds() {
     }
 
-    public static Identifier id(String path) {
+    public static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 }

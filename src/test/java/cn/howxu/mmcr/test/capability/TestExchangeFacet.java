@@ -15,7 +15,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
@@ -28,7 +28,7 @@ import java.util.Set;
  */
 public final class TestExchangeFacet implements MachineCapability, ExchangeFacet {
     private final LongValueStorage storage = new LongValueStorage(10L, 10L, null);
-    private final CapabilityType type = new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "exchange"));
+    private final CapabilityType type = new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "exchange"));
     private final CapabilityView view = new CapabilityView() {
         @Override
         public CapabilityType type() {
@@ -97,9 +97,9 @@ public final class TestExchangeFacet implements MachineCapability, ExchangeFacet
     }
 
     private static CapabilityResult failed(String reason) {
-        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "exchange");
+        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "exchange");
         return CapabilityResult.failure(ExecutionStatus.blocked(
-                Identifier.fromNamespaceAndPath("mmcr_test", reason), source,
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", reason), source,
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
                         null, null, Map.of())));
     }

@@ -14,7 +14,7 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -31,8 +31,8 @@ import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 @EventBusSubscriber
 public class DATA_STORAGE_MACHINE {
 
-    private static final Identifier DATA_STORAGE_MACHINE = id("data_storage_machine");
-    private static final Identifier FE_STATUS = id("fe_storage_status");
+    private static final ResourceLocation DATA_STORAGE_MACHINE = id("data_storage_machine");
+    private static final ResourceLocation FE_STATUS = id("fe_storage_status");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(DATA_STORAGE_MACHINE)) {
@@ -40,7 +40,7 @@ public class DATA_STORAGE_MACHINE {
                     .machine(DATA_STORAGE_MACHINE)
                     .recipePool(DATA_STORAGE_MACHINE)
                     .displayNameKey("machine.mmcr.data_storage_machine")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:crying_obsidian")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:crying_obsidian")))
                     .tickBehavior(behavior -> behavior.serverTick(context -> {
                         DataStorage storage = context.dataStorage();
                         if (storage == null) return;

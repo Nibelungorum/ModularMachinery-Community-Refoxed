@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.publicapi.event;
 
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 
 import java.util.Collections;
@@ -15,10 +15,10 @@ import java.util.function.UnaryOperator;
  * @author howxu <dev@howxu.cn>
  */
 public class MMCRMachineDefinationsEvent extends Event {
-    private final Map<Identifier, MachineDefinition> definitions = new LinkedHashMap<>();
+    private final Map<ResourceLocation, MachineDefinition> definitions = new LinkedHashMap<>();
     private boolean frozen;
 
-    public void registerMachine(Identifier id, UnaryOperator<MachineBuilder> consumer) {
+    public void registerMachine(ResourceLocation id, UnaryOperator<MachineBuilder> consumer) {
         if (frozen) throw new IllegalStateException("Machine definitions are frozen");
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(consumer, "consumer");
@@ -36,7 +36,7 @@ public class MMCRMachineDefinationsEvent extends Event {
         }
     }
 
-    public Map<Identifier, MachineDefinition> definitions() {
+    public Map<ResourceLocation, MachineDefinition> definitions() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(definitions));
     }
 

@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Startup-script builder for machine level types.
@@ -14,12 +14,12 @@ import net.minecraft.resources.Identifier;
 public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
     public transient String displayNameKey;
 
-    public LevelTypeBuilderJS(Identifier id) {
+    public LevelTypeBuilderJS(ResourceLocation id) {
         super(id);
     }
 
     public LevelTypeBuilderJS(String id) {
-        this(Identifier.parse(id));
+        this(ResourceLocation.parse(id));
     }
 
     public LevelTypeBuilderJS displayName(String displayName) {

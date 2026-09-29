@@ -16,7 +16,7 @@ import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,9 +57,9 @@ class DynamicModuleReloadValidationTest {
 
     @Test
     void invalid_candidate_role_coupler_or_module_reference_retains_previous_snapshot() {
-        Identifier oldId = MMCR.id("old_machine");
-        Identifier hostId = MMCR.id("host_machine");
-        Identifier moduleId = MMCR.id("module_machine");
+        ResourceLocation oldId = MMCR.id("old_machine");
+        ResourceLocation hostId = MMCR.id("host_machine");
+        ResourceLocation moduleId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(oldId).build());
         MachineDefinitions.register(MachineRegistration.builder(hostId).host(moduleId).build());
         MachineDefinitions.register(MachineRegistration.builder(moduleId).module().build());
@@ -91,9 +91,9 @@ class DynamicModuleReloadValidationTest {
 
     @Test
     void orphan_recipe_does_not_prevent_replacement_structure_from_committing() {
-        Identifier oldMachineId = MMCR.id("old_machine");
-        Identifier replacementMachineId = MMCR.id("replacement_machine");
-        Identifier oldRecipeId = MMCR.id("old_recipe");
+        ResourceLocation oldMachineId = MMCR.id("old_machine");
+        ResourceLocation replacementMachineId = MMCR.id("replacement_machine");
+        ResourceLocation oldRecipeId = MMCR.id("old_recipe");
         MachineDefinitions.register(MachineRegistration.builder(oldMachineId).build());
         MachineDefinitions.register(MachineRegistration.builder(replacementMachineId).build());
         MachineRecipe oldRecipe = recipe(oldRecipeId, oldMachineId);
@@ -116,9 +116,9 @@ class DynamicModuleReloadValidationTest {
 
     @Test
     void orphan_recipe_does_not_prevent_valid_structure_in_same_transaction() {
-        Identifier oldMachineId = MMCR.id("old_machine");
-        Identifier replacementMachineId = MMCR.id("replacement_machine");
-        Identifier oldRecipeId = MMCR.id("old_recipe");
+        ResourceLocation oldMachineId = MMCR.id("old_machine");
+        ResourceLocation replacementMachineId = MMCR.id("replacement_machine");
+        ResourceLocation oldRecipeId = MMCR.id("old_recipe");
         MachineDefinitions.register(MachineRegistration.builder(oldMachineId).build());
         MachineDefinitions.register(MachineRegistration.builder(replacementMachineId).build());
         MachineRecipe oldRecipe = recipe(oldRecipeId, oldMachineId);
@@ -140,9 +140,9 @@ class DynamicModuleReloadValidationTest {
 
     @Test
     void candidate_recipe_map_key_must_match_recipe_id_before_commit() {
-        Identifier machineId = MMCR.id("key_machine");
-        Identifier oldRecipeId = MMCR.id("old_recipe");
-        Identifier mismatchedKey = MMCR.id("mismatched_key");
+        ResourceLocation machineId = MMCR.id("key_machine");
+        ResourceLocation oldRecipeId = MMCR.id("old_recipe");
+        ResourceLocation mismatchedKey = MMCR.id("mismatched_key");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         DynamicContentReloadService.reload(candidate -> {
             candidate.registerStructure(structure(machineId, 0));
@@ -158,7 +158,7 @@ class DynamicModuleReloadValidationTest {
         assertThat(RecipeRegistry.dynamicSnapshot()).containsOnlyKeys(oldRecipeId);
     }
 
-    private static MachineStructureDefinition structure(Identifier id, int couplers) {
+    private static MachineStructureDefinition structure(ResourceLocation id, int couplers) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         for (int index = 0; index < couplers; index++) {
             pattern.put(new BlockPos(index, 0, 0), BlockPredicate.machineCoupler());
@@ -167,7 +167,7 @@ class DynamicModuleReloadValidationTest {
                 MachineStructureRequirements.EMPTY);
     }
 
-    private static MachineRecipe recipe(Identifier id, Identifier machineId) {
+    private static MachineRecipe recipe(ResourceLocation id, ResourceLocation machineId) {
         return RecipeTestSupport.create(id, machineId, 1, List.of(), List.of());
     }
 }

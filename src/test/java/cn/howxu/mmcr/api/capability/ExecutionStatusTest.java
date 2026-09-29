@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -21,11 +21,11 @@ class ExecutionStatusTest {
 
     @Test
     void status_preserves_identity_severity_source_and_an_immutable_details_snapshot() {
-        Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "blocked");
-        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "machine");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("mmcr_test", "blocked");
+        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "machine");
         Map<String, String> details = new HashMap<>();
         details.put("available", "0");
-        FailureReason reason = new FailureReason(Identifier.fromNamespaceAndPath("mmcr_test", "busy"),
+        FailureReason reason = new FailureReason(ResourceLocation.fromNamespaceAndPath("mmcr_test", "busy"),
                 "gui.mmcr.failure.busy", 10);
         FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
                 null, 1, details);

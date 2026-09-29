@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonObject;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -27,12 +27,12 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
  */
 @EventBusSubscriber
 public class SPACE {
-    private static final Identifier SPACE_ELEVATOR = id("space_elevator");
-    private static final Identifier SPACE_REASSEMBLER = id("space_reassembler");
-    private static final Identifier SPACE_MINER = id("space_miner");
-    private static final Identifier SPACE_POOL_1 = id("space_1");
-    private static final Identifier SPACE_POOL_2 = id("space_2");
-    private static final Identifier SPACE_POOL_3 = id("space_3");
+    private static final ResourceLocation SPACE_ELEVATOR = id("space_elevator");
+    private static final ResourceLocation SPACE_REASSEMBLER = id("space_reassembler");
+    private static final ResourceLocation SPACE_MINER = id("space_miner");
+    private static final ResourceLocation SPACE_POOL_1 = id("space_1");
+    private static final ResourceLocation SPACE_POOL_2 = id("space_2");
+    private static final ResourceLocation SPACE_POOL_3 = id("space_3");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(SPACE_ELEVATOR) && !event.definitions().containsKey(SPACE_REASSEMBLER)) {
@@ -42,8 +42,8 @@ public class SPACE {
                     .displayNameKey("machine.mmcr.space_elevator")
                     .appearance(a -> a
                             .machineBasicBlock("smooth_quartz")
-                            .controllerBaseTexture(Identifier.parse("block/quartz_block_bottom"))
-                            .formedPortBaseTexture(Identifier.parse("block/quartz_block_bottom"))
+                            .controllerBaseTexture(ResourceLocation.parse("block/quartz_block_bottom"))
+                            .formedPortBaseTexture(ResourceLocation.parse("block/quartz_block_bottom"))
                     )
                     .role(MachineRole.HOST)
                     .acceptedModule(SPACE_REASSEMBLER)
@@ -134,7 +134,7 @@ public class SPACE {
         contents.addProperty("potion", potionId);
 
         return new DataComponentPredicateSet(Map.of(
-                Identifier.parse("minecraft:potion_contents"),
+                ResourceLocation.parse("minecraft:potion_contents"),
                 ComponentPredicate.exact(contents)));
     }
 

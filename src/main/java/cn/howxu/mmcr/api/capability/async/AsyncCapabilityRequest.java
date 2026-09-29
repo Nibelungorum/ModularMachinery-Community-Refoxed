@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.capability.async;
 
 import java.util.List;
 import java.util.Objects;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * A worker-safe capability request for asynchronous planning.
@@ -11,7 +11,7 @@ import net.minecraft.resources.Identifier;
  */
 public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Resource, AsyncCapabilityRequest.Scalar,
         AsyncCapabilityRequest.Heat {
-    Identifier capabilityId();
+    ResourceLocation capabilityId();
 
     long parallelism();
 
@@ -22,7 +22,7 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
      * @param parallelism requested parallelism
      * @param actions requested resource actions
      */
-    record Resource(Identifier capabilityId, long parallelism, List<AsyncResourceAction> actions)
+    record Resource(ResourceLocation capabilityId, long parallelism, List<AsyncResourceAction> actions)
             implements AsyncCapabilityRequest {
         public Resource {
             Objects.requireNonNull(capabilityId, "capabilityId");
@@ -40,7 +40,7 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
      * @param amount requested scalar amount
      * @param insert whether the scalar is inserted rather than extracted
      */
-    record Scalar(Identifier capabilityId, long parallelism, long amount, boolean insert) implements AsyncCapabilityRequest {
+    record Scalar(ResourceLocation capabilityId, long parallelism, long amount, boolean insert) implements AsyncCapabilityRequest {
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (parallelism <= 0L || amount <= 0L) {
@@ -50,7 +50,7 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
     }
 
     /** A minimum-temperature check or output-heat request. */
-    record Heat(Identifier capabilityId, long parallelism, double value, boolean minimumTemperature,
+    record Heat(ResourceLocation capabilityId, long parallelism, double value, boolean minimumTemperature,
                 long accountingAmount) implements AsyncCapabilityRequest {
         public Heat {
             Objects.requireNonNull(capabilityId, "capabilityId");

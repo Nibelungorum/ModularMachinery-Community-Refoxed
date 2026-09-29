@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.publicapi.jei;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
@@ -12,14 +12,14 @@ import java.util.Objects;
  */
 public sealed interface JeiWorkstationRegistration {
 
-    record RecipePoolItem(Identifier recipePoolId, Identifier itemId) implements JeiWorkstationRegistration {
+    record RecipePoolItem(ResourceLocation recipePoolId, ResourceLocation itemId) implements JeiWorkstationRegistration {
         public RecipePoolItem {
             Objects.requireNonNull(recipePoolId, "recipePoolId");
             Objects.requireNonNull(itemId, "itemId");
         }
     }
 
-    record RecipePoolStack(Identifier recipePoolId, ItemStack workstation) implements JeiWorkstationRegistration {
+    record RecipePoolStack(ResourceLocation recipePoolId, ItemStack workstation) implements JeiWorkstationRegistration {
         public RecipePoolStack {
             Objects.requireNonNull(recipePoolId, "recipePoolId");
             Objects.requireNonNull(workstation, "workstation");
@@ -33,7 +33,7 @@ public sealed interface JeiWorkstationRegistration {
         }
     }
 
-    record Machine(Identifier machineId, Identifier recipeTypeId) implements JeiWorkstationRegistration {
+    record Machine(ResourceLocation machineId, ResourceLocation recipeTypeId) implements JeiWorkstationRegistration {
         public Machine {
             Objects.requireNonNull(machineId, "machineId");
             Objects.requireNonNull(recipeTypeId, "recipeTypeId");

@@ -8,7 +8,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -200,7 +200,7 @@ public final class InterfacePredicates {
         return BlockPredicate.anyOf(predicates);
     }
 
-    public static BlockPredicate anyOfPort(Identifier... ids) {
+    public static BlockPredicate anyOfPort(ResourceLocation... ids) {
         if (ids == null || ids.length == 0) throw new IllegalArgumentException("At least one port is required");
         String[] paths = new String[ids.length];
         for (int i = 0; i < ids.length; i++) paths[i] = ids[i].toString();
@@ -218,7 +218,7 @@ public final class InterfacePredicates {
         return BlockPredicate.deferredBlock(BuiltinRegistration.block(id));
     }
 
-    public static BlockPredicate port(Identifier id) {
+    public static BlockPredicate port(ResourceLocation id) {
         return BlockPredicate.deferredBlock(BuiltinRegistration.block(id));
     }
 
@@ -242,7 +242,7 @@ public final class InterfacePredicates {
 
     public static BlockPredicate networkInterface(){return port("network_interface");}
 
-    private static BlockPredicate anyOfPorts(Identifier familyId, IOType ioType) {
+    private static BlockPredicate anyOfPorts(ResourceLocation familyId, IOType ioType) {
         if (isUnavailableMekanismFamily(familyId)) return BlockPredicate.none();
         List<BlockPredicate> predicates = new ArrayList<>();
         for (IOPortKind kind : PortKinds.all()) {
@@ -276,7 +276,7 @@ public final class InterfacePredicates {
         return alternatives.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(alternatives);
     }
 
-    private static boolean isUnavailableMekanismFamily(Identifier familyId) {
+    private static boolean isUnavailableMekanismFamily(ResourceLocation familyId) {
         return (familyId.equals(MekanismPortFamilies.HEAT)
                 || familyId.equals(MekanismPortFamilies.CHEMICAL)
                 || familyId.equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL))

@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Client-owned lazy compilation cache for JEI structure previews.
@@ -42,7 +42,7 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
         return entries.computeIfAbsent(new CacheKey(machine.registryName(), contentVersion, stageNumber),
                 ignored -> create(machine, stageNumber));
     }
-    public boolean has(Identifier machineId) {
+    public boolean has(ResourceLocation machineId) {
         long currentVersion = RuntimeContentClientApplier.appliedContentVersion();
         return entries.keySet().stream().anyMatch(key -> key.machineId().equals(machineId)
                 && key.contentVersion() == currentVersion);
@@ -73,6 +73,6 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
         return reference[0];
     }
 
-    private record CacheKey(Identifier machineId, long contentVersion, int stageNumber) {
+    private record CacheKey(ResourceLocation machineId, long contentVersion, int stageNumber) {
     }
 }

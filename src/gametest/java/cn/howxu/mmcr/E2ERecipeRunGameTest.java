@@ -22,7 +22,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -60,7 +60,7 @@ public class E2ERecipeRunGameTest {
         var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
-        Identifier machineId = MMCR.id("iron_compressor");
+        ResourceLocation machineId = MMCR.id("iron_compressor");
         var machine = MachineRegistry.getMachine(machineId);
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(
                 MMCR.id("iron_compressor_recipe"), machineId, 40,
@@ -108,7 +108,7 @@ public class E2ERecipeRunGameTest {
         pattern.put(outputPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()));
         pattern.put(energyPos.subtract(controllerPos), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("energy_input_hatch").get()));
 
-        Identifier machineId = MMCR.id("wide_compressor");
+        ResourceLocation machineId = MMCR.id("wide_compressor");
         var machine = new DynamicMachine(machineId, "Wide Compressor", new BlockArray(pattern));
         MachineRegistry.register(machine);
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(
@@ -134,7 +134,7 @@ public class E2ERecipeRunGameTest {
     }
 
     public void distillationTowerUnlocksPartialFluidOutputsByStage(GameTestHelper helper) {
-        Identifier machineId = MMCR.id("distillation_tower_test");
+        ResourceLocation machineId = MMCR.id("distillation_tower_test");
         var machine = MachineRegistry.getMachine(machineId);
         BlockPos controllerPos = new BlockPos(3, 2, 3);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()

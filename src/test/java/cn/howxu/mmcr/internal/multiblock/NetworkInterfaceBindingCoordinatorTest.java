@@ -20,7 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
@@ -230,7 +230,7 @@ class NetworkInterfaceBindingCoordinatorTest {
     }
 
     private static GlobalPos global(String dimension, BlockPos pos) {
-        return GlobalPos.of(ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension)), pos);
+        return GlobalPos.of(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimension)), pos);
     }
 
     private static NetworkInterfaceBindingCoordinator.ConnectionResult connect(Fixture fixture) {
@@ -303,9 +303,9 @@ class NetworkInterfaceBindingCoordinatorTest {
                 Direction.SOUTH, Direction.NORTH, 1);
     }
 
-    private static Machine machine(Identifier id, int maxConnections, Set<Identifier> allowedMachines) {
+    private static Machine machine(ResourceLocation id, int maxConnections, Set<ResourceLocation> allowedMachines) {
         return new Machine() {
-            @Override public Identifier registryName() { return id; }
+            @Override public ResourceLocation registryName() { return id; }
             @Override public BlockArray pattern() { return new BlockArray(Map.of()); }
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public NetworkInterfaceSpec networkInterface() {

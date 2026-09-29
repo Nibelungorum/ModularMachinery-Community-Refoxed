@@ -56,7 +56,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -175,8 +175,8 @@ class FactoryRuntimeTest {
 
     @Test
     void searchContextUsesTheConfiguredMachineRecipePoolCatalog() {
-        Identifier machineId = MMCR.id("factory_shared_pool_machine");
-        Identifier recipePoolId = MMCR.id("factory_shared_pool");
+        ResourceLocation machineId = MMCR.id("factory_shared_pool_machine");
+        ResourceLocation recipePoolId = MMCR.id("factory_shared_pool");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
         MachineControllerBlockEntity controller = factoryController(machineId.getPath());
@@ -239,7 +239,7 @@ class FactoryRuntimeTest {
     @Test
     void stage_one_controller_rejects_a_stage_two_recipe_before_starting() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = stagedController(1);
         FactoryRuntime runtime = new FactoryRuntime();
         MachineRecipe recipe = stageRecipe("factory_stage_one_rejected", machineId);
@@ -256,7 +256,7 @@ class FactoryRuntimeTest {
     @Test
     void stage_two_controller_starts_a_stage_two_recipe() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = stagedController(2);
         FactoryRuntime runtime = new FactoryRuntime();
         MachineRecipe recipe = stageRecipe("factory_stage_two_started", machineId);
@@ -788,7 +788,7 @@ class FactoryRuntimeTest {
 
     @Test
     void failed_lane_retries_a_same_id_recipe_from_the_new_catalog_on_the_next_tick() {
-        Identifier recipeId = MMCR.id("factory_reload_failed_lane");
+        ResourceLocation recipeId = MMCR.id("factory_reload_failed_lane");
         MachineRecipe oldRecipe = itemInputRecipe(recipeId.getPath(), Items.IRON_INGOT);
         MachineRecipe newRecipe = recipe(recipeId.getPath(), 20);
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
@@ -813,7 +813,7 @@ class FactoryRuntimeTest {
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         assertThat(domain).isNotNull();
 
-        Identifier recipeId = MMCR.id("factory_reload_pending_recipe");
+        ResourceLocation recipeId = MMCR.id("factory_reload_pending_recipe");
         MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
         MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 40,
                 List.of(), List.of());
@@ -833,7 +833,7 @@ class FactoryRuntimeTest {
 
     @Test
     void catalog_change_before_shared_tick_commit_stops_the_old_recipe_without_advancing_it() {
-        Identifier recipeId = MMCR.id("factory_reload_pending_tick_recipe");
+        ResourceLocation recipeId = MMCR.id("factory_reload_pending_tick_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
@@ -865,7 +865,7 @@ class FactoryRuntimeTest {
 
     @Test
     void catalog_change_after_shared_tick_commit_invalidates_before_async_continuation() {
-        Identifier recipeId = MMCR.id("factory_reload_async_tick_recipe");
+        ResourceLocation recipeId = MMCR.id("factory_reload_async_tick_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
@@ -897,8 +897,8 @@ class FactoryRuntimeTest {
     @Test
     void loading_a_last_recipe_does_not_use_the_global_registry_fallback() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        Identifier recipeId = MMCR.id("factory_foreign_last_recipe");
-        Identifier foreignPool = MMCR.id("factory_foreign_last_pool");
+        ResourceLocation recipeId = MMCR.id("factory_foreign_last_recipe");
+        ResourceLocation foreignPool = MMCR.id("factory_foreign_last_pool");
         RuntimeTestFixtures.registerRecipePool(foreignPool);
         MachineRecipe foreign = RecipeTestSupport.create(recipeId, foreignPool, 20, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
@@ -923,7 +923,7 @@ class FactoryRuntimeTest {
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
                 controller.runtimeSnapshot().structure().version())).isTrue();
         thread.runtime().invalidate();
-        Identifier foreignMachineId = MMCR.id("factory_foreign_pool_machine");
+        ResourceLocation foreignMachineId = MMCR.id("factory_foreign_pool_machine");
         RuntimeTestFixtures.registerRecipePool(foreignMachineId);
         controller.setMachine(new DynamicMachine(foreignMachineId, "foreign pool machine", new BlockArray(Map.of())));
 
@@ -963,8 +963,8 @@ class FactoryRuntimeTest {
 
     @Test
     void async_catalog_invalidation_stops_the_old_recipe_before_retrying_the_current_catalog() {
-        Identifier machineId = MMCR.id("test_cube");
-        Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
+        ResourceLocation machineId = MMCR.id("test_cube");
+        ResourceLocation recipeId = MMCR.id("factory_reload_completion_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
@@ -1064,9 +1064,9 @@ class FactoryRuntimeTest {
     @Test
     void shared_finish_release_wakes_output_capacity_lane_on_the_next_tick() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
-        Identifier machineId = MMCR.id("test_cube");
-        Identifier activeId = MMCR.id("shared_finish_release_active");
-        Identifier blockedId = MMCR.id("shared_finish_release_blocked");
+        ResourceLocation machineId = MMCR.id("test_cube");
+        ResourceLocation activeId = MMCR.id("shared_finish_release_active");
+        ResourceLocation blockedId = MMCR.id("shared_finish_release_blocked");
         MachineRecipe active = RecipeTestSupport.create(activeId, machineId, 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
         MachineRecipe blocked = RecipeTestSupport.create(blockedId, machineId, 20,
@@ -1607,7 +1607,7 @@ class FactoryRuntimeTest {
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
         MachineRecipe candidate = recipe("factory_context_pending_recipe", 20);
-        Identifier machineId = controller.structureSnapshot().machine().registryName();
+        ResourceLocation machineId = controller.structureSnapshot().machine().registryName();
         RecipeRegistry.replaceDynamic(Map.of(candidate.id(), candidate));
         ControllerRuntimeSnapshot live = controller.runtimeSnapshot();
         ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, live.stateVersion() + 1L);
@@ -1706,7 +1706,7 @@ class FactoryRuntimeTest {
     }
 
     private static MachineControllerBlockEntity factoryController(String path) {
-        Identifier machineId = MMCR.id(path);
+        ResourceLocation machineId = MMCR.id(path);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -1740,7 +1740,7 @@ class FactoryRuntimeTest {
     }
 
     private static MachineControllerBlockEntity asyncFactoryController(ItemInputBusBlockEntity input) {
-        Identifier machineId = MMCR.id("test_cube");
+        ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -1760,8 +1760,8 @@ class FactoryRuntimeTest {
         return controller;
     }
 
-    private static MachineControllerBlockEntity sharedFactoryController(Identifier machineId,
-                                                                         Identifier coreRecipeId,
+    private static MachineControllerBlockEntity sharedFactoryController(ResourceLocation machineId,
+                                                                         ResourceLocation coreRecipeId,
                                                                          IOPortBlockEntity output) {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
@@ -1881,7 +1881,7 @@ class FactoryRuntimeTest {
                  ItemStack.EMPTY)));
     }
 
-    private static MachineRecipe stageRecipe(String path, Identifier machineId) {
+    private static MachineRecipe stageRecipe(String path, ResourceLocation machineId) {
         return RecipeTestSupport.create(MMCR.id(path), machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(2)));

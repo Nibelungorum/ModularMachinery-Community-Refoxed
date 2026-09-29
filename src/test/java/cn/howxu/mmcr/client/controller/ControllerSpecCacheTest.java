@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.client.controller;
 
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +20,7 @@ class ControllerSpecCacheTest {
 
     @Test
     void replacementIsAtomicAndMissingIdsUseDefaults() {
-        Identifier id = Identifier.parse("mmcr:dynamic");
+        ResourceLocation id = ResourceLocation.parse("mmcr:dynamic");
         MachineControllerSpec spec = testSpec(id);
 
         assertThat(ControllerSpecCache.replaceSnapshot(Map.of(id, spec))).isTrue();
@@ -33,7 +33,7 @@ class ControllerSpecCacheTest {
 
     @Test
     void listenersRunOnlyAfterSuccessfulReplacement() {
-        Identifier id = Identifier.parse("mmcr:listener");
+        ResourceLocation id = ResourceLocation.parse("mmcr:listener");
         AtomicInteger invocations = new AtomicInteger();
         ControllerSpecCache.addInvalidationListener(invocations::incrementAndGet);
 
@@ -45,7 +45,7 @@ class ControllerSpecCacheTest {
 
     @Test
     void synchronized_replacement_uses_content_version() {
-        Identifier id = Identifier.parse("mmcr:versioned_controller");
+        ResourceLocation id = ResourceLocation.parse("mmcr:versioned_controller");
 
         assertThat(ControllerSpecCache.replaceSnapshot(Map.of(id, testSpec(id)), 42L)).isTrue();
         assertThat(ControllerSpecCache.revision()).isEqualTo(42L);
@@ -53,26 +53,26 @@ class ControllerSpecCacheTest {
 
     @Test
     void modelKeyChangesWhenAcceptedSnapshotChanges() {
-        Identifier id = Identifier.parse("mmcr:model");
+        ResourceLocation id = ResourceLocation.parse("mmcr:model");
         ControllerModelCache.clear();
         ControllerSpecCache.replaceSnapshot(Map.of(id, testSpec(id)));
         var first = ControllerModelCache.modelFor(id);
 
         ControllerSpecCache.replaceSnapshot(Map.of(id, new MachineControllerSpec(
-                testSpec(id).id(), Identifier.parse("mmcr:block/changed"), testSpec(id).sideTexture(),
+                testSpec(id).id(), ResourceLocation.parse("mmcr:block/changed"), testSpec(id).sideTexture(),
                 testSpec(id).topTexture(), testSpec(id).bottomTexture(), false)));
 
         assertThat(ControllerModelCache.modelFor(id)).isNotSameAs(first);
         assertThat(ControllerModelCache.size()).isEqualTo(1);
     }
 
-    private static MachineControllerSpec testSpec(Identifier machineId) {
+    private static MachineControllerSpec testSpec(ResourceLocation machineId) {
         return new MachineControllerSpec(
-                Identifier.fromNamespaceAndPath(machineId.getNamespace(), machineId.getPath() + "_controller"),
-                Identifier.parse("mmcr:block/front"),
-                Identifier.parse("mmcr:block/side"),
-                Identifier.parse("mmcr:block/top"),
-                Identifier.parse("mmcr:block/bottom"),
+                ResourceLocation.fromNamespaceAndPath(machineId.getNamespace(), machineId.getPath() + "_controller"),
+                ResourceLocation.parse("mmcr:block/front"),
+                ResourceLocation.parse("mmcr:block/side"),
+                ResourceLocation.parse("mmcr:block/top"),
+                ResourceLocation.parse("mmcr:block/bottom"),
                 false);
     }
 }

@@ -5,7 +5,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import net.minecraft.client.StringSplitter;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ class ControllerScreenTextComposerTest {
     void merge_keeps_standard_lines_before_external_lines_and_uses_default_color() {
         ControllerTextLine standard = new ControllerTextLine(Component.literal("standard"), 0xFF123456);
         ControllerScreenTextSnapshot.Line external = new ControllerScreenTextSnapshot.Line(
-                ControllerScreenTextScope.CONTROLLER, Identifier.parse("test:external"), Component.literal("external"));
+                ControllerScreenTextScope.CONTROLLER, ResourceLocation.parse("test:external"), Component.literal("external"));
 
         List<ControllerTextLine> lines = ControllerScreenTextComposer.merge(List.of(standard), List.of(external));
 

@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import com.google.gson.JsonObject;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -26,8 +26,8 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineRecipeBuilder {
-    private final Identifier id;
-    private Identifier recipePoolId;
+    private final ResourceLocation id;
+    private ResourceLocation recipePoolId;
     private int tickTime = 1;
     private int priority;
     private int maxThreads = 1;
@@ -36,19 +36,19 @@ public final class MachineRecipeBuilder {
     private boolean allowPartialOutputs;
     private final List<RecipeRequirement> requirements = new ArrayList<>();
     private final List<CustomRecipeIo> customOutputs = new ArrayList<>();
-    private final List<Identifier> modifierIds = new ArrayList<>();
+    private final List<ResourceLocation> modifierIds = new ArrayList<>();
     private final List<RequiredHost> requiredHosts = new ArrayList<>();
 
-    private MachineRecipeBuilder(Identifier id) {
+    private MachineRecipeBuilder(ResourceLocation id) {
         this.id = id;
     }
 
-    public static MachineRecipeBuilder recipe(Identifier id) {
+    public static MachineRecipeBuilder recipe(ResourceLocation id) {
         if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
         return new MachineRecipeBuilder(id);
     }
 
-    public MachineRecipeBuilder recipePool(Identifier recipePoolId) {
+    public MachineRecipeBuilder recipePool(ResourceLocation recipePoolId) {
         this.recipePoolId = recipePoolId;
         return this;
     }
@@ -76,23 +76,23 @@ public final class MachineRecipeBuilder {
         return requirement(FluidRequirement.input(new FluidInput(FluidIngredient.of(fluid), amount, consumeChance)));
     }
     public MachineRecipeBuilder outputFluid(Fluid fluid, int amount) { return requirement(FluidRequirement.output(new FluidOutput(fluid, amount))); }
-    public MachineRecipeBuilder inputChemical(Identifier id, long amount) {
+    public MachineRecipeBuilder inputChemical(ResourceLocation id, long amount) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
                 chemicalInputPayload(ChemicalIngredient.chemical(id, amount))));
     }
-    public MachineRecipeBuilder inputChemical(Identifier id, long amount, float consumeChance) {
+    public MachineRecipeBuilder inputChemical(ResourceLocation id, long amount, float consumeChance) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
                 chemicalInputPayload(ChemicalIngredient.chemical(id, amount), consumeChance)));
     }
-    public MachineRecipeBuilder inputChemicalTag(Identifier id, long amount) {
+    public MachineRecipeBuilder inputChemicalTag(ResourceLocation id, long amount) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
                 chemicalInputPayload(ChemicalIngredient.tag(id, amount))));
     }
-    public MachineRecipeBuilder inputChemicalTag(Identifier id, long amount, float consumeChance) {
+    public MachineRecipeBuilder inputChemicalTag(ResourceLocation id, long amount, float consumeChance) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
                 chemicalInputPayload(ChemicalIngredient.tag(id, amount), consumeChance)));
     }
-    public MachineRecipeBuilder outputChemical(Identifier id, long amount, float chance) {
+    public MachineRecipeBuilder outputChemical(ResourceLocation id, long amount, float chance) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
                 chemicalOutputPayload(ChemicalOutput.of(id, amount, chance))));
     }
@@ -129,9 +129,9 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder outputItem(ItemStack stack, DataComponentPredicateSet components) { return requirement(ItemRequirement.output(new ItemOutput(stack, components))); }
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance) { return requirement(ItemRequirement.output(new ItemOutput(stack, chance))); }
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance, DataComponentPredicateSet components) { return requirement(ItemRequirement.output(new ItemOutput(stack, chance, components))); }
-    public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { return requirement(new LevelRequirement(typeId, levelId)); }
+    public MachineRecipeBuilder levelRequirement(ResourceLocation typeId, ResourceLocation levelId) { return requirement(new LevelRequirement(typeId, levelId)); }
     public MachineRecipeBuilder stageRequirement(int minStage) { return requirement(new StageRequirement(minStage)); }
-    public MachineRecipeBuilder requiredHost(Identifier hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
+    public MachineRecipeBuilder requiredHost(ResourceLocation hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
     public MachineRecipeBuilder requirement(RecipeRequirement requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
     public MachineRecipeBuilder custom(CustomRecipeIo io) {
         CustomRecipeIo validated = RecipeRequirement.custom(io.typeId(), io.ioType(), io.payload());
@@ -145,7 +145,7 @@ public final class MachineRecipeBuilder {
         if (requirement == null) throw new IllegalArgumentException("smart interface requirement null");
         return requirement(requirement);
     }
-    public MachineRecipeBuilder modifier(Identifier modifierId) { if (modifierId == null) throw new IllegalArgumentException("modifier id null"); modifierIds.add(modifierId); return this; }
+    public MachineRecipeBuilder modifier(ResourceLocation modifierId) { if (modifierId == null) throw new IllegalArgumentException("modifier id null"); modifierIds.add(modifierId); return this; }
 
     public MachineRecipeDefinition build() {
         if (recipePoolId == null) {
@@ -262,7 +262,7 @@ public final class MachineRecipeBuilder {
      * @return immutable JSON payload for {@code RecipeApi.custom}
      * @author howxu <dev@howxu.cn>
      */
-    public static JsonObject heatPayload(HeatRequirement requirement, Identifier typeId, RecipeIo io) {
+    public static JsonObject heatPayload(HeatRequirement requirement, ResourceLocation typeId, RecipeIo io) {
         if (requirement == null) throw new IllegalArgumentException("requirement must not be null");
         if (typeId == null) throw new IllegalArgumentException("typeId must not be null");
         if (io == null) throw new IllegalArgumentException("io must not be null");

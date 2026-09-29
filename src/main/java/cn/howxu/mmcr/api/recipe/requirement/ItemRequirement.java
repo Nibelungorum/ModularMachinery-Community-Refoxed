@@ -8,7 +8,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.serialization.DynamicOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import org.jetbrains.annotations.Nullable;
@@ -21,7 +21,7 @@ import java.util.Optional;
  */
 public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, float chance, List<String> tags,
                               DataComponentPredicateSet components, float consumeChance) implements MachineRequirement {
-    private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "item");
+    private static final ResourceLocation TYPE_ID = ResourceLocation.fromNamespaceAndPath("minecraft", "item");
     public static final MapCodec<ItemRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

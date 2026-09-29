@@ -5,7 +5,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -15,10 +15,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ModuleRecipeHostRequirementTest {
-    private static final Identifier MODULE_ID = MMCR.id("module_recipe_host_module");
-    private static final Identifier HOST_A = MMCR.id("module_recipe_host_a");
-    private static final Identifier HOST_B = MMCR.id("module_recipe_host_b");
-    private static final Identifier HOST_C = MMCR.id("module_recipe_host_c");
+    private static final ResourceLocation MODULE_ID = MMCR.id("module_recipe_host_module");
+    private static final ResourceLocation HOST_A = MMCR.id("module_recipe_host_a");
+    private static final ResourceLocation HOST_B = MMCR.id("module_recipe_host_b");
+    private static final ResourceLocation HOST_C = MMCR.id("module_recipe_host_c");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -62,7 +62,7 @@ class ModuleRecipeHostRequirementTest {
         assertThat(decoded.requiredHostIds()).containsExactlyInAnyOrder(HOST_A, HOST_B);
     }
 
-    private static MachineRecipe recipe(String path, Set<Identifier> requiredHostIds) {
+    private static MachineRecipe recipe(String path, Set<ResourceLocation> requiredHostIds) {
         return RecipeTestSupport.create(MMCR.id(path), MODULE_ID, 20, List.of(), List.of(), List.of(), 0, 1,
                 false, List.of(), List.of(), false, List.of(), requiredHostIds);
     }

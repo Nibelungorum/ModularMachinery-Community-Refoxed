@@ -8,7 +8,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -83,7 +83,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
 
     public List<FluidStorageEntry> entries() { return entries; }
 
-    public Identifier selectedCapabilityId() { return BuiltinCapabilityDefinitions.FLUID_TYPE.id(); }
+    public ResourceLocation selectedCapabilityId() { return BuiltinCapabilityDefinitions.FLUID_TYPE.id(); }
 
     public boolean matches(BlockPos targetPos, String targetKind) {
         return pos.equals(targetPos) && kind.equals(targetKind);

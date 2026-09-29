@@ -12,7 +12,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.PackOutput;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagEntry;
 import net.minecraft.tags.TagKey;
 import net.neoforged.neoforge.common.data.BlockTagsProvider;
@@ -51,7 +51,7 @@ public final class ModBlockTags extends BlockTagsProvider {
 
     private void addPortTags(IOPortKind kind) {
         PortTagSet tags = PortTagSet.forKind(kind);
-        for (Identifier tagId : tags.tags()) {
+        for (ResourceLocation tagId : tags.tags()) {
             if (tags.optionalEntries()) {
                 tag(TagKey.create(Registries.BLOCK, tagId)).add(TagEntry.optionalElement(MMCR.id(kind.id())));
             } else {

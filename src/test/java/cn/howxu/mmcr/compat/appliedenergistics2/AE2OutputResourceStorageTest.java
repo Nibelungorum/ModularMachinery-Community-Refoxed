@@ -29,7 +29,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Blocks;
@@ -704,7 +704,7 @@ class AE2OutputResourceStorageTest {
     }
 
     private static void bindTestAE2InterfaceItem() {
-        Identifier id = Identifier.fromNamespaceAndPath("ae2", "interface");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("ae2", "interface");
         MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
         registry.unfreeze(true);
         try {
@@ -719,7 +719,7 @@ class AE2OutputResourceStorageTest {
 
     @SuppressWarnings("unchecked")
     private static void bindTestEntityType(IOPortKind kind) {
-        Identifier id = MMCR.id(kind.id());
+        ResourceLocation id = MMCR.id(kind.id());
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {

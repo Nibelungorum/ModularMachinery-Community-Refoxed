@@ -14,7 +14,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import java.util.ArrayList;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -35,9 +35,9 @@ import static org.nibelungorum.builtin.NETWORK_PRODUCER_MACHINE.REPORT_POWER;
 @EventBusSubscriber
 public class NETWORK_CENTER_MACHINE {
 
-    private static final Identifier CENTER_POWER = id("center_power");
-    private static final Identifier CENTER_COUNT = id("center_count");
-    private static final Identifier CENTER_FE = id("center_fe");
+    private static final ResourceLocation CENTER_POWER = id("center_power");
+    private static final ResourceLocation CENTER_COUNT = id("center_count");
+    private static final ResourceLocation CENTER_FE = id("center_fe");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(NETWORK_CENTER_MACHINE)) {
@@ -45,7 +45,7 @@ public class NETWORK_CENTER_MACHINE {
                     .machine(NETWORK_CENTER_MACHINE)
                     .recipePool(NETWORK_CENTER_MACHINE)
                     .displayNameKey("machine.mmcr.network_center_machine")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:black_wool")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:black_wool")))
                     .networkInterface(1, 16)
                     .allowNetworkMachine(NETWORK_PRODUCER_MACHINE.NETWORK_PRODUCER_MACHINE)
                     .requestProcess(REPORT_POWER, (body, request, senderStorage, receiverStorage) -> {

@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -12,7 +12,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record JeiDisplayEntry(RecipeIngredientRole role, Identifier typeId, IIngredientType<?> ingredientType,
+public record JeiDisplayEntry(RecipeIngredientRole role, ResourceLocation typeId, IIngredientType<?> ingredientType,
                               Object ingredient, int count, float chance, IIngredientRenderer<?> renderer,
                               boolean transferable) {
     public JeiDisplayEntry {

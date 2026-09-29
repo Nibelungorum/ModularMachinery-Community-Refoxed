@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRJeiWorkstationsEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.registry.ModBlocks; // I love casings
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
@@ -26,7 +26,7 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
 @EventBusSubscriber
 public class BLAST_FURNACE {
 
-    private static final Identifier BLAST_FURNACE = id("blast_furnace"); // equal to mmcr:blast_furnace
+    private static final ResourceLocation BLAST_FURNACE = id("blast_furnace"); // equal to mmcr:blast_furnace
 
     // cause we have to register controller block
     // this must work before ModBlocs, it's not suggested to use mixin to change the neoforge lifecycle
@@ -116,7 +116,7 @@ public class BLAST_FURNACE {
         // MMCR 机器控制器 -> 任意 JEI 配方类型
         event.addMachineWorkstation(
                 BLAST_FURNACE,
-                Identifier.parse("minecraft:smelting")
+                ResourceLocation.parse("minecraft:smelting")
         );
     }
 

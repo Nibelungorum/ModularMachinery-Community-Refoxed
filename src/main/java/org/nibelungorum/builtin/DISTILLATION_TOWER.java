@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -26,7 +26,7 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
 @EventBusSubscriber
 public class DISTILLATION_TOWER {
 
-    private static final Identifier DISTILLATION_TOWER = id("distillation_tower");
+    private static final ResourceLocation DISTILLATION_TOWER = id("distillation_tower");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(DISTILLATION_TOWER)) {
@@ -34,7 +34,7 @@ public class DISTILLATION_TOWER {
                     .machine(DISTILLATION_TOWER)
                     .recipePool(DISTILLATION_TOWER)
                     .displayNameKey("machine.mmcr.distillation_tower")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("polished_blackstone")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("polished_blackstone")))
                     .maxParallelism(32)
                     .parallelizable(true)
                     .build();

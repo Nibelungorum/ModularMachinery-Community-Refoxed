@@ -18,7 +18,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.locale.Language;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -109,7 +109,7 @@ class RecipeOutputComponentProviderTest {
     void skipsChemicalOutputWhenChemicalIsNotRegistered() {
         CompoundTag data = new CompoundTag();
         RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
-                new LoadedChemicalOutput(Identifier.fromNamespaceAndPath("mmcr_test", "missing_chemical"),
+                new LoadedChemicalOutput(ResourceLocation.fromNamespaceAndPath("mmcr_test", "missing_chemical"),
                         200L, 1F), 200L)));
 
         List<Object> calls = collect(data);
@@ -153,7 +153,7 @@ class RecipeOutputComponentProviderTest {
 
     private static Holder.Reference<Chemical> registerChemical(String name) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.fromNamespaceAndPath("mmcr_test", name));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", name));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);

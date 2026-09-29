@@ -4,7 +4,7 @@ import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.IIngredientRenderer;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Optional;
 
@@ -14,7 +14,7 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public interface JeiIngredientAdapter {
-    Identifier typeId();
+    ResourceLocation typeId();
 
     IIngredientType<?> ingredientType();
 

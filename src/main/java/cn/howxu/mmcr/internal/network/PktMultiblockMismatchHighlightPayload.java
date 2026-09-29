@@ -7,7 +7,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -23,12 +23,12 @@ public record PktMultiblockMismatchHighlightPayload(ResourceKey<Level> dimension
             StreamCodec.of(PktMultiblockMismatchHighlightPayload::write, PktMultiblockMismatchHighlightPayload::read);
 
     private static void write(RegistryFriendlyByteBuf buf, PktMultiblockMismatchHighlightPayload payload) {
-        Identifier.STREAM_CODEC.encode(buf, payload.dimension.identifier());
+        ResourceLocation.STREAM_CODEC.encode(buf, payload.dimension.identifier());
         buf.writeBlockPos(payload.pos);
     }
 
     private static PktMultiblockMismatchHighlightPayload read(RegistryFriendlyByteBuf buf) {
-        Identifier dimension = Identifier.STREAM_CODEC.decode(buf);
+        ResourceLocation dimension = ResourceLocation.STREAM_CODEC.decode(buf);
         return new PktMultiblockMismatchHighlightPayload(ResourceKey.create(Registries.DIMENSION, dimension), buf.readBlockPos());
     }
 

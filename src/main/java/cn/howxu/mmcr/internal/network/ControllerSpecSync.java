@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -18,8 +18,8 @@ public final class ControllerSpecSync {
     private ControllerSpecSync() {
     }
 
-    public static Map<Identifier, MachineControllerSpec> createSnapshot() {
-        Map<Identifier, MachineControllerSpec> snapshot = new LinkedHashMap<>();
+    public static Map<ResourceLocation, MachineControllerSpec> createSnapshot() {
+        Map<ResourceLocation, MachineControllerSpec> snapshot = new LinkedHashMap<>();
         MachineRegistry.effectiveSnapshot().forEach((id, machine) -> {
             MachineControllerSpec spec = machine.controller();
             if (spec != null) {
@@ -30,8 +30,8 @@ public final class ControllerSpecSync {
         return Map.copyOf(snapshot);
     }
 
-    public static Map<Identifier, MachineAppearanceSpec> createAppearanceSnapshot() {
-        Map<Identifier, MachineAppearanceSpec> snapshot = new LinkedHashMap<>();
+    public static Map<ResourceLocation, MachineAppearanceSpec> createAppearanceSnapshot() {
+        Map<ResourceLocation, MachineAppearanceSpec> snapshot = new LinkedHashMap<>();
         MachineRegistry.effectiveSnapshot().forEach((id, machine) -> {
             if (machine.controller() != null) {
                 snapshot.put(id, machine.appearance());
@@ -40,7 +40,7 @@ public final class ControllerSpecSync {
         return Map.copyOf(snapshot);
     }
 
-    private static void validate(Identifier machineId, MachineControllerSpec spec) {
+    private static void validate(ResourceLocation machineId, MachineControllerSpec spec) {
         if (spec == null || !MachineControllerSpec.defaultsFor(machineId).id().equals(spec.id())) {
             throw new IllegalStateException("Controller spec key does not match spec id: " + machineId);
         }

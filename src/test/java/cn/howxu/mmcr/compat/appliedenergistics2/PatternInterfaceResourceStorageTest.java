@@ -31,7 +31,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -335,7 +335,7 @@ class PatternInterfaceResourceStorageTest {
 
     @SuppressWarnings("unchecked")
     private static void bindTestEntityType(IOPortKind kind) {
-        Identifier id = MMCR.id(kind.id());
+        ResourceLocation id = MMCR.id(kind.id());
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {
@@ -380,8 +380,8 @@ class PatternInterfaceResourceStorageTest {
         }
 
         @Override
-        public Identifier getId() {
-            return Identifier.fromNamespaceAndPath("test", "unsupported");
+        public ResourceLocation getId() {
+            return ResourceLocation.fromNamespaceAndPath("test", "unsupported");
         }
 
         @Override

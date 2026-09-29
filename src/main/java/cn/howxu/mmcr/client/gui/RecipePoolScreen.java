@@ -8,7 +8,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.List;
@@ -35,22 +35,22 @@ public final class RecipePoolScreen extends Screen {
     static final int RETURN_X = 92;
     static final int RETURN_Y = 125;
     static final int RETURN_SIZE = 12;
-    private static final Identifier BACKGROUND = MMCR.id("textures/gui/gui_recipe_pool.png");
-    private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
-    private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
-    private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
+    private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/gui_recipe_pool.png");
+    private static final ResourceLocation ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
+    private static final ResourceLocation SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
+    private static final ResourceLocation SCROLLER = MMCR.id("textures/gui/scroller.png");
     private static final int TEXT_COLOR = 0xFF222222;
 
     private final Screen parent;
     private final BlockPos controllerPos;
-    private final List<Identifier> recipePoolIds;
-    private Identifier selectedRecipePoolId;
+    private final List<ResourceLocation> recipePoolIds;
+    private ResourceLocation selectedRecipePoolId;
     private int scrollOffset;
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
 
-    public RecipePoolScreen(Screen parent, BlockPos controllerPos, List<Identifier> recipePoolIds,
-                            Identifier selectedRecipePoolId) {
+    public RecipePoolScreen(Screen parent, BlockPos controllerPos, List<ResourceLocation> recipePoolIds,
+                            ResourceLocation selectedRecipePoolId) {
         super(Component.translatable("gui.mmcr.recipe_pool.title"));
         this.parent = parent;
         this.controllerPos = controllerPos.immutable();
@@ -70,9 +70,9 @@ public final class RecipePoolScreen extends Screen {
                 IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT);
         int visible = Math.min(VISIBLE_ROWS, recipePoolIds.size() - scrollOffset);
         for (int row = 0; row < visible; row++) {
-            Identifier poolId = recipePoolIds.get(scrollOffset + row);
+            ResourceLocation poolId = recipePoolIds.get(scrollOffset + row);
             int y = top() + ROW_Y + row * (ROW_HEIGHT + ROW_GAP);
-            Identifier texture = poolId.equals(selectedRecipePoolId) ? SELECTED_ELEMENTS : ELEMENTS;
+            ResourceLocation texture = poolId.equals(selectedRecipePoolId) ? SELECTED_ELEMENTS : ELEMENTS;
             graphics.blit(RenderPipelines.GUI_TEXTURED, texture, left() + ROW_X, y, 0, 0,
                     ROW_WIDTH, ROW_HEIGHT, 256, 256);
             String label = fitLabel(RecipePoolDisplayName.component(poolId).getString(), ROW_WIDTH - 6);

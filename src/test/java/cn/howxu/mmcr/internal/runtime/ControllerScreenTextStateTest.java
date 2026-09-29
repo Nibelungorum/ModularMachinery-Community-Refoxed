@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -140,7 +140,7 @@ class ControllerScreenTextStateTest {
 
     @Test
     void replace_prefers_controller_scope_and_never_inserts_missing_lines() {
-        Identifier duplicate = id("example:progress");
+        ResourceLocation duplicate = id("example:progress");
         state.append(OPERATION, duplicate, Component.literal("operation"));
         state.append(CONTROLLER, duplicate, Component.literal("controller"));
 
@@ -237,7 +237,7 @@ class ControllerScreenTextStateTest {
         return Component.literal("x".repeat(40_000)).append(Component.literal("y".repeat(30_000)));
     }
 
-    private static Identifier id(String value) {
-        return Identifier.parse(value);
+    private static ResourceLocation id(String value) {
+        return ResourceLocation.parse(value);
     }
 }

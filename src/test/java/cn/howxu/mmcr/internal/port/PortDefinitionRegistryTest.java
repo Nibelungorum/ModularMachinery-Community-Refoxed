@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -199,7 +199,7 @@ class PortDefinitionRegistryTest {
         return (_, tier) -> tier >= minimum;
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id("test_port_" + path);
     }
 }

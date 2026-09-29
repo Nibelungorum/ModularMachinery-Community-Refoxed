@@ -13,7 +13,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MachineOutputCodecTest {
-    private static final Identifier TEST_ID = Identifier.fromNamespaceAndPath("mmcr_test", "custom_output");
+    private static final ResourceLocation TEST_ID = ResourceLocation.fromNamespaceAndPath("mmcr_test", "custom_output");
     private static final MapCodec<TestOutput> TEST_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> TEST_ID.toString()),
             Codec.INT.fieldOf("value").forGetter(TestOutput::value),

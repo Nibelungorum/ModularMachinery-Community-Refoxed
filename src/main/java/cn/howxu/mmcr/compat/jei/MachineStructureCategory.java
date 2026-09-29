@@ -20,7 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -151,8 +151,8 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     }
 
     @Override
-    public Identifier getIdentifier(MachineStructureDisplay display) {
-        Identifier machineId = display.machine().registryName();
+    public ResourceLocation getResourceLocation(MachineStructureDisplay display) {
+        ResourceLocation machineId = display.machine().registryName();
         return MMCR.id("structure/" + machineId.getNamespace() + "/" + machineId.getPath());
     }
 

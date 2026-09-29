@@ -14,7 +14,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -104,8 +104,8 @@ class ActiveMachineRecipeTest {
 
     @Test
     void pool_scoped_load_does_not_resolve_a_same_id_recipe_from_another_pool() {
-        Identifier recipeId = MMCR.id("pool_scoped_active_recipe");
-        Identifier foreignPool = MMCR.id("foreign_active_pool");
+        ResourceLocation recipeId = MMCR.id("pool_scoped_active_recipe");
+        ResourceLocation foreignPool = MMCR.id("foreign_active_pool");
         RuntimeTestFixtures.registerRecipePool(foreignPool);
         MachineRecipe foreign = new MachineRecipe(recipeId, foreignPool, 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());
@@ -126,7 +126,7 @@ class ActiveMachineRecipeTest {
     @Test
     void pool_scoped_load_rejects_a_missing_recipe_id_without_throwing() {
         HolderLookup.Provider lookup = registryProvider();
-        Identifier registeredId = MMCR.id("pool_scoped_missing_id_candidate");
+        ResourceLocation registeredId = MMCR.id("pool_scoped_missing_id_candidate");
         MachineRecipe registered = new MachineRecipe(registeredId, MMCR.id("test_cube"), 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());
         RecipeRegistry.replaceDynamic(Map.of(registeredId, registered));
@@ -146,8 +146,8 @@ class ActiveMachineRecipeTest {
     @Test
     void embedded_definition_requires_membership_in_the_current_pool_catalog() {
         HolderLookup.Provider lookup = registryProvider();
-        Identifier recipeId = MMCR.id("embedded_catalog_membership");
-        Identifier poolId = MMCR.id("embedded_catalog_pool");
+        ResourceLocation recipeId = MMCR.id("embedded_catalog_membership");
+        ResourceLocation poolId = MMCR.id("embedded_catalog_pool");
         RuntimeTestFixtures.registerRecipePool(poolId);
         MachineRecipe recipe = new MachineRecipe(recipeId, poolId, 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());

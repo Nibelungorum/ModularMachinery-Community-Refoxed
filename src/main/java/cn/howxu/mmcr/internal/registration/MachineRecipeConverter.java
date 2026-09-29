@@ -43,7 +43,7 @@ import com.mojang.serialization.JsonOps;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /** Internal conversion boundary for public recipe declarations.
  * @author howxu <dev@howxu.cn>
@@ -54,8 +54,8 @@ public final class MachineRecipeConverter {
 
     public static MachineRecipe toRecipe(MachineRecipeDefinition definition,
             MMCRMachineStructuresEvent.Snapshot snapshot) {
-        Map<Identifier, ModifierDefinition> modifiers = snapshot.modifiers();
-        Map<Identifier, MachineLevel> levels = snapshot.levels();
+        Map<ResourceLocation, ModifierDefinition> modifiers = snapshot.modifiers();
+        Map<ResourceLocation, MachineLevel> levels = snapshot.levels();
         List<MachineRequirement> requirements = new ArrayList<>();
         for (RecipeRequirement value : definition.requirements()) {
             requirements.add(toRequirement(value));
@@ -115,7 +115,7 @@ public final class MachineRecipeConverter {
             return new SmartInterfaceRequirement(toInternalIo(io1), interfaceType, minValue, maxValue);
         }
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement(
-                RecipeIo io, Identifier typeId, Identifier levelId
+                RecipeIo io, ResourceLocation typeId, ResourceLocation levelId
         )) {
             return new LevelRequirement(toInternalIo(io), typeId, levelId);
         }
@@ -165,7 +165,7 @@ public final class MachineRecipeConverter {
     private static DataComponentPredicateSet toPublicComponents(
             cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components) {
         if (components.isEmpty()) return DataComponentPredicateSet.EMPTY;
-        Map<Identifier, ComponentPredicate> values = new LinkedHashMap<>();
+        Map<ResourceLocation, ComponentPredicate> values = new LinkedHashMap<>();
         components.values().forEach((type, predicate) -> values.put(
                 Objects.requireNonNull(BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(type),
                         "Unregistered data component type"), toPublicPredicate(predicate)));

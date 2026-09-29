@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -24,7 +24,7 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
         this.context = Objects.requireNonNull(context, "context");
     }
 
-    public Identifier machineId() {
+    public ResourceLocation machineId() {
         return context.machineId();
     }
 
@@ -33,45 +33,45 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
     }
 
     public void append(String scope, String lineId, Component text) {
-        textHandle().append(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"), requireText(text));
+        textHandle().append(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"), requireText(text));
     }
 
     public void appendAfter(String scope, String lineId, String afterLineId, Component text) {
-        textHandle().appendAfter(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
-                parseNamespacedIdentifier(afterLineId, "afterLineId"), requireText(text));
+        textHandle().appendAfter(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"),
+                parseNamespacedResourceLocation(afterLineId, "afterLineId"), requireText(text));
     }
 
     public void replace(String lineId, Component text) {
-        textHandle().replace(parseNamespacedIdentifier(lineId, "lineId"), requireText(text));
+        textHandle().replace(parseNamespacedResourceLocation(lineId, "lineId"), requireText(text));
     }
 
     public void appendTranslatable(String scope, String lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().append(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
+        textHandle().append(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"),
                 Component.translatable(key, args));
     }
 
     public void appendAfterTranslatable(String scope, String lineId, String afterLineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().appendAfter(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
-                parseNamespacedIdentifier(afterLineId, "afterLineId"), Component.translatable(key, args));
+        textHandle().appendAfter(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"),
+                parseNamespacedResourceLocation(afterLineId, "afterLineId"), Component.translatable(key, args));
     }
 
     public void replaceTranslatable(String lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().replace(parseNamespacedIdentifier(lineId, "lineId"), Component.translatable(key, args));
+        textHandle().replace(parseNamespacedResourceLocation(lineId, "lineId"), Component.translatable(key, args));
     }
 
     public void remove(String scope, String lineId) {
-        textHandle().remove(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"));
+        textHandle().remove(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"));
     }
 
-    static Identifier parseIdentifier(String value, String name) {
+    static ResourceLocation parseResourceLocation(String value, String name) {
         requireText(value, name);
-        Identifier identifier = Identifier.tryParse(value);
+        ResourceLocation identifier = ResourceLocation.tryParse(value);
         if (identifier == null) throw new IllegalArgumentException("Invalid " + name + ": " + value);
         return identifier;
     }
@@ -90,12 +90,12 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
         };
     }
 
-    private static Identifier parseNamespacedIdentifier(String value, String name) {
+    private static ResourceLocation parseNamespacedResourceLocation(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be null or blank");
         int separator = value.indexOf(':');
         if (separator <= 0) throw new IllegalArgumentException(name + " must have a namespace: " + value);
         if (separator == value.length() - 1) throw new IllegalArgumentException(name + " must have a path: " + value);
-        return parseIdentifier(value, name);
+        return parseResourceLocation(value, name);
     }
 
     private static Component requireText(Component text) {

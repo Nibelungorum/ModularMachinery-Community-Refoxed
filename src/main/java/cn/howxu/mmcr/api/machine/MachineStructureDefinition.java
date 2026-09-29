@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +15,7 @@ import java.util.Collections;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record MachineStructureDefinition(Identifier machineId, List<Declaration> declarations) {
+public record MachineStructureDefinition(ResourceLocation machineId, List<Declaration> declarations) {
 
     public MachineStructureDefinition {
         if (machineId == null) throw new IllegalArgumentException("machineId null");
@@ -24,7 +24,7 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
     }
 
     public MachineStructureDefinition(
-            Identifier machineId,
+            ResourceLocation machineId,
             BlockArray pattern,
             PortRequirementSpec portRequirements,
             PortTierRequirementSpec portTierRequirements,
@@ -37,7 +37,7 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
     }
 
     public MachineStructureDefinition(
-            Identifier machineId,
+            ResourceLocation machineId,
             BlockArray pattern,
             PortRequirementSpec portRequirements,
             List<DynamicPatternSpec> dynamicPatterns,
@@ -70,7 +70,7 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
         return compiled(declaration).modifierReplacements();
     }
 
-    public Map<BlockPos, Identifier> levelSlots() {
+    public Map<BlockPos, ResourceLocation> levelSlots() {
         Declaration declaration = declarations.getFirst();
         return compiled(declaration).levelSlots();
     }

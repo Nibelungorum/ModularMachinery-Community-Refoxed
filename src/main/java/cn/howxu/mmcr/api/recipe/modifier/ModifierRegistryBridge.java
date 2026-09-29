@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
 
@@ -17,7 +17,7 @@ public final class ModifierRegistryBridge {
     private ModifierRegistryBridge() {
     }
 
-    public static void install(Map<Identifier, ModifierDefinition> definitions) {
+    public static void install(Map<ResourceLocation, ModifierDefinition> definitions) {
         ModifierRegistry.installSnapshot(definitions);
     }
 }

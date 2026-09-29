@@ -14,7 +14,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,8 +51,8 @@ class RuntimeContentSyncTest {
 
     @Test
     void createSnapshotIncludesDynamicStructuresRecipesSpecsAndAppearance() {
-        Identifier machineId = MMCR.id("test_cube");
-        Identifier recipeId = MMCR.id("runtime_sync_recipe");
+        ResourceLocation machineId = MMCR.id("test_cube");
+        ResourceLocation recipeId = MMCR.id("runtime_sync_recipe");
         MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId)));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe(recipeId, machineId)));
 
@@ -68,10 +68,10 @@ class RuntimeContentSyncTest {
 
     @Test
     void createSnapshotUsesEffectiveStartupDataPackAndDynamicLayers() {
-        Identifier machineId = MMCR.id("test_cube");
-        Identifier staticRecipeId = MMCR.id("static_sync_recipe");
-        Identifier dataPackRecipeId = MMCR.id("datapack_sync_recipe");
-        Identifier dynamicRecipeId = MMCR.id("dynamic_sync_recipe");
+        ResourceLocation machineId = MMCR.id("test_cube");
+        ResourceLocation staticRecipeId = MMCR.id("static_sync_recipe");
+        ResourceLocation dataPackRecipeId = MMCR.id("datapack_sync_recipe");
+        ResourceLocation dynamicRecipeId = MMCR.id("dynamic_sync_recipe");
         if (MachineDefinitions.getRegistration(machineId) == null) {
             MachineDefinitions.register(MachineRegistration.builder(machineId).build());
         }
@@ -101,12 +101,12 @@ class RuntimeContentSyncTest {
         RuntimeContentSync.resetSenderForTesting();
     }
 
-    private static MachineStructureDefinition structure(Identifier id) {
+    private static MachineStructureDefinition structure(ResourceLocation id) {
         return new MachineStructureDefinition(id, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.EMPTY);
     }
 
-    private static MachineRecipe recipe(Identifier id, Identifier machineId) {
+    private static MachineRecipe recipe(ResourceLocation id, ResourceLocation machineId) {
         return RecipeTestSupport.create(id, machineId, 1, List.of(), List.of());
     }
 }

@@ -43,7 +43,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.Set;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -82,8 +82,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PublicRecipeBuilderTest {
-    private static final Identifier TEST_LEVEL_TYPE = id("test_recipe_level");
-    private static final Identifier TEST_LEVEL = id("test_recipe_level_normal");
+    private static final ResourceLocation TEST_LEVEL_TYPE = id("test_recipe_level");
+    private static final ResourceLocation TEST_LEVEL = id("test_recipe_level_normal");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -157,7 +157,7 @@ class PublicRecipeBuilderTest {
     void preserves_item_tag_component_and_consume_chance_and_output_chance() {
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("predicates")).recipePool(id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2)
-                .inputItemTag(ItemTags.create(Identifier.parse("c:ingots/iron")), 3)
+                .inputItemTag(ItemTags.create(ResourceLocation.parse("c:ingots/iron")), 3)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT), 1, DataComponentPredicateSet.EMPTY, 0.25F)
                 .outputChance(new ItemStack(Items.DIAMOND), 0.4F)
                 .build();
@@ -324,7 +324,7 @@ class PublicRecipeBuilderTest {
         JsonObject enchantments = new JsonObject();
         enchantments.addProperty("minecraft:sharpness", 4);
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
-                Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
+                ResourceLocation.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
 
         var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_output")).recipePool(id("machine"))
                         .outputItem(output, components).build(),
@@ -343,7 +343,7 @@ class PublicRecipeBuilderTest {
         JsonObject enchantments = new JsonObject();
         enchantments.addProperty("minecraft:sharpness", 4);
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
-                Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
+                ResourceLocation.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
 
         var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_network_output")).recipePool(id("machine"))
                         .outputItem(output, components).build(),
@@ -445,7 +445,7 @@ class PublicRecipeBuilderTest {
     @Test
     void input_chemical_supports_consume_chance() {
         MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("chemical_consume_chance")).recipePool(id("machine"))
-                .inputChemical(Identifier.parse("mekanism:oxygen"), 1_000L, 0.25F)
+                .inputChemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L, 0.25F)
                 .build();
 
         var custom = (CustomRecipeIo) def.requirements().get(0);
@@ -566,7 +566,7 @@ class PublicRecipeBuilderTest {
         }
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 

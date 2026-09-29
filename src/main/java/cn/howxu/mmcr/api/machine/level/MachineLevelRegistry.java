@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.machine.level;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -19,9 +19,9 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineLevelRegistry {
-    private static final Map<Identifier, LevelType> TYPES = new LinkedHashMap<>();
-    private static final Map<Identifier, MachineLevel> LEVELS = new LinkedHashMap<>();
-    private static final Map<Identifier, List<MachineLevel>> LEVELS_BY_TYPE = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, LevelType> TYPES = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, MachineLevel> LEVELS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, List<MachineLevel>> LEVELS_BY_TYPE = new LinkedHashMap<>();
     private static boolean registrationOpen;
 
     private MachineLevelRegistry() {
@@ -39,9 +39,9 @@ public final class MachineLevelRegistry {
     }
 
     public static void installSnapshot(Collection<LevelType> types, Collection<MachineLevel> levels) {
-        Map<Identifier, LevelType> nextTypes = new LinkedHashMap<>();
-        Map<Identifier, MachineLevel> nextLevels = new LinkedHashMap<>();
-        Map<Identifier, List<MachineLevel>> nextByType = new LinkedHashMap<>();
+        Map<ResourceLocation, LevelType> nextTypes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineLevel> nextLevels = new LinkedHashMap<>();
+        Map<ResourceLocation, List<MachineLevel>> nextByType = new LinkedHashMap<>();
         types.forEach(type -> {
             Objects.requireNonNull(type, "type");
             if (nextTypes.putIfAbsent(type.id(), type) != null) {
@@ -64,9 +64,9 @@ public final class MachineLevelRegistry {
      * Throws if any duplicate priority or duplicate state is detected within a type.
      */
     public static void validateSnapshot(Collection<LevelType> types, Collection<MachineLevel> levels) {
-        Map<Identifier, LevelType> nextTypes = new LinkedHashMap<>();
-        Map<Identifier, MachineLevel> nextLevels = new LinkedHashMap<>();
-        Map<Identifier, List<MachineLevel>> nextByType = new LinkedHashMap<>();
+        Map<ResourceLocation, LevelType> nextTypes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineLevel> nextLevels = new LinkedHashMap<>();
+        Map<ResourceLocation, List<MachineLevel>> nextByType = new LinkedHashMap<>();
         types.forEach(type -> {
             Objects.requireNonNull(type, "type");
             if (nextTypes.putIfAbsent(type.id(), type) != null) {
@@ -91,8 +91,8 @@ public final class MachineLevelRegistry {
         validateAndAdd(level, TYPES, LEVELS, LEVELS_BY_TYPE);
     }
 
-    private static void validateAndAdd(MachineLevel level, Map<Identifier, LevelType> types,
-            Map<Identifier, MachineLevel> levels, Map<Identifier, List<MachineLevel>> levelsByType) {
+    private static void validateAndAdd(MachineLevel level, Map<ResourceLocation, LevelType> types,
+            Map<ResourceLocation, MachineLevel> levels, Map<ResourceLocation, List<MachineLevel>> levelsByType) {
         Objects.requireNonNull(level, "level");
         if (!types.containsKey(level.typeId())) {
             throw new IllegalStateException("Unknown machine level type: " + level.typeId());
@@ -121,11 +121,11 @@ public final class MachineLevelRegistry {
         levelsForType.add(level);
     }
 
-    public static MachineLevel getLevel(Identifier id) {
+    public static MachineLevel getLevel(ResourceLocation id) {
         return LEVELS.get(id);
     }
 
-    public static LevelType getType(Identifier id) {
+    public static LevelType getType(ResourceLocation id) {
         return TYPES.get(id);
     }
 
@@ -133,7 +133,7 @@ public final class MachineLevelRegistry {
         return List.copyOf(TYPES.values());
     }
 
-    public static Collection<MachineLevel> getLevels(Identifier typeId) {
+    public static Collection<MachineLevel> getLevels(ResourceLocation typeId) {
         return levelsForType(typeId);
     }
 
@@ -146,13 +146,13 @@ public final class MachineLevelRegistry {
         return Optional.empty();
     }
 
-    public static Optional<MachineLevel> findLevel(Identifier typeId, BlockState state) {
+    public static Optional<MachineLevel> findLevel(ResourceLocation typeId, BlockState state) {
         return levelsForType(typeId).stream()
                 .filter(level -> level.statePredicate().matches(state))
                 .findFirst();
     }
 
-    public static List<MachineLevel> levelsForType(Identifier typeId) {
+    public static List<MachineLevel> levelsForType(ResourceLocation typeId) {
         List<MachineLevel> levels = LEVELS_BY_TYPE.get(typeId);
         return levels == null ? List.of() : Collections.unmodifiableList(levels);
     }

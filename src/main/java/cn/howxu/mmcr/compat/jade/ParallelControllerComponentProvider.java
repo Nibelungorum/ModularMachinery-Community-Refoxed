@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.item.InterfaceTooltips;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -18,10 +18,10 @@ import snownee.jade.api.config.IPluginConfig;
 public enum ParallelControllerComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
-    static final Identifier UID = MMCR.id("parallel_controller");
+    static final ResourceLocation UID = MMCR.id("parallel_controller");
 
     @Override
-    public Identifier getUid() {
+    public ResourceLocation getUid() {
         return UID;
     }
 

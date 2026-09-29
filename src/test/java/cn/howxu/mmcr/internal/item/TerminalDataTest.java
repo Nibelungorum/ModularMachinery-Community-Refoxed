@@ -4,7 +4,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -32,14 +32,14 @@ class TerminalDataTest {
 
     @Test
     void level_selection_is_remembered_per_type() {
-        Identifier coils = Identifier.parse("test:coils");
-        Identifier voltage = Identifier.parse("test:voltage");
+        ResourceLocation coils = ResourceLocation.parse("test:coils");
+        ResourceLocation voltage = ResourceLocation.parse("test:voltage");
         TerminalData data = TerminalData.DEFAULT
-                .withSelectedLevel(coils, Identifier.parse("test:iron"))
-                .withSelectedLevel(voltage, Identifier.parse("test:high"));
+                .withSelectedLevel(coils, ResourceLocation.parse("test:iron"))
+                .withSelectedLevel(voltage, ResourceLocation.parse("test:high"));
 
-        assertThat(data.selectedLevels()).containsEntry(coils, Identifier.parse("test:iron"))
-                .containsEntry(voltage, Identifier.parse("test:high"));
+        assertThat(data.selectedLevels()).containsEntry(coils, ResourceLocation.parse("test:iron"))
+                .containsEntry(voltage, ResourceLocation.parse("test:high"));
     }
 
     @Test

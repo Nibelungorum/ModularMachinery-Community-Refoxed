@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Objects;
@@ -20,7 +20,7 @@ import java.util.function.UnaryOperator;
  * @author howxu <dev@howxu.cn>
  */
 public interface OutputType<O extends MachineOutput> {
-    Identifier id();
+    ResourceLocation id();
 
     MapCodec<O> codec();
 
@@ -68,7 +68,7 @@ public interface OutputType<O extends MachineOutput> {
             }
         }
 
-        public static Presentation defaults(Identifier id) {
+        public static Presentation defaults(ResourceLocation id) {
             String key = "output." + id;
             return new Presentation(key, key + ".description");
         }
@@ -76,7 +76,7 @@ public interface OutputType<O extends MachineOutput> {
 
     /** Standard immutable implementation for custom and built-in output declarations. */
     final class Definition<O extends MachineOutput> implements OutputType<O> {
-        private final Identifier id;
+        private final ResourceLocation id;
         private final MapCodec<O> codec;
         private final BiFunction<O, Float, O> chanceTransformer;
         private final BiFunction<O, List<RecipeModifier>, O> modifierTransformer;
@@ -88,7 +88,7 @@ public interface OutputType<O extends MachineOutput> {
         private final String serializedId;
         private final RecipeSyncCodec<O> syncCodec;
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier) {
             this(id, codec, chanceTransformer, modifierTransformer, copier, Presentation.defaults(id), id.toString(),
                     (output, tags) -> {
@@ -96,7 +96,7 @@ public interface OutputType<O extends MachineOutput> {
                     }, requirement -> false);
         }
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation) {
             this(id, codec, chanceTransformer, modifierTransformer, copier, presentation, id.toString(),
@@ -105,7 +105,7 @@ public interface OutputType<O extends MachineOutput> {
                     }, requirement -> false);
         }
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation, String serializedId) {
             this(id, codec, chanceTransformer, modifierTransformer, copier, presentation, serializedId,
@@ -114,7 +114,7 @@ public interface OutputType<O extends MachineOutput> {
                     }, requirement -> false);
         }
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation, String serializedId,
                           BiFunction<O, List<String>, MachineRequirement> requirementFactory,
@@ -123,7 +123,7 @@ public interface OutputType<O extends MachineOutput> {
                     requirementFactory, requirementMatcher, ignored -> null);
         }
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           RecipeSyncCodec<O> syncCodec) {
             this(id, codec, chanceTransformer, modifierTransformer, copier, Presentation.defaults(id), id.toString(),
@@ -132,7 +132,7 @@ public interface OutputType<O extends MachineOutput> {
                     }, requirement -> false, ignored -> null, syncCodec);
         }
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation, String serializedId,
                           BiFunction<O, List<String>, MachineRequirement> requirementFactory,
@@ -142,7 +142,7 @@ public interface OutputType<O extends MachineOutput> {
                     requirementFactory, requirementMatcher, outputFactory, null);
         }
 
-        public Definition(Identifier id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
+        public Definition(ResourceLocation id, MapCodec<O> codec, BiFunction<O, Float, O> chanceTransformer,
                           BiFunction<O, List<RecipeModifier>, O> modifierTransformer, UnaryOperator<O> copier,
                           Presentation presentation, String serializedId,
                           BiFunction<O, List<String>, MachineRequirement> requirementFactory,
@@ -163,7 +163,7 @@ public interface OutputType<O extends MachineOutput> {
         }
 
         @Override
-        public Identifier id() {
+        public ResourceLocation id() {
             return id;
         }
 

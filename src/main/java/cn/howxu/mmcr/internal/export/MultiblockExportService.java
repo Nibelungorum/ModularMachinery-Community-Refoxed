@@ -4,7 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockRotator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 
@@ -59,7 +59,7 @@ public final class MultiblockExportService {
         StringBuilder out = new StringBuilder("public class ExportedStructure {").append(lineSeparator)
                 .append(lineSeparator)
                 .append("    public static void register(MMCRMachineStructuresEvent event) {").append(lineSeparator)
-                .append("        var id = Identifier.parse(\"mmcr:exported_structure\");").append(lineSeparator)
+                .append("        var id = ResourceLocation.parse(\"mmcr:exported_structure\");").append(lineSeparator)
                 .append("        var structure = MachineStructureBuilder").append(lineSeparator)
                 .append("                .structure()").append(lineSeparator)
                 .append("                .fullStructure(s -> s").append(lineSeparator)
@@ -122,7 +122,7 @@ public final class MultiblockExportService {
         return new PreparedExport(rendered, assignSymbols(rendered));
     }
 
-    private static BlockState normalizeState(Identifier blockId, BlockState state) {
+    private static BlockState normalizeState(ResourceLocation blockId, BlockState state) {
         return state != null && state.getProperties().isEmpty()
                 && state.equals(BuiltInRegistries.BLOCK.getValue(blockId).defaultBlockState()) ? null : state;
     }
@@ -249,7 +249,7 @@ public final class MultiblockExportService {
     }
 
     private static String predicateExpression(PredicateKey key) {
-        String block = "BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"" + escapeJava(key.blockId().toString()) + "\"))";
+        String block = "BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(\"" + escapeJava(key.blockId().toString()) + "\"))";
         if (key.state() == null) return "new BlockPredicate.OfBlock(" + block + ")";
         String expression = block + ".defaultBlockState()";
         for (Property<?> property : key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).toList()) {
@@ -290,7 +290,7 @@ public final class MultiblockExportService {
         return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
-    public record SnapshotEntry(BlockPos offset, Identifier blockId, BlockState state, boolean air, boolean controller) {
+    public record SnapshotEntry(BlockPos offset, ResourceLocation blockId, BlockState state, boolean air, boolean controller) {
         public SnapshotEntry(BlockPos offset, BlockState state, boolean air, boolean controller) {
             this(offset, BuiltInRegistries.BLOCK.getKey(state.getBlock()), state, air, controller);
         }
@@ -302,16 +302,16 @@ public final class MultiblockExportService {
         /**
          * Legacy identifier-only capture; nullable {@link #state} keeps this entry as a plain Block predicate.
          */
-        public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air) {
+        public SnapshotEntry(BlockPos offset, ResourceLocation blockId, boolean air) {
             this(offset, blockId, null, air, false);
         }
 
-        public SnapshotEntry(BlockPos offset, Identifier blockId, boolean air, boolean controller) {
+        public SnapshotEntry(BlockPos offset, ResourceLocation blockId, boolean air, boolean controller) {
             this(offset, blockId, null, air, controller);
         }
     }
 
-    private record PredicateKey(Identifier blockId, BlockState state) {}
+    private record PredicateKey(ResourceLocation blockId, BlockState state) {}
 
     private record RenderedEntry(BlockPos pos, PredicateKey predicate, boolean controller) {}
 

@@ -14,7 +14,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
@@ -34,7 +34,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class StructurePreviewSchemaFactory implements StructurePreviewVariantSource {
-    private static final Identifier RESOLVED_STAGE_ID = MMCR.id("resolved_stage");
+    private static final ResourceLocation RESOLVED_STAGE_ID = MMCR.id("resolved_stage");
 
     public StructurePreviewSchema create(Machine machine) {
         Objects.requireNonNull(machine, "machine");
@@ -44,20 +44,20 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         return create(stages.getFirst(), machine.registryName(), facing);
     }
 
-    public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId) {
+    public StructurePreviewSchema create(MachineStructureStage stage, ResourceLocation machineId) {
         return create(stage, machineId, Direction.SOUTH);
     }
 
-    public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId, Direction facing) {
+    public StructurePreviewSchema create(MachineStructureStage stage, ResourceLocation machineId, Direction facing) {
         return create(stage, machineId, StructurePreviewVariantSelection.defaults(), facing);
     }
 
-    public StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId,
+    public StructurePreviewSchema create(MachineStructureStage stage, ResourceLocation machineId,
             StructurePreviewVariantSelection selection) {
         return create(stage, machineId, selection, Direction.SOUTH);
     }
 
-    private StructurePreviewSchema create(MachineStructureStage stage, Identifier machineId,
+    private StructurePreviewSchema create(MachineStructureStage stage, ResourceLocation machineId,
             StructurePreviewVariantSelection selection, Direction facing) {
         Objects.requireNonNull(machineId, "machineId");
         return resolve(stage, machineId, selection, facing, true);
@@ -73,19 +73,19 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         return resolve(stage, RESOLVED_STAGE_ID, selection, facing, false);
     }
 
-    private StructurePreviewSchema resolve(MachineStructureStage stage, Identifier machineId,
+    private StructurePreviewSchema resolve(MachineStructureStage stage, ResourceLocation machineId,
             StructurePreviewVariantSelection selection, Direction facing, boolean lazyCandidates) {
         Objects.requireNonNull(stage, "stage");
         Objects.requireNonNull(selection, "selection");
         BlockArray rotatedPattern = BlockArrayCache.get(stage.pattern(), facing);
-        Map<BlockPos, Identifier> rotatedLevelSlots = new LinkedHashMap<>();
+        Map<BlockPos, ResourceLocation> rotatedLevelSlots = new LinkedHashMap<>();
         stage.levelSlots().forEach((position, levelSlot) ->
                 rotatedLevelSlots.put(BlockRotator.rotateSouthTo(position, facing), levelSlot));
         Map<BlockPos, List<SingleBlockModifierReplacement>> rotatedModifierReplacements = new LinkedHashMap<>();
         stage.modifierReplacements().forEach((position, replacements) ->
                 rotatedModifierReplacements.put(BlockRotator.rotateSouthTo(position, facing), replacements));
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
-        Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
+        Map<BlockPos, ResourceLocation> levelSlots = new LinkedHashMap<>();
         Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
         int levelRank = highestSharedLevelRank(stage);
         Map<BlockPos, BlockPredicate> pattern = rotatedPattern.pattern();
@@ -93,7 +93,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Direction correctedFacing = hasController ? correctedControllerFacing(pattern) : null;
         for (var entry : pattern.entrySet()) {
             BlockPos position = entry.getKey().immutable();
-            Identifier levelSlot = rotatedLevelSlots.get(entry.getKey());
+            ResourceLocation levelSlot = rotatedLevelSlots.get(entry.getKey());
             BlockState state = levelSlot == null
                     ? entry.getValue() instanceof BlockPredicate.MachineCoupler
                             ? MultiblockPreviewPredicates.machineCouplerState().orElse(null)
@@ -150,7 +150,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         }
     }
 
-    private static BlockState levelState(Identifier typeId, int levelRank) {
+    private static BlockState levelState(ResourceLocation typeId, int levelRank) {
         return MachineLevelRegistry.levelsForType(typeId).stream()
                 .filter(level -> level.priority() == levelRank)
                 .findFirst()

@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.client;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation.Target;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +28,7 @@ public final class RecipeInformationRegistry {
         kubeJSEntries = List.copyOf(entries);
     }
 
-    public static List<Component> componentsFor(Identifier poolId, Identifier recipeId) {
+    public static List<Component> componentsFor(ResourceLocation poolId, ResourceLocation recipeId) {
         List<RecipeInformation> publicSnapshot = publicEntries;
         List<RecipeInformation> kubeJSSnapshot = kubeJSEntries;
         List<Component> components = new ArrayList<>();
@@ -40,7 +40,7 @@ public final class RecipeInformationRegistry {
     }
 
     private static void append(List<Component> components, List<RecipeInformation> entries,
-                               Target target, Identifier targetId) {
+                               Target target, ResourceLocation targetId) {
         entries.stream()
                 .filter(entry -> entry.target() == target && entry.targetId().equals(targetId))
                 .map(RecipeInformation::component)

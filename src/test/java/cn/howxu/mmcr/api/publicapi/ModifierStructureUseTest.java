@@ -15,7 +15,7 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -43,8 +43,8 @@ class ModifierStructureUseTest {
 
     @Test
     void base_and_registered_replacement_states_match_as_optional_modifier_use() {
-        Identifier machineId = MMCR.id("modifier_structure");
-        Identifier speedupId = MMCR.id("speedup");
+        ResourceLocation machineId = MMCR.id("modifier_structure");
+        ResourceLocation speedupId = MMCR.id("speedup");
         ModifierUse use = ModifierUse.of(speedupId, BlockPredicate.block(Blocks.DIAMOND_BLOCK));
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerModifier(speedupId, new ModifierDefinition(List.of()));
@@ -70,8 +70,8 @@ class ModifierStructureUseTest {
 
     @Test
     void unknown_modifier_id_is_rejected_when_structure_event_freezes() {
-        Identifier machineId = MMCR.id("unknown_modifier_structure");
-        Identifier unknownId = MMCR.id("unknown_speedup");
+        ResourceLocation machineId = MMCR.id("unknown_modifier_structure");
+        ResourceLocation unknownId = MMCR.id("unknown_speedup");
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerStructure(structure(machineId,
                 ModifierUse.of(unknownId, BlockPredicate.block(Blocks.DIAMOND_BLOCK))));
@@ -83,8 +83,8 @@ class ModifierStructureUseTest {
 
     @Test
     void modifier_use_symbol_must_exist_in_the_runtime_pattern() {
-        Identifier machineId = MMCR.id("missing_modifier_symbol");
-        Identifier modifierId = MMCR.id("speedup");
+        ResourceLocation machineId = MMCR.id("missing_modifier_symbol");
+        ResourceLocation modifierId = MMCR.id("speedup");
         MachineStructureDefinition structure = new MachineStructureDefinition(machineId, List.of(
                 StructureStage.builder()
                         .pattern(pattern -> pattern.layer("M")
@@ -98,7 +98,7 @@ class ModifierStructureUseTest {
                 .hasMessageContaining("Requirement symbol X is absent");
     }
 
-    private static MachineStructureDefinition structure(Identifier machineId, ModifierUse use) {
+    private static MachineStructureDefinition structure(ResourceLocation machineId, ModifierUse use) {
         return new MachineStructureDefinition(machineId, List.of(
                 StructureStage.builder()
                         .pattern(pattern -> pattern.layer("M")

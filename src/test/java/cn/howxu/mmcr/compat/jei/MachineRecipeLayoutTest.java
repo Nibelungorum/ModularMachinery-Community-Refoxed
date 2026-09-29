@@ -19,7 +19,7 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -241,10 +241,10 @@ class MachineRecipeLayoutTest {
     @Test
     void levelRequirementSlotStartsAfterThePrecedingMetadataTextRow() {
         TestBootstrap.beginRegistration();
-        Identifier coilType = MMCR.id("layout_coil_type");
-        Identifier casingType = MMCR.id("layout_casing_type");
-        Identifier coilLevel = MMCR.id("layout_coil_level");
-        Identifier casingLevel = MMCR.id("layout_casing_level");
+        ResourceLocation coilType = MMCR.id("layout_coil_type");
+        ResourceLocation casingType = MMCR.id("layout_casing_type");
+        ResourceLocation coilLevel = MMCR.id("layout_coil_level");
+        ResourceLocation casingLevel = MMCR.id("layout_casing_level");
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerType(new LevelType(casingType, Component.literal("Casing")));
         TestBootstrap.registerLevel(new MachineLevel(coilLevel, coilType, 0,
@@ -272,8 +272,8 @@ class MachineRecipeLayoutTest {
     @Test
     void stageRequirementTextFollowsLevelSlotAndPrecedesSmartInterfaceText() {
         TestBootstrap.beginRegistration();
-        Identifier levelType = MMCR.id("stage_layout_level_type");
-        Identifier levelId = MMCR.id("stage_layout_level");
+        ResourceLocation levelType = MMCR.id("stage_layout_level_type");
+        ResourceLocation levelId = MMCR.id("stage_layout_level");
         TestBootstrap.registerType(new LevelType(levelType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, levelType, 0,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),

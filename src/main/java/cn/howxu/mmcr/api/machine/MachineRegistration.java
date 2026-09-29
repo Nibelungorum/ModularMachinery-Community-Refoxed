@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,11 +27,11 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public record MachineRegistration(
-        Identifier id,
+        ResourceLocation id,
         String displayNameKey,
         MachineControllerSpec controllerSpec,
         MachineAppearanceSpec appearance,
-        List<Identifier> recipePoolIds,
+        List<ResourceLocation> recipePoolIds,
         boolean allowModifiers,
         boolean allowMultithreading,
         boolean allowParallelism,
@@ -40,24 +40,24 @@ public record MachineRegistration(
         Map<String, SmartInterfaceType> smartInterfaceTypes,
         boolean shareSmartInterfaces,
         List<SmartInterfaceModifier> smartInterfaceModifiers,
-        @Nullable Identifier runningSoundId,
-        @Nullable Identifier finishSoundId,
+        @Nullable ResourceLocation runningSoundId,
+        @Nullable ResourceLocation finishSoundId,
         MachineRole role,
-        Set<Identifier> acceptedModuleIds,
+        Set<ResourceLocation> acceptedModuleIds,
         NetworkInterfaceSpec networkInterface,
         BlockArray pattern,
         MachineBehavior behavior,
-        Map<Identifier, RequestProcess> requestProcessors,
-        Map<Identifier, RequestFailed> requestFailures,
+        Map<ResourceLocation, RequestProcess> requestProcessors,
+        Map<ResourceLocation, RequestFailed> requestFailures,
         int factoryThreadLimit
 ) {
-    public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
-            MachineAppearanceSpec appearance, Identifier recipePoolId, boolean allowModifiers,
+    public MachineRegistration(ResourceLocation id, String displayNameKey, MachineControllerSpec controllerSpec,
+            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, boolean allowModifiers,
             boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
-            @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
-            Set<Identifier> acceptedModuleIds, NetworkInterfaceSpec networkInterface, BlockArray pattern,
+            @Nullable ResourceLocation runningSoundId, @Nullable ResourceLocation finishSoundId, MachineRole role,
+            Set<ResourceLocation> acceptedModuleIds, NetworkInterfaceSpec networkInterface, BlockArray pattern,
             MachineBehavior behavior) {
         this(id, displayNameKey, controllerSpec, appearance, singletonPool(recipePoolId), allowModifiers, allowMultithreading,
                 allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
@@ -88,33 +88,33 @@ public record MachineRegistration(
         requestFailures = Collections.unmodifiableMap(new LinkedHashMap<>(requestFailures == null ? Map.of() : requestFailures));
     }
 
-    public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
-            MachineAppearanceSpec appearance, Identifier recipePoolId, boolean allowModifiers,
+    public MachineRegistration(ResourceLocation id, String displayNameKey, MachineControllerSpec controllerSpec,
+            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, boolean allowModifiers,
             boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
-            @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
-            Set<Identifier> acceptedModuleIds, BlockArray pattern) {
+            @Nullable ResourceLocation runningSoundId, @Nullable ResourceLocation finishSoundId, MachineRole role,
+            Set<ResourceLocation> acceptedModuleIds, BlockArray pattern) {
         this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure,
                 smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, role, acceptedModuleIds, pattern, RecipeBehavior.defaults());
     }
 
-    public MachineRegistration(Identifier id, String displayNameKey, MachineControllerSpec controllerSpec,
-            MachineAppearanceSpec appearance, Identifier recipePoolId, boolean allowModifiers,
+    public MachineRegistration(ResourceLocation id, String displayNameKey, MachineControllerSpec controllerSpec,
+            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, boolean allowModifiers,
             boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
-            @Nullable Identifier runningSoundId, @Nullable Identifier finishSoundId, MachineRole role,
-            Set<Identifier> acceptedModuleIds, BlockArray pattern, MachineBehavior behavior) {
+            @Nullable ResourceLocation runningSoundId, @Nullable ResourceLocation finishSoundId, MachineRole role,
+            Set<ResourceLocation> acceptedModuleIds, BlockArray pattern, MachineBehavior behavior) {
         this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure,
                 smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, role, acceptedModuleIds, NetworkInterfaceSpec.disabled(), pattern, behavior);
     }
 
-    public static Builder builder(Identifier id) {
+    public static Builder builder(ResourceLocation id) {
         return new Builder(id);
     }
 
@@ -142,40 +142,40 @@ public record MachineRegistration(
                 requestProcessors, requestFailures, factoryThreadLimit);
     }
 
-    public static String defaultDisplayNameKey(Identifier id) {
+    public static String defaultDisplayNameKey(ResourceLocation id) {
         return defaultDisplayNameKey(id, null);
     }
 
-    public static String defaultDisplayNameKey(Identifier id, String explicitKey) {
+    public static String defaultDisplayNameKey(ResourceLocation id, String explicitKey) {
         if (id == null) throw new IllegalArgumentException("id null");
         if (explicitKey != null && !explicitKey.isBlank()) return explicitKey;
         return id.toLanguageKey("machine");
     }
 
-    public Identifier recipePoolId() {
+    public ResourceLocation recipePoolId() {
         return recipePoolIds.getFirst();
     }
 
-    public static List<Identifier> copyRecipePoolIds(Identifier machineId, List<Identifier> recipePoolIds) {
+    public static List<ResourceLocation> copyRecipePoolIds(ResourceLocation machineId, List<ResourceLocation> recipePoolIds) {
         if (machineId == null) throw new IllegalArgumentException("id null");
         if (recipePoolIds == null) return List.of(machineId);
         if (recipePoolIds.isEmpty()) throw new IllegalArgumentException("recipePool requires at least one id");
-        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
-        for (Identifier recipePoolId : recipePoolIds) {
+        LinkedHashSet<ResourceLocation> copy = new LinkedHashSet<>();
+        for (ResourceLocation recipePoolId : recipePoolIds) {
             if (recipePoolId == null) throw new IllegalArgumentException("recipe pool id null");
             if (!copy.add(recipePoolId)) throw new IllegalArgumentException("Duplicate recipe pool id: " + recipePoolId);
         }
         return List.copyOf(copy);
     }
 
-    private static List<Identifier> singletonPool(Identifier recipePoolId) {
+    private static List<ResourceLocation> singletonPool(ResourceLocation recipePoolId) {
         return recipePoolId == null ? null : List.of(recipePoolId);
     }
 
-    private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {
+    private static Set<ResourceLocation> copyAcceptedModuleIds(Set<ResourceLocation> acceptedModuleIds) {
         if (acceptedModuleIds == null || acceptedModuleIds.isEmpty()) return Set.of();
-        LinkedHashSet<Identifier> copy = new LinkedHashSet<>();
-        for (Identifier acceptedModuleId : acceptedModuleIds) {
+        LinkedHashSet<ResourceLocation> copy = new LinkedHashSet<>();
+        for (ResourceLocation acceptedModuleId : acceptedModuleIds) {
             if (acceptedModuleId == null) throw new IllegalArgumentException("accepted module id null");
             copy.add(acceptedModuleId);
         }
@@ -183,11 +183,11 @@ public record MachineRegistration(
     }
 
     public static final class Builder {
-        private final Identifier id;
+        private final ResourceLocation id;
         private String displayNameKey;
         private MachineControllerSpec controllerSpec;
         private MachineAppearanceSpec appearance;
-        private List<Identifier> recipePoolIds;
+        private List<ResourceLocation> recipePoolIds;
         private boolean allowModifiers;
         private boolean allowMultithreading;
         private boolean allowParallelism;
@@ -196,19 +196,19 @@ public record MachineRegistration(
         private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
         private boolean shareSmartInterfaces;
         private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
-        private @Nullable Identifier runningSoundId;
-        private @Nullable Identifier finishSoundId;
+        private @Nullable ResourceLocation runningSoundId;
+        private @Nullable ResourceLocation finishSoundId;
         private boolean host;
         private boolean module;
-        private final Set<Identifier> acceptedModuleIds = new LinkedHashSet<>();
+        private final Set<ResourceLocation> acceptedModuleIds = new LinkedHashSet<>();
         private NetworkInterfaceSpec networkInterface = NetworkInterfaceSpec.disabled();
         private BlockArray pattern;
         private MachineBehavior behavior = RecipeBehavior.defaults();
-        private final Map<Identifier, RequestProcess> requestProcessors = new LinkedHashMap<>();
-        private final Map<Identifier, RequestFailed> requestFailures = new LinkedHashMap<>();
+        private final Map<ResourceLocation, RequestProcess> requestProcessors = new LinkedHashMap<>();
+        private final Map<ResourceLocation, RequestFailed> requestFailures = new LinkedHashMap<>();
         private int factoryThreadLimit = 1;
 
-        private Builder(Identifier id) {
+        private Builder(ResourceLocation id) {
             this.id = id;
         }
 
@@ -232,12 +232,12 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder recipePoolId(Identifier recipePoolId) {
+        public Builder recipePoolId(ResourceLocation recipePoolId) {
             this.recipePoolIds = singletonPool(recipePoolId);
             return this;
         }
 
-        public Builder recipePoolIds(List<Identifier> recipePoolIds) {
+        public Builder recipePoolIds(List<ResourceLocation> recipePoolIds) {
             this.recipePoolIds = copyRecipePoolIds(id, recipePoolIds);
             return this;
         }
@@ -284,7 +284,7 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder runningSound(Identifier id) {
+        public Builder runningSound(ResourceLocation id) {
             if (id != null) MachineRegistration.validateSound(id);
             this.runningSoundId = id;
             return this;
@@ -294,7 +294,7 @@ public record MachineRegistration(
             return runningSound(soundId(sound));
         }
 
-        public Builder finishSound(Identifier id) {
+        public Builder finishSound(ResourceLocation id) {
             if (id != null) MachineRegistration.validateSound(id);
             this.finishSoundId = id;
             return this;
@@ -304,7 +304,7 @@ public record MachineRegistration(
             return finishSound(soundId(sound));
         }
 
-        public Builder host(Identifier acceptedModuleId) {
+        public Builder host(ResourceLocation acceptedModuleId) {
             this.host = true;
             if (acceptedModuleId == null) throw new IllegalArgumentException("accepted module id null");
             this.acceptedModuleIds.add(acceptedModuleId);
@@ -312,7 +312,7 @@ public record MachineRegistration(
         }
 
         public Builder host(String acceptedModuleId) {
-            return host(Identifier.parse(acceptedModuleId));
+            return host(ResourceLocation.parse(acceptedModuleId));
         }
 
         public Builder networkInterface(NetworkInterfaceSpec networkInterface) {
@@ -325,7 +325,7 @@ public record MachineRegistration(
                     networkInterface.allowedMachineIds()));
         }
 
-        public Builder allowNetworkMachine(Identifier machineId) {
+        public Builder allowNetworkMachine(ResourceLocation machineId) {
             this.networkInterface = networkInterface.withAllowedMachine(Objects.requireNonNull(machineId, "machineId"));
             return this;
         }
@@ -345,7 +345,7 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder requestProcess(Identifier requestId, RequestProcess process) {
+        public Builder requestProcess(ResourceLocation requestId, RequestProcess process) {
             if (requestProcessors.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
                     Objects.requireNonNull(process, "process")) != null) {
                 throw new IllegalArgumentException("Duplicate request processor: " + requestId);
@@ -353,7 +353,7 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder requestFailed(Identifier requestId, RequestFailed failure) {
+        public Builder requestFailed(ResourceLocation requestId, RequestFailed failure) {
             if (requestFailures.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
                     Objects.requireNonNull(failure, "failure")) != null) {
                 throw new IllegalArgumentException("Duplicate request failure handler: " + requestId);
@@ -377,15 +377,15 @@ public record MachineRegistration(
                     requestProcessors, requestFailures, factoryThreadLimit);
         }
 
-        private static Identifier soundId(SoundEvent sound) {
-            Identifier id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
+        private static ResourceLocation soundId(SoundEvent sound) {
+            ResourceLocation id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
             if (id == null) throw new ApiRegistrationException("Unregistered sound event " + sound);
             return id;
         }
 
     }
 
-    public static void validateSound(Identifier id) {
+    public static void validateSound(ResourceLocation id) {
         if (id == null || !BuiltInRegistries.SOUND_EVENT.containsKey(id)) {
             throw new ApiRegistrationException("Unknown sound event " + id);
         }

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.sound;
 
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import org.jetbrains.annotations.Nullable;
 
@@ -13,7 +13,7 @@ public final class MachineSoundRegistry {
     private MachineSoundRegistry() {
     }
 
-    public static @Nullable SoundEvent get(@Nullable Identifier id) {
+    public static @Nullable SoundEvent get(@Nullable ResourceLocation id) {
         return id == null ? null : BuiltInRegistries.SOUND_EVENT.getValue(id);
     }
 }

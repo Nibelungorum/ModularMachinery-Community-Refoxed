@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +43,7 @@ public final class CapabilitySyncRegistry {
             throw new IllegalArgumentException("Unknown capability sync index");
         }
         MachineCapability capability = snapshot.capabilities().get(entry.capabilityIndex());
-        Identifier expectedType = capability.type().id();
+        ResourceLocation expectedType = capability.type().id();
         if (!expectedType.equals(entry.typeId())) throw new IllegalArgumentException("Unknown capability sync type");
         SyncFacet facet = capability.facet(SyncFacet.class)
                 .orElseThrow(() -> new IllegalArgumentException("Capability does not support sync"));

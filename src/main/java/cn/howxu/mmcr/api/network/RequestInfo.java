@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.network;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record RequestInfo(Identifier requestId, MachineReference peer) {
+public record RequestInfo(ResourceLocation requestId, MachineReference peer) {
     public RequestInfo {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(peer, "peer");

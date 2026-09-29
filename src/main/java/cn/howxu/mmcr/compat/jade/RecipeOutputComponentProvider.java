@@ -11,7 +11,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -36,10 +36,10 @@ import java.util.Optional;
 public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
-    public static final Identifier UID = MMCR.id("recipe_output");
+    public static final ResourceLocation UID = MMCR.id("recipe_output");
 
     @Override
-    public Identifier getUid() {
+    public ResourceLocation getUid() {
         return UID;
     }
 

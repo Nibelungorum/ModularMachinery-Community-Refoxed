@@ -36,7 +36,7 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
@@ -614,11 +614,11 @@ public class MekanismPortGameTest {
                     "Installed unavailable bridge reports the documented failure reason");
 
             MachineRecipeBuilder builder = MachineRecipeBuilder.recipe(
-                            Identifier.fromNamespaceAndPath("mmcr_test", "unavailable_chemical_e2e"))
-                    .recipePool(Identifier.fromNamespaceAndPath("mmcr_test", "test_cube"))
+                            ResourceLocation.fromNamespaceAndPath("mmcr_test", "unavailable_chemical_e2e"))
+                    .recipePool(ResourceLocation.fromNamespaceAndPath("mmcr_test", "test_cube"))
                     .duration(20)
-                    .inputChemical(Identifier.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L)
-                    .outputChemical(Identifier.fromNamespaceAndPath("mekanism", "hydrogen"), 200L, 0.5F)
+                    .inputChemical(ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L)
+                    .outputChemical(ResourceLocation.fromNamespaceAndPath("mekanism", "hydrogen"), 200L, 0.5F)
                     .inputHeatTemperature(450D)
                     .outputHeat(120D);
             List<CustomRecipeIo> customRequirements =
@@ -696,8 +696,8 @@ public class MekanismPortGameTest {
 
         ChemicalPortBlockEntity port = helper.getBlockEntity(portPos, ChemicalPortBlockEntity.class);
 
-        Identifier updatedTexture = MMCR.id("block/chemical_basic_casing_updated");
-        Identifier initialAppearance = port.appearanceBaseTexture();
+        ResourceLocation updatedTexture = MMCR.id("block/chemical_basic_casing_updated");
+        ResourceLocation initialAppearance = port.appearanceBaseTexture();
 
         port.linkControllerAppearance(portPos, updatedTexture);
 
@@ -755,7 +755,7 @@ public class MekanismPortGameTest {
 
     private static Holder.Reference<Chemical> registerChemical(String path, boolean radioactive) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.fromNamespaceAndPath("mmcr_test", path));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);

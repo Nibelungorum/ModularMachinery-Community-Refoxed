@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.jetbrains.annotations.Nullable;
@@ -18,7 +18,7 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags, float consumeChance) implements MachineRequirement {
-    private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "fluid");
+    private static final ResourceLocation TYPE_ID = ResourceLocation.fromNamespaceAndPath("minecraft", "fluid");
     public static final MapCodec<FluidRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)

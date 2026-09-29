@@ -8,7 +8,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -19,7 +19,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * @author howxu <dev@howxu.cn>
  */
 public final class ControllerIdleEasterEggManager {
-    private static final Identifier DEFAULT_IDLE_OVERLAY = MMCR.id("block/overlay_basic_idle");
+    private static final ResourceLocation DEFAULT_IDLE_OVERLAY = MMCR.id("block/overlay_basic_idle");
     private static final ControllerIdleEasterEggTracker TRACKER =
             new ControllerIdleEasterEggTracker(() -> ThreadLocalRandom.current().nextDouble());
     private static volatile long clientTicks;
@@ -27,7 +27,8 @@ public final class ControllerIdleEasterEggManager {
     private ControllerIdleEasterEggManager() {
     }
 
-    static boolean trackAndIsActive(BlockAndTintGetter level, BlockPos pos, BlockState state, Identifier machineId) {
+    static boolean trackAndIsActive(BlockAndTintGetter level, BlockPos pos, BlockState state,
+                                    ResourceLocation machineId) {
         ClientLevel clientLevel = Minecraft.getInstance().level;
         if (!canTrackRenderView(level, clientLevel != null)) {
             return false;
@@ -67,7 +68,7 @@ public final class ControllerIdleEasterEggManager {
         clientTicks = 0L;
     }
 
-    static boolean eligible(BlockState state, Identifier machineId) {
+    static boolean eligible(BlockState state, ResourceLocation machineId) {
         if (!(state.getBlock() instanceof MachineControllerBlock)
                 || !state.getValue(MachineControllerBlock.FORMED)
                 || state.getValue(MachineControllerBlock.ACTIVE)) {
@@ -84,7 +85,7 @@ public final class ControllerIdleEasterEggManager {
             return false;
         }
         BlockState state = level.getBlockState(pos);
-        Identifier machineId = state.getBlock() instanceof MachineControllerBlock controller
+        ResourceLocation machineId = state.getBlock() instanceof MachineControllerBlock controller
                 ? controller.machineId() : null;
         return eligible(state, machineId);
     }

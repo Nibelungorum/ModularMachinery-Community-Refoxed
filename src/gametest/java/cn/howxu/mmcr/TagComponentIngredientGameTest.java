@@ -11,7 +11,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
@@ -33,7 +33,7 @@ public class TagComponentIngredientGameTest {
                 DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Validated' } }
                         """)).getOrThrow(), 1F);
-        var recipe = MachineRecipe.fromCanonical(Identifier.parse("mmcr:tag_component_input"),
+        var recipe = MachineRecipe.fromCanonical(ResourceLocation.parse("mmcr:tag_component_input"),
                 MMCR.id("iron_compressor"), 20, List.of(MachineRequirement.fromInput(ingredient)), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());
         var ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);

@@ -34,7 +34,7 @@ import mekanism.api.resource.LargeResourceStack;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -115,7 +115,7 @@ class AsyncChemicalPlanningTest {
     void crafting_context_keeps_tag_chemical_input_on_the_main_thread() throws Exception {
         ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_tag_oxygen"));
         LoadedChemicalRequirement input = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.tag(Identifier.parse("mmcr_test:crafting_context_tag"), 100L), 1F, List.of(), 1F);
+                ChemicalIngredient.tag(ResourceLocation.parse("mmcr_test:crafting_context_tag"), 100L), 1F, List.of(), 1F);
 
         assertThat(prepareChemicalInput(input, oxygen, 1L)).isNull();
     }
@@ -205,7 +205,7 @@ class AsyncChemicalPlanningTest {
     private static Object prepareChemicalInput(ChemicalResource chemical, float consumeChance, long parallelism)
             throws Exception {
         LoadedChemicalRequirement input = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(Identifier.parse(chemical.typeHolder().getRegisteredName()), 100L), 1F,
+                ChemicalIngredient.chemical(ResourceLocation.parse(chemical.typeHolder().getRegisteredName()), 100L), 1F,
                 List.of(), consumeChance);
         return prepareChemicalInput(input, chemical, parallelism);
     }
@@ -238,7 +238,7 @@ class AsyncChemicalPlanningTest {
 
     private static Holder.Reference<Chemical> registerChemical(String path) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
-                Identifier.fromNamespaceAndPath("mmcr_test", path));
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);

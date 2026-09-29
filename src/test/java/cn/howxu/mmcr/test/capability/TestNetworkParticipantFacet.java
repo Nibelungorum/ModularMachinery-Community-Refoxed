@@ -10,7 +10,7 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.NetworkParticipantFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.Set;
@@ -24,7 +24,7 @@ public final class TestNetworkParticipantFacet implements MachineCapability, Net
     private boolean attached;
     private long topologyVersion;
     private CapabilitySnapshot snapshot = new CapabilitySnapshot(List.of());
-    private final CapabilityType type = new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "network"));
+    private final CapabilityType type = new CapabilityType(ResourceLocation.fromNamespaceAndPath("mmcr_test", "network"));
     private final CapabilityView view = new CapabilityView() {
         @Override
         public CapabilityType type() {

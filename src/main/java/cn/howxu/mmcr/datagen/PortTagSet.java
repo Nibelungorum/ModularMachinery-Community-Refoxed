@@ -2,7 +2,7 @@ package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -12,9 +12,9 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-record PortTagSet(List<Identifier> tags, boolean optionalEntries) {
+record PortTagSet(List<ResourceLocation> tags, boolean optionalEntries) {
     static PortTagSet forKind(IOPortKind kind) {
-        LinkedHashSet<Identifier> tags = new LinkedHashSet<>();
+        LinkedHashSet<ResourceLocation> tags = new LinkedHashSet<>();
         tags.add(MMCR.id("ports"));
         tags.add(MMCR.id("machines"));
         kind.families().forEach(family -> {

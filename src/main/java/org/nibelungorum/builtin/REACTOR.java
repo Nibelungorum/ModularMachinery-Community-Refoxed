@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
@@ -25,7 +25,7 @@ import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 @EventBusSubscriber
 public class REACTOR {
 
-    private static final Identifier REACTOR = id("reactor");
+    private static final ResourceLocation REACTOR = id("reactor");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(REACTOR)) {
@@ -33,7 +33,7 @@ public class REACTOR {
                     .machine(REACTOR)
                     .recipePool(REACTOR)
                     .displayNameKey("machine.mmcr.reactor")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:blue_ice")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:blue_ice")))
                     .build();
             event.registerMachine(machine);
         }

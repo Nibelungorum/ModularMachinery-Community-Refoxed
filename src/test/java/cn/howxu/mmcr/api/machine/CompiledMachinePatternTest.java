@@ -8,7 +8,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
@@ -57,7 +57,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void compiler_derives_coupler_positions_from_the_structure_pattern() {
-        Identifier id = Identifier.parse("mmcr:coupler_pattern");
+        ResourceLocation id = ResourceLocation.parse("mmcr:coupler_pattern");
         BlockArray pattern = new BlockArray(Map.of(
                 BlockPos.ZERO, BlockPredicate.machineCoupler(),
                 new BlockPos(1, 0, 0), BlockPredicate.machineCoupler()));
@@ -81,7 +81,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void compiled_pattern_contains_rotated_replacements_for_horizontal_facing() {
-        Identifier id = MMCR.id("compiled_replacement");
+        ResourceLocation id = MMCR.id("compiled_replacement");
         BlockPos rawPos = new BlockPos(-1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         var machine = new DynamicMachine(
@@ -111,7 +111,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void compiler_supports_non_dynamic_machine_without_replacements() {
-        Identifier id = MMCR.id("plain_machine");
+        ResourceLocation id = MMCR.id("plain_machine");
         Machine machine = new PlainMachine(id, "Plain Machine", pattern(), MachineControllerSpec.defaultsFor(id));
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
@@ -122,13 +122,13 @@ class CompiledMachinePatternTest {
 
     @Test
     void compiler_preserves_stage_specific_pattern_data() {
-        Identifier id = Identifier.parse("mmcr:compiled_stage");
+        ResourceLocation id = ResourceLocation.parse("mmcr:compiled_stage");
         BlockArray first = pattern();
         BlockArray second = new BlockArray(Map.of(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE)));
         MachineBehavior behavior = TickBehavior.builder().build();
         Machine machine = new DynamicMachine(id, "Compiled Stage", first);
         machine = new Machine() {
-            @Override public Identifier registryName() { return machineId(); }
+            @Override public ResourceLocation registryName() { return machineId(); }
             @Override public BlockArray pattern() { return first; }
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public List<MachineStructureStage> structureStages() {
@@ -138,7 +138,7 @@ class CompiledMachinePatternTest {
                                 PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY));
             }
             @Override public MachineBehavior behavior() { return behavior; }
-            private Identifier machineId() { return id; }
+            private ResourceLocation machineId() { return id; }
         };
 
         List<CompiledMachinePattern> stages = MachinePatternCompiler.compileStages(machine, null);
@@ -152,7 +152,7 @@ class CompiledMachinePatternTest {
 
     @Test
     void stage_compiled_modifier_replacements_support_vertical_roll_without_parent_type_checks() {
-        Identifier id = Identifier.parse("mmcr:compiled_stage_modifiers");
+        ResourceLocation id = ResourceLocation.parse("mmcr:compiled_stage_modifiers");
         BlockPos rawPosition = new BlockPos(1, 0, 0);
         var replacement = new SingleBlockModifierReplacement("stage_modifier", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         BlockArray first = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
@@ -166,7 +166,7 @@ class CompiledMachinePatternTest {
         DynamicPatternSpec dynamic = new DynamicPatternSpec("stage_dynamic", new BlockArray(Map.of()), null,
                 0, 1, BlockPos.ZERO, BlockPos.ZERO, Set.of(Direction.SOUTH));
         Machine machine = new Machine() {
-            @Override public Identifier registryName() { return id; }
+            @Override public ResourceLocation registryName() { return id; }
             @Override public BlockArray pattern() { return first; }
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public List<MachineStructureStage> structureStages() {
@@ -201,7 +201,7 @@ class CompiledMachinePatternTest {
     }
 
     private record PlainMachine(
-            Identifier registryName,
+            ResourceLocation registryName,
             String localizedName,
             BlockArray pattern,
             MachineControllerSpec controller

@@ -12,7 +12,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +45,7 @@ class ModifierRegistrationTest {
 
     @Test
     void item_binding_ignores_count_and_distinguishes_data_components() {
-        Identifier modifierId = id("component_modifier");
+        ResourceLocation modifierId = id("component_modifier");
         ItemStack namedStack = new ItemStack(Items.IRON_INGOT, 1);
         namedStack.set(DataComponents.MAX_STACK_SIZE, 32);
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
@@ -68,7 +68,7 @@ class ModifierRegistrationTest {
 
     @Test
     void duplicate_item_binding_is_rejected_after_count_normalization() {
-        Identifier modifierId = id("duplicate_modifier");
+        ResourceLocation modifierId = id("duplicate_modifier");
         ItemStack stack = new ItemStack(Items.GOLD_INGOT);
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
@@ -91,7 +91,7 @@ class ModifierRegistrationTest {
 
     @Test
     void modifier_snapshot_copies_item_stacks_and_is_immutable() {
-        Identifier modifierId = id("isolated_modifier");
+        ResourceLocation modifierId = id("isolated_modifier");
         ItemStack source = new ItemStack(Items.DIAMOND, 1);
         source.set(DataComponents.MAX_STACK_SIZE, 32);
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
@@ -126,7 +126,7 @@ class ModifierRegistrationTest {
 
     @Test
     void modifier_use_requires_both_identifier_and_replacement() {
-        Identifier modifierId = id("use_modifier");
+        ResourceLocation modifierId = id("use_modifier");
         ModifierUse use = ModifierUse.of(modifierId, BlockPredicate.block(Blocks.IRON_BLOCK));
 
         assertThat(use.modifierId()).isEqualTo(modifierId);
@@ -137,7 +137,7 @@ class ModifierRegistrationTest {
                 .isInstanceOf(NullPointerException.class);
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 }

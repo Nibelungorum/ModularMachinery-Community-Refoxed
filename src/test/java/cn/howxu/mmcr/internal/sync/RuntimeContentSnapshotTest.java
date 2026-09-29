@@ -40,7 +40,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
@@ -106,11 +106,11 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void snapshotDefensivelyCopiesAllMaps() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
-        Map<Identifier, MachineStructureDefinition> structures = mapWithOpaqueValue(machineId);
-        Map<Identifier, MachineRecipe> recipes = mapWithOpaqueValue(machineId);
-        Map<Identifier, MachineControllerSpec> controllerSpecs = mapWithOpaqueValue(machineId);
-        Map<Identifier, MachineAppearanceSpec> appearances = mapWithOpaqueValue(machineId);
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
+        Map<ResourceLocation, MachineStructureDefinition> structures = mapWithOpaqueValue(machineId);
+        Map<ResourceLocation, MachineRecipe> recipes = mapWithOpaqueValue(machineId);
+        Map<ResourceLocation, MachineControllerSpec> controllerSpecs = mapWithOpaqueValue(machineId);
+        Map<ResourceLocation, MachineAppearanceSpec> appearances = mapWithOpaqueValue(machineId);
         RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
                 structures, recipes, controllerSpecs, appearances,
                 Map.of(machineId, List.of(MMCR.id("runtime_pool"), MMCR.id("secondary_pool"))), 7L);
@@ -233,7 +233,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void runtimeContentPayloadRoundTripsCompleteSnapshot() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         RuntimeContentSnapshot snapshot = new RuntimeContentSnapshot(
                 Map.of(machineId, structureWithLevelAndModifier(machineId)),
                 Map.of(MMCR.id("sync_recipe"), recipe(MMCR.id("sync_recipe"), machineId)),
@@ -264,14 +264,14 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         buf.writeVarInt(4);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
-        Identifier.STREAM_CODEC.encode(buf, machineId);
+        ResourceLocation.STREAM_CODEC.encode(buf, machineId);
         MachineStructureSyncCodec.encode(buf, structure(machineId));
-        Identifier.STREAM_CODEC.encode(buf, machineId);
+        ResourceLocation.STREAM_CODEC.encode(buf, machineId);
         MachineStructureSyncCodec.encode(buf, structure(machineId));
 
         assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
@@ -281,13 +281,13 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void runtimeContentPayloadRejectsStructureKeyIdMismatch() {
-        Identifier key = MMCR.id("runtime_test_machine");
-        Identifier structureId = MMCR.id("runtime_test_machine_new");
+        ResourceLocation key = MMCR.id("runtime_test_machine");
+        ResourceLocation structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         buf.writeVarInt(4);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
-        Identifier.STREAM_CODEC.encode(buf, key);
+        ResourceLocation.STREAM_CODEC.encode(buf, key);
         MachineStructureSyncCodec.encode(buf, structure(structureId));
         buf.writeVarInt(0);
         buf.writeVarInt(0);
@@ -312,10 +312,10 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientReplacesOldDynamicStructuresAndRecipes() {
-        Identifier oldMachine = MMCR.id("runtime_test_machine");
-        Identifier newMachine = MMCR.id("runtime_test_machine_new");
-        Identifier oldRecipe = MMCR.id("old_synced_recipe");
-        Identifier newRecipe = MMCR.id("new_synced_recipe");
+        ResourceLocation oldMachine = MMCR.id("runtime_test_machine");
+        ResourceLocation newMachine = MMCR.id("runtime_test_machine_new");
+        ResourceLocation oldRecipe = MMCR.id("old_synced_recipe");
+        ResourceLocation newRecipe = MMCR.id("new_synced_recipe");
         registerMachineIfMissing(oldMachine);
         registerMachineIfMissing(newMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(oldMachine, structure(oldMachine)));
@@ -335,8 +335,8 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientRemovesDynamicContentOmittedFromSnapshot() {
-        Identifier removedMachine = MMCR.id("runtime_test_machine");
-        Identifier removedRecipe = MMCR.id("removed_synced_recipe");
+        ResourceLocation removedMachine = MMCR.id("runtime_test_machine");
+        ResourceLocation removedRecipe = MMCR.id("removed_synced_recipe");
         registerMachineIfMissing(removedMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(removedMachine, structure(removedMachine)));
         RecipeRegistry.replaceDynamic(Map.of(removedRecipe, recipe(removedRecipe, removedMachine)));
@@ -351,7 +351,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void applyClientRejectsOlderSnapshotBeforeReplacingContent() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         RuntimeContentSnapshot current = new RuntimeContentSnapshot(
                 Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
@@ -365,12 +365,12 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void invalidSnapshotDoesNotPartiallyReplaceClientContent() {
-        Identifier oldMachine = MMCR.id("runtime_test_machine");
-        Identifier newMachine = MMCR.id("runtime_test_machine_new");
+        ResourceLocation oldMachine = MMCR.id("runtime_test_machine");
+        ResourceLocation newMachine = MMCR.id("runtime_test_machine_new");
         registerMachineIfMissing(oldMachine);
         registerMachineIfMissing(newMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(oldMachine, structure(oldMachine)));
-        Map<Identifier, MachineStructureDefinition> before = MachineStructureRegistry.effectiveSnapshot();
+        Map<ResourceLocation, MachineStructureDefinition> before = MachineStructureRegistry.effectiveSnapshot();
 
         MachineRecipe invalidRecipe = recipe(MMCR.id("actual_recipe"), newMachine);
         RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
@@ -384,12 +384,12 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void invalidMachinePoolMappingDoesNotPartiallyReplaceClientContent() {
-        Identifier oldMachine = MMCR.id("runtime_test_machine");
-        Identifier newMachine = MMCR.id("runtime_test_machine_new");
+        ResourceLocation oldMachine = MMCR.id("runtime_test_machine");
+        ResourceLocation newMachine = MMCR.id("runtime_test_machine_new");
         registerMachineIfMissing(oldMachine);
         registerMachineIfMissing(newMachine);
         MachineStructureRegistry.replaceDynamic(Map.of(oldMachine, structure(oldMachine)));
-        Map<Identifier, MachineStructureDefinition> before = MachineStructureRegistry.effectiveSnapshot();
+        Map<ResourceLocation, MachineStructureDefinition> before = MachineStructureRegistry.effectiveSnapshot();
 
         RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
                 Map.of(newMachine, structure(newMachine)), Map.of(), Map.of(), Map.of(), Map.of(), 30L);
@@ -401,9 +401,9 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void clientUsesServerMachinePoolMappingForRecipeCatalogs() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
-        Identifier serverPool = MMCR.id("server_recipe_pool");
-        Identifier recipeId = MMCR.id("server_pool_recipe");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation serverPool = MMCR.id("server_recipe_pool");
+        ResourceLocation recipeId = MMCR.id("server_pool_recipe");
         registerMachineIfMissing(machineId);
         MachineRecipe recipe = RecipeTestSupport.create(recipeId, serverPool, 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
@@ -441,7 +441,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void applyingClientSnapshotDoesNotAdvanceServerContentVersion() {
         long before = RuntimeContentVersion.current();
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
 
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
@@ -453,7 +453,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void newClientConnectionAcceptsLowerVersionFromAnotherServer() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(), Map.of(), Map.of(),
                 Map.of(machineId, List.of(machineId)), 90L)
@@ -468,7 +468,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void newClientConnectionRetainsRuntimeContentUntilSnapshotArrives() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         new RuntimeContentSnapshot(Map.of(machineId, structure(machineId)), Map.of(),
                 Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
@@ -484,7 +484,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void clientRejectsControllerSpecForAnotherMachine() {
-        Identifier machineId = MMCR.id("runtime_test_machine");
+        ResourceLocation machineId = MMCR.id("runtime_test_machine");
         registerMachineIfMissing(machineId);
         RuntimeContentSnapshot invalid = new RuntimeContentSnapshot(
                 Map.of(machineId, structure(machineId)), Map.of(),
@@ -581,7 +581,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void structureSyncCodecRejectsBlockPatternsWhoseCombinedSizeExceedsLimit() {
-        Identifier machineId = MMCR.id("oversized_combined_structure");
+        ResourceLocation machineId = MMCR.id("oversized_combined_structure");
         MachineStructureDefinition original = new MachineStructureDefinition(machineId,
                 Collections.nCopies(2, structure(machineId).declarations().getFirst()));
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
@@ -592,19 +592,19 @@ class RuntimeContentSnapshotTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> Map<Identifier, T> mapWithOpaqueValue(Identifier id) {
-        Map<Identifier, T> map = new LinkedHashMap<>();
+    private static <T> Map<ResourceLocation, T> mapWithOpaqueValue(ResourceLocation id) {
+        Map<ResourceLocation, T> map = new LinkedHashMap<>();
         map.put(id, (T) new Object());
         return map;
     }
 
-    private static void registerMachineIfMissing(Identifier id) {
+    private static void registerMachineIfMissing(ResourceLocation id) {
         if (MachineDefinitions.getRegistration(id) == null) {
             MachineDefinitions.register(MachineRegistration.builder(id).build());
         }
     }
 
-    private static MachineStructureDefinition structure(Identifier id) {
+    private static MachineStructureDefinition structure(ResourceLocation id) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
         pattern.put(BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
@@ -616,7 +616,7 @@ class RuntimeContentSnapshotTest {
                 MachineStructureRequirements.builder().levelSlot('L', MMCR.id("coil")).build(blockArray));
     }
 
-    private static MachineStructureDefinition structureWithLevelAndModifier(Identifier id) {
+    private static MachineStructureDefinition structureWithLevelAndModifier(ResourceLocation id) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE));
         pattern.put(BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
@@ -632,7 +632,7 @@ class RuntimeContentSnapshotTest {
                 PortTierRequirementSpec.none(), List.of(), requirements);
     }
 
-    private static MachineRecipe recipe(Identifier id, Identifier machineId) {
+    private static MachineRecipe recipe(ResourceLocation id, ResourceLocation machineId) {
         return RecipeTestSupport.create(
                 id, machineId, 40,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
@@ -641,7 +641,7 @@ class RuntimeContentSnapshotTest {
                 List.of(), true, Set.of());
     }
 
-    private static Set<Identifier> hostIds(int count) {
+    private static Set<ResourceLocation> hostIds(int count) {
         return IntStream.range(0, count)
                 .mapToObj(index -> MMCR.id("host_" + index))
                 .collect(Collectors.toCollection(LinkedHashSet::new));

@@ -13,7 +13,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
@@ -36,9 +36,9 @@ import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 @EventBusSubscriber
 public class PURE_TICK_MACHINE {
 
-    private static final Identifier PURE_TICK_MACHINE = id("pure_tick_machine");
-    private static final Identifier FE_STATUS = id("fe_status");
-    private static final Identifier PURE_TICK_STATUS = id("pure_tick_status");
+    private static final ResourceLocation PURE_TICK_MACHINE = id("pure_tick_machine");
+    private static final ResourceLocation FE_STATUS = id("fe_status");
+    private static final ResourceLocation PURE_TICK_STATUS = id("pure_tick_status");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         ControllerScreenTextRegistry.register(PURE_TICK_MACHINE, context -> {
@@ -57,7 +57,7 @@ public class PURE_TICK_MACHINE {
                     .machine(PURE_TICK_MACHINE)
                     .recipePool(PURE_TICK_MACHINE)
                     .displayNameKey("machine.mmcr.pure_tick_machine")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:green_terracotta")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:green_terracotta")))
                     .allowMultithreading()
                     .maxParallelism(Integer.MAX_VALUE)
                     .tickBehavior(behavior -> behavior.serverTick(context -> {

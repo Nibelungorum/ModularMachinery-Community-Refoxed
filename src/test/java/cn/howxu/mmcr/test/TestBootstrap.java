@@ -59,7 +59,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
@@ -82,8 +82,8 @@ import java.nio.file.Path;
 
 public final class TestBootstrap {
     private static boolean initialized;
-    private static final Map<Identifier, LevelType> TEST_LEVEL_TYPES = new LinkedHashMap<>();
-    private static final Map<Identifier, MachineLevel> TEST_LEVELS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, LevelType> TEST_LEVEL_TYPES = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, MachineLevel> TEST_LEVELS = new LinkedHashMap<>();
 
     private TestBootstrap() {
     }
@@ -334,7 +334,7 @@ public final class TestBootstrap {
         });
         ModBlocks.registerMachineControllers(MachineRegistry.effectiveSnapshot().keySet());
         try {
-            for (Identifier machineId : MachineRegistry.effectiveSnapshot().keySet()) {
+            for (ResourceLocation machineId : MachineRegistry.effectiveSnapshot().keySet()) {
                 if (!ModBlocks.hasControllerFor(machineId)) bindController(machineId);
             }
         } catch (Exception e) {
@@ -343,7 +343,7 @@ public final class TestBootstrap {
         MachineRegistry.rebuildCompiledCache();
     }
 
-    public static synchronized void bindControllerForTesting(Identifier machineId) {
+    public static synchronized void bindControllerForTesting(ResourceLocation machineId) {
         ModBlocks.registerMachineControllers(List.of(machineId));
         ModBlockEntities.registerMachineControllers(List.of(machineId));
         try {
@@ -374,7 +374,7 @@ public final class TestBootstrap {
 
     public static void registerTestMachineDefinitions(MMCRMachineDefinationsEvent event) {
         for (String name : testMachineNames()) {
-            Identifier id = id(name);
+            ResourceLocation id = id(name);
             event.registerMachine(id, builder -> {
                 builder.displayNameKey("machine.mmcr_test." + name);
                 if (name.equals("test_cube")) builder.allowModifiers();
@@ -391,7 +391,7 @@ public final class TestBootstrap {
             throw new IllegalStateException("Unable to bind GameTest machine blocks", exception);
         }
         for (String name : testMachineNames()) {
-            Identifier machineId = id(name);
+            ResourceLocation machineId = id(name);
             event.registerStructure(machineId, structure -> {
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern
                         .layer("XXX").layer("XCX").layer("XXX")
@@ -417,7 +417,7 @@ public final class TestBootstrap {
 
     public static void registerTestRecipes(MMCRMachineRecipesEvent event) {
         event.registerRecipe(MachineRecipeBuilder.recipe(
-                Identifier.parse("mmcr_test:datapack_static_override")).recipePool(id("iron_compressor"))
+                ResourceLocation.parse("mmcr_test:datapack_static_override")).recipePool(id("iron_compressor"))
                 .duration(20).inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());
     }
 
@@ -428,11 +428,11 @@ public final class TestBootstrap {
     }
 
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 
-    private static void bindController(Identifier machineId) throws Exception {
+    private static void bindController(ResourceLocation machineId) throws Exception {
         MachineControllerBlock block = bindControllerBlockEntity(machineId);
         String itemName = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         DeferredHolder<Item, Item> itemHolder = ModItems.ITEMS.get(itemName);
@@ -441,11 +441,11 @@ public final class TestBootstrap {
         Item.BY_BLOCK.put(block, item);
     }
 
-    private static MachineControllerBlock bindControllerBlockEntity(Identifier machineId) throws Exception {
+    private static MachineControllerBlock bindControllerBlockEntity(ResourceLocation machineId) throws Exception {
         MachineControllerBlock block = controllerBlock(machineId);
         bind(ModBlocks.controllerFor(machineId), block);
         if (!ModBlockEntities.controllerFor(machineId).isBound()) {
-            Identifier typeId = MachineControllerSpec.defaultsFor(machineId).id();
+            ResourceLocation typeId = MachineControllerSpec.defaultsFor(machineId).id();
             MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
             BlockEntityType<?> type;
             if (BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(typeId)) {
@@ -461,9 +461,9 @@ public final class TestBootstrap {
         return block;
     }
 
-    private static MachineControllerBlock controllerBlock(Identifier machineId) {
+    private static MachineControllerBlock controllerBlock(ResourceLocation machineId) {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
-        Identifier id = MachineControllerSpec.defaultsFor(machineId).id();
+        ResourceLocation id = MachineControllerSpec.defaultsFor(machineId).id();
         if (BuiltInRegistries.BLOCK.containsKey(id)) {
             return (MachineControllerBlock) BuiltInRegistries.BLOCK.getValue(id);
         }
@@ -487,7 +487,7 @@ public final class TestBootstrap {
 
     private static ParallelControllerBlock parallelControllerBlock(ParallelTier tier) {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
-        Identifier id = MMCR.id(tier.idSuffix());
+        ResourceLocation id = MMCR.id(tier.idSuffix());
         if (BuiltInRegistries.BLOCK.containsKey(id)) {
             return (ParallelControllerBlock) BuiltInRegistries.BLOCK.getValue(id);
         }
@@ -735,7 +735,7 @@ public final class TestBootstrap {
         return item;
     }
 
-    private static void bindItemComponents(Item item, Identifier id) throws Exception {
+    private static void bindItemComponents(Item item, ResourceLocation id) throws Exception {
         Field initializersField = DataComponentInitializers.class.getDeclaredField("initializers");
         initializersField.setAccessible(true);
         Field keyField = null;

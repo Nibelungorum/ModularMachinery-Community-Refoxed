@@ -32,7 +32,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -69,15 +69,15 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void commitsMachineStructureAndRecipeAsOneStartupModel() {
-        Identifier machineId = id("coordinated_machine");
+        ResourceLocation machineId = id("coordinated_machine");
         MachineDefinition machine = MachineBuilder.machine(machineId).build();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(machine);
         definitions.freeze();
         MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
-        Identifier typeId = id("coordinated_type");
-        Identifier levelId = id("coordinated_level");
-        Identifier modifierId = id("coordinated_modifier");
+        ResourceLocation typeId = id("coordinated_type");
+        ResourceLocation levelId = id("coordinated_level");
+        ResourceLocation modifierId = id("coordinated_modifier");
         structures.registerLevelType(new LevelType(typeId,
                 Component.literal("Coil")));
         structures.registerLevel(new MachineLevel(levelId, typeId, 1,
@@ -111,7 +111,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void rejectsStructureWithoutMachine() {
-        Identifier machineId = id("missing_machine");
+        ResourceLocation machineId = id("missing_machine");
         MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
@@ -129,9 +129,9 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void dropsOrphanRecipeWithoutBlockingValidStartupRecipe() {
-        Identifier machineId = id("missing_recipe_machine");
-        Identifier validRecipeId = id("valid_startup_recipe");
-        Identifier orphanRecipeId = id("orphan_startup_recipe");
+        ResourceLocation machineId = id("missing_recipe_machine");
+        ResourceLocation validRecipeId = id("valid_startup_recipe");
+        ResourceLocation orphanRecipeId = id("orphan_startup_recipe");
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
@@ -158,7 +158,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void commitIsIdempotentAfterSuccess() {
-        Identifier machineId = id("idempotent_machine");
+        ResourceLocation machineId = id("idempotent_machine");
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
@@ -175,7 +175,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void commits_complete_startup_structure_snapshot() {
-        Identifier machineId = id("complete_startup_machine");
+        ResourceLocation machineId = id("complete_startup_machine");
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
@@ -200,7 +200,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void invalid_level_snapshot_does_not_install_machine_levels_or_modifiers() {
-        Identifier machineId = id("invalid_snapshot_machine");
+        ResourceLocation machineId = id("invalid_snapshot_machine");
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
@@ -232,8 +232,8 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void recipe_failure_does_not_install_any_startup_registry_state() {
-        Identifier existingMachineId = id("atomic_existing_machine");
-        Identifier existingRecipeId = id("atomic_existing_recipe");
+        ResourceLocation existingMachineId = id("atomic_existing_machine");
+        ResourceLocation existingRecipeId = id("atomic_existing_recipe");
         MachineDefinition existingMachine = MachineBuilder.machine(existingMachineId).build();
         MachineDefinitions.register(MachineDefinitionConverter.toStartupRegistration(
                 existingMachine, null));
@@ -243,7 +243,7 @@ class ContentRegistrationCoordinatorTest {
                         Map.of(), Map.of())));
         ContentRegistrationCoordinator.beginStartup();
 
-        Identifier newMachineId = id("atomic_new_machine");
+        ResourceLocation newMachineId = id("atomic_new_machine");
         MMCRMachineDefinationsEvent newDefinitions = new MMCRMachineDefinationsEvent();
         newDefinitions.registerMachine(MachineBuilder.machine(newMachineId).build());
         newDefinitions.freeze();
@@ -289,7 +289,7 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void definition_subscribers_have_controller_blocks_before_structure_subscribers_run() {
-        Identifier machineId = id("subscriber_controller_machine");
+        ResourceLocation machineId = id("subscriber_controller_machine");
         assertThatCode(() -> StartupContentRegistration.registerForTesting(
                 definitions -> definitions.registerMachine(machineId, builder -> builder),
                 structures -> assertThat(ModBlocks.BLOCKS.containsKey(machineId.getPath() + "_controller")).isTrue(),
@@ -360,8 +360,8 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void kubejs_startup_levels_declared_after_structures_event_are_collected_with_production() {
-        Identifier typeId = id("kubejs_deferred_type");
-        Identifier levelId = id("kubejs_deferred_level");
+        ResourceLocation typeId = id("kubejs_deferred_type");
+        ResourceLocation levelId = id("kubejs_deferred_level");
         StartupContentRegistration.registerProductionForModStartup();
         MMCRMachineStructuresEvent.current().registerLevelType(new LevelType(typeId,
                 Component.literal("KubeJS Coil")));
@@ -386,7 +386,7 @@ class ContentRegistrationCoordinatorTest {
         assertThat(MachineStructureRegistry.startupSnapshot()).isEmpty();
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 }

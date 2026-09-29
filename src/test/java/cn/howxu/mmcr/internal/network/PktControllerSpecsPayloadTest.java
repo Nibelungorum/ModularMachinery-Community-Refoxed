@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -12,9 +12,9 @@ class PktControllerSpecsPayloadTest {
 
     @Test
     void payloadRetainsCompleteSpecSnapshot() {
-        Identifier firstId = Identifier.parse("mmcr:first");
-        Identifier secondId = Identifier.parse("mmcr:second");
-        Map<Identifier, MachineControllerSpec> specs = Map.of(
+        ResourceLocation firstId = ResourceLocation.parse("mmcr:first");
+        ResourceLocation secondId = ResourceLocation.parse("mmcr:second");
+        Map<ResourceLocation, MachineControllerSpec> specs = Map.of(
                 firstId, testSpec(firstId),
                 secondId, testSpec(secondId));
 
@@ -23,13 +23,13 @@ class PktControllerSpecsPayloadTest {
         assertThat(payload.specs()).isEqualTo(specs);
     }
 
-    private static MachineControllerSpec testSpec(Identifier machineId) {
+    private static MachineControllerSpec testSpec(ResourceLocation machineId) {
         return new MachineControllerSpec(
-                Identifier.fromNamespaceAndPath(machineId.getNamespace(), machineId.getPath() + "_controller"),
-                Identifier.parse("mmcr:block/front"),
-                Identifier.parse("mmcr:block/side"),
-                Identifier.parse("mmcr:block/top"),
-                Identifier.parse("mmcr:block/bottom"),
+                ResourceLocation.fromNamespaceAndPath(machineId.getNamespace(), machineId.getPath() + "_controller"),
+                ResourceLocation.parse("mmcr:block/front"),
+                ResourceLocation.parse("mmcr:block/side"),
+                ResourceLocation.parse("mmcr:block/top"),
+                ResourceLocation.parse("mmcr:block/bottom"),
                 true,
                 false,
                 true);

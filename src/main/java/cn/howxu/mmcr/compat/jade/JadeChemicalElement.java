@@ -7,7 +7,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.data.AtlasIds;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import snownee.jade.impl.ui.ProgressOverlayElement;
 
 /**
@@ -19,20 +19,20 @@ import snownee.jade.impl.ui.ProgressOverlayElement;
  */
 public final class JadeChemicalElement extends ProgressOverlayElement {
 
-    private final Identifier spriteLocation;
+    private final ResourceLocation spriteLocation;
     private final int tint;
     private final int width;
     private final int height;
 
     // 方形
-    public JadeChemicalElement(Identifier spriteLocation, int tint, int size) {
+    public JadeChemicalElement(ResourceLocation spriteLocation, int tint, int size) {
         this.spriteLocation = spriteLocation;
         this.tint = tint;
         this.width = size;
         this.height = size;
     }
 
-    public JadeChemicalElement(Identifier spriteLocation, int tint, int width, int height) {
+    public JadeChemicalElement(ResourceLocation spriteLocation, int tint, int width, int height) {
         this.spriteLocation = spriteLocation;
         this.tint = tint;
         this.width = width;

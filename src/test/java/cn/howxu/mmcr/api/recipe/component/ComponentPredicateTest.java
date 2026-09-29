@@ -12,7 +12,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
@@ -76,7 +76,7 @@ class ComponentPredicateTest {
     void exactPredicateMatchesAndExportsEnchantmentComponents() {
         var lookup = VanillaRegistries.createLookup();
         var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
-                Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
+                Registries.ENCHANTMENT, ResourceLocation.parse("minecraft:sharpness")));
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         enchantments.set(sharpness, 2);
@@ -96,7 +96,7 @@ class ComponentPredicateTest {
     void applyToMaterializesStandardJsonComponentsOnTargetStack() {
         var lookup = VanillaRegistries.createLookup();
         var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
-                Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
+                Registries.ENCHANTMENT, ResourceLocation.parse("minecraft:sharpness")));
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         var enchantments = new JsonObject();
         enchantments.addProperty("minecraft:sharpness", 2);
@@ -116,7 +116,7 @@ class ComponentPredicateTest {
     void matchesStandardJsonComponentsAgainstRuntimeStackValues() {
         var lookup = VanillaRegistries.createLookup();
         var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
-                Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
+                Registries.ENCHANTMENT, ResourceLocation.parse("minecraft:sharpness")));
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         enchantments.set(sharpness, 2);
@@ -139,9 +139,9 @@ class ComponentPredicateTest {
         var lookup = VanillaRegistries.createLookup();
         var enchantments = lookup.lookupOrThrow(Registries.ENCHANTMENT);
         var sharpness = enchantments.getOrThrow(ResourceKey.create(
-                Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
+                Registries.ENCHANTMENT, ResourceLocation.parse("minecraft:sharpness")));
         var unbreaking = enchantments.getOrThrow(ResourceKey.create(
-                Registries.ENCHANTMENT, Identifier.parse("minecraft:unbreaking")));
+                Registries.ENCHANTMENT, ResourceLocation.parse("minecraft:unbreaking")));
         var expectedEnchantments = new JsonObject();
         expectedEnchantments.addProperty("minecraft:sharpness", 2);
         var predicates = new DataComponentPredicateSet(Map.of(
@@ -164,7 +164,7 @@ class ComponentPredicateTest {
     void matchesRejectsWrongRuntimeComponentValues() {
         var lookup = VanillaRegistries.createLookup();
         var sharpness = lookup.lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(ResourceKey.create(
-                Registries.ENCHANTMENT, Identifier.parse("minecraft:sharpness")));
+                Registries.ENCHANTMENT, ResourceLocation.parse("minecraft:sharpness")));
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         var enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         enchantments.set(sharpness, 1);

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 
@@ -10,7 +10,7 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record RecipeIoEntry(RecipeIngredientRole role, Identifier typeId,
+public record RecipeIoEntry(RecipeIngredientRole role, ResourceLocation typeId,
                             Object value, long amount, float chance) {
     public RecipeIoEntry {
         Objects.requireNonNull(role, "role");

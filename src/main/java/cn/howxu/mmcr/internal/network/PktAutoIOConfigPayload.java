@@ -16,7 +16,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -32,13 +32,13 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, AutoIOAction action,
+public record PktAutoIOConfigPayload(BlockPos pos, ResourceLocation capabilityId, AutoIOAction action,
                                     @Nullable Direction side, boolean enabled)
         implements CustomPacketPayload {
     public static final Type<PktAutoIOConfigPayload> TYPE = new Type<>(MMCR.id("auto_io_config"));
     public static final StreamCodec<ByteBuf, PktAutoIOConfigPayload> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, PktAutoIOConfigPayload::pos,
-            Identifier.STREAM_CODEC, PktAutoIOConfigPayload::capabilityId,
+            ResourceLocation.STREAM_CODEC, PktAutoIOConfigPayload::capabilityId,
             ByteBufCodecs.idMapper(index -> readEnum(AutoIOAction.values(), index), AutoIOAction::ordinal), PktAutoIOConfigPayload::action,
             ByteBufCodecs.optional(ByteBufCodecs.idMapper(index -> readEnum(Direction.values(), index), Direction::ordinal)),
             payload -> Optional.ofNullable(payload.side),
@@ -77,7 +77,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
         return menu.stillValid(player) && (!action.requiresSide() || side != null);
     }
 
-    public static boolean canUpdate(ServerPlayer player, BlockPos pos, Identifier capabilityId,
+    public static boolean canUpdate(ServerPlayer player, BlockPos pos, ResourceLocation capabilityId,
                                     AutoIOAction action, @Nullable Direction side) {
         if (!canUpdate(player, pos, action, side) || capabilityId == null || player.level() == null) return false;
         if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return false;

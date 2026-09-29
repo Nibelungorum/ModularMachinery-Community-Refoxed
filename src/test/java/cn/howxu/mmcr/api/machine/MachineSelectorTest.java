@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import org.junit.jupiter.api.Test;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.MMCR;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -11,13 +11,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MachineSelectorTest {
 
-    private static Map<Identifier, Machine> registry(Machine... machines) {
-        LinkedHashMap<Identifier, Machine> map = new LinkedHashMap<>();
+    private static Map<ResourceLocation, Machine> registry(Machine... machines) {
+        LinkedHashMap<ResourceLocation, Machine> map = new LinkedHashMap<>();
         for (Machine m : machines) map.put(m.registryName(), m);
         return map;
     }
 
-    private static Identifier id(String path) {
+    private static ResourceLocation id(String path) {
         return MMCR.id(path);
     }
 

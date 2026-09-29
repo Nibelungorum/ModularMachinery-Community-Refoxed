@@ -19,7 +19,7 @@ import mezz.jei.api.registration.IRecipeTransferRegistration;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 public final class JeiPlugin implements IModPlugin {
 
     @Override
-    public Identifier getPluginUid() {
+    public ResourceLocation getPluginUid() {
         return MMCR.id("jei");
     }
 
@@ -53,7 +53,7 @@ public final class JeiPlugin implements IModPlugin {
         JeiIngredientAdapterRegistry.registerBuiltIns();
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
-        Map<Identifier, List<Identifier>> machinesByPool = machineIdsByPool();
+        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = machineIdsByPool();
         JeiRuntimeReloader.markRegisteredRecipePoolCategories(machinesByPool.keySet());
         machinesByPool.forEach((poolId, machineIds) -> registration.addRecipeCategories(
                 new MachineRecipeCategory(guiHelper, poolId, machineIds.getFirst())));
@@ -70,8 +70,8 @@ public final class JeiPlugin implements IModPlugin {
                 .map(MachineStructureDisplay::from)
                 .toList());
         var displaysByPool = MachineRecipeDisplays.byPool();
-        Set<Identifier> poolIds = machineIdsByPool().keySet();
-        Map<Identifier, List<MachineRecipeDisplay>> registeredDisplays = displaysByPool.entrySet().stream()
+        Set<ResourceLocation> poolIds = machineIdsByPool().keySet();
+        Map<ResourceLocation, List<MachineRecipeDisplay>> registeredDisplays = displaysByPool.entrySet().stream()
                 .filter(entry -> poolIds.contains(entry.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
                         (first, ignored) -> first, LinkedHashMap::new));
@@ -88,7 +88,7 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        Map<Identifier, List<Identifier>> machinesByPool = machineIdsByPool();
+        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = machineIdsByPool();
         Map<IRecipeType<?>, List<ItemStack>> workstations = new LinkedHashMap<>();
         machinesByPool.forEach((poolId, machineIds) -> machineIds.forEach(machineId ->
                 addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolId), controllerFor(machineId))));
@@ -157,14 +157,14 @@ public final class JeiPlugin implements IModPlugin {
         registration.addGuiScreenHandler(BlueprintScreen.class, new BlueprintScreenJeiHandler());
     }
 
-    static Set<Identifier> machineIds() {
-        Set<Identifier> ids = new LinkedHashSet<>(MachineRegistry.getAll().keySet());
+    static Set<ResourceLocation> machineIds() {
+        Set<ResourceLocation> ids = new LinkedHashSet<>(MachineRegistry.getAll().keySet());
         ids.addAll(MachineDefinitions.effectiveSnapshot().keySet());
         return ids;
     }
 
-    static Map<Identifier, List<Identifier>> machineIdsByPool() {
-        Map<Identifier, List<Identifier>> machinesByPool = new LinkedHashMap<>();
+    static Map<ResourceLocation, List<ResourceLocation>> machineIdsByPool() {
+        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = new LinkedHashMap<>();
         machineIds().stream().sorted().forEach(machineId ->
                 MachineRegistry.recipePoolsForMachine(machineId).forEach(poolId ->
                         machinesByPool.computeIfAbsent(poolId, ignored -> new java.util.ArrayList<>()).add(machineId)));
@@ -172,7 +172,7 @@ public final class JeiPlugin implements IModPlugin {
         return machinesByPool;
     }
 
-    private static ItemStack controllerFor(Identifier machineId) {
+    private static ItemStack controllerFor(ResourceLocation machineId) {
         return new ItemStack(ModBlocks.controllerFor(machineId).get());
     }
 

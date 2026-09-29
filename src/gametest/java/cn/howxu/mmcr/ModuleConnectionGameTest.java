@@ -12,7 +12,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 
 import net.minecraft.server.level.ServerLevel;
@@ -26,8 +26,8 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public class ModuleConnectionGameTest {
-    private static final Identifier HOST_ID = MMCR.id("gametest_module_host");
-    private static final Identifier MODULE_ID = MMCR.id("gametest_module");
+    private static final ResourceLocation HOST_ID = MMCR.id("gametest_module_host");
+    private static final ResourceLocation MODULE_ID = MMCR.id("gametest_module");
 
     public void hostFormsWithNoInstalledModules(GameTestHelper helper) {
         Fixture fixture = placeFixture(helper, false, true, false);
@@ -87,8 +87,8 @@ public class ModuleConnectionGameTest {
         BlockPos moduleNormal = new BlockPos(5, 2, 2);
         BlockPos moduleInterface = new BlockPos(6, 2, 3);
         BlockPos hostInterface = sharedInterface ? moduleInterface : new BlockPos(2, 2, 3);
-        Identifier hostId = sharedInterface ? MMCR.id("gametest_module_host_interface_conflict") : HOST_ID;
-        Identifier moduleId = sharedInterface ? MMCR.id("gametest_module_interface_conflict") : MODULE_ID;
+        ResourceLocation hostId = sharedInterface ? MMCR.id("gametest_module_host_interface_conflict") : HOST_ID;
+        ResourceLocation moduleId = sharedInterface ? MMCR.id("gametest_module_interface_conflict") : MODULE_ID;
         DynamicMachine hostMachine = machine(hostId, MachineRole.HOST, Set.of(moduleId), hostPos, coupler, hostNormal, hostInterface);
         DynamicMachine moduleMachine = machine(moduleId, MachineRole.MODULE, Set.of(), modulePos, coupler, moduleNormal, moduleInterface);
         registerForGameTest(hostMachine);
@@ -127,7 +127,7 @@ public class ModuleConnectionGameTest {
         }
     }
 
-    private static DynamicMachine machine(Identifier id, MachineRole role, Set<Identifier> acceptedModules,
+    private static DynamicMachine machine(ResourceLocation id, MachineRole role, Set<ResourceLocation> acceptedModules,
                                           BlockPos controller, BlockPos coupler, BlockPos normal, BlockPos smartInterface) {
         return new DynamicMachine(id, id.toString(), new BlockArray(Map.of(
                 coupler.subtract(controller), BlockPredicate.machineCoupler(),

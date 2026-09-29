@@ -47,7 +47,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
@@ -94,10 +94,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2PatternInterfaceGameTest {
-    private static final Identifier PATTERN_MACHINE_ID = MMCR.id("ae2_pattern_interface_test");
-    private static final Identifier PATTERN_RECIPE_ID = MMCR.id("ae2_pattern_interface_recipe");
-    private static final Identifier EXTENDED_PATTERN_MACHINE_ID = MMCR.id("eae_extended_pattern_interface_test");
-    private static final Identifier EXTENDED_PATTERN_RECIPE_ID = MMCR.id("eae_extended_pattern_interface_recipe");
+    private static final ResourceLocation PATTERN_MACHINE_ID = MMCR.id("ae2_pattern_interface_test");
+    private static final ResourceLocation PATTERN_RECIPE_ID = MMCR.id("ae2_pattern_interface_recipe");
+    private static final ResourceLocation EXTENDED_PATTERN_MACHINE_ID = MMCR.id("eae_extended_pattern_interface_test");
+    private static final ResourceLocation EXTENDED_PATTERN_RECIPE_ID = MMCR.id("eae_extended_pattern_interface_recipe");
     private static final BlockPos PORT_POS = new BlockPos(0, 0, 0);
     private static final BlockPos RESTORED_PORT_POS = new BlockPos(10, 0, 0);
     private static final BlockPos TARGET_CHEST_POS = new BlockPos(1, 0, 0);
@@ -183,8 +183,8 @@ public class AE2PatternInterfaceGameTest {
     }
 
     public void craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(GameTestHelper helper) {
-        Identifier machineId = MMCR.id("ae2_cpu_batch_factory_test");
-        Identifier recipeId = MMCR.id("ae2_cpu_batch_factory_recipe");
+        ResourceLocation machineId = MMCR.id("ae2_cpu_batch_factory_test");
+        ResourceLocation recipeId = MMCR.id("ae2_cpu_batch_factory_recipe");
         BlockPos patternPortPos = new BlockPos(0, 1, 0);
         BlockPos factoryPos = new BlockPos(1, 0, 0);
         BlockPos factoryPos2 = new BlockPos(2, 0, 0);

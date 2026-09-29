@@ -11,7 +11,7 @@ import net.minecraft.gametest.framework.TestData;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Rotation;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
@@ -59,7 +59,7 @@ public final class OptionalGameTestSource {
         testsInvoked = true;
         Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
         TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment,
-                Identifier.fromNamespaceAndPath("minecraft", "empty"), 1, 0, true,
+                ResourceLocation.fromNamespaceAndPath("minecraft", "empty"), 1, 0, true,
                 Rotation.NONE, false, 1, 1, false, 0);
         event.registerTest(MMCR.id("optional_source_test"),
                 new FixtureGameTest(data));

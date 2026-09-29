@@ -35,7 +35,7 @@ import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -92,7 +92,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IDrawable slotBackground;
     private final IGuiHelper guiHelper;
 
-    public MachineRecipeCategory(IGuiHelper guiHelper, Identifier poolId, Identifier iconMachineId) {
+    public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
         this.guiHelper = guiHelper;
         this.title = Component.translatable(poolId.toLanguageKey("recipe_pool"));
         this.recipeType = JeiMachineRecipeTypes.forPool(poolId);
@@ -256,7 +256,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     @Override
-    public @Nullable Identifier getIdentifier(MachineRecipeDisplay recipe) {
+    public @Nullable ResourceLocation getResourceLocation(MachineRecipeDisplay recipe) {
         return recipe.recipeId();
     }
 
@@ -419,9 +419,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     static Component hostRequirementComponent(MachineRecipeDisplay recipe, long gameTime) {
         if (recipe.requiredHostIds().isEmpty()) return Component.empty();
-        List<Identifier> hostIds = List.copyOf(recipe.requiredHostIds());
+        List<ResourceLocation> hostIds = List.copyOf(recipe.requiredHostIds());
         int index = (int) ((gameTime / 20) % hostIds.size());
-        Identifier hostId = hostIds.get(index);
+        ResourceLocation hostId = hostIds.get(index);
         var registration = MachineDefinitions.getRegistration(hostId);
         Component hostName = registration == null ? Component.literal(hostId.toString()) : registration.displayName();
         return Component.translatable("jei.mmcr.machine_recipe.required_host", hostName);

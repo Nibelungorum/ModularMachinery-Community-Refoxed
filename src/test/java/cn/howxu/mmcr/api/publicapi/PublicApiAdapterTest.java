@@ -18,7 +18,7 @@ import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -225,7 +225,7 @@ class PublicApiAdapterTest {
                 .hasMessageContaining("factory threads");
     }
 
-    private static MachineStructureDefinition structureFor(Identifier machineId) {
+    private static MachineStructureDefinition structureFor(ResourceLocation machineId) {
         return MachineStructureBuilder.structure()
                 .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
                         .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))

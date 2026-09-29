@@ -10,7 +10,7 @@ import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -97,7 +97,7 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
     private static <T> DataResult<T> encode(DataComponentPredicateSet predicates, DynamicOps<T> ops, T prefix) {
         Map<T, T> values = new LinkedHashMap<>();
         for (var entry : predicates.values.entrySet()) {
-            Identifier id = BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(entry.getKey());
+            ResourceLocation id = BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(entry.getKey());
             if (id == null) return DataResult.error(() -> "Unregistered data component type " + entry.getKey());
             var predicate = ComponentPredicate.CODEC.encodeStart(ops, entry.getValue()).result();
             if (predicate.isEmpty()) return DataResult.error(() -> "Could not encode data component predicate " + id);
@@ -114,9 +114,9 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
                 var predicate = ComponentPredicate.CODEC.parse(entry.getSecond()).result()
                         .or(() -> Optional.of(ComponentPredicate.exact(entry.getSecond())));
                 if (key.isEmpty() || predicate.isEmpty()) return DataResult.error(() -> "Invalid data component predicate");
-                Identifier id;
+                ResourceLocation id;
                 try {
-                    id = Identifier.parse(key.get());
+                    id = ResourceLocation.parse(key.get());
                 } catch (IllegalArgumentException e) {
                     return DataResult.error(() -> "Invalid data component type " + key.get());
                 }

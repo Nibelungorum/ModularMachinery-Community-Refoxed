@@ -48,7 +48,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -361,7 +361,7 @@ class PatternInterfaceCraftingMachineTest {
 
     @SuppressWarnings("unchecked")
     private static void bindTestPatternInterfaceEntityType() {
-        Identifier id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
+        ResourceLocation id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {
@@ -378,7 +378,7 @@ class PatternInterfaceCraftingMachineTest {
 
     @SuppressWarnings("unchecked")
     private static void bindTestPatternInterfaceBlock() {
-        Identifier id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
+        ResourceLocation id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
         MappedRegistry<Block> registry = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         registry.unfreeze(true);
         try {
@@ -467,8 +467,8 @@ class PatternInterfaceCraftingMachineTest {
         }
 
         @Override
-        public Identifier getId() {
-            return Identifier.fromNamespaceAndPath("test", "unsupported");
+        public ResourceLocation getId() {
+            return ResourceLocation.fromNamespaceAndPath("test", "unsupported");
         }
 
         @Override

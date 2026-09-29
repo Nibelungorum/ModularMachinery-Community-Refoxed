@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
@@ -31,13 +31,13 @@ import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 @EventBusSubscriber
 public class RECIPE_TICKER {
 
-    private static final Identifier RECIPE_TICKER = id("recipe_ticker");
-    private static final Identifier BEFORE_LINE = id("before_line");
-    private static final Identifier IN_LINE = id("in_line");
-    private static final Identifier AFTER_LINE = id("after_line");
-    private static final Identifier DISPLAY_WHEN_IDLE = id("display_when_idle");
-    private static final Identifier DISPLAY_WHEN_IDLE_EMPTY_LINE = id("display_when_idle_empty_line");
-    private static final Identifier DISPLAY_WHEN_START_RECIPE = id("display_when_start_recipe");
+    private static final ResourceLocation RECIPE_TICKER = id("recipe_ticker");
+    private static final ResourceLocation BEFORE_LINE = id("before_line");
+    private static final ResourceLocation IN_LINE = id("in_line");
+    private static final ResourceLocation AFTER_LINE = id("after_line");
+    private static final ResourceLocation DISPLAY_WHEN_IDLE = id("display_when_idle");
+    private static final ResourceLocation DISPLAY_WHEN_IDLE_EMPTY_LINE = id("display_when_idle_empty_line");
+    private static final ResourceLocation DISPLAY_WHEN_START_RECIPE = id("display_when_start_recipe");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         ControllerScreenTextRegistry.register(RECIPE_TICKER, context -> {
@@ -61,7 +61,7 @@ public class RECIPE_TICKER {
                     .machine(RECIPE_TICKER)
                     .recipePool(RECIPE_TICKER)
                     .displayNameKey("machine.mmcr.recipe_ticker")
-                    .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:green_terracotta")))
+                    .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:green_terracotta")))
                     .recipeBehavior(behavior -> behavior
                             .idleStart(ctx -> {
                                 var screen = ctx.screenText();

@@ -27,7 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SmartInterfaceBindingCoordinatorTest {
@@ -83,8 +83,8 @@ class SmartInterfaceBindingCoordinatorTest {
 
     @Test
     void reconcile_replaces_a_stale_binding_when_the_same_controller_changes_machine() throws Exception {
-        Identifier firstMachineId = MMCR.id("binding_first_machine");
-        Identifier secondMachineId = MMCR.id("binding_second_machine");
+        ResourceLocation firstMachineId = MMCR.id("binding_first_machine");
+        ResourceLocation secondMachineId = MMCR.id("binding_second_machine");
         var smartInterface = smartInterface(new BlockPos(1, 0, 0));
         var first = controller(BlockPos.ZERO, firstMachineId, MMCR.id("block/first_machine_casing"));
         var second = controller(BlockPos.ZERO, secondMachineId, MMCR.id("block/second_machine_casing"));
@@ -170,12 +170,12 @@ class SmartInterfaceBindingCoordinatorTest {
         return controller(MMCR.id("block/basic_casing"));
     }
 
-    private static MachineControllerBlockEntity controller(Identifier texture) throws Exception {
+    private static MachineControllerBlockEntity controller(ResourceLocation texture) throws Exception {
         return controller(BlockPos.ZERO, MMCR.id("binding_test"), texture);
     }
 
-    private static MachineControllerBlockEntity controller(BlockPos pos, Identifier machineId,
-                                                           Identifier texture) {
+    private static MachineControllerBlockEntity controller(BlockPos pos, ResourceLocation machineId,
+                                                           ResourceLocation texture) {
         Machine machine = new DynamicMachine(machineId, "Binding Test",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
                 MachineControllerSpec.defaultsFor(machineId),

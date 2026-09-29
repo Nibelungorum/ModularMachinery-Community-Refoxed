@@ -15,7 +15,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
@@ -274,7 +274,7 @@ public final class StartupContentRegistration {
         }
     }
 
-    private static void registerDynamicControllers(Set<Identifier> machineIds) {
+    private static void registerDynamicControllers(Set<ResourceLocation> machineIds) {
         ModBlocks.registerMachineControllers(machineIds);
         ModBlockEntities.registerMachineControllers(machineIds);
         ModItems.registerMachineControllerItems(machineIds);

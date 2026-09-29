@@ -10,7 +10,7 @@ import cn.howxu.mmcr.util.IOType;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -60,10 +60,10 @@ class CapabilitySyncRegistryTest {
         CapabilitySnapshot snapshot = new CapabilitySnapshot(List.of(new TestCapability(1)));
 
         assertThatThrownBy(() -> CapabilitySyncRegistry.decode(snapshot,
-                new CapabilitySyncEntry(Identifier.fromNamespaceAndPath("test", "unknown"), 0, new byte[0]), buffer()))
+                new CapabilitySyncEntry(ResourceLocation.fromNamespaceAndPath("test", "unknown"), 0, new byte[0]), buffer()))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> CapabilitySyncRegistry.decode(snapshot,
-                new CapabilitySyncEntry(Identifier.fromNamespaceAndPath("test", "scalar"), 1, new byte[0]), buffer()))
+                new CapabilitySyncEntry(ResourceLocation.fromNamespaceAndPath("test", "scalar"), 1, new byte[0]), buffer()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -78,7 +78,7 @@ class CapabilitySyncRegistryTest {
             this.value = value;
         }
 
-        @Override public CapabilityType type() { return new CapabilityType(Identifier.fromNamespaceAndPath("test", "scalar")); }
+        @Override public CapabilityType type() { return new CapabilityType(ResourceLocation.fromNamespaceAndPath("test", "scalar")); }
         @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
         @Override public CapabilityView view() {
             return new CapabilityView() {

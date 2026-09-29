@@ -21,7 +21,7 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
@@ -86,9 +86,9 @@ class RecipeThreadTest {
 
     @Test
     void ordinary_search_uses_the_controller_selected_recipe_pool() {
-        Identifier machineId = MMCR.id("ordinary_selected_pool_machine");
-        Identifier firstPool = MMCR.id("ordinary_selected_pool_first");
-        Identifier secondPool = MMCR.id("ordinary_selected_pool_second");
+        ResourceLocation machineId = MMCR.id("ordinary_selected_pool_machine");
+        ResourceLocation firstPool = MMCR.id("ordinary_selected_pool_first");
+        ResourceLocation secondPool = MMCR.id("ordinary_selected_pool_second");
         MachineControllerBlockEntity controller = multiPoolController(machineId, firstPool, secondPool);
         assertThat(controller.selectRecipePool(secondPool)).isTrue();
         MachineRecipe first = RecipeTestSupport.create(MMCR.id("ordinary_selected_pool_first_recipe"), firstPool,
@@ -123,9 +123,9 @@ class RecipeThreadTest {
 
     @Test
     void switching_pools_discards_an_outstanding_async_search_result() {
-        Identifier machineId = MMCR.id("test_cube");
-        Identifier firstPool = MMCR.id("async_selected_pool_first");
-        Identifier secondPool = MMCR.id("async_selected_pool_second");
+        ResourceLocation machineId = MMCR.id("test_cube");
+        ResourceLocation firstPool = MMCR.id("async_selected_pool_first");
+        ResourceLocation secondPool = MMCR.id("async_selected_pool_second");
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId)
                 .recipePoolIds(List.of(firstPool, secondPool)).build());
@@ -250,7 +250,7 @@ class RecipeThreadTest {
         return controller;
     }
 
-    private static MachineControllerBlockEntity multiPoolController(Identifier machineId, Identifier... pools) {
+    private static MachineControllerBlockEntity multiPoolController(ResourceLocation machineId, ResourceLocation... pools) {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolIds(List.of(pools)).build());
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));

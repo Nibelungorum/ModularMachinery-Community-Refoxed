@@ -21,7 +21,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -80,7 +80,7 @@ class ChemicalHatchScreenTest {
                 cn.howxu.mmcr.client.render.FluidGuiRenderer.fillHeight(
                         menu.chemicalAmount(), menu.chemicalCapacity(), 61));
         assertThat(state.tint()).isEqualTo(EXPECTED_TINT).isNotEqualTo(0xFFFFFFFF);
-        assertThat(state.identifier()).isEqualTo(menu.chemicalIdentifier());
+        assertThat(state.identifier()).isEqualTo(menu.chemicalResourceLocation());
     }
 
     @Test
@@ -113,7 +113,7 @@ class ChemicalHatchScreenTest {
 
     private static Holder.Reference<Chemical> registerChemical(String path) {
         ResourceKey<Chemical> key = ResourceKey.create(
-                MekanismAPI.CHEMICAL_REGISTRY_NAME, Identifier.fromNamespaceAndPath("mmcr_test", path));
+                MekanismAPI.CHEMICAL_REGISTRY_NAME, ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);
@@ -206,8 +206,8 @@ class ChemicalHatchScreenTest {
         }
 
         @Override
-        protected Identifier texture(boolean autoIOPage) {
-            return Identifier.parse("mmcr:test");
+        protected ResourceLocation texture(boolean autoIOPage) {
+            return ResourceLocation.parse("mmcr:test");
         }
     }
 

@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -29,7 +29,7 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
 @EventBusSubscriber
 public class ALLOY_FURNACE {
 
-    private static final Identifier ALLOY_FURNACE = id("alloy_furnace");
+    private static final ResourceLocation ALLOY_FURNACE = id("alloy_furnace");
 
     public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
         if (!event.definitions().containsKey(ALLOY_FURNACE)) {
@@ -38,7 +38,7 @@ public class ALLOY_FURNACE {
                     .recipePool(ALLOY_FURNACE)
                     .allowModifiers()
                     .displayNameKey("machine.mmcr.alloy_furnace")
-                    .appearance(appearance -> appearance.machineBasicBlock(Identifier.parse("minecraft:bricks")))
+                    .appearance(appearance -> appearance.machineBasicBlock(ResourceLocation.parse("minecraft:bricks")))
                     .build();
             event.registerMachine(machine);
         }

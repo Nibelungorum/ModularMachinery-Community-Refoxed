@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.external;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,7 +13,7 @@ import java.util.Set;
  */
 public final class ExternalCapabilityRegistry {
     private static final ExternalCapabilityRegistry GLOBAL = new ExternalCapabilityRegistry();
-    private final Map<Identifier, AdapterRegistration> adapters = new LinkedHashMap<>();
+    private final Map<ResourceLocation, AdapterRegistration> adapters = new LinkedHashMap<>();
     private boolean frozen;
 
     public static ExternalCapabilityRegistry global() {
@@ -22,7 +22,7 @@ public final class ExternalCapabilityRegistry {
 
     public synchronized void register(ExternalCapabilityAdapter adapter) {
         Objects.requireNonNull(adapter, "adapter");
-        Identifier id = Objects.requireNonNull(adapter.id(), "adapter id");
+        ResourceLocation id = Objects.requireNonNull(adapter.id(), "adapter id");
         Set<CapabilityType> capabilityTypes = Set.copyOf(
                 Objects.requireNonNull(adapter.capabilityTypes(), "adapter capability types"));
         if (frozen) throw new IllegalStateException("External capability adapters are frozen");
@@ -35,7 +35,7 @@ public final class ExternalCapabilityRegistry {
         return frozen;
     }
 
-    public synchronized boolean isRegistered(Identifier id) {
+    public synchronized boolean isRegistered(ResourceLocation id) {
         return id != null && adapters.containsKey(id);
     }
 

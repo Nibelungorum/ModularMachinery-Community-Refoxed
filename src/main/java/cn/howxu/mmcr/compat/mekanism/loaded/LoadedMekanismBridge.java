@@ -63,7 +63,7 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -143,7 +143,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public boolean supportsPortFamily(Identifier familyId) {
+    public boolean supportsPortFamily(ResourceLocation familyId) {
         return MekanismRecipeTypes.CHEMICAL.equals(familyId)
                 || MekanismPortFamilies.RADIOACTIVE_CHEMICAL.equals(familyId)
                 || MekanismRecipeTypes.HEAT_TEMPERATURE.equals(familyId)
@@ -206,7 +206,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public Identifier capabilityIdForMenu(AbstractContainerMenu menu) {
+    public ResourceLocation capabilityIdForMenu(AbstractContainerMenu menu) {
         if (menu instanceof ChemicalPortMenu) return MekanismRecipeTypes.CHEMICAL;
         if (menu instanceof HeatPortMenu) return MekanismRecipeTypes.HEAT;
         return null;
@@ -291,12 +291,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public Identifier unavailableReason() {
+    public ResourceLocation unavailableReason() {
         return null;
     }
 
     @Override
-    public ChemicalRenderData chemicalRenderData(Identifier chemicalId) {
+    public ChemicalRenderData chemicalRenderData(ResourceLocation chemicalId) {
         if (chemicalId == null) return null;
         Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId));
@@ -313,7 +313,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat) {
+    public void registerRecipeTypes(ResourceLocation chemical, ResourceLocation heatTemperature, ResourceLocation heat) {
         registerRequirement(LoadedChemicalRequirement.TYPE);
         registerRequirement(LoadedHeatRequirement.TEMPERATURE_TYPE);
         registerRequirement(LoadedHeatRequirement.HEAT_TYPE);
@@ -345,7 +345,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
     }
 
-    private static boolean exposes(IOPortBlockEntity port, Identifier type, Direction side) {
+    private static boolean exposes(IOPortBlockEntity port, ResourceLocation type, Direction side) {
         return port.kind().definition().bindings().stream()
                 .filter(binding -> binding.type().id().equals(type))
                 .anyMatch(binding -> port.isNativeSideExposed(binding, side));
@@ -450,7 +450,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     private static TransferResult transferBlocked(FailureReason reason) {
-        Identifier source = MMCR.id("auto_io");
+        ResourceLocation source = MMCR.id("auto_io");
         FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
                 null, null, Map.of());
         return TransferResult.blocked(ExecutionStatus.blocked(source, source, occurrence));
@@ -839,7 +839,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return capabilityFailure(capability.type().id(), reason, Map.of());
     }
 
-    private static CapabilityResult capabilityFailure(Identifier source, FailureReason reason,
+    private static CapabilityResult capabilityFailure(ResourceLocation source, FailureReason reason,
                                                       Map<String, String> details) {
         FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
                 null, null, details);

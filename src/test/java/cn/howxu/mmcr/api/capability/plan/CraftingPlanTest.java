@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import java.util.Map;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -28,11 +28,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class CraftingPlanTest {
     private static final ExecutionStatus FIRST_FAILURE = new ExecutionStatus(
-            Identifier.fromNamespaceAndPath("mmcr_test", "first_failure"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "first_failure"),
             StatusSeverity.FAILURE,
-            Identifier.fromNamespaceAndPath("mmcr_test", "test"),
+            ResourceLocation.fromNamespaceAndPath("mmcr_test", "test"),
             FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
-                    Identifier.fromNamespaceAndPath("mmcr_test", "test"), FailurePhase.CAPABILITY_COMMIT,
+                    ResourceLocation.fromNamespaceAndPath("mmcr_test", "test"), FailurePhase.CAPABILITY_COMMIT,
                     null, null, Map.of()));
 
     @Test
@@ -74,9 +74,9 @@ class CraftingPlanTest {
 
     @Test
     void publishes_the_first_structured_failure() {
-        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "test");
+        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "test");
         ExecutionStatus secondFailure = new ExecutionStatus(
-                Identifier.fromNamespaceAndPath("mmcr_test", "second_failure"),
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "second_failure"),
                 StatusSeverity.FAILURE, source,
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
                         null, null, Map.of()));
@@ -225,11 +225,11 @@ class CraftingPlanTest {
         };
         OutputSimulation simulation = new OutputSimulation(4L, 2L, OutputFit.PARTIAL);
         ExecutionStatus unsafeFailure = new ExecutionStatus(
-                Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),
                 StatusSeverity.FAILURE,
-                Identifier.fromNamespaceAndPath("mmcr_test", "test"),
+                ResourceLocation.fromNamespaceAndPath("mmcr_test", "test"),
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
-                        Identifier.fromNamespaceAndPath("mmcr_test", "test"), FailurePhase.CAPABILITY_COMMIT,
+                        ResourceLocation.fromNamespaceAndPath("mmcr_test", "test"), FailurePhase.CAPABILITY_COMMIT,
                         null, null, Map.of()));
 
         RequirementPlan resolved = RequirementPlan.withOutputSimulation(0, 2, List.of(operation), null, simulation)

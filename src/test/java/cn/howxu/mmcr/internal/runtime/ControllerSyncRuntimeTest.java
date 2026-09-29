@@ -44,7 +44,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -148,7 +148,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void tick_behavior_projects_as_active_without_recipe_or_factory_work() {
-        Identifier machineId = MMCR.id("sync_tick_machine");
+        ResourceLocation machineId = MMCR.id("sync_tick_machine");
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Tick", new BlockArray(Map.of()),
                 MachineControllerSpec.defaultsFor(machineId),
                 MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
@@ -187,7 +187,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void factory_progress_is_published_through_a_real_controller_runtime_boundary() {
-        Identifier machineId = MMCR.id("sync_factory_machine");
+        ResourceLocation machineId = MMCR.id("sync_factory_machine");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -228,7 +228,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void factory_shared_tick_publishes_progress_in_the_same_resolve_pass() {
-        Identifier machineId = MMCR.id("sync_factory_immediate_progress");
+        ResourceLocation machineId = MMCR.id("sync_factory_immediate_progress");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -262,7 +262,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void factory_uses_machine_level_parallelism_bonus() {
-        Identifier machineId = MMCR.id("sync_factory_level_parallelism");
+        ResourceLocation machineId = MMCR.id("sync_factory_level_parallelism");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -329,7 +329,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void factory_publishes_the_first_started_thread_on_the_first_tick() {
-        Identifier machineId = MMCR.id("sync_factory_initial_threads");
+        ResourceLocation machineId = MMCR.id("sync_factory_initial_threads");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
@@ -372,7 +372,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void reforming_a_replaced_factory_component_clears_the_stale_active_lane() {
-        Identifier machineId = MMCR.id("sync_factory_reform_machine");
+        ResourceLocation machineId = MMCR.id("sync_factory_reform_machine");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -412,7 +412,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void recipe_failure_is_projected_from_a_real_controller_start_attempt() {
-        Identifier machineId = MMCR.id("sync_failure_machine");
+        ResourceLocation machineId = MMCR.id("sync_failure_machine");
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Failure",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
                 MachineControllerSpec.defaultsFor(machineId));
@@ -437,7 +437,7 @@ class ControllerSyncRuntimeTest {
 
     @Test
     void unknown_typed_status_uses_the_unknown_failure_translation_key() {
-        Identifier source = MMCR.id("controller_sync_unknown");
+        ResourceLocation source = MMCR.id("controller_sync_unknown");
         ExecutionStatus unknown = ExecutionStatus.blocked(MMCR.id("unknown_status"), source,
                 FailureOccurrence.at(null, source, FailurePhase.UNKNOWN, null, null, Map.of()));
 
@@ -451,8 +451,8 @@ class ControllerSyncRuntimeTest {
         DynamicMachine machine = new DynamicMachine(MMCR.id("sync_module_machine"), "Sync Module",
                 new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(MMCR.id("sync_module_machine")));
         RuntimeTestFixtures.publishStructure(controller, machine, true);
-        Identifier hostId = MMCR.id("sync_host");
-        Identifier levelId = MMCR.id("sync_steel");
+        ResourceLocation hostId = MMCR.id("sync_host");
+        ResourceLocation levelId = MMCR.id("sync_steel");
         MachineLevel level = new MachineLevel(levelId, MMCR.id("sync_level_type"), 1,
                 new BlockPredicate.Any(), ItemStack.EMPTY, ModifierDefinition.EMPTY);
         controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.connected(hostId), 2);

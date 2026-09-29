@@ -18,7 +18,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -28,16 +28,16 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktEjectPortContentsPayload(BlockPos pos, Identifier capabilityId,
+public record PktEjectPortContentsPayload(BlockPos pos, ResourceLocation capabilityId,
                                           boolean allResources) implements CustomPacketPayload {
     public static final Type<PktEjectPortContentsPayload> TYPE = new Type<>(MMCR.id("eject_port_contents"));
     public static final StreamCodec<ByteBuf, PktEjectPortContentsPayload> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, PktEjectPortContentsPayload::pos,
-            Identifier.STREAM_CODEC, PktEjectPortContentsPayload::capabilityId,
+            ResourceLocation.STREAM_CODEC, PktEjectPortContentsPayload::capabilityId,
             ByteBufCodecs.BOOL, PktEjectPortContentsPayload::allResources,
             PktEjectPortContentsPayload::new);
 
-    public PktEjectPortContentsPayload(BlockPos pos, Identifier capabilityId) {
+    public PktEjectPortContentsPayload(BlockPos pos, ResourceLocation capabilityId) {
         this(pos, capabilityId, false);
     }
 

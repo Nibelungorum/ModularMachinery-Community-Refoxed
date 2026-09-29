@@ -6,7 +6,7 @@ import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.client.preview.StructurePreviewCompilationCache;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
 
@@ -21,8 +21,8 @@ public final class RuntimeContentClientApplier {
     private RuntimeContentClientApplier() {
     }
 
-    public static void apply(Map<Identifier, MachineControllerSpec> controllerSpecs,
-                             Map<Identifier, MachineAppearanceSpec> appearances,
+    public static void apply(Map<ResourceLocation, MachineControllerSpec> controllerSpecs,
+                             Map<ResourceLocation, MachineAppearanceSpec> appearances,
                              long contentVersion) {
         if (!ControllerSpecCache.replaceSnapshot(controllerSpecs, contentVersion)
                 || !MachineAppearanceCache.replaceSnapshot(appearances, contentVersion)) {
@@ -37,8 +37,8 @@ public final class RuntimeContentClientApplier {
         return appliedContentVersion;
     }
 
-    public static void validate(Map<Identifier, MachineControllerSpec> controllerSpecs,
-                                Map<Identifier, MachineAppearanceSpec> appearances) {
+    public static void validate(Map<ResourceLocation, MachineControllerSpec> controllerSpecs,
+                                Map<ResourceLocation, MachineAppearanceSpec> appearances) {
         if (controllerSpecs == null || appearances == null) {
             throw new IllegalArgumentException("Runtime client cache snapshot null");
         }

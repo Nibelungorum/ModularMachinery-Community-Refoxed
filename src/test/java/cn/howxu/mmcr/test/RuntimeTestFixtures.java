@@ -21,7 +21,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.block.Block;
@@ -46,7 +46,7 @@ public final class RuntimeTestFixtures {
     private RuntimeTestFixtures() {
     }
 
-    public static MachineControllerBlockEntity controller(Identifier machineId, IOPortBlockEntity... ports) {
+    public static MachineControllerBlockEntity controller(ResourceLocation machineId, IOPortBlockEntity... ports) {
         MachineControllerBlockEntity controller = controllerEntity(machineId, BlockPos.ZERO);
         BlockPos controllerPos = controller.getBlockPos();
 
@@ -73,11 +73,11 @@ public final class RuntimeTestFixtures {
         return controller;
     }
 
-    public static MachineControllerBlockEntity controllerEntity(Identifier machineId, BlockPos pos) {
+    public static MachineControllerBlockEntity controllerEntity(ResourceLocation machineId, BlockPos pos) {
         return controllerEntity(machineId, pos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
     }
 
-    public static MachineControllerBlockEntity controllerEntity(Identifier machineId, BlockPos pos, BlockState state) {
+    public static MachineControllerBlockEntity controllerEntity(ResourceLocation machineId, BlockPos pos, BlockState state) {
         BlockEntity entity = ModBlockEntities.controllerFor(machineId).get().create(pos, state);
         if (!(entity instanceof MachineControllerBlockEntity controller)) {
             throw new AssertionError("Expected a machine controller block entity");
@@ -97,7 +97,7 @@ public final class RuntimeTestFixtures {
         level.blockEntities.put(replacement.getBlockPos(), replacement);
     }
 
-    public static void registerRecipePool(Identifier recipePoolId) {
+    public static void registerRecipePool(ResourceLocation recipePoolId) {
         if (MachineRegistry.containsRecipePool(recipePoolId)) return;
         if (!MachineDefinitions.isRegistryPhaseOpen()) MachineDefinitions.beginRegistryPhase();
         if (MachineDefinitions.getRegistration(recipePoolId) == null) {

@@ -35,7 +35,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
@@ -319,7 +319,7 @@ public class AE2OutputInterfaceGameTest {
         });
     }
 
-    private static MachineCapability capabilityOf(OutputInterfaceBlockEntity port, Identifier familyId) {
+    private static MachineCapability capabilityOf(OutputInterfaceBlockEntity port, ResourceLocation familyId) {
         return port.capabilitySnapshot().capabilities().stream()
                 .filter(capability -> capability.type().id().equals(familyId))
                 .findFirst()

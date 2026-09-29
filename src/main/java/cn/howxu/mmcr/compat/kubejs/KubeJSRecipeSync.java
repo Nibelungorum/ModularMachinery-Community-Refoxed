@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.internal.sync.JeiRuntimeReloadBridge;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
 import java.util.LinkedHashMap;
@@ -21,10 +21,10 @@ public final class KubeJSRecipeSync {
     private KubeJSRecipeSync() {
     }
 
-    static Map<Identifier, MachineRecipe> filterRecipesWithRegisteredPools(
-            Map<Identifier, MachineRecipe> recipes) {
-        Map<Identifier, MachineRecipe> valid = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+    static Map<ResourceLocation, MachineRecipe> filterRecipesWithRegisteredPools(
+            Map<ResourceLocation, MachineRecipe> recipes) {
+        Map<ResourceLocation, MachineRecipe> valid = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, MachineRecipe> entry : recipes.entrySet()) {
             MachineRecipe recipe = entry.getValue();
             if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
                 MMCR.LOG.warn("Skipping KubeJS recipe {}: unknown recipe pool {} at recipe_pool",
@@ -37,10 +37,10 @@ public final class KubeJSRecipeSync {
     }
 
     public static void replaceDataPackRecipes(Iterable<RecipeHolder<?>> holders) {
-        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
-                Identifier id = holder.id().identifier();
+                ResourceLocation id = holder.id().identifier();
                 if (!KubeJSContentReloadTransaction.ownsRecipe(id)
                         && !KubeJSContentReloadTransaction.ownsRecipe(machineRecipe)) {
                     recipes.put(id, machineRecipe.withId(id));

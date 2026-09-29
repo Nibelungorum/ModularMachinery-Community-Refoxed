@@ -25,7 +25,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,7 +49,7 @@ import java.util.UUID;
 public class MultiFactoryControllerGameTest {
 
     public void formsWithTwoFactoryControllersAndReformsAfterRelease(GameTestHelper helper) {
-        Identifier machineId = MMCR.id("multi_factory_game_test_runtime");
+        ResourceLocation machineId = MMCR.id("multi_factory_game_test_runtime");
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
         pattern.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()));
         pattern.put(new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()));
