@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -19,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Entry point for capability planning from a direct tick behavior.
@@ -124,6 +127,28 @@ public final class MachineIoPlan {
         } finally {
             consumed = true;
         }
+    }
+
+    /**
+     * Commits through the legacy Transfer transaction boundary for public compatibility callers.
+     * The built-in native runtime does not call this overload.
+     */
+    public CommitResult commit(Consumer<TransactionContext> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        if (consumed) return new CommitResult(false, null);
+        consumed = true;
+        if (simulation == null || !simulation.successful() || simulation.plan() == null) {
+            return new CommitResult(false, simulation == null ? null : simulation.failure());
+        }
+        CraftingPlan plan = simulation.plan();
+        boolean successful = plan.commit(transactionWrites);
+        return new CommitResult(successful, successful ? null : plan.failure());
+    }
+
+    /** Legacy data-storage transaction adapter for public callers. */
+    public CommitResult commitData(Consumer<DataStorage.Transaction> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        return commit(transaction -> transactionWrites.accept(DataStorage.Transaction.view(transaction)));
     }
 
     public List<OutputSimulation> outputSimulations() {

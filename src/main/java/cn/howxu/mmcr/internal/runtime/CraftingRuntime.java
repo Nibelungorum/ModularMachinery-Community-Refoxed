@@ -59,6 +59,7 @@ import net.minecraft.nbt.LongTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -191,11 +192,6 @@ public final class CraftingRuntime {
     }
 
     public boolean commitPatternStart(PreparedStart prepared) {
-        return commitPatternStart(prepared, ignored -> { });
-    }
-
-    /** Commits a prepared pattern start without a Transfer transaction. */
-    public boolean commitPatternStart(PreparedStart prepared, Consumer<?> transactionWrites) {
         if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
         if (!preparedStartCurrent(prepared)) {
             discardPatternStart(prepared);
@@ -208,13 +204,24 @@ public final class CraftingRuntime {
                 fail(commitFailure);
                 return false;
             }
-            transactionWrites.accept(null);
             committed = true;
         } finally {
             if (!committed) discardPatternStart(prepared);
         }
         activatePatternStart(prepared);
         return true;
+    }
+
+    /**
+     * Legacy transaction callback boundary. Native pattern starts cannot share a Transfer transaction.
+     */
+    public boolean commitPatternStart(PreparedStart prepared, Consumer<TransactionContext> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
+        discardPatternStart(prepared);
+        fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START,
+                Map.of("reason", "transaction_callback_unsupported")));
+        return false;
     }
 
     boolean commitPatternPlan(PreparedStart prepared) {
