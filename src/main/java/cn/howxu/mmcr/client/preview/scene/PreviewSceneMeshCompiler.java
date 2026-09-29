@@ -15,19 +15,15 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.color.block.BlockColors;
-import net.minecraft.client.renderer.block.BlockStateModelSet;
-import net.minecraft.client.renderer.block.BlockQuadOutput;
-import net.minecraft.client.renderer.block.BlockModelLighter;
-import net.minecraft.client.renderer.block.FluidRenderer;
-import net.minecraft.client.renderer.block.FluidStateModelSet;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
@@ -38,9 +34,11 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.util.RandomSource;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.IdentityHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -84,9 +82,7 @@ public final class PreviewSceneMeshCompiler {
         Minecraft minecraft = Minecraft.getInstance();
         List<Map.Entry<BlockPos, BlockState>> entries = schema.states().entrySet().stream().toList();
         return new CompilationInput(entries, visibility,
-                minecraft.getModelManager().getBlockStateModelSet(),
-                minecraft.getModelManager().getFluidStateModelSet(), minecraft.getBlockColors(),
-                minecraft.options.ambientOcclusion().get(), previewRegion(level, schema, visibility));
+                minecraft.getBlockRenderer(), previewRegion(level, schema, visibility));
     }
 
     static CompletableFuture<CompiledScene> compileAsync(CompilationInput input, PreviewSceneCamera camera,
@@ -129,17 +125,14 @@ public final class PreviewSceneMeshCompiler {
     private static WorkerResult compilePartition(CompilationInput input, int startInclusive, int endExclusive,
                                                   PreviewSceneCamera camera, AtomicBoolean cancelled) {
         SectionBufferBuilderPack builders = new SectionBufferBuilderPack();
-        Map<ChunkSectionLayer, BufferBuilder> started = new EnumMap<>(ChunkSectionLayer.class);
-        Map<ChunkSectionLayer, MeshData> meshes = new EnumMap<>(ChunkSectionLayer.class);
+        Map<RenderType, BufferBuilder> started = new IdentityHashMap<>();
+        Map<RenderType, MeshData> meshes = new IdentityHashMap<>();
         Set<BlockPos> blockEntities = new HashSet<>();
-        BlockModelLighter.enableCaching();
+        ModelBlockRenderer.enableCaching();
         try {
-            ModelBlockRenderer blockRenderer = new ModelBlockRenderer(input.ambientOcclusion(), true,
-                    input.blockColors());
-            FluidRenderer fluidRenderer = new FluidRenderer(input.fluidSet());
-            BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
-                    quad.materialInfo().layer()).putBlockBakedQuad(x, y, z, quad, instance);
-            FluidRenderer.Output fluidOutput = layer -> new SectionOriginConsumer(builderFor(started, builders, layer));
+            BlockRenderDispatcher blockRenderer = input.blockRenderer();
+            RandomSource random = RandomSource.create();
+            PoseStack poseStack = new PoseStack();
             for (int index = startInclusive; index < endExclusive; index++) {
                 if (cancelled.get()) throw new CancelledCompilation();
                 Map.Entry<BlockPos, BlockState> entry = input.entries().get(index);
@@ -149,21 +142,32 @@ public final class PreviewSceneMeshCompiler {
                 if (state.hasBlockEntity()) blockEntities.add(pos);
                 FluidState fluidState = state.getFluidState();
                 if (!fluidState.isEmpty()) {
-                    fluidRenderer.tesselate(input.region(), pos, offset(fluidOutput, pos), state, fluidState);
+                    RenderType layer = ItemBlockRenderTypes.getRenderLayer(fluidState);
+                    blockRenderer.renderLiquid(pos, input.region(), new SectionOriginConsumer(
+                            builderFor(started, builders, layer), pos.getX() & ~15, pos.getY() & ~15,
+                            pos.getZ() & ~15), state, fluidState);
                 }
                 if (state.getRenderShape() == RenderShape.MODEL) {
-                    blockRenderer.tesselateBlock(blockOutput, pos.getX(), pos.getY(), pos.getZ(), input.region(), pos,
-                            state, input.modelSet().get(state), state.getSeed(pos));
+                    var model = blockRenderer.getBlockModel(state);
+                    ModelData modelData = model.getModelData(input.region(), pos, state, ModelData.EMPTY);
+                    random.setSeed(state.getSeed(pos));
+                    for (RenderType layer : model.getRenderTypes(state, random, modelData)) {
+                        poseStack.pushPose();
+                        poseStack.translate(pos.getX(), pos.getY(), pos.getZ());
+                        blockRenderer.renderBatched(state, pos, input.region(), poseStack,
+                                builderFor(started, builders, layer), true, random, modelData, layer);
+                        poseStack.popPose();
+                    }
                 }
             }
             if (cancelled.get()) throw new CancelledCompilation();
             VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
             MeshData.SortState sortState = null;
-            for (Map.Entry<ChunkSectionLayer, BufferBuilder> entry : started.entrySet()) {
+            for (Map.Entry<RenderType, BufferBuilder> entry : started.entrySet()) {
                 MeshData mesh = entry.getValue().build();
                 if (mesh == null) continue;
                 meshes.put(entry.getKey(), mesh);
-                if (entry.getKey() == ChunkSectionLayer.TRANSLUCENT) {
+                if (entry.getKey() == RenderType.translucent()) {
                     sortState = mesh.sortQuads(builders.buffer(entry.getKey()), sorting);
                 }
             }
@@ -173,7 +177,7 @@ public final class PreviewSceneMeshCompiler {
             rethrow(throwable);
             throw new IllegalStateException("unreachable");
         } finally {
-            BlockModelLighter.clearCache();
+            ModelBlockRenderer.clearCache();
         }
     }
 
@@ -193,7 +197,7 @@ public final class PreviewSceneMeshCompiler {
         }
     }
 
-    private static void closeWorkerResources(Map<ChunkSectionLayer, MeshData> meshes,
+    private static void closeWorkerResources(Map<RenderType, MeshData> meshes,
                                              SectionBufferBuilderPack builders, Throwable failure) {
         meshes.values().forEach(mesh -> {
             try {
@@ -215,10 +219,26 @@ public final class PreviewSceneMeshCompiler {
         throw new IllegalStateException("preview mesh compilation failed", failure);
     }
 
-    private static BufferBuilder builderFor(Map<ChunkSectionLayer, BufferBuilder> started,
-                                            SectionBufferBuilderPack builders, ChunkSectionLayer layer) {
+    private static BufferBuilder builderFor(Map<RenderType, BufferBuilder> started,
+                                             SectionBufferBuilderPack builders, RenderType layer) {
         return started.computeIfAbsent(layer, key -> new BufferBuilder(builders.buffer(key), VertexFormat.Mode.QUADS,
-                key.vertexFormat()));
+                key.format()));
+    }
+
+    private record SectionOriginConsumer(VertexConsumer delegate, float x, float y, float z)
+            implements VertexConsumer {
+        @Override public VertexConsumer addVertex(float x, float y, float z) {
+            return delegate.addVertex(x + this.x, y + this.y, z + this.z);
+        }
+        @Override public VertexConsumer setColor(int red, int green, int blue, int alpha) {
+            return delegate.setColor(red, green, blue, alpha);
+        }
+        @Override public VertexConsumer setUv(float u, float v) { return delegate.setUv(u, v); }
+        @Override public VertexConsumer setUv1(int u, int v) { return delegate.setUv1(u, v); }
+        @Override public VertexConsumer setUv2(int u, int v) { return delegate.setUv2(u, v); }
+        @Override public VertexConsumer setNormal(float x, float y, float z) {
+            return delegate.setNormal(x, y, z);
+        }
     }
 
     static BlockAndTintGetter previewRegion(PreviewLevel level, StructurePreviewSchema schema,
@@ -235,74 +255,22 @@ public final class PreviewSceneMeshCompiler {
             @Override public int getHeight() { return level.getHeight(); }
             @Override public int getMinY() { return level.getMinY(); }
             @Override public int getBrightness(LightLayer lightLayer, BlockPos position) { return 15; }
-            @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
             @Override public LevelLightEngine getLightEngine() { return LevelLightEngine.EMPTY; }
+            @Override public float getShade(net.minecraft.core.Direction direction, boolean shade) {
+                return level.getShade(direction, shade);
+            }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
                 return resolver.getColor(biome, position.getX(), position.getZ());
             }
         };
     }
 
-    private static FluidRenderer.Output offset(FluidRenderer.Output output, BlockPos position) {
-        float x = position.getX() & ~15;
-        float y = position.getY() & ~15;
-        float z = position.getZ() & ~15;
-        return layer -> new SectionOriginConsumer(output.getBuilder(layer), x, y, z);
-    }
-
-    private record SectionOriginConsumer(VertexConsumer delegate, float x, float y, float z) implements VertexConsumer {
-            private SectionOriginConsumer(VertexConsumer delegate) {
-                this(delegate, 0, 0, 0);
-            }
-
-        @Override
-        public VertexConsumer addVertex(float x, float y, float z) {
-            return delegate.addVertex(x + this.x, y + this.y, z + this.z);
-        }
-
-        @Override
-        public VertexConsumer setColor(int r, int g, int b, int a) {
-            return delegate.setColor(r, g, b, a);
-        }
-
-        @Override
-        public VertexConsumer setColor(int color) {
-            return delegate.setColor(color);
-        }
-
-        @Override
-        public VertexConsumer setUv(float u, float v) {
-            return delegate.setUv(u, v);
-        }
-
-        @Override
-        public VertexConsumer setUv1(int u, int v) {
-            return delegate.setUv1(u, v);
-        }
-
-        @Override
-        public VertexConsumer setUv2(int u, int v) {
-            return delegate.setUv2(u, v);
-        }
-
-        @Override
-        public VertexConsumer setNormal(float x, float y, float z) {
-            return delegate.setNormal(x, y, z);
-        }
-
-        @Override
-        public VertexConsumer setLineWidth(float width) {
-            return delegate.setLineWidth(width);
-        }
-        }
-
     private static final class CancelledCompilation extends RuntimeException { }
 
     record Partition(int startInclusive, int endExclusive) { }
 
     record CompilationInput(List<Map.Entry<BlockPos, BlockState>> entries, PreviewVisibility visibility,
-                            BlockStateModelSet modelSet, FluidStateModelSet fluidSet, BlockColors blockColors,
-                            boolean ambientOcclusion, BlockAndTintGetter region) { }
+                            BlockRenderDispatcher blockRenderer, BlockAndTintGetter region) { }
 
     /** CPU-side mesh results that have not yet been handed to the render-thread GPU owner. */
     static final class CompiledScene implements AutoCloseable {

@@ -50,11 +50,12 @@ public final class JadeChemicalElement extends Element {
                 .apply(spriteLocation);
         try {
             if (tint != -1) {
+                int opaqueTint = tint | 0xFF000000;
                 graphics.setColor(
-                        FastColor.ARGB32.red(tint) / 255.0F,
-                        FastColor.ARGB32.green(tint) / 255.0F,
-                        FastColor.ARGB32.blue(tint) / 255.0F,
-                        FastColor.ARGB32.alpha(tint) / 255.0F);
+                        FastColor.ARGB32.red(opaqueTint) / 255.0F,
+                        FastColor.ARGB32.green(opaqueTint) / 255.0F,
+                        FastColor.ARGB32.blue(opaqueTint) / 255.0F,
+                        1.0F);
             }
             graphics.blit((int) x, (int) y, 0, width, height, sprite);
         } finally {

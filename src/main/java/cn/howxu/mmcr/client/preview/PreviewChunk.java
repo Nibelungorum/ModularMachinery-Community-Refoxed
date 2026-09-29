@@ -40,7 +40,7 @@ final class PreviewChunk extends LevelChunk {
     }
 
     @Override
-    public BlockState setBlockState(BlockPos position, BlockState state, int flags) {
+    public BlockState setBlockState(BlockPos position, BlockState state, boolean moved) {
         throw new UnsupportedOperationException("preview chunks are immutable");
     }
 

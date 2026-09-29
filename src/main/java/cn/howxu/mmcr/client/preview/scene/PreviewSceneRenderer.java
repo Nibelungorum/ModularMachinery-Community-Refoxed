@@ -16,13 +16,11 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
-import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
-import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.AABB;
 
@@ -102,8 +100,9 @@ public final class PreviewSceneRenderer {
             if (renderTranslucent && compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
                 compileTranslucent(cache, sceneCamera);
             }
-            draw(cache, ChunkSectionLayer.SOLID);
-            draw(cache, ChunkSectionLayer.CUTOUT);
+            draw(cache, RenderType.solid());
+            draw(cache, RenderType.cutoutMipped());
+            draw(cache, RenderType.cutout());
             if (renderTranslucent) drawTranslucent(cache);
             if (renderBlockEntities) submitBlockEntities(cache, context, sceneCamera);
             drawOutlines(context, hoverHit, selectedHit);
@@ -211,7 +210,7 @@ public final class PreviewSceneRenderer {
             for (PreviewSceneMeshCache.MeshPart part : parts) {
                 MeshData.SortState sortState = part.translucentSortState();
                 ByteBufferBuilder.Result indexBuffer = sortState.buildSortedIndexBuffer(
-                        part.builders().buffer(ChunkSectionLayer.TRANSLUCENT), sorting);
+                        part.builders().buffer(RenderType.translucent()), sorting);
                 if (indexBuffer == null) {
                     indexBuffers.forEach(ByteBufferBuilder.Result::close);
                     return;
@@ -230,12 +229,12 @@ public final class PreviewSceneRenderer {
         }
     }
 
-    private static void draw(PreviewSceneMeshCache.Meshes cache, ChunkSectionLayer layer) {
+    private static void draw(PreviewSceneMeshCache.Meshes cache, RenderType layer) {
         cache.draw(layer);
     }
 
     private static void drawTranslucent(PreviewSceneMeshCache.Meshes cache) {
-        cache.draw(ChunkSectionLayer.TRANSLUCENT);
+        cache.draw(RenderType.translucent());
     }
 
     private void submitBlockEntities(PreviewSceneMeshCache.Meshes cache, PreviewSceneRenderContext context,
@@ -243,29 +242,31 @@ public final class PreviewSceneRenderer {
         if (context == null) return;
         Minecraft minecraft = Minecraft.getInstance();
         BlockEntityRenderDispatcher blockEntities = minecraft.getBlockEntityRenderDispatcher();
-        FeatureRenderDispatcher features = minecraft.gameRenderer.getFeatureRenderDispatcher();
-        CameraRenderState cameraState = context.cameraState();
-        blockEntities.prepare(new Vec3(sceneCamera.eye()));
-        try {
-            for (BlockPos position : cache.blockEntities()) {
-                BlockEntity blockEntity = level.getBlockEntity(position);
-                if (blockEntity == null) continue;
-                try {
-                    BlockEntityRenderState renderState = blockEntities.tryExtractRenderState(
-                            blockEntity, context.partialTick(), null, null);
-                    if (renderState != null) {
-                        blockEntities.submit(renderState, context.poseStack(), context.submitStorage(), cameraState);
-                    }
-                } catch (RuntimeException exception) {
-                    MMCR.LOG.error("Cannot render preview block entity {} at {} with state {}",
-                            schema.machineId(), position, blockEntity.getBlockState(), exception);
-                }
+        for (BlockPos position : cache.blockEntities()) {
+            BlockEntity blockEntity = level.getBlockEntity(position);
+            if (blockEntity == null) continue;
+            try {
+                renderBlockEntity(blockEntities, blockEntity, position, context);
+            } catch (RuntimeException exception) {
+                MMCR.LOG.error("Cannot render preview block entity {} at {} with state {}",
+                        schema.machineId(), position, blockEntity.getBlockState(), exception);
             }
-            features.renderSolidFeatures();
-            features.renderTranslucentFeatures();
+        }
+        context.bufferSource().endBatch();
+    }
+
+    private static <T extends BlockEntity> void renderBlockEntity(BlockEntityRenderDispatcher dispatcher,
+            T blockEntity, BlockPos position, PreviewSceneRenderContext context) {
+        BlockEntityRenderer<T> renderer = dispatcher.getRenderer(blockEntity);
+        if (renderer == null) return;
+        PoseStack poseStack = context.poseStack();
+        poseStack.pushPose();
+        try {
+            poseStack.translate(position.getX(), position.getY(), position.getZ());
+            renderer.render(blockEntity, context.partialTick(), poseStack, context.bufferSource(),
+                    15728880, OverlayTexture.NO_OVERLAY);
         } finally {
-            features.clearSubmitNodes();
-            context.bufferSource().endBatch();
+            poseStack.popPose();
         }
     }
 
@@ -278,14 +279,13 @@ public final class PreviewSceneRenderer {
     private static void drawHighlight(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
         PoseStack.Pose pose = new PoseStack().last();
-        VertexConsumer fill = context.bufferSource().getBuffer(RenderTypes.debugFilledBox());
+        VertexConsumer fill = context.bufferSource().getBuffer(RenderType.debugFilledBox());
         drawFilledBox(fill, pose, box, (color & 0x00FFFFFF) | 0x44000000);
-        context.bufferSource().endBatch(RenderTypes.debugFilledBox());
+        context.bufferSource().endBatch(RenderType.debugFilledBox());
 
-        VertexConsumer lines = context.bufferSource().getBuffer(RenderTypes.lines());
-        float width = Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth * 2.0F;
-        drawOutline(lines, pose, box, color, width);
-        context.bufferSource().endBatch(RenderTypes.lines());
+        VertexConsumer lines = context.bufferSource().getBuffer(RenderType.lines());
+        drawOutline(lines, pose, box, color);
+        context.bufferSource().endBatch(RenderType.lines());
     }
 
     private static void drawFilledBox(VertexConsumer vertices, PoseStack.Pose pose, AABB box, int color) {
@@ -307,21 +307,21 @@ public final class PreviewSceneRenderer {
         vertices.addVertex(pose, (float) dx, (float) dy, (float) dz).setColor(color);
     }
 
-    private static void drawOutline(VertexConsumer vertices, PoseStack.Pose pose, AABB box, int color, float width) {
+    private static void drawOutline(VertexConsumer vertices, PoseStack.Pose pose, AABB box, int color) {
         double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
-        line(vertices, pose, x0, y0, z0, x1, y0, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y0, z1, color, width);
-        line(vertices, pose, x1, y0, z1, x0, y0, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y0, z0, color, width);
-        line(vertices, pose, x0, y1, z0, x1, y1, z0, color, width); line(vertices, pose, x1, y1, z0, x1, y1, z1, color, width);
-        line(vertices, pose, x1, y1, z1, x0, y1, z1, color, width); line(vertices, pose, x0, y1, z1, x0, y1, z0, color, width);
-        line(vertices, pose, x0, y0, z0, x0, y1, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y1, z0, color, width);
-        line(vertices, pose, x1, y0, z1, x1, y1, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y1, z1, color, width);
+        line(vertices, pose, x0, y0, z0, x1, y0, z0, color); line(vertices, pose, x1, y0, z0, x1, y0, z1, color);
+        line(vertices, pose, x1, y0, z1, x0, y0, z1, color); line(vertices, pose, x0, y0, z1, x0, y0, z0, color);
+        line(vertices, pose, x0, y1, z0, x1, y1, z0, color); line(vertices, pose, x1, y1, z0, x1, y1, z1, color);
+        line(vertices, pose, x1, y1, z1, x0, y1, z1, color); line(vertices, pose, x0, y1, z1, x0, y1, z0, color);
+        line(vertices, pose, x0, y0, z0, x0, y1, z0, color); line(vertices, pose, x1, y0, z0, x1, y1, z0, color);
+        line(vertices, pose, x1, y0, z1, x1, y1, z1, color); line(vertices, pose, x0, y0, z1, x0, y1, z1, color);
     }
 
     private static void line(VertexConsumer vertices, PoseStack.Pose pose, double x0, double y0, double z0,
-                             double x1, double y1, double z1, int color, float width) {
+                              double x1, double y1, double z1, int color) {
         float nx = (float) (x1 - x0), ny = (float) (y1 - y0), nz = (float) (z1 - z0);
-        vertices.addVertex(pose, (float) x0, (float) y0, (float) z0).setColor(color).setNormal(pose, nx, ny, nz).setLineWidth(width);
-        vertices.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, -nx, -ny, -nz).setLineWidth(width);
+        vertices.addVertex(pose, (float) x0, (float) y0, (float) z0).setColor(color).setNormal(pose, nx, ny, nz);
+        vertices.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, -nx, -ny, -nz);
     }
 
     private void assertRenderThread() {

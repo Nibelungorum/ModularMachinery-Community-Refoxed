@@ -10,9 +10,8 @@ import cn.howxu.mmcr.MMCR;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import java.util.EnumMap;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.RenderType;
 
 import net.minecraft.core.BlockPos;
 
@@ -86,7 +85,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
 
     static final class Meshes implements FullCache {
         private final List<MeshPart> parts;
-        private final Map<ChunkSectionLayer, List<MeshData>> layers;
+        private final Map<RenderType, List<MeshData>> layers;
         private final Set<BlockPos> blockEntities;
         private final List<MeshPart> translucentParts;
         private final PreviewSceneGpuMesh gpuMesh;
@@ -95,7 +94,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
 
         Meshes(List<MeshPart> parts, Set<BlockPos> blockEntities) {
             this.parts = List.copyOf(parts);
-            this.layers = flattenLayers(this.parts);
+            this.layers = transferLayers(this.parts);
             this.blockEntities = blockEntities;
             this.translucentParts = this.parts.stream()
                     .filter(part -> part.translucentSortState() != null)
@@ -103,27 +102,27 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
             this.gpuMesh = PreviewSceneGpuMesh.upload(layers);
         }
 
-        Map<ChunkSectionLayer, List<MeshData>> layers() { return layers; }
+        Map<RenderType, List<MeshData>> layers() { return layers; }
         Set<BlockPos> blockEntities() { return blockEntities; }
         List<MeshPart> translucentParts() { return translucentParts; }
         TranslucentOrder translucentOrder() { return translucentOrder; }
 
-        private static Map<ChunkSectionLayer, List<MeshData>> flattenLayers(List<MeshPart> parts) {
-            Map<ChunkSectionLayer, List<MeshData>> flattened = new EnumMap<>(ChunkSectionLayer.class);
+        private static Map<RenderType, List<MeshData>> transferLayers(List<MeshPart> parts) {
+            Map<RenderType, List<MeshData>> flattened = new IdentityHashMap<>();
             for (MeshPart part : parts) {
-                part.meshes().forEach((layer, mesh) ->
+                part.transferMeshes().forEach((layer, mesh) ->
                         flattened.computeIfAbsent(layer, ignored -> new ArrayList<>()).add(mesh));
             }
             flattened.replaceAll((layer, meshes) -> List.copyOf(meshes));
             return Map.copyOf(flattened);
         }
 
-        void draw(ChunkSectionLayer layer) { gpuMesh.draw(layer); }
+        void draw(RenderType layer) { gpuMesh.draw(layer); }
 
         @Override
         public TranslucentCache replaceTranslucent(TranslucentCache result) {
             TranslucentOrder replacement = (TranslucentOrder) result;
-            gpuMesh.replaceTranslucent(replacement.indexBuffers(), replacement.indexTypes());
+            gpuMesh.replaceTranslucent(replacement);
             TranslucentOrder previous = translucentOrder;
             translucentOrder = replacement;
             return previous;
@@ -165,11 +164,12 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
 
     static final class MeshPart implements AutoCloseable {
         private final SectionBufferBuilderPack builders;
-        private final Map<ChunkSectionLayer, MeshData> meshes;
+        private final Map<RenderType, MeshData> meshes;
         private final MeshData.SortState translucentSortState;
+        private boolean meshesTransferred;
         private boolean closed;
 
-        MeshPart(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, MeshData> meshes,
+        MeshPart(SectionBufferBuilderPack builders, Map<RenderType, MeshData> meshes,
                  MeshData.SortState translucentSortState) {
             this.builders = builders;
             this.meshes = Map.copyOf(meshes);
@@ -177,7 +177,11 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         }
 
         SectionBufferBuilderPack builders() { return builders; }
-        Map<ChunkSectionLayer, MeshData> meshes() { return meshes; }
+        Map<RenderType, MeshData> meshes() { return meshes; }
+        Map<RenderType, MeshData> transferMeshes() {
+            meshesTransferred = true;
+            return meshes;
+        }
         MeshData.SortState translucentSortState() { return translucentSortState; }
 
         @Override
@@ -185,7 +189,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
             if (closed) return;
             closed = true;
             RuntimeException failure = null;
-            for (MeshData mesh : meshes.values()) {
+            for (MeshData mesh : meshesTransferred ? List.<MeshData>of() : meshes.values()) {
                 try {
                     mesh.close();
                 } catch (RuntimeException exception) {
@@ -207,21 +211,34 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         }
     }
 
-    record TranslucentOrder(List<ByteBufferBuilder.Result> indexBuffers,
-                            List<VertexFormat.IndexType> indexTypes) implements TranslucentCache {
+    static final class TranslucentOrder implements TranslucentCache {
+            private final List<ByteBufferBuilder.Result> indexBuffers;
+            private final List<VertexFormat.IndexType> indexTypes;
+
             TranslucentOrder(List<ByteBufferBuilder.Result> indexBuffers,
-                             List<VertexFormat.IndexType> indexTypes) {
+                              List<VertexFormat.IndexType> indexTypes) {
                 if (indexBuffers.size() != indexTypes.size()) {
                     throw new IllegalArgumentException("translucent index metadata size mismatch");
                 }
-                this.indexBuffers = List.copyOf(indexBuffers);
+                this.indexBuffers = new ArrayList<>(indexBuffers);
                 this.indexTypes = List.copyOf(indexTypes);
+            }
+
+            List<ByteBufferBuilder.Result> indexBuffers() { return List.copyOf(indexBuffers); }
+            List<VertexFormat.IndexType> indexTypes() { return indexTypes; }
+            int size() { return indexBuffers.size(); }
+            ByteBufferBuilder.Result take(int index) {
+                ByteBufferBuilder.Result result = indexBuffers.get(index);
+                if (result == null) throw new IllegalStateException("translucent index buffer already transferred");
+                indexBuffers.set(index, null);
+                return result;
             }
 
             @Override
             public void close() {
                 RuntimeException failure = null;
                 for (ByteBufferBuilder.Result indexBuffer : indexBuffers) {
+                    if (indexBuffer == null) continue;
                     try {
                         indexBuffer.close();
                     } catch (RuntimeException exception) {

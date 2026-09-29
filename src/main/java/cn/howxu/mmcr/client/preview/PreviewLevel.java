@@ -9,32 +9,27 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.TickRateManager;
-import net.minecraft.world.attribute.EnvironmentAttributeSystem;
-import net.minecraft.world.clock.ClockManager;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.alchemy.PotionBrewing;
-import net.minecraft.world.item.crafting.RecipeAccess;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.FuelValues;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.ChunkSource;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.level.entity.LevelEntityGetter;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -50,19 +45,14 @@ import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.entity.PartEntity;
 
 import net.minecraft.core.Direction;
-import net.minecraft.core.HolderSet;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
-import net.minecraft.core.particles.ExplosionParticleInfo;
-import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.AbortableIterationConsumer;
 import net.minecraft.util.valueproviders.ConstantInt;
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.attribute.EnvironmentAttributeMap;
 import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.damagesource.DamageTypes;
-import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeSpecialEffects;
 import net.minecraft.world.level.biome.MobSpawnSettings;
@@ -73,12 +63,14 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.ticks.BlackholeTickAccess;
 import net.minecraft.world.ticks.LevelTickAccess;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.util.profiling.InactiveProfiler;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -102,14 +94,20 @@ public final class PreviewLevel extends Level {
     private final Scoreboard scoreboard = new Scoreboard();
     private final AtomicReference<Supplier<PreviewVisibility>> visibilitySupplier;
     private final Thread renderThread;
+    private final RecipeManager recipeManager;
+    private int nextMapId;
+    private float dayTimeFraction;
+    private float dayTimePerTick = 1.0F;
     private volatile boolean closed;
 
     private PreviewLevel(StructurePreviewSchema schema, Supplier<PreviewVisibility> visibilitySupplier) {
-        super(new PreviewLevelData(), Level.OVERWORLD, previewRegistryAccess(), overworldType(), true, false, 0L, 0);
+        super(new PreviewLevelData(), Level.OVERWORLD, previewRegistryAccess(), overworldType(),
+                () -> InactiveProfiler.INSTANCE, true, false, 0L, 0);
         this.schema = Objects.requireNonNull(schema, "schema");
         this.visibilitySupplier = new AtomicReference<>(Objects.requireNonNull(visibilitySupplier, "visibilitySupplier"));
         this.renderThread = Thread.currentThread();
         this.chunkSource = new PreviewChunkSource(this);
+        this.recipeManager = new RecipeManager(registryAccess());
     }
 
     public static PreviewLevel create(StructurePreviewSchema schema, Supplier<PreviewVisibility> visibilitySupplier) {
@@ -218,22 +216,22 @@ public final class PreviewLevel extends Level {
     @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
     @Override public void playSeededSound(Entity source, double x, double y, double z, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
     @Override public void playSeededSound(Entity source, Entity entity, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
-    @Override public void explode(Entity entity, DamageSource damageSource, ExplosionDamageCalculator calculator, double x, double y, double z, float radius, boolean fire, ExplosionInteraction interaction, ParticleOptions smallParticle, ParticleOptions largeParticle, WeightedList<ExplosionParticleInfo> particles, Holder<SoundEvent> soundEvent) { }
     @Override public String gatherChunkSourceStats() { return chunkSource.gatherStats(); }
-    @Override public void setRespawnData(LevelData.RespawnData respawnData) { }
-    @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
     @Override public Entity getEntity(int id) { return null; }
-    @Override public Collection<? extends PartEntity<?>> dragonParts() { return List.of(); }
+    @Override public Collection<PartEntity<?>> getPartEntities() { return List.of(); }
     @Override public TickRateManager tickRateManager() { return tickRateManager; }
     @Override public MapItemSavedData getMapData(MapId id) { return null; }
+    @Override public void setMapData(MapId id, MapItemSavedData data) { }
+    @Override public MapId getFreeMapId() { return new MapId(nextMapId++); }
     @Override public void destroyBlockProgress(int id, BlockPos pos, int progress) { }
     @Override public Scoreboard getScoreboard() { return scoreboard; }
-    @Override public RecipeAccess recipeAccess() { return null; }
+    @Override public RecipeManager getRecipeManager() { return recipeManager; }
     @Override protected LevelEntityGetter<Entity> getEntities() { return EmptyEntityGetter.INSTANCE; }
-    @Override public ClockManager clockManager() { return clock -> 0L; }
-    @Override public EnvironmentAttributeSystem environmentAttributes() { return null; }
     @Override public PotionBrewing potionBrewing() { return PotionBrewing.EMPTY; }
-    @Override public FuelValues fuelValues() { return FuelValues.vanillaBurnTimes(registryAccess(), FeatureFlags.DEFAULT_FLAGS); }
+    @Override public void setDayTimeFraction(float fraction) { dayTimeFraction = fraction; }
+    @Override public float getDayTimeFraction() { return dayTimeFraction; }
+    @Override public float getDayTimePerTick() { return dayTimePerTick; }
+    @Override public void setDayTimePerTick(float ticks) { dayTimePerTick = ticks; }
     @Override public void levelEvent(Entity entity, int type, BlockPos pos, int data) { }
     @Override public void gameEvent(Holder<GameEvent> event, Vec3 position, GameEvent.Context context) { }
     @Override public Holder<Biome> getUncachedNoiseBiome(int x, int y, int z) { return registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS); }
@@ -263,7 +261,7 @@ public final class PreviewLevel extends Level {
                 @SuppressWarnings("unchecked")
                 ResourceKey<DamageType> key =
                         (ResourceKey<DamageType>) field.get(null);
-                damageTypes.register(key, new DamageType(key.identifier().getPath(), 0.0F),
+                damageTypes.register(key, new DamageType(key.location().getPath(), 0.0F),
                         RegistrationInfo.BUILT_IN);
             } catch (IllegalAccessException exception) {
                 throw new IllegalStateException("cannot initialize preview damage registry", exception);
@@ -274,11 +272,10 @@ public final class PreviewLevel extends Level {
     }
 
     private static Holder<DimensionType> overworldType() {
-        return Holder.direct(new DimensionType(true, false, false, false, 1.0D, 256,
-                256, 256, BlockTags.INFINIBURN_OVERWORLD, 0.0F,
-                new DimensionType.MonsterSettings(ConstantInt.of(0), 0),
-                DimensionType.Skybox.OVERWORLD, CardinalLighting.Type.DEFAULT,
-                EnvironmentAttributeMap.EMPTY, HolderSet.empty(), Optional.empty()));
+        return Holder.direct(new DimensionType(OptionalLong.empty(), true, false, false, true, 1.0D,
+                true, false, -64, 384, 384, BlockTags.INFINIBURN_OVERWORLD,
+                BuiltinDimensionTypes.OVERWORLD_EFFECTS, 0.0F,
+                new DimensionType.MonsterSettings(false, false, ConstantInt.of(0), 0)));
     }
 
     /**
@@ -287,12 +284,23 @@ public final class PreviewLevel extends Level {
      * @author howxu <dev@howxu.cn>
      */
     private static final class PreviewLevelData implements WritableLevelData {
-        @Override public LevelData.RespawnData getRespawnData() { return LevelData.RespawnData.DEFAULT; }
+        private BlockPos spawn = BlockPos.ZERO;
+        private float spawnAngle;
+        @Override public BlockPos getSpawnPos() { return spawn; }
+        @Override public float getSpawnAngle() { return spawnAngle; }
         @Override public long getGameTime() { return 0L; }
+        @Override public long getDayTime() { return 0L; }
+        @Override public boolean isThundering() { return false; }
+        @Override public boolean isRaining() { return false; }
+        @Override public void setRaining(boolean raining) { }
         @Override public boolean isHardcore() { return false; }
+        @Override public GameRules getGameRules() { return new GameRules(); }
         @Override public Difficulty getDifficulty() { return Difficulty.PEACEFUL; }
         @Override public boolean isDifficultyLocked() { return true; }
-        @Override public void setSpawn(LevelData.RespawnData respawnData) { }
+        @Override public void setSpawn(BlockPos position, float angle) {
+            spawn = position.immutable();
+            spawnAngle = angle;
+        }
     }
 
     /**

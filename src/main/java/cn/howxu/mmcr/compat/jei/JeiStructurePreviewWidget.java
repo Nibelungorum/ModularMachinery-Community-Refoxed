@@ -78,7 +78,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (panel == null) return;
         ScreenPosition origin = guiOrigin(graphics);
         panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(),
-                origin.x() + (int) mouseX, origin.y() + (int) mouseY, 0, 0);
+                origin.x() + (int) mouseX, origin.y() + (int) mouseY, origin.x(), origin.y());
         if (!panel.isReady()) return;
         String[] labels = panel.hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
         for (int index = 0; index < labels.length; index++) {

@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.config.ClientConfig;
-import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
-import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
+import cn.howxu.mmcr.client.preview.scene.PreviewSceneGuiRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
 
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera;
@@ -16,7 +15,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Connects the host-neutral preview widget to the cached PiP scene renderer.
+ * Connects the host-neutral preview widget to the cached GUI scene renderer.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -24,7 +23,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     private final StructurePreviewSchema schema;
     private final PreviewLevel level;
     private final PreviewSceneRenderer scene;
-    private final PreviewScenePictureInPictureRenderer pictureInPicture;
+    private final PreviewSceneGuiRenderer guiRenderer;
     private final AtomicBoolean releaseScheduled = new AtomicBoolean();
     private BlockHitResult hoverHit;
     private BlockHitResult selectedHit;
@@ -44,8 +43,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         this.schema = Objects.requireNonNull(schema, "schema");
         this.level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL);
         this.scene = new PreviewSceneRenderer(level, schema);
-        this.pictureInPicture = new PreviewScenePictureInPictureRenderer(
-                Minecraft.getInstance().renderBuffers().bufferSource());
+        this.guiRenderer = new PreviewSceneGuiRenderer();
         StructurePreviewReloadListener.register(this);
     }
 
@@ -107,12 +105,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
             hoverHit = null;
             invalidateHoverInputs();
         }
-        int guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-        pictureInPicture.prepare(new PreviewSceneRenderState(scene, context.camera(),
-                absoluteViewport.x(), absoluteViewport.y(), absoluteViewport.x() + absoluteViewport.width(), absoluteViewport.y() + absoluteViewport.height(),
-                context.partialTick(), null,
-                this),
-                context.graphics(), guiScale);
+        guiRenderer.render(context.graphics(), absoluteViewport, context.camera(), context.partialTick(), this);
     }
 
     @Override
@@ -164,7 +157,6 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     private void releaseResources() {
         closed = true;
-        pictureInPicture.close();
         scene.dispose();
     }
 
