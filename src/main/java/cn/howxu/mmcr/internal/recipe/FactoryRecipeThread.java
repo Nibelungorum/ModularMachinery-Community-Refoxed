@@ -21,9 +21,8 @@ import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import java.util.stream.Collectors;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -617,7 +616,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         lastRecipeComponentStateVersion = snapshot.stateVersion();
     }
 
-    public void save(ValueOutput output) {
+    public void save(CompoundTag output, HolderLookup.Provider registries) {
         output.putBoolean("core", coreThread);
         output.putBoolean("base", baseThread);
         output.putString("name", threadName);
@@ -646,7 +645,8 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
         if (lastSearchFailureKey != null) {
             output.putBoolean("has_search_failure_key", true);
-            ValueOutput key = output.child("search_failure_key");
+            CompoundTag key = new CompoundTag();
+            output.put("search_failure_key", key);
             key.putLong("structure_version", lastSearchFailureKey.structureVersion());
             key.putLong("capability_version", lastSearchFailureKey.capabilityVersion());
             key.putLong("modifier_version", lastSearchFailureKey.modifierVersion());
@@ -655,21 +655,24 @@ public final class FactoryRecipeThread extends RecipeThread {
             key.putLong("resource_availability_epoch", lastSearchFailureKey.resourceAvailabilityEpoch());
             key.putLong("core_recipe_set_version", lastSearchFailureKey.coreRecipeSetVersion());
         }
-        runtime.save(output.child("runtime"));
+        CompoundTag runtimeOutput = new CompoundTag();
+        runtime.save(runtimeOutput, registries);
+        output.put("runtime", runtimeOutput);
     }
 
-    public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller) {
-        return load(input, controller, null);
+    public static FactoryRecipeThread load(CompoundTag input, MachineControllerBlockEntity controller,
+                                           HolderLookup.Provider registries) {
+        return load(input, controller, registries, null);
     }
 
-    public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
-                                           @Nullable List<MachineRecipe> candidates) {
-        return load(input, controller, candidates, null);
+    public static FactoryRecipeThread load(CompoundTag input, MachineControllerBlockEntity controller,
+                                           HolderLookup.Provider registries, @Nullable List<MachineRecipe> candidates) {
+        return load(input, controller, registries, candidates, null);
     }
 
-    public static FactoryRecipeThread load(ValueInput input, MachineControllerBlockEntity controller,
-                                           @Nullable List<MachineRecipe> candidates,
-                                           @Nullable String fallbackLaneId) {
+    public static FactoryRecipeThread load(CompoundTag input, MachineControllerBlockEntity controller,
+                                            HolderLookup.Provider registries, @Nullable List<MachineRecipe> candidates,
+                                            @Nullable String fallbackLaneId) {
         String persistedLaneId = input.getStringOr("lane_id", "");
         String laneId = persistedLaneId.isBlank() ? fallbackLaneId : persistedLaneId;
         FactoryRecipeThread thread = new FactoryRecipeThread(controller,
@@ -693,14 +696,14 @@ public final class FactoryRecipeThread extends RecipeThread {
                         thread.currentRecipeCatalog().version());
             }
         }
-        thread.runtime.load(input.childOrEmpty("runtime"), controller.resourceDomain());
+        thread.runtime.load(input.getCompoundOrEmpty("runtime"), controller.resourceDomain(), registries);
         MachineRecipe activeRecipe = thread.runtime.recipe();
         if (activeRecipe != null) {
             MachineRecipe current = availableCandidates.stream()
                     .filter(candidate -> candidate != null && activeRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
             if (current == null || !ActiveMachineRecipe.sameDefinition(activeRecipe, current,
-                    input.lookup())) {
+                    registries)) {
                 thread.clearLastRecipe();
             }
         }
@@ -728,9 +731,10 @@ public final class FactoryRecipeThread extends RecipeThread {
         return thread;
     }
 
-    private static @Nullable ResourceLocation readSearchFailureReason(ValueInput input) {
-        var typedReason = input.getString("search_failure_reason_id");
-        if (typedReason.isPresent()) return FailureStatusMigration.factoryReasonId(typedReason.get());
+    private static @Nullable ResourceLocation readSearchFailureReason(CompoundTag input) {
+        if (input.contains("search_failure_reason_id")) {
+            return FailureStatusMigration.factoryReasonId(input.getStringOr("search_failure_reason_id", ""));
+        }
         return FailureStatusMigration.factoryReasonId(input.getStringOr("search_failure_reason", ""));
     }
 
@@ -770,9 +774,9 @@ public final class FactoryRecipeThread extends RecipeThread {
         return controller.getLevel() == null ? null : controller.getLevel().registryAccess();
     }
 
-    private static @Nullable RecipeSearchContextKey readSearchFailureKey(ValueInput input) {
+    private static @Nullable RecipeSearchContextKey readSearchFailureKey(CompoundTag input) {
         if (!input.getBooleanOr("has_search_failure_key", false)) return null;
-        ValueInput key = input.childOrEmpty("search_failure_key");
+        CompoundTag key = input.getCompoundOrEmpty("search_failure_key");
         return new RecipeSearchContextKey(key.getLongOr("structure_version", Long.MIN_VALUE),
                 key.getLongOr("capability_version", Long.MIN_VALUE),
                 key.getLongOr("modifier_version", Long.MIN_VALUE),

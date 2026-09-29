@@ -35,10 +35,10 @@ import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import java.util.Collections;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
@@ -836,18 +836,19 @@ public final class FactoryRuntime {
         cachedCandidateRecipePoolId = null;
     }
 
-    public void save(ValueOutput output) {
+    public void save(CompoundTag output, HolderLookup.Provider registries) {
         output.putInt("lane_limit", laneLimit);
         output.putBoolean("paused", paused);
         output.putInt("lane_count", lanes.size());
         for (int index = 0; index < lanes.size(); index++) {
             FactoryRecipeThread lane = lanes.get(index);
-            ValueOutput laneOutput = output.child("lane_" + index);
-            lane.save(laneOutput);
+            CompoundTag laneOutput = new CompoundTag();
+            lane.save(laneOutput, registries);
+            output.put("lane_" + index, laneOutput);
         }
     }
 
-    public void load(ValueInput input, MachineControllerBlockEntity controller) {
+    public void load(CompoundTag input, MachineControllerBlockEntity controller, HolderLookup.Provider registries) {
         this.controller = controller;
         clear();
         setLaneLimit(input.getIntOr("lane_limit", laneLimit));
@@ -870,7 +871,7 @@ public final class FactoryRuntime {
         }
         Map<String, Integer> restoredCoreOccurrences = new LinkedHashMap<>();
         for (int index = 0; index < count; index++) {
-            ValueInput laneInput = input.childOrEmpty("lane_" + index);
+            CompoundTag laneInput = input.getCompoundOrEmpty("lane_" + index);
             List<MachineRecipe> candidates = laneInput.getBooleanOr("core", false)
                     ? coreCandidates.getOrDefault(laneInput.getStringOr("name", ""), List.of())
                     : catalog.recipes();
@@ -880,7 +881,7 @@ public final class FactoryRuntime {
                 int occurrence = restoredCoreOccurrences.merge(name, 1, Integer::sum) - 1;
                 fallbackLaneId = "core-" + name + (occurrence == 0 ? "" : "-" + occurrence);
             }
-            FactoryRecipeThread lane = FactoryRecipeThread.load(laneInput, controller, candidates,
+            FactoryRecipeThread lane = FactoryRecipeThread.load(laneInput, controller, registries, candidates,
                     fallbackLaneId);
             addLane(lane);
             if (lane.laneId().startsWith("factory-")) {

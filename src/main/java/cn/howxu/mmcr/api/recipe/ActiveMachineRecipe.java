@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import com.mojang.serialization.Codec;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
@@ -20,9 +21,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -220,11 +218,9 @@ public final class ActiveMachineRecipe {
         }
     }
 
-    public void serialize(ValueOutput output) {
-        serialize(output, null);
-    }
-
-    public void serialize(ValueOutput output, @Nullable HolderLookup.Provider registries) {
+    public void serialize(CompoundTag output, HolderLookup.Provider registries) {
+        Objects.requireNonNull(output, "output");
+        Objects.requireNonNull(registries, "registries");
         output.putString("recipeName", recipe == null ? "" : recipe.id().toString());
         output.putInt("tick", this.tick);
         output.putInt("totalTick", this.totalTick);
@@ -236,39 +232,42 @@ public final class ActiveMachineRecipe {
             output.putBoolean("has_effective_definition", true);
             output.putInt("effective_definition_version", EFFECTIVE_EXECUTION_SNAPSHOT_VERSION);
             output.putInt("effective_duration", totalTick);
-            output.store("effective_requirements", MachineRequirement.CODEC.listOf(), effectiveRequirements);
-            output.store("effective_outputs", MachineOutput.CODEC.listOf(), effectiveOutputs);
+            put(output, "effective_requirements", MachineRequirement.CODEC.listOf(), effectiveRequirements, registries);
+            put(output, "effective_outputs", MachineOutput.CODEC.listOf(), effectiveOutputs, registries);
         }
-        if (recipe != null && registries != null) {
+        if (recipe != null) {
             String fingerprint = definitionFingerprint(recipe, registries);
             output.putBoolean("has_recipe_definition", true);
             output.putInt("recipe_definition_version", RECIPE_DEFINITION_VERSION);
             output.putString("recipe_definition_fingerprint", fingerprint);
-            output.store("recipe_definition", MachineRecipe.CODEC.codec(), recipe);
+            put(output, "recipe_definition", MachineRecipe.CODEC.codec(), recipe, registries);
         }
         if (inputConsumptionPlan != null) {
             output.putBoolean("has_input_consumption_plan", true);
-            output.store("inputConsumptionPlan", CompoundTag.CODEC, inputConsumptionPlan.serialize());
+            output.put("inputConsumptionPlan", inputConsumptionPlan.serialize());
         }
         if (!data.isEmpty()) {
-            output.store("data", CompoundTag.CODEC, data);
+            output.put("data", data.copy());
         }
     }
 
-    public static @Nullable ActiveMachineRecipe from(ValueInput input) {
-        return load(input).recipe();
+    public static @Nullable ActiveMachineRecipe from(CompoundTag input, HolderLookup.Provider registries) {
+        return load(input, registries).recipe();
     }
 
-    public static LoadResult load(ValueInput input) {
-        return load(input, null);
+    public static LoadResult load(CompoundTag input, HolderLookup.Provider registries) {
+        Objects.requireNonNull(input, "input");
+        Objects.requireNonNull(registries, "registries");
+        return load(input, registries, null);
     }
 
-    public static LoadResult loadForPool(ValueInput input, ResourceLocation recipePoolId) {
-        return load(input, Objects.requireNonNull(recipePoolId, "recipePoolId"));
+    public static LoadResult loadForPool(CompoundTag input, HolderLookup.Provider registries,
+                                         ResourceLocation recipePoolId) {
+        return load(input, registries, Objects.requireNonNull(recipePoolId, "recipePoolId"));
     }
 
-    private static LoadResult load(ValueInput input, @Nullable ResourceLocation recipePoolId) {
-        HolderLookup.Provider registries = input.lookup();
+    private static LoadResult load(CompoundTag input, HolderLookup.Provider registries,
+                                   @Nullable ResourceLocation recipePoolId) {
         String recipeName = input.getStringOr("recipeName", "");
         ResourceLocation recipeId;
         try {
@@ -287,7 +286,7 @@ public final class ActiveMachineRecipe {
                 return new LoadResult(null);
             }
             try {
-                recipe = input.read("recipe_definition", MachineRecipe.CODEC.codec()).orElse(null);
+                recipe = get(input, "recipe_definition", MachineRecipe.CODEC.codec(), registries);
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
@@ -336,9 +335,8 @@ public final class ActiveMachineRecipe {
             }
             try {
                 effectiveDuration = input.getIntOr("effective_duration", -1);
-                effectiveRequirements = input.read("effective_requirements", MachineRequirement.CODEC.listOf())
-                        .orElse(null);
-                effectiveOutputs = input.read("effective_outputs", MachineOutput.CODEC.listOf()).orElse(null);
+                effectiveRequirements = get(input, "effective_requirements", MachineRequirement.CODEC.listOf(), registries);
+                effectiveOutputs = get(input, "effective_outputs", MachineOutput.CODEC.listOf(), registries);
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
@@ -355,8 +353,7 @@ public final class ActiveMachineRecipe {
         }
         if (hasInputConsumptionPlan) {
             try {
-                inputPlan = input.read("inputConsumptionPlan", CompoundTag.CODEC)
-                        .map(InputConsumptionPlan::deserialize).orElse(null);
+                inputPlan = InputConsumptionPlan.deserialize(input.getCompoundOrEmpty("inputConsumptionPlan"));
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
@@ -385,7 +382,7 @@ public final class ActiveMachineRecipe {
         result.finishPending = finishPending;
         result.inputConsumptionPlan = inputPlan;
         result.parallelism = parallelism;
-        result.data = input.read("data", CompoundTag.CODEC).orElseGet(CompoundTag::new);
+        result.data = input.getCompoundOrEmpty("data").copy();
         return new LoadResult(result);
     }
 
@@ -509,10 +506,19 @@ public final class ActiveMachineRecipe {
         }
     }
 
-    private static boolean hasField(ValueInput input, String field) {
-        return input.getBooleanOr(field, false)
-                || input.child(field).isPresent()
-                || input instanceof TagValueInput tagInput && tagInput.keySet().contains(field);
+    private static boolean hasField(CompoundTag input, String field) {
+        return input.contains(field);
+    }
+
+    private static <T> void put(CompoundTag output, String field, Codec<T> codec, T value,
+                                HolderLookup.Provider registries) {
+        output.put(field, codec.encodeStart(RegistryOps.create(NbtOps.INSTANCE, registries), value).getOrThrow());
+    }
+
+    private static <T> @Nullable T get(CompoundTag input, String field, Codec<T> codec,
+                                        HolderLookup.Provider registries) {
+        if (!input.contains(field)) return null;
+        return codec.parse(RegistryOps.create(NbtOps.INSTANCE, registries), input.get(field)).result().orElse(null);
     }
 
     private static String definitionFingerprint(MachineRecipe recipe, @Nullable HolderLookup.Provider registries) {

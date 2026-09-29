@@ -9,10 +9,10 @@ import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.config.CommonConfig;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -34,7 +34,7 @@ public final class FailureStatusCodec {
     private FailureStatusCodec() {
     }
 
-    public static void write(ValueOutput output, @Nullable ExecutionStatus status) {
+    public static void write(CompoundTag output, @Nullable ExecutionStatus status) {
         Objects.requireNonNull(output, "output");
         output.putBoolean("present", status != null);
         if (status == null) return;
@@ -44,7 +44,8 @@ public final class FailureStatusCodec {
         output.putInt("severity", status.severity().ordinal());
         putResourceLocation(output, "source", status.source());
 
-        ValueOutput occurrenceOutput = output.child("occurrence");
+        CompoundTag occurrenceOutput = new CompoundTag();
+        output.put("occurrence", occurrenceOutput);
         FailureOccurrence occurrence = status.failure();
         occurrenceOutput.putBoolean("present", occurrence != null);
         if (occurrence == null) return;
@@ -55,10 +56,12 @@ public final class FailureStatusCodec {
 
         List<FailureTrace.Frame> frames = occurrence.trace().frames();
         checkCount(frames.size(), MAX_TRACE_FRAMES, "trace frame");
-        ValueOutput.ValueOutputList trace = occurrenceOutput.childrenList("trace");
+        ListTag trace = new ListTag();
+        occurrenceOutput.put("trace", trace);
         for (FailureTrace.Frame frameValue : frames) {
             if (frameValue == null) throw new IllegalArgumentException("trace frame must not be null");
-            ValueOutput frame = trace.addChild();
+            CompoundTag frame = new CompoundTag();
+            trace.add(frame);
             putResourceLocation(frame, "source", frameValue.source());
             frame.putInt("phase", frameValue.phase().ordinal());
             frame.putBoolean("has_recipe", frameValue.recipeId() != null);
@@ -69,22 +72,24 @@ public final class FailureStatusCodec {
 
         Map<String, String> details = occurrence.details();
         checkCount(details.size(), maxDetails(), "failure detail");
-        ValueOutput.ValueOutputList detailList = occurrenceOutput.childrenList("details");
+        ListTag detailList = new ListTag();
+        occurrenceOutput.put("details", detailList);
         for (Map.Entry<String, String> entry : details.entrySet()) {
-            ValueOutput detail = detailList.addChild();
+            CompoundTag detail = new CompoundTag();
+            detailList.add(detail);
             putString(detail, "key", entry.getKey());
             putString(detail, "value", entry.getValue());
         }
     }
 
-    public static @Nullable ExecutionStatus read(ValueInput input) {
+    public static @Nullable ExecutionStatus read(CompoundTag input) {
         Objects.requireNonNull(input, "input");
         if (!input.getBooleanOr("present", false)) return null;
 
         ResourceLocation id = getResourceLocation(input, "id");
         StatusSeverity severity = getEnum(StatusSeverity.values(), input.getIntOr("severity", -1), "failure severity");
         ResourceLocation source = getResourceLocation(input, "source");
-        ValueInput occurrenceInput = input.childOrEmpty("occurrence");
+        CompoundTag occurrenceInput = input.getCompoundOrEmpty("occurrence");
         if (!occurrenceInput.getBooleanOr("present", false)) {
             return new ExecutionStatus(id, severity, source, (FailureOccurrence) null);
         }
@@ -93,15 +98,18 @@ public final class FailureStatusCodec {
                 ? getResourceLocation(occurrenceInput, "reason_id") : null;
         FailureReason reason = reasonId == null ? null : resolveReason(reasonId);
 
-        ValueInput.ValueInputList traceInputs = occurrenceInput.childrenListOrEmpty("trace");
+        ListTag traceInputs = occurrenceInput.getListOrEmpty("trace");
         int traceCount = count(traceInputs, MAX_TRACE_FRAMES, "trace frame");
         List<FailureTrace.Frame> frames = new ArrayList<>(traceCount);
-        for (ValueInput frameInput : traceInputs) frames.add(readFrame(frameInput));
+        for (int index = 0; index < traceInputs.size(); index++) {
+            frames.add(readFrame(traceInputs.getCompoundOrEmpty(index)));
+        }
 
-        ValueInput.ValueInputList detailInputs = occurrenceInput.childrenListOrEmpty("details");
+        ListTag detailInputs = occurrenceInput.getListOrEmpty("details");
         int detailCount = count(detailInputs, maxDetails(), "failure detail");
         Map<String, String> details = new LinkedHashMap<>(detailCount);
-        for (ValueInput detailInput : detailInputs) {
+        for (int index = 0; index < detailInputs.size(); index++) {
+            CompoundTag detailInput = detailInputs.getCompoundOrEmpty(index);
             String key = getString(detailInput, "key");
             String value = getString(detailInput, "value");
             details.put(key, value);
@@ -191,7 +199,7 @@ public final class FailureStatusCodec {
         }
     }
 
-    private static FailureTrace.Frame readFrame(ValueInput input) {
+    private static FailureTrace.Frame readFrame(CompoundTag input) {
         ResourceLocation source = getResourceLocation(input, "source");
         FailurePhase phase = getEnum(FailurePhase.values(), input.getIntOr("phase", -1), "failure phase");
         ResourceLocation recipeId = input.getBooleanOr("has_recipe", false)
@@ -225,11 +233,11 @@ public final class FailureStatusCodec {
         }
     }
 
-    private static void putResourceLocation(ValueOutput output, String name, ResourceLocation value) {
+    private static void putResourceLocation(CompoundTag output, String name, ResourceLocation value) {
         putString(output, name, value.toString());
     }
 
-    private static ResourceLocation getResourceLocation(ValueInput input, String name) {
+    private static ResourceLocation getResourceLocation(CompoundTag input, String name) {
         return parseResourceLocation(getString(input, name), name);
     }
 
@@ -241,12 +249,12 @@ public final class FailureStatusCodec {
         }
     }
 
-    private static void putString(ValueOutput output, String name, String value) {
+    private static void putString(CompoundTag output, String name, String value) {
         checkString(value, name);
         output.putString(name, value);
     }
 
-    private static String getString(ValueInput input, String name) {
+    private static String getString(CompoundTag input, String name) {
         String value = input.getStringOr(name, "");
         checkString(value, name);
         return value;
@@ -287,12 +295,9 @@ public final class FailureStatusCodec {
         if (count < 0 || count > maximum) throw new IllegalArgumentException("Invalid " + name + " count: " + count);
     }
 
-    private static int count(ValueInput.ValueInputList values, int maximum, String name) {
-        int count = 0;
-        for (ValueInput ignored : values) {
-            if (++count > maximum) throw new IllegalArgumentException("Invalid " + name + " count: " + count);
-        }
-        return count;
+    private static int count(ListTag values, int maximum, String name) {
+        checkCount(values.size(), maximum, name);
+        return values.size();
     }
 
     private static int readCount(RegistryFriendlyByteBuf buffer, int maximum, String name) {

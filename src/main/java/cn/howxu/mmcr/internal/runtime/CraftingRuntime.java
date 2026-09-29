@@ -57,8 +57,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.LongTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -918,10 +916,12 @@ public final class CraftingRuntime {
         captureVersions(runtime);
     }
 
-    public void save(ValueOutput output) {
+    public void save(CompoundTag output, HolderLookup.Provider registries) {
         boolean present = activeRecipe != null && activeRecipe.getRecipe() != null;
         output.putBoolean("active", present);
-        FailureStatusCodec.write(output.child("failure"), failure);
+        CompoundTag failureOutput = new CompoundTag();
+        FailureStatusCodec.write(failureOutput, failure);
+        output.put("failure", failureOutput);
         if (present) {
             output.putLong("structure_version", structureVersion);
             output.putLong("capability_version", capabilityVersion);
@@ -929,11 +929,14 @@ public final class CraftingRuntime {
             output.putLong("component_state_version", componentStateVersion);
             output.putLong("upgrade_content_revision", upgradeContentRevision);
             savePrefetchAllocations();
-            activeRecipe.serialize(output.child("recipe"), registryAccess());
+            CompoundTag recipeOutput = new CompoundTag();
+            activeRecipe.serialize(recipeOutput, registries);
+            output.put("recipe", recipeOutput);
         }
     }
 
-    public void load(ValueInput input, @Nullable StructureClaimRegistry.ResourceDomain domain) {
+    public void load(CompoundTag input, @Nullable StructureClaimRegistry.ResourceDomain domain,
+                     HolderLookup.Provider registries) {
         boolean active = input.getBooleanOr("active", false);
         if (!active) {
             invalidate();
@@ -946,7 +949,7 @@ public final class CraftingRuntime {
             return;
         }
         ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.loadForPool(
-                input.childOrEmpty("recipe"), recipePoolId);
+                input.getCompoundOrEmpty("recipe"), registries, recipePoolId);
         if (!loaded.successful()) {
             failLoad();
             return;
@@ -965,9 +968,8 @@ public final class CraftingRuntime {
         }
     }
 
-    private static @Nullable ExecutionStatus readFailure(ValueInput input, @Nullable ResourceLocation recipeId) {
-        var failureInput = input.child("failure");
-        if (failureInput.isPresent()) return FailureStatusCodec.read(failureInput.get());
+    private static @Nullable ExecutionStatus readFailure(CompoundTag input, @Nullable ResourceLocation recipeId) {
+        if (input.contains("failure")) return FailureStatusCodec.read(input.getCompoundOrEmpty("failure"));
         if (!input.getBooleanOr("has_failure", false)) return null;
         return FailureStatusMigration.craftingFailure(input.getStringOr("failure_reason", ""), recipeId);
     }
@@ -1451,10 +1453,6 @@ public final class CraftingRuntime {
     /** Returns outputs using the same runtime modifier context as pattern-start preparation. */
     public List<MachineOutput> runtimeMachineOutputs(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
         return recipe.runtimeMachineOutputs(contextModifiers(runtime));
-    }
-
-    private @Nullable HolderLookup.Provider registryAccess() {
-        return controller.getLevel() == null ? null : controller.getLevel().registryAccess();
     }
 
     private void captureVersions(ControllerRuntimeSnapshot runtime) {
