@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.runtime;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
@@ -49,27 +48,25 @@ public final class PatternStartBatchReservation implements AutoCloseable {
     }
 
     public boolean commit() {
-        return commit(ignored -> { });
-    }
-
-    public boolean commit(Consumer<TransactionContext> transactionWrites) {
-        Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (status != Status.RESERVED) return false;
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (PatternStartReservation reservation : reservations) {
-                if (reservation.commitPlan()) continue;
-                rollback();
-                return false;
-            }
-            transactionWrites.accept(transaction);
-            transaction.commit();
-        } catch (RuntimeException exception) {
+        for (PatternStartReservation reservation : reservations) {
+            if (reservation.commitPlan()) continue;
             rollback();
             return false;
         }
         reservations.forEach(PatternStartReservation::activate);
         status = Status.COMMITTED;
         return true;
+    }
+
+    /**
+     * Legacy transaction callback boundary. Native pattern starts cannot share a Transfer transaction.
+     */
+    public boolean commit(Consumer<TransactionContext> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        if (status != Status.RESERVED) return false;
+        rollback();
+        return false;
     }
 
     public void rollback() {
