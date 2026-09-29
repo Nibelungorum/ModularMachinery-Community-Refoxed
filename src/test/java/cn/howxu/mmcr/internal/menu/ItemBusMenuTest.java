@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.test.TestBootstrap;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -11,8 +11,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -21,7 +19,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -109,8 +106,8 @@ class ItemBusMenuTest {
     @Test
     void input_slots_allow_inserting_and_pickup() {
         bindItemComponents(Items.IRON_INGOT);
-        LongResourceStorage<ItemResource> storage = itemStorage(1);
-        storage.setContents(0, ItemResource.of(Items.IRON_INGOT.getDefaultInstance()), 1L);
+        LongItemStorage storage = itemStorage(1);
+        storage.setContents(0, Items.IRON_INGOT.getDefaultInstance(), 1L);
         DirectionalItemSlot slot = new DirectionalItemSlot(storage, 0, 0, 0);
 
         assertThat(slot.mayPlace(Items.IRON_INGOT.getDefaultInstance())).isTrue();
@@ -120,8 +117,8 @@ class ItemBusMenuTest {
     @Test
     void output_slots_allow_inserting_and_pickup() {
         bindItemComponents(Items.IRON_INGOT);
-        LongResourceStorage<ItemResource> storage = itemStorage(1);
-        storage.setContents(0, ItemResource.of(Items.IRON_INGOT.getDefaultInstance()), 1L);
+        LongItemStorage storage = itemStorage(1);
+        storage.setContents(0, Items.IRON_INGOT.getDefaultInstance(), 1L);
         DirectionalItemSlot slot = new DirectionalItemSlot(storage, 0, 0, 0);
 
         assertThat(slot.mayPlace(Items.IRON_INGOT.getDefaultInstance())).isTrue();
@@ -131,8 +128,8 @@ class ItemBusMenuTest {
     @Test
     void output_slots_merge_player_insert_before_using_empty_slot() {
         bindItemComponents(Items.IRON_INGOT);
-        LongResourceStorage<ItemResource> storage = itemStorage(2);
-        storage.setContents(0, ItemResource.of(Items.IRON_INGOT.getDefaultInstance()), 10L);
+        LongItemStorage storage = itemStorage(2);
+        storage.setContents(0, Items.IRON_INGOT.getDefaultInstance(), 10L);
         DirectionalItemSlot first = new DirectionalItemSlot(storage, 0, 0, 0);
         DirectionalItemSlot second = new DirectionalItemSlot(storage, 1, 0, 0);
 
@@ -145,20 +142,14 @@ class ItemBusMenuTest {
         assertThat(stack.isEmpty()).as("remaining=%s slot0=%s slot1=%s", stack,
                 storage.resource(0), storage.resource(1)).isTrue();
         assertThat(storage.amount(0)).isEqualTo(15L);
-        assertThat(storage.resource(1)).isNull();
+        assertThat(storage.resource(1)).isEmpty();
     }
 
     @Test
     void output_slots_reject_mismatched_insert_like_input_slots() {
         bindItemComponents(Items.IRON_INGOT);
         bindItemComponents(Items.GOLD_INGOT);
-        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, 64L,
-                ItemResource::isEmpty, null) {
-            @Override
-            public boolean isValid(int slot, ItemResource resource) {
-                return resource.toStack(1).is(Items.IRON_INGOT) && super.isValid(slot, resource);
-            }
-        };
+        LongItemStorage storage = new LongItemStorage(1, 64L, stack -> stack.is(Items.IRON_INGOT), null);
         DirectionalItemSlot inputSlot = new DirectionalItemSlot(storage, 0, 0, 0);
         DirectionalItemSlot outputSlot = new DirectionalItemSlot(storage, 0, 0, 0);
 
@@ -166,15 +157,15 @@ class ItemBusMenuTest {
         ItemStack outputRemaining = outputSlot.safeInsert(Items.GOLD_INGOT.getDefaultInstance());
 
         assertThat(outputRemaining.getCount()).isEqualTo(inputRemaining.getCount());
-        assertThat(storage.resource(0)).isNull();
+        assertThat(storage.resource(0)).isEmpty();
     }
 
     private static Inventory emptyInventory() {
         return new Inventory(null, null);
     }
 
-    private static LongResourceStorage<ItemResource> itemStorage(int slots) {
-        return new LongResourceStorage<>(ItemResource.class, slots, 64L, ItemResource::isEmpty, null);
+    private static LongItemStorage itemStorage(int slots) {
+        return new LongItemStorage(slots, 64L, null);
     }
 
     private static ItemBusMenu clientMenuFromServer(ItemBusMenu serverMenu) {

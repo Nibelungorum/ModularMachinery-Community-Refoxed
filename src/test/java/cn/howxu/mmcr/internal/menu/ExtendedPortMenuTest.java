@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.menu;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
@@ -13,20 +12,24 @@ import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
-import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,6 +69,33 @@ class ExtendedPortMenuTest {
         assertThat(menu.slotCount()).isEqualTo(2);
         assertThat(menu.entries()).isEmpty();
         assertThat(menu.selectedCapabilityId()).isEqualTo(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+    }
+
+    @Test
+    void extended_menus_apply_native_handler_snapshots_with_component_identity() {
+        ItemStack taggedIron = Items.IRON_INGOT.getDefaultInstance();
+        CompoundTag data = new CompoundTag();
+        data.putString("source", "extended-menu-test");
+        CustomData.set(DataComponents.CUSTOM_DATA, taggedIron, data);
+
+        ExtendedItemBusBlockEntity itemOwner = new ExtendedItemBusBlockEntity(
+                POS, ModBlocks.BLOCKS.get(PortKinds.EXTENDED_ITEM_INPUT.id()).get().defaultBlockState());
+        itemOwner.nativeItemHandler().insertItem(0, taggedIron, false);
+        ExtendedItemMenu itemMenu = clientItemMenu();
+        itemMenu.applySnapshot(PktPortStorageSyncPayload.from(itemOwner));
+
+        ExtendedFluidHatchBlockEntity fluidOwner = new ExtendedFluidHatchBlockEntity(
+                POS, ModBlocks.BLOCKS.get(PortKinds.EXTENDED_FLUID_INPUT.id()).get().defaultBlockState());
+        fluidOwner.nativeFluidHandler().fill(new FluidStack(Fluids.WATER, 250), IFluidHandler.FluidAction.EXECUTE);
+        ExtendedFluidMenu fluidMenu = clientFluidMenu();
+        fluidMenu.applySnapshot(PktPortStorageSyncPayload.from(fluidOwner));
+
+        ItemStorageEntry itemEntry = itemMenu.entries().getFirst();
+        FluidStorageEntry fluidEntry = fluidMenu.entries().getFirst();
+        assertThat(ItemStack.isSameItemSameComponents(itemEntry.resource(), taggedIron)).isTrue();
+        assertThat(itemEntry.amount()).isEqualTo(1L);
+        assertThat(FluidStack.isSameFluidSameComponents(fluidEntry.resource(), new FluidStack(Fluids.WATER, 1))).isTrue();
+        assertThat(fluidEntry.amount()).isEqualTo(250L);
     }
 
     @Test
@@ -109,6 +139,12 @@ class ExtendedPortMenuTest {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         ExtendedFluidMenu.writeClientOpenData(buffer, POS, PortKinds.EXTENDED_FLUID_INPUT.id(), 2);
         return ExtendedFluidMenu.clientOpen(1, emptyInventory(), buffer);
+    }
+
+    private static ExtendedItemMenu clientItemMenu() {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        ExtendedItemMenu.writeClientOpenData(buffer, POS, PortKinds.EXTENDED_ITEM_INPUT.id(), 2);
+        return ExtendedItemMenu.clientOpen(1, emptyInventory(), buffer);
     }
 
     private static Inventory emptyInventory() {
