@@ -6,6 +6,9 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
@@ -15,6 +18,9 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.Set;
+import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 
 /**
  * Compatibility helpers for built-in capability consumers and shared contract helpers.
@@ -61,6 +67,24 @@ public final class CapabilityFactories {
         return capability.facet(OperationFacet.class)
                 .orElseThrow(() -> new IllegalStateException("Capability does not declare an operation facet"))
                 .prepareOperation(request);
+    }
+
+    public static IItemHandler itemHandler(MachineCapability capability) {
+        if (capability == null) return null;
+        ItemHandlerFacet facet = capability.facet(ItemHandlerFacet.class).orElse(null);
+        return facet == null ? null : facet.itemHandler();
+    }
+
+    public static IFluidHandler fluidHandler(MachineCapability capability) {
+        if (capability == null) return null;
+        FluidHandlerFacet facet = capability.facet(FluidHandlerFacet.class).orElse(null);
+        return facet == null ? null : facet.fluidHandler();
+    }
+
+    public static IEnergyStorage energyStorage(MachineCapability capability) {
+        if (capability == null) return null;
+        EnergyStorageFacet facet = capability.facet(EnergyStorageFacet.class).orElse(null);
+        return facet == null ? null : facet.energyStorage();
     }
 
     @SuppressWarnings("unchecked")
