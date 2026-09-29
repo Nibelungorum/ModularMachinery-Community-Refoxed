@@ -63,7 +63,7 @@ public final class DynamicOverlayTextures {
         }
         if (kind.combinedPortSize().isPresent()) {
             // return overlay(tieredPortOverlay(kind.ioType(), "new/overlay_combined_input", "new/overlay_combined_output", kind.combinedPortSize().map(CombinedPortSize::id).orElseThrow()));
-            return ImmutableList.of(baseOverlay("item_fluid"), directionOverlay(kind.ioType()), typeOverlay("item_fluid"), tierOverlay("extended/" + kind.combinedPortSize().map(CombinedPortSize::id).orElseThrow()));
+            return ImmutableList.of(baseOverlay("item_fluid"), directionOverlay(kind.ioType()), typeOverlay("item_fluid"), tierOverlay(mappingTier(kind.combinedPortSize().map(CombinedPortSize::id).orElseThrow())));
         }
         if (kind.extendedCombinedPortSize().isPresent()) {
             // return overlay(tieredPortOverlay(kind.ioType(), "new/overlay_extended_combined_input", "new/overlay_extended_combined_output", kind.extendedCombinedPortSize().map(ExtendedCombinedPortSize::id).orElseThrow()));
@@ -145,5 +145,14 @@ public final class DynamicOverlayTextures {
                 // typeOverlay()
                 tierOverlay("huge")
         );
+    }
+
+    private static String mappingTier(String to_map){
+        return switch (to_map) {
+            case "basic" -> "big";
+            case "advanced" -> "huge";
+            case "reinforced" -> "ludicrous";
+            default -> "vacuum"; // include ultimate
+        };
     }
 }
