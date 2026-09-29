@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -37,12 +36,12 @@ public final class BuiltinCapabilityDefinitions {
     public static void register() {
         CapabilityRegistry.register(new CapabilityDefinition(
                 ITEM_TYPE,
-                Set.of(ResourceFacet.class, ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                Set.of(ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
                         TransferFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createItem));
         CapabilityRegistry.register(new CapabilityDefinition(
                 FLUID_TYPE,
-                Set.of(ResourceFacet.class, FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                Set.of(FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
                         TransferFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createFluid));
         CapabilityRegistry.register(new CapabilityDefinition(

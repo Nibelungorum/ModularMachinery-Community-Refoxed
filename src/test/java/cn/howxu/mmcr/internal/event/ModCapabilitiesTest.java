@@ -9,15 +9,14 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -27,7 +26,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -97,7 +95,7 @@ class ModCapabilitiesTest {
     }
 
     @Test
-    void native_resource_provider_exposes_resource_facet_without_transfer_facet() {
+    void native_provider_exposes_typed_handler_without_transfer_facet() {
         ResourceOnlyCapability capability = new ResourceOnlyCapability();
         CapabilityBinding binding = new CapabilityBinding(capability.type(), CapabilityDirections.input(),
                 _ -> capability, PortTierPolicy.always());
@@ -106,8 +104,8 @@ class ModCapabilitiesTest {
         port.setLevel(level);
         int lookupsBefore = LevelStub.capabilityLookups(level);
 
-        assertThat(ModCapabilities.resourceStorage(port, List.of(binding), Direction.NORTH, ItemResource.class))
-                .isSameAs(capability.storage());
+        assertThat(ModCapabilities.itemHandler(port, List.of(binding), Direction.NORTH))
+                .isSameAs(capability.itemHandler());
 
         port.enableAutoIOAndRunCycle();
         assertThat(port.autoIOCandidateCount()).isZero();
@@ -140,20 +138,18 @@ class ModCapabilitiesTest {
         }
     }
 
-    private static final class ResourceOnlyCapability implements MachineCapability, ResourceFacet<ItemResource> {
+    private static final class ResourceOnlyCapability implements MachineCapability, ItemHandlerFacet {
         private static final CapabilityType TYPE = new CapabilityType(MMCR.id("resource_only_test"));
-        private final ResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, 64L,
-                ItemResource::isEmpty, () -> {});
+        private final LongItemStorage storage = new LongItemStorage(1, 64L, () -> {});
 
         @Override public CapabilityType type() { return TYPE; }
         @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
-        @Override public Class<ItemResource> resourceType() { return ItemResource.class; }
-        @Override public ResourceStorage<ItemResource> storage() { return storage; }
+        @Override public LongItemStorage itemHandler() { return storage; }
         @Override public CapabilityView view() {
             return new CapabilityView() {
                 @Override public CapabilityType type() { return TYPE; }
                 @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
-                @Override public Set<Class<? extends CapabilityFacet>> facets() { return Set.of(ResourceFacet.class); }
+                @Override public Set<Class<? extends CapabilityFacet>> facets() { return Set.of(ItemHandlerFacet.class); }
             };
         }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {

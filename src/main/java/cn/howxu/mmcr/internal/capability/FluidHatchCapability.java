@@ -7,7 +7,6 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
@@ -51,7 +50,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FluidHatchCapability implements MachineCapability, ResourceFacet<FluidResource>, FluidHandlerFacet, TransferFacet,
+public final class FluidHatchCapability implements MachineCapability, FluidHandlerFacet, TransferFacet,
         OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
@@ -78,7 +77,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     }
 
     public FluidHatchCapability(IOPortBlockEntity port, IFluidHandler fluidHandler, IOType ioType) {
-        this(port, null, fluidHandler, ioType, false);
+        this(port, null, fluidHandler, ioType, true);
     }
 
     private FluidHatchCapability(IOPortBlockEntity port, ResourceStorage<FluidResource> storage,
@@ -137,7 +136,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
             }
         };
         Set<Class<? extends CapabilityFacet>> facets = new LinkedHashSet<>(Set.of(
-                ResourceFacet.class, FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
                 AsyncPlanningFacet.class));
         if (exposeTransferFacet) facets.add(TransferFacet.class);
         this.view = CapabilityFactories.view(type(), directions(),
@@ -157,7 +156,6 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         return fluidHandler;
     }
 
-    @Override
     public Class<FluidResource> resourceType() {
         return FluidResource.class;
     }
@@ -348,19 +346,34 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
 
     @Override
     public void encode(RegistryFriendlyByteBuf buffer) {
-        buffer.writeVarInt(storage.size());
-        for (int slot = 0; slot < storage.size(); slot++) {
-            FluidResource resource = storage.resource(slot);
+        int tanks = fluidHandler == null ? storage.size() : fluidHandler.getTanks();
+        buffer.writeVarInt(tanks);
+        for (int slot = 0; slot < tanks; slot++) {
+            FluidResource resource = fluidHandler == null ? storage.resource(slot) : FluidResource.of(fluidHandler.getFluidInTank(slot));
             FluidResource.STREAM_CODEC.encode(buffer, resource == null ? FluidResource.EMPTY : resource);
-            buffer.writeLong(storage.amount(slot));
-            buffer.writeLong(storage.capacity(slot, resource));
+            buffer.writeLong(fluidHandler == null ? storage.amount(slot) : fluidAmount(slot));
+            buffer.writeLong(fluidHandler == null ? storage.capacity(slot, resource) : fluidCapacity(slot));
         }
     }
 
     @Override
     public void decode(RegistryFriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
-        if (count < 0 || count > 1024 || count != storage.size()) throw new IllegalArgumentException("Invalid fluid sync state");
+        int tanks = fluidHandler == null ? storage.size() : fluidHandler.getTanks();
+        if (count < 0 || count > 1024 || count != tanks) throw new IllegalArgumentException("Invalid fluid sync state");
+        if (fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage nativeStorage) {
+            for (int slot = 0; slot < count; slot++) {
+                FluidResource resource = FluidResource.STREAM_CODEC.decode(buffer);
+                long amount = buffer.readLong();
+                long capacity = buffer.readLong();
+                if (amount < 0 || capacity < amount || capacity != nativeStorage.capacity(slot)) {
+                    throw new IllegalArgumentException("Invalid fluid sync amount");
+                }
+                nativeStorage.setContents(slot, resource.isEmpty() ? net.neoforged.neoforge.fluids.FluidStack.EMPTY
+                        : resource.toStack(1), amount);
+            }
+            return;
+        }
         try (Transaction transaction = Transaction.openRoot()) {
             for (int slot = 0; slot < count; slot++) {
                 FluidResource resource = FluidResource.STREAM_CODEC.decode(buffer);

@@ -3,8 +3,6 @@ package cn.howxu.mmcr.internal.autoio;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -19,25 +17,25 @@ import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.util.IOType;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
+import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-
-import java.util.Map;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.Predicate;
 
 /**
  * Built-in automatic IO policies registered by capability identity.
@@ -54,9 +52,6 @@ public final class CapabilityTransferPolicies {
     private CapabilityTransferPolicies() {
     }
 
-    /**
-     * Forces class initialization before generic callers query the registry.
-     */
     public static void ensureRegistered() {
         MekanismBridge.get().registerTransferPolicies();
     }
@@ -68,14 +63,9 @@ public final class CapabilityTransferPolicies {
     }
 
     private static TransferResult blocked(FailureReason reason) {
-        return blocked(reason, Map.of());
-    }
-
-    private static TransferResult blocked(FailureReason reason, Map<String, String> details) {
         FailureOccurrence occurrence = FailureOccurrence.at(reason, MMCR.id("auto_io"),
-                FailurePhase.CAPABILITY_COMMIT, null, null, details);
-        return TransferResult.blocked(
-                ExecutionStatus.blocked(MMCR.id("auto_io"), MMCR.id("auto_io"), occurrence));
+                FailurePhase.CAPABILITY_COMMIT, null, null, Map.of());
+        return TransferResult.blocked(ExecutionStatus.blocked(MMCR.id("auto_io"), MMCR.id("auto_io"), occurrence));
     }
 
     private static boolean canWork(Level level, Direction side) {
@@ -89,17 +79,16 @@ public final class CapabilityTransferPolicies {
     private static final class ItemPolicy implements TransferPolicy {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
-            if (storage == null) return false;
-            if (capability.directions().supports(IOType.OUTPUT)) {
-                for (int slot = 0; slot < storage.size(); slot++) {
-                    if (storage.amount(slot) > 0L) return true;
+            IItemHandler handler = CapabilityFactories.itemHandler(capability);
+            if (handler == null) return false;
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                ItemStack stack = handler.getStackInSlot(slot);
+                if (capability.directions().supports(IOType.OUTPUT)) {
+                    if (!stack.isEmpty() && itemAmount(handler, slot) > 0L) return true;
+                } else if (!stack.isEmpty() ? acceptedItems(handler, stack.copyWithCount(1), true) > 0
+                        : handler.getSlotLimit(slot) > 0) {
+                    return true;
                 }
-                return false;
-            }
-            for (int slot = 0; slot < storage.size(); slot++) {
-                ItemResource resource = storage.resource(slot);
-                if (storage.amount(slot) < storage.capacity(slot, isEmpty(resource) ? null : resource)) return true;
             }
             return false;
         }
@@ -111,42 +100,44 @@ public final class CapabilityTransferPolicies {
 
         @Override
         public List<Resource> ejectionResources(MachineCapability capability) {
-            return storedResources(CapabilityFactories.resourceStorage(capability, ItemResource.class));
+            IItemHandler handler = CapabilityFactories.itemHandler(capability);
+            if (handler == null) return List.of();
+            LinkedHashSet<Resource> resources = new LinkedHashSet<>();
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                ItemStack stack = handler.getStackInSlot(slot);
+                if (!stack.isEmpty() && itemAmount(handler, slot) > 0L) resources.add(ItemResource.of(stack));
+            }
+            return List.copyOf(resources);
         }
 
         @Override
         public TransferResult transfer(TransferContext context) {
-            MachineCapability capability = context.capability();
-            ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
-            TransferFacet transfer = transferFacet(capability);
-            if (storage == null || transfer == null) {
-                return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
-            }
-            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) {
+            IItemHandler internal = CapabilityFactories.itemHandler(context.capability());
+            TransferFacet transfer = transferFacet(context.capability());
+            if (internal == null || transfer == null) return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            if (context.eject() ? !hasStoredContents(internal) : !hasWork(context.capability())) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
             }
-            ResourceHandler<ItemResource> adjacent = adjacentItem(capability, context.side());
+            IItemHandler adjacent = adjacentItem(context.capability(), context.side());
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
-            ResourceHandler<ItemResource> internal = resourceHandler(storage);
-            int limit = (int) Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(),
-                    Integer.MAX_VALUE);
-            Predicate<ItemResource> filter = ejectionFilter(context);
+            long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
+            Predicate<ItemStack> filter = ejectionItemFilter(context);
             long moved = context.eject()
-                    ? moveResource(internal, adjacent, filter, limit, context)
+                    ? moveItems(internal, adjacent, filter, limit, context.simulate())
                     : context.ioType() == IOType.INPUT
-                    ? moveResource(adjacent, internal, resource -> true, limit, context)
-                    : moveResource(internal, adjacent, resource -> true, limit, context);
+                    ? moveItems(adjacent, internal, stack -> true, limit, context.simulate())
+                    : moveItems(internal, adjacent, stack -> true, limit, context.simulate());
             return TransferResult.moved(moved);
         }
 
-        private static boolean hasStoredContents(ResourceStorage<ItemResource> storage) {
-            for (int slot = 0; slot < storage.size(); slot++) {
-                if (storage.amount(slot) > 0L) return true;
+        private static boolean hasStoredContents(IItemHandler handler) {
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                if (!handler.getStackInSlot(slot).isEmpty() && itemAmount(handler, slot) > 0L) return true;
             }
             return false;
         }
 
-        private static ResourceHandler<ItemResource> adjacentItem(MachineCapability capability, Direction side) {
+        private static IItemHandler adjacentItem(MachineCapability capability, Direction side) {
             TransferFacet transfer = transferFacet(capability);
             if (transfer == null || !canWork(transfer.level(), side)) return null;
             return transfer.level().getCapability(ModCapabilities.ITEM_BLOCK,
@@ -157,12 +148,16 @@ public final class CapabilityTransferPolicies {
     private static final class FluidPolicy implements TransferPolicy {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
-            if (storage == null) return false;
-            if (capability.directions().supports(IOType.OUTPUT)) return hasStoredContents(storage);
-            for (int slot = 0; slot < storage.size(); slot++) {
-                FluidResource resource = storage.resource(slot);
-                if (storage.amount(slot) < storage.capacity(slot, isEmpty(resource) ? null : resource)) return true;
+            IFluidHandler handler = CapabilityFactories.fluidHandler(capability);
+            if (handler == null) return false;
+            for (int tank = 0; tank < handler.getTanks(); tank++) {
+                FluidStack stack = handler.getFluidInTank(tank);
+                if (capability.directions().supports(IOType.OUTPUT)) {
+                    if (!stack.isEmpty() && fluidAmount(handler, tank) > 0L) return true;
+                } else if (!stack.isEmpty() ? handler.fill(stack.copyWithAmount(1), IFluidHandler.FluidAction.SIMULATE) > 0
+                        : handler.getTankCapacity(tank) > 0) {
+                    return true;
+                }
             }
             return false;
         }
@@ -174,42 +169,44 @@ public final class CapabilityTransferPolicies {
 
         @Override
         public List<Resource> ejectionResources(MachineCapability capability) {
-            return storedResources(CapabilityFactories.resourceStorage(capability, FluidResource.class));
+            IFluidHandler handler = CapabilityFactories.fluidHandler(capability);
+            if (handler == null) return List.of();
+            LinkedHashSet<Resource> resources = new LinkedHashSet<>();
+            for (int tank = 0; tank < handler.getTanks(); tank++) {
+                FluidStack stack = handler.getFluidInTank(tank);
+                if (!stack.isEmpty() && fluidAmount(handler, tank) > 0L) resources.add(FluidResource.of(stack));
+            }
+            return List.copyOf(resources);
         }
 
         @Override
         public TransferResult transfer(TransferContext context) {
-            MachineCapability capability = context.capability();
-            ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
-            TransferFacet transfer = transferFacet(capability);
-            if (storage == null || transfer == null) {
-                return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
-            }
-            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) {
+            IFluidHandler internal = CapabilityFactories.fluidHandler(context.capability());
+            TransferFacet transfer = transferFacet(context.capability());
+            if (internal == null || transfer == null) return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            if (context.eject() ? !hasStoredContents(internal) : !hasWork(context.capability())) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
             }
-            ResourceHandler<FluidResource> adjacent = adjacentFluid(capability, context.side());
+            IFluidHandler adjacent = adjacentFluid(context.capability(), context.side());
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
-            ResourceHandler<FluidResource> internal = resourceHandler(storage);
-            int limit = (int) Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(),
-                    Integer.MAX_VALUE);
-            Predicate<FluidResource> filter = ejectionFilter(context);
+            long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
+            Predicate<FluidStack> filter = ejectionFluidFilter(context);
             long moved = context.eject()
-                    ? moveResource(internal, adjacent, filter, limit, context)
+                    ? moveFluids(internal, adjacent, filter, limit, context.simulate())
                     : context.ioType() == IOType.INPUT
-                    ? moveResource(adjacent, internal, resource -> true, limit, context)
-                    : moveResource(internal, adjacent, resource -> true, limit, context);
+                    ? moveFluids(adjacent, internal, stack -> true, limit, context.simulate())
+                    : moveFluids(internal, adjacent, stack -> true, limit, context.simulate());
             return TransferResult.moved(moved);
         }
 
-        private static boolean hasStoredContents(ResourceStorage<FluidResource> storage) {
-            for (int slot = 0; slot < storage.size(); slot++) {
-                if (storage.amount(slot) > 0L) return true;
+        private static boolean hasStoredContents(IFluidHandler handler) {
+            for (int tank = 0; tank < handler.getTanks(); tank++) {
+                if (!handler.getFluidInTank(tank).isEmpty() && fluidAmount(handler, tank) > 0L) return true;
             }
             return false;
         }
 
-        private static ResourceHandler<FluidResource> adjacentFluid(MachineCapability capability, Direction side) {
+        private static IFluidHandler adjacentFluid(MachineCapability capability, Direction side) {
             TransferFacet transfer = transferFacet(capability);
             if (transfer == null || !canWork(transfer.level(), side)) return null;
             return transfer.level().getCapability(ModCapabilities.FLUID_BLOCK,
@@ -220,11 +217,10 @@ public final class CapabilityTransferPolicies {
     private static final class EnergyPolicy implements TransferPolicy {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
+            IEnergyStorage storage = CapabilityFactories.energyStorage(capability);
             if (storage == null) return false;
             return capability.directions().supports(IOType.OUTPUT)
-                    ? storage.amount() > 0L
-                    : storage.amount() < storage.capacity();
+                    ? energyAmount(storage) > 0L : energyAmount(storage) < energyCapacity(storage);
         }
 
         @Override
@@ -234,28 +230,24 @@ public final class CapabilityTransferPolicies {
 
         @Override
         public TransferResult transfer(TransferContext context) {
-            MachineCapability capability = context.capability();
-            LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
-            TransferFacet transfer = transferFacet(capability);
-            if (storage == null || transfer == null) {
-                return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
-            }
-            if (context.eject() ? storage.amount() <= 0L : !hasWork(capability)) {
+            IEnergyStorage internal = CapabilityFactories.energyStorage(context.capability());
+            TransferFacet transfer = transferFacet(context.capability());
+            if (internal == null || transfer == null) return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            if (context.eject() ? energyAmount(internal) <= 0L : !hasWork(context.capability())) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
             }
-            EnergyHandler adjacent = adjacentEnergy(capability, context.side());
+            IEnergyStorage adjacent = adjacentEnergy(context.capability(), context.side());
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
             long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
-            EnergyHandler internal = energyHandler(storage, limit);
             long moved = context.eject()
-                    ? moveEnergy(internal, adjacent, limit, context)
+                    ? moveEnergy(internal, adjacent, limit, context.simulate())
                     : context.ioType() == IOType.INPUT
-                    ? moveEnergy(adjacent, internal, limit, context)
-                    : moveEnergy(internal, adjacent, limit, context);
+                    ? moveEnergy(adjacent, internal, limit, context.simulate())
+                    : moveEnergy(internal, adjacent, limit, context.simulate());
             return TransferResult.moved(moved);
         }
 
-        private static EnergyHandler adjacentEnergy(MachineCapability capability, Direction side) {
+        private static IEnergyStorage adjacentEnergy(MachineCapability capability, Direction side) {
             TransferFacet transfer = transferFacet(capability);
             if (transfer == null || !canWork(transfer.level(), side)) return null;
             return transfer.level().getCapability(ModCapabilities.ENERGY_BLOCK,
@@ -267,130 +259,118 @@ public final class CapabilityTransferPolicies {
         return capability == null ? null : capability.facet(TransferFacet.class).orElse(null);
     }
 
-    private static <R extends Resource> long moveResource(ResourceHandler<R> from, ResourceHandler<R> to,
-                                                          Predicate<R> filter, int limit, TransferContext context) {
-        if (!context.simulate()) {
-            return ResourceHandlerUtil.move(from, to, filter, limit, context.transaction());
-        }
-        try (Transaction transaction = Transaction.open(context.transaction())) {
-            return ResourceHandlerUtil.move(from, to, filter, limit, transaction);
-        }
-    }
-
-    private static <R extends Resource> Predicate<R> ejectionFilter(TransferContext context) {
+    private static Predicate<ItemStack> ejectionItemFilter(TransferContext context) {
         Resource selected = context.ejectionResource();
-        return selected == null ? resource -> true : selected::equals;
+        return selected == null ? stack -> true : stack -> selected.equals(ItemResource.of(stack));
     }
 
-    private static <R extends Resource> List<Resource> storedResources(ResourceStorage<R> storage) {
-        if (storage == null) return List.of();
-        LinkedHashSet<Resource> resources = new LinkedHashSet<>();
-        for (int slot = 0; slot < storage.size(); slot++) {
-            R resource = storage.resource(slot);
-            if (storage.amount(slot) > 0L && !isEmpty(resource)) resources.add(resource);
-        }
-        return List.copyOf(resources);
+    private static Predicate<FluidStack> ejectionFluidFilter(TransferContext context) {
+        Resource selected = context.ejectionResource();
+        return selected == null ? stack -> true : stack -> selected.equals(FluidResource.of(stack));
     }
 
-    private static <R extends Resource> ResourceHandler<R> resourceHandler(ResourceStorage<R> storage) {
-        return new ResourceHandler<>() {
-            @Override public int size() { return storage.size(); }
-            @Override public R getResource(int slot) { return resourceOrEmpty(storage, slot); }
-            @Override public long getAmountAsLong(int slot) { return storage.amount(slot); }
-            @Override public long getCapacityAsLong(int slot, R resource) { return storage.capacity(slot, resource); }
-            @Override public boolean isValid(int slot, R resource) { return storage.isValid(slot, resource); }
-            @Override public int insert(int slot, R resource, int amount, TransactionContext transaction) {
-                return (int) storage.insert(slot, resource, amount, transaction);
-            }
-            @Override public int extract(int slot, R resource, int amount, TransactionContext transaction) {
-                return (int) storage.extract(slot, resource, amount, transaction);
-            }
-        };
-    }
-
-    private static boolean isEmpty(Resource resource) {
-        return resource == null || resource.isEmpty();
-    }
-
-    private static <R extends Resource> R resourceOrEmpty(ResourceStorage<R> storage, int slot) {
-        R resource = storage.resource(slot);
-        return resource == null ? emptyResource(storage.resourceType()) : resource;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <R extends Resource> R emptyResource(Class<R> resourceType) {
-        // NeoForge ResourceHandler requires a concrete empty resource, unlike ResourceStorage.
-        if (resourceType == ItemResource.class) return (R) ItemResource.EMPTY;
-        if (resourceType == FluidResource.class) return (R) FluidResource.EMPTY;
-        throw new IllegalArgumentException("Missing empty resource for " + resourceType.getName());
-    }
-
-    private static EnergyHandler energyHandler(LongValueStorage storage, long transferLimit) {
-        return new LongEnergyHandler() {
-            @Override public long getAmountAsLong() { return storage.amount(); }
-            @Override public long getCapacityAsLong() { return storage.capacity(); }
-            @Override public long getTransferLimit() { return transferLimit; }
-            @Override public int insert(int amount, TransactionContext transaction) {
-                return (int) storage.insert(amount, transaction);
-            }
-            @Override public int extract(int amount, TransactionContext transaction) {
-                return (int) storage.extract(amount, transaction);
-            }
-            @Override public long insertLong(long amount, TransactionContext transaction) {
-                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-                return storage.insert(amount, transaction);
-            }
-            @Override public long extractLong(long amount, TransactionContext transaction) {
-                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-                return storage.extract(amount, transaction);
-            }
-        };
-    }
-
-    private static long moveEnergy(EnergyHandler from, EnergyHandler to, long requested, TransferContext context) {
-        if (requested <= 0L) return 0L;
-        if (from instanceof LongEnergyHandler longFrom && to instanceof LongEnergyHandler longTo) {
-            return moveLongEnergy(longFrom, longTo, requested, context);
-        }
-        // EnergyHandler exposes int-sized transfers; continue long-backed transfers on later ticks.
-        long boundedRequest = Math.min(requested, Integer.MAX_VALUE);
-        if (!context.simulate()) {
-            return moveIntEnergy(from, to, boundedRequest, context.transaction());
-        }
-        try (Transaction transaction = Transaction.open(context.transaction())) {
-            return moveIntEnergy(from, to, boundedRequest, transaction);
-        }
-    }
-
-    private static long moveIntEnergy(EnergyHandler from, EnergyHandler to, long requested,
-                                      TransactionContext transaction) {
+    private static long moveItems(IItemHandler from, IItemHandler to, Predicate<ItemStack> filter,
+                                  long limit, boolean simulate) {
         long moved = 0L;
-        while (moved < requested) {
-            int chunk = (int) (requested - moved);
-            int chunkMoved = EnergyHandlerUtil.move(from, to, chunk, transaction);
-            if (chunkMoved <= 0) break;
-            moved += chunkMoved;
-            if (chunkMoved < chunk) break;
+        for (int slot = 0; slot < from.getSlots() && moved < limit; slot++) {
+            ItemStack present = from.getStackInSlot(slot).copy();
+            if (present.isEmpty() || !filter.test(present)) continue;
+            int requested = (int) Math.min(Math.min(limit - moved, itemAmount(from, slot)), Integer.MAX_VALUE);
+            if (requested <= 0) continue;
+            ItemStack extracted = from.extractItem(slot, requested, true);
+            int accepted = acceptedItems(to, extracted, true);
+            if (accepted <= 0) continue;
+            if (simulate) {
+                moved += accepted;
+                continue;
+            }
+            ItemStack committed = from.extractItem(slot, accepted, false);
+            ItemStack remainder = insertItems(to, committed, false);
+            int inserted = committed.getCount() - remainder.getCount();
+            if (!remainder.isEmpty()) from.insertItem(slot, remainder, false);
+            moved += inserted;
+            if (inserted < accepted) break;
         }
         return moved;
     }
 
-    private static long moveLongEnergy(LongEnergyHandler from, LongEnergyHandler to, long requested,
-                                       TransferContext context) {
-        long targetSpace = to.getAmountAsLong() >= to.getCapacityAsLong()
-                ? 0L
-                : to.getCapacityAsLong() - to.getAmountAsLong();
-        long amount = Math.min(requested, Math.min(from.getAmountAsLong(), targetSpace));
-        amount = Math.min(amount, Math.min(from.getTransferLimit(), to.getTransferLimit()));
-        if (amount <= 0L) return 0L;
+    private static int acceptedItems(IItemHandler handler, ItemStack stack, boolean simulate) {
+        return stack.isEmpty() ? 0 : stack.getCount() - insertItems(handler, stack, simulate).getCount();
+    }
 
-        try (Transaction transaction = Transaction.open(context.transaction())) {
-            long extracted = from.extractLong(amount, transaction);
-            if (extracted != amount) return 0L;
-            long inserted = to.insertLong(extracted, transaction);
-            if (inserted != extracted) return 0L;
-            if (!context.simulate()) transaction.commit();
+    private static ItemStack insertItems(IItemHandler handler, ItemStack stack, boolean simulate) {
+        ItemStack remainder = stack.copy();
+        for (int slot = 0; slot < handler.getSlots() && !remainder.isEmpty(); slot++) {
+            remainder = handler.insertItem(slot, remainder, simulate);
+        }
+        return remainder;
+    }
+
+    private static long moveFluids(IFluidHandler from, IFluidHandler to, Predicate<FluidStack> filter,
+                                   long limit, boolean simulate) {
+        long moved = 0L;
+        for (int tank = 0; tank < from.getTanks() && moved < limit; tank++) {
+            FluidStack present = from.getFluidInTank(tank).copy();
+            if (present.isEmpty() || !filter.test(present)) continue;
+            int requested = (int) Math.min(Math.min(limit - moved, fluidAmount(from, tank)), Integer.MAX_VALUE);
+            if (requested <= 0) continue;
+            FluidStack extracted = from.drain(present.copyWithAmount(requested), IFluidHandler.FluidAction.SIMULATE);
+            int accepted = to.fill(extracted.copy(), IFluidHandler.FluidAction.SIMULATE);
+            if (accepted <= 0) continue;
+            if (simulate) {
+                moved += accepted;
+                continue;
+            }
+            FluidStack committed = from.drain(present.copyWithAmount(accepted), IFluidHandler.FluidAction.EXECUTE);
+            int inserted = to.fill(committed.copy(), IFluidHandler.FluidAction.EXECUTE);
+            if (inserted < committed.getAmount()) {
+                from.fill(committed.copyWithAmount(committed.getAmount() - inserted), IFluidHandler.FluidAction.EXECUTE);
+            }
+            moved += inserted;
+            if (inserted < accepted) break;
+        }
+        return moved;
+    }
+
+    private static long moveEnergy(IEnergyStorage from, IEnergyStorage to, long requested, boolean simulate) {
+        if (requested <= 0L) return 0L;
+        if (from instanceof LongEnergyHandler longFrom && to instanceof LongEnergyHandler longTo) {
+            long amount = Math.min(requested, Math.min(longFrom.getAmountAsLong(),
+                    Math.max(0L, longTo.getCapacityAsLong() - longTo.getAmountAsLong())));
+            amount = Math.min(amount, Math.min(longFrom.getTransferLimit(), longTo.getTransferLimit()));
+            if (amount <= 0L || longFrom.extractLong(amount, true) != amount || longTo.insertLong(amount, true) != amount) {
+                return 0L;
+            }
+            if (simulate) return amount;
+            long extracted = longFrom.extractLong(amount, false);
+            long inserted = longTo.insertLong(extracted, false);
+            if (inserted < extracted) longFrom.insertLong(extracted - inserted, false);
             return inserted;
         }
+        int amount = (int) Math.min(requested, Integer.MAX_VALUE);
+        int extracted = from.extractEnergy(amount, true);
+        int accepted = to.receiveEnergy(extracted, true);
+        if (accepted <= 0) return 0L;
+        if (simulate) return accepted;
+        int committed = from.extractEnergy(accepted, false);
+        int inserted = to.receiveEnergy(committed, false);
+        if (inserted < committed) from.receiveEnergy(committed - inserted, false);
+        return inserted;
+    }
+
+    private static long itemAmount(IItemHandler handler, int slot) {
+        return handler instanceof LongItemStorage storage ? storage.amount(slot) : handler.getStackInSlot(slot).getCount();
+    }
+
+    private static long fluidAmount(IFluidHandler handler, int tank) {
+        return handler instanceof LongFluidStorage storage ? storage.amount(tank) : handler.getFluidInTank(tank).getAmount();
+    }
+
+    private static long energyAmount(IEnergyStorage storage) {
+        return storage instanceof LongEnergyHandler longStorage ? longStorage.getAmountAsLong() : storage.getEnergyStored();
+    }
+
+    private static long energyCapacity(IEnergyStorage storage) {
+        return storage instanceof LongEnergyHandler longStorage ? longStorage.getCapacityAsLong() : storage.getMaxEnergyStored();
     }
 }

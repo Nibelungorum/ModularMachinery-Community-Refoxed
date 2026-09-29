@@ -1,16 +1,13 @@
 package cn.howxu.mmcr.internal.assembly;
 
 import cn.howxu.mmcr.internal.event.ModCapabilities;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.items.IItemHandler;
 
 /**
  * Block capability backed storage for structure assembly blocks.
@@ -25,7 +22,7 @@ public final class BlockStructureItemStorage implements StructureItemStorage {
     }
 
     static Optional<BlockStructureItemStorage> at(ServerLevel level, BlockPos position) {
-        ResourceHandler<ItemResource> handler = level.getCapability(ModCapabilities.ITEM_BLOCK, position, null);
+        IItemHandler handler = level.getCapability(ModCapabilities.ITEM_BLOCK, position, null);
         return handler == null ? Optional.empty() : Optional.of(new BlockStructureItemStorage(new HandlerAccess(handler)));
     }
 
@@ -39,62 +36,62 @@ public final class BlockStructureItemStorage implements StructureItemStorage {
         return access;
     }
 
-    private interface StorageAccess extends StructureItemSource, StructureItemSink {}
+    private interface StorageAccess extends StructureItemSource, StructureItemSink {
+    }
 
-    private record HandlerAccess(ResourceHandler<ItemResource> handler) implements StorageAccess {
+    private record HandlerAccess(IItemHandler handler) implements StorageAccess {
+        @Override
+        public List<ItemStack> copyStacks() {
+            List<ItemStack> stacks = new ArrayList<>(handler.getSlots());
+            for (int slot = 0; slot < handler.getSlots(); slot++) stacks.add(handler.getStackInSlot(slot).copy());
+            return stacks;
+        }
 
         @Override
-            public List<ItemStack> copyStacks() {
-                List<ItemStack> stacks = new ArrayList<>(handler.size());
-                for (int slot = 0; slot < handler.size(); slot++) {
-                    ItemResource resource = handler.getResource(slot);
-                    stacks.add(resource.isEmpty() ? ItemStack.EMPTY : resource.toStack((int) handler.getAmountAsLong(slot)));
+        public boolean canExtractAll(List<ItemStack> requirements) {
+            List<ItemStack> available = copyStacks();
+            for (ItemStack requirement : requirements) {
+                int remaining = requirement.getCount();
+                for (ItemStack stack : available) {
+                    if (!ItemStack.isSameItemSameComponents(stack, requirement)) continue;
+                    int extracted = Math.min(remaining, stack.getCount());
+                    stack.shrink(extracted);
+                    remaining -= extracted;
+                    if (remaining == 0) break;
                 }
-                return stacks;
+                if (remaining > 0) return false;
             }
-
-            @Override
-            public boolean canExtractAll(List<ItemStack> requirements) {
-                try (Transaction transaction = Transaction.openRoot()) {
-                    return extractAll(requirements, transaction);
-                }
-            }
-
-            @Override
-            public boolean extractAll(List<ItemStack> requirements) {
-                try (Transaction transaction = Transaction.openRoot()) {
-                    if (!extractAll(requirements, transaction)) return false;
-                    transaction.commit();
-                    return true;
-                }
-            }
-
-            @Override
-            public boolean accept(ItemStack stack) {
-                if (stack.isEmpty()) return true;
-                try (Transaction transaction = Transaction.openRoot()) {
-                    int remaining = stack.getCount();
-                    ItemResource resource = ItemResource.of(stack);
-                    for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
-                        int inserted = handler.insert(slot, resource, remaining, transaction);
-                        remaining -= inserted;
-                    }
-                    if (remaining > 0) return false;
-                    transaction.commit();
-                    return true;
-                }
-            }
-
-            private boolean extractAll(List<ItemStack> requirements, Transaction transaction) {
-                for (ItemStack requirement : requirements) {
-                    int remaining = requirement.getCount();
-                    ItemResource resource = ItemResource.of(requirement);
-                    for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
-                        remaining -= handler.extract(slot, resource, remaining, transaction);
-                    }
-                    if (remaining > 0) return false;
-                }
-                return true;
-            }
+            return true;
         }
+
+        @Override
+        public boolean extractAll(List<ItemStack> requirements) {
+            if (!canExtractAll(requirements)) return false;
+            for (ItemStack requirement : requirements) {
+                int remaining = requirement.getCount();
+                for (int slot = 0; slot < handler.getSlots() && remaining > 0; slot++) {
+                    ItemStack stack = handler.getStackInSlot(slot);
+                    if (!ItemStack.isSameItemSameComponents(stack, requirement)) continue;
+                    remaining -= handler.extractItem(slot, remaining, false).getCount();
+                }
+                if (remaining > 0) return false;
+            }
+            return true;
+        }
+
+        @Override
+        public boolean accept(ItemStack stack) {
+            if (stack.isEmpty()) return true;
+            ItemStack remainder = stack.copy();
+            for (int slot = 0; slot < handler.getSlots() && !remainder.isEmpty(); slot++) {
+                remainder = handler.insertItem(slot, remainder, true);
+            }
+            if (!remainder.isEmpty()) return false;
+            remainder = stack.copy();
+            for (int slot = 0; slot < handler.getSlots() && !remainder.isEmpty(); slot++) {
+                remainder = handler.insertItem(slot, remainder, false);
+            }
+            return remainder.isEmpty();
+        }
+    }
 }

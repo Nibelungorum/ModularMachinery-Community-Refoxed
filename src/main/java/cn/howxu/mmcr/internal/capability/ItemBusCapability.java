@@ -7,7 +7,6 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
@@ -52,7 +51,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ItemBusCapability implements MachineCapability, ResourceFacet<ItemResource>, ItemHandlerFacet, TransferFacet,
+public final class ItemBusCapability implements MachineCapability, ItemHandlerFacet, TransferFacet,
         OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
@@ -79,7 +78,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     }
 
     public ItemBusCapability(IOPortBlockEntity port, IItemHandler itemHandler, IOType ioType) {
-        this(port, null, itemHandler, ioType, false);
+        this(port, null, itemHandler, ioType, true);
     }
 
     private ItemBusCapability(IOPortBlockEntity port, ResourceStorage<ItemResource> storage, IItemHandler itemHandler,
@@ -138,7 +137,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
             }
         };
         Set<Class<? extends CapabilityFacet>> facets = new LinkedHashSet<>(Set.of(
-                ResourceFacet.class, ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
                 AsyncPlanningFacet.class));
         if (exposeTransferFacet) facets.add(TransferFacet.class);
         this.view = CapabilityFactories.view(type(), directions(),
@@ -158,7 +157,6 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         return itemHandler;
     }
 
-    @Override
     public Class<ItemResource> resourceType() {
         return ItemResource.class;
     }
@@ -172,7 +170,6 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         return port == null ? BlockPos.ZERO : port.getBlockPos();
     }
 
-    @Override
     public boolean supportsLargeStacks() {
         return port != null && (port.kind().extendedItemBusSize().isPresent()
                 || port.kind().extendedCombinedPortSize().isPresent());
@@ -364,19 +361,34 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
 
     @Override
     public void encode(RegistryFriendlyByteBuf buffer) {
-        buffer.writeVarInt(storage.size());
-        for (int slot = 0; slot < storage.size(); slot++) {
-            ItemResource resource = storage.resource(slot);
+        int slots = itemHandler == null ? storage.size() : itemHandler.getSlots();
+        buffer.writeVarInt(slots);
+        for (int slot = 0; slot < slots; slot++) {
+            ItemResource resource = itemHandler == null ? storage.resource(slot) : ItemResource.of(itemHandler.getStackInSlot(slot));
             ItemResource.STREAM_CODEC.encode(buffer, resource == null ? ItemResource.EMPTY : resource);
-            buffer.writeLong(storage.amount(slot));
-            buffer.writeLong(storage.capacity(slot, resource));
+            buffer.writeLong(itemHandler == null ? storage.amount(slot) : itemAmount(slot));
+            buffer.writeLong(itemHandler == null ? storage.capacity(slot, resource) : itemCapacity(slot));
         }
     }
 
     @Override
     public void decode(RegistryFriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
-        if (count < 0 || count > 1024 || count != storage.size()) throw new IllegalArgumentException("Invalid item sync state");
+        int slots = itemHandler == null ? storage.size() : itemHandler.getSlots();
+        if (count < 0 || count > 1024 || count != slots) throw new IllegalArgumentException("Invalid item sync state");
+        if (itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage nativeStorage) {
+            for (int slot = 0; slot < count; slot++) {
+                ItemResource resource = ItemResource.STREAM_CODEC.decode(buffer);
+                long amount = buffer.readLong();
+                long capacity = buffer.readLong();
+                if (amount < 0 || capacity < amount || capacity != nativeStorage.capacity(slot)) {
+                    throw new IllegalArgumentException("Invalid item sync amount");
+                }
+                nativeStorage.setContents(slot, resource.isEmpty() ? net.minecraft.world.item.ItemStack.EMPTY
+                        : resource.toStack(1), amount);
+            }
+            return;
+        }
         try (Transaction transaction = Transaction.openRoot()) {
             for (int slot = 0; slot < count; slot++) {
                 ItemResource resource = ItemResource.STREAM_CODEC.decode(buffer);

@@ -41,11 +41,12 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
@@ -122,7 +123,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private void notifyAvailabilityChanges() {
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
-            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
             Object resource = valueStorage == null ? null : capability.type();
             List<Object> resources = new ArrayList<>();
             List<SlotAvailability> slots = new ArrayList<>();
@@ -131,13 +131,23 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             if (valueStorage != null) {
                 amount = valueStorage.amount();
                 slots.add(new SlotAvailability(resource, amount));
-            } else if (resourceStorage != null) {
-                for (int slot = 0; slot < resourceStorage.size(); slot++) {
-                    long slotAmount = resourceStorage.amount(slot);
+            } else {
+                IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);
+                IFluidHandler fluidHandler = CapabilityFactories.fluidHandler(capability);
+                int slotCount = itemHandler == null ? fluidHandler == null ? 0 : fluidHandler.getTanks() : itemHandler.getSlots();
+                for (int slot = 0; slot < slotCount; slot++) {
+                    Object nativeResource = itemHandler == null ? fluidHandler.getFluidInTank(slot).copy()
+                            : itemHandler.getStackInSlot(slot).copy();
+                    long slotAmount = itemHandler == null
+                            ? fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                                    ? storage.amount(slot) : ((FluidStack) nativeResource).getAmount()
+                            : itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
+                                    ? storage.amount(slot) : ((ItemStack) nativeResource).getCount();
+                    Object slotResource = nativeResource instanceof ItemStack stack ? ItemResource.of(stack)
+                            : FluidResource.of((FluidStack) nativeResource);
                     amount += slotAmount;
-                    Object slotResource = resourceStorage.resource(slot);
                     slots.add(new SlotAvailability(slotResource, slotAmount));
-                    if (slotAmount > 0L && slotResource != null) {
+                    if (slotAmount > 0L && !isEmptyNativeResource(nativeResource)) {
                         resources.add(slotResource);
                         if (resource == null) resource = slotResource;
                     }
@@ -177,6 +187,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 }
             }
         }
+    }
+
+    private static boolean isEmptyNativeResource(Object resource) {
+        return resource instanceof ItemStack stack && stack.isEmpty()
+                || resource instanceof FluidStack stack && stack.isEmpty();
     }
 
     private void notifyControllers(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
@@ -282,17 +297,17 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         throw new IllegalStateException("Port does not expose energy storage: " + kind().id());
     }
 
-    /** Native handler access used by requirement execution; external capability exposure remains Task 5. */
+    /** Native item handler used by requirement execution and external capability exposure. */
     public IItemHandler nativeItemHandler() {
         throw new IllegalStateException("Port does not expose an item handler: " + kind().id());
     }
 
-    /** Native handler access used by requirement execution; external capability exposure remains Task 5. */
+    /** Native fluid handler used by requirement execution and external capability exposure. */
     public IFluidHandler nativeFluidHandler() {
         throw new IllegalStateException("Port does not expose a fluid handler: " + kind().id());
     }
 
-    /** Native handler access used by requirement execution; external capability exposure remains Task 5. */
+    /** Native energy storage used by requirement execution and external capability exposure. */
     public IEnergyStorage nativeEnergyStorage() {
         throw new IllegalStateException("Port does not expose an energy storage: " + kind().id());
     }
