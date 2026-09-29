@@ -276,7 +276,7 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
-    void preordered_candidates_preserve_supplied_order_and_lock_singleton() {
+    void preordered_candidates_preserve_supplied_order() {
         MachineRecipe highPriority = RecipeTestSupport.create(id("high_priority"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1);
         MachineRecipe moreInputs = RecipeTestSupport.create(id("more_inputs"), MACHINE, 20,
@@ -285,16 +285,13 @@ class RecipeCandidateIndexTest {
                 List.of(), List.of(), List.of(), 2, 1);
         List<MachineRecipe> supplied = List.of(idTieBreaker, highPriority, moreInputs);
         RecipeSearchResult existing = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1,
-                supplied, null, List.of()).compute();
+                supplied, List.of()).compute();
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1,
-                supplied, null, List.of(), List.of()).compute();
-        RecipeSearchResult locked = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1,
-                supplied, moreInputs.id(), List.of(), List.of()).compute();
+                supplied, List.of(), List.of()).compute();
 
         assertThat(existing.recipe()).isEqualTo(highPriority);
         assertThat(result.recipe()).isEqualTo(idTieBreaker);
-        assertThat(locked.recipe()).isEqualTo(moreInputs);
     }
 
     @Test
@@ -309,7 +306,7 @@ class RecipeCandidateIndexTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
 
         RecipeSearchResult result = RecipeSearchTask.forPlanningValues(emptySnapshot(), MACHINE, 0L, 1L,
-                List.of(specific, fallback), null, List.of(
+                List.of(specific, fallback), List.of(
                 RecipeSearchTask.PlanningValue.failure(specific.id(), BuiltinFailureReasons.LEVEL_INSUFFICIENT, 0, true),
                 RecipeSearchTask.PlanningValue.success(fallback.id()))).compute();
 
@@ -334,7 +331,7 @@ class RecipeCandidateIndexTest {
                 List.of(), List.of(), List.of(), 0, 1);
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
-                List.of(foreign), null, List.of(), List.of()).compute();
+                List.of(foreign), List.of(), List.of()).compute();
 
         assertThat(result.success()).isFalse();
         assertThat(result.recipe()).isNull();
@@ -350,7 +347,7 @@ class RecipeCandidateIndexTest {
         MachineRecipe inputLimited = itemRecipe("input_limited", Ingredient.of(Items.IRON_INGOT));
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
-                List.of(levelLimited, energyLimited, inputLimited), null, List.of(), List.of()).compute();
+                List.of(levelLimited, energyLimited, inputLimited), List.of(), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
         assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
@@ -378,7 +375,7 @@ class RecipeCandidateIndexTest {
                 .failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
-                List.of(copperRecipe, ironRecipe), null,
+                List.of(copperRecipe, ironRecipe),
                 List.of(capability), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
@@ -399,7 +396,7 @@ class RecipeCandidateIndexTest {
         MachineRecipe ironRecipe = itemRecipe("iron_missing_input_for_energy", Ingredient.of(Items.RAW_IRON));
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
-                List.of(copperRecipe, ironRecipe), null,
+                List.of(copperRecipe, ironRecipe),
                 List.of(new ItemBusCapability(storage, IOType.INPUT)), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
@@ -424,7 +421,7 @@ class RecipeCandidateIndexTest {
 
         List<MachineRecipe> indexedCandidates = RecipeCandidateIndex.build(MACHINE, candidates).candidates(null);
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
-                indexedCandidates, null, List.of(), List.of()).compute();
+                indexedCandidates, List.of(), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
         assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
@@ -447,7 +444,7 @@ class RecipeCandidateIndexTest {
                 List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, List.of(), false, Set.of());
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
-                List.of(levelLimited), null, List.of(), List.of()).compute();
+                List.of(levelLimited), List.of(), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
         assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.LEVEL_INSUFFICIENT);
@@ -474,7 +471,7 @@ class RecipeCandidateIndexTest {
                 List.of(), false, Set.of(requiredHost));
 
         RecipeSearchResult result = new RecipeSearchTask(snapshot(ModuleConnectionStatus.disconnected()), MACHINE,
-                0L, 1L, List.of(first, second), null, List.of(), List.of()).compute();
+                0L, 1L, List.of(first, second), List.of(), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
         assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MODULE_CONNECTION);

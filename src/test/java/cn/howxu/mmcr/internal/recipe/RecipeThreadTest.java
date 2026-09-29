@@ -113,7 +113,7 @@ class RecipeThreadTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         assertThat(thread.searchAndStartAsyncRecipe(List.of(foreign, valid), 1,
-                controller.runtimeSnapshot().structure().version(), null)).isTrue();
+                controller.runtimeSnapshot().structure().version())).isTrue();
 
         completeAsyncLevelTick((ServerLevel) controller.getLevel());
 
@@ -136,7 +136,7 @@ class RecipeThreadTest {
         MachineRecipeThread thread = new MachineRecipeThread(controller);
 
         assertThat(thread.searchAndStartAsyncRecipe(List.of(second), 1,
-                controller.runtimeSnapshot().structure().version(), null)).isTrue();
+                controller.runtimeSnapshot().structure().version())).isTrue();
         assertThat(controller.selectRecipePool(firstPool)).isTrue();
         completeAsyncLevelTick((ServerLevel) controller.getLevel());
 

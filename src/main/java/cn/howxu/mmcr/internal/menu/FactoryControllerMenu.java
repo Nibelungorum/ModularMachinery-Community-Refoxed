@@ -143,9 +143,6 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         return selectedThread().failure();
     }
 
-    public boolean selectedRecipeLocked() { return selectedThread().locked(); }
-    public String selectedLockedRecipeId() { return selectedThread().lockedRecipeId(); }
-
     public int selectedThreadIndex() { return selectedThread().index(); }
 
     public void selectThread(int index) {

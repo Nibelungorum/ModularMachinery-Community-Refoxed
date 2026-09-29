@@ -23,7 +23,6 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
-import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
@@ -73,7 +72,7 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ModEventRegistration {
-    static final String PAYLOAD_PROTOCOL_VERSION = "6";
+    static final String PAYLOAD_PROTOCOL_VERSION = "7";
 
     private ModEventRegistration() {
     }
@@ -175,8 +174,6 @@ public final class ModEventRegistration {
                          PktEjectPortContentsPayload::handle)
                  .playToServer(PktBlueprintStageUpdatePayload.TYPE, PktBlueprintStageUpdatePayload.STREAM_CODEC,
                          PktBlueprintStageUpdatePayload::handle)
-                  .playToServer(PktRecipeLockPayload.TYPE, PktRecipeLockPayload.STREAM_CODEC,
-                         PktRecipeLockPayload::handle)
                   .playToServer(PktRecipePoolSelectPayload.TYPE, PktRecipePoolSelectPayload.STREAM_CODEC,
                          PktRecipePoolSelectPayload::handle)
                  .playToServer(PktTerminalActionPayload.TYPE, PktTerminalActionPayload.STREAM_CODEC,

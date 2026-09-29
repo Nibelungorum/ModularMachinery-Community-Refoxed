@@ -82,11 +82,6 @@ public abstract class RecipeThread {
     }
 
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
-        return searchAndStartRecipe(candidates, availableParallelism, structureVersion, null);
-    }
-
-    protected boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism,
-                                           long structureVersion, @Nullable ResourceLocation lockedRecipeId) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
@@ -96,7 +91,7 @@ public abstract class RecipeThread {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
-                    availableParallelism, machineCandidates, lockedRecipeId, controller.componentRuntime().capabilities()).compute();
+                    availableParallelism, machineCandidates, controller.componentRuntime().capabilities()).compute();
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
@@ -112,7 +107,7 @@ public abstract class RecipeThread {
     }
 
     protected boolean searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
-                                           long structureVersion, @Nullable ResourceLocation lockedRecipeId) {
+                                           long structureVersion) {
         if (context == null) return false;
         ControllerRuntimeSnapshot snapshot = context.snapshot();
         Machine machine = snapshot.structure().machine() == null
@@ -123,7 +118,7 @@ public abstract class RecipeThread {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
-                    context.maxParallelism(), machineCandidates, lockedRecipeId,
+                    context.maxParallelism(), machineCandidates,
                     context.capabilities(), MachineModifier.recipeModifiers(context.modifiers())).compute();
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
@@ -177,7 +172,7 @@ public abstract class RecipeThread {
         }
         if (result.requiresMainThreadReplan()) {
             searchAndStartRecipe(search.request().candidates(), search.request().maxParallelism(),
-                    search.request().structureVersion(), search.request().lockedRecipeId());
+                    search.request().structureVersion());
             return MainThreadStep.Result.success();
         }
         if (controller.shouldDelayConflictProneStart(result.result())) return MainThreadStep.Result.success();

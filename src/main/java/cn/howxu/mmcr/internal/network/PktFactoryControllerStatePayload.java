@@ -125,8 +125,6 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         buf.writeVarInt(state.totalTick());
         buf.writeLong(state.parallelism());
         buf.writeLong(state.maxParallelism());
-        buf.writeBoolean(state.recipeLocked());
-        buf.writeUtf(state.lockedRecipeId(), maxStringLength());
     }
 
     private static CraftingStateSnapshot readCrafting(RegistryFriendlyByteBuf buf) {
@@ -135,8 +133,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         CraftingStatus craftingStatus = new CraftingStatus(status, buf.readUtf(maxStringLength()));
         ExecutionStatus failure = FailureStatusCodec.read(buf);
         return new CraftingStateSnapshot(recipeId, craftingStatus, failure, buf.readLong(), buf.readLong(), buf.readLong(),
-                 buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(), buf.readBoolean(),
-                buf.readUtf(maxStringLength()));
+                 buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong());
     }
 
     private static void writeThread(RegistryFriendlyByteBuf buf, FactoryRuntime.ThreadSnapshot thread) {
@@ -150,8 +147,6 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         buf.writeVarInt(thread.totalTick());
         buf.writeLong(thread.parallelism());
         FailureStatusCodec.write(buf, thread.failure());
-        buf.writeBoolean(thread.locked());
-        buf.writeUtf(thread.lockedRecipeId(), maxStringLength());
         ControllerRecipePresentation.write(buf, thread.presentation());
     }
 
@@ -168,8 +163,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         validateThread(active, tick, totalTick, parallelism);
         ExecutionStatus failure = FailureStatusCodec.read(buf);
         return new FactoryRuntime.ThreadSnapshot(index, laneId, baseThread, coreThread, active, recipeId, tick,
-                totalTick, parallelism, failure, buf.readBoolean(),
-                buf.readUtf(maxStringLength()), ControllerRecipePresentation.read(buf));
+                totalTick, parallelism, failure, ControllerRecipePresentation.read(buf));
     }
 
     private static void validateSnapshot(FactorySnapshot state) {

@@ -18,6 +18,7 @@ import cn.howxu.mmcr.client.controller.ControllerModelInvalidator;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
+import cn.howxu.mmcr.client.model.ControllerIdleEasterEggManager;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.client.model.RuntimeMachineResourcePack;
@@ -69,6 +70,7 @@ public class Client {
         modBus.addListener(Client::registerRuntimeResourcePack);
         modBus.addListener(Client::registerPreviewReloadListener);
         NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
+        NeoForge.EVENT_BUS.addListener(Client::tickControllerIdleEasterEgg);
         NeoForge.EVENT_BUS.addListener(this::clearMachineSounds);
         NeoForge.EVENT_BUS.addListener(this::clearControllerScreenTextCache);
         MachineAppearanceCache.loadPersistedSnapshot();
@@ -80,9 +82,14 @@ public class Client {
         machineSoundManager.clientTick(Minecraft.getInstance());
     }
 
+    private static void tickControllerIdleEasterEgg(ClientTickEvent.Post event) {
+        ControllerIdleEasterEggManager.clientTick(Minecraft.getInstance());
+    }
+
     private void clearMachineSounds(LevelEvent.Unload event) {
         if (event.getLevel().isClientSide()) {
             ControllerScreenTextCache.clearAll();
+            ControllerIdleEasterEggManager.clear();
             machineSoundManager.clear();
         }
     }
@@ -95,6 +102,7 @@ public class Client {
 
     private static void invalidateMachineModels() {
         DynamicOverlayBakedModel.clearCache();
+        ControllerIdleEasterEggManager.clear();
         if (Minecraft.getInstance().levelRenderer != null) {
             if (Minecraft.getInstance().isSameThread()) {
                 ControllerModelInvalidator.invalidate();

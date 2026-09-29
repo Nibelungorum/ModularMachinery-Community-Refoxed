@@ -39,16 +39,6 @@ final class ControllerMenuState {
         addControllerPlayerSlots(menu, inventory, 8);
     }
 
-    static DataSlot addRecipeLockSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
-        return menu.addControllerDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() {
-                return SYNC_RUNTIME.machineState(owner.runtimeSnapshot()).recipeLocked() ? 1 : 0;
-            }
-
-            @Override public void set(int value) { }
-        });
-    }
-
     static DataSlot addInstalledModuleCountSlot(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         return add(menu, owner, MachineStateSnapshot::installedModuleCount);
     }

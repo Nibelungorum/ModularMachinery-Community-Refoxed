@@ -47,7 +47,7 @@ class MachineControllerBlockEntityRecipeDelayTest {
     @Test
     void retry_delays_follow_the_five_ten_twenty_forty_eighty_hundred_schedule() {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(RuntimeTestFixtures.controller(MMCR.id("test_cube")));
-        RecipeSearchContextKey key = new RecipeSearchContextKey(1L, 1L, 1L, 1L, 1L, 1L, null, 1L);
+        RecipeSearchContextKey key = new RecipeSearchContextKey(1L, 1L, 1L, 1L, 1L, 1L, 1L);
 
         thread.recordSearchFailure(key, 0L);
         assertThat(thread.canSearch(4L, key)).isFalse();

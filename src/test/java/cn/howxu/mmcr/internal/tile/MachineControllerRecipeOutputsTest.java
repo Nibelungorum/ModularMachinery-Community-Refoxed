@@ -118,9 +118,9 @@ class MachineControllerRecipeOutputsTest {
                 0L, 0L, 0D);
 
         FactoryRuntime.ThreadSnapshot firstThread = new FactoryRuntime.ThreadSnapshot(0, "factory-0", true, false,
-                true, "mmcr:first", 1, 20, 3L, null, false, "", first);
+                true, "mmcr:first", 1, 20, 3L, null, first);
         FactoryRuntime.ThreadSnapshot secondThread = new FactoryRuntime.ThreadSnapshot(1, "factory-1", false, false,
-                true, "mmcr:second", 1, 20, 5L, null, false, "", second);
+                true, "mmcr:second", 1, 20, 5L, null, second);
 
         assertThat(firstThread.presentation().outputs()).containsExactly(first.outputs().getFirst());
         assertThat(firstThread.presentation().outputs()).doesNotContainAnyElementsOf(second.outputs());

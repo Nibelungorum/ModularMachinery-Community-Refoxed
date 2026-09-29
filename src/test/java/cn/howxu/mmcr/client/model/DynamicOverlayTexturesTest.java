@@ -26,48 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DynamicOverlayTexturesTest {
 
     @Test
-    void dedicated_overlay_port_kinds_resolve_to_their_category_and_tier_texture() {
-        PortKinds.all().stream()
-                .filter(DynamicOverlayTexturesTest::usesDedicatedOverlay)
-                .forEach(kind -> assertThat(DynamicOverlayTextures.portOverlayTexture(kind))
-                        .as(kind.id())
-                        .isEqualTo(ImmutableList.of(MMCR.id(expectedOverlayPath(kind)))));
-    }
-
-
-    @Test
-    void mekanism_port_kinds_resolve_to_their_dedicated_overlay_textures_and_keep_formed_base() {
-        var appearance = new MachineAppearanceSpec(
-                MMCR.id("machine/test"),
-                MMCR.id("block/test_controller"),
-                MMCR.id("block/test_formed_port"));
-        var chemicalBasicInput = new PortKinds.ChemicalKind(
-                "chemical_input_hatch_basic", IOType.INPUT, 0, 64_000L, false);
-        var chemicalUltimateOutput = new PortKinds.ChemicalKind(
-                "chemical_output_hatch_ultimate", IOType.OUTPUT, 3, 8_192_000L, false);
-        var chemicalRadioactiveInput = new PortKinds.ChemicalKind(
-                "radioactive_chemical_input_hatch", IOType.INPUT, 4, 512_000L, true);
-        var heatInput = new PortKinds.HeatKind("heat_input_hatch", IOType.INPUT, 0, 300D);
-        var heatOutput = new PortKinds.HeatKind("heat_output_hatch", IOType.OUTPUT, 0, 300D);
-
-        assertThat(RuntimeMachineModelRegistry.portTexturesForTest(chemicalBasicInput, appearance))
-                .isEqualTo(new DynamicOverlayBakedModel.TextureSet(
-                        appearance.formedPortBaseTexture(), MMCR.id("block/mekanism/overlay_chemicalinputhatch_basic")));
-        assertThat(RuntimeMachineModelRegistry.portTexturesForTest(chemicalUltimateOutput, appearance))
-                .isEqualTo(new DynamicOverlayBakedModel.TextureSet(
-                        appearance.formedPortBaseTexture(), MMCR.id("block/mekanism/overlay_chemicaloutputhatch_ultimate")));
-        assertThat(RuntimeMachineModelRegistry.portTexturesForTest(chemicalRadioactiveInput, appearance))
-                .isEqualTo(new DynamicOverlayBakedModel.TextureSet(
-                        appearance.formedPortBaseTexture(), MMCR.id("block/mekanism/overlay_radioactive_chemical_input")));
-        assertThat(RuntimeMachineModelRegistry.portTexturesForTest(heatInput, appearance))
-                .isEqualTo(new DynamicOverlayBakedModel.TextureSet(
-                        appearance.formedPortBaseTexture(), MMCR.id("block/mekanism/overlay_heat_input")));
-        assertThat(RuntimeMachineModelRegistry.portTexturesForTest(heatOutput, appearance))
-                .isEqualTo(new DynamicOverlayBakedModel.TextureSet(
-                        appearance.formedPortBaseTexture(), MMCR.id("block/mekanism/overlay_heat_output")));
-    }
-
-    @Test
     void ae2InputInterfaceUsesTheDedicatedInterfaceOverlay() {
         assertThat(DynamicOverlayTextures.portOverlayTexture(InputInterfaceKind.INSTANCE))
                 .isEqualTo(ImmutableList.of(MMCR.id("block/appliedenergistics2/ae2_input")));

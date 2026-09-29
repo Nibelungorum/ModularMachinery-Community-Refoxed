@@ -50,8 +50,7 @@ public final class MachineControllerRendererDispatcher
                         snapshot.crafting().recipeId(), snapshot.crafting().status().getStatus(),
                         snapshot.crafting().status().getUnlocMessage(), snapshot.crafting().failure(),
                         snapshot.crafting().tick(), snapshot.crafting().totalTick(),
-                        snapshot.crafting().parallelism(), snapshot.crafting().maxParallelism(),
-                        snapshot.crafting().recipeLocked(), snapshot.crafting().lockedRecipeId()),
+                        snapshot.crafting().parallelism(), snapshot.crafting().maxParallelism()),
                 snapshot.dataStorageValues(), packedLight, partialTick);
         invokeForTesting(context, poseStack, bufferSource, packedLight, packedOverlay);
     }

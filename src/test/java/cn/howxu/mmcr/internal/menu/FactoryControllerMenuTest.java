@@ -67,24 +67,11 @@ class FactoryControllerMenuTest {
     }
 
     @Test
-    void selected_thread_exposes_only_its_own_recipe_lock() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
-         menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 2, 0, 1L, false,
-                List.of(lockedThread(0, false, ""), lockedThread(1, true, "mmcr:locked")),
-                "Factory", 0, null, List.of(), 0, 1));
-
-        assertThat(menu.selectedRecipeLocked()).isFalse();
-        menu.selectThread(1);
-        assertThat(menu.selectedRecipeLocked()).isTrue();
-        assertThat(menu.selectedLockedRecipeId()).isEqualTo("mmcr:locked");
-    }
-
-    @Test
     void inactive_thread_reports_zero_parallelism_and_failure_is_exposed() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 1, 0, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, false, "", 0, 0, 1,
-                        "gui.mmcr.controller.failure.missing_input", false, "")),
+                        "gui.mmcr.controller.failure.missing_input")),
                 "Factory", 0, null, List.of(), 0, 1));
 
         assertThat(menu.currentParallelism()).isZero();
@@ -130,18 +117,18 @@ class FactoryControllerMenuTest {
 
     private static FactorySnapshot snapshot(int... indexes) {
          return new FactorySnapshot(true, false, List.of(), indexes.length, 0, 1L, false,
-                Arrays.stream(indexes).mapToObj(index -> lockedThread(index, false, "")).toList(),
+                Arrays.stream(indexes).mapToObj(index -> idleThread(index)).toList(),
                 "", 0, null, List.of(), 0, 1);
     }
 
     private static FactoryRuntime.ThreadSnapshot activeThread(int index, int parallelism) {
         return new FactoryRuntime.ThreadSnapshot(index, index == 0, false, true,
-                "mmcr:recipe_" + index, 1, 20, parallelism, "", false, "");
+                "mmcr:recipe_" + index, 1, 20, parallelism, "");
     }
 
-    private static FactoryRuntime.ThreadSnapshot lockedThread(int index, boolean locked, String recipeId) {
+    private static FactoryRuntime.ThreadSnapshot idleThread(int index) {
         return new FactoryRuntime.ThreadSnapshot(index, index == 0, false, false,
-                "", 0, 0, 1, "", locked, recipeId);
+                "", 0, 0, 1, "");
     }
 
     private static void bind(Object deferredHolder, MenuType<FactoryControllerMenu> menuType) throws Exception {

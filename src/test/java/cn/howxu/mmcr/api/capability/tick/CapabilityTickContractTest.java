@@ -155,7 +155,7 @@ class CapabilityTickContractTest {
         });
         var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         new RecipeSearchTask(controller.currentRuntimeSnapshot(), controller.machineId(), 0L, 1L,
-                List.of(), null, List.of(capability)).compute();
+                List.of(), List.of(capability)).compute();
 
         assertThat(calls).hasValue(0);
     }

@@ -16,8 +16,6 @@ public record MachineStateSnapshot(
         boolean active,
         String activeRecipe,
         List<String> foundLevelIds,
-        boolean recipeLocked,
-        String lockedRecipeId,
         String machineId,
         int controllerRole,
         int installedModuleCount,
@@ -44,8 +42,7 @@ public record MachineStateSnapshot(
         String recipePoolId) {
 
     public MachineStateSnapshot(boolean formed, boolean structureAreaLoaded, boolean active, String activeRecipe,
-                                List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId,
-                                String machineId, int controllerRole, int installedModuleCount,
+                                List<String> foundLevelIds, String machineId, int controllerRole, int installedModuleCount,
                                 boolean moduleConnected, String connectedHostId, CraftingStatus.Status craftingStatus,
                                 String craftingMessage, ExecutionStatus failure, int tick, int totalTick,
                                 long parallelism, long maxParallelism, boolean redstonePaused,
@@ -54,7 +51,7 @@ public record MachineStateSnapshot(
                                 List<ControllerRuntimeSnapshot.ComponentPresentation> components,
                                 List<ControllerRuntimeSnapshot.CapabilityPresentation> capabilities,
                                 int matchedStage, int stageCount) {
-        this(formed, structureAreaLoaded, active, activeRecipe, foundLevelIds, recipeLocked, lockedRecipeId,
+        this(formed, structureAreaLoaded, active, activeRecipe, foundLevelIds,
                 machineId, controllerRole, installedModuleCount, moduleConnected, connectedHostId, craftingStatus,
                 craftingMessage, failure, tick, totalTick, parallelism, maxParallelism, redstonePaused,
                 factoryControllerPresent, factoryThreadCount, activeFactoryThreadCount, parallelControllerCount,
@@ -65,7 +62,6 @@ public record MachineStateSnapshot(
     public MachineStateSnapshot {
         activeRecipe = activeRecipe == null ? "" : activeRecipe;
         foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
-        lockedRecipeId = lockedRecipeId == null ? "" : lockedRecipeId;
         machineId = machineId == null ? "" : machineId;
         connectedHostId = connectedHostId == null ? "" : connectedHostId;
         craftingStatus = craftingStatus == null ? CraftingStatus.Status.IDLE : craftingStatus;

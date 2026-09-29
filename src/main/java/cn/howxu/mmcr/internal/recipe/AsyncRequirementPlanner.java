@@ -40,7 +40,6 @@ public final class AsyncRequirementPlanner {
     /** Captures immutable recipe planning inputs on the server thread for a later worker search. */
     public static RecipeSearchRequest captureRecipeSearch(ControllerRuntimeSnapshot snapshot,
                                                            List<MachineRecipe> candidates, long maxParallelism,
-                                                           @Nullable Identifier lockedRecipeId,
                                                            List<MachineCapability> capabilities,
                                                            List<MachineModifier> modifiers,
                                                            long catalogVersion,
@@ -65,7 +64,7 @@ public final class AsyncRequirementPlanner {
         List<Capability> asyncCapabilities = new CraftingContext(new CapabilitySnapshot(capabilities), List.of())
                 .captureAsyncCapabilities(capabilityIds);
         return new RecipeSearchRequest(snapshot, machine.registryName(), snapshot.structure().version(), maxParallelism,
-                orderedCandidates, lockedRecipeId, modifiers, asyncCapabilities, catalogVersion,
+                orderedCandidates, modifiers, asyncCapabilities, catalogVersion,
                 effectiveRecipeCache);
     }
 
@@ -261,7 +260,6 @@ public final class AsyncRequirementPlanner {
         private final long structureVersion;
         private final long maxParallelism;
         private final List<MachineRecipe> candidates;
-        private final @Nullable Identifier lockedRecipeId;
         private final List<MachineModifier> modifiers;
         private final List<Capability> capabilities;
         private final long catalogVersion;
@@ -270,7 +268,6 @@ public final class AsyncRequirementPlanner {
 
         private RecipeSearchRequest(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
                                      long maxParallelism, List<MachineRecipe> candidates,
-                                     @Nullable Identifier lockedRecipeId,
                                      List<MachineModifier> modifiers, List<Capability> capabilities,
                                      long catalogVersion, EffectiveRecipeSet.Cache effectiveRecipeCache) {
             this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
@@ -278,7 +275,6 @@ public final class AsyncRequirementPlanner {
             this.structureVersion = structureVersion;
             this.maxParallelism = Math.max(1L, maxParallelism);
             this.candidates = List.copyOf(candidates);
-            this.lockedRecipeId = lockedRecipeId;
             this.modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
             this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
             this.catalogVersion = catalogVersion;
@@ -289,7 +285,6 @@ public final class AsyncRequirementPlanner {
         public long structureVersion() { return structureVersion; }
         public long maxParallelism() { return maxParallelism; }
         public List<MachineRecipe> candidates() { return candidates; }
-        public @Nullable Identifier lockedRecipeId() { return lockedRecipeId; }
         public @Nullable EffectiveRecipeSet effectiveRecipes() { return effectiveRecipes; }
 
         /** Runs without live capabilities, block entities, chunks, or recipe callbacks. */
@@ -313,7 +308,7 @@ public final class AsyncRequirementPlanner {
                             : RecipeSearchTask.PlanningValue.mainThread(candidate.source().id()));
                 }
                 cn.howxu.mmcr.api.recipe.RecipeSearchResult result = RecipeSearchTask.forPlanningValues(snapshot, machineId,
-                        structureVersion, maxParallelism, candidates, lockedRecipeId, planningValues).compute();
+                        structureVersion, maxParallelism, candidates, planningValues).compute();
                 return new RecipeSearchResult(result, null, requiresMainThreadReplan(result, planningValues));
             } catch (RuntimeException exception) {
                 return new RecipeSearchResult(null, exception, false);

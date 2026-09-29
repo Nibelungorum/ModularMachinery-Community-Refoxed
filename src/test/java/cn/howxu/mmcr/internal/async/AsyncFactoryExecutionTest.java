@@ -228,56 +228,6 @@ class AsyncFactoryExecutionTest {
     }
 
     @Test
-    void async_factory_unlock_retries_after_a_locked_recipe_fails_through_the_shared_io_fence() {
-        MachineControllerBlockEntity controller = factoryController(1);
-        MachineRecipe locked = RecipeTestSupport.create(MMCR.id("async_factory_locked_failure"), MMCR.id("test_cube"), 1,
-                List.of(), List.of(), List.of(), 0, 1);
-        MachineRecipe fallback = RecipeTestSupport.create(MMCR.id("async_factory_unlocked_fallback"), MMCR.id("test_cube"), 20,
-                List.of(), List.of(), List.of(), 0, 1);
-        RecipeRegistry.replaceDynamic(Map.of(locked.id(), locked, fallback.id(), fallback));
-        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-
-        controller.serverTick();
-        completeAsyncLevelTick(level);
-        FactoryRuntime runtime = factoryRuntime(controller);
-        assertThat(runtime.toggleRecipeLock(0)).isTrue();
-        MachineRecipe lockedFailure = RecipeTestSupport.create(locked.id(), MMCR.id("test_cube"), 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
-                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
-        RecipeRegistry.replaceDynamic(Map.of(lockedFailure.id(), lockedFailure, fallback.id(), fallback));
-
-        long initialAttempts = runtime.searchAttemptsForTesting();
-        for (int pass = 0; pass < 8 && runtime.searchAttemptsForTesting() == initialAttempts; pass++) {
-            RuntimeTestFixtures.advanceGameTime(level);
-            controller.serverTick();
-            completeAsyncLevelTick(level);
-        }
-
-        assertThat(controller.runtimeSnapshot().factory().activeLaneCount())
-                .as("lanes=%s", runtime.threadSnapshots()).isZero();
-        assertThat(runtime.threadSnapshots().getFirst().locked()).isTrue();
-        long attemptsAfterFailure = runtime.searchAttemptsForTesting();
-
-        RuntimeTestFixtures.advanceGameTime(level);
-        controller.serverTick();
-        completeAsyncLevelTick(level);
-
-        assertThat(runtime.searchAttemptsForTesting()).isEqualTo(attemptsAfterFailure);
-        assertThat(runtime.toggleRecipeLock(0)).isTrue();
-
-        for (int pass = 0; pass < 8 && controller.runtimeSnapshot().factory().activeLaneCount() == 0; pass++) {
-            RuntimeTestFixtures.advanceGameTime(level);
-            controller.serverTick();
-            completeAsyncLevelTick(level);
-        }
-
-        assertThat(controller.runtimeSnapshot().factory().presentationLanes()).singleElement().satisfies(lane -> {
-            assertThat(lane.active()).isTrue();
-            assertThat(lane.recipeId()).isEqualTo(fallback.id().toString());
-        });
-    }
-
-    @Test
     void async_factory_does_not_delay_a_fallback_when_the_more_specific_output_is_blocked() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = factoryController(input);

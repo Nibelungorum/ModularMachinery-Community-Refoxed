@@ -30,8 +30,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
-                                     List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId,
-                                     String machineId, int controllerRole, int installedModuleCount,
+                                     List<String> foundLevelIds, String machineId, int controllerRole, int installedModuleCount,
                                      boolean moduleConnected, String connectedHostId,
                                       CraftingStatus.Status craftingStatus, String craftingMessage,
                                       ExecutionStatus failure, boolean structureAreaLoaded, boolean redstonePaused,
@@ -52,7 +51,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     public PktMachineStatePayload {
         pos = pos == null ? BlockPos.ZERO : pos.immutable();
         foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
-        lockedRecipeId = lockedRecipeId == null ? "" : lockedRecipeId;
         machineId = machineId == null ? "" : machineId;
         connectedHostId = connectedHostId == null ? "" : connectedHostId;
         craftingStatus = craftingStatus == null ? CraftingStatus.Status.IDLE : craftingStatus;
@@ -70,8 +68,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     }
 
     public PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
-                                  List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId,
-                                  String machineId, int controllerRole, int installedModuleCount,
+                                  List<String> foundLevelIds, String machineId, int controllerRole, int installedModuleCount,
                                   boolean moduleConnected, String connectedHostId, CraftingStatus.Status craftingStatus,
                                   String craftingMessage, ExecutionStatus failure, boolean structureAreaLoaded,
                                   boolean redstonePaused, int tick, int totalTick, long parallelism,
@@ -79,7 +76,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                   int activeFactoryThreadCount, int parallelControllerCount,
                                   long maxParallelControllerCount, Map<String, DataValue> dataStorageValues,
                                   int matchedStage, int stageCount) {
-        this(pos, recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId, machineId,
+        this(pos, recipeName, formed, active, foundLevelIds, machineId,
                 controllerRole, installedModuleCount, moduleConnected, connectedHostId, craftingStatus,
                 craftingMessage, failure, structureAreaLoaded, redstonePaused, tick, totalTick, parallelism,
                 maxParallelism, factoryControllerPresent, factoryThreadCount, activeFactoryThreadCount,
@@ -88,8 +85,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     }
 
     public PktMachineStatePayload(BlockPos pos, String recipeName, boolean formed, boolean active,
-                                  List<String> foundLevelIds, boolean recipeLocked, String lockedRecipeId,
-                                  String machineId, int controllerRole, int installedModuleCount,
+                                  List<String> foundLevelIds, String machineId, int controllerRole, int installedModuleCount,
                                   boolean moduleConnected, String connectedHostId, CraftingStatus.Status craftingStatus,
                                   String craftingMessage, ExecutionStatus failure, boolean structureAreaLoaded,
                                   boolean redstonePaused, int tick, int totalTick, long parallelism,
@@ -97,7 +93,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                   int activeFactoryThreadCount, int parallelControllerCount,
                                   long maxParallelControllerCount, Map<String, DataValue> dataStorageValues,
                                   int matchedStage, int stageCount, String recipePoolId) {
-        this(pos, recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId, machineId,
+        this(pos, recipeName, formed, active, foundLevelIds, machineId,
                 controllerRole, installedModuleCount, moduleConnected, connectedHostId, craftingStatus,
                 craftingMessage, failure, structureAreaLoaded, redstonePaused, tick, totalTick, parallelism,
                 maxParallelism, factoryControllerPresent, factoryThreadCount, activeFactoryThreadCount,
@@ -114,8 +110,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         MachineStateSnapshot machineState = recipePoolId == null
                 ? SYNC_RUNTIME.machineState(runtime) : SYNC_RUNTIME.machineState(runtime, recipePoolId);
         return new PktMachineStatePayload(pos, machineState.activeRecipe(), machineState.formed(), machineState.active(),
-                machineState.foundLevelIds(), machineState.recipeLocked(), machineState.lockedRecipeId(),
-                machineState.machineId(), machineState.controllerRole(), machineState.installedModuleCount(),
+                machineState.foundLevelIds(), machineState.machineId(), machineState.controllerRole(), machineState.installedModuleCount(),
                 machineState.moduleConnected(), machineState.connectedHostId(), machineState.craftingStatus(),
                 machineState.craftingMessage(), machineState.failure(), machineState.structureAreaLoaded(),
                 machineState.redstonePaused(),
@@ -134,8 +129,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || current.active != previous.active
                 || !Objects.equals(current.recipeName, previous.recipeName)
                 || !current.foundLevelIds.equals(previous.foundLevelIds)
-                || current.recipeLocked != previous.recipeLocked
-                || !current.lockedRecipeId.equals(previous.lockedRecipeId)
                 || !current.machineId.equals(previous.machineId)
                 || current.controllerRole != previous.controllerRole
                 || current.installedModuleCount != previous.installedModuleCount
@@ -176,8 +169,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeBoolean(payload.active);
         buf.writeVarInt(payload.foundLevelIds.size());
         for (String id : payload.foundLevelIds) buf.writeUtf(id, maxStringLength());
-        buf.writeBoolean(payload.recipeLocked);
-        buf.writeUtf(payload.lockedRecipeId, maxStringLength());
         buf.writeUtf(payload.machineId, maxStringLength());
         buf.writeVarInt(payload.controllerRole);
         buf.writeVarInt(payload.installedModuleCount);
@@ -213,8 +204,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         if (levelCount < 0 || levelCount > maxLevelSnapshots()) throw new IllegalArgumentException("Invalid machine level count");
         List<String> foundLevelIds = new ArrayList<>(levelCount);
         for (int i = 0; i < levelCount; i++) foundLevelIds.add(buf.readUtf(maxStringLength()));
-        boolean recipeLocked = buf.readBoolean();
-        String lockedRecipeId = buf.readUtf(maxStringLength());
         String machineId = buf.readUtf(maxStringLength());
         int controllerRole = buf.readVarInt();
         int installedModuleCount = buf.readVarInt();
@@ -229,7 +218,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         boolean structureAreaLoaded = buf.readBoolean();
         boolean redstonePaused = buf.readBoolean();
         return new PktMachineStatePayload(pos, recipeName, formed, active, foundLevelIds,
-                recipeLocked, lockedRecipeId, machineId, controllerRole, installedModuleCount,
+                machineId, controllerRole, installedModuleCount,
                 moduleConnected, connectedHostId, status, craftingMessage, failure, structureAreaLoaded,
                 redstonePaused,
                  buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(),
@@ -249,7 +238,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             boolean menuMatches = player.containerMenu instanceof MachineControllerMenu menu
                     && menu.controllerPos().equals(pos);
             if (blockEntity instanceof MachineControllerBlockEntity controller) {
-                controller.applyClientState(recipeName, formed, active, foundLevelIds, recipeLocked, lockedRecipeId,
+                controller.applyClientState(recipeName, formed, active, foundLevelIds,
                         machineId.isEmpty() ? null : ResourceLocation.parse(machineId), controllerRole, installedModuleCount,
                         moduleConnected, connectedHostId.isEmpty() ? null : ResourceLocation.parse(connectedHostId),
                         new CraftingStatus(craftingStatus, craftingMessage), failure, structureAreaLoaded,

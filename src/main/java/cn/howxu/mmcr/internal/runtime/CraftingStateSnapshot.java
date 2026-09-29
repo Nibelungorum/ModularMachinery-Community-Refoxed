@@ -20,9 +20,7 @@ public record CraftingStateSnapshot(
         int tick,
         int totalTick,
         long parallelism,
-        long maxParallelism,
-        boolean recipeLocked,
-        String lockedRecipeId) {
+        long maxParallelism) {
 
     public CraftingStateSnapshot {
         status = copyStatus(status);
@@ -32,12 +30,11 @@ public record CraftingStateSnapshot(
         if (parallelism < 0 || maxParallelism < 1) {
             throw new IllegalArgumentException("Invalid crafting parallelism");
         }
-        lockedRecipeId = recipeLocked && lockedRecipeId != null ? lockedRecipeId : "";
     }
 
     public static CraftingStateSnapshot empty(long structureVersion, long capabilityVersion, long modifierVersion) {
         return new CraftingStateSnapshot(null, CraftingStatus.IDLE, null,
-                structureVersion, capabilityVersion, modifierVersion, 0, 0, 0L, 1L, false, "");
+                structureVersion, capabilityVersion, modifierVersion, 0, 0, 0L, 1L);
     }
 
     @Override

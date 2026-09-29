@@ -193,7 +193,7 @@ class MachineControllerScreenTest {
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS,
                 machineId, null, 0, true, 0);
         menu.applyClientSnapshot(new PktMachineStatePayload(
-                CONTROLLER_POS, "mmcr:recipe", formed, true, List.of(), true, "mmcr:locked_recipe",
+                CONTROLLER_POS, "mmcr:recipe", formed, true, List.of(),
                 machineId.toString(), 0, 0, false, "", CraftingStatus.Status.CRAFTING, "", FAILURE,
                 true, false, 4, 20, 6, 8, false, 0, 0, 2, 3, Map.of(), matchedStage, stageCount));
         return menu;

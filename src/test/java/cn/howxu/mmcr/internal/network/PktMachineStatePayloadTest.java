@@ -116,7 +116,7 @@ class PktMachineStatePayloadTest {
         ControllerRecipePresentation presentation = new ControllerRecipePresentation(List.of(), 2L, 3L, 4D,
                 37, 9L);
         PktMachineStatePayload payload = new PktMachineStatePayload(base.pos(), base.recipeName(), base.formed(),
-                base.active(), base.foundLevelIds(), base.recipeLocked(), base.lockedRecipeId(), base.machineId(),
+                base.active(), base.foundLevelIds(), base.machineId(),
                 base.controllerRole(), base.installedModuleCount(), base.moduleConnected(), base.connectedHostId(),
                 base.craftingStatus(), base.craftingMessage(), base.failure(), base.structureAreaLoaded(),
                 base.redstonePaused(), base.tick(), base.totalTick(), base.parallelism(), base.maxParallelism(),
@@ -162,12 +162,12 @@ class PktMachineStatePayloadTest {
 
     @Test
     void machine_state_rejects_negative_or_oversized_installed_module_count() {
-        assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
+        assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(),
                 "", 0, -1, false, "", CraftingStatus.Status.IDLE, "", null, true, false,
                 0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(),
                 0, 1))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
+        assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(),
                 "", 0, PktMachineStatePayload.MAX_INSTALLED_MODULES + 1, false, "", CraftingStatus.Status.IDLE,
                 "", null, true, false, 0, 0, 0, 1, false, 0, 0, 0, 0,
                 Map.of(), 0, 1)).isInstanceOf(IllegalArgumentException.class);
@@ -206,7 +206,7 @@ class PktMachineStatePayloadTest {
     private static PktMachineStatePayload payload(long parallelism, long maxParallelism,
                                                   long maxParallelControllerCount, List<String> levels,
                                                   ExecutionStatus failure, Map<String, DataValue> dataStorageValues) {
-        return new PktMachineStatePayload(BlockPos.ZERO, "mmcr:recipe", true, true, levels, false, "",
+        return new PktMachineStatePayload(BlockPos.ZERO, "mmcr:recipe", true, true, levels,
                 "mmcr:machine", 0, 0, false, "", CraftingStatus.Status.IDLE,
                 "", failure, true, false, 0, 10, parallelism, maxParallelism, false, 0, 0, 0,
                 maxParallelControllerCount, dataStorageValues, 0, 1, "mmcr:pool");

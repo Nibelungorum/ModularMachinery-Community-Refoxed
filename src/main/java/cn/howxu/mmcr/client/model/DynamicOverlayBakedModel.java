@@ -33,13 +33,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class DynamicOverlayBakedModel {
     private static final ResourceLocation DEFAULT_PORT_OVERLAY_TEXTURE = ResourceLocation.withDefaultNamespace("block/copper_block");
     private static final ResourceLocation FALLBACK_BASE_TEXTURE = MMCR.id("block/basic_casing");
+    private static final ResourceLocation DEFAULT_IDLE_OVERLAY_TEXTURE = MMCR.id("block/overlay_basic_idle");
+    private static final ResourceLocation EASTER_EGG_OVERLAY_TEXTURE = MMCR.id("block/overlay_egg");
     private static final Map<MachineAppearanceSpec.TextureSource, FaceTextures> BASE_TEXTURES = new ConcurrentHashMap<>();
 
     private DynamicOverlayBakedModel() {
     }
 
-    public record FaceTextures(ResourceLocation down, ResourceLocation up, ResourceLocation north, ResourceLocation south, ResourceLocation west,
-                               ResourceLocation east) {
+    public record FaceTextures(ResourceLocation down, ResourceLocation up, ResourceLocation north, ResourceLocation south,
+                               ResourceLocation west, ResourceLocation east) {
         public ResourceLocation forFace(Direction direction) {
             return switch (direction) {
                 case DOWN -> down;
@@ -102,10 +104,18 @@ public final class DynamicOverlayBakedModel {
     }
 
     public static ResourceLocation controllerStateOverlay(ResourceLocation machineId, boolean active) {
+        return controllerStateOverlay(machineId, active, false);
+    }
+
+    static ResourceLocation controllerStateOverlay(ResourceLocation machineId, boolean active, boolean idleEasterEgg) {
         MachineAppearanceSpec appearance = machineId == null
                 ? MachineAppearanceSpec.defaults()
                 : MachineAppearanceCache.specFor(machineId);
-        return active ? appearance.controllerActiveOverlayTexture() : appearance.controllerIdleOverlayTexture();
+        ResourceLocation idleOverlay = appearance.controllerIdleOverlayTexture();
+        if (!active && idleEasterEgg && idleOverlay.equals(DEFAULT_IDLE_OVERLAY_TEXTURE)) {
+            return EASTER_EGG_OVERLAY_TEXTURE;
+        }
+        return active ? appearance.controllerActiveOverlayTexture() : idleOverlay;
     }
 
     static boolean controllerCtmEligible(ResourceLocation machineId, MachineAppearanceSpec appearance,

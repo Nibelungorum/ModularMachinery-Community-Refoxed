@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -95,7 +94,7 @@ public final class MachineRecipeThread extends RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = currentMachine();
         RecipeSearchResult result = new RecipeSearchTask(snapshot, machine.registryName(), controller.currentRecipePoolId(),
-                snapshot.structure().version(), controller.getMaxParallelism(), List.of(recipe), null,
+                snapshot.structure().version(), controller.getMaxParallelism(), List.of(recipe),
                 controller.componentRuntime().capabilities()).compute();
         if (result.success()) return true;
         runtime.prepareAsyncStart(recipe, controller.getMaxParallelism());
@@ -139,9 +138,9 @@ public final class MachineRecipeThread extends RecipeThread {
 
     /** Starts one ordinary-controller candidate search from immutable main-thread captures. */
     public boolean searchAndStartAsyncRecipe(List<MachineRecipe> candidates, long availableParallelism,
-                                             long structureVersion, @Nullable ResourceLocation lockedRecipeId) {
+                                             long structureVersion) {
         if (controller.activeWorkMode() != MachineWorkMode.ASYNC || !(controller.getLevel() instanceof ServerLevel level)) {
-            return searchAndStartRecipe(candidates, availableParallelism, structureVersion, lockedRecipeId);
+            return searchAndStartRecipe(candidates, availableParallelism, structureVersion);
         }
         if (hasPendingAsyncSearch()) return false;
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
@@ -151,10 +150,10 @@ public final class MachineRecipeThread extends RecipeThread {
         AsyncRequirementPlanner.RecipeSearchRequest request;
         try {
             request = AsyncRequirementPlanner.captureRecipeSearch(snapshot, candidatesForMachine(candidates), availableParallelism,
-                    lockedRecipeId, controller.componentRuntime().capabilities(),
+                    controller.componentRuntime().capabilities(),
                     controller.componentRuntime().modifierList(), catalogVersion, effectiveRecipeCache);
         } catch (RuntimeException exception) {
-            return searchAndStartRecipe(candidates, availableParallelism, structureVersion, lockedRecipeId);
+            return searchAndStartRecipe(candidates, availableParallelism, structureVersion);
         }
         long searchId = ++nextAsyncSearchId;
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
@@ -187,7 +186,6 @@ public final class MachineRecipeThread extends RecipeThread {
                 && lastRecipeCapabilityVersion == snapshot.capabilityVersion()
                 && lastRecipeModifierVersion == snapshot.modifierVersion()
                 && lastRecipeComponentStateVersion == snapshot.stateVersion()
-                && (controller.lockedRecipeId() == null || controller.lockedRecipeId().equals(retryRecipe.id()))
                 && recipeBelongsToCurrentMachine(retryRecipe)
                 && candidatesForMachine(candidates).contains(retryRecipe);
         return canRestart ? retryRecipe : null;

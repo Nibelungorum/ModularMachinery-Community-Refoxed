@@ -61,6 +61,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
     private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/basic_casing");
     private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
+    private static final ModelProperty<Boolean> EASTER_EGG_ACTIVE = new ModelProperty<>();
     static final float OVERLAY_GROW = 0.0005f;
     private static final Set<ResourceLocation> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
@@ -213,10 +214,17 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         @Override
         public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
+            ModelData.Builder derived = modelData.derive();
+            boolean easterEggTracked = false;
+            if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
+                derived.with(EASTER_EGG_ACTIVE, ControllerIdleEasterEggManager.trackAndIsActive(
+                        level, pos, state, machineId(state, modelData)));
+                easterEggTracked = true;
+            }
             MachineAppearanceSpec.TextureSource source = ctmSource(kind, state, modelData);
             var sourceState = DynamicOverlayBakedModel.sourceState(source, level, pos);
             if (sourceState.isEmpty()) {
-                return modelData;
+                return easterEggTracked ? derived.build() : modelData;
             }
             BlockState appearance = sourceState.get();
             BakedModel sourceModel = Minecraft.getInstance().getModelManager()
@@ -225,7 +233,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             if (sourceData == null) {
                 sourceData = sourceModel.getModelData(level, pos, appearance, modelData);
             }
-            return modelData.derive().with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData)).build();
+            return derived.with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData)).build();
         }
 
         @Override
@@ -281,7 +289,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     ? state.getValue(MachineControllerBlock.ROLL_FACING) : Direction.NORTH;
             ResourceLocation stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
                     ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
-                    state.getValue(MachineControllerBlock.ACTIVE)) : null;
+                    state.getValue(MachineControllerBlock.ACTIVE),
+                    Boolean.TRUE.equals(modelData.get(EASTER_EGG_ACTIVE))) : null;
             for (OverlayLayer layer : overlayLayers(textures.overlays(), stateOverlay)) {
                 for (Direction direction : Direction.values()) {
                     if (overlayFace == null || direction == overlayFace) {

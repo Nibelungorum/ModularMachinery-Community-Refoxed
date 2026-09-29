@@ -24,7 +24,7 @@ class MachineStateSnapshotTest {
 
     private static MachineStateSnapshot baseSnapshot(int matchedStage, int stageCount) {
         return new MachineStateSnapshot(
-                false, true, false, "", List.<String>of(), false, "",
+                false, true, false, "", List.<String>of(),
                 "", 0, 0, false, "", CraftingStatus.Status.IDLE, "",
                 null, 0, 0, 0L, 1L, false, false, 0, 0, 0, 0L,
                 List.of(), List.of(),

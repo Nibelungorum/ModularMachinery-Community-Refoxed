@@ -32,8 +32,6 @@ public final class ControllerSyncRuntime {
                 active(runtime),
                 activeRecipe(runtime),
                 runtime.foundLevelIds(),
-                recipeLocked(runtime),
-                lockedRecipeId(runtime),
                 runtime.machineId(),
                 runtime.controllerRole(),
                 runtime.installedModuleCount(),
@@ -146,19 +144,6 @@ public final class ControllerSyncRuntime {
         require(runtime);
         FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(runtime);
         return thread == null ? runtime.crafting().totalTick() : thread.totalTick();
-    }
-
-    public boolean recipeLocked(ControllerRuntimeSnapshot runtime) {
-        require(runtime);
-        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(runtime);
-        return thread == null ? runtime.crafting().recipeLocked() : thread.locked();
-    }
-
-    public String lockedRecipeId(ControllerRuntimeSnapshot runtime) {
-        require(runtime);
-        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(runtime);
-        String locked = thread == null ? runtime.crafting().lockedRecipeId() : thread.lockedRecipeId();
-        return locked == null ? "" : locked;
     }
 
     /**

@@ -44,7 +44,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot factoryControllerPresent;
     private final DataSlot factoryThreadCount;
     private final DataSlot factoryActiveThreadCount;
-    private final DataSlot recipeLocked;
     private final DataSlot installedModuleCount;
     private final DataSlot moduleConnected;
     private final DataSlot controllerRole;
@@ -97,7 +96,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
             @Override public int get() { return machineState(owner).activeFactoryThreadCount(); }
             @Override public void set(int value) {}
         });
-        this.recipeLocked = ControllerMenuState.addRecipeLockSlot(this, owner);
         this.installedModuleCount = ControllerMenuState.addInstalledModuleCountSlot(this, owner);
         this.moduleConnected = ControllerMenuState.addModuleConnectedSlot(this, owner);
         this.controllerRole = ControllerMenuState.addControllerRoleSlot(this, owner);
@@ -124,7 +122,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.factoryControllerPresent = addDataSlot(DataSlot.standalone());
         this.factoryThreadCount = addDataSlot(DataSlot.standalone());
         this.factoryActiveThreadCount = addDataSlot(DataSlot.standalone());
-        this.recipeLocked = addDataSlot(DataSlot.standalone());
         this.installedModuleCount = addDataSlot(DataSlot.standalone());
         this.moduleConnected = addDataSlot(DataSlot.standalone());
         this.controllerRole = addDataSlot(DataSlot.standalone());
@@ -309,12 +306,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? factoryActiveThreadCount.get() : state.activeFactoryThreadCount();
     }
 
-    public boolean recipeLocked() {
-        if (clientSnapshot != null) return clientSnapshot.recipeLocked();
-        MachineStateSnapshot state = localState();
-        return state == null ? recipeLocked.get() != 0 : state.recipeLocked();
-    }
-
     public int installedModuleCount() {
         if (clientSnapshot != null) return clientSnapshot.installedModuleCount();
         MachineStateSnapshot state = localState();
@@ -365,18 +356,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.factoryThreadCount.set(snapshot.factoryThreadCount());
         this.factoryActiveThreadCount.set(snapshot.activeFactoryThreadCount());
         this.parallelControllerCount.set(snapshot.parallelControllerCount());
-        this.recipeLocked.set(snapshot.recipeLocked() ? 1 : 0);
         this.installedModuleCount.set(Math.max(0, snapshot.installedModuleCount()));
         this.moduleConnected.set(snapshot.moduleConnected() && this.clientConnectedHostId != null ? 1 : 0);
         this.controllerRole.set(snapshot.controllerRole());
-    }
-
-    public @Nullable String lockedRecipeId() {
-        if (clientSnapshot != null) return clientSnapshot.recipeLocked() ? clientSnapshot.lockedRecipeId() : null;
-        MachineStateSnapshot state = localState();
-        if (state == null) return null;
-        String lockedRecipe = state.lockedRecipeId();
-        return lockedRecipe.isEmpty() ? null : lockedRecipe;
     }
 
     public List<String> foundLevelIds() {

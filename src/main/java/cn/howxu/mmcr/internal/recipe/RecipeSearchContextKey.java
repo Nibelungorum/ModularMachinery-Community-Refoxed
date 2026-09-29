@@ -1,8 +1,5 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import net.minecraft.resources.Identifier;
-import org.jetbrains.annotations.Nullable;
-
 /**
  * Immutable versions that identify one recipe-search failure context.
  *
@@ -11,9 +8,8 @@ import org.jetbrains.annotations.Nullable;
 public record RecipeSearchContextKey(long structureVersion,
                                      long capabilityVersion,
                                      long modifierVersion,
-                                     long componentStateVersion,
-                                     long catalogVersion,
-                                     long resourceAvailabilityEpoch,
-                                     @Nullable Identifier lockedRecipeId,
-                                     long coreRecipeSetVersion) {
+                                      long componentStateVersion,
+                                      long catalogVersion,
+                                      long resourceAvailabilityEpoch,
+                                      long coreRecipeSetVersion) {
 }

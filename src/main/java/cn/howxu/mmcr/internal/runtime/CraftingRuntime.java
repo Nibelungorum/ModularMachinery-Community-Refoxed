@@ -758,13 +758,11 @@ public final class CraftingRuntime {
 
     public CraftingStateSnapshot snapshot() {
         ActiveMachineRecipe recipe = activeRecipe;
-        String lockedRecipeId = controller.lockedRecipeId() == null ? "" : controller.lockedRecipeId().toString();
         return new CraftingStateSnapshot(activeRecipe == null ? null : activeRecipe.getRecipe().id(), status, failure,
                 structureVersion == Long.MIN_VALUE ? 0L : structureVersion,
                 capabilityVersion == Long.MIN_VALUE ? 0L : capabilityVersion,
                 modifierVersion == Long.MIN_VALUE ? 0L : modifierVersion,
-                tickCount(), totalTick(), parallelism(), recipe == null ? 1 : recipe.getMaxParallelism(),
-                !lockedRecipeId.isEmpty(), lockedRecipeId);
+                tickCount(), totalTick(), parallelism(), recipe == null ? 1 : recipe.getMaxParallelism());
     }
 
     public @Nullable MachineRecipe recipe() {

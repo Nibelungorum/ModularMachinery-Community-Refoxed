@@ -30,7 +30,7 @@ class ControllerRenderContextTest {
                 BlockPos.ZERO, Identifier.fromNamespaceAndPath("test", "machine"), Direction.NORTH,
                 new ControllerRenderContext.StructureView(false, true, 0),
                 new ControllerRenderContext.CraftingView(null, CraftingStatus.Status.IDLE, "", null,
-                        0, 0, 0L, 1L, false, ""),
+                        0, 0, 0L, 1L),
                 source, 15728880, 0.5F);
 
         source.put("changed", DataValue.of(true));
@@ -55,7 +55,7 @@ class ControllerRenderContextTest {
                 BlockPos.ZERO, Identifier.fromNamespaceAndPath("test", "machine"), Direction.NORTH,
                 new ControllerRenderContext.StructureView(true, true, 1),
                 new ControllerRenderContext.CraftingView(recipeId, CraftingStatus.Status.NO_RECIPE, "", failure,
-                        1, 20, 1L, 1L, false, ""),
+                        1, 20, 1L, 1L),
                 Map.of(), 15728880, 0.5F);
 
         ExecutionStatus copied = context.crafting().failure();

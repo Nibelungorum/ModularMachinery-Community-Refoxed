@@ -299,7 +299,7 @@ class ControllerSyncRuntimeTest {
     void machine_projection_reports_live_parallel_capacity_while_active_recipe_keeps_its_parallelism() {
         ControllerRuntimeSnapshot base = runtimeSnapshot();
         CraftingStateSnapshot crafting = new CraftingStateSnapshot(MMCR.id("sync_live_parallel_recipe"),
-                CraftingStatus.working(), null, 1L, 20L, 1L, 4, 20, 7, 7, false, "");
+                CraftingStatus.working(), null, 1L, 20L, 1L, 4, 20, 7, 7);
         ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(base.structure(), base.capabilityVersion(),
                 base.modifierVersion(), base.stateVersion(), base.foundModifiers(), base.foundLevels(),
                 base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
@@ -495,11 +495,11 @@ class ControllerSyncRuntimeTest {
                 FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, MMCR.id("crafting_runtime"),
                         FailurePhase.UNKNOWN, null, null, Map.of()));
         FactoryRuntime.ThreadSnapshot activeLane = new FactoryRuntime.ThreadSnapshot(0, true, false, true,
-                "mmcr:factory_recipe", 4, 20, 6, "", true, "mmcr:factory_recipe");
+                "mmcr:factory_recipe", 4, 20, 6, "");
         FactoryRuntime.ThreadSnapshot idleLane = new FactoryRuntime.ThreadSnapshot(1, false, false, false,
-                "", 0, 0, 1, "", false, "");
+                "", 0, 0, 1, "");
         CraftingStateSnapshot crafting = new CraftingStateSnapshot(MMCR.id("crafting_recipe"),
-                CraftingStatus.working(), null, 7L, 8L, 9L, 3, 20, 2, 8, true, "mmcr:crafting_recipe");
+                CraftingStatus.working(), null, 7L, 8L, 9L, 3, 20, 2, 8);
         FactorySnapshot factory = new FactorySnapshot(true, true, List.of(crafting), 2, 1, 8L,
                 false, List.of(activeLane, idleLane), "factory", 3, failure, List.of("mmcr:steel"), 1, 1);
         StructureSnapshot structure = new StructureSnapshot(null, null, null, null, null,

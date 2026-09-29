@@ -343,7 +343,7 @@ public final class MachineControllerRuntime {
         CraftingStateSnapshot current = craftingRuntime.snapshot();
         return new CraftingStateSnapshot(current.recipeId(), current.status(), current.failure(), structure.version(),
                 components.capabilityVersion(), components.modifierVersion(), current.tick(), current.totalTick(),
-                current.parallelism(), current.maxParallelism(), current.recipeLocked(), current.lockedRecipeId());
+                current.parallelism(), current.maxParallelism());
     }
 
     private void refreshCraftingStateFromRuntime() {
@@ -354,8 +354,6 @@ public final class MachineControllerRuntime {
                 || craftingState.totalTick() != current.totalTick()
                 || craftingState.parallelism() != current.parallelism()
                 || craftingState.maxParallelism() != current.maxParallelism()
-                || craftingState.recipeLocked() != current.recipeLocked()
-                || !Objects.equals(craftingState.lockedRecipeId(), current.lockedRecipeId())
                 || (current.recipeId() != null || current.failure() != null)
                 && !Objects.equals(craftingState.status(), current.status());
         if (contentChanged) updateCraftingState(currentCraftingState());
@@ -424,13 +422,9 @@ public final class MachineControllerRuntime {
         structure.setMachine(configuredMachine);
         structure.setMatchedStructureStage(matchedStage);
 
-        boolean client = controller.getLevel() != null && controller.getLevel().isClientSide();
-        boolean recipeLocked = client ? controller.hasClientRecipeLock() : controller.lockedRecipeId() != null;
-        String lockedRecipeId = client ? controller.clientLockedRecipeId()
-                : controller.lockedRecipeId() == null ? "" : controller.lockedRecipeId().toString();
         CraftingStateSnapshot nextCrafting = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion(),
-                tick, totalTick, parallelism, maxParallelism, recipeLocked, lockedRecipeId);
+                tick, totalTick, parallelism, maxParallelism);
         updateCraftingState(nextCrafting);
         publishSnapshot();
     }
@@ -635,13 +629,9 @@ public final class MachineControllerRuntime {
     void publishCraftingState(@Nullable ResourceLocation recipeId, CraftingStatus status,
                               @Nullable ExecutionStatus failure, int tick, int totalTick,
                               long parallelism, long maxParallelism) {
-        boolean client = controller.getLevel() != null && controller.getLevel().isClientSide();
-        boolean recipeLocked = client ? controller.hasClientRecipeLock() : controller.lockedRecipeId() != null;
-        String lockedRecipeId = client ? controller.clientLockedRecipeId()
-                : controller.lockedRecipeId() == null ? "" : controller.lockedRecipeId().toString();
         CraftingStateSnapshot nextCrafting = new CraftingStateSnapshot(recipeId, status, failure,
                 structure.version(), components.capabilityVersion(), components.modifierVersion(),
-                tick, totalTick, parallelism, maxParallelism, recipeLocked, lockedRecipeId);
+                tick, totalTick, parallelism, maxParallelism);
         updateCraftingState(nextCrafting);
         publishSnapshot();
     }

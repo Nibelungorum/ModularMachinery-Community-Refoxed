@@ -62,9 +62,9 @@ class PktFactoryControllerStatePayloadTest {
     void long_parallelism_values_round_trip_without_truncation() {
         long parallelism = Long.MAX_VALUE;
         CraftingStateSnapshot lane = new CraftingStateSnapshot(MMCR.id("long_lane"), CraftingStatus.working(),
-                null, 0L, 0L, 0L, 1, 20, parallelism, parallelism, false, "");
+                null, 0L, 0L, 0L, 1, 20, parallelism, parallelism);
         FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
-                "mmcr:long_lane", 1, 20, parallelism, (ExecutionStatus) null, false, "");
+                "mmcr:long_lane", 1, 20, parallelism, (ExecutionStatus) null);
         FactorySnapshot snapshot = new FactorySnapshot(false, true, List.of(lane), 1, 1, parallelism,
                 false, List.of(thread), "", 0, null, List.of(), 0, 1);
         RegistryFriendlyByteBuf buffer = buffer();
@@ -81,9 +81,9 @@ class PktFactoryControllerStatePayloadTest {
     void factory_snapshot_round_trip_preserves_typed_failures_in_snapshot_lanes_and_threads() {
         ExecutionStatus failure = failure(2);
         CraftingStateSnapshot lane = new CraftingStateSnapshot(MMCR.id("factory_recipe"), CraftingStatus.working(),
-                failure, 0L, 0L, 0L, 0, 0, 0L, 1L, false, "");
+                failure, 0L, 0L, 0L, 0, 0, 0L, 1L);
         FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, "base", true, false, false,
-                "", 0, 0, 1, failure, false, "");
+                "", 0, 0, 1, failure);
         FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(lane), 1, 0, 1L,
                 false, List.of(thread), "", 0, failure, List.of(), 0, 1);
         RegistryFriendlyByteBuf buffer = buffer();
@@ -218,7 +218,7 @@ class PktFactoryControllerStatePayloadTest {
          return new FactorySnapshot(false, false, List.of(), count, 0, 1L, false,
                  IntStream.range(0, count).mapToObj(index -> new FactoryRuntime.ThreadSnapshot(index,
                          index == 0 ? "base" : "factory-" + index, index == 0, false, false,
-                         "", 0, 0, 1, (ExecutionStatus) null, false, "")).toList(),
+                         "", 0, 0, 1, (ExecutionStatus) null)).toList(),
                  "", 0, null, List.of(), 0, 1);
     }
 
@@ -294,8 +294,6 @@ class PktFactoryControllerStatePayloadTest {
         buffer.writeVarInt(totalTick);
         buffer.writeLong(parallelism);
         FailureStatusCodec.write(buffer, null);
-        buffer.writeBoolean(false);
-        buffer.writeUtf("");
         ControllerRecipePresentation.write(buffer, ControllerRecipePresentation.empty());
     }
 }

@@ -53,14 +53,11 @@ public record ControllerRenderContext(
             int tick,
             int totalTick,
             long parallelism,
-            long maxParallelism,
-            boolean recipeLocked,
-            String lockedRecipeId) {
+            long maxParallelism) {
         public CraftingView {
             status = Objects.requireNonNull(status, "status");
             statusMessage = statusMessage == null ? "" : statusMessage;
             failure = copyFailure(failure);
-            lockedRecipeId = lockedRecipeId == null ? "" : lockedRecipeId;
         }
 
         private static @Nullable ExecutionStatus copyFailure(@Nullable ExecutionStatus failure) {

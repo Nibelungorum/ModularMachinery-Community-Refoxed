@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
@@ -59,22 +58,6 @@ class MenuScreenTest {
     @AfterAll
     static void restoreLanguage() {
         Language.inject(previousLanguage);
-    }
-
-    @Test
-    void controller_screens_do_not_expose_recipe_lock_controls() {
-        assertThat(Arrays.stream(MachineControllerScreen.class.getDeclaredFields())
-                .map(Field::getName))
-                .doesNotContain("recipeLockButton");
-        assertThat(Arrays.stream(MachineControllerScreen.class.getDeclaredMethods())
-                .map(method -> method.getName().toLowerCase()))
-                .noneMatch(name -> name.contains("recipelock"));
-        assertThat(Arrays.stream(FactoryControllerScreen.class.getDeclaredFields())
-                .map(Field::getName))
-                .doesNotContain("recipeLockButton");
-        assertThat(Arrays.stream(FactoryControllerScreen.class.getDeclaredMethods())
-                .map(method -> method.getName().toLowerCase()))
-                .noneMatch(name -> name.contains("recipelock"));
     }
 
     @Test
@@ -182,7 +165,7 @@ class MenuScreenTest {
                         FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()));
         menu.applyClientSnapshot(new PktMachineStatePayload(
                 BlockPos.ZERO, "mmcr:recipe", true, true,
-                List.of(levelId.toString()), false, "", "mmcr:test_cube", 2, 3, true,
+                List.of(levelId.toString()), "mmcr:test_cube", 2, 3, true,
                 "mmcr:host", CraftingStatus.Status.CRAFTING, "", failure, true, true,
                 4, 20, 6, 8, false, 0, 0, 2, 3, Map.of(), 0, 1));
 
