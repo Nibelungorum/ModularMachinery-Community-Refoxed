@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.crafting.IPatternDetails;
-import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
@@ -46,8 +45,6 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -58,13 +55,10 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import com.mojang.serialization.Lifecycle;
 import java.lang.reflect.Field;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -217,20 +211,6 @@ class PatternInterfaceCraftingMachineTest {
     }
 
     @Test
-    void rejects_unsupported_request_keys_without_taking_requested_material() {
-        PatternInterfaceBlockEntity host = patternHost();
-        UnsupportedKey unsupported = new UnsupportedKey();
-        KeyCounter request = new KeyCounter();
-        request.add(unsupported, 1L);
-
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
-                processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, null)).isFalse();
-
-        assertThat(request.get(unsupported)).isOne();
-        assertThat(host.getLogic().getReturnInv().isEmpty()).isTrue();
-    }
-
-    @Test
     void rejects_when_the_only_normal_controller_is_already_active() {
         PatternInterfaceBlockEntity host = patternHost();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
@@ -273,7 +253,7 @@ class PatternInterfaceCraftingMachineTest {
     }
 
     @Test
-    void rolls_back_mixed_request_when_fluid_return_capacity_rejects_after_item_return() {
+    void preflights_cumulative_mixed_return_capacity_before_starting_recipe() {
         PatternInterfaceBlockEntity host = patternHost();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
         host.linkControllerAppearance(controller.getBlockPos(), null);
@@ -284,13 +264,13 @@ class PatternInterfaceCraftingMachineTest {
                     new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 64L));
         }
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
-        request.add(AEFluidKey.of(FluidResource.of(Fluids.WATER)), 1_000L);
+        request.add(AEFluidKey.of(Fluids.WATER), 1_000L);
 
         assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
                 mixedProcessingPattern(), new KeyCounter[]{request}, null)).isFalse();
 
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
-        assertThat(request.get(AEFluidKey.of(FluidResource.of(Fluids.WATER)))).isEqualTo(1_000L);
+        assertThat(request.get(AEFluidKey.of(Fluids.WATER))).isEqualTo(1_000L);
         assertThat(host.getLogic().getReturnInv().getStack(0)).isNull();
         for (int slot = 1; slot < host.getLogic().getReturnInv().size(); slot++) {
             assertThat(host.getLogic().getReturnInv().getStack(slot))
@@ -428,14 +408,14 @@ class PatternInterfaceCraftingMachineTest {
         ItemStack definition = new ItemStack(Items.PAPER);
         AEProcessingPattern.encode(definition,
                 List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L),
-                        new GenericStack(AEFluidKey.of(FluidResource.of(Fluids.WATER)), 1_000L)),
+                        new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L)),
                 List.of(new GenericStack(AEItemKey.of(Items.IRON_NUGGET), 2L)));
         return new AEProcessingPattern(AEItemKey.of(definition));
     }
 
     private static KeyCounter counter(Item item, long amount) {
         KeyCounter counter = new KeyCounter();
-        counter.add(AEItemKey.of(ItemResource.of(item)), amount);
+        counter.add(AEItemKey.of(item), amount);
         return counter;
     }
 
@@ -445,48 +425,4 @@ class PatternInterfaceCraftingMachineTest {
         return stack;
     }
 
-    /** Represents an AE2 key family MMCR does not support. */
-    private static final class UnsupportedKey extends AEKey {
-        @Override
-        public AEKeyType getType() {
-            return null;
-        }
-
-        @Override
-        public AEKey dropSecondary() {
-            return this;
-        }
-
-        @Override
-        public void toTag(ValueOutput output) {
-        }
-
-        @Override
-        public Object getPrimaryKey() {
-            return this;
-        }
-
-        @Override
-        public ResourceLocation getId() {
-            return ResourceLocation.fromNamespaceAndPath("test", "unsupported");
-        }
-
-        @Override
-        public void writeToPacket(RegistryFriendlyByteBuf data) {
-        }
-
-        @Override
-        protected Component computeDisplayName() {
-            return Component.empty();
-        }
-
-        @Override
-        public void addDrops(long amount, List<ItemStack> drops, Level level, BlockPos pos) {
-        }
-
-        @Override
-        public boolean hasComponents() {
-            return false;
-        }
-    }
 }

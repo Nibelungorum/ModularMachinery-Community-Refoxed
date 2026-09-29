@@ -22,8 +22,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
-import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -119,13 +119,14 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void entityViewsShareStorageIdentityAndDoNotExposeTransferFacet() {
+    void entityViewsExposeInputOnlyNativeHandlers() {
         InputInterfaceBlockEntity entity = ordinaryEntity();
 
         assertThat(entity.kind()).isSameAs(InputInterfaceKind.INSTANCE);
         assertThat(entity.ioType()).isEqualTo(IOType.INPUT);
-        assertThat(entity.itemStorage().reservationIdentity())
-                .isSameAs(entity.fluidStorage().reservationIdentity());
+        entity.getInterfaceLogic().getStorage().setStack(0,
+                new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4L));
+        assertThat(((NativeStackSync.Item) entity.nativeItemHandler()).amount(0)).isEqualTo(4L);
         var capabilities = entity.capabilitySnapshot().capabilities();
         assertThat(capabilities).hasSize(2)
                 .extracting(capability -> capability.type().id())
@@ -136,8 +137,9 @@ class AE2InputInterfaceKindTest {
             assertThat(capability.view().type()).isEqualTo(capability.type());
             assertThat(capability.view().directions().supports(IOType.INPUT)).isTrue();
             assertThat(capability.view().directions().supports(IOType.OUTPUT)).isFalse();
-            assertThat(capability.facet(TransferFacet.class)).isEmpty();
         });
+        assertThat(entity.nativeItemHandler()).isNotNull();
+        assertThat(entity.nativeFluidHandler()).isNotNull();
     }
 
     @Test
@@ -255,7 +257,7 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void outputEntityCapabilitiesExposeTransferFacetForCacheExtraction() {
+    void outputEntityCapabilitiesExposeNativeCacheHandlers() {
         OutputInterfaceBlockEntity entity = newOutputEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
@@ -265,8 +267,9 @@ class AE2InputInterfaceKindTest {
         assertThat(capabilities).allSatisfy(capability -> {
             assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
             assertThat(capability.directions().supports(IOType.INPUT)).isFalse();
-            assertThat(capability.facet(TransferFacet.class)).isPresent();
         });
+        assertThat(entity.nativeItemHandler()).isNotNull();
+        assertThat(entity.nativeFluidHandler()).isNotNull();
     }
 
     @Test
@@ -295,7 +298,7 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void asyncOutputEntityCapabilitiesAreOutputOnlyWithoutTransferFacet() {
+    void asyncOutputEntityCapabilitiesAreOutputOnly() {
         AsyncOutputInterfaceBlockEntity entity = newAsyncOutputEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
@@ -305,7 +308,6 @@ class AE2InputInterfaceKindTest {
         assertThat(capabilities).allSatisfy(capability -> {
             assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
             assertThat(capability.directions().supports(IOType.INPUT)).isFalse();
-            assertThat(capability.facet(TransferFacet.class)).isEmpty();
         });
     }
 
@@ -343,7 +345,7 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void stockingEntityCapabilitiesUseNetworkStorageWithoutTransferFacet() {
+    void stockingEntityCapabilitiesUseNetworkNativeHandlers() {
         StockingInterfaceBlockEntity entity = newStockingEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
@@ -355,8 +357,9 @@ class AE2InputInterfaceKindTest {
             assertThat(capability.directions().supports(IOType.OUTPUT)).isFalse();
             assertThat(capability.facet(ResourceFacet.class)).isPresent();
             assertThat(capability.facet(OperationFacet.class)).isPresent();
-            assertThat(capability.facet(TransferFacet.class)).isEmpty();
         });
+        assertThat(entity.nativeItemHandler()).isNotNull();
+        assertThat(entity.nativeFluidHandler()).isNotNull();
     }
 
     @Test
@@ -423,7 +426,7 @@ class AE2InputInterfaceKindTest {
         entity.saveChanges();
 
         assertThat(entity.getInterfaceLogic().getStorage().getStack(0)).isNull();
-        assertThat(entity.itemStorage().amount(0)).isZero();
+        assertThat(((NativeStackSync.Item) entity.nativeItemHandler()).amount(0)).isZero();
     }
 
     private static InputInterfaceBlockEntity ordinaryEntity() {

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class AE2ResourceStorageTest {
+class AE2InventoryAdapterTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();

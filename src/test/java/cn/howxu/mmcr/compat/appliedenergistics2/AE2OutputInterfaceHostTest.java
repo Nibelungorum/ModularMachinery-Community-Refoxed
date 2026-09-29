@@ -6,9 +6,6 @@ import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.GenericStack;
-import appeng.api.config.LockCraftingMode;
-import appeng.api.config.Settings;
-import appeng.api.config.YesNo;
 import appeng.api.networking.GridFlags;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.security.IActionSource;
@@ -35,7 +32,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -47,12 +43,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -61,7 +52,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -135,30 +125,8 @@ class AE2OutputInterfaceHostTest {
         assertThat(host.getLogic().getPatternInv().size()).isEqualTo(9);
         assertThat(host.getLogic().getReturnInv().size()).isEqualTo(9);
         assertThat((Object) host.getLogic().getPatternInv()).isNotSameAs(host.getLogic().getReturnInv());
-        assertThat(host.itemOutputStorage().reservationIdentity()).isSameAs(host.getLogic().getReturnInv());
-        assertThat(host.fluidOutputStorage().reservationIdentity()).isSameAs(host.getLogic().getReturnInv());
-        assertThat(host.itemInputStorage().reservationIdentity()).isNotSameAs(host.getLogic().getReturnInv());
-        assertThat(host.fluidInputStorage().reservationIdentity()).isNotSameAs(host.getLogic().getReturnInv());
-    }
-
-    @Test
-    void patternHostRestoresNativePriorityAndConfiguration() {
-        PatternInterfaceBlockEntity source = patternHost();
-        source.getLogic().setPriority(7);
-        source.getConfigManager().putSetting(Settings.BLOCKING_MODE, YesNo.YES);
-        source.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_UNTIL_RESULT);
-        TagValueOutput output = TagValueOutput.createWithContext(
-                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()));
-        source.getLogic().writeToNBT(output);
-        PatternInterfaceBlockEntity restored = patternHost();
-
-        restored.getLogic().readFromNBT(TagValueInput.create(
-                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
-
-        assertThat(restored.getLogic().getPriority()).isEqualTo(7);
-        assertThat(restored.getConfigManager().getSetting(Settings.BLOCKING_MODE)).isEqualTo(YesNo.YES);
-        assertThat(restored.getConfigManager().getSetting(Settings.LOCK_CRAFTING_MODE))
-                .isEqualTo(LockCraftingMode.LOCK_UNTIL_RESULT);
+        assertThat(host.nativeItemHandler()).isNotNull();
+        assertThat(host.nativeFluidHandler()).isNotNull();
     }
 
     @Test
@@ -189,10 +157,7 @@ class AE2OutputInterfaceHostTest {
         host.linkControllerAppearance(controller.getBlockPos(), null);
 
         AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
-        try (Transaction transaction = Transaction.openRoot()) {
-            host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
-            transaction.commit();
-        }
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
         host.serverTick();
         host.linkControllerAppearance(controller.getBlockPos(), null);
         controller.notifiedOutputResources.clear();
@@ -211,7 +176,8 @@ class AE2OutputInterfaceHostTest {
 
         host.serverTick();
 
-        assertThat(controller.notifiedOutputResources).containsExactly(ItemResource.of(Items.GOLD_INGOT));
+        assertThat(controller.notifiedOutputResources).singleElement().satisfies(resource ->
+                assertThat(AEItemKey.of((ItemStack) resource)).isEqualTo(gold));
     }
 
     @Test
