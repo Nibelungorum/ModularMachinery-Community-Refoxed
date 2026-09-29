@@ -8,7 +8,9 @@ import cn.howxu.mmcr.registry.ModItems;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -16,7 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Vector3f;
 
 /**
@@ -28,13 +30,12 @@ import org.joml.Vector3f;
 public final class MultiblockDetectorSelectionRenderer {
 
     private static final int GREEN = 0xFF00FF00;
-    private static final int MASK_GREEN = 0x6600FF00;
-    private static final float LINE_WIDTH = 4.0F;
-
     private MultiblockDetectorSelectionRenderer() {}
 
     @SubscribeEvent
-    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_WEATHER) return;
+
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
 
@@ -52,14 +53,17 @@ public final class MultiblockDetectorSelectionRenderer {
         double maxX = Math.max(first.getX(), second.getX()) + 1.0D;
         double maxY = Math.max(first.getY(), second.getY()) + 1.0D;
         double maxZ = Math.max(first.getZ(), second.getZ()) + 1.0D;
-        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        Vec3 camera = event.getCamera().getPosition();
+        PoseStack poseStack = event.getPoseStack();
+        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
 
-        event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(), (pose, buffer) ->
-                renderBoxEdges(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ));
+        renderBoxEdges(poseStack.last(), buffer.getBuffer(RenderType.lines()), camera,
+                minX, minY, minZ, maxX, maxY, maxZ);
+        buffer.endBatch(RenderType.lines());
         if (shouldRenderMask(detector, selection)) {
-            event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
-                    (pose, buffer) -> renderBoxFaces(pose, buffer, camera,
-                            minX, minY, minZ, maxX, maxY, maxZ));
+            renderBoxFaces(poseStack, buffer.getBuffer(RenderType.debugFilledBox()), camera,
+                    minX, minY, minZ, maxX, maxY, maxZ);
+            buffer.endBatch(RenderType.debugFilledBox());
         }
     }
 
@@ -92,32 +96,12 @@ public final class MultiblockDetectorSelectionRenderer {
         line(pose, buffer, camera, maxX, maxY, minZ, maxX, maxY, maxZ);
     }
 
-    private static void renderBoxFaces(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+    private static void renderBoxFaces(PoseStack poseStack, VertexConsumer buffer, Vec3 camera,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
-        float x1 = (float) (minX - camera.x());
-        float y1 = (float) (minY - camera.y());
-        float z1 = (float) (minZ - camera.z());
-        float x2 = (float) (maxX - camera.x());
-        float y2 = (float) (maxY - camera.y());
-        float z2 = (float) (maxZ - camera.z());
-
-        // This is always one six-face shell (24 vertices), never a mesh per selected block. The native
-        // debugFilledBox GPU pipeline performs back-face culling and viewport clipping for large regions.
-        face(pose, buffer, x1, y2, z1, x2, y2, z1, x2, y1, z1, x1, y1, z1);
-        face(pose, buffer, x2, y2, z2, x1, y2, z2, x1, y1, z2, x2, y1, z2);
-        face(pose, buffer, x1, y2, z2, x1, y2, z1, x1, y1, z1, x1, y1, z2);
-        face(pose, buffer, x2, y2, z1, x2, y2, z2, x2, y1, z2, x2, y1, z1);
-        face(pose, buffer, x1, y2, z2, x2, y2, z2, x2, y2, z1, x1, y2, z1);
-        face(pose, buffer, x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
-    }
-
-    private static void face(PoseStack.Pose pose, VertexConsumer buffer,
-            float x1, float y1, float z1, float x2, float y2, float z2,
-            float x3, float y3, float z3, float x4, float y4, float z4) {
-        buffer.addVertex(pose, x1, y1, z1).setColor(MASK_GREEN);
-        buffer.addVertex(pose, x2, y2, z2).setColor(MASK_GREEN);
-        buffer.addVertex(pose, x3, y3, z3).setColor(MASK_GREEN);
-        buffer.addVertex(pose, x4, y4, z4).setColor(MASK_GREEN);
+        LevelRenderer.addChainedFilledBoxVertices(poseStack, buffer,
+                minX - camera.x(), minY - camera.y(), minZ - camera.z(),
+                maxX - camera.x(), maxY - camera.y(), maxZ - camera.z(),
+                0.0F, 1.0F, 0.0F, 0.4F);
     }
 
     private static void line(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
@@ -129,7 +113,7 @@ public final class MultiblockDetectorSelectionRenderer {
         float ey = (float) (y2 - camera.y());
         float ez = (float) (z2 - camera.z());
         Vector3f normal = new Vector3f(ex - sx, ey - sy, ez - sz).normalize();
-        buffer.addVertex(pose, sx, sy, sz).setColor(GREEN).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
-        buffer.addVertex(pose, ex, ey, ez).setColor(GREEN).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
+        buffer.addVertex(pose, sx, sy, sz).setColor(GREEN).setNormal(pose, normal.x(), normal.y(), normal.z());
+        buffer.addVertex(pose, ex, ey, ez).setColor(GREEN).setNormal(pose, normal.x(), normal.y(), normal.z());
     }
 }

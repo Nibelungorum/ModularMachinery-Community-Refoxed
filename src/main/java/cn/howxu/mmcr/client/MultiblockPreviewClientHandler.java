@@ -9,19 +9,12 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewGpuMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewCompileInput;
-import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.BlockModelRenderState;
-import net.minecraft.client.renderer.block.model.BlockDisplayContext;
-import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -31,14 +24,11 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.function.Function;
 
 /**
  * Renders the active multiblock ghost preview for the local player.
@@ -52,7 +42,6 @@ public final class MultiblockPreviewClientHandler {
     private static List<MultiblockPreviewSnapshot.Entry> entries = List.of();
     private static List<MultiblockPreviewSnapshot.Entry> visibleEntries = List.of();
     private static List<Integer> layers = List.of();
-    private static final Map<BlockState, CachedModel> modelCache = new HashMap<>();
     private static final WorldPreviewMeshCache worldMeshCache = new WorldPreviewMeshCache();
     private static final ExecutorService WORLD_MESH_COMPILER = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().daemon().name("mmcr-world-preview-compiler-").factory());
@@ -63,7 +52,6 @@ public final class MultiblockPreviewClientHandler {
     private static WorldPreviewCompileInput worldMeshCompileInput;
     private static WorldPreviewGpuMesh gpuMesh;
     private static WorldPreviewMeshKey gpuMeshKey;
-    private static final BlockDisplayContext BLOCK_DISPLAY_CONTEXT = BlockDisplayContext.create();
     private static BlockPos visibleEntriesCameraCell;
     private static double visibleEntriesRadius = -1.0;
     private static int selectedLayer = Integer.MAX_VALUE;
@@ -110,7 +98,6 @@ public final class MultiblockPreviewClientHandler {
         controllerPos = newControllerPos.immutable();
         entries = List.copyOf(newEntries);
         worldMeshCompileInput = null;
-        modelCache.clear();
         visibleEntriesCameraCell = null;
         layers = entries.stream().map(entry -> entry.relativePos().getY()).distinct().sorted().toList();
         selectedLayer = sameActiveController ? nextLayer() : Integer.MAX_VALUE;
@@ -131,24 +118,20 @@ public final class MultiblockPreviewClientHandler {
     }
 
     @SubscribeEvent
-    public static void onRenderLevelAfterOpaqueBlocks(RenderLevelStageEvent.AfterOpaqueBlocks event) {
-        onRenderLevelStage(event);
-    }
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+        RenderLevelStageEvent.Stage stage = event.getStage();
+        if (stage != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS
+                && stage != RenderLevelStageEvent.Stage.AFTER_CUTOUT_MIPPED_BLOCKS_BLOCKS
+                && stage != RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS
+                && stage != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
+                && stage != RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) return;
 
-    @SubscribeEvent
-    public static void onRenderLevelAfterTranslucentBlocks(RenderLevelStageEvent.AfterTranslucentBlocks event) {
-        onRenderLevelStage(event);
-    }
-
-    private static void onRenderLevelStage(RenderLevelStageEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || controllerPos == null || !minecraft.level.dimension().equals(dimension)) return;
         if (!isActive(minecraft.level.getGameTime())) {
             clear();
             return;
         }
-        if (!(event instanceof RenderLevelStageEvent.AfterOpaqueBlocks)
-                && !(event instanceof RenderLevelStageEvent.AfterTranslucentBlocks)) return;
         render(event, minecraft);
     }
 
@@ -170,24 +153,6 @@ public final class MultiblockPreviewClientHandler {
 
     static void rebuildVisibleEntriesForTesting(Vec3 camera) {
         rebuildVisibleEntries(camera);
-    }
-
-    static void resolveModelForTesting(BlockState state) {
-        resolveModelForState(state, ignored -> null);
-    }
-
-    static void resolveModelForTesting(BlockState state, Function<BlockState, BlockModel> resolver) {
-        resolveModelForState(state, resolver);
-    }
-
-    static void resolveVisibleModelsForTesting(Function<BlockState, BlockModel> resolver) {
-        for (MultiblockPreviewSnapshot.Entry entry : visibleEntries) {
-            resolveModelForState(entry.state(), resolver);
-        }
-    }
-
-    static int resolvedModelCacheSizeForTesting() {
-        return modelCache.size();
     }
 
     static boolean rendersPreviewOutlineForTesting() {
@@ -278,7 +243,6 @@ public final class MultiblockPreviewClientHandler {
         entries = List.of();
         visibleEntries = List.of();
         layers = List.of();
-        modelCache.clear();
         worldMeshCache.clear();
         worldMeshCompileInput = null;
         visibleEntriesCameraCell = null;
@@ -292,7 +256,7 @@ public final class MultiblockPreviewClientHandler {
     }
 
     private static void render(RenderLevelStageEvent event, Minecraft minecraft) {
-        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        Vec3 camera = event.getCamera().getPosition();
         rebuildVisibleEntries(camera);
         if (visibleEntries.isEmpty()) return;
         WorldPreviewMeshKey key = worldMeshKey();
@@ -315,17 +279,23 @@ public final class MultiblockPreviewClientHandler {
         try {
             RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
             RenderSystem.getModelViewStack().translate((float) -camera.x, (float) -camera.y, (float) -camera.z);
-            if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
+            RenderSystem.applyModelViewMatrix();
+            RenderLevelStageEvent.Stage stage = event.getStage();
+            if (stage == RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) {
                 mesh.draw(RenderType.solid());
+            } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_MIPPED_BLOCKS_BLOCKS) {
                 mesh.draw(RenderType.cutoutMipped());
+            } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
                 mesh.draw(RenderType.cutout());
-            } else {
+            } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
                 mesh.resortTranslucent(camera);
                 mesh.draw(RenderType.translucent());
+            } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
                 mesh.draw(RenderType.tripwire());
             }
         } finally {
             RenderSystem.getModelViewStack().popMatrix();
+            RenderSystem.applyModelViewMatrix();
         }
     }
 
@@ -376,26 +346,4 @@ public final class MultiblockPreviewClientHandler {
         compilingWorldMeshCancelled = null;
     }
 
-    private static CachedModel resolveModelForState(BlockState state, Function<BlockState, BlockModel> resolver) {
-        return modelCache.computeIfAbsent(state, currentState -> resolveModel(resolver.apply(currentState)));
-    }
-
-    private static CachedModel resolveModel(BlockModel model) {
-        return new CachedModel(model);
-    }
-
-    static boolean updateRenderStateForTesting(BlockState state, BlockModel model) {
-        BlockModelRenderState renderState = new BlockModelRenderState();
-        updateRenderState(renderState, model, state);
-        return !renderState.isEmpty();
-    }
-
-    private static void updateRenderState(BlockModelRenderState renderState, BlockModel model, BlockState state) {
-        // BlockModel.update is the complete 26.1.2 resolver path, including special renderers.
-        renderState.clear();
-        model.update(renderState, state, BLOCK_DISPLAY_CONTEXT, 42L);
-    }
-
-    private record CachedModel(BlockModel model) {
-    }
 }

@@ -5,7 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -27,8 +27,6 @@ public final class MultiblockMismatchHighlightClientHandler {
     private static final long DURATION_MILLIS = 8_000L;
     private static final long PHASE_MILLIS = 300L;
     private static final int RED = 0xFFFF0000;
-    private static final float LINE_WIDTH = 4.0F;
-
     private static Highlight active;
 
     private MultiblockMismatchHighlightClientHandler() {}
@@ -38,7 +36,9 @@ public final class MultiblockMismatchHighlightClientHandler {
     }
 
     @SubscribeEvent
-    public static void onRenderLevelAfterWeather(RenderLevelStageEvent.AfterWeather event) {
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_WEATHER) return;
+
         Highlight highlight = active;
         Minecraft minecraft = Minecraft.getInstance();
         if (highlight == null || minecraft.level == null) return;
@@ -52,11 +52,11 @@ public final class MultiblockMismatchHighlightClientHandler {
         if (((highlight.expiresAtMillis - now) / PHASE_MILLIS) % 2L == 0L) return;
 
         AABB box = new AABB(highlight.pos).inflate(0.005D);
-        Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
+        Vec3 camera = event.getCamera().getPosition();
         PoseStack poseStack = event.getPoseStack();
         MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
-        renderBoxEdges(poseStack.last(), buffer.getBuffer(RenderTypes.lines()), camera, box);
-        buffer.endBatch(RenderTypes.lines());
+        renderBoxEdges(poseStack.last(), buffer.getBuffer(RenderType.lines()), camera, box);
+        buffer.endBatch(RenderType.lines());
     }
 
     private static void renderBoxEdges(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera, AABB box) {
@@ -85,8 +85,8 @@ public final class MultiblockMismatchHighlightClientHandler {
         float ey = (float) (y2 - camera.y());
         float ez = (float) (z2 - camera.z());
         Vector3f normal = new Vector3f(ex - sx, ey - sy, ez - sz).normalize();
-        buffer.addVertex(pose, sx, sy, sz).setColor(RED).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
-        buffer.addVertex(pose, ex, ey, ez).setColor(RED).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
+        buffer.addVertex(pose, sx, sy, sz).setColor(RED).setNormal(pose, normal.x(), normal.y(), normal.z());
+        buffer.addVertex(pose, ex, ey, ez).setColor(RED).setNormal(pose, normal.x(), normal.y(), normal.z());
     }
 
     private record Highlight(ResourceKey<Level> dimension, BlockPos pos, long expiresAtMillis) {}
