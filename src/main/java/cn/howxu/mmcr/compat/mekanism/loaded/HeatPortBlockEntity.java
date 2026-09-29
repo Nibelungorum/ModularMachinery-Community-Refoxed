@@ -128,6 +128,7 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
         super.tick();
         if (level == null || level.isClientSide()) return;
         simulate();
+        updateHeatCapacitors(null);
     }
 
     @Override
