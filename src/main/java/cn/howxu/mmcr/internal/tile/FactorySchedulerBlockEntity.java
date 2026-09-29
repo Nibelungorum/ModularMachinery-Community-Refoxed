@@ -4,10 +4,10 @@ import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -49,23 +49,22 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         ItemStack resource = storage.resource(0);
         output.putBoolean("itemHasResource", !resource.isEmpty());
         if (!resource.isEmpty()) {
-            output.store("itemResource", ItemStack.CODEC, resource);
+            output.put("itemResource", resource.save(registries));
             output.putLong("itemAmount", storage.amount(0));
         }
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        if (input.getBooleanOr("itemHasResource", false)) {
-            ItemStack resource = input.read("itemResource", ItemStack.CODEC)
-                    .orElse(ItemStack.EMPTY);
-            storage.setContents(0, resource, input.getLong("itemAmount").orElse(0L));
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
+        if (input.getBoolean("itemHasResource")) {
+            ItemStack resource = ItemStack.parseOptional(registries, input.getCompound("itemResource"));
+            storage.setContents(0, resource, input.getLong("itemAmount"));
         } else {
             storage.setContents(0, ItemStack.EMPTY, 0L);
         }

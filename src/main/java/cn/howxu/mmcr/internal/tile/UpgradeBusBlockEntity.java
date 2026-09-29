@@ -5,10 +5,10 @@ import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -76,14 +76,14 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = "_" + slot;
             ItemStack resource = storage.resource(slot);
             output.putBoolean("itemHasResource" + suffix, !resource.isEmpty());
             if (!resource.isEmpty()) {
-                output.store("itemResource" + suffix, ItemStack.CODEC, resource);
+                output.put("itemResource" + suffix, resource.save(registries));
                 output.putLong("itemAmount" + suffix, storage.amount(slot));
             }
         }
@@ -91,19 +91,18 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = "_" + slot;
-            if (input.getBooleanOr("itemHasResource" + suffix, false)) {
-                ItemStack resource = input.read("itemResource" + suffix, ItemStack.CODEC)
-                        .orElse(ItemStack.EMPTY);
-                storage.setContents(slot, resource, input.getLong("itemAmount" + suffix).orElse(0L));
+            if (input.getBoolean("itemHasResource" + suffix)) {
+                ItemStack resource = ItemStack.parseOptional(registries, input.getCompound("itemResource" + suffix));
+                storage.setContents(slot, resource, input.getLong("itemAmount" + suffix));
             } else {
                 storage.setContents(slot, ItemStack.EMPTY, 0L);
             }
         }
-        contentsVersion = input.getLong(CONTENTS_VERSION_KEY).orElse(0L);
+        contentsVersion = input.getLong(CONTENTS_VERSION_KEY);
     }
 
     private void onContentsChanged() {

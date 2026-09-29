@@ -3,7 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.client.render.ChemicalGuiRenderer;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -140,21 +140,21 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         textScrollOffset = 0;
     }
 
-    protected final void renderVisualLine(GuiGraphicsExtractor graphics,
+    protected final void renderVisualLine(GuiGraphics graphics,
                                           ControllerScreenTextComposer.VisualLine line, int x, int y) {
         ControllerTextLine source = line.source();
         if (line.firstSegment() && source.icon() != null) {
             renderIcon(graphics, source.icon(), x + source.leftIndent(), y, 9);
         }
-        graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
+        graphics.drawString(font, line.text(), x + line.textXOffset(), y, line.color(), false);
     }
 
-    protected final void renderTextLine(GuiGraphicsExtractor graphics, ControllerTextLine line, int x, int y) {
+    protected final void renderTextLine(GuiGraphics graphics, ControllerTextLine line, int x, int y) {
         if (line.icon() != null) renderIcon(graphics, line.icon(), x + line.leftIndent(), y, 9);
-        graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
+        graphics.drawString(font, line.text(), x + line.textXOffset(), y, line.color(), false);
     }
 
-    protected final void renderScrollableTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY,
+    protected final void renderScrollableTooltip(GuiGraphics graphics, int mouseX, int mouseY,
                                                  int textX) {
         TextViewport viewport = scrollableTextViewport();
         if (!containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) return;
@@ -168,18 +168,18 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
                 line.textXOffset(), font.width(line.text()), viewport.scale(), viewport.lineSpacing(),
                 mouseX, mouseY)) return;
         List<Component> tooltip = line.source().tooltip();
-        if (!tooltip.isEmpty()) graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
+        if (!tooltip.isEmpty()) graphics.renderComponentTooltip(font, tooltip, mouseX, mouseY);
     }
 
-    protected static void renderIcon(GuiGraphicsExtractor graphics, ControllerTextLine.Icon icon,
+    protected static void renderIcon(GuiGraphics graphics, ControllerTextLine.Icon icon,
                                      int x, int y, int size) {
         switch (icon) {
             case ControllerTextLine.ItemIcon item -> {
-                graphics.pose().pushMatrix();
-                graphics.pose().translate(x, y);
-                graphics.pose().scale(size / 16F, size / 16F);
-                graphics.fakeItem(item.stack(), 0, 0);
-                graphics.pose().popMatrix();
+                graphics.pose().pushPose();
+                graphics.pose().translate(x, y, 0.0F);
+                graphics.pose().scale(size / 16F, size / 16F, 1.0F);
+                graphics.renderFakeItem(item.stack(), 0, 0);
+                graphics.pose().popPose();
             }
             case ControllerTextLine.FluidIcon fluid ->
                     FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, size, size);

@@ -7,8 +7,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
@@ -16,8 +14,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -73,17 +69,21 @@ public class ModuleCouplerBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        writeGlobalPos(output.child(HOST_KEY), connectedHost);
-        writeGlobalPos(output.child(MODULE_KEY), connectedModule);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        CompoundTag host = new CompoundTag();
+        CompoundTag module = new CompoundTag();
+        writeGlobalPos(host, connectedHost);
+        writeGlobalPos(module, connectedModule);
+        output.put(HOST_KEY, host);
+        output.put(MODULE_KEY, module);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        connectedHost = readGlobalPos(input.childOrEmpty(HOST_KEY));
-        connectedModule = readGlobalPos(input.childOrEmpty(MODULE_KEY));
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
+        connectedHost = readGlobalPos(input.getCompound(HOST_KEY));
+        connectedModule = readGlobalPos(input.getCompound(MODULE_KEY));
         if (connectedHost == null || connectedModule == null) {
             connectedHost = null;
             connectedModule = null;
@@ -96,31 +96,29 @@ public class ModuleCouplerBlockEntity extends BlockEntity {
     }
 
     @Override
-    public void onDataPacket(Connection net, ValueInput input) {
-        super.onDataPacket(net, input);
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
+        super.onDataPacket(net, packet, registries);
         if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
     }
 
     @Override
-    public Packet<ClientGamePacketListener> getUpdatePacket() {
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    private static void writeGlobalPos(ValueOutput output, GlobalPos pos) {
+    private static void writeGlobalPos(CompoundTag output, GlobalPos pos) {
         if (pos == null) return;
-        output.putString(DIMENSION_KEY, pos.dimension().identifier().toString());
+        output.putString(DIMENSION_KEY, pos.dimension().location().toString());
         output.putInt(X_KEY, pos.pos().getX());
         output.putInt(Y_KEY, pos.pos().getY());
         output.putInt(Z_KEY, pos.pos().getZ());
     }
 
-    private static GlobalPos readGlobalPos(ValueInput input) {
-        String dimension = input.getStringOr(DIMENSION_KEY, "");
+    private static GlobalPos readGlobalPos(CompoundTag input) {
+        String dimension = input.getString(DIMENSION_KEY);
         if (dimension.isBlank()) return null;
         ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimension));
         return GlobalPos.of(key, new BlockPos(
-                input.getIntOr(X_KEY, 0),
-                input.getIntOr(Y_KEY, 0),
-                input.getIntOr(Z_KEY, 0)));
+                input.getInt(X_KEY), input.getInt(Y_KEY), input.getInt(Z_KEY)));
     }
 }

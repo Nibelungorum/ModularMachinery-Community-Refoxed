@@ -3,9 +3,10 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -42,15 +43,17 @@ public class ParallelControllerBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         output.putInt("current_parallelism", currentParallelism());
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
         currentParallelism = Math.max(1, Math.min(
-                input.getIntOr("current_parallelism", tier.maxParallelism()), tier.maxParallelism()));
+                input.contains("current_parallelism", Tag.TAG_INT)
+                        ? input.getInt("current_parallelism") : tier.maxParallelism(),
+                tier.maxParallelism()));
     }
 }
