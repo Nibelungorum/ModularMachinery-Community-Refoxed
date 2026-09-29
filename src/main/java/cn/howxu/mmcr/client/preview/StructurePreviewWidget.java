@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.config.ClientConfig;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jspecify.annotations.Nullable;
@@ -47,16 +46,16 @@ public final class StructurePreviewWidget implements AutoCloseable {
     }
 
     /** Renders this preview inside the supplied GUI rectangle. */
-    public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, float partialTick) {
-        render(graphics, x, y, width, height, partialTick, 0, 0);
+    public void render(GuiGraphics graphics, int x, int y, int width, int height, float partialTick,
+            int mouseX, int mouseY) {
+        render(graphics, x, y, width, height, partialTick, 0, 0, mouseX, mouseY);
     }
 
     /** Renders this preview with the GUI origin supplied by an embedding host. */
-    public void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height, float partialTick,
-            int guiOriginX, int guiOriginY) {
-        Minecraft minecraft = Minecraft.getInstance();
+    public void render(GuiGraphics graphics, int x, int y, int width, int height, float partialTick,
+            int guiOriginX, int guiOriginY, int mouseX, int mouseY) {
         render(new PreviewRenderContext(graphics, new PreviewViewport(x, y, width, height), partialTick,
-                guiOriginX, guiOriginY, camera));
+                guiOriginX, guiOriginY, mouseX, mouseY, camera));
     }
 
     public Object hoverHit() {

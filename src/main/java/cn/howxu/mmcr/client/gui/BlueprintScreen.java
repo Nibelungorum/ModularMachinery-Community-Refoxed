@@ -193,7 +193,7 @@ public final class BlueprintScreen extends Screen {
         graphics.enableScissor(preview.x(), preview.y(), preview.x() + preview.width(), preview.y() + preview.height());
         try {
             panel.render(graphics, preview.width(), preview.height(), partialTick,
-                    preview.x(), preview.y(), preview.x(), preview.y());
+                    preview.x(), preview.y(), mouseX, mouseY, preview.x(), preview.y());
         } finally {
             graphics.disableScissor();
         }

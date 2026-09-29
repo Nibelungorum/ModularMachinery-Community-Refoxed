@@ -1,14 +1,13 @@
 package cn.howxu.mmcr.compat.jade;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.data.AtlasIds;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import snownee.jade.impl.ui.ProgressOverlayElement;
+import net.minecraft.util.FastColor;
+import net.minecraft.world.phys.Vec2;
+import snownee.jade.api.ui.Element;
 
 /**
  * Renders a Mekanism chemical icon (a 16×16 sprite in the BLOCKS atlas) inside a
@@ -17,7 +16,7 @@ import snownee.jade.impl.ui.ProgressOverlayElement;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class JadeChemicalElement extends ProgressOverlayElement {
+public final class JadeChemicalElement extends Element {
 
     private final ResourceLocation spriteLocation;
     private final int tint;
@@ -40,21 +39,26 @@ public final class JadeChemicalElement extends ProgressOverlayElement {
     }
 
     @Override
-    public Component getNarration() {
-        return null;
+    public Vec2 getSize() {
+        return new Vec2(width, height);
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        Minecraft minecraft = Minecraft.getInstance();
-        TextureAtlasSprite sprite = minecraft.getAtlasManager()
-                .getAtlasOrThrow(AtlasIds.BLOCKS)
-                .getSprite(spriteLocation);
-        RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
-        int drawX = floatingRect == null ? getX() : (int) floatingRect.getX();
-        int drawY = floatingRect == null ? getY() : (int) floatingRect.getY();
-        int drawW = floatingRect == null ? this.width : (int) floatingRect.getWidth();
-        int drawH = floatingRect == null ? this.height : (int) floatingRect.getHeight();
-        graphics.blitSprite(pipeline, sprite, drawX, drawY, drawW, drawH, tint);
+    public void render(GuiGraphics graphics, float x, float y, float maxX, float maxY) {
+        TextureAtlasSprite sprite = Minecraft.getInstance()
+                .getTextureAtlas(TextureAtlas.LOCATION_BLOCKS)
+                .apply(spriteLocation);
+        try {
+            if (tint != -1) {
+                graphics.setColor(
+                        FastColor.ARGB32.red(tint) / 255.0F,
+                        FastColor.ARGB32.green(tint) / 255.0F,
+                        FastColor.ARGB32.blue(tint) / 255.0F,
+                        FastColor.ARGB32.alpha(tint) / 255.0F);
+            }
+            graphics.blit((int) x, (int) y, 0, width, height, sprite);
+        } finally {
+            if (tint != -1) graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
     }
 }

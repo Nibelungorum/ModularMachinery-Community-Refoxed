@@ -11,7 +11,7 @@ import cn.howxu.mmcr.internal.client.JeiWorkstationRegistry;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
-import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
@@ -89,7 +89,7 @@ public final class JeiPlugin implements IModPlugin {
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         Map<ResourceLocation, List<ResourceLocation>> machinesByPool = machineIdsByPool();
-        Map<IRecipeType<?>, List<ItemStack>> workstations = new LinkedHashMap<>();
+        Map<RecipeType<?>, List<ItemStack>> workstations = new LinkedHashMap<>();
         machinesByPool.forEach((poolId, machineIds) -> machineIds.forEach(machineId ->
                 addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolId), controllerFor(machineId))));
 
@@ -140,7 +140,7 @@ public final class JeiPlugin implements IModPlugin {
         });
 
         workstations.forEach((recipeType, stacks) ->
-                registration.addCraftingStation(recipeType, stacks.toArray(ItemStack[]::new)));
+                registration.addRecipeCatalysts(recipeType, stacks.toArray(ItemStack[]::new)));
     }
 
     @Override
@@ -176,8 +176,8 @@ public final class JeiPlugin implements IModPlugin {
         return new ItemStack(ModBlocks.controllerFor(machineId).get());
     }
 
-    private static void addWorkstation(Map<IRecipeType<?>, List<ItemStack>> workstations,
-                                       IRecipeType<?> recipeType, ItemStack workstation) {
+    private static void addWorkstation(Map<RecipeType<?>, List<ItemStack>> workstations,
+                                       RecipeType<?> recipeType, ItemStack workstation) {
         List<ItemStack> stacks = workstations.computeIfAbsent(recipeType, ignored -> new ArrayList<>());
         if (stacks.stream().noneMatch(existing -> ItemStack.isSameItemSameComponents(existing, workstation))) {
             stacks.add(workstation.copyWithCount(1));

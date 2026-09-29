@@ -15,9 +15,9 @@ import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
-import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -56,7 +56,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         icon = guiHelper.createDrawableItemLike(ModBlocks.BASIC_CASING.get());
     }
 
-    @Override public IRecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
+    @Override public RecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
     @Override public Component getTitle() { return Component.translatable("jei.mmcr.multiblock_structure"); }
     @Override
     public int getWidth() {
@@ -130,7 +130,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void draw(MachineStructureDisplay display, IRecipeSlotsView recipeSlotsView,
-            GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
+            GuiGraphics graphics, double mouseX, double mouseY) {
         var font = Minecraft.getInstance().font;
         Component machineName = display.machine().displayName();
         int textWidth = font.width(machineName);
@@ -141,17 +141,17 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
                 (float) MACHINE_NAME_HEIGHT / font.lineHeight));
         float scaledWidth = textWidth * scale;
         float scaledHeight = font.lineHeight * scale;
-        graphics.pose().pushMatrix();
+        graphics.pose().pushPose();
         graphics.pose().translate(
                 MACHINE_NAME_X + MACHINE_NAME_WIDTH / 2.0F - scaledWidth / 2.0F,
-                MACHINE_NAME_Y + MACHINE_NAME_HEIGHT / 2.0F - scaledHeight);
-        graphics.pose().scale(scale, scale);
-        graphics.text(font, machineName, 0, 0, 0xFFFFFFFF, false);
-        graphics.pose().popMatrix();
+                MACHINE_NAME_Y + MACHINE_NAME_HEIGHT / 2.0F - scaledHeight, 0.0F);
+        graphics.pose().scale(scale, scale, 1.0F);
+        graphics.drawString(font, machineName, 0, 0, 0xFFFFFFFF, false);
+        graphics.pose().popPose();
     }
 
     @Override
-    public ResourceLocation getResourceLocation(MachineStructureDisplay display) {
+    public ResourceLocation getRegistryName(MachineStructureDisplay display) {
         ResourceLocation machineId = display.machine().registryName();
         return MMCR.id("structure/" + machineId.getNamespace() + "/" + machineId.getPath());
     }

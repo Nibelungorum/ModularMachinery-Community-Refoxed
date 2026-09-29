@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.client.preview.StructurePreviewPanel;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
-import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.gui.inputs.IJeiInputHandler;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
@@ -13,7 +12,7 @@ import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.network.chat.Component;
@@ -72,28 +71,27 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
-    @Override public ScreenRectangle getArea() { return new ScreenRectangle(x, y, LAYOUT_WIDTH, height + 54); }
+    @Override public ScreenRectangle getScreenRectangle() { return new ScreenRectangle(x, y, LAYOUT_WIDTH, height + 54); }
 
     @Override
-    public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
+    public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
         if (panel == null) return;
-        GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
-        ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
-        panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(), 0, 0);
+        ScreenPosition origin = guiOrigin(graphics);
+        panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(),
+                origin.x() + (int) mouseX, origin.y() + (int) mouseY, 0, 0);
         if (!panel.isReady()) return;
-        graphics.nextStratum();
         String[] labels = panel.hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
         for (int index = 0; index < labels.length; index++) {
             int controlX = UI_X_OFFSET + index * CONTROL_STEP;
             int controlY = height + CONTROL_Y_OFFSET;
             graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, 0xFF808080);
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(controlX + CONTROL_SIZE / 2.0F, controlY + CONTROL_SIZE / 2.0F);
-            graphics.pose().scale(CONTROL_SCALE, CONTROL_SCALE);
+            graphics.pose().pushPose();
+            graphics.pose().translate(controlX + CONTROL_SIZE / 2.0F, controlY + CONTROL_SIZE / 2.0F, 0.0F);
+            graphics.pose().scale(CONTROL_SCALE, CONTROL_SCALE, 1.0F);
             int labelWidth = Minecraft.getInstance().font.width(labels[index]);
-            graphics.text(Minecraft.getInstance().font, Component.literal(labels[index]),
+            graphics.drawString(Minecraft.getInstance().font, Component.literal(labels[index]),
                     -labelWidth / 2, -Minecraft.getInstance().font.lineHeight / 2, 0xFFFFFFFF, false);
-            graphics.pose().popMatrix();
+            graphics.pose().popPose();
         }
         int selectedLayer = panel.selectedLayer();
         StructurePreviewSchema schema = panel.schema();
@@ -101,21 +99,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         Component layerText = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer, layers.indexOf(selectedLayer) + 1, layers.size());
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(LAYER_TEXT_SCALE, LAYER_TEXT_SCALE);
+        graphics.pose().pushPose();
+        graphics.pose().scale(LAYER_TEXT_SCALE, LAYER_TEXT_SCALE, 1.0F);
         int layerTextY = (int) ((height + LAYER_TEXT_Y_OFFSET) / LAYER_TEXT_SCALE);
         int layerTextX = (int) (UI_X_OFFSET / LAYER_TEXT_SCALE);
-        graphics.text(Minecraft.getInstance().font, layerText, layerTextX, layerTextY, 0xFFFFFFFF, false);
+        graphics.drawString(Minecraft.getInstance().font, layerText, layerTextX, layerTextY, 0xFFFFFFFF, false);
         if (panel.hasMultipleStages()) {
             int levelTextX = Minecraft.getInstance().font.width(layerText) + 4;
-            graphics.text(Minecraft.getInstance().font, Component.literal("Level=" + panel.stageNumber()),
+            graphics.drawString(Minecraft.getInstance().font, Component.literal("Level=" + panel.stageNumber()),
                     (int) ((UI_X_OFFSET + levelTextX) / LAYER_TEXT_SCALE), layerTextY, 0xFFFFFFFF, false);
         }
-        graphics.pose().popMatrix();
+        graphics.pose().popPose();
         renderCandidates(graphics);
     }
 
-    private void renderCandidates(GuiGraphicsExtractor graphics) {
+    private void renderCandidates(GuiGraphics graphics) {
         if (panel == null) return;
         List<StructurePreviewSchema.Candidate> candidates = panel.selectedCandidates();
         if (candidates.isEmpty()) return;
@@ -123,7 +121,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         long timeMillis = clock.getAsLong();
         for (int index = 0; index < visibleCount; index++) {
             StructurePreviewSchema.Candidate candidate = candidateForSlot(candidates, index, timeMillis);
-            if (candidate != null) graphics.item(candidate.stack(), 0, index * CANDIDATE_STEP, 0);
+            if (candidate != null) graphics.renderItem(candidate.stack(), 0, index * CANDIDATE_STEP, 0);
         }
     }
 
@@ -137,8 +135,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         return candidates.get(1 + Math.floorMod(slot - 1 + offset, remainingCandidates));
     }
 
-    static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {
-        return new ScreenPosition(absoluteMouseX - (int) localMouseX, absoluteMouseY - (int) localMouseY);
+    private static ScreenPosition guiOrigin(GuiGraphics graphics) {
+        var pose = graphics.pose().last().pose();
+        return new ScreenPosition(Math.round(pose.m30()), Math.round(pose.m31()));
     }
 
     @Override

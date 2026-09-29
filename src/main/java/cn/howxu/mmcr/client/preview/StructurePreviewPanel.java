@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary.Entry;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema.Candidate;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -46,8 +46,9 @@ public final class StructurePreviewPanel implements AutoCloseable {
         this.compilation = acquireCompilation(stageIndex);
     }
 
-    public void render(GuiGraphicsExtractor graphics, int width, int height,
-            float partialTick, int guiOriginX, int guiOriginY, int statusOriginX, int statusOriginY) {
+    public void render(GuiGraphics graphics, int width, int height,
+            float partialTick, int guiOriginX, int guiOriginY, int mouseX, int mouseY,
+            int statusOriginX, int statusOriginY) {
         if (closed) return;
         ensurePreviewStarted();
         if (widget == null) {
@@ -64,14 +65,14 @@ public final class StructurePreviewPanel implements AutoCloseable {
                     statusOriginX + width, statusOriginY + height);
             try {
                 int x = statusOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
-                graphics.text(minecraft.font, status, x, statusOriginY + height / 2, 0xFFFFFFFF, false);
+                graphics.drawString(minecraft.font, status, x, statusOriginY + height / 2, 0xFFFFFFFF, false);
             } finally {
                 graphics.disableScissor();
             }
             return;
         }
 
-        widget.render(graphics, 0, 0, width, height, partialTick, guiOriginX, guiOriginY);
+        widget.render(graphics, 0, 0, width, height, partialTick, guiOriginX, guiOriginY, mouseX, mouseY);
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {

@@ -8,12 +8,14 @@ import cn.howxu.mmcr.util.ReadableNumber;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec2;
 import net.neoforged.neoforge.fluids.FluidStack;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
@@ -21,8 +23,7 @@ import snownee.jade.api.ITooltip;
 import snownee.jade.api.TooltipPosition;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.fluid.JadeFluidObject;
-import snownee.jade.api.ui.JadeUI;
-import snownee.jade.overlay.DisplayHelper;
+import snownee.jade.api.ui.IElementHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -85,8 +86,9 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         if (stack.isEmpty() || amount <= 0L) return;
         ItemStack iconStack = stack.copy();
         iconStack.setCount(1);
-        tooltip.add(JadeUI.smallItem(iconStack));
-        tooltip.append(JadeUI.spacer(2, 0));
+        IElementHelper elements = IElementHelper.get();
+        tooltip.add(elements.smallItem(iconStack));
+        tooltip.append(elements.spacer(2, 0));
         String count = amount > 1L
                 ? ReadableNumber.formatForSlot(amount, 0, "") + " "
                 : "";
@@ -100,11 +102,12 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         FluidStack stack = fluid.stack();
         if (stack.isEmpty() || amount <= 0L) return;
         JadeFluidObject obj = JadeFluidObject.of(stack.getFluid(), 1L);
-        int lineHeight = DisplayHelper.font().lineHeight;
-        var icon = JadeUI.fluid(obj);
-        icon.setFreeSpace(lineHeight + 1, lineHeight - 1);
-        tooltip.add(icon.offset(0, -1));
-        tooltip.append(JadeUI.spacer(2, 0));
+        int lineHeight = Minecraft.getInstance().font.lineHeight;
+        IElementHelper elements = IElementHelper.get();
+        var icon = elements.fluid(obj);
+        icon.size(new Vec2(lineHeight + 1, lineHeight - 1)).translate(new Vec2(0, -1));
+        tooltip.add(icon);
+        tooltip.append(elements.spacer(2, 0));
         String formattedAmount = amount <= 10L
                 ? ReadableNumber.formatForSlot(amount, 0, "mB")
                 : ReadableNumber.formatForSlot(amount, 3, "B");
@@ -129,13 +132,13 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         // here get an icon
         var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 10,8);
         try {
-            int lineHeight = DisplayHelper.font().lineHeight;
-            icon.setFreeSpace(lineHeight + 1, lineHeight - 1);
-            tooltip.add(icon.offset(0, -1));
+            int lineHeight = Minecraft.getInstance().font.lineHeight;
+            icon.size(new Vec2(lineHeight + 1, lineHeight - 1)).translate(new Vec2(0, -1));
+            tooltip.add(icon);
         } catch (RuntimeException ignored) {
             // Unit tests have no client font, but Jade can still lay out the default-sized icon.
         }
-        tooltip.append(JadeUI.spacer(2, 0));
+        tooltip.append(IElementHelper.get().spacer(2, 0));
         tooltip.append(Component.translatable("jade.mmcr.machine_controller.recipe_output.fluid",
                 formattedAmount, name));
     }

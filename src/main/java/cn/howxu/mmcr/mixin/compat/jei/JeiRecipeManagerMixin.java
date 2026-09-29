@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  *
  * @author howxu <dev@howxu.cn>
  */
-@Mixin(targets = "mezz.jei.library.recipes.RecipeManager")
+@Mixin(targets = "mezz.jei.library.recipes.RecipeManager", remap = false)
 abstract class JeiRecipeManagerMixin {
     @ModifyVariable(
             method = {

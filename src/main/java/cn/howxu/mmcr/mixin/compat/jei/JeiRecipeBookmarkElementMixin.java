@@ -15,10 +15,10 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
  *
  * @author howxu <dev@howxu.cn>
  */
-@Mixin(targets = "mezz.jei.gui.overlay.elements.RecipeBookmarkElement")
+@Mixin(targets = "mezz.jei.gui.overlay.elements.RecipeBookmarkElement", remap = false)
 abstract class JeiRecipeBookmarkElementMixin {
     @ModifyArgs(
-            method = "getRecipeLayoutDrawable",
+            method = "getRecipeLayoutDrawable()Ljava/util/Optional;",
             at = @At(
                     value = "INVOKE",
                     target = "Lmezz/jei/api/recipe/IRecipeManager;createRecipeLayoutDrawable(Lmezz/jei/api/recipe/category/IRecipeCategory;Ljava/lang/Object;Lmezz/jei/api/recipe/IFocusGroup;Lmezz/jei/api/gui/drawable/IScalableDrawable;I)Ljava/util/Optional;"

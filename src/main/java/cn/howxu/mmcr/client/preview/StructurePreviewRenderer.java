@@ -4,7 +4,6 @@ import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
-import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
 
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderContext;
@@ -76,9 +75,8 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     @Override
     public void render(PreviewRenderContext context) {
         if (closed || context.viewport().width() <= 0 || context.viewport().height() <= 0) return;
-        GuiGraphicsExtractorAccessor graphics = (GuiGraphicsExtractorAccessor) context.graphics();
-        int mouseX = graphics.mmcr$getMouseX();
-        int mouseY = graphics.mmcr$getMouseY();
+        int mouseX = context.mouseX();
+        int mouseY = context.mouseY();
         PreviewViewport absoluteViewport = context.absoluteViewport();
         if (absoluteViewport.contains(mouseX, mouseY)) {
             boolean changed = lastHoverCameraVersion != context.camera().version()
@@ -112,9 +110,9 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
         int guiScale = Minecraft.getInstance().getWindow().getGuiScale();
         pictureInPicture.prepare(new PreviewSceneRenderState(scene, context.camera(),
                 absoluteViewport.x(), absoluteViewport.y(), absoluteViewport.x() + absoluteViewport.width(), absoluteViewport.y() + absoluteViewport.height(),
-                context.partialTick(), context.graphics().peekScissorStack(),
+                context.partialTick(), null,
                 this),
-                graphics.mmcr$getGuiRenderState(), guiScale);
+                context.graphics(), guiScale);
     }
 
     @Override

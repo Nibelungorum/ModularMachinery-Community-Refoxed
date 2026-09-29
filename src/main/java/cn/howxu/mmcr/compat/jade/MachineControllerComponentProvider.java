@@ -11,8 +11,7 @@ import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.BoxStyle;
-import snownee.jade.api.ui.JadeUI;
-import snownee.jade.api.view.ProgressView;
+import snownee.jade.api.ui.IElementHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,20 +53,15 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                 ? Component.translatable("jade.mmcr.machine_controller.progress.tick", tick, total)
                 : Component.translatable("jade.mmcr.machine_controller.progress.sec",
                         Math.round(tick / 20F), Math.round(total / 20F));
-        // JadeUI.progress(...) reaches into Jade client state (BoxStyle.nestedBox() calls
-        // IThemeHelper.get().theme(); JadeUI.progress() reads Minecraft.getInstance().font via
-        // DisplayHelper; JadeFont reaches Font.provider via a field made public by Jade's
-        // accesstransformer). All of those are null/missing in the unit-test JVM, so this whole
-        // block throws there. In production with a live client everything is present, so the
-        // catch never fires. Scoped narrowly to the bar so a failing render in tests does not
-        // strand the rest of the tooltip.
+        // Jade's progress helpers require live client theme and font state, which unit tests lack.
         try {
-            ProgressView view = new ProgressView(
-                    ProgressView.Part.of(ratio, 0xFF4CBB17),
+            IElementHelper elements = IElementHelper.get();
+            tooltip.add(elements.progress(
+                    ratio,
                     text,
-                    JadeUI.progressStyle(),
-                    BoxStyle.nestedBox());
-            tooltip.add(JadeUI.progress(view));
+                    elements.progressStyle().color(0xFF4CBB17),
+                    BoxStyle.getNestedBox(),
+                    false));
         } catch (NullPointerException | IllegalAccessError ignored) {
             // graceful degradation; bar is unobservable in this environment
         }

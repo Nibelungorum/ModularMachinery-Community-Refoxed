@@ -8,11 +8,12 @@ import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.recipe.transfer.IRecipeTransferError;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
-import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.tags.TagKey;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
@@ -34,9 +35,9 @@ import java.util.stream.Stream;
 public final class MachineRecipeTransferHandler implements IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> {
 
     private final IRecipeTransferHandlerHelper helper;
-    private final IRecipeType<MachineRecipeDisplay> recipeType;
+    private final RecipeType<MachineRecipeDisplay> recipeType;
 
-    public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper, IRecipeType<MachineRecipeDisplay> recipeType) {
+    public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper, RecipeType<MachineRecipeDisplay> recipeType) {
         this.helper = helper;
         this.recipeType = recipeType;
     }
@@ -52,7 +53,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
     }
 
     @Override
-    public IRecipeType<MachineRecipeDisplay> getRecipeType() {
+    public RecipeType<MachineRecipeDisplay> getRecipeType() {
         return recipeType;
     }
 
@@ -147,12 +148,22 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             }
 
             @Override
+            public Stream<ITypedIngredient<?>> getDisplayedIngredients() {
+                return delegate.getDisplayedIngredients().map(ingredient -> withActualCount(ingredient, count));
+            }
+
+            @Override
+            public Optional<TagKey<?>> getTagKey() {
+                return delegate.getTagKey();
+            }
+
+            @Override
             public RecipeIngredientRole getRole() {
                 return delegate.getRole();
             }
 
             @Override
-            public void drawHighlight(GuiGraphicsExtractor guiGraphics, int color) {
+            public void drawHighlight(GuiGraphics guiGraphics, int color) {
                 delegate.drawHighlight(guiGraphics, color);
             }
 

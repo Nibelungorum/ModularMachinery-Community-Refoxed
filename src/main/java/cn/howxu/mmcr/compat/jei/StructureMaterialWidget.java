@@ -6,7 +6,7 @@ import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.world.item.ItemStack;
 
@@ -65,7 +65,7 @@ public final class StructureMaterialWidget implements IRecipeWidget {
     }
 
     @Override
-    public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
+    public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
         int first = displayedPage * SLOT_COUNT;
         for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
             int entryIndex = first + slotIndex;

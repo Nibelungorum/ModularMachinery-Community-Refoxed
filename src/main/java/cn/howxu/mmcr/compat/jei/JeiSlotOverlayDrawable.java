@@ -2,7 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import mezz.jei.api.gui.drawable.IDrawable;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 /**
  * Shared compact quantity overlay used by JEI item slots.
@@ -29,19 +29,19 @@ final class JeiSlotOverlayDrawable implements IDrawable {
     }
 
     @Override
-    public void draw(GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+    public void draw(GuiGraphics guiGraphics, int xOffset, int yOffset) {
         var font = Minecraft.getInstance().font;
-        guiGraphics.pose().pushMatrix();
-        guiGraphics.pose().translate(xOffset, yOffset);
-        guiGraphics.pose().scale(MachineRecipeCategory.ITEM_OVERLAY_SCALE, MachineRecipeCategory.ITEM_OVERLAY_SCALE);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(xOffset, yOffset, 0.0F);
+        guiGraphics.pose().scale(MachineRecipeCategory.ITEM_OVERLAY_SCALE, MachineRecipeCategory.ITEM_OVERLAY_SCALE, 1.0F);
         if (!chanceText.isEmpty()) {
-            guiGraphics.text(font, chanceText, 0, 0, 0xFFFF4040, false);
+            guiGraphics.drawString(font, chanceText, 0, 0, 0xFFFF4040, false);
         }
         if (!quantityText.isEmpty()) {
             int x = Math.max(0, (int) (16 / MachineRecipeCategory.ITEM_OVERLAY_SCALE) - font.width(quantityText)) + 1;
             int y = (int) (16 / MachineRecipeCategory.ITEM_OVERLAY_SCALE) - font.lineHeight + 1;
-            guiGraphics.text(font, quantityText, x, y, 0xFFFFFFFF, true);
+            guiGraphics.drawString(font, quantityText, x, y, 0xFFFFFFFF, true);
         }
-        guiGraphics.pose().popMatrix();
+        guiGraphics.pose().popPose();
     }
 }

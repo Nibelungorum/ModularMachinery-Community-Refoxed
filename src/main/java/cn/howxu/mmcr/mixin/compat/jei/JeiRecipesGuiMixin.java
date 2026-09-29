@@ -11,9 +11,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * @author howxu <dev@howxu.cn>
  */
-@Mixin(targets = "mezz.jei.gui.recipes.RecipesGui")
+@Mixin(targets = "mezz.jei.gui.recipes.RecipesGui", remap = false)
 abstract class JeiRecipesGuiMixin {
-    @Inject(method = "onClose", at = @At("HEAD"))
+    @Inject(method = "onClose()V", at = @At("HEAD"))
     private void mmcr$closePreviews(CallbackInfo callback) {
         JeiPreviewLifecycle.closeActive();
     }

@@ -31,9 +31,9 @@ import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
-import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
@@ -75,7 +75,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static final float ITEM_OVERLAY_SCALE = 0.6F;
     private static final IIngredientRenderer<FluidStack> FULL_FLUID_RENDERER = new IIngredientRenderer<>() {
         @Override
-        public void render(GuiGraphicsExtractor guiGraphics, FluidStack fluid) {
+        public void render(GuiGraphics guiGraphics, FluidStack fluid) {
             FluidGuiRenderer.drawFluid(guiGraphics, fluid, 0, 0, 16, 16);
         }
 
@@ -87,7 +87,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     };
 
     private final Component title;
-    private final IRecipeType<MachineRecipeDisplay> recipeType;
+    private final RecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable slotBackground;
     private final IGuiHelper guiHelper;
@@ -101,7 +101,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     @Override
-    public IRecipeType<MachineRecipeDisplay> getRecipeType() {
+    public RecipeType<MachineRecipeDisplay> getRecipeType() {
         return recipeType;
     }
 
@@ -151,38 +151,38 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     @Override
-    public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphicsExtractor guiGraphics, double mouseX, double mouseY) {
+    public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
-        guiGraphics.pose().pushMatrix();
-        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
         int textX = (int) (layout.durationTextX() / TEXT_SCALE);
-        guiGraphics.text(Minecraft.getInstance().font,
+        guiGraphics.drawString(Minecraft.getInstance().font,
                 Component.translatable("jei.mmcr.machine_recipe.duration", recipe.durationTicks(), seconds(recipe.durationTicks())),
                 textX, (int) (layout.durationTextY() / TEXT_SCALE), 0xFF404040, false);
 
         int y = layout.durationTextY() + TEXT_LINE_SPACING;
         for (EnergyIngredient energy : recipe.energyInputs()) {
-            guiGraphics.text(Minecraft.getInstance().font,
+            guiGraphics.drawString(Minecraft.getInstance().font,
                     Component.translatable("jei.mmcr.machine_recipe.energy_in", ReadableNumber.format(energy.fePerTick()),
                             ReadableNumber.format(saturatedEnergyTotal(energy.fePerTick(), recipe.durationTicks()))),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
         for (EnergyIngredient energy : recipe.energyOutputs()) {
-            guiGraphics.text(Minecraft.getInstance().font,
+            guiGraphics.drawString(Minecraft.getInstance().font,
                     Component.translatable("jei.mmcr.machine_recipe.energy_out", ReadableNumber.format(energy.fePerTick())),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
         if (recipe.minimumTemperature().isPresent()) {
-            guiGraphics.text(Minecraft.getInstance().font,
+            guiGraphics.drawString(Minecraft.getInstance().font,
                     MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
         if (recipe.outputHeat().isPresent()) {
-            guiGraphics.text(Minecraft.getInstance().font,
+            guiGraphics.drawString(Minecraft.getInstance().font,
                     MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
@@ -190,28 +190,28 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
         if (!hostRequirement.getString().isEmpty()) {
             y = layout.hostRequirementTextY();
-            guiGraphics.text(Minecraft.getInstance().font, hostRequirement, textX,
+            guiGraphics.drawString(Minecraft.getInstance().font, hostRequirement, textX,
                     (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
         drawLevelRequirementLabels(recipe, layout, guiGraphics, textX);
         drawStageRequirementLabels(recipe, layout, guiGraphics, textX);
         y = layout.smartInterfaceTextY(recipe);
-        guiGraphics.pose().popMatrix();
-        guiGraphics.pose().pushMatrix();
-        guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE);
+        guiGraphics.pose().popPose();
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE, 1.0F);
         textX = (int) (layout.durationTextX() / SMART_INTERFACE_TEXT_SCALE);
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
-            guiGraphics.text(Minecraft.getInstance().font, smartInterface.label(),
+            guiGraphics.drawString(Minecraft.getInstance().font, smartInterface.label(),
                     textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
             y += SMART_INTERFACE_LINE_SPACING;
         }
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
-            guiGraphics.text(Minecraft.getInstance().font, smartInterface.label(),
+            guiGraphics.drawString(Minecraft.getInstance().font, smartInterface.label(),
                     textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
             y += SMART_INTERFACE_LINE_SPACING;
         }
-        guiGraphics.pose().popMatrix();
+        guiGraphics.pose().popPose();
         drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
         drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
@@ -220,7 +220,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private void drawRecipeInformation(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-                                       GuiGraphicsExtractor guiGraphics) {
+                                       GuiGraphics guiGraphics) {
         List<Component> information = RecipeInformationRegistry.componentsFor(
                 recipe.recipePoolId(), recipe.recipeId());
         int lineCount = Math.min(information.size(), layout.informationLineCapacity(recipe, getHeight()));
@@ -231,16 +231,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         int maxTextWidth = (int) ((getWidth() - margin * 2) / TEXT_SCALE);
         int textX = (int) (margin / TEXT_SCALE);
         int y = layout.informationTextY(recipe);
-        guiGraphics.pose().pushMatrix();
-        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
         for (int index = 0; index < lineCount; index++) {
             var lines = font.split(information.get(index), maxTextWidth);
             if (!lines.isEmpty()) {
-                guiGraphics.text(font, lines.getFirst(), textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+                guiGraphics.drawString(font, lines.getFirst(), textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             }
             y += TEXT_LINE_SPACING;
         }
-        guiGraphics.pose().popMatrix();
+        guiGraphics.pose().popPose();
     }
 
     @Override
@@ -256,7 +256,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     @Override
-    public @Nullable ResourceLocation getResourceLocation(MachineRecipeDisplay recipe) {
+    public @Nullable ResourceLocation getRegistryName(MachineRecipeDisplay recipe) {
         return recipe.recipeId();
     }
 
@@ -370,13 +370,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static IIngredientRenderer<ItemStack> levelItemRenderer(LevelRequirement requirement) {
         return new IIngredientRenderer<>() {
             @Override
-            public void render(GuiGraphicsExtractor guiGraphics, ItemStack ingredient) {
+            public void render(GuiGraphics guiGraphics, ItemStack ingredient) {
                 Minecraft minecraft = Minecraft.getInstance();
                 long gameTime = minecraft.level == null ? 0L : minecraft.level.getGameTime();
                 ItemStack candidate = levelCandidate(requirement, gameTime);
                 if (!candidate.isEmpty()) {
-                    guiGraphics.fakeItem(candidate, 0, 0);
-                    guiGraphics.itemDecorations(minecraft.font, candidate, 0, 0);
+                    guiGraphics.renderFakeItem(candidate, 0, 0);
+                    guiGraphics.renderItemDecorations(minecraft.font, candidate, 0, 0);
                 }
             }
 
@@ -393,21 +393,21 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void drawLevelRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-            GuiGraphicsExtractor guiGraphics, int textX) {
+            GuiGraphics guiGraphics, int textX) {
         int index = 0;
         for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
             int slotY = layout.levelRequirementSlotY(recipe, index++);
             int labelY = slotY + (JEI_SLOT_SIZE - Minecraft.getInstance().font.lineHeight) / 2 + 2;
-            guiGraphics.text(Minecraft.getInstance().font, levelLabel(requirement), textX,
+            guiGraphics.drawString(Minecraft.getInstance().font, levelLabel(requirement), textX,
                     (int) (labelY / TEXT_SCALE), 0xFF404040, false);
         }
     }
 
     private static void drawStageRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-            GuiGraphicsExtractor guiGraphics, int textX) {
+            GuiGraphics guiGraphics, int textX) {
         int y = layout.stageRequirementTextY(recipe);
         for (StageRequirement requirement : recipe.recipe().stageRequirements()) {
-            guiGraphics.text(Minecraft.getInstance().font, stageRequirementLabel(requirement), textX,
+            guiGraphics.drawString(Minecraft.getInstance().font, stageRequirementLabel(requirement), textX,
                     (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
@@ -519,10 +519,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void drawTextEntries(MachineRecipeDisplay recipe, MachineRecipeLayout.RegionPlan region,
-            boolean input, GuiGraphicsExtractor guiGraphics) {
+            boolean input, GuiGraphics guiGraphics) {
         for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
             if (slot.entry().kind() != MachineRecipeLayout.Kind.TEXT) continue;
-            displayEntry(recipe, slot.entry(), input).ifPresent(entry -> guiGraphics.text(Minecraft.getInstance().font,
+            displayEntry(recipe, slot.entry(), input).ifPresent(entry -> guiGraphics.drawString(Minecraft.getInstance().font,
                     (Component) entry.ingredient(), slot.x(), slot.y() + 4, 0xFF404040, false));
         }
     }
@@ -777,10 +777,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void drawOverflowSlot(@Nullable OverflowSlotPlan slot,
-            GuiGraphicsExtractor guiGraphics, IDrawable slotBackground) {
+            GuiGraphics guiGraphics, IDrawable slotBackground) {
         if (slot != null) {
             slotBackground.draw(guiGraphics, slot.x() - 1, slot.y() - 1);
-            guiGraphics.text(Minecraft.getInstance().font, "...", slot.x() + OVERFLOW_TEXT_OFFSET_X, slot.y() + 4, 0xFF404040, false);
+            guiGraphics.drawString(Minecraft.getInstance().font, "...", slot.x() + OVERFLOW_TEXT_OFFSET_X, slot.y() + 4, 0xFF404040, false);
         }
     }
 
