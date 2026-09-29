@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
@@ -122,8 +123,18 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
 
             @Override
             protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                             TransactionContext transaction) {
+                                                              TransactionContext transaction) {
                 return commitAsync(operation, transaction);
+            }
+
+            @Override
+            public boolean supportsNativeExecution() {
+                return itemHandler != null;
+            }
+
+            @Override
+            protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
+                return commitNativeAsync(operation);
             }
         };
         Set<Class<? extends CapabilityFacet>> facets = new LinkedHashSet<>(Set.of(
@@ -221,7 +232,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (request instanceof CapabilityRequests.ItemRequest itemRequest && itemHandler != null) {
-            return ignored -> commitNative(itemRequest);
+            return (NativeCapabilityOperation) () -> commitNative(itemRequest);
         }
         if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
@@ -268,6 +279,26 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
             }
         }
         return CapabilityResult.successful();
+    }
+
+    private CapabilityResult commitNativeAsync(AsyncCapabilityOperation operation) {
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
+            for (AsyncCapabilityOperation child : operations) {
+                CapabilityResult result = commitNativeAsync(child);
+                if (!result.success()) return result;
+            }
+            return CapabilityResult.successful();
+        }
+        if (!(operation instanceof AsyncCapabilityOperation.Resource(
+                net.minecraft.resources.ResourceLocation capabilityId, int slot,
+                cn.howxu.mmcr.api.capability.async.AsyncResourceValue value, long amount, boolean insert
+        )) || !type().id().equals(capabilityId)) return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        try {
+            return commitNative(new CapabilityRequests.ItemRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT, 1L,
+                    List.of(new CapabilityRequests.ItemAction(slot, NativeAsyncResourceValues.item(value), amount, insert))));
+        } catch (IllegalArgumentException exception) {
+            return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
+        }
     }
 
     private long itemAmount(int slot) {

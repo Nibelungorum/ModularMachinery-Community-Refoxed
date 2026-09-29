@@ -1121,6 +1121,7 @@ public final class CraftingRuntime {
             return failure == null ? missingInputStatus() : failure;
         }
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
+            if (!prefetch.plan().operation().supportsNativeExecution()) return missingInputStatus();
             CapabilityResult result = prefetch.plan().operation().commit();
             if (result == null || !result.success()) {
                 return result == null || result.status() == null ? missingInputStatus() : result.status();
@@ -1258,23 +1259,8 @@ public final class CraftingRuntime {
     private @Nullable ExecutionStatus consumePrefetchedEnergy() {
         long remaining = Math.min(prefetchedEnergyPerTick, prefetchedEnergyRemaining);
         if (remaining <= 0L) return null;
-        List<ActivePrefetch> next = new ArrayList<>(activePrefetches.size());
-        try {
-            for (ActivePrefetch prefetch : activePrefetches) {
-                long consumed = Math.min(remaining, prefetch.remaining());
-                if (consumed > 0L) {
-                    CapabilityResult result = prefetch.facet().consumeReservation(consumed, null);
-                    if (result == null || !result.success()) {
-                        return result == null || result.status() == null ? missingInputStatus() : result.status();
-                    }
-                }
-                next.add(new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed));
-                remaining -= consumed;
-            }
-        }
-        activePrefetches = List.copyOf(next);
-        prefetchedEnergyRemaining = Math.max(0L, prefetchedEnergyRemaining - prefetchedEnergyPerTick);
-        return null;
+        // Prefetch facets still use the compatibility transaction boundary until Task 7/8.
+        return missingInputStatus();
     }
 
     private void releaseActivePrefetches() {
@@ -1348,10 +1334,12 @@ public final class CraftingRuntime {
         }
         List<AsyncPlanningFacet> facets = components.capabilities().stream()
                 .map(capability -> capability.facet(AsyncPlanningFacet.class).orElse(null))
-                .filter(Objects::nonNull).toList();
+                .toList();
         try {
             for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
-                if (operation.capabilityIndex() >= facets.size()) {
+                if (operation.capabilityIndex() >= facets.size()
+                        || facets.get(operation.capabilityIndex()) == null
+                        || !facets.get(operation.capabilityIndex()).supportsNativeExecution()) {
                     waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()));
                     return false;
                 }

@@ -136,6 +136,9 @@ public final class ComponentRuntime {
             return new CapabilityTickResult(operations, null, stateChanged);
         }
         for (CapabilityOperation operation : operations) {
+            if (!operation.supportsNativeExecution()) {
+                return new CapabilityTickResult(operations, UNSPECIFIED_TICK_OPERATION_FAILURE, stateChanged);
+            }
             CapabilityResult result = operation.commit();
             if (result == null || !result.success()) {
                 ExecutionStatus failure = result == null || result.status() == null

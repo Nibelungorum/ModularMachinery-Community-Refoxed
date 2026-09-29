@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
@@ -121,8 +122,18 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
 
             @Override
             protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                             TransactionContext transaction) {
+                                                              TransactionContext transaction) {
                 return commitAsync(operation, transaction);
+            }
+
+            @Override
+            public boolean supportsNativeExecution() {
+                return fluidHandler != null;
+            }
+
+            @Override
+            protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
+                return commitNativeAsync(operation);
             }
         };
         Set<Class<? extends CapabilityFacet>> facets = new LinkedHashSet<>(Set.of(
@@ -209,7 +220,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (request instanceof CapabilityRequests.FluidRequest fluidRequest && fluidHandler != null) {
-            return ignored -> commitNative(fluidRequest);
+            return (NativeCapabilityOperation) () -> commitNative(fluidRequest);
         }
         if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
@@ -252,6 +263,26 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
             }
         }
         return CapabilityResult.successful();
+    }
+
+    private CapabilityResult commitNativeAsync(AsyncCapabilityOperation operation) {
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
+            for (AsyncCapabilityOperation child : operations) {
+                CapabilityResult result = commitNativeAsync(child);
+                if (!result.success()) return result;
+            }
+            return CapabilityResult.successful();
+        }
+        if (!(operation instanceof AsyncCapabilityOperation.Resource(
+                net.minecraft.resources.ResourceLocation capabilityId, int tank,
+                cn.howxu.mmcr.api.capability.async.AsyncResourceValue value, long amount, boolean insert
+        )) || !type().id().equals(capabilityId)) return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        try {
+            return commitNative(new CapabilityRequests.FluidRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT, 1L,
+                    List.of(new CapabilityRequests.FluidAction(tank, NativeAsyncResourceValues.fluid(value), amount, insert))));
+        } catch (IllegalArgumentException exception) {
+            return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
+        }
     }
 
     private long fluidAmount(int tank) {

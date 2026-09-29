@@ -73,7 +73,16 @@ public abstract class AsyncPlanningFacet implements CapabilityFacet {
      * Compatibility facets keep the transaction overload until Task 7/8.
      */
     public final CapabilityResult commit(AsyncCapabilityOperation operation) {
-        return commit(operation, null);
+        requireServerThread("commit");
+        if (!supportsNativeExecution()) {
+            throw new UnsupportedOperationException("Async operation requires the legacy TransactionContext boundary");
+        }
+        return commitNativeOnServerThread(Objects.requireNonNull(operation, "operation"));
+    }
+
+    /** Whether this facet can apply worker operations through the built-in no-transaction runtime path. */
+    public boolean supportsNativeExecution() {
+        return false;
     }
 
     /**
@@ -98,7 +107,12 @@ public abstract class AsyncPlanningFacet implements CapabilityFacet {
      * @return the operation result
      */
     protected abstract CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                             TransactionContext transaction);
+                                                              TransactionContext transaction);
+
+    /** Applies an operation after the no-transaction entry point checked the server thread. */
+    protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
+        throw new UnsupportedOperationException("Async operation requires the legacy TransactionContext boundary");
+    }
 
     private static void requireServerThread(String operation) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();

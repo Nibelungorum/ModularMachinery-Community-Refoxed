@@ -121,6 +121,10 @@ public final class CraftingPlan {
         for (RequirementPlan requirement : requirements) {
             if (!selector.test(requirement.requirementIndex())) continue;
             for (CapabilityOperation operation : requirement.operations()) {
+                if (!operation.supportsNativeExecution()) {
+                    if (failure == null) failure = UNSPECIFIED_OPERATION_FAILURE;
+                    return false;
+                }
                 CapabilityResult result = operation.commit();
                 if (result == null || !result.success()) {
                     if (failure == null) {

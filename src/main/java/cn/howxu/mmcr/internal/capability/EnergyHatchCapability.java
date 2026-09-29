@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
@@ -90,8 +91,22 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
             @Override
             protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                             net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+                                                              net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
                 return commitAsync(operation, transaction);
+            }
+
+            @Override
+            public boolean supportsNativeExecution() {
+                return energyStorage != null;
+            }
+
+            @Override
+            protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
+                if (!(operation instanceof AsyncCapabilityOperation.Scalar(
+                        net.minecraft.resources.ResourceLocation capabilityId, long amount, boolean insert
+                )) || !type().id().equals(capabilityId)) return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+                return commitNative(new CapabilityRequests.ValueRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT,
+                        1L, amount, insert));
             }
         };
         this.view = CapabilityFactories.view(type(), directions(),
@@ -165,7 +180,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (request instanceof CapabilityRequests.ValueRequest valueRequest && energyStorage != null) {
-            return ignored -> commitNative(valueRequest);
+            return (NativeCapabilityOperation) () -> commitNative(valueRequest);
         }
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);

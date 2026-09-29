@@ -13,7 +13,12 @@ public interface CapabilityOperation {
      * Built-in native item, fluid, and energy operations use this entry point.
      */
     default CapabilityResult commit() {
-        return commit(null);
+        throw new UnsupportedOperationException("Operation requires the legacy TransactionContext boundary");
+    }
+
+    /** Whether this operation can be applied by the built-in no-transaction runtime path. */
+    default boolean supportsNativeExecution() {
+        return false;
     }
 
     /**
