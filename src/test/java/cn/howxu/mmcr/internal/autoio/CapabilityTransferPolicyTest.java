@@ -12,25 +12,18 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.api.capability.transfer.TransferContext;
-import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
-import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.LevelStub;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedEnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -43,32 +36,23 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.util.ProblemReporter;
+import net.minecraft.nbt.CompoundTag;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Capability identity and automatic transfer policy tests.
@@ -92,9 +76,9 @@ class CapabilityTransferPolicyTest {
         FluidInputHatchBlockEntity fluid = RuntimeTestFixtures.fluidInput(new BlockPos(1, 0, 0));
         EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
 
-        assertThat(CapabilityTransferPolicies.policyFor(item.capabilitySnapshot().capabilities().getFirst())).isPresent();
-        assertThat(CapabilityTransferPolicies.policyFor(fluid.capabilitySnapshot().capabilities().getFirst())).isPresent();
-        assertThat(CapabilityTransferPolicies.policyFor(energy.capabilitySnapshot().capabilities().getFirst())).isPresent();
+        assertThat(CapabilityTransferPolicies.handlerFor(item.capabilitySnapshot().capabilities().getFirst())).isPresent();
+        assertThat(CapabilityTransferPolicies.handlerFor(fluid.capabilitySnapshot().capabilities().getFirst())).isPresent();
+        assertThat(CapabilityTransferPolicies.handlerFor(energy.capabilitySnapshot().capabilities().getFirst())).isPresent();
     }
 
     @Test
@@ -103,11 +87,11 @@ class CapabilityTransferPolicyTest {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
         var inputCapability = input.capabilitySnapshot().capabilities().getFirst();
         var outputCapability = output.capabilitySnapshot().capabilities().getFirst();
-        var inputPolicy = CapabilityTransferPolicies.policyFor(inputCapability).orElseThrow();
-        var outputPolicy = CapabilityTransferPolicies.policyFor(outputCapability).orElseThrow();
+        var inputHandler = CapabilityTransferPolicies.handlerFor(inputCapability).orElseThrow();
+        var outputHandler = CapabilityTransferPolicies.handlerFor(outputCapability).orElseThrow();
 
-        assertThat(inputPolicy.hasWork(inputCapability)).isTrue();
-        assertThat(outputPolicy.hasWork(outputCapability)).isFalse();
+        assertThat(inputHandler.hasWork(inputCapability)).isTrue();
+        assertThat(outputHandler.hasWork(outputCapability)).isFalse();
     }
 
     @Test
@@ -116,11 +100,11 @@ class CapabilityTransferPolicyTest {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
         var inputCapability = input.capabilitySnapshot().capabilities().getFirst();
         var outputCapability = output.capabilitySnapshot().capabilities().getFirst();
-        var inputPolicy = CapabilityTransferPolicies.policyFor(inputCapability).orElseThrow();
-        var outputPolicy = CapabilityTransferPolicies.policyFor(outputCapability).orElseThrow();
+        var inputHandler = CapabilityTransferPolicies.handlerFor(inputCapability).orElseThrow();
+        var outputHandler = CapabilityTransferPolicies.handlerFor(outputCapability).orElseThrow();
 
-        TransferResult noTarget = simulate(inputPolicy, inputCapability, Direction.NORTH);
-        TransferResult noWork = simulate(outputPolicy, outputCapability, Direction.NORTH);
+        AutoIoResult noTarget = transfer(inputHandler, inputCapability, Direction.NORTH);
+        AutoIoResult noWork = transfer(outputHandler, outputCapability, Direction.NORTH);
 
         assertThat(noTarget.successful()).isFalse();
         assertThat(noTarget.amount()).isZero();
@@ -138,45 +122,45 @@ class CapabilityTransferPolicyTest {
         var energyInput = ports.energyInput.capabilitySnapshot().capabilities().getFirst();
         var energyOutput = ports.energyOutput.capabilitySnapshot().capabilities().getFirst();
 
-        setItem(ports.itemOutput.itemStorage(), 0, stack(2));
-        LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
-                itemHandler(ports.itemOutput, false, true));
-        assertThat(transfer(CapabilityTransferPolicies.policyFor(itemInput).orElseThrow(), itemInput,
+        setItem(ports.itemOutput.itemHandler(), 0, stack(2));
+        LevelStub.setCapability(ports.level, Capabilities.ItemHandler.BLOCK, ports.itemOutput.getBlockPos(),
+                ports.itemOutput.itemHandler());
+        assertThat(transfer(CapabilityTransferPolicies.handlerFor(itemInput).orElseThrow(), itemInput,
                 Direction.EAST).amount()).isEqualTo(2);
-        assertThat(ports.itemInput.itemStorage().amount(0)).isEqualTo(2L);
+        assertThat(itemAmount(ports.itemInput.itemHandler(), 0)).isEqualTo(2L);
 
-        setItem(ports.itemOutput.itemStorage(), 0, stack(3));
-        LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemInput.getBlockPos(),
-                itemHandler(ports.itemInput, true, false));
-        assertThat(eject(CapabilityTransferPolicies.policyFor(itemOutput).orElseThrow(), itemOutput,
+        setItem(ports.itemOutput.itemHandler(), 0, stack(3));
+        LevelStub.setCapability(ports.level, Capabilities.ItemHandler.BLOCK, ports.itemInput.getBlockPos(),
+                ports.itemInput.itemHandler());
+        assertThat(eject(CapabilityTransferPolicies.handlerFor(itemOutput).orElseThrow(), itemOutput,
                 Direction.WEST).amount()).isEqualTo(3);
-        assertThat(ports.itemInput.itemStorage().amount(0)).isEqualTo(5L);
+        assertThat(itemAmount(ports.itemInput.itemHandler(), 0)).isEqualTo(5L);
 
-        ports.fluidOutput.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 400));
-        LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidOutput.getBlockPos(),
-                ports.fluidOutput.getResourceHandler(null));
-        assertThat(transfer(CapabilityTransferPolicies.policyFor(fluidInput).orElseThrow(), fluidInput,
+        ports.fluidOutput.fluidHandler(null).setFluid(new FluidStack(Fluids.WATER, 400));
+        LevelStub.setCapability(ports.level, Capabilities.FluidHandler.BLOCK, ports.fluidOutput.getBlockPos(),
+                ports.fluidOutput.fluidHandler(null));
+        assertThat(transfer(CapabilityTransferPolicies.handlerFor(fluidInput).orElseThrow(), fluidInput,
                 Direction.EAST).amount()).isEqualTo(400);
-        assertThat(ports.fluidInput.fluidStorage().getAmountAsLong()).isEqualTo(400);
+        assertThat(ports.fluidInput.fluidHandler(null).getAmountAsLong()).isEqualTo(400);
 
-        ports.fluidOutput.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 500));
-        LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidInput.getBlockPos(),
-                ports.fluidInput.getResourceHandler(null));
-        assertThat(eject(CapabilityTransferPolicies.policyFor(fluidOutput).orElseThrow(), fluidOutput,
+        ports.fluidOutput.fluidHandler(null).setFluid(new FluidStack(Fluids.WATER, 500));
+        LevelStub.setCapability(ports.level, Capabilities.FluidHandler.BLOCK, ports.fluidInput.getBlockPos(),
+                ports.fluidInput.fluidHandler(null));
+        assertThat(eject(CapabilityTransferPolicies.handlerFor(fluidOutput).orElseThrow(), fluidOutput,
                 Direction.WEST).amount()).isEqualTo(500);
-        assertThat(ports.fluidInput.fluidStorage().getAmountAsLong()).isEqualTo(900);
+        assertThat(ports.fluidInput.fluidHandler(null).getAmountAsLong()).isEqualTo(900);
 
         ports.energyOutput.energyStorage().setAmount(600);
-        LevelStub.setCapability(ports.level, ModCapabilities.ENERGY_BLOCK, ports.energyOutput.getBlockPos(),
+        LevelStub.setCapability(ports.level, Capabilities.EnergyStorage.BLOCK, ports.energyOutput.getBlockPos(),
                 ports.energyOutput.getEnergyHandler(null));
-        assertThat(transfer(CapabilityTransferPolicies.policyFor(energyInput).orElseThrow(), energyInput,
+        assertThat(transfer(CapabilityTransferPolicies.handlerFor(energyInput).orElseThrow(), energyInput,
                 Direction.EAST).amount()).isEqualTo(600);
         assertThat(ports.energyInput.energyStorage().getAmountAsLong()).isEqualTo(600);
 
         ports.energyOutput.energyStorage().setAmount(700);
-        LevelStub.setCapability(ports.level, ModCapabilities.ENERGY_BLOCK, ports.energyInput.getBlockPos(),
+        LevelStub.setCapability(ports.level, Capabilities.EnergyStorage.BLOCK, ports.energyInput.getBlockPos(),
                 ports.energyInput.getEnergyHandler(null));
-        assertThat(eject(CapabilityTransferPolicies.policyFor(energyOutput).orElseThrow(), energyOutput,
+        assertThat(eject(CapabilityTransferPolicies.handlerFor(energyOutput).orElseThrow(), energyOutput,
                 Direction.WEST).amount()).isEqualTo(700);
         assertThat(ports.energyInput.energyStorage().getAmountAsLong()).isEqualTo(1_300);
     }
@@ -192,10 +176,10 @@ class CapabilityTransferPolicyTest {
         output.setLevel(level);
         long amount = Long.MAX_VALUE;
         output.energyStorage().setAmount(amount);
-        LevelStub.setCapability(level, ModCapabilities.ENERGY_BLOCK, output.getBlockPos(), output.getEnergyHandler(null));
+        LevelStub.setCapability(level, Capabilities.EnergyStorage.BLOCK, output.getBlockPos(), output.getEnergyHandler(null));
 
         var capability = input.capabilitySnapshot().capabilities().getFirst();
-        TransferResult result = transfer(CapabilityTransferPolicies.policyFor(capability).orElseThrow(), capability,
+        AutoIoResult result = transfer(CapabilityTransferPolicies.handlerFor(capability).orElseThrow(), capability,
                 Direction.EAST);
 
         assertThat(result.amount()).isEqualTo(amount);
@@ -207,17 +191,17 @@ class CapabilityTransferPolicyTest {
     void disabled_or_unavailable_side_does_not_mutate_real_storage() {
         Ports ports = connectedPorts();
         var input = ports.itemInput.capabilitySnapshot().capabilities().getFirst();
-        setItem(ports.itemOutput.itemStorage(), 0, stack(2));
-        LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
-                itemHandler(ports.itemOutput, false, true));
+        setItem(ports.itemOutput.itemHandler(), 0, stack(2));
+        LevelStub.setCapability(ports.level, Capabilities.ItemHandler.BLOCK, ports.itemOutput.getBlockPos(),
+                ports.itemOutput.itemHandler());
 
-        TransferResult blocked = simulate(CapabilityTransferPolicies.policyFor(input).orElseThrow(), input,
+        AutoIoResult blocked = transfer(CapabilityTransferPolicies.handlerFor(input).orElseThrow(), input,
                 Direction.WEST);
 
         assertThat(blocked.successful()).isFalse();
         assertThat(blocked.failure().reason()).isEqualTo(BuiltinFailureReasons.NO_TARGET);
-        assertThat(ports.itemInput.itemStorage().amount(0)).isZero();
-        assertThat(ports.itemOutput.itemStorage().amount(0)).isEqualTo(2L);
+        assertThat(itemAmount(ports.itemInput.itemHandler(), 0)).isZero();
+        assertThat(itemAmount(ports.itemOutput.itemHandler(), 0)).isEqualTo(2L);
     }
 
     @Test
@@ -236,15 +220,15 @@ class CapabilityTransferPolicyTest {
             @Override public CapabilityOperation prepare(CapabilityRequest request) { return null; }
         };
 
-        assertThat(CapabilityTransferPolicies.policyFor(unknown)).isEmpty();
-        assertThat(CapabilityTransferPolicies.policyFor(null)).isEmpty();
+        assertThat(CapabilityTransferPolicies.handlerFor(unknown)).isEmpty();
+        assertThat(CapabilityTransferPolicies.handlerFor(null)).isEmpty();
     }
 
     @Test
     void operation_only_bidirectional_item_capability_is_excluded_from_auto_io() {
         OperationOnlyItemCapability capability = new OperationOnlyItemCapability();
 
-        assertThat(CapabilityTransferPolicies.policyFor(capability)).isEmpty();
+        assertThat(CapabilityTransferPolicies.handlerFor(capability)).isEmpty();
         assertThat(capability.prepareCalls()).isZero();
     }
 
@@ -266,19 +250,21 @@ class CapabilityTransferPolicyTest {
         assertThat(port.autoIODelay()).isEqualTo(60);
         assertThat(LevelStub.capabilityLookups(level)).isEqualTo(lookupsBefore);
 
-        TagValueOutput saved = tagOutput();
+        CompoundTag saved = new CompoundTag();
         port.saveTo(saved);
-        assertThat(saved.buildResult().getCompound("auto_io_capabilities")).isEmpty();
+        assertThat(saved.getCompound("auto_io_capabilities")).isEmpty();
 
-        TagValueOutput injected = tagOutput();
-        injected.child("auto_io_capabilities").child(capability.type().id().toString())
-                .putBoolean("enabled", true);
-        port.loadFrom(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), injected.buildResult()));
-        TagValueOutput restored = tagOutput();
+        CompoundTag injected = new CompoundTag();
+        CompoundTag profiles = new CompoundTag();
+        CompoundTag profile = new CompoundTag();
+        profile.putBoolean("enabled", true);
+        profiles.put(capability.type().id().toString(), profile);
+        injected.put("auto_io_capabilities", profiles);
+        port.loadFrom(injected);
+        CompoundTag restored = new CompoundTag();
         port.saveTo(restored);
 
-        assertThat(restored.buildResult().getCompound("auto_io_capabilities")).isEmpty();
+        assertThat(restored.getCompound("auto_io_capabilities")).isEmpty();
         assertThat(port.ejectContents(capability.type())).isFalse();
         assertThat(port.ejectContents()).isFalse();
         assertThat(port.activeRecipeChecks()).isZero();
@@ -289,64 +275,49 @@ class CapabilityTransferPolicyTest {
     @Test
     void output_port_ejection_is_rejected_before_transfer_policy_runs() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
-        setItem(output.itemStorage(), 0, stack(2));
+        setItem(output.itemHandler(), 0, stack(2));
 
         assertThat(output.ejectContents()).isFalse();
-        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
-    }
-
-    @Test
-    void longValueStorageKeepsLongAmountsAndHonorsTransactionRollback() {
-        LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
-        long amount = (long) Integer.MAX_VALUE + 17L;
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            storage.updateSnapshots(transaction);
-            assertThat(storage.insert(amount, false)).isEqualTo(amount);
-        }
-
-        assertThat(storage.amount()).isZero();
-        assertThat(new TransferResult(true, amount, null).amount()).isEqualTo(amount);
+        assertThat(itemAmount(output.itemHandler(), 0)).isEqualTo(2L);
     }
 
     @Test
     void empty_long_resource_storage_is_safe_for_auto_io_and_handler_projection() {
         Ports ports = connectedPorts();
-        setItem(ports.itemOutput.itemStorage(), 0, stack(2));
-        LevelStub.setCapability(ports.level, ModCapabilities.ITEM_BLOCK, ports.itemOutput.getBlockPos(),
-                itemHandler(ports.itemOutput, false, true));
+        setItem(ports.itemOutput.itemHandler(), 0, stack(2));
+        LevelStub.setCapability(ports.level, Capabilities.ItemHandler.BLOCK, ports.itemOutput.getBlockPos(),
+                ports.itemOutput.itemHandler());
 
-        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
-                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        LongItemStorage storage = new LongItemStorage(2, 100L, () -> {});
         ItemBusCapability capability = new ItemBusCapability(ports.itemInput, storage, IOType.INPUT);
-        var policy = CapabilityTransferPolicies.policyFor(capability).orElseThrow();
+        var handler = CapabilityTransferPolicies.handlerFor(capability).orElseThrow();
 
-        assertThatCode(() -> policy.hasWork(capability)).doesNotThrowAnyException();
-        TransferResult result = transfer(policy, capability, Direction.EAST);
+        assertThat(handler.hasWork(capability)).isTrue();
+        AutoIoResult result = transfer(handler, capability, Direction.EAST);
 
         assertThat(result.successful()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(2L);
-        assertThat(storage.resource(0)).isNotNull();
+        assertThat(storage.resource(0)).isEqualTo(stack(1));
     }
 
     @Test
     void fluid_policy_scans_all_slots_for_work_and_ejects_slot_one() {
         LongFluidStorage inputStorage = new LongFluidStorage(2, 100L, () -> {});
-        inputStorage.setContents(0, FluidResource.of(Fluids.WATER), 100L);
-        inputStorage.setContents(1, FluidResource.of(Fluids.LAVA), 20L);
+        inputStorage.setContents(0, new FluidStack(Fluids.WATER, 1), 100L);
+        inputStorage.setContents(1, new FluidStack(Fluids.LAVA, 1), 20L);
         FluidHatchCapability input = new FluidHatchCapability(inputStorage, IOType.INPUT);
-        var inputPolicy = CapabilityTransferPolicies.policyFor(input).orElseThrow();
+        var inputHandler = CapabilityTransferPolicies.handlerFor(input).orElseThrow();
 
-        assertThat(inputPolicy.hasWork(input)).isTrue();
+        assertThat(inputHandler.hasWork(input)).isTrue();
 
         Ports ports = connectedPorts();
         LongFluidStorage outputStorage = new LongFluidStorage(2, 100L, () -> {});
-        outputStorage.setContents(1, FluidResource.of(Fluids.WATER), 40L);
+        outputStorage.setContents(1, new FluidStack(Fluids.WATER, 1), 40L);
         FluidHatchCapability output = new FluidHatchCapability(ports.fluidOutput, outputStorage, IOType.OUTPUT);
-        LevelStub.setCapability(ports.level, ModCapabilities.FLUID_BLOCK, ports.fluidInput.getBlockPos(),
-                ports.fluidInput.getResourceHandler(null));
+        LevelStub.setCapability(ports.level, Capabilities.FluidHandler.BLOCK, ports.fluidInput.getBlockPos(),
+                ports.fluidInput.fluidHandler(null));
 
-        TransferResult result = eject(CapabilityTransferPolicies.policyFor(output).orElseThrow(), output,
+        AutoIoResult result = eject(CapabilityTransferPolicies.handlerFor(output).orElseThrow(), output,
                 Direction.WEST);
 
         assertThat(result.successful()).isTrue();
@@ -368,24 +339,12 @@ class CapabilityTransferPolicyTest {
         return new Ports(level, itemInput, itemOutput, fluidInput, fluidOutput, energyInput, energyOutput);
     }
 
-    private static TransferResult simulate(TransferPolicy policy, MachineCapability capability, Direction side) {
-        return policy.transfer(TransferContext.simulate(capability, side, 1L));
+    private static AutoIoResult transfer(AutoIoHandler handler, MachineCapability capability, Direction side) {
+        return handler.transfer(capability, side, null, 0L);
     }
 
-    private static TransferResult transfer(TransferPolicy policy, MachineCapability capability, Direction side) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            TransferResult result = policy.transfer(TransferContext.commit(capability, side, 1L, transaction));
-            if (result.successful()) transaction.commit();
-            return result;
-        }
-    }
-
-    private static TransferResult eject(TransferPolicy policy, MachineCapability capability, Direction side) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            TransferResult result = policy.eject(TransferContext.commit(capability, side, 1L, transaction));
-            if (result.successful()) transaction.commit();
-            return result;
-        }
+    private static AutoIoResult eject(AutoIoHandler handler, MachineCapability capability, Direction side) {
+        return handler.transfer(capability, side, null, Integer.MAX_VALUE);
     }
 
     private static ExtendedEnergyHatchBlockEntity extendedEnergy(String id, BlockPos position) {
@@ -394,25 +353,21 @@ class CapabilityTransferPolicyTest {
     }
 
     private static ItemStack stack(int count) {
-        ItemStack stack = new ItemStack(Items.IRON_INGOT, count);
-        stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        return stack;
+        return new ItemStack(Items.IRON_INGOT, count);
     }
 
-    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = storage.resource(slot);
-            if (current != null && !current.isEmpty()) {
-                storage.extract(slot, current, storage.amount(slot), transaction);
-            }
-            storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
+    private static void setItem(IItemHandler storage, int slot, ItemStack stack) {
+        if (storage instanceof LongItemStorage longStorage) longStorage.setContents(slot, stack, stack.getCount());
+        else if (storage instanceof net.neoforged.neoforge.items.IItemHandlerModifiable modifiable) {
+            modifiable.setStackInSlot(slot, stack);
+        } else {
+            throw new IllegalArgumentException("Test handler must be modifiable");
         }
     }
 
-    private static TagValueOutput tagOutput() {
-        return TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+    private static long itemAmount(IItemHandler storage, int slot) {
+        return storage instanceof LongItemStorage longStorage ? longStorage.amount(slot)
+                : storage.getStackInSlot(slot).getCount();
     }
 
     private static final class OperationOnlyPort extends IOPortBlockEntity {
@@ -445,12 +400,12 @@ class CapabilityTransferPolicyTest {
             runAutoIOCycle();
         }
 
-        private void saveTo(TagValueOutput output) {
-            saveAdditional(output);
+        private void saveTo(CompoundTag output) {
+            saveAdditional(output, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
         }
 
-        private void loadFrom(ValueInput input) {
-            loadAdditional(input);
+        private void loadFrom(CompoundTag input) {
+            loadAdditional(input, HolderLookup.Provider.create(java.util.stream.Stream.empty()));
         }
 
         @Override
@@ -510,27 +465,6 @@ class CapabilityTransferPolicyTest {
 
         private int prepareCalls() {
             return prepareCalls.get();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static ResourceHandler<ItemResource> itemHandler(ItemBusBlockEntity port, boolean canInsert,
-                                                              boolean canExtract) {
-        try {
-            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ResourceStorageHandler");
-            Constructor<?> constructor = null;
-            for (Constructor<?> candidate : type.getDeclaredConstructors()) {
-                if (candidate.getParameterCount() == 3) {
-                    constructor = candidate;
-                    break;
-                }
-            }
-            if (constructor == null) throw new NoSuchMethodException("Item capability adapter constructor");
-            constructor.setAccessible(true);
-            return (ResourceHandler<ItemResource>) constructor.newInstance(port.itemStorage(), canInsert,
-                    canExtract);
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("Unable to create the production item capability adapter", exception);
         }
     }
 

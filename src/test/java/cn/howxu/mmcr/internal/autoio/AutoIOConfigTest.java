@@ -14,7 +14,7 @@ import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -23,11 +23,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -71,12 +67,10 @@ class AutoIOConfigTest {
         config.setAllSides(false);
         config.setSide(Direction.NORTH, true);
         config.setSide(Direction.SOUTH, true);
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        CompoundTag output = new CompoundTag();
 
         config.save(output);
-        AutoIOConfig loaded = AutoIOConfig.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        AutoIOConfig loaded = AutoIOConfig.load(output);
 
         assertThat(loaded.enabled()).isTrue();
         assertThat(loaded.enabledSides()).containsExactlyInAnyOrder(Direction.NORTH, Direction.SOUTH);
@@ -84,11 +78,9 @@ class AutoIOConfigTest {
 
     @Test
     void missing_saved_state_loads_as_enabled_on_all_sides() {
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        CompoundTag output = new CompoundTag();
 
-        AutoIOConfig loaded = AutoIOConfig.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        AutoIOConfig loaded = AutoIOConfig.load(output);
 
         assertThat(loaded.enabled()).isFalse();
         assertThat(loaded.enabledSides()).containsExactlyInAnyOrder(Direction.values());
@@ -135,12 +127,10 @@ class AutoIOConfigTest {
         host.autoIOConfig(item).setSide(Direction.NORTH, false);
         host.autoIOConfig(fluid).setSide(Direction.SOUTH, false);
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        CompoundTag output = new CompoundTag();
         host.saveTo(output);
         ProfileHost restored = new ProfileHost();
-        restored.loadFrom(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        restored.loadFrom(output);
 
         assertThat(restored.autoIOConfig(item).enabled()).isTrue();
         assertThat(restored.isAutoIOSideExposed(item, Direction.NORTH)).isFalse();
@@ -181,18 +171,16 @@ class AutoIOConfigTest {
         @Override
         public CapabilitySnapshot capabilitySnapshot() {
             return new CapabilitySnapshot(List.of(
-                    new ItemBusCapability(this, new LongResourceStorage<>(
-                            ItemResource.class, 1, 64L,
-                            ItemResource::isEmpty, () -> {}), IOType.INPUT),
+                    new ItemBusCapability(this, new LongItemStorage(1, 64L, () -> {}), IOType.INPUT),
                     new FluidHatchCapability(this, new LongFluidStorage(1, 64L, () -> {}), IOType.INPUT)));
         }
 
-        private void saveTo(TagValueOutput output) {
-            saveAdditional(output);
+        private void saveTo(CompoundTag output) {
+            saveAdditional(output, HolderLookup.Provider.create(Stream.empty()));
         }
 
-        private void loadFrom(ValueInput input) {
-            loadAdditional(input);
+        private void loadFrom(CompoundTag input) {
+            loadAdditional(input, HolderLookup.Provider.create(Stream.empty()));
         }
     }
 
