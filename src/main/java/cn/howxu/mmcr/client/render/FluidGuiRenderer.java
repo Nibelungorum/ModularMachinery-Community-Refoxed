@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.render;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -59,13 +60,25 @@ public final class FluidGuiRenderer {
     public static void drawSprite(GuiGraphics graphics, TextureAtlasSprite sprite, int color,
                                    int x, int y, int width, int height) {
         if (sprite == null || width <= 0 || height <= 0) return;
-        for (Tile tile : tiles(x, y, width, height)) {
-            graphics.enableScissor(tile.x(), tile.y() + tile.maskTop(),
-                    tile.x() + tile.width(), tile.y() + tile.maskTop() + tile.height());
-            graphics.blit(tile.x(), tile.y(), 0, TILE_SIZE, TILE_SIZE, sprite,
-                    (color >> 16 & 0xFF) / 255F, (color >> 8 & 0xFF) / 255F,
-                    (color & 0xFF) / 255F, (color >>> 24) / 255F);
-            graphics.disableScissor();
+        int atlasWidth = Math.round(sprite.contents().width() / (sprite.getU1() - sprite.getU0()));
+        int atlasHeight = Math.round(sprite.contents().height() / (sprite.getV1() - sprite.getV0()));
+        float[] shaderColor = RenderSystem.getShaderColor().clone();
+        graphics.setColor(shaderColor[0] * (color >> 16 & 0xFF) / 255F,
+                shaderColor[1] * (color >> 8 & 0xFF) / 255F,
+                shaderColor[2] * (color & 0xFF) / 255F,
+                shaderColor[3] * (color >>> 24) / 255F);
+        RenderSystem.enableBlend();
+        try {
+            for (Tile tile : tiles(x, y, width, height)) {
+                Uv uv = tileUv(sprite.getU0(), sprite.getV0(), sprite.getU1(), sprite.getV1(), tile);
+                graphics.blit(sprite.atlasLocation(), tile.x(), tile.y() + tile.maskTop(), tile.width(), tile.height(),
+                        uv.u0() * atlasWidth, uv.v0() * atlasHeight,
+                        Math.round((uv.u1() - uv.u0()) * atlasWidth),
+                        Math.round((uv.v1() - uv.v0()) * atlasHeight), atlasWidth, atlasHeight);
+            }
+        } finally {
+            graphics.setColor(shaderColor[0], shaderColor[1], shaderColor[2], shaderColor[3]);
+            RenderSystem.disableBlend();
         }
     }
 
