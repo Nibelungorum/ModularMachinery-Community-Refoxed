@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
 import org.jspecify.annotations.NonNull;
 import snownee.jade.api.BlockAccessor;
@@ -69,11 +71,12 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
 
     static List<OutputPresentation> outputs(CompoundTag data) {
         List<OutputPresentation> outputs = new ArrayList<>();
-        for (int index = 0; index < data.getListOrEmpty(OUTPUTS).size(); index++) {
-            CompoundTag output = data.getListOrEmpty(OUTPUTS).getCompoundOrEmpty(index);
-            String label = output.getStringOr(LABEL, "");
-            String value = output.getStringOr(VALUE, "");
-            String unit = output.getStringOr(UNIT, "");
+        ListTag outputs = data.getList(OUTPUTS, Tag.TAG_COMPOUND);
+        for (int index = 0; index < outputs.size(); index++) {
+            CompoundTag output = outputs.getCompound(index);
+            String label = output.getString(LABEL);
+            String value = output.getString(VALUE);
+            String unit = output.getString(UNIT);
             if (isSupportedDisplay(label) && !value.isEmpty()) {
                 outputs.add(new OutputPresentation(label, value, unit));
             }

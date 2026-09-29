@@ -29,7 +29,7 @@ class CapabilityPersistenceTest {
         source.save(state, registries);
         output.put(source.stateKey(), state);
         StateFacet restored = new StateFacet("custom", 0, 0L, "");
-        restored.load(output.getCompoundOrEmpty(restored.stateKey()), registries);
+        restored.load(output.getCompound(restored.stateKey()), registries);
 
         assertThat(restored.resource).isEqualTo(12);
         assertThat(restored.scalar).isEqualTo(34L);
@@ -70,9 +70,9 @@ class CapabilityPersistenceTest {
             output.putString("presentation", presentation);
         }
         @Override public void load(CompoundTag input, HolderLookup.Provider registries) {
-            resource = input.getIntOr("resource", 0);
-            scalar = input.getLongOr("scalar", 0L);
-            presentation = input.getStringOr("presentation", "");
+            resource = input.getInt("resource");
+            scalar = input.getLong("scalar");
+            presentation = input.getString("presentation");
         }
         @Override public void encode(RegistryFriendlyByteBuf buffer) {
             buffer.writeVarInt(resource);

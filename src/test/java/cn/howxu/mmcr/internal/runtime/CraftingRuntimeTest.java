@@ -93,6 +93,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -642,16 +643,16 @@ class CraftingRuntimeTest {
         runtime.tick();
         CompoundTag output = new CompoundTag();
         runtime.save(output, EMPTY_LOOKUP);
-        ListTag allocations = output.getCompound("recipe").orElseThrow()
-                .getCompound("data").orElseThrow().getListOrEmpty("prefetched_energy_allocations");
+        ListTag allocations = output.getCompound("recipe").getCompound("data")
+                .getList("prefetched_energy_allocations", Tag.TAG_COMPOUND);
         network.clearReservations();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
         restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(allocations).hasSize(1);
-        assertThat(allocations.getCompoundOrEmpty(0).getStringOr("key", "")).isEqualTo("test:prefetch");
-        assertThat(allocations.getCompoundOrEmpty(0).getLongOr("amount", -1L)).isEqualTo(4L);
+        assertThat(allocations.getCompound(0).getString("key")).isEqualTo("test:prefetch");
+        assertThat(allocations.getCompound(0).getLong("amount")).isEqualTo(4L);
         assertThat(restored.active()).isTrue();
         assertThat(network.reserved()).isEqualTo(4L);
     }
@@ -672,18 +673,19 @@ class CraftingRuntimeTest {
 
     @Test
     void restoreRejectsMalformedPrefetchAllocations() {
-        assertPrefetchRestoreFails("runtime_flux_restore_missing", data -> data.getListOrEmpty("prefetched_energy_allocations")
-                .getCompoundOrEmpty(0).putString("key", "test:missing"));
+        assertPrefetchRestoreFails("runtime_flux_restore_missing", data -> data
+                .getList("prefetched_energy_allocations", Tag.TAG_COMPOUND)
+                .getCompound(0).putString("key", "test:missing"));
         assertPrefetchRestoreFails("runtime_flux_restore_duplicate", data -> {
-            ListTag allocations = data.getListOrEmpty("prefetched_energy_allocations");
-            allocations.add(allocations.getCompoundOrEmpty(0).copy());
+            ListTag allocations = data.getList("prefetched_energy_allocations", Tag.TAG_COMPOUND);
+            allocations.add(allocations.getCompound(0).copy());
         });
-        assertPrefetchRestoreFails("runtime_flux_restore_negative", data -> data.getListOrEmpty("prefetched_energy_allocations")
-                .getCompoundOrEmpty(0).putLong("amount", -1L));
-        assertPrefetchRestoreFails("runtime_flux_restore_type", data -> data.getListOrEmpty("prefetched_energy_allocations")
-                .getCompoundOrEmpty(0).putString("amount", "4"));
-        assertPrefetchRestoreFails("runtime_flux_restore_total", data -> data.getListOrEmpty("prefetched_energy_allocations")
-                .getCompoundOrEmpty(0).putLong("amount", 5L));
+        assertPrefetchRestoreFails("runtime_flux_restore_negative", data -> data
+                .getList("prefetched_energy_allocations", Tag.TAG_COMPOUND).getCompound(0).putLong("amount", -1L));
+        assertPrefetchRestoreFails("runtime_flux_restore_type", data -> data
+                .getList("prefetched_energy_allocations", Tag.TAG_COMPOUND).getCompound(0).putString("amount", "4"));
+        assertPrefetchRestoreFails("runtime_flux_restore_total", data -> data
+                .getList("prefetched_energy_allocations", Tag.TAG_COMPOUND).getCompound(0).putLong("amount", 5L));
     }
 
     @Test
@@ -1232,8 +1234,8 @@ class CraftingRuntimeTest {
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
         CompoundTag outputTag = new CompoundTag();
         saved.save(outputTag, EMPTY_LOOKUP);
-        CompoundTag savedRecipeTag = outputTag.getCompound("recipe").orElseThrow();
-        assertThat(savedRecipeTag.getBooleanOr("has_effective_definition", false)).isTrue();
+        CompoundTag savedRecipeTag = outputTag.getCompound("recipe");
+        assertThat(savedRecipeTag.getBoolean("has_effective_definition")).isTrue();
         savedRecipeTag.putInt("totalTick", 99);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1273,7 +1275,7 @@ class CraftingRuntimeTest {
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
         CompoundTag root = output;
-        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = root.getCompound("recipe");
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
         recipeTag.putBoolean("has_effective_execution_snapshot", true);
@@ -1297,7 +1299,7 @@ class CraftingRuntimeTest {
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
         CompoundTag root = output;
-        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = root.getCompound("recipe");
         recipeTag.putBoolean("has_effective_execution_snapshot", true);
         recipeTag.putInt("effective_execution_snapshot_version", 2);
 
@@ -1317,7 +1319,7 @@ class CraftingRuntimeTest {
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
         CompoundTag root = output;
-        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = root.getCompound("recipe");
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
 
@@ -1357,7 +1359,7 @@ class CraftingRuntimeTest {
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
+        var savedRecipeTag = output.getCompound("recipe");
         savedRecipeTag.remove("has_input_consumption_plan");
         savedRecipeTag.remove("inputConsumptionPlan");
 
@@ -1381,7 +1383,7 @@ class CraftingRuntimeTest {
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        CompoundTag recipeTag = output.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = output.getCompound("recipe");
         ListTag requirements = recipeTag.get("effective_requirements").asList().orElseThrow();
         requirements.getFirst().asCompound().orElseThrow().putInt("count", -1);
 
@@ -1433,9 +1435,9 @@ class CraftingRuntimeTest {
 
         CompoundTag outputTag = new CompoundTag();
         saved.save(outputTag, EMPTY_LOOKUP);
-        var savedRecipeTag = outputTag.getCompound("recipe").orElseThrow();
-        assertThat(savedRecipeTag.getBooleanOr("has_recipe_definition", false)).isTrue();
-        assertThat(savedRecipeTag.getCompound("recipe_definition").orElseThrow().isEmpty()).isFalse();
+        var savedRecipeTag = outputTag.getCompound("recipe");
+        assertThat(savedRecipeTag.getBoolean("has_recipe_definition")).isTrue();
+        assertThat(savedRecipeTag.getCompound("recipe_definition").isEmpty()).isFalse();
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
 
@@ -1459,7 +1461,7 @@ class CraftingRuntimeTest {
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
+        var savedRecipeTag = output.getCompound("recipe");
         savedRecipeTag.remove("has_recipe_definition");
         savedRecipeTag.remove("recipe_definition");
         savedRecipeTag.remove("recipe_definition_version");
@@ -1537,7 +1539,7 @@ class CraftingRuntimeTest {
         CompoundTag outputTag = new CompoundTag();
         saved.save(outputTag, EMPTY_LOOKUP);
         CompoundTag root = outputTag;
-        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = root.getCompound("recipe");
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
         recipeTag.remove("effective_duration");
@@ -1575,7 +1577,7 @@ class CraftingRuntimeTest {
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
         CompoundTag root = output;
-        CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = root.getCompound("recipe");
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
         recipeTag.remove("effective_duration");
@@ -1602,7 +1604,7 @@ class CraftingRuntimeTest {
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
+        var savedRecipeTag = output.getCompound("recipe");
         savedRecipeTag.remove("recipe_definition");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1623,7 +1625,7 @@ class CraftingRuntimeTest {
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
+        var savedRecipeTag = output.getCompound("recipe");
         savedRecipeTag.putString("recipe_definition_fingerprint", "0".repeat(64));
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1648,7 +1650,7 @@ class CraftingRuntimeTest {
 
         CompoundTag outputTag = new CompoundTag();
         saved.save(outputTag, EMPTY_LOOKUP);
-        var savedRecipeTag = outputTag.getCompound("recipe").orElseThrow();
+        var savedRecipeTag = outputTag.getCompound("recipe");
         CompoundTag malformedPlan = new CompoundTag();
         malformedPlan.putIntArray("consumedInputBatches", new int[]{1});
         savedRecipeTag.put("inputConsumptionPlan", malformedPlan);
@@ -1673,10 +1675,10 @@ class CraftingRuntimeTest {
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        var recipeTag = output.getCompound("recipe").orElseThrow();
-        assertThat(recipeTag.getStringOr("recipe_definition_fingerprint", ""))
+        var recipeTag = output.getCompound("recipe");
+        assertThat(recipeTag.getString("recipe_definition_fingerprint"))
                 .matches("[0-9a-f]{64}");
-        recipeTag.getCompound("recipe_definition").orElseThrow().putInt("tick_time", 99);
+        recipeTag.getCompound("recipe_definition").putInt("tick_time", 99);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
         restored.load(output, null, EMPTY_LOOKUP);
@@ -1694,7 +1696,7 @@ class CraftingRuntimeTest {
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
-        CompoundTag recipeTag = output.getCompound("recipe").orElseThrow();
+        CompoundTag recipeTag = output.getCompound("recipe");
         mutate.accept(recipeTag);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1765,8 +1767,7 @@ class CraftingRuntimeTest {
         runtime.tick();
         CompoundTag output = new CompoundTag();
         runtime.save(output, EMPTY_LOOKUP);
-        CompoundTag data = output.getCompound("recipe").orElseThrow()
-                .getCompound("data").orElseThrow();
+        CompoundTag data = output.getCompound("recipe").getCompound("data");
         mutation.accept(data);
         network.clearReservations();
 

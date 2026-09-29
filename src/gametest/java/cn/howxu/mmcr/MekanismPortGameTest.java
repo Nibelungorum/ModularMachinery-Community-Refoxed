@@ -695,6 +695,15 @@ public class MekanismPortGameTest {
             load.setAccessible(true);
             CompoundTag tag = new CompoundTag();
             save.invoke(entity, tag, helper.getLevel().registryAccess());
+            if (entity instanceof ChemicalPortBlockEntity chemical) {
+                chemical.chemicalTank().setStack(ChemicalStack.EMPTY);
+                helper.assertTrue(chemical.chemicalTank().isEmpty(),
+                        "Chemical state is cleared before loading persisted data");
+            } else if (entity instanceof HeatPortBlockEntity heat) {
+                heat.heatCapacitor().setHeat(0D);
+                helper.assertValueEqual(0D, heat.heatCapacitor().getHeat(),
+                        "Heat state is cleared before loading persisted data");
+            }
             load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);

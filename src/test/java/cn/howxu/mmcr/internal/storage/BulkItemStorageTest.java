@@ -22,7 +22,8 @@ class BulkItemStorageTest {
         assertThat(storage.insertItem(0, new ItemStack(Items.IRON_INGOT, 20), false)).isEmpty();
 
         assertThat(storage.amount(0)).isEqualTo(60L);
-        assertThat(storage.resource(0)).isEqualTo(new ItemStack(Items.IRON_INGOT, 1));
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), new ItemStack(Items.IRON_INGOT))).isTrue();
+        assertThat(storage.resource(0).getCount()).isEqualTo(1);
     }
 
     @Test
@@ -30,8 +31,9 @@ class BulkItemStorageTest {
         BulkItemStorage storage = new BulkItemStorage(100L, () -> {});
         storage.insertItem(0, new ItemStack(Items.IRON_INGOT, 1), false);
 
-        assertThat(storage.insertItem(0, new ItemStack(Items.GOLD_INGOT, 1), true))
-                .isEqualTo(new ItemStack(Items.GOLD_INGOT, 1));
+        ItemStack rejected = storage.insertItem(0, new ItemStack(Items.GOLD_INGOT, 1), true);
+        assertThat(ItemStack.isSameItemSameComponents(rejected, new ItemStack(Items.GOLD_INGOT))).isTrue();
+        assertThat(rejected.getCount()).isEqualTo(1);
         assertThat(storage.amount(0)).isEqualTo(1L);
     }
 
@@ -54,9 +56,13 @@ class BulkItemStorageTest {
         BulkItemStorage storage = new BulkItemStorage(1_000L, () -> {});
         storage.forceInsert(new ItemStack(Items.IRON_INGOT, 1), 200L, false);
 
-        assertThat(storage.extractItem(0, 64, true)).isEqualTo(new ItemStack(Items.IRON_INGOT, 64));
+        ItemStack simulated = storage.extractItem(0, 64, true);
+        assertThat(ItemStack.isSameItemSameComponents(simulated, new ItemStack(Items.IRON_INGOT))).isTrue();
+        assertThat(simulated.getCount()).isEqualTo(64);
         assertThat(storage.amount(0)).isEqualTo(200L);
-        assertThat(storage.extractItem(0, 64, false)).isEqualTo(new ItemStack(Items.IRON_INGOT, 64));
+        ItemStack extracted = storage.extractItem(0, 64, false);
+        assertThat(ItemStack.isSameItemSameComponents(extracted, new ItemStack(Items.IRON_INGOT))).isTrue();
+        assertThat(extracted.getCount()).isEqualTo(64);
 
         assertThat(storage.amount(0)).isEqualTo(136L);
     }

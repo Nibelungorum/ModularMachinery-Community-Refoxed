@@ -937,7 +937,7 @@ public final class CraftingRuntime {
 
     public void load(CompoundTag input, @Nullable StructureClaimRegistry.ResourceDomain domain,
                      HolderLookup.Provider registries) {
-        boolean active = input.getBooleanOr("active", false);
+        boolean active = input.getBoolean("active");
         if (!active) {
             invalidate();
             restoreFailure(readFailure(input, null));
@@ -949,17 +949,18 @@ public final class CraftingRuntime {
             return;
         }
         ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.loadForPool(
-                input.getCompoundOrEmpty("recipe"), registries, recipePoolId);
+                input.getCompound("recipe"), registries, recipePoolId);
         if (!loaded.successful()) {
             failLoad();
             return;
         }
-        long restoredUpgradeContentRevision = input.getLongOr("upgrade_content_revision", Long.MIN_VALUE);
+        long restoredUpgradeContentRevision = input.contains("upgrade_content_revision")
+                ? input.getLong("upgrade_content_revision") : Long.MIN_VALUE;
         restore(loaded.recipe(), domain,
-                input.getLongOr("structure_version", Long.MIN_VALUE),
-                input.getLongOr("capability_version", Long.MIN_VALUE),
-                input.getLongOr("modifier_version", Long.MIN_VALUE),
-                input.getLongOr("component_state_version", Long.MIN_VALUE));
+                input.contains("structure_version") ? input.getLong("structure_version") : Long.MIN_VALUE,
+                input.contains("capability_version") ? input.getLong("capability_version") : Long.MIN_VALUE,
+                input.contains("modifier_version") ? input.getLong("modifier_version") : Long.MIN_VALUE,
+                input.contains("component_state_version") ? input.getLong("component_state_version") : Long.MIN_VALUE);
         if (active()) {
             if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
                 upgradeContentRevision = restoredUpgradeContentRevision;
@@ -969,9 +970,9 @@ public final class CraftingRuntime {
     }
 
     private static @Nullable ExecutionStatus readFailure(CompoundTag input, @Nullable ResourceLocation recipeId) {
-        if (input.contains("failure")) return FailureStatusCodec.read(input.getCompoundOrEmpty("failure"));
-        if (!input.getBooleanOr("has_failure", false)) return null;
-        return FailureStatusMigration.craftingFailure(input.getStringOr("failure_reason", ""), recipeId);
+        if (input.contains("failure")) return FailureStatusCodec.read(input.getCompound("failure"));
+        if (!input.getBoolean("has_failure")) return null;
+        return FailureStatusMigration.craftingFailure(input.getString("failure_reason"), recipeId);
     }
 
     private void failLoad() {
@@ -1149,20 +1150,19 @@ public final class CraftingRuntime {
         prefetchedEnergyPerTick = 0L;
         prefetchedEnergyRemaining = 0L;
         CompoundTag data = restored.getDataCompound();
-        var storedAllocations = data.getList(PREFETCH_ALLOCATIONS_KEY);
         if (!data.contains(PREFETCH_ALLOCATIONS_KEY)) {
-            return !data.getBooleanOr(PREFETCH_RESERVATION_KEY, false);
+            return !data.getBoolean(PREFETCH_RESERVATION_KEY);
         }
-        if (storedAllocations.isEmpty()) return false;
+        ListTag allocationList = data.getList(PREFETCH_ALLOCATIONS_KEY, Tag.TAG_COMPOUND);
+        if (allocationList.isEmpty()) return false;
         List<StoredPrefetch> allocations = new ArrayList<>();
         Set<String> storedKeys = new HashSet<>();
-        ListTag allocationList = storedAllocations.get();
         for (int index = 0; index < allocationList.size(); index++) {
-            CompoundTag allocation = allocationList.getCompound(index).orElse(null);
-            if (allocation == null) return false;
-            String reservationKey = allocation.getString(PREFETCH_ALLOCATION_KEY).orElse("");
+            CompoundTag allocation = allocationList.getCompound(index);
+            if (allocation.isEmpty()) return false;
+            String reservationKey = allocation.getString(PREFETCH_ALLOCATION_KEY);
             if (!(allocation.get(PREFETCH_ALLOCATION_AMOUNT) instanceof LongTag longTag)) return false;
-            long amount = longTag.longValue();
+            long amount = longTag.getAsLong();
             if (reservationKey.isBlank() || !storedKeys.add(reservationKey) || amount < 0L) return false;
             allocations.add(new StoredPrefetch(reservationKey, amount));
         }

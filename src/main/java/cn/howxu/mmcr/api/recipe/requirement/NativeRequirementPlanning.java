@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.util.IOType;
 import java.util.ArrayList;
 import java.util.List;
@@ -254,18 +255,24 @@ final class NativeRequirementPlanning {
     }
 
     private static long itemAmount(IItemHandler handler, int slot) {
-        return handler instanceof LongItemStorage storage ? storage.amount(slot) : handler.getStackInSlot(slot).getCount();
+        return handler instanceof LongItemStorage storage ? storage.amount(slot)
+                : handler instanceof NativeStackSync.Item sync ? sync.amount(slot)
+                : handler.getStackInSlot(slot).getCount();
     }
 
     private static long itemCapacity(IItemHandler handler, int slot) {
-        return handler instanceof LongItemStorage storage ? storage.capacity(slot) : handler.getSlotLimit(slot);
+        return handler instanceof LongItemStorage storage ? storage.capacity(slot)
+                : handler instanceof NativeStackSync.Item sync ? sync.capacity(slot) : handler.getSlotLimit(slot);
     }
 
     private static long fluidAmount(IFluidHandler handler, int tank) {
-        return handler instanceof LongFluidStorage storage ? storage.amount(tank) : handler.getFluidInTank(tank).getAmount();
+        return handler instanceof LongFluidStorage storage ? storage.amount(tank)
+                : handler instanceof NativeStackSync.Fluid sync ? sync.amount(tank)
+                : handler.getFluidInTank(tank).getAmount();
     }
 
     private static long fluidCapacity(IFluidHandler handler, int tank) {
-        return handler instanceof LongFluidStorage storage ? storage.capacity(tank) : handler.getTankCapacity(tank);
+        return handler instanceof LongFluidStorage storage ? storage.capacity(tank)
+                : handler instanceof NativeStackSync.Fluid sync ? sync.capacity(tank) : handler.getTankCapacity(tank);
     }
 }

@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class DataStorageBlockEntityTest {
 
         CompoundTag serialized = new CompoundTag();
         source.saveAdditional(serialized, LOOKUP);
-        ListTag values = serialized.getListOrEmpty("Values");
+        ListTag values = serialized.getList("Values", Tag.TAG_COMPOUND);
         CompoundTag malformed = new CompoundTag();
         malformed.putString("Key", "malformed");
         malformed.putString("Type", "MAP");

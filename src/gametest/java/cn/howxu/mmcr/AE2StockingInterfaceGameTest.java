@@ -44,7 +44,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * End-to-end GameTest coverage for the AE2 stocking input interface.
@@ -54,7 +53,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public class AE2StockingInterfaceGameTest {
     private static final long ITEM_AMOUNT = 128L;
     private static final long FLUID_AMOUNT = 5_000L;
-    private static final long OVERSIZE_TRANSFER_AMOUNT = 20_000L;
 
     public void stockingInterfaceReadsAndWatchesNetworkStorage(GameTestHelper helper) {
         helper.assertTrue(AE2Bridge.get().available(),
@@ -226,58 +224,4 @@ public class AE2StockingInterfaceGameTest {
         });
     }
 
-    // This is a unstable gametest wich will be pushed by the game tick
-    // public void oversizeStockingWatcherTracksLargeConfiguredKey(GameTestHelper helper) {
-    //     helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for this integration test");
-    // 
-    //     BlockPos portPos = new BlockPos(0, 0, 0);
-    //     BlockPos chestPos = new BlockPos(3, 0, 0);
-    //     BlockPos energyPos = new BlockPos(3, 0, 2);
-    //     helper.setBlock(portPos, ModBlocks.BLOCKS.get("eae_me_oversize_stocking_input_interface").get().defaultBlockState());
-    //     helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
-    //     helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
-    // 
-    //     StockingInterfaceBlockEntity port = helper.getBlockEntity(portPos, StockingInterfaceBlockEntity.class);
-    //     MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
-    //     CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
-    //     chest.setCell(AEItems.ITEM_CELL_64K.stack());
-    //     port.getInterfaceLogic().getConfig().setStack(35,
-    //             new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
-    //     AtomicLong refreshesAfterInitialWatch = new AtomicLong();
-    // 
-    //     helper.runAtTickTime(2, () -> {
-    //         helper.assertTrue(port.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
-    //                         && energy.getMainNode().getNode() != null,
-    //                 "Oversize stocking interface and its ME network initialize");
-    //         GridHelper.createConnection(port.getMainNode().getNode(), chest.getMainNode().getNode());
-    //         GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode());
-    //     });
-    // 
-    //     helper.runAtTickTime(10, () -> {
-    //         helper.assertTrue(chest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), OVERSIZE_TRANSFER_AMOUNT,
-    //                         Actionable.MODULATE, IActionSource.empty()) == OVERSIZE_TRANSFER_AMOUNT,
-    //                 "Oversize ME inventory transfers an amount beyond an ordinary AE2 interface slot");
-    //     });
-    // 
-    //     helper.startSequence()
-    //             .thenWaitUntil(() -> {
-    //                 GenericStack mirroredStack = port.getInterfaceLogic().getStorage().getStack(35);
-    //                 helper.assertTrue(mirroredStack != null && mirroredStack.amount() == OVERSIZE_TRANSFER_AMOUNT,
-    //                         "Oversize stocking watcher mirrors the configured key after AE2 processing");
-    //             })
-    //             .thenExecute(() -> {
-    //                 refreshesAfterInitialWatch.set(port.storageMirrorRefreshes());
-    //                 helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), 1L,
-    //                                 Actionable.MODULATE, IActionSource.empty()) == 1L,
-    //                         "Oversize ME inventory allows extracting the watched key");
-    //             })
-    //             .thenWaitUntil(() -> {
-    //                 GenericStack mirroredStack = port.getInterfaceLogic().getStorage().getStack(35);
-    //                 helper.assertTrue(mirroredStack != null && mirroredStack.amount() == OVERSIZE_TRANSFER_AMOUNT - 1L,
-    //                         "Watcher updates the changed configured key after AE2 processing");
-    //             })
-    //             .thenExecute(() -> helper.assertTrue(port.storageMirrorRefreshes() == refreshesAfterInitialWatch.get(),
-    //                     "Watcher callback updates the changed key without a full network mirror refresh"))
-    //             .thenSucceed();
-    // }
 }

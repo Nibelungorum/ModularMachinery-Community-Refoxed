@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -195,6 +196,12 @@ public class AE2AsyncOutputInterfaceGameTest {
             load.setAccessible(true);
             CompoundTag tag = new CompoundTag();
             save.invoke(entity, tag, helper.getLevel().registryAccess());
+            OutputInterfaceBaseBlockEntity output = (OutputInterfaceBaseBlockEntity) entity;
+            output.getInterfaceLogic().getStorage().clear();
+            output.getInterfaceLogic().getConfig().clear();
+            helper.assertTrue(output.getInterfaceLogic().getStorage().isEmpty()
+                            && output.getInterfaceLogic().getConfig().isEmpty(),
+                    "Async output state is cleared before loading persisted data");
             load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);

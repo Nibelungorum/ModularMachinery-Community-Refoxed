@@ -136,26 +136,26 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         static Snapshot from(CompoundTag tag) {
             return new Snapshot(
-                    tag.getBooleanOr("formed", false),
-                    tag.getBooleanOr("active", false),
-                    tag.getBooleanOr("tickMachine", false),
-                    tag.getIntOr("tick", 0),
-                    tag.getIntOr("totalTick", 0),
-                    tag.getLongOr("parallelism", 0L),
-                    tag.getLongOr("maxParallelism", 1L),
-                    tag.getIntOr("parallelSlots", 0),
-                    tag.getLongOr("maxParallelSlots", 0L),
-                    tag.getBooleanOr("factorySupported", false),
-                    tag.getBooleanOr("factoryPresent", false),
-                    tag.getIntOr("factoryLanes", 0),
-                    tag.getIntOr("factoryThreadLimit", 1),
-                    tag.getIntOr("itemInputs", 0),
-                    tag.getIntOr("itemOutputs", 0),
-                    tag.getIntOr("fluidInputs", 0),
-                    tag.getIntOr("fluidOutputs", 0),
-                    tag.getIntOr("energyInputs", 0),
-                    tag.getIntOr("energyOutputs", 0),
-                    parseResourceLocation(tag.getStringOr("recipePool", "")));
+                    tag.getBoolean("formed"),
+                    tag.getBoolean("active"),
+                    tag.getBoolean("tickMachine"),
+                    tag.getInt("tick"),
+                    tag.getInt("totalTick"),
+                    tag.getLong("parallelism"),
+                    tag.contains("maxParallelism") ? tag.getLong("maxParallelism") : 1L,
+                    tag.getInt("parallelSlots"),
+                    tag.getLong("maxParallelSlots"),
+                    tag.getBoolean("factorySupported"),
+                    tag.getBoolean("factoryPresent"),
+                    tag.getInt("factoryLanes"),
+                    tag.contains("factoryThreadLimit") ? tag.getInt("factoryThreadLimit") : 1,
+                    tag.getInt("itemInputs"),
+                    tag.getInt("itemOutputs"),
+                    tag.getInt("fluidInputs"),
+                    tag.getInt("fluidOutputs"),
+                    tag.getInt("energyInputs"),
+                    tag.getInt("energyOutputs"),
+                    parseResourceLocation(tag.getString("recipePool")));
         }
 
         private static ResourceLocation parseResourceLocation(String value) {

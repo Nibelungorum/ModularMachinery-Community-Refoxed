@@ -184,11 +184,11 @@ public final class RecipeModifier {
     }
 
     public static RecipeModifier deserializeNbt(CompoundTag tag) {
-        String target = tag.getStringOr("target", "");
-        IOType io = IOType.byKey(tag.getStringOr("ioTarget", IO_INPUT));
-        Operation op = Operation.byId(tag.getIntOr("operation", 0));
+        String target = tag.getString("target");
+        IOType io = IOType.byKey(tag.contains("ioTarget") ? tag.getString("ioTarget") : IO_INPUT);
+        Operation op = Operation.byId(tag.getInt("operation"));
         float value = tag.getFloatOr("value", 0F);
-        boolean chance = tag.getBooleanOr("chance", false);
+        boolean chance = tag.getBoolean("chance");
         return new RecipeModifier(target, io, value, op, chance);
     }
 

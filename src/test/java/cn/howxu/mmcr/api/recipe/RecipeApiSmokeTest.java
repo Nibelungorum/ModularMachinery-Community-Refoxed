@@ -322,7 +322,7 @@ class RecipeApiSmokeTest {
         assertThat(back.getTotalTick()).isEqualTo(200);
         assertThat(back.getMaxParallelism()).isEqualTo(4);
         assertThat(back.getParallelism()).isEqualTo(2);
-        assertThat(back.getDataCompound().getIntOr("custom", 0)).isEqualTo(42);
+        assertThat(back.getDataCompound().getInt("custom")).isEqualTo(42);
         assertThat(back.isCompleted()).isFalse();
     }
 

@@ -297,7 +297,8 @@ class CapabilityTransferPolicyTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(2L);
-        assertThat(storage.resource(0)).isEqualTo(stack(1));
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), stack(1))).isTrue();
+        assertThat(storage.resource(0).getCount()).isEqualTo(1);
     }
 
     @Test

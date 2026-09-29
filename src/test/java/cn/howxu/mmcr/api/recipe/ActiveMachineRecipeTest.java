@@ -68,8 +68,8 @@ class ActiveMachineRecipeTest {
         CompoundTag serialized = new CompoundTag();
 
         assertThatCode(() -> active.serialize(serialized, lookup)).doesNotThrowAnyException();
-        assertThat(serialized.getBooleanOr("has_recipe_definition", false)).isTrue();
-        assertThat(serialized.getIntOr("recipe_definition_version", -1)).isEqualTo(3);
+        assertThat(serialized.getBoolean("has_recipe_definition")).isTrue();
+        assertThat(serialized.getInt("recipe_definition_version")).isEqualTo(3);
         ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(serialized, lookup);
         assertThat(loaded.successful()).isTrue();
         assertThat(loaded.recipe()).isNotNull();

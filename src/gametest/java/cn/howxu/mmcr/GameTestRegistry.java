@@ -226,8 +226,6 @@ public final class GameTestRegistry {
                 helper -> new AE2InterfaceGameTest().inputInterfaceMemoryCardRoundTrip(helper));
         register(event, "ae2_me_stocking_input_interface", 100,
                 helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
-        // register(event, "eae_me_oversize_stocking_watcher", 100,
-        //         helper -> new AE2StockingInterfaceGameTest().oversizeStockingWatcherTracksLargeConfiguredKey(helper));
         register(event, "task2_ae2_output_lifecycle", 100,
                 helper -> new Task2AE2OutputGameTest().outputWakeUpAndActiveNodeLifecycle(helper));
         register(event, "ae2_me_output_interface", 200,

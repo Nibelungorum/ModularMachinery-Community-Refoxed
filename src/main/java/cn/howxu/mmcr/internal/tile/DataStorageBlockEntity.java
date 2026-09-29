@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.tile;
 
-import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
@@ -8,11 +7,13 @@ import cn.howxu.mmcr.api.data.DataValueType;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -101,8 +102,8 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         if (controllerPosition != null) {
             output.putBoolean(HAS_CONTROLLER_KEY, true);
             output.putInt(CONTROLLER_X_KEY, controllerPosition.getX());
@@ -110,33 +111,37 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
             output.putInt(CONTROLLER_Z_KEY, controllerPosition.getZ());
             if (controllerMachine != null) output.putString(CONTROLLER_MACHINE_KEY, controllerMachine.toString());
         }
-        var entries = output.childrenList(VALUES_KEY);
+        ListTag entries = new ListTag();
         storage.values().forEach((key, value) -> {
-            ValueOutput entry = entries.addChild();
+            CompoundTag entry = new CompoundTag();
             entry.putString(KEY_KEY, key);
             entry.putString(TYPE_KEY, value.type().name());
             writeValue(entry, value);
+            entries.add(entry);
         });
+        output.put(VALUES_KEY, entries);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
         loading = true;
         try {
             storage = new DataStorage(this::onStorageChanged);
             controllerPosition = null;
             controllerMachine = null;
-            if (input.getBooleanOr(HAS_CONTROLLER_KEY, false)) {
-                controllerPosition = new BlockPos(input.getIntOr(CONTROLLER_X_KEY, 0),
-                        input.getIntOr(CONTROLLER_Y_KEY, 0), input.getIntOr(CONTROLLER_Z_KEY, 0));
-                String machine = input.getStringOr(CONTROLLER_MACHINE_KEY, "");
+            if (input.getBoolean(HAS_CONTROLLER_KEY)) {
+                controllerPosition = new BlockPos(input.getInt(CONTROLLER_X_KEY),
+                        input.getInt(CONTROLLER_Y_KEY), input.getInt(CONTROLLER_Z_KEY));
+                String machine = input.getString(CONTROLLER_MACHINE_KEY);
                 if (!machine.isBlank()) controllerMachine = ResourceLocation.parse(machine);
             }
-            for (ValueInput entry : input.childrenListOrEmpty(VALUES_KEY)) {
+            ListTag entries = input.getList(VALUES_KEY, Tag.TAG_COMPOUND);
+            for (int index = 0; index < entries.size(); index++) {
+                CompoundTag entry = entries.getCompound(index);
                 try {
-                    String key = entry.getStringOr(KEY_KEY, "");
-                    DataValue value = readValue(entry, DataValueType.valueOf(entry.getStringOr(TYPE_KEY, "")));
+                    String key = entry.getString(KEY_KEY);
+                    DataValue value = readValue(entry, DataValueType.valueOf(entry.getString(TYPE_KEY)));
                     if (!key.isBlank() && value != null) storage.set(key, value);
                 } catch (RuntimeException ignored) {
                     // Malformed persisted entries must not prevent the block entity from loading.
@@ -157,7 +162,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
         }
     }
 
-    private static void writeValue(ValueOutput output, DataValue value) {
+    private static void writeValue(CompoundTag output, DataValue value) {
         switch (value.type()) {
             case BOOLEAN -> output.putBoolean(VALUE_KEY, value.booleanValue());
             case STRING -> output.putString(VALUE_KEY, value.stringValue());
@@ -170,52 +175,57 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
             case BIG_INTEGER -> output.putString(VALUE_KEY, value.bigIntegerValue().toString());
             case BIG_DECIMAL -> output.putString(VALUE_KEY, value.bigDecimalValue().toString());
             case LIST -> {
-                var entries = output.childrenList(LIST_VALUES_KEY);
+                ListTag entries = new ListTag();
                 for (DataValue element : value.asList().orElseThrow()) {
-                    ValueOutput entry = entries.addChild();
+                    CompoundTag entry = new CompoundTag();
                     entry.putString(TYPE_KEY, element.type().name());
                     writeValue(entry, element);
+                    entries.add(entry);
                 }
+                output.put(LIST_VALUES_KEY, entries);
             }
             case MAP -> {
-                var entries = output.childrenList(MAP_ENTRIES_KEY);
+                ListTag entries = new ListTag();
                 value.asMap().orElseThrow().forEach((key, element) -> {
-                    ValueOutput entry = entries.addChild();
+                    CompoundTag entry = new CompoundTag();
                     entry.putString(KEY_KEY, key);
                     entry.putString(TYPE_KEY, element.type().name());
                     writeValue(entry, element);
+                    entries.add(entry);
                 });
+                output.put(MAP_ENTRIES_KEY, entries);
             }
         }
     }
 
-    private static @Nullable DataValue readValue(ValueInput input, DataValueType type) {
+    private static @Nullable DataValue readValue(CompoundTag input, DataValueType type) {
         try {
             return switch (type) {
-            case BOOLEAN -> input.read(VALUE_KEY, Codec.BOOL).map(DataValue::of).orElse(null);
-            case STRING -> input.getString(VALUE_KEY).map(DataValue::of).orElse(null);
+            case BOOLEAN -> input.contains(VALUE_KEY) ? DataValue.of(input.getBoolean(VALUE_KEY)) : null;
+            case STRING -> input.contains(VALUE_KEY) ? DataValue.of(input.getString(VALUE_KEY)) : null;
             case BYTE -> {
-                int value = input.getIntOr(VALUE_KEY, Integer.MIN_VALUE);
+                int value = input.contains(VALUE_KEY) ? input.getInt(VALUE_KEY) : Integer.MIN_VALUE;
                 yield value < Byte.MIN_VALUE || value > Byte.MAX_VALUE ? null : DataValue.of((byte) value);
             }
             case SHORT -> {
-                int value = input.getIntOr(VALUE_KEY, Integer.MIN_VALUE);
+                int value = input.contains(VALUE_KEY) ? input.getInt(VALUE_KEY) : Integer.MIN_VALUE;
                 yield value < Short.MIN_VALUE || value > Short.MAX_VALUE ? null : DataValue.of((short) value);
             }
-            case INT -> input.getInt(VALUE_KEY).map(DataValue::of).orElse(null);
-            case LONG -> input.getLong(VALUE_KEY).map(DataValue::of).orElse(null);
-            case FLOAT -> input.read(VALUE_KEY, Codec.FLOAT).map(DataValue::of).orElse(null);
-            case DOUBLE -> input.read(VALUE_KEY, Codec.DOUBLE).map(DataValue::of).orElse(null);
-            case BIG_INTEGER -> DataValue.of(new BigInteger(input.getStringOr(VALUE_KEY, "")));
-            case BIG_DECIMAL -> DataValue.of(new BigDecimal(input.getStringOr(VALUE_KEY, "")));
+            case INT -> input.contains(VALUE_KEY) ? DataValue.of(input.getInt(VALUE_KEY)) : null;
+            case LONG -> input.contains(VALUE_KEY) ? DataValue.of(input.getLong(VALUE_KEY)) : null;
+            case FLOAT -> input.contains(VALUE_KEY) ? DataValue.of(input.getFloat(VALUE_KEY)) : null;
+            case DOUBLE -> input.contains(VALUE_KEY) ? DataValue.of(input.getDouble(VALUE_KEY)) : null;
+            case BIG_INTEGER -> DataValue.of(new BigInteger(input.getString(VALUE_KEY)));
+            case BIG_DECIMAL -> DataValue.of(new BigDecimal(input.getString(VALUE_KEY)));
             case LIST -> {
-                var entries = input.childrenList(LIST_VALUES_KEY).orElse(null);
-                if (entries == null) yield null;
+                if (!input.contains(LIST_VALUES_KEY)) yield null;
+                ListTag entries = input.getList(LIST_VALUES_KEY, Tag.TAG_COMPOUND);
                 var values = new ArrayList<DataValue>();
-                for (ValueInput entry : entries) {
+                for (int index = 0; index < entries.size(); index++) {
+                    CompoundTag entry = entries.getCompound(index);
                     try {
                         DataValue value = readValue(entry,
-                                DataValueType.valueOf(entry.getStringOr(TYPE_KEY, "")));
+                                DataValueType.valueOf(entry.getString(TYPE_KEY)));
                         if (value != null) values.add(value);
                     } catch (RuntimeException ignored) {
                         // Skip malformed nested entries without losing valid siblings.
@@ -224,15 +234,16 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
                 yield DataValue.list(values);
             }
             case MAP -> {
-                var entries = input.childrenList(MAP_ENTRIES_KEY).orElse(null);
-                if (entries == null) yield null;
+                if (!input.contains(MAP_ENTRIES_KEY)) yield null;
+                ListTag entries = input.getList(MAP_ENTRIES_KEY, Tag.TAG_COMPOUND);
                 var values = new LinkedHashMap<String, DataValue>();
-                for (ValueInput entry : entries) {
+                for (int index = 0; index < entries.size(); index++) {
+                    CompoundTag entry = entries.getCompound(index);
                     try {
-                        String key = entry.getStringOr(KEY_KEY, "");
+                        String key = entry.getString(KEY_KEY);
                         if (key.isBlank()) continue;
                         DataValue value = readValue(entry,
-                                DataValueType.valueOf(entry.getStringOr(TYPE_KEY, "")));
+                                DataValueType.valueOf(entry.getString(TYPE_KEY)));
                         if (value != null) values.put(key, value);
                     } catch (RuntimeException ignored) {
                         // Skip malformed nested entries without losing valid siblings.

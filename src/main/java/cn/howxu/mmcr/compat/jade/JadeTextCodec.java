@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.resources.ResourceLocation;
@@ -43,11 +44,11 @@ public final class JadeTextCodec {
 
     public static List<Component> read(CompoundTag data) {
         if (data == null) return List.of();
-        ListTag lines = data.getListOrEmpty(LINES_KEY);
+        ListTag lines = data.getList(LINES_KEY, Tag.TAG_COMPOUND);
         List<Component> decoded = new ArrayList<>();
         for (int index = 0; index < Math.min(lines.size(), JadeTextSnapshot.MAX_LINES); index++) {
-            CompoundTag encodedLine = lines.getCompoundOrEmpty(index);
-            String serializedId = encodedLine.getStringOr(ID_KEY, "");
+            CompoundTag encodedLine = lines.getCompound(index);
+            String serializedId = encodedLine.getString(ID_KEY);
             Tag encodedText = encodedLine.get(TEXT_KEY);
             if (serializedId.isEmpty() || encodedText == null) continue;
             try {

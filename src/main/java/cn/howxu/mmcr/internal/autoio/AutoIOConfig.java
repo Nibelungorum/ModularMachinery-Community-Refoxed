@@ -55,9 +55,10 @@ public final class AutoIOConfig {
     }
 
     public void loadInto(CompoundTag input) {
-        enabled = input.getBooleanOr(ENABLED_KEY, false);
+        enabled = input.getBoolean(ENABLED_KEY);
         enabledSides.clear();
-        enabledSides.addAll(fromMask(input.getIntOr(SIDES_KEY, toMask(EnumSet.allOf(Direction.class)))));
+        enabledSides.addAll(fromMask(input.contains(SIDES_KEY) ? input.getInt(SIDES_KEY)
+                : toMask(EnumSet.allOf(Direction.class))));
     }
 
     public static AutoIOConfig load(CompoundTag input) {

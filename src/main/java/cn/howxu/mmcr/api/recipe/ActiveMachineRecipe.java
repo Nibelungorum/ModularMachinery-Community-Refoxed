@@ -268,7 +268,7 @@ public final class ActiveMachineRecipe {
 
     private static LoadResult load(CompoundTag input, HolderLookup.Provider registries,
                                    @Nullable ResourceLocation recipePoolId) {
-        String recipeName = input.getStringOr("recipeName", "");
+        String recipeName = input.getString("recipeName");
         ResourceLocation recipeId;
         try {
             recipeId = recipeName.isEmpty() ? null : ResourceLocation.parse(recipeName);
@@ -277,8 +277,9 @@ public final class ActiveMachineRecipe {
         }
         if (recipeId == null) return new LoadResult(null);
         MachineRecipe recipe;
-        if (input.getBooleanOr("has_recipe_definition", false)) {
-            int definitionVersion = input.getIntOr("recipe_definition_version", -1);
+        if (input.getBoolean("has_recipe_definition")) {
+            int definitionVersion = input.contains("recipe_definition_version")
+                    ? input.getInt("recipe_definition_version") : -1;
             if (definitionVersion != RECIPE_DEFINITION_VERSION) {
                 return new LoadResult(null);
             }
@@ -293,7 +294,7 @@ public final class ActiveMachineRecipe {
             if (recipe == null || recipeId == null || !recipeId.equals(recipe.id())) {
                 return new LoadResult(null);
             }
-            String expectedFingerprint = input.getStringOr("recipe_definition_fingerprint", "");
+            String expectedFingerprint = input.getString("recipe_definition_fingerprint");
             String actualFingerprint;
             try {
                 actualFingerprint = definitionFingerprint(recipe, registries);
@@ -309,7 +310,7 @@ public final class ActiveMachineRecipe {
                     .filter(candidate -> recipeId.equals(candidate.id())).findFirst().orElse(null);
         }
         if (recipe == null || recipePoolId != null && (!recipePoolId.equals(recipe.recipePoolId())
-                || input.getBooleanOr("has_recipe_definition", false)
+                || input.getBoolean("has_recipe_definition")
                 && RecipeRegistry.catalogForPool(recipePoolId).recipes().stream()
                 .noneMatch(candidate -> sameDefinition(recipe, candidate, registries)))) {
             return new LoadResult(null);
@@ -318,7 +319,7 @@ public final class ActiveMachineRecipe {
         List<MachineOutput> effectiveOutputs = null;
         int effectiveDuration = -1;
         boolean hasSnapshotMarker = hasField(input, EFFECTIVE_DEFINITION_MARKER);
-        boolean snapshotMarker = input.getBooleanOr(EFFECTIVE_DEFINITION_MARKER, false);
+        boolean snapshotMarker = input.getBoolean(EFFECTIVE_DEFINITION_MARKER);
         boolean hasSnapshotVersion = hasField(input, EFFECTIVE_DEFINITION_VERSION);
         boolean hasEffectivePayload = hasField(input, "effective_duration")
                 || hasField(input, "effective_requirements")
@@ -329,12 +330,12 @@ public final class ActiveMachineRecipe {
         }
         if (snapshotMarker) {
             if (!hasSnapshotVersion
-                    || input.getIntOr(EFFECTIVE_DEFINITION_VERSION, -1)
+                    || (input.contains(EFFECTIVE_DEFINITION_VERSION) ? input.getInt(EFFECTIVE_DEFINITION_VERSION) : -1)
                     != EFFECTIVE_EXECUTION_SNAPSHOT_VERSION) {
                 return new LoadResult(null);
             }
             try {
-                effectiveDuration = input.getIntOr("effective_duration", -1);
+                effectiveDuration = input.contains("effective_duration") ? input.getInt("effective_duration") : -1;
                 effectiveRequirements = get(input, "effective_requirements", MachineRequirement.CODEC.listOf(), registries);
                 effectiveOutputs = get(input, "effective_outputs", MachineOutput.CODEC.listOf(), registries);
             } catch (RuntimeException exception) {
@@ -353,18 +354,18 @@ public final class ActiveMachineRecipe {
         }
         if (hasInputConsumptionPlan) {
             try {
-                inputPlan = InputConsumptionPlan.deserialize(input.getCompoundOrEmpty("inputConsumptionPlan"));
+                inputPlan = InputConsumptionPlan.deserialize(input.getCompound("inputConsumptionPlan"));
             } catch (RuntimeException exception) {
                 return new LoadResult(null);
             }
             if (inputPlan == null || (snapshotMarker
                     && !inputPlan.isValidFor(effectiveRequirements))) return new LoadResult(null);
         }
-        long maxParallelism = input.getLongOr("maxParallelism", 1L);
-        long parallelism = input.getLongOr("parallelism", 1L);
-        int serializedTotalTick = input.getIntOr("totalTick", -1);
-        int tick = input.getIntOr("tick", 0);
-        boolean finishPending = input.getBooleanOr("finishPending", false);
+        long maxParallelism = input.contains("maxParallelism") ? input.getLong("maxParallelism") : 1L;
+        long parallelism = input.contains("parallelism") ? input.getLong("parallelism") : 1L;
+        int serializedTotalTick = input.contains("totalTick") ? input.getInt("totalTick") : -1;
+        int tick = input.getInt("tick");
+        boolean finishPending = input.getBoolean("finishPending");
         int totalTick = snapshotMarker ? effectiveDuration : serializedTotalTick;
         if (serializedTotalTick < 1 || !validRuntimeState(tick, totalTick, maxParallelism, parallelism,
                 finishPending)) {
@@ -378,11 +379,11 @@ public final class ActiveMachineRecipe {
                 : new ActiveMachineRecipe(recipe, maxParallelism, false);
         result.tick = tick;
         result.totalTick = totalTick;
-        result.nextFinishRetryTick = input.getIntOr("nextFinishRetryTick", 0);
+        result.nextFinishRetryTick = input.getInt("nextFinishRetryTick");
         result.finishPending = finishPending;
         result.inputConsumptionPlan = inputPlan;
         result.parallelism = parallelism;
-        result.data = input.getCompoundOrEmpty("data").copy();
+        result.data = input.getCompound("data").copy();
         return new LoadResult(result);
     }
 
@@ -540,8 +541,8 @@ public final class ActiveMachineRecipe {
         switch (tag.getId()) {
             case Tag.TAG_BYTE -> digest.update(((NumericTag) tag).byteValue());
             case Tag.TAG_SHORT -> updateShort(digest, ((NumericTag) tag).shortValue());
-            case Tag.TAG_INT -> updateInt(digest, ((NumericTag) tag).intValue());
-            case Tag.TAG_LONG -> updateLong(digest, ((NumericTag) tag).longValue());
+            case Tag.TAG_INT -> updateInt(digest, ((NumericTag) tag).getAsInt());
+            case Tag.TAG_LONG -> updateLong(digest, ((NumericTag) tag).getAsLong());
             case Tag.TAG_FLOAT -> updateInt(digest, Float.floatToIntBits(((NumericTag) tag).floatValue()));
             case Tag.TAG_DOUBLE -> updateLong(digest, Double.doubleToLongBits(((NumericTag) tag).doubleValue()));
             case Tag.TAG_BYTE_ARRAY -> {

@@ -673,30 +673,30 @@ public final class FactoryRecipeThread extends RecipeThread {
     public static FactoryRecipeThread load(CompoundTag input, MachineControllerBlockEntity controller,
                                             HolderLookup.Provider registries, @Nullable List<MachineRecipe> candidates,
                                             @Nullable String fallbackLaneId) {
-        String persistedLaneId = input.getStringOr("lane_id", "");
+        String persistedLaneId = input.getString("lane_id");
         String laneId = persistedLaneId.isBlank() ? fallbackLaneId : persistedLaneId;
         FactoryRecipeThread thread = new FactoryRecipeThread(controller,
-                input.getBooleanOr("core", false), input.getBooleanOr("base", false), input.getStringOr("name", ""), laneId);
+                input.getBoolean("core"), input.getBoolean("base"), input.getString("name"), laneId);
         List<MachineRecipe> availableCandidates = candidatesForMachine(controller, candidates);
         RecipeSearchContextKey restoredKey = readSearchFailureKey(input);
         if (thread.coreThread) thread.recipeSet.addAll(availableCandidates);
-        thread.idleTicks = input.getIntOr("idle_ticks", 0);
-        if (input.getBooleanOr("has_last", false)) {
-            String recipeName = input.getStringOr("last_recipe", "");
+        thread.idleTicks = input.getInt("idle_ticks");
+        if (input.getBoolean("has_last")) {
+            String recipeName = input.getString("last_recipe");
             ResourceLocation recipeId = recipeName.isEmpty() ? null : ResourceLocation.parse(recipeName);
             thread.lastRecipe = recipeId == null ? null : availableCandidates.stream()
                     .filter(candidate -> candidate != null && recipeId.equals(candidate.id()))
                     .findFirst().orElse(null);
             if (thread.lastRecipe != null) {
-                thread.lastRecipeStructureVersion = input.getLongOr("last_structure_version", Long.MIN_VALUE);
-                thread.lastRecipeCapabilityVersion = input.getLongOr("last_capability_version", Long.MIN_VALUE);
-                thread.lastRecipeModifierVersion = input.getLongOr("last_modifier_version", Long.MIN_VALUE);
-                thread.lastRecipeComponentStateVersion = input.getLongOr("last_component_state_version", Long.MIN_VALUE);
-                thread.lastRecipeCatalogVersion = input.getLongOr("last_catalog_version",
+                thread.lastRecipeStructureVersion = longOr(input, "last_structure_version", Long.MIN_VALUE);
+                thread.lastRecipeCapabilityVersion = longOr(input, "last_capability_version", Long.MIN_VALUE);
+                thread.lastRecipeModifierVersion = longOr(input, "last_modifier_version", Long.MIN_VALUE);
+                thread.lastRecipeComponentStateVersion = longOr(input, "last_component_state_version", Long.MIN_VALUE);
+                thread.lastRecipeCatalogVersion = longOr(input, "last_catalog_version",
                         thread.currentRecipeCatalog().version());
             }
         }
-        thread.runtime.load(input.getCompoundOrEmpty("runtime"), controller.resourceDomain(), registries);
+        thread.runtime.load(input.getCompound("runtime"), controller.resourceDomain(), registries);
         MachineRecipe activeRecipe = thread.runtime.recipe();
         if (activeRecipe != null) {
             MachineRecipe current = availableCandidates.stream()
@@ -707,10 +707,10 @@ public final class FactoryRecipeThread extends RecipeThread {
                 thread.clearLastRecipe();
             }
         }
-        int restoredStreak = Math.max(0, input.getIntOr("search_failure_streak", 0));
-        int restoredRemaining = Math.max(0, Math.min(100, input.getIntOr("search_retry_remaining", 0)));
+        int restoredStreak = Math.max(0, input.getInt("search_failure_streak"));
+        int restoredRemaining = Math.max(0, Math.min(100, input.getInt("search_retry_remaining")));
         ResourceLocation restoredReason = readSearchFailureReason(input);
-        String restoredPoolName = input.getStringOr("search_failure_pool", "");
+        String restoredPoolName = input.getString("search_failure_pool");
         ResourceLocation restoredPool = restoredPoolName.isEmpty()
                 ? thread.currentRecipePoolId() : ResourceLocation.parse(restoredPoolName);
         if (!thread.coreThread && restoredStreak > 0 && restoredKey != null
@@ -733,9 +733,9 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private static @Nullable ResourceLocation readSearchFailureReason(CompoundTag input) {
         if (input.contains("search_failure_reason_id")) {
-            return FailureStatusMigration.factoryReasonId(input.getStringOr("search_failure_reason_id", ""));
+            return FailureStatusMigration.factoryReasonId(input.getString("search_failure_reason_id"));
         }
-        return FailureStatusMigration.factoryReasonId(input.getStringOr("search_failure_reason", ""));
+        return FailureStatusMigration.factoryReasonId(input.getString("search_failure_reason"));
     }
 
     private static List<MachineRecipe> candidatesForMachine(MachineControllerBlockEntity controller,
@@ -775,14 +775,18 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     private static @Nullable RecipeSearchContextKey readSearchFailureKey(CompoundTag input) {
-        if (!input.getBooleanOr("has_search_failure_key", false)) return null;
-        CompoundTag key = input.getCompoundOrEmpty("search_failure_key");
-        return new RecipeSearchContextKey(key.getLongOr("structure_version", Long.MIN_VALUE),
-                key.getLongOr("capability_version", Long.MIN_VALUE),
-                key.getLongOr("modifier_version", Long.MIN_VALUE),
-                key.getLongOr("component_state_version", Long.MIN_VALUE),
-                key.getLongOr("catalog_version", Long.MIN_VALUE),
-                key.getLongOr("resource_availability_epoch", Long.MIN_VALUE),
-                key.getLongOr("core_recipe_set_version", Long.MIN_VALUE));
+        if (!input.getBoolean("has_search_failure_key")) return null;
+        CompoundTag key = input.getCompound("search_failure_key");
+        return new RecipeSearchContextKey(longOr(key, "structure_version", Long.MIN_VALUE),
+                longOr(key, "capability_version", Long.MIN_VALUE),
+                longOr(key, "modifier_version", Long.MIN_VALUE),
+                longOr(key, "component_state_version", Long.MIN_VALUE),
+                longOr(key, "catalog_version", Long.MIN_VALUE),
+                longOr(key, "resource_availability_epoch", Long.MIN_VALUE),
+                longOr(key, "core_recipe_set_version", Long.MIN_VALUE));
+    }
+
+    private static long longOr(CompoundTag input, String key, long fallback) {
+        return input.contains(key) ? input.getLong(key) : fallback;
     }
 }

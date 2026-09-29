@@ -406,7 +406,7 @@ class MachineRecipeTest {
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000)))
         );
 
-        assertThat(recipe.assemble(null)).isEqualTo(ItemStack.EMPTY);
+        assertThat(recipe.assemble(null)).isEmpty();
     }
 
     @Test

@@ -25,11 +25,8 @@ import com.mojang.serialization.MapCodec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -98,15 +95,12 @@ class FactoryRecipeThreadTest {
                         RecipeModifier.IOType.INPUT, null, 1, new ItemStack(Items.IRON_INGOT, 1))));
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, 0L)).isFalse();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        CompoundTag legacy = output.buildResult();
+        CompoundTag legacy = new CompoundTag();
+        thread.save(legacy, EMPTY_LOOKUP);
         legacy.remove("search_failure_reason_id");
         legacy.putString("search_failure_reason", "insufficient_resource");
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, legacy),
-                controller);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(legacy, controller, EMPTY_LOOKUP);
 
         assertThat(restored.searchFailureReason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT.id());
     }
@@ -121,15 +115,12 @@ class FactoryRecipeThreadTest {
                         RecipeModifier.IOType.INPUT, null, 1, new ItemStack(Items.IRON_INGOT, 1))));
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, 0L)).isFalse();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        CompoundTag legacy = output.buildResult();
+        CompoundTag legacy = new CompoundTag();
+        thread.save(legacy, EMPTY_LOOKUP);
         legacy.remove("search_failure_reason_id");
         legacy.putString("search_failure_reason", "legacy:removed_reason");
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, legacy),
-                controller);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(legacy, controller, EMPTY_LOOKUP);
 
         assertThat(restored.searchFailureReason()).isNull();
         assertThat(restored.searchFailureKey()).isNull();
@@ -145,15 +136,12 @@ class FactoryRecipeThreadTest {
                         RecipeModifier.IOType.INPUT, null, 1, new ItemStack(Items.IRON_INGOT, 1))));
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1, 0L)).isFalse();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        CompoundTag legacy = output.buildResult();
+        CompoundTag legacy = new CompoundTag();
+        thread.save(legacy, EMPTY_LOOKUP);
         legacy.remove("search_failure_reason_id");
         legacy.putString("search_failure_reason", "not a valid identifier");
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, legacy),
-                controller);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(legacy, controller, EMPTY_LOOKUP);
 
         assertThat(restored.searchFailureReason()).isNull();
         assertThat(restored.searchFailureKey()).isNull();

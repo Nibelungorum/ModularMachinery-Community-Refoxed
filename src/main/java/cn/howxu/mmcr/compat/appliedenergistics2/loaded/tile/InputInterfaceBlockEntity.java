@@ -28,6 +28,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -270,8 +271,9 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     private void readNetworkOwned(CompoundTag input, HolderLookup.Provider registries) {
         Arrays.fill(networkOwned, null);
-        for (int index = 0; index < input.getListOrEmpty(NETWORK_OWNED_KEY).size(); index++) {
-            CompoundTag entry = input.getListOrEmpty(NETWORK_OWNED_KEY).getCompoundOrEmpty(index);
+        ListTag networkOwned = input.getList(NETWORK_OWNED_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < networkOwned.size(); index++) {
+            CompoundTag entry = networkOwned.getCompound(index);
             int slot = entry.getInt(NETWORK_OWNED_SLOT_KEY);
             GenericStack owned = GenericStack.readTag(registries, entry.getCompound("stack"));
             if (slot >= 0 && slot < networkOwned.length && owned != null && owned.amount() > 0L) {

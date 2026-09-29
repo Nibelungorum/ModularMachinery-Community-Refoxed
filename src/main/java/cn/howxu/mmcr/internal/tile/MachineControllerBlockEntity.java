@@ -116,6 +116,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
@@ -4296,16 +4297,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         super.loadAdditional(input, registries);
         try {
-            CompoundTag factoryRuntimeInput = input.getCompoundOrEmpty("factory_runtime");
+            CompoundTag factoryRuntimeInput = input.getCompound("factory_runtime");
             StructureSnapshot currentStructure = runtimeSnapshot().structure();
             runtime.publishStructureState(currentStructure.structureAreaLoaded(), currentStructure.formed(),
-                    currentStructure.configuredMachine(), Math.max(0, input.getIntOr("matched_structure_stage", 0)));
+                    currentStructure.configuredMachine(), Math.max(0, input.getInt("matched_structure_stage")));
             runtime.requestStructureCheck();
             redstonePaused = false;
-            selectedRecipePoolId = ResourceLocation.tryParse(input.getStringOr("selected_recipe_pool", ""));
+            selectedRecipePoolId = ResourceLocation.tryParse(input.getString("selected_recipe_pool"));
             runtime.craftingRuntime().invalidate();
             Map<ResourceLocation, MachineLevel> restoredLevels = new LinkedHashMap<>();
-            ListTag foundLevelInputs = input.getListOrEmpty("found_levels");
+            ListTag foundLevelInputs = input.getList("found_levels", Tag.TAG_STRING);
             for (int index = 0; index < foundLevelInputs.size(); index++) {
                 MachineLevel foundLevel = MachineLevelRegistry.getLevel(ResourceLocation.parse(foundLevelInputs.getString(index)));
                 if (foundLevel != null) restoredLevels.put(foundLevel.typeId(), foundLevel);
@@ -4314,14 +4315,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.publishComponentState(runtime.components(), current.foundModifiers(), restoredLevels,
                     current.linkedPortPositions());
             lastFailure = null;
-            if (factoryRuntimeInput.getIntOr("lane_count", -1) >= 0) {
+            if ((factoryRuntimeInput.contains("lane_count") ? factoryRuntimeInput.getInt("lane_count") : -1) >= 0) {
                 pendingFactoryRuntimeInput = factoryRuntimeInput;
             }
-            pendingCraftingRuntimeInput = input.getCompoundOrEmpty("crafting_runtime");
+            pendingCraftingRuntimeInput = input.getCompound("crafting_runtime");
             pendingRuntimeRegistries = registries;
             ensureFactoryRuntimeLoaded();
             runtime.requestStructureCheck();
-            runtime.restoreStructureVersion(input.getLongOr("structure_runtime_version", 0L));
+            runtime.restoreStructureVersion(input.getLong("structure_runtime_version"));
         } finally {
             publishRuntimeState();
         }

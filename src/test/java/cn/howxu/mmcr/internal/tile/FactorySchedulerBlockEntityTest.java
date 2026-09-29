@@ -58,7 +58,8 @@ class FactorySchedulerBlockEntityTest {
         ItemStack rejected = scheduler.itemStorage().insertItem(0, iron, false);
         ItemStack accepted = scheduler.itemStorage().insertItem(0, disperser, false);
 
-        assertThat(rejected).isEqualTo(iron);
+        assertThat(ItemStack.isSameItemSameComponents(rejected, iron)).isTrue();
+        assertThat(rejected.getCount()).isEqualTo(iron.getCount());
         assertThat(accepted).isEmpty();
         assertThat(scheduler.threadCount()).isEqualTo(9);
     }

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.capability;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -35,5 +36,22 @@ class PlanningReservationsTest {
         assertThat(reservations.fluidAmount(storage, 0)).isEqualTo(10L);
         assertThat(reservations.reserveFluidExtract(storage, 0, new FluidStack(Fluids.LAVA, 1), 1L)).isFalse();
         assertThat(storage.amount(0)).isEqualTo(20L);
+    }
+
+    @Test
+    void reservations_read_complete_long_item_and_fluid_amounts() {
+        long amount = (long) Integer.MAX_VALUE + 42L;
+        LongItemStorage items = new LongItemStorage(1, Long.MAX_VALUE, () -> {});
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), amount);
+        LongFluidStorage fluids = new LongFluidStorage(Long.MAX_VALUE, () -> {});
+        fluids.setContents(0, new FluidStack(Fluids.WATER, 1), amount);
+        PlanningReservations reservations = new PlanningReservations();
+
+        assertThat(reservations.itemAmount(items, 0)).isEqualTo(amount);
+        assertThat(reservations.fluidAmount(fluids, 0)).isEqualTo(amount);
+        assertThat(reservations.reserveItemExtract(items, 0, new ItemStack(Items.IRON_INGOT), amount)).isTrue();
+        assertThat(reservations.reserveFluidExtract(fluids, 0, new FluidStack(Fluids.WATER, 1), amount)).isTrue();
+        assertThat(reservations.itemAmount(items, 0)).isZero();
+        assertThat(reservations.fluidAmount(fluids, 0)).isZero();
     }
 }

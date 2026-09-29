@@ -8,8 +8,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.storage.TagValueInput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +40,7 @@ class LinkedAppearanceBlockEntityTest {
         controllers.add(controller);
         serialized.put("LinkedControllers", controllers);
 
-        entity.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+        entity.loadAdditional(serialized, LOOKUP);
 
         assertThat(entity.changed).isZero();
         assertThat(entity.appearanceBaseTexture()).isEqualTo(MMCR.id("block/test_casing"));

@@ -18,8 +18,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -155,36 +157,61 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
-    private void saveState(ValueOutput output) {
+    private void saveState(CompoundTag output, HolderLookup.Provider registries) {
         if (machineId != null) output.putString(MACHINE_ID_KEY, machineId.toString());
-        ValueOutput.TypedOutputList<ValueEntry> serializedValues = output.list(VALUES_KEY, ValueEntry.CODEC);
-        values.forEach((type, value) -> serializedValues.add(new ValueEntry(type, value)));
-        ValueOutput.TypedOutputList<ControllerEntry> serializedControllers = output.list(CONTROLLERS_KEY, ControllerEntry.CODEC);
-        controllers.forEach(pos -> serializedControllers.add(new ControllerEntry(pos)));
+        ListTag serializedValues = new ListTag();
+        values.forEach((type, value) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("type", type);
+            entry.putFloat("value", value);
+            serializedValues.add(entry);
+        });
+        output.put(VALUES_KEY, serializedValues);
+        ListTag serializedControllers = new ListTag();
+        controllers.forEach(pos -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putInt("x", pos.getX());
+            entry.putInt("y", pos.getY());
+            entry.putInt("z", pos.getZ());
+            serializedControllers.add(entry);
+        });
+        output.put(CONTROLLERS_KEY, serializedControllers);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        input.child("state").ifPresent(this::loadState);
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
+        if (input.contains("state")) loadState(input.getCompound("state"), registries);
     }
 
-    private void loadState(ValueInput input) {
-        machineId = input.getString(MACHINE_ID_KEY).map(ResourceLocation::parse).orElse(null);
+    private void loadState(CompoundTag input, HolderLookup.Provider registries) {
+        String serializedMachineId = input.getString(MACHINE_ID_KEY);
+        machineId = serializedMachineId.isBlank() ? null : ResourceLocation.tryParse(serializedMachineId);
         values.clear();
         controllers.clear();
-        input.listOrEmpty(VALUES_KEY, ValueEntry.CODEC).forEach(entry -> {
-            if (entry.type() != null && !entry.type().isBlank() && Float.isFinite(entry.value()) && !values.containsKey(entry.type())) {
-                values.put(entry.type(), entry.value());
+        ListTag serializedValues = input.getList(VALUES_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < serializedValues.size(); index++) {
+            CompoundTag entry = serializedValues.getCompound(index);
+            String type = entry.getString("type");
+            float value = entry.getFloat("value");
+            if (!type.isBlank() && Float.isFinite(value) && !values.containsKey(type)) {
+                values.put(type, value);
             }
-        });
-        input.listOrEmpty(CONTROLLERS_KEY, ControllerEntry.CODEC).forEach(entry -> controllers.add(entry.pos().immutable()));
+        }
+        ListTag serializedControllers = input.getList(CONTROLLERS_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < serializedControllers.size(); index++) {
+            CompoundTag entry = serializedControllers.getCompound(index);
+            controllers.add(new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z")).immutable());
+        }
         capabilityStorage.replace(values);
     }
 
@@ -227,13 +254,13 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         }
 
         @Override
-        public void save(ValueOutput output) {
-            saveState(output);
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
+            saveState(output, registries);
         }
 
         @Override
-        public void load(ValueInput input) {
-            loadState(input);
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            loadState(input, registries);
         }
     }
 

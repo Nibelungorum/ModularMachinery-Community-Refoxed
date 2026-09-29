@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -319,6 +320,12 @@ public class AE2OutputInterfaceGameTest {
             load.setAccessible(true);
             CompoundTag tag = new CompoundTag();
             save.invoke(entity, tag, helper.getLevel().registryAccess());
+            OutputInterfaceBaseBlockEntity output = (OutputInterfaceBaseBlockEntity) entity;
+            output.getInterfaceLogic().getStorage().clear();
+            output.getInterfaceLogic().getConfig().clear();
+            helper.assertTrue(output.getInterfaceLogic().getStorage().isEmpty()
+                            && output.getInterfaceLogic().getConfig().isEmpty(),
+                    "Output interface state is cleared before loading persisted data");
             load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);

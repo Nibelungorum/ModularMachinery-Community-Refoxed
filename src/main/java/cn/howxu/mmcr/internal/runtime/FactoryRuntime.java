@@ -851,13 +851,13 @@ public final class FactoryRuntime {
     public void load(CompoundTag input, MachineControllerBlockEntity controller, HolderLookup.Provider registries) {
         this.controller = controller;
         clear();
-        setLaneLimit(input.getIntOr("lane_limit", laneLimit));
-        boolean restoredPaused = input.getBooleanOr("paused", false);
+        setLaneLimit(input.contains("lane_limit") ? input.getInt("lane_limit") : laneLimit);
+        boolean restoredPaused = input.getBoolean("paused");
         if (paused != restoredPaused) {
             paused = restoredPaused;
             markLaneStateChanged();
         }
-        int count = Math.min(MAX_LANES, Math.max(0, input.getIntOr("lane_count", 0)));
+        int count = Math.min(MAX_LANES, Math.max(0, input.getInt("lane_count")));
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         Machine machine = current.structure().machine() == null
                 ? current.structure().configuredMachine() : current.structure().machine();
@@ -871,13 +871,13 @@ public final class FactoryRuntime {
         }
         Map<String, Integer> restoredCoreOccurrences = new LinkedHashMap<>();
         for (int index = 0; index < count; index++) {
-            CompoundTag laneInput = input.getCompoundOrEmpty("lane_" + index);
-            List<MachineRecipe> candidates = laneInput.getBooleanOr("core", false)
-                    ? coreCandidates.getOrDefault(laneInput.getStringOr("name", ""), List.of())
+            CompoundTag laneInput = input.getCompound("lane_" + index);
+            List<MachineRecipe> candidates = laneInput.getBoolean("core")
+                    ? coreCandidates.getOrDefault(laneInput.getString("name"), List.of())
                     : catalog.recipes();
             String fallbackLaneId = null;
-            if (laneInput.getBooleanOr("core", false)) {
-                String name = laneInput.getStringOr("name", "");
+            if (laneInput.getBoolean("core")) {
+                String name = laneInput.getString("name");
                 int occurrence = restoredCoreOccurrences.merge(name, 1, Integer::sum) - 1;
                 fallbackLaneId = "core-" + name + (occurrence == 0 ? "" : "-" + occurrence);
             }

@@ -566,7 +566,7 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
-    void heat_output_uses_transactional_handle_heat() {
+    void heat_output_uses_handle_heat() {
         LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
         FakeHeatPort port = new FakeHeatPort(360D, IOType.OUTPUT);
 

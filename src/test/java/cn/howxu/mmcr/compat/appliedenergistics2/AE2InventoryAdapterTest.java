@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2;
 import appeng.api.stacks.AEKeyType;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Set;
@@ -33,7 +34,9 @@ class AE2InventoryAdapterTest {
         assertThat(items.getStackInSlot(0)).isEmpty();
         assertThat(items.insertItem(0, iron, false)).isEmpty();
 
-        assertThat(items.getStackInSlot(0)).isEqualTo(iron);
+        ItemStack stored = items.getStackInSlot(0);
+        assertThat(ItemStack.isSameItemSameComponents(stored, iron)).isTrue();
+        assertThat(stored.getCount()).isEqualTo(iron.getCount());
         assertThat(((NativeStackSync.Item) items).amount(0)).isEqualTo(4L);
     }
 
@@ -47,7 +50,9 @@ class AE2InventoryAdapterTest {
         assertThat(fluids.getFluidInTank(0)).isEmpty();
         assertThat(fluids.fill(water, IFluidHandler.FluidAction.EXECUTE)).isEqualTo(1_000);
 
-        assertThat(fluids.getFluidInTank(0)).isEqualTo(water);
+        FluidStack stored = fluids.getFluidInTank(0);
+        assertThat(FluidStack.isSameFluidSameComponents(stored, water)).isTrue();
+        assertThat(stored.getAmount()).isEqualTo(water.getAmount());
         assertThat(((NativeStackSync.Fluid) fluids).amount(0)).isEqualTo(1_000L);
     }
 
@@ -56,9 +61,31 @@ class AE2InventoryAdapterTest {
         IItemHandler items = AE2NativeAdapters.items(inventory(Set.of(AEKeyType.fluids())));
         IFluidHandler fluids = AE2NativeAdapters.fluids(inventory(Set.of(AEKeyType.items())));
 
-        assertThat(items.insertItem(0, new ItemStack(Items.IRON_INGOT, 1), true))
-                .isEqualTo(new ItemStack(Items.IRON_INGOT, 1));
+        ItemStack rejected = items.insertItem(0, new ItemStack(Items.IRON_INGOT, 1), true);
+        assertThat(ItemStack.isSameItemSameComponents(rejected, new ItemStack(Items.IRON_INGOT))).isTrue();
+        assertThat(rejected.getCount()).isEqualTo(1);
         assertThat(fluids.fill(new FluidStack(Fluids.WATER, 1_000), IFluidHandler.FluidAction.SIMULATE)).isZero();
+    }
+
+    @Test
+    void native_sync_exposes_complete_long_item_and_fluid_amounts() {
+        long amount = (long) Integer.MAX_VALUE + 42L;
+        IItemHandler items = AE2NativeAdapters.items(inventory(Set.of(AEKeyType.items())));
+        IFluidHandler fluids = AE2NativeAdapters.fluids(inventory(Set.of(AEKeyType.fluids())));
+
+        ((NativeStackSync.Item) items).setContents(0, new ItemStack(Items.IRON_INGOT), amount);
+        ((NativeStackSync.Fluid) fluids).setContents(0, new FluidStack(Fluids.WATER, 1), amount);
+
+        assertThat(((NativeStackSync.Item) items).amount(0)).isEqualTo(amount);
+        assertThat(((NativeStackSync.Fluid) fluids).amount(0)).isEqualTo(amount);
+        assertThat(items.getStackInSlot(0).getCount()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(fluids.getFluidInTank(0).getAmount()).isEqualTo(Integer.MAX_VALUE);
+
+        PlanningReservations reservations = new PlanningReservations();
+        assertThat(reservations.reserveItemExtract(items, 0, new ItemStack(Items.IRON_INGOT), amount)).isTrue();
+        assertThat(reservations.reserveFluidExtract(fluids, 0, new FluidStack(Fluids.WATER, 1), amount)).isTrue();
+        assertThat(reservations.itemAmount(items, 0)).isZero();
+        assertThat(reservations.fluidAmount(fluids, 0)).isZero();
     }
 
     private static GenericStackInv inventory(Set<AEKeyType> types) {

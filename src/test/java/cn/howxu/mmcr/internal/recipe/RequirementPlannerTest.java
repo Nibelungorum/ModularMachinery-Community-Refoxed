@@ -1492,6 +1492,22 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void fluid_planning_supports_parallelism_above_integer_maximum() {
+        long parallelism = (long) Integer.MAX_VALUE + 1L;
+        LongFluidStorage storage = new LongFluidStorage(Long.MAX_VALUE, null);
+        storage.setContents(0, new FluidStack(Fluids.WATER, 1), Long.MAX_VALUE);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT,
+                        FluidIngredient.of(Fluids.WATER), 1, FluidStack.EMPTY)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
+                new PlanningContext(parallelism, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(parallelism);
+    }
+
+    @Test
     void energy_planning_supports_long_parallelism_without_batch_iteration() {
         LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, 1L, null);
         storage.setAmount(Long.MAX_VALUE);

@@ -41,10 +41,14 @@ class LongResourceStorageTest {
         assertThat(storage.amount(0)).isZero();
         assertThat(storage.insertItem(0, iron, false)).isEmpty();
 
-        assertThat(storage.resource(0)).isEqualTo(iron.copyWithCount(1));
-        assertThat(storage.getStackInSlot(0)).isEqualTo(iron);
-        assertThat(storage.insertItem(0, new ItemStack(Items.GOLD_INGOT, 1), true))
-                .isEqualTo(new ItemStack(Items.GOLD_INGOT, 1));
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), iron)).isTrue();
+        assertThat(storage.resource(0).getCount()).isEqualTo(1);
+        ItemStack projected = storage.getStackInSlot(0);
+        assertThat(ItemStack.isSameItemSameComponents(projected, iron)).isTrue();
+        assertThat(projected.getCount()).isEqualTo(iron.getCount());
+        ItemStack rejected = storage.insertItem(0, new ItemStack(Items.GOLD_INGOT, 1), true);
+        assertThat(ItemStack.isSameItemSameComponents(rejected, new ItemStack(Items.GOLD_INGOT))).isTrue();
+        assertThat(rejected.getCount()).isEqualTo(1);
     }
 
     @Test
@@ -71,10 +75,15 @@ class LongResourceStorageTest {
         assertThat(storage.fill(water, IFluidHandler.FluidAction.SIMULATE)).isEqualTo(40);
         assertThat(storage.amount(0)).isZero();
         assertThat(storage.fill(water, IFluidHandler.FluidAction.EXECUTE)).isEqualTo(40);
-        assertThat(storage.resource(0)).isEqualTo(water.copyWithAmount(1));
-        assertThat(storage.drain(water, IFluidHandler.FluidAction.SIMULATE)).isEqualTo(water);
+        assertThat(FluidStack.isSameFluidSameComponents(storage.resource(0), water)).isTrue();
+        assertThat(storage.resource(0).getAmount()).isEqualTo(1);
+        FluidStack simulated = storage.drain(water, IFluidHandler.FluidAction.SIMULATE);
+        assertThat(FluidStack.isSameFluidSameComponents(simulated, water)).isTrue();
+        assertThat(simulated.getAmount()).isEqualTo(water.getAmount());
         assertThat(storage.amount(0)).isEqualTo(40L);
-        assertThat(storage.drain(water, IFluidHandler.FluidAction.EXECUTE)).isEqualTo(water);
+        FluidStack drained = storage.drain(water, IFluidHandler.FluidAction.EXECUTE);
+        assertThat(FluidStack.isSameFluidSameComponents(drained, water)).isTrue();
+        assertThat(drained.getAmount()).isEqualTo(water.getAmount());
 
         assertThat(storage.amount(0)).isZero();
         assertThat(storage.resource(0)).isEmpty();

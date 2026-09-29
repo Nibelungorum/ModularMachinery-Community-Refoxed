@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.config.CommonConfig;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -84,32 +85,33 @@ public final class FailureStatusCodec {
 
     public static @Nullable ExecutionStatus read(CompoundTag input) {
         Objects.requireNonNull(input, "input");
-        if (!input.getBooleanOr("present", false)) return null;
+        if (!input.getBoolean("present")) return null;
 
         ResourceLocation id = getResourceLocation(input, "id");
-        StatusSeverity severity = getEnum(StatusSeverity.values(), input.getIntOr("severity", -1), "failure severity");
+        StatusSeverity severity = getEnum(StatusSeverity.values(),
+                input.contains("severity") ? input.getInt("severity") : -1, "failure severity");
         ResourceLocation source = getResourceLocation(input, "source");
-        CompoundTag occurrenceInput = input.getCompoundOrEmpty("occurrence");
-        if (!occurrenceInput.getBooleanOr("present", false)) {
+        CompoundTag occurrenceInput = input.getCompound("occurrence");
+        if (!occurrenceInput.getBoolean("present")) {
             return new ExecutionStatus(id, severity, source, (FailureOccurrence) null);
         }
 
-        ResourceLocation reasonId = occurrenceInput.getBooleanOr("has_reason", false)
+        ResourceLocation reasonId = occurrenceInput.getBoolean("has_reason")
                 ? getResourceLocation(occurrenceInput, "reason_id") : null;
         FailureReason reason = reasonId == null ? null : resolveReason(reasonId);
 
-        ListTag traceInputs = occurrenceInput.getListOrEmpty("trace");
+        ListTag traceInputs = occurrenceInput.getList("trace", Tag.TAG_COMPOUND);
         int traceCount = count(traceInputs, MAX_TRACE_FRAMES, "trace frame");
         List<FailureTrace.Frame> frames = new ArrayList<>(traceCount);
         for (int index = 0; index < traceInputs.size(); index++) {
-            frames.add(readFrame(traceInputs.getCompoundOrEmpty(index)));
+            frames.add(readFrame(traceInputs.getCompound(index)));
         }
 
-        ListTag detailInputs = occurrenceInput.getListOrEmpty("details");
+        ListTag detailInputs = occurrenceInput.getList("details", Tag.TAG_COMPOUND);
         int detailCount = count(detailInputs, maxDetails(), "failure detail");
         Map<String, String> details = new LinkedHashMap<>(detailCount);
         for (int index = 0; index < detailInputs.size(); index++) {
-            CompoundTag detailInput = detailInputs.getCompoundOrEmpty(index);
+            CompoundTag detailInput = detailInputs.getCompound(index);
             String key = getString(detailInput, "key");
             String value = getString(detailInput, "value");
             details.put(key, value);
@@ -201,11 +203,12 @@ public final class FailureStatusCodec {
 
     private static FailureTrace.Frame readFrame(CompoundTag input) {
         ResourceLocation source = getResourceLocation(input, "source");
-        FailurePhase phase = getEnum(FailurePhase.values(), input.getIntOr("phase", -1), "failure phase");
-        ResourceLocation recipeId = input.getBooleanOr("has_recipe", false)
+        FailurePhase phase = getEnum(FailurePhase.values(),
+                input.contains("phase") ? input.getInt("phase") : -1, "failure phase");
+        ResourceLocation recipeId = input.getBoolean("has_recipe")
                 ? getResourceLocation(input, "recipe_id") : null;
-        Integer requirementIndex = input.getBooleanOr("has_requirement", false)
-                ? input.getIntOr("requirement_index", 0) : null;
+        Integer requirementIndex = input.getBoolean("has_requirement")
+                ? input.getInt("requirement_index") : null;
         return new FailureTrace.Frame(source, phase, recipeId, requirementIndex);
     }
 
@@ -255,7 +258,7 @@ public final class FailureStatusCodec {
     }
 
     private static String getString(CompoundTag input, String name) {
-        String value = input.getStringOr(name, "");
+        String value = input.getString(name);
         checkString(value, name);
         return value;
     }

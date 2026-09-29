@@ -76,6 +76,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -84,7 +85,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -94,8 +94,6 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -1347,13 +1345,10 @@ class MachineControllerBlockEntityTest {
         controller.setFormed(true);
         long savedVersion = controller.structureSnapshot().version();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        controller.saveAdditional(output);
+        CompoundTag output = saveController(controller);
 
         MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(restored, output);
 
         assertThat(restored.structureSnapshot().version()).isEqualTo(savedVersion);
         assertThat(restored.structureSnapshot().dirty()).isTrue();
@@ -1378,12 +1373,9 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
         assertThat(controller.selectRecipePool(secondPool)).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        controller.saveAdditional(output);
+        CompoundTag output = saveController(controller);
         MachineControllerBlockEntity restored = recipePoolController(machineId, firstPool, secondPool);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(restored, output);
 
         assertThat(restored.currentRecipePoolId()).isEqualTo(secondPool);
     }
@@ -1393,13 +1385,11 @@ class MachineControllerBlockEntityTest {
         ResourceLocation machineId = MMCR.id("controller_recipe_pool_malformed");
         ResourceLocation firstPool = MMCR.id("controller_recipe_pool_malformed_first");
         ResourceLocation secondPool = MMCR.id("controller_recipe_pool_malformed_second");
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        CompoundTag output = new CompoundTag();
         output.putString("selected_recipe_pool", "not an identifier");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
 
-        controller.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(controller, output);
 
         assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
     }
@@ -1409,12 +1399,10 @@ class MachineControllerBlockEntityTest {
         ResourceLocation machineId = MMCR.id("controller_recipe_pool_removed");
         ResourceLocation firstPool = MMCR.id("controller_recipe_pool_removed_first");
         ResourceLocation removedPool = MMCR.id("controller_recipe_pool_removed_second");
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        CompoundTag output = new CompoundTag();
         output.putString("selected_recipe_pool", removedPool.toString());
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
-        controller.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(controller, output);
         MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
 
         assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
@@ -1477,15 +1465,23 @@ class MachineControllerBlockEntityTest {
         }
     }
 
+    private static CompoundTag saveController(MachineControllerBlockEntity controller) {
+        CompoundTag output = new CompoundTag();
+        controller.saveAdditional(output, HolderLookup.Provider.create(Stream.empty()));
+        return output;
+    }
+
+    private static void loadController(MachineControllerBlockEntity controller, CompoundTag input) {
+        controller.loadAdditional(input, HolderLookup.Provider.create(Stream.empty()));
+    }
+
     @Test
     void negative_structure_runtime_version_loads_as_zero() {
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        CompoundTag output = new CompoundTag();
         output.putLong("structure_runtime_version", -1L);
 
         MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(restored, output);
 
         assertThat(restored.structureSnapshot().version()).isZero();
         assertThat(restored.structureSnapshot().dirty()).isTrue();
@@ -1516,9 +1512,7 @@ class MachineControllerBlockEntityTest {
         resolveSharedRequests(controller);
         assertThat(controller.runtimeSnapshot().factory().active()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        controller.saveAdditional(output);
+        CompoundTag output = saveController(controller);
 
         MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         FactorySchedulerBlockEntity restoredScheduler = new FactorySchedulerBlockEntity(new BlockPos(1, 0, 0),
@@ -1526,8 +1520,7 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.formStructureWithComponents(restored, machine, restoredScheduler);
         restored.invalidateFormedStructure();
         restored.setMachine(null);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(restored, output);
         restored.setMachine(machine);
 
         restored.tickStructure((ServerLevel) restored.getLevel(), restored.getBlockPos());
@@ -1563,9 +1556,7 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.setDirectSignal(controller.getLevel(), controllerPos, 15);
         controller.serverTick();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        controller.saveAdditional(output);
+        CompoundTag output = saveController(controller);
 
         MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
         FactorySchedulerBlockEntity restoredScheduler = new FactorySchedulerBlockEntity(schedulerPos,
@@ -1573,8 +1564,7 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.formStructureWithComponents(restored, machine, restoredScheduler);
         restored.invalidateFormedStructure();
         restored.setMachine(null);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        loadController(restored, output);
         restored.setMachine(machine);
         assertThat(restored.runtimeSnapshot().factory().presentationLanes())
                 .anyMatch(thread -> thread.recipeId().equals(recipe.id().toString()));

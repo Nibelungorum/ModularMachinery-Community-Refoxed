@@ -96,8 +96,10 @@ class CombinedPortBlockEntityTest {
 
         assertThat(items.amount(0)).isEqualTo(64L);
         assertThat(fluids.amount(0)).isEqualTo(256_000L);
-        assertThat(items.resource(0)).isEqualTo(iron);
-        assertThat(fluids.resource(0)).isEqualTo(water);
+        assertThat(ItemStack.isSameItemSameComponents(items.resource(0), iron)).isTrue();
+        assertThat(items.resource(0).getCount()).isEqualTo(1);
+        assertThat(FluidStack.isSameFluidSameComponents(fluids.resource(0), water)).isTrue();
+        assertThat(fluids.resource(0).getAmount()).isEqualTo(1);
     }
 
     @Test
@@ -172,7 +174,8 @@ class CombinedPortBlockEntityTest {
         restored.loadAdditional(output, lookup);
 
         assertThat(restored.fluidStorage().resource(0)).isEmpty();
-        assertThat(restored.fluidStorage().resource(1)).isEqualTo(water);
+        assertThat(FluidStack.isSameFluidSameComponents(restored.fluidStorage().resource(1), water)).isTrue();
+        assertThat(restored.fluidStorage().resource(1).getAmount()).isEqualTo(1);
         assertThat(restored.fluidStorage().amount(1)).isEqualTo(1_234L);
         assertThat(restored.fluidStorage().resource(2)).isEmpty();
     }

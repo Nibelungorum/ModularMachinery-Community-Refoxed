@@ -18,11 +18,10 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.ProblemReporter;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -76,14 +75,14 @@ class MachinePortAppearanceTest {
         port.linkControllerAppearance(new BlockPos(12, 4, 12), texture);
 
         var tag = port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-        var linkedControllers = tag.getListOrEmpty("LinkedControllers");
+        var linkedControllers = tag.getList("LinkedControllers", Tag.TAG_COMPOUND);
         assertThat(linkedControllers).hasSize(1);
-        var linkedController = linkedControllers.getCompound(0).orElseThrow();
-        assertThat(linkedController.getIntOr("X", 0)).isEqualTo(12);
-        assertThat(linkedController.getIntOr("Y", 0)).isEqualTo(4);
-        assertThat(linkedController.getIntOr("Z", 0)).isEqualTo(12);
-        assertThat(linkedController.getStringOr("SourceBlock", "")).isEqualTo(MMCR.id("basic_casing").toString());
-        assertThat(linkedController.getStringOr("Texture", "")).isEqualTo(texture.toString());
+        var linkedController = linkedControllers.getCompound(0);
+        assertThat(linkedController.getInt("X")).isEqualTo(12);
+        assertThat(linkedController.getInt("Y")).isEqualTo(4);
+        assertThat(linkedController.getInt("Z")).isEqualTo(12);
+        assertThat(linkedController.getString("SourceBlock")).isEqualTo(MMCR.id("basic_casing").toString());
+        assertThat(linkedController.getString("Texture")).isEqualTo(texture.toString());
     }
 
     @Test
@@ -96,16 +95,12 @@ class MachinePortAppearanceTest {
         source.linkControllerAppearance(second, secondTexture);
         source.linkControllerAppearance(first, firstTexture);
 
-        TagValueOutput output = TagValueOutput.createWithContext(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        source.saveAdditional(output);
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag output = new CompoundTag();
+        source.saveAdditional(output, lookup);
         IOPortBlockEntity restored = itemInputBus();
 
-        restored.loadAdditional(TagValueInput.create(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()),
-                output.buildResult()));
+        restored.loadAdditional(output, lookup);
 
         assertThat(restored.linkedControllerPositions()).containsExactlyInAnyOrder(first, second);
         assertThat(restored.linkedControllerPos()).isEqualTo(first);

@@ -96,7 +96,9 @@ class CapabilityHostTest {
         assertThat(handler.insertItem(0, iron, false)).isEmpty();
         assertThat(item.prepare(request(item)).commit().success()).isTrue();
 
-        assertThat(handler.getStackInSlot(0)).isEqualTo(iron);
+        ItemStack stored = handler.getStackInSlot(0);
+        assertThat(ItemStack.isSameItemSameComponents(stored, iron)).isTrue();
+        assertThat(stored.getCount()).isEqualTo(iron.getCount());
     }
 
     @Test
@@ -109,7 +111,9 @@ class CapabilityHostTest {
         FluidStack water = new FluidStack(Fluids.WATER, 750);
         assertThat(handler.fill(water, IFluidHandler.FluidAction.EXECUTE)).isEqualTo(750);
 
-        assertThat(handler.getFluidInTank(0)).isEqualTo(water);
+        FluidStack stored = handler.getFluidInTank(0);
+        assertThat(FluidStack.isSameFluidSameComponents(stored, water)).isTrue();
+        assertThat(stored.getAmount()).isEqualTo(water.getAmount());
     }
 
     @Test

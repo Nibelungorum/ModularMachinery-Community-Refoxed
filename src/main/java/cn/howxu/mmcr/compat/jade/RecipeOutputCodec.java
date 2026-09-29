@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import com.mojang.serialization.DataResult;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 
@@ -46,15 +47,16 @@ public final class RecipeOutputCodec {
 
     public static List<MachineOutputAmount> read(CompoundTag data) {
         if (data == null) return List.of();
-        ListTag list = data.getListOrEmpty(OUTPUT_KEY);
+        ListTag list = data.getList(OUTPUT_KEY, Tag.TAG_COMPOUND);
         List<MachineOutputAmount> decoded = new ArrayList<>(list.size());
         for (Tag element : list) {
             if (!(element instanceof CompoundTag compound)) continue;
             CompoundTag encodedOutput = compound.contains(OUTPUT_FIELD)
-                    ? compound.getCompoundOrEmpty(OUTPUT_FIELD) : compound;
+                    ? compound.getCompound(OUTPUT_FIELD) : compound;
             DataResult<MachineOutput> parsed = MachineOutput.CODEC.parse(NbtOps.INSTANCE, encodedOutput);
             parsed.result().ifPresent(output -> decoded.add(new MachineOutputAmount(output,
-                    compound.getLong(AMOUNT_FIELD).orElse(MachineOutput.scaledAmount(output)))));
+                    compound.contains(AMOUNT_FIELD) ? compound.getLong(AMOUNT_FIELD)
+                            : MachineOutput.scaledAmount(output))));
         }
         return List.copyOf(decoded);
     }

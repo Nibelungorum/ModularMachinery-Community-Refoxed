@@ -8,6 +8,8 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -18,8 +20,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
@@ -145,36 +145,43 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        writeGlobalPos(output.child(OWNER_KEY), owner);
-        var serializedConnections = output.childrenList(CONNECTIONS_KEY);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        CompoundTag ownerOutput = new CompoundTag();
+        writeGlobalPos(ownerOutput, owner);
+        output.put(OWNER_KEY, ownerOutput);
+        net.minecraft.nbt.ListTag serializedConnections = new net.minecraft.nbt.ListTag();
         for (Connection connection : connections.values()) {
-            ValueOutput serialized = serializedConnections.addChild();
-            writeGlobalPos(serialized.child(ENDPOINT_KEY), connection.endpoint());
+            CompoundTag serialized = new CompoundTag();
+            CompoundTag endpoint = new CompoundTag();
+            writeGlobalPos(endpoint, connection.endpoint());
+            serialized.put(ENDPOINT_KEY, endpoint);
             serialized.putString(MACHINE_KEY, connection.machine().type().toString());
             serialized.putLong(HASH_KEY, connection.machine().hash());
             serialized.putLong(SEQUENCE_KEY, connection.sequence());
+            serializedConnections.add(serialized);
         }
+        output.put(CONNECTIONS_KEY, serializedConnections);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
-        owner = readGlobalPos(input.childOrEmpty(OWNER_KEY));
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
+        owner = readGlobalPos(input.getCompound(OWNER_KEY));
         connections.clear();
         connectionSnapshot = null;
-        for (ValueInput serialized : input.childrenListOrEmpty(CONNECTIONS_KEY)) {
+        ListTag connections = input.getList(CONNECTIONS_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < connections.size(); index++) {
+            CompoundTag serialized = connections.getCompound(index);
             try {
-                GlobalPos endpoint = readGlobalPos(serialized.childOrEmpty(ENDPOINT_KEY));
-                String machine = serialized.getStringOr(MACHINE_KEY, "");
+                GlobalPos endpoint = readGlobalPos(serialized.getCompound(ENDPOINT_KEY));
+                String machine = serialized.getString(MACHINE_KEY);
                 if (endpoint == null || machine.isBlank()
-                        || serialized.getLong(HASH_KEY).isEmpty()
-                        || serialized.getLong(SEQUENCE_KEY).isEmpty()) continue;
-                long sequence = serialized.getLong(SEQUENCE_KEY).orElseThrow();
+                        || !serialized.contains(HASH_KEY) || !serialized.contains(SEQUENCE_KEY)) continue;
+                long sequence = serialized.getLong(SEQUENCE_KEY);
                 if (sequence < 0L) continue;
                 MachineReference machineReference = new MachineReference(
-                        ResourceLocation.parse(machine), serialized.getLong(HASH_KEY).orElseThrow());
+                        ResourceLocation.parse(machine), serialized.getLong(HASH_KEY));
                 connections.put(new ConnectionKey(endpoint, machineReference),
                         new Connection(endpoint, machineReference, sequence));
             } catch (RuntimeException ignored) {
@@ -189,8 +196,9 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    public void onDataPacket(net.minecraft.network.Connection net, ValueInput input) {
-        super.onDataPacket(net, input);
+    public void onDataPacket(net.minecraft.network.Connection net, ClientboundBlockEntityDataPacket packet,
+                             HolderLookup.Provider registries) {
+        super.onDataPacket(net, packet, registries);
         if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
     }
 
@@ -204,7 +212,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
                 && connection.machine().type() != null && connection.sequence() >= 0L;
     }
 
-    private static void writeGlobalPos(ValueOutput output, @Nullable GlobalPos pos) {
+    private static void writeGlobalPos(CompoundTag output, @Nullable GlobalPos pos) {
         if (pos == null) return;
         output.putString(DIMENSION_KEY, pos.dimension().identifier().toString());
         output.putInt(X_KEY, pos.pos().getX());
@@ -212,13 +220,13 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         output.putInt(Z_KEY, pos.pos().getZ());
     }
 
-    private static @Nullable GlobalPos readGlobalPos(ValueInput input) {
-        String dimension = input.getStringOr(DIMENSION_KEY, "");
+    private static @Nullable GlobalPos readGlobalPos(CompoundTag input) {
+        String dimension = input.getString(DIMENSION_KEY);
         if (dimension.isBlank()) return null;
         ResourceLocation dimensionId = ResourceLocation.parse(dimension);
         ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, dimensionId);
         return GlobalPos.of(key, new BlockPos(
-                input.getIntOr(X_KEY, 0), input.getIntOr(Y_KEY, 0), input.getIntOr(Z_KEY, 0)));
+                input.getInt(X_KEY), input.getInt(Y_KEY), input.getInt(Z_KEY)));
     }
 
     public record Connection(GlobalPos endpoint, MachineReference machine, long sequence) {

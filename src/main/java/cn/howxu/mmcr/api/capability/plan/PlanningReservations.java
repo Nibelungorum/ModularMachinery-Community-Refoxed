@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.internal.capability.NativeStackSync;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import java.util.HashMap;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -33,11 +36,17 @@ public final class PlanningReservations {
     }
 
     public long itemAmount(IItemHandler handler, int slot) {
-        return virtualAmount(handler, slot, handler.getStackInSlot(slot).getCount());
+        long amount = handler instanceof LongItemStorage storage ? storage.amount(slot)
+                : handler instanceof NativeStackSync.Item sync ? sync.amount(slot)
+                : handler.getStackInSlot(slot).getCount();
+        return virtualAmount(handler, slot, amount);
     }
 
     public long fluidAmount(IFluidHandler handler, int tank) {
-        return virtualAmount(handler, tank, handler.getFluidInTank(tank).getAmount());
+        long amount = handler instanceof LongFluidStorage storage ? storage.amount(tank)
+                : handler instanceof NativeStackSync.Fluid sync ? sync.amount(tank)
+                : handler.getFluidInTank(tank).getAmount();
+        return virtualAmount(handler, tank, amount);
     }
 
     public boolean reserveItemExtract(IItemHandler handler, int slot, ItemStack stack, long amount) {
