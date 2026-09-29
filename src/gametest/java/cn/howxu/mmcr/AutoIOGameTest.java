@@ -17,8 +17,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -407,19 +405,12 @@ public class AutoIOGameTest {
     }
 
     private static void setItem(IOPortBlockEntity port, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = port.itemStorage().resource(slot);
-            if (current != null && !current.isEmpty()) {
-                port.itemStorage().extract(slot, current, port.itemStorage().amount(slot), transaction);
-            }
-            port.itemStorage().insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
-        }
+        port.itemStorage().setContents(slot, stack, stack.getCount());
     }
 
     private static ItemStack item(IOPortBlockEntity port, int slot) {
-        ItemResource resource = port.itemStorage().resource(slot);
-        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
-                : resource.toStack((int) Math.min(port.itemStorage().amount(slot), resource.getMaxStackSize()));
+        ItemStack resource = port.itemStorage().resource(slot);
+        return resource.isEmpty() ? ItemStack.EMPTY
+                : resource.copyWithCount((int) Math.min(port.itemStorage().amount(slot), resource.getMaxStackSize()));
     }
 }

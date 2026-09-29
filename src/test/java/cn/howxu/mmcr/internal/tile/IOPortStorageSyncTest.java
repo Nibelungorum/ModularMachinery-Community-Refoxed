@@ -3,15 +3,13 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -33,8 +31,7 @@ class IOPortStorageSyncTest {
         TrackingPort port = new TrackingPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_ITEM_INPUT.id()).get().defaultBlockState());
 
-        ((LongResourceStorage<ItemResource>) port.itemStorage()).setContents(0,
-                ItemResource.of(Items.IRON_INGOT), 1L);
+        ((LongItemStorage) port.itemStorage()).setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
         assertThat(port.snapshotNotifications).isEqualTo(1);
 
         port.setAutoIOEnabled(true);
@@ -47,15 +44,7 @@ class IOPortStorageSyncTest {
         TrackingItemPort port = new TrackingItemPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.itemStorage().insert(
-                    0,
-                    ItemResource.of(new ItemStack(Items.IRON_INGOT)),
-                    1L,
-                    transaction
-            );
-            transaction.commit();
-        }
+        port.itemStorage().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
 
         assertThat(port.snapshotNotifications).isEqualTo(1);
     }
@@ -64,25 +53,16 @@ class IOPortStorageSyncTest {
     void every_input_item_or_fluid_storage_host_notifies_recipe_inputs() {
         TrackingPort extendedItem = new TrackingPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_ITEM_INPUT.id()).get().defaultBlockState());
-        ((LongResourceStorage<ItemResource>) extendedItem.itemStorage()).setContents(0,
-                ItemResource.of(Items.IRON_INGOT), 1L);
+        ((LongItemStorage) extendedItem.itemStorage()).setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
 
         TrackingFluidPort extendedFluid = new TrackingFluidPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_FLUID_INPUT.id()).get().defaultBlockState());
-        extendedFluid.fluidStorage().setContents(0, FluidResource.of(Fluids.WATER), 1L);
+        extendedFluid.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
 
         TrackingCombinedPort combined = new TrackingCombinedPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.COMBINED_INPUT.id()).get().defaultBlockState());
-        try (Transaction transaction = Transaction.openRoot()) {
-            combined.itemStorage().insert(
-                    0,
-                    ItemResource.of(new ItemStack(Items.IRON_INGOT)),
-                    1L,
-                    transaction
-            );
-            transaction.commit();
-        }
-        combined.fluidStorage().setContents(0, FluidResource.of(Fluids.WATER), 1L);
+        combined.itemStorage().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        combined.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
 
         assertThat(extendedItem.recipeInputNotifications).isEqualTo(1);
         assertThat(extendedFluid.recipeInputNotifications).isEqualTo(1);

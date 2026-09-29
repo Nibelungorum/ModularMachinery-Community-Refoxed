@@ -26,8 +26,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.HashMap;
 import java.util.List;
@@ -202,15 +200,12 @@ public class E2ERecipeRunGameTest {
     }
 
     private static void insertItem(ItemBusBlockEntity bus, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            bus.itemStorage().insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
-        }
+        bus.itemStorage().setContents(slot, stack, stack.getCount());
     }
 
     private static ItemStack item(ItemBusBlockEntity bus, int slot) {
-        ItemResource resource = bus.itemStorage().resource(slot);
-        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
-                : resource.toStack((int) Math.min(bus.itemStorage().amount(slot), resource.getMaxStackSize()));
+        ItemStack resource = bus.itemStorage().resource(slot);
+        return resource.isEmpty() ? ItemStack.EMPTY
+                : resource.copyWithCount((int) Math.min(bus.itemStorage().amount(slot), resource.getMaxStackSize()));
     }
 }

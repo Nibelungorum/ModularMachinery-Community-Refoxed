@@ -17,15 +17,11 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.ProblemReporter;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -56,33 +52,21 @@ class FactorySchedulerBlockEntityTest {
     void slotOnlyAcceptsThreadDispersers() {
         FactorySchedulerBlockEntity scheduler = createScheduler();
 
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT.getDefaultInstance());
-        ItemResource disperser = ItemResource.of(new ItemStack(ModItems.THREAD_DISPERSER.get(), 8));
+        ItemStack iron = Items.IRON_INGOT.getDefaultInstance();
+        ItemStack disperser = new ItemStack(ModItems.THREAD_DISPERSER.get(), 8);
 
-        long rejected;
-        long accepted;
-        try (Transaction transaction = Transaction.openRoot()) {
-            rejected = scheduler.itemStorage().insert(0, iron, 1L, transaction);
-            accepted = scheduler.itemStorage().insert(0, disperser, 8L, transaction);
-            transaction.commit();
-        }
+        ItemStack rejected = scheduler.itemStorage().insertItem(0, iron, false);
+        ItemStack accepted = scheduler.itemStorage().insertItem(0, disperser, false);
 
-        assertThat(rejected).isZero();
-        assertThat(accepted).isEqualTo(8L);
+        assertThat(rejected).isEqualTo(iron);
+        assertThat(accepted).isEmpty();
         assertThat(scheduler.threadCount()).isEqualTo(9);
     }
 
     @Test
     void largeStoredStackSaturatesThreadCount() {
         FactorySchedulerBlockEntity scheduler = createScheduler();
-        ItemResource disperser = ItemResource.of(
-                new ItemStack(ModItems.THREAD_DISPERSER.get(), Integer.MAX_VALUE)
-        );
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            scheduler.itemStorage().insert(0, disperser, Integer.MAX_VALUE, transaction);
-            transaction.commit();
-        }
+        scheduler.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get()), Integer.MAX_VALUE);
 
         assertThat(scheduler.threadCount()).isEqualTo(Integer.MAX_VALUE);
     }
@@ -90,26 +74,14 @@ class FactorySchedulerBlockEntityTest {
     @Test
     void inventoryRoundTripsThroughNbt() {
         FactorySchedulerBlockEntity scheduler = createScheduler();
-        try (Transaction transaction = Transaction.openRoot()) {
-            scheduler.itemStorage().insert(
-                    0,
-                    ItemResource.of(new ItemStack(ModItems.THREAD_DISPERSER.get(), 7)),
-                    7L,
-                    transaction
-            );
-            transaction.commit();
-        }
+        scheduler.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 7), 7L);
 
-        TagValueOutput output = TagValueOutput.createWithContext(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        scheduler.saveAdditional(output);
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag output = new CompoundTag();
+        scheduler.saveAdditional(output, lookup);
 
         FactorySchedulerBlockEntity loaded = createScheduler();
-        loaded.loadAdditional(TagValueInput.create(
-                ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()),
-                output.buildResult()));
+        loaded.loadAdditional(output, lookup);
 
         assertThat(loaded.itemStorage().amount(0)).isEqualTo(7L);
         assertThat(loaded.threadCount()).isEqualTo(8);
@@ -120,15 +92,8 @@ class FactorySchedulerBlockEntityTest {
         MachineControllerBlockEntity controller = createController();
         FactorySchedulerBlockEntity first = createScheduler();
         FactorySchedulerBlockEntity second = createScheduler();
-        try (Transaction transaction = Transaction.openRoot()) {
-            first.itemStorage().insert(0,
-                    ItemResource.of(new ItemStack(ModItems.THREAD_DISPERSER.get(), 2)),
-                    2L, transaction);
-            second.itemStorage().insert(0,
-                    ItemResource.of(new ItemStack(ModItems.THREAD_DISPERSER.get(), 4)),
-                    4L, transaction);
-            transaction.commit();
-        }
+        first.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2), 2L);
+        second.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 4), 4L);
         addFactoryComponent(controller, first);
         addFactoryComponent(controller, second);
 
@@ -144,16 +109,8 @@ class FactorySchedulerBlockEntityTest {
         addFactoryComponent(controller, scheduler);
         scheduler.bindOwner(controller);
 
-        ItemResource disperser = ItemResource.of(new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            scheduler.itemStorage().insert(0, disperser, 3L, transaction);
-            transaction.commit();
-        }
-        try (Transaction transaction = Transaction.openRoot()) {
-            scheduler.itemStorage().extract(0, disperser, 1L, transaction);
-            transaction.commit();
-        }
+        scheduler.itemStorage().insertItem(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 3), false);
+        scheduler.itemStorage().extractItem(0, 1, false);
 
         assertThat(invalidations).hasValue(2);
     }

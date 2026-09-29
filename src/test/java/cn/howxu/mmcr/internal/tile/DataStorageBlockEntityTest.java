@@ -10,10 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,11 +39,11 @@ class DataStorageBlockEntityTest {
         source.storage().set("enabled", DataValue.of(true));
         source.claimController(BlockPos.ZERO, MMCR.id("test_cube"));
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, LOOKUP);
-        source.saveAdditional(output);
+        CompoundTag output = new CompoundTag();
+        source.saveAdditional(output, LOOKUP);
 
         DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, output.buildResult()));
+        restored.loadAdditional(output, LOOKUP);
 
         assertThat(restored.storage().get("decimal")).contains(DataValue.of(new BigDecimal("1.2300")));
         assertThat(restored.storage().get("decimal")).get().isEqualTo(DataValue.of(new BigDecimal("1.2300")));
@@ -69,9 +66,8 @@ class DataStorageBlockEntityTest {
         )));
         source.storage().set("legacy", DataValue.of(42));
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, LOOKUP);
-        source.saveAdditional(output);
-        CompoundTag serialized = output.buildResult();
+        CompoundTag serialized = new CompoundTag();
+        source.saveAdditional(serialized, LOOKUP);
         ListTag values = serialized.getListOrEmpty("Values");
         CompoundTag malformed = new CompoundTag();
         malformed.putString("Key", "malformed");
@@ -100,7 +96,7 @@ class DataStorageBlockEntityTest {
         values.add(malformed);
 
         DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+        restored.loadAdditional(serialized, LOOKUP);
 
         assertThat(restored.storage().get("nested")).contains(DataValue.map(Map.of(
                 "mixed", mixedList,
@@ -141,7 +137,7 @@ class DataStorageBlockEntityTest {
         serialized.put("Values", values);
 
         DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+        restored.loadAdditional(serialized, LOOKUP);
 
         assertThat(restored.storage().values()).containsOnlyKeys("valid");
         assertThat(restored.storage().get("valid")).contains(DataValue.of("kept"));
@@ -181,7 +177,7 @@ class DataStorageBlockEntityTest {
         serialized.put("Values", values);
 
         DataStorageBlockEntity restored = create(new BlockPos(1, 0, 0));
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+        restored.loadAdditional(serialized, LOOKUP);
 
         assertThat(restored.storage().values()).containsOnlyKeys("valid");
         assertThat(restored.storage().get("valid")).contains(DataValue.of("kept"));

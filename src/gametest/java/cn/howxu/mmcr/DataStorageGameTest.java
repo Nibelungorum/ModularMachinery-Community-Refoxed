@@ -48,17 +48,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -148,16 +141,8 @@ public final class DataStorageGameTest {
 
         ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
         ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            input.itemStorage().insert(0, ItemResource.of(Items.DIAMOND), 1L, transaction);
-            transaction.commit();
-        }
-        try (Transaction transaction = Transaction.openRoot()) {
-            input.itemStorage().insert(1, ItemResource.of(Items.IRON_INGOT), 2L, transaction);
-            transaction.commit();
-        }
-        // input.getItemHandler(null).insertItem(0, new ItemStack(Items.DIAMOND), false);
-        // input.getItemHandler(null).insertItem(1, new ItemStack(Items.IRON_INGOT, 2), false);
+        input.itemStorage().setContents(0, new ItemStack(Items.DIAMOND), 1L);
+        input.itemStorage().setContents(1, new ItemStack(Items.IRON_INGOT), 2L);
 
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         AtomicInteger starts = new AtomicInteger();
@@ -230,13 +215,7 @@ public final class DataStorageGameTest {
                             && controller.runtimeSnapshot().crafting().totalTick() == 2
                             && starts.get() == 1,
                     "Controller load restores the effective recipe without rerunning Start");
-            try (Transaction transaction = Transaction.openRoot()) {
-                ItemResource resource = input.itemStorage().resource(0);
-                if (resource != null && !resource.isEmpty()) {
-                    input.itemStorage().extract(0, resource, 1L, transaction);
-                    transaction.commit();
-                }
-            }
+            input.itemStorage().extractItem(0, 1, false);
 
             controller.serverTick();
             controller.serverTick();
@@ -246,7 +225,7 @@ public final class DataStorageGameTest {
             helper.assertTrue(ticks.get() == 2 && finishes.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
-                            && output.itemStorage().resource(0).toStack(1).is(Items.GOLD_NUGGET)
+                            && output.itemStorage().resource(0).is(Items.GOLD_NUGGET)
                             && output.itemStorage().amount(0) == 2L,
                     "Loaded effective output finishes through the real output bus");
             helper.succeed();
@@ -257,11 +236,12 @@ public final class DataStorageGameTest {
     private static CompoundTag saveController(MachineControllerBlockEntity controller,
                                                HolderLookup.Provider registries) {
         try {
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, registries);
-            var save = MachineControllerBlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
+            CompoundTag output = new CompoundTag();
+            var save = MachineControllerBlockEntity.class.getDeclaredMethod("saveAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             save.setAccessible(true);
-            save.invoke(controller, output);
-            return output.buildResult();
+            save.invoke(controller, output, registries);
+            return output;
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to save controller runtime", exception);
         }
@@ -270,9 +250,10 @@ public final class DataStorageGameTest {
     private static void loadController(MachineControllerBlockEntity controller,
                                        HolderLookup.Provider registries, CompoundTag tag) {
         try {
-            var load = MachineControllerBlockEntity.class.getDeclaredMethod("loadAdditional", ValueInput.class);
+            var load = MachineControllerBlockEntity.class.getDeclaredMethod("loadAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             load.setAccessible(true);
-            load.invoke(controller, TagValueInput.create(ProblemReporter.DISCARDING, registries, tag));
+            load.invoke(controller, tag, registries);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to load controller runtime", exception);
         }

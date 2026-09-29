@@ -1,7 +1,6 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
@@ -58,8 +57,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 
 import java.util.ArrayList;
 import java.lang.reflect.Field;
@@ -448,39 +446,33 @@ public class ControllerTickGameTest {
     }
 
     private static void fillOutput(ItemOutputBusBlockEntity output, int retainedGoldSlot) {
-        ResourceStorage<ItemResource> itemStorage = output.itemStorage();
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (int slot = 0; slot < itemStorage.size(); slot++) {
+        LongItemStorage itemStorage = output.itemStorage();
+        for (int slot = 0; slot < itemStorage.size(); slot++) {
                 if (slot != retainedGoldSlot) {
-                    itemStorage.insert(slot, ItemResource.of(Items.COBBLESTONE), 64L, transaction);
+                itemStorage.setContents(slot, new ItemStack(Items.COBBLESTONE), 64L);
                 }
-            }
-            transaction.commit();
         }
     }
 
-    private static void insert(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
-        }
+    private static void insert(LongItemStorage storage, int slot, ItemStack stack) {
+        storage.setContents(slot, stack, stack.getCount());
     }
 
-    private static long count(ResourceStorage<ItemResource> storage, Item item) {
+    private static long count(LongItemStorage storage, Item item) {
         long amount = 0L;
         for (int slot = 0; slot < storage.size(); slot++) {
-            ItemResource resource = storage.resource(slot);
-            if (resource != null && resource.toStack(1).is(item)) amount += storage.amount(slot);
+            ItemStack resource = storage.resource(slot);
+            if (!resource.isEmpty() && resource.is(item)) amount += storage.amount(slot);
         }
         return amount;
     }
 
-    private static List<ItemStack> snapshot(ResourceStorage<ItemResource> storage) {
+    private static List<ItemStack> snapshot(LongItemStorage storage) {
         List<ItemStack> stacks = new ArrayList<>(storage.size());
         for (int slot = 0; slot < storage.size(); slot++) {
-            ItemResource resource = storage.resource(slot);
-            stacks.add(resource == null ? ItemStack.EMPTY
-                    : resource.toStack((int) Math.min(storage.amount(slot), Integer.MAX_VALUE)));
+            ItemStack resource = storage.resource(slot);
+            stacks.add(resource.isEmpty() ? ItemStack.EMPTY
+                    : resource.copyWithCount((int) Math.min(storage.amount(slot), Integer.MAX_VALUE)));
         }
         return List.copyOf(stacks);
     }

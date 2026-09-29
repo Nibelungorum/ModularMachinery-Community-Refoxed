@@ -13,11 +13,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -50,11 +47,11 @@ class NetworkInterfaceBlockEntityTest {
         assertThat(source.addConnection(new NetworkInterfaceBlockEntity.Connection(firstEndpoint, firstMachine, 4L))).isTrue();
         assertThat(source.addConnection(new NetworkInterfaceBlockEntity.Connection(secondEndpoint, secondMachine, 9L))).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, LOOKUP);
-        source.saveAdditional(output);
+        CompoundTag output = new CompoundTag();
+        source.saveAdditional(output, LOOKUP);
 
         NetworkInterfaceBlockEntity restored = create(new BlockPos(8, 4, 2));
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, output.buildResult()));
+        restored.loadAdditional(output, LOOKUP);
 
         assertThat(restored.owner()).contains(owner);
         assertThat(restored.connections()).containsExactly(
@@ -75,7 +72,7 @@ class NetworkInterfaceBlockEntityTest {
         serialized.put("connections", connections);
 
         NetworkInterfaceBlockEntity restored = create(BlockPos.ZERO);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, serialized));
+        restored.loadAdditional(serialized, LOOKUP);
 
         assertThat(restored.connections()).containsExactly(
                 new NetworkInterfaceBlockEntity.Connection(

@@ -1,17 +1,14 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-import net.neoforged.neoforge.transfer.energy.EnergyHandlerUtil;
-import net.neoforged.neoforge.transfer.energy.InfiniteEnergyHandler;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 
 public class EnergyHatchCapabilityGameTest {
 
@@ -34,34 +31,28 @@ public class EnergyHatchCapabilityGameTest {
         helper.assertTrue(inputCapability.directions().supports(IOType.INPUT), "Input capability accepts INPUT");
         helper.assertTrue(outputCapability.directions().supports(IOType.OUTPUT), "Output capability accepts OUTPUT");
 
-        EnergyHandler input = ModCapabilities.ENERGY_BLOCK.getCapability(
+        IEnergyStorage input = Capabilities.EnergyStorage.BLOCK.getCapability(
                 helper.getLevel(), inputWorldPos, helper.getLevel().getBlockState(inputWorldPos), inputBe, Direction.UP);
-        EnergyHandler output = ModCapabilities.ENERGY_BLOCK.getCapability(
+        IEnergyStorage output = Capabilities.EnergyStorage.BLOCK.getCapability(
                 helper.getLevel(), outputWorldPos, helper.getLevel().getBlockState(outputWorldPos), outputBe, Direction.UP);
 
         helper.assertTrue(input != null, "Input energy capability is present");
         helper.assertTrue(output != null, "Output energy capability is present");
 
-        int movedToInput = EnergyHandlerUtil.move(InfiniteEnergyHandler.INSTANCE, input, 500, null);
+        int movedToInput = input.receiveEnergy(500, false);
         helper.assertTrue(movedToInput == 500, "Input energy capability receives from transfer energy source");
         helper.assertTrue(inputHatch.getEnergyHandler(null).getAmountAsLong() == 500, "Input hatch stores transferred energy");
 
-        try (Transaction tx = Transaction.openRoot()) {
-            int extracted = input.extract(200, tx);
-            helper.assertTrue(extracted == 0, "Input energy capability rejects extracting");
-            tx.commit();
-        }
+        int extracted = input.extractEnergy(200, false);
+        helper.assertTrue(extracted == 0, "Input energy capability rejects extracting");
 
         var outputStorage = outputHatch.energyStorage();
         while (outputStorage.forceInsert(10000, false) > 0) {}
 
-        try (Transaction tx = Transaction.openRoot()) {
-            int inserted = output.insert(200, tx);
-            int extracted = output.extract(700, tx);
-            helper.assertTrue(inserted == 0, "Output energy capability rejects receiving");
-            helper.assertTrue(extracted > 0, "Output energy capability extracts stored energy");
-            tx.commit();
-        }
+        int rejectedReceive = output.receiveEnergy(200, false);
+        int outputExtracted = output.extractEnergy(700, false);
+        helper.assertTrue(rejectedReceive == 0, "Output energy capability rejects receiving");
+        helper.assertTrue(outputExtracted > 0, "Output energy capability extracts stored energy");
 
         helper.succeed();
     }

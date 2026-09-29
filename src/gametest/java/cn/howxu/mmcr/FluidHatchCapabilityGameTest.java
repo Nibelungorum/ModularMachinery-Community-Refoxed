@@ -1,7 +1,6 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -20,9 +19,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -48,39 +46,25 @@ public class FluidHatchCapabilityGameTest {
         helper.assertTrue(inputCapability.directions().supports(IOType.INPUT), "Input capability accepts INPUT");
         helper.assertTrue(outputCapability.directions().supports(IOType.OUTPUT), "Output capability accepts OUTPUT");
 
-        ResourceHandler<FluidResource> input = ModCapabilities.FLUID_BLOCK.getCapability(
+        IFluidHandler input = Capabilities.FluidHandler.BLOCK.getCapability(
                 helper.getLevel(), inputWorldPos, helper.getLevel().getBlockState(inputWorldPos), inputBe, Direction.UP);
-        ResourceHandler<FluidResource> output = ModCapabilities.FLUID_BLOCK.getCapability(
+        IFluidHandler output = Capabilities.FluidHandler.BLOCK.getCapability(
                 helper.getLevel(), outputWorldPos, helper.getLevel().getBlockState(outputWorldPos), outputBe, Direction.UP);
 
         helper.assertTrue(input != null, "Input fluid capability is present");
         helper.assertTrue(output != null, "Output fluid capability is present");
 
-        try (Transaction tx = Transaction.openRoot()) {
-            int inserted = input.insert(0, FluidResource.of(Fluids.WATER), 1000, tx);
-            int extracted = input.extract(0, FluidResource.of(Fluids.WATER), 500, tx);
-            helper.assertTrue(inserted == 1000, "Input fluid capability fills");
-            helper.assertTrue(extracted == 0, "Input fluid capability rejects extraction");
-            tx.commit();
-        }
-
-        try (Transaction tx = Transaction.openRoot()) {
-            try {
-                input.extract(0, FluidResource.of(Fluids.WATER), -1, tx);
-                helper.fail("Fluid capability rejects negative extraction amount");
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
+        int inserted = input.fill(new FluidStack(Fluids.WATER, 1_000), IFluidHandler.FluidAction.EXECUTE);
+        FluidStack extracted = input.drain(500, IFluidHandler.FluidAction.EXECUTE);
+        helper.assertTrue(inserted == 1_000, "Input fluid capability fills");
+        helper.assertTrue(extracted.isEmpty(), "Input fluid capability rejects extraction");
 
         outputHatch.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2000), false);
 
-        try (Transaction tx = Transaction.openRoot()) {
-            int inserted = output.insert(0, FluidResource.of(Fluids.WATER), 500, tx);
-            int extracted = output.extract(0, FluidResource.of(Fluids.WATER), 1000, tx);
-            helper.assertTrue(inserted == 0, "Output fluid capability rejects fill");
-            helper.assertTrue(extracted == 1000, "Output fluid capability drains");
-            tx.commit();
-        }
+        int rejectedFill = output.fill(new FluidStack(Fluids.WATER, 500), IFluidHandler.FluidAction.EXECUTE);
+        FluidStack drained = output.drain(1_000, IFluidHandler.FluidAction.EXECUTE);
+        helper.assertTrue(rejectedFill == 0, "Output fluid capability rejects fill");
+        helper.assertTrue(drained.getAmount() == 1_000, "Output fluid capability drains");
 
         helper.succeed();
     }

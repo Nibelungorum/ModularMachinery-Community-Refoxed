@@ -19,8 +19,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -53,10 +51,7 @@ public class WrenchDismantleGameTest {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            bus.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
-            transaction.commit();
-        }
+        bus.itemStorage().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
 
         ServerPlayer player = player(helper);
         player.setPose(Pose.CROUCHING);

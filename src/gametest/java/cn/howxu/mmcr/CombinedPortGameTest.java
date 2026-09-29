@@ -30,8 +30,6 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -94,10 +92,7 @@ public class CombinedPortGameTest {
         helper.setBlock(extendedOutputPos,
                 ModBlocks.BLOCKS.get("extended_combined_output_advanced").get().defaultBlockState());
         IOPortBlockEntity extendedOutput = helper.getBlockEntity(extendedOutputPos, IOPortBlockEntity.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            extendedOutput.fluidStorage().insert(0, FluidResource.of(Fluids.WATER), 1_000L, transaction);
-            transaction.commit();
-        }
+        extendedOutput.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1_000), 1_000L);
         player.getInventory().clearContent();
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
         InteractionResult extendedFilled = use(helper, extendedOutput, player);

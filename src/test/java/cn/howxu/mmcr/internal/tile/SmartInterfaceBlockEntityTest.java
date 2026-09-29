@@ -17,10 +17,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -48,12 +45,11 @@ class SmartInterfaceBlockEntityTest {
         ), false)).isTrue();
         assertThat(owner.setValue("mode", 7F)).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        owner.saveAdditional(output);
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag output = new CompoundTag();
+        owner.saveAdditional(output, lookup);
         var restored = createSmartInterface();
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        restored.loadAdditional(output, lookup);
 
         assertThat(restored.machineId()).contains(MMCR.id("test"));
         assertThat(restored.controllerPositions()).containsExactly(BlockPos.ZERO);
@@ -64,11 +60,8 @@ class SmartInterfaceBlockEntityTest {
         MachineCapability capability = restored.capabilitySnapshot().capabilities().stream()
                 .filter(candidate -> candidate.directions().supports(IOType.OUTPUT))
                 .findFirst().orElseThrow();
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(capability.prepare(new CapabilityRequests.SmartValueRequest(
-                    capability.type(), IOType.OUTPUT, 1, "mode", 9F)).commit(transaction).success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(capability.prepare(new CapabilityRequests.SmartValueRequest(
+                capability.type(), IOType.OUTPUT, 1, "mode", 9F)).commit().success()).isTrue();
         assertThat(restored.value("mode")).contains(9F);
     }
 
@@ -77,12 +70,11 @@ class SmartInterfaceBlockEntityTest {
         var legacy = createSmartInterface();
         assertThat(legacy.bind(BlockPos.ZERO, MMCR.id("test"), "mode", 4F)).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        legacy.saveAdditional(output);
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag output = new CompoundTag();
+        legacy.saveAdditional(output, lookup);
         var restored = createSmartInterface();
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        restored.loadAdditional(output, lookup);
 
         assertThat(restored.machineId()).contains(MMCR.id("test"));
         assertThat(restored.value("mode")).contains(4F);
@@ -113,10 +105,7 @@ class SmartInterfaceBlockEntityTest {
         var request = new CapabilityRequests.SmartValueRequest(
                 output.type(), IOType.OUTPUT, 1, "temperature", 80F);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(output.prepare(request).commit(transaction).success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(output.prepare(request).commit().success()).isTrue();
 
         assertThat(owner.value("temperature")).contains(80F);
     }

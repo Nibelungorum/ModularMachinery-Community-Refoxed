@@ -8,10 +8,8 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.ProblemReporter;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -20,8 +18,6 @@ import java.util.stream.Stream;
 
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -73,9 +69,9 @@ class ModuleCouplerBlockEntityTest {
         var coupler = coupler();
 
         coupler.setConnection(host, module);
-        var first = save(coupler).buildResult();
+        var first = save(coupler);
         var restored = coupler();
-        invokeLoadAdditional(restored, TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, first));
+        invokeLoadAdditional(restored, first);
         var second = save(restored).buildResult();
 
         assertThat(second).isEqualTo(first);
@@ -86,22 +82,24 @@ class ModuleCouplerBlockEntityTest {
                 BlockPos.ZERO, ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
     }
 
-    private static ValueInput inputFrom(ModuleCouplerBlockEntity coupler) throws Exception {
-        return TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, save(coupler).buildResult());
+    private static CompoundTag inputFrom(ModuleCouplerBlockEntity coupler) throws Exception {
+        return save(coupler);
     }
 
-    private static TagValueOutput save(ModuleCouplerBlockEntity coupler) throws Exception {
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        Method method = coupler.getClass().getDeclaredMethod("saveAdditional", ValueOutput.class);
+    private static CompoundTag save(ModuleCouplerBlockEntity coupler) throws Exception {
+        CompoundTag output = new CompoundTag();
+        Method method = coupler.getClass().getDeclaredMethod("saveAdditional", CompoundTag.class,
+                HolderLookup.Provider.class);
         method.setAccessible(true);
-        method.invoke(coupler, output);
+        method.invoke(coupler, output, EMPTY_LOOKUP);
         return output;
     }
 
     private static void invokeLoadAdditional(ModuleCouplerBlockEntity coupler,
-                                             ValueInput input) throws Exception {
-        Method method = coupler.getClass().getDeclaredMethod("loadAdditional", ValueInput.class);
+                                             CompoundTag input) throws Exception {
+        Method method = coupler.getClass().getDeclaredMethod("loadAdditional", CompoundTag.class,
+                HolderLookup.Provider.class);
         method.setAccessible(true);
-        method.invoke(coupler, input);
+        method.invoke(coupler, input, EMPTY_LOOKUP);
     }
 }

@@ -29,8 +29,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.List;
 import java.util.Map;
@@ -84,10 +82,7 @@ public class SharedMultiblockIoGameTest {
             second.serverTick();
             ItemInputBusBlockEntity input = helper.getBlockEntity(sharedInput, ItemInputBusBlockEntity.class);
             for (int slot = 0; slot < 10; slot++) {
-                try (Transaction transaction = Transaction.openRoot()) {
-                    input.itemStorage().insert(slot, ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-                    transaction.commit();
-                }
+                input.itemStorage().setContents(slot, new ItemStack(Items.IRON_INGOT), 1L);
             }
             MachineRecipe recipe = itemRecipe("shared_input_start");
             StructureClaimRegistry.ResourceDomain domain = first.resourceDomain();

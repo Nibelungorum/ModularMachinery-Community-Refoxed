@@ -1,7 +1,6 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
@@ -36,8 +35,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.phys.AABB;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -215,7 +212,7 @@ public class TerminalAssemblyGameTest {
         helper.succeed();
     }
 
-    public void blockStorageAcceptsCompleteStacksAndRollsBackPartialInsertions(GameTestHelper helper) {
+    public void blockStorageAcceptsCompleteStacksAndRejectsPartialInsertions(GameTestHelper helper) {
         BlockPos busPos = new BlockPos(0, 1, 0);
         helper.setBlock(busPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         ItemBusBlockEntity bus = helper.getBlockEntity(busPos, ItemBusBlockEntity.class);
@@ -225,27 +222,20 @@ public class TerminalAssemblyGameTest {
 
         helper.assertTrue(storage.sink().accept(new ItemStack(Items.STONE, 2)),
                 "Block storage accepts a complete stack through its item capability");
-        ResourceStorage<ItemResource> itemStorage = bus.itemStorage();
+        var itemStorage = bus.itemStorage();
         helper.assertTrue(itemStorage.amount(0) == 2,
                 "Successful block storage insertion commits to the item bus");
 
-        try (Transaction transaction = Transaction.open(null)) {
-            ItemResource existingResource = itemStorage.resource(0);
-            if (existingResource != null) {
-                itemStorage.extract(0, existingResource, itemStorage.amount(0), transaction);
-            }
-            itemStorage.insert(0, ItemResource.of(Items.STONE), 63, transaction);
-            for (int slot = 1; slot < itemStorage.size(); slot++) {
-                itemStorage.insert(slot, ItemResource.of(Items.DIRT), 64, transaction);
-            }
-            transaction.commit();
+        itemStorage.setContents(0, new ItemStack(Items.STONE), 63L);
+        for (int slot = 1; slot < itemStorage.size(); slot++) {
+            itemStorage.setContents(slot, new ItemStack(Items.DIRT), 64L);
         }
 
         helper.assertTrue(!storage.sink().accept(new ItemStack(Items.STONE, 2)),
                 "Block storage rejects a stack that only partially fits");
-        helper.assertTrue(itemStorage.resource(0) != null && itemStorage.resource(0).is(Items.STONE)
+        helper.assertTrue(itemStorage.resource(0).is(Items.STONE)
                         && itemStorage.amount(0) == 63,
-                "Rejected block storage insertion rolls back the partial first-slot insertion");
+                "Rejected block storage insertion leaves the occupied handler state unchanged");
         helper.succeed();
     }
 

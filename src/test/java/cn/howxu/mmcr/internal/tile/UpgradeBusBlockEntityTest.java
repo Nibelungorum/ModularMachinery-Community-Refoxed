@@ -6,13 +6,8 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -48,15 +43,15 @@ class UpgradeBusBlockEntityTest {
         insert(source, 0, new ItemStack(Items.IRON_INGOT, 3));
         insert(source, 8, new ItemStack(Items.GOLD_INGOT, 7));
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        source.saveAdditional(output);
+        CompoundTag output = new CompoundTag();
+        source.saveAdditional(output, EMPTY_LOOKUP);
 
         UpgradeBusBlockEntity restored = create(UpgradeBusSize.ELITE);
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()));
+        restored.loadAdditional(output, EMPTY_LOOKUP);
 
-        assertThat(restored.itemStorage().resource(0).toStack(1).getItem()).isEqualTo(Items.IRON_INGOT);
+        assertThat(restored.itemStorage().resource(0).getItem()).isEqualTo(Items.IRON_INGOT);
         assertThat(restored.itemStorage().amount(0)).isEqualTo(3L);
-        assertThat(restored.itemStorage().resource(8).toStack(1).getItem()).isEqualTo(Items.GOLD_INGOT);
+        assertThat(restored.itemStorage().resource(8).getItem()).isEqualTo(Items.GOLD_INGOT);
         assertThat(restored.itemStorage().amount(8)).isEqualTo(7L);
 
         List<ItemStack> snapshot = restored.itemSnapshot();
@@ -71,29 +66,18 @@ class UpgradeBusBlockEntityTest {
         bus.addControllerChangeListener(notifications::incrementAndGet);
 
         long initial = bus.contentsVersion();
-        try (Transaction transaction = Transaction.openRoot()) {
-            bus.itemStorage().insert(0, ItemResource.of(new ItemStack(Items.IRON_INGOT, 2)), 2L, transaction);
-        }
+        bus.itemStorage().insertItem(0, new ItemStack(Items.IRON_INGOT, 2), true);
         assertThat(bus.contentsVersion()).isEqualTo(initial);
 
         insert(bus, 0, new ItemStack(Items.IRON_INGOT, 2));
         long afterInsert = bus.contentsVersion();
         assertThat(afterInsert).isGreaterThan(initial);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource iron = ItemResource.of(new ItemStack(Items.IRON_INGOT, 1));
-            bus.itemStorage().extract(0, iron, 1L, transaction);
-            transaction.commit();
-        }
+        bus.itemStorage().extractItem(0, 1, false);
         long afterExtract = bus.contentsVersion();
         assertThat(afterExtract).isGreaterThan(afterInsert);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource iron = ItemResource.of(new ItemStack(Items.IRON_INGOT, 1));
-            bus.itemStorage().extract(0, iron, bus.itemStorage().amount(0), transaction);
-            bus.itemStorage().insert(0, ItemResource.of(new ItemStack(Items.GOLD_INGOT, 1)), 1L, transaction);
-            transaction.commit();
-        }
+        bus.itemStorage().setContents(0, new ItemStack(Items.GOLD_INGOT), 1L);
         assertThat(bus.contentsVersion()).isGreaterThan(afterExtract);
         assertThat(notifications).hasValue(3);
     }
@@ -105,9 +89,6 @@ class UpgradeBusBlockEntityTest {
     }
 
     private static void insert(UpgradeBusBlockEntity bus, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            bus.itemStorage().insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
-        }
+        bus.itemStorage().setContents(slot, stack, stack.getCount());
     }
 }

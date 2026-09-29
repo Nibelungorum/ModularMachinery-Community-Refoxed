@@ -24,11 +24,10 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.capabilities.BlockCapability;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import java.util.List;
 import java.util.Map;
 
@@ -48,10 +47,7 @@ public class ExtendedPortGameTest {
             BlockPos position = positions.get(index);
             helper.setBlock(position, ModBlocks.BLOCKS.get(ids.get(index)).get().defaultBlockState());
             IOPortBlockEntity port = helper.getBlockEntity(position, IOPortBlockEntity.class);
-            try (Transaction transaction = Transaction.openRoot()) {
-                port.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
-                transaction.commit();
-            }
+            port.itemStorage().setContents(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT), 3L);
         }
 
         positions.forEach(helper::destroyBlock);
@@ -69,13 +65,9 @@ public class ExtendedPortGameTest {
         BlockPos position = new BlockPos(0, 1, 0);
         helper.setBlock(position, ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
         IOPortBlockEntity port = helper.getBlockEntity(position, IOPortBlockEntity.class);
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.itemStorage().insert(0, iron, (long) Integer.MAX_VALUE + 1L, transaction);
-            port.itemStorage().insert(1, gold, Long.MAX_VALUE, transaction);
-            transaction.commit();
-        }
+        port.itemStorage().setContents(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT),
+                (long) Integer.MAX_VALUE + 1L);
+        port.itemStorage().setContents(1, new net.minecraft.world.item.ItemStack(Items.GOLD_INGOT), Long.MAX_VALUE);
 
         helper.destroyBlock(position);
         helper.runAtTickTime(1, () -> {
@@ -103,24 +95,21 @@ public class ExtendedPortGameTest {
         helper.setBlock(fluidPos, ModBlocks.BLOCKS.get("extended_fluid_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("extended_energy_input_hatch_reinforced").get().defaultBlockState());
 
-        ResourceHandler<ItemResource> items = capability(helper, itemPos, ModCapabilities.ITEM_BLOCK);
-        ResourceHandler<FluidResource> fluids = capability(helper, fluidPos, ModCapabilities.FLUID_BLOCK);
-        EnergyHandler energy = capability(helper, energyPos, ModCapabilities.ENERGY_BLOCK);
+        IItemHandler items = capability(helper, itemPos, ModCapabilities.ITEM_BLOCK);
+        IFluidHandler fluids = capability(helper, fluidPos, ModCapabilities.FLUID_BLOCK);
+        IEnergyStorage energy = capability(helper, energyPos, ModCapabilities.ENERGY_BLOCK);
         helper.assertTrue(items != null, "Standalone extended item capability is present");
         helper.assertTrue(fluids != null, "Standalone extended fluid capability is present");
         helper.assertTrue(energy != null, "Standalone extended energy capability is present");
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            helper.assertTrue(items.insert(0, ItemResource.of(Items.IRON_INGOT), Integer.MAX_VALUE, transaction)
-                            == Integer.MAX_VALUE,
-                    "Standalone extended item capability accepts long-backed amounts");
-            helper.assertTrue(fluids.insert(0, FluidResource.of(Fluids.WATER), Integer.MAX_VALUE, transaction)
-                            == Integer.MAX_VALUE,
-                    "Standalone extended fluid capability accepts long-backed amounts");
-            helper.assertTrue(energy.insert(Integer.MAX_VALUE, transaction) == Integer.MAX_VALUE,
-                    "Standalone extended energy capability accepts long-backed amounts");
-            transaction.commit();
-        }
+        helper.assertTrue(items.insertItem(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT,
+                        Integer.MAX_VALUE), false).isEmpty(),
+                "Standalone extended item capability accepts bounded native stacks");
+        helper.assertTrue(fluids.fill(new FluidStack(Fluids.WATER, Integer.MAX_VALUE),
+                        IFluidHandler.FluidAction.EXECUTE) == Integer.MAX_VALUE,
+                "Standalone extended fluid capability accepts bounded native stacks");
+        helper.assertTrue(energy.receiveEnergy(Integer.MAX_VALUE, false) == Integer.MAX_VALUE,
+                "Standalone extended energy capability accepts bounded native amounts");
         helper.succeed();
     }
 
@@ -131,20 +120,17 @@ public class ExtendedPortGameTest {
         BlockPos worldPos = helper.absolutePos(portPos);
         BlockEntity blockEntity = helper.getLevel().getBlockEntity(worldPos);
 
-        ResourceHandler<ItemResource> itemHandler = ModCapabilities.ITEM_BLOCK.getCapability(
+        IItemHandler itemHandler = ModCapabilities.ITEM_BLOCK.getCapability(
                 helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos), blockEntity, Direction.EAST);
-        ResourceHandler<FluidResource> fluidHandler = ModCapabilities.FLUID_BLOCK.getCapability(
+        IFluidHandler fluidHandler = ModCapabilities.FLUID_BLOCK.getCapability(
                 helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos), blockEntity, Direction.WEST);
         helper.assertTrue(itemHandler != null, "Extended combined item handler is exposed");
         helper.assertTrue(fluidHandler != null, "Extended combined fluid handler is exposed");
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            itemHandler.insert(0, ItemResource.of(Items.IRON_INGOT), Integer.MAX_VALUE, transaction);
-            itemHandler.insert(0, ItemResource.of(Items.IRON_INGOT), Integer.MAX_VALUE, transaction);
-            fluidHandler.insert(0, FluidResource.of(Fluids.WATER), Integer.MAX_VALUE, transaction);
-            fluidHandler.insert(0, FluidResource.of(Fluids.WATER), Integer.MAX_VALUE, transaction);
-            transaction.commit();
-        }
+        itemHandler.insertItem(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT, Integer.MAX_VALUE), false);
+        itemHandler.insertItem(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT, Integer.MAX_VALUE), false);
+        fluidHandler.fill(new FluidStack(Fluids.WATER, Integer.MAX_VALUE), IFluidHandler.FluidAction.EXECUTE);
+        fluidHandler.fill(new FluidStack(Fluids.WATER, Integer.MAX_VALUE), IFluidHandler.FluidAction.EXECUTE);
 
         helper.assertTrue(port.itemStorage().amount(0) > Integer.MAX_VALUE,
                 "Extended item storage preserves cumulative amounts above int range");
@@ -179,10 +165,7 @@ public class ExtendedPortGameTest {
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         ExtendedCombinedPortBlockEntity port = helper.getBlockEntity(portPos, ExtendedCombinedPortBlockEntity.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.fluidStorage().insert(0, FluidResource.of(Fluids.WATER), 1L, transaction);
-            transaction.commit();
-        }
+        port.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
         ResourceLocation texture = MMCR.id("block/extended_combined_test_casing");
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("extended_combined_appearance_test"),

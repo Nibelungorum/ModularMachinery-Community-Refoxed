@@ -27,8 +27,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.List;
 import java.util.Set;
@@ -89,11 +87,8 @@ public class UpgradeBusGameTest {
             helper.setBlock(secondBusPos, ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
             UpgradeBusBlockEntity firstBus = helper.getBlockEntity(firstBusPos, UpgradeBusBlockEntity.class);
             UpgradeBusBlockEntity secondBus = helper.getBlockEntity(secondBusPos, UpgradeBusBlockEntity.class);
-            try (Transaction transaction = Transaction.openRoot()) {
-                firstBus.itemStorage().insert(0, ItemResource.of(Items.NETHER_STAR), 1L, transaction);
-                secondBus.itemStorage().insert(0, ItemResource.of(Items.NETHER_STAR), 1L, transaction);
-                transaction.commit();
-            }
+            firstBus.itemStorage().setContents(0, new ItemStack(Items.NETHER_STAR), 1L);
+            secondBus.itemStorage().setContents(0, new ItemStack(Items.NETHER_STAR), 1L);
             controller.onStructureBlockChanged(helper.absolutePos(firstBusPos));
             controller.onStructureBlockChanged(helper.absolutePos(secondBusPos));
             controller.serverTick();
@@ -118,10 +113,7 @@ public class UpgradeBusGameTest {
 
                         ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
                         ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-                        try (Transaction transaction = Transaction.openRoot()) {
-                            input.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
-                            transaction.commit();
-                        }
+                        input.itemStorage().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
                         ResourceLocation recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
                         ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
                         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 20,
@@ -146,14 +138,7 @@ public class UpgradeBusGameTest {
                         helper.assertTrue(controller.runtimeSnapshot().crafting().totalTick() == 23,
                                 "Recipe starts with the Upgrade Bus effective duration");
 
-                        try (Transaction transaction = Transaction.openRoot()) {
-                            ItemResource current = firstBus.itemStorage().resource(0);
-                            if (current != null && !current.isEmpty()) {
-                                firstBus.itemStorage().extract(0, current, firstBus.itemStorage().amount(0), transaction);
-                            }
-                            firstBus.itemStorage().insert(0, ItemResource.of(Items.DIAMOND), 1L, transaction);
-                            transaction.commit();
-                        }
+                        firstBus.itemStorage().setContents(0, new ItemStack(Items.DIAMOND), 1L);
                         controller.serverTick();
 
                         helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),

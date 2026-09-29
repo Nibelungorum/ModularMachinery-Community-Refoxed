@@ -1,7 +1,6 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -15,9 +14,8 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
 
 public class ItemBusCapabilityGameTest {
 
@@ -40,42 +38,33 @@ public class ItemBusCapabilityGameTest {
         helper.assertTrue(inputCapability.directions().supports(IOType.INPUT), "Input capability accepts INPUT");
         helper.assertTrue(outputCapability.directions().supports(IOType.OUTPUT), "Output capability accepts OUTPUT");
 
-        ResourceHandler<ItemResource> input = ModCapabilities.ITEM_BLOCK.getCapability(
+        IItemHandler input = Capabilities.ItemHandler.BLOCK.getCapability(
                 helper.getLevel(), inputWorldPos, helper.getLevel().getBlockState(inputWorldPos), inputBe, Direction.UP);
-        ResourceHandler<ItemResource> output = ModCapabilities.ITEM_BLOCK.getCapability(
+        IItemHandler output = Capabilities.ItemHandler.BLOCK.getCapability(
                 helper.getLevel(), outputWorldPos, helper.getLevel().getBlockState(outputWorldPos), outputBe, Direction.UP);
 
         helper.assertTrue(input != null, "Input item capability is present");
         helper.assertTrue(output != null, "Output item capability is present");
 
-        try (Transaction tx = Transaction.openRoot()) {
-            long inserted = 0L;
-            for (int slot = 0; slot < 4; slot++) {
-                inserted += input.insert(slot, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            }
-            long extracted = input.extract(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            helper.assertTrue(inserted == 4L, "Input capability inserts");
-            helper.assertTrue(extracted == 1L, "Input capability extracts");
-            tx.commit();
+        int inserted = 0;
+        for (int slot = 0; slot < 4; slot++) {
+            inserted += input.insertItem(slot, new ItemStack(Items.IRON_INGOT), false).isEmpty() ? 1 : 0;
+        }
+        ItemStack extracted = input.extractItem(0, 1, false);
+        helper.assertTrue(inserted == 4, "Input capability inserts");
+        helper.assertTrue(extracted.isEmpty(), "Input capability rejects extraction");
+
+        for (int slot = 0; slot < 4; slot++) {
+            outputBus.itemStorage().setContents(slot, new ItemStack(Items.IRON_INGOT), 1L);
         }
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (int slot = 0; slot < 4; slot++) {
-                outputBus.itemStorage().insert(slot, ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-            }
-            transaction.commit();
+        ItemStack insertionRemainder = output.insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        int extractedCount = 0;
+        for (int slot = 0; slot < 4; slot++) {
+            extractedCount += output.extractItem(slot, 1, false).getCount();
         }
-
-        try (Transaction tx = Transaction.openRoot()) {
-            long inserted = output.insert(0, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            long extracted = 0L;
-            for (int slot = 0; slot < 4; slot++) {
-                extracted += output.extract(slot, ItemResource.of(Items.IRON_INGOT), 1, tx);
-            }
-            helper.assertTrue(inserted == 0L, "Output capability rejects inserts");
-            helper.assertTrue(extracted == 4L, "Output capability extracts");
-            tx.commit();
-        }
+        helper.assertTrue(insertionRemainder.getCount() == 1, "Output capability rejects inserts");
+        helper.assertTrue(extractedCount == 4, "Output capability extracts");
 
         helper.succeed();
     }
@@ -87,11 +76,8 @@ public class ItemBusCapabilityGameTest {
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         sword.set(DataComponents.CUSTOM_NAME, Component.literal("Sharpness II"));
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            long inserted = bus.itemStorage().insert(0, ItemResource.of(sword), 2L, transaction);
-            helper.assertTrue(inserted == 1L, "Non-stackable items are limited to one item per UI slot");
-            transaction.commit();
-        }
+        ItemStack remainder = bus.itemStorage().insertItem(0, sword.copyWithCount(2), false);
+        helper.assertTrue(remainder.getCount() == 1, "Non-stackable items are limited to one item per UI slot");
 
         helper.assertTrue(bus.itemStorage().amount(0) == 1L,
                 "Non-stackable item storage does not exceed the item stack limit");
@@ -104,8 +90,8 @@ public class ItemBusCapabilityGameTest {
 
         BlockPos inputWorldPos = helper.absolutePos(inputPos);
         ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
-        BlockCapabilityCache<ResourceHandler<ItemResource>, Direction> cache = BlockCapabilityCache.create(
-                ModCapabilities.ITEM_BLOCK, helper.getLevel(), inputWorldPos, Direction.UP);
+        BlockCapabilityCache<IItemHandler, Direction> cache = BlockCapabilityCache.create(
+                Capabilities.ItemHandler.BLOCK, helper.getLevel(), inputWorldPos, Direction.UP);
 
         helper.assertTrue(cache.getCapability() != null, "Enabled side has cached item capability by default");
         inputBus.setAutoIOSide(Direction.UP, false);
@@ -120,10 +106,7 @@ public class ItemBusCapabilityGameTest {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            bus.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 3L, transaction);
-            transaction.commit();
-        }
+        bus.itemStorage().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
 
         helper.destroyBlock(pos);
         helper.runAfterDelay(1, () -> {
