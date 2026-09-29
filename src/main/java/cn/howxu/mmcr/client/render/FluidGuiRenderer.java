@@ -1,32 +1,23 @@
 package cn.howxu.mmcr.client.render;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.ArrayList;
-import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
-import org.joml.Matrix3x2f;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.render.TextureSetup;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.block.FluidModel;
-import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 /**
  * Standalone fluid GUI renderer adapted from LowDragLib2's 16-pixel tiling and tint approach,
- * modified for MMCR and NeoForge 26.1.2.
+     * modified for MMCR and NeoForge 21.1.1.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class FluidGuiRenderer {
     private static final int TILE_SIZE = 16;
-    private static final int OPAQUE_WHITE = 0xffffffff;
-
     private FluidGuiRenderer() {
     }
 
@@ -52,40 +43,32 @@ public final class FluidGuiRenderer {
     }
 
     public static TextureAtlasSprite stillSprite(FluidStack fluid) {
-        FluidModel model = model(fluid);
-        TextureAtlasSprite sprite = model.stillMaterial().sprite();
-        if (Minecraft.getInstance().getTextureManager().getTexture(sprite.atlasLocation()) instanceof TextureAtlas atlas
-                && sprite == atlas.missingSprite()) {
-            throw new IllegalArgumentException("Missing still sprite for fluid " + fluid.getFluid());
-        }
-        return sprite;
+        return Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS)
+                .apply(IClientFluidTypeExtensions.of(fluid.getFluid()).getStillTexture());
     }
 
     public static int fluidColor(FluidStack fluid) {
-        var tintSource = model(fluid).fluidTintSource();
-        return tintSource == null ? OPAQUE_WHITE : tintSource.colorAsStack(fluid) | 0xff000000;
+        return IClientFluidTypeExtensions.of(fluid.getFluid()).getTintColor(fluid);
     }
 
-    public static void drawFluid(GuiGraphicsExtractor graphics, FluidStack fluid, int x, int y, int width, int height) {
+    public static void drawFluid(GuiGraphics graphics, FluidStack fluid, int x, int y, int width, int height) {
         TextureAtlasSprite sprite = stillSprite(fluid);
         drawSprite(graphics, sprite, fluidColor(fluid), x, y, width, height);
     }
 
-    public static void drawSprite(GuiGraphicsExtractor graphics, TextureAtlasSprite sprite, int color,
-                                  int x, int y, int width, int height) {
+    public static void drawSprite(GuiGraphics graphics, TextureAtlasSprite sprite, int color,
+                                   int x, int y, int width, int height) {
         if (sprite == null || width <= 0 || height <= 0) return;
-        AbstractTexture texture = Minecraft.getInstance().getTextureManager().getTexture(sprite.atlasLocation());
-        GpuTextureView textureView = texture.getTextureView();
-        GpuSampler sampler = texture.getSampler();
+        graphics.setColor((color >> 16 & 0xFF) / 255F, (color >> 8 & 0xFF) / 255F,
+                (color & 0xFF) / 255F, (color >>> 24) / 255F);
         for (Tile tile : tiles(x, y, width, height)) {
-            Uv uv = tileUv(sprite.getU0(), sprite.getV0(), sprite.getU1(), sprite.getV1(), tile);
-            ((GuiGraphicsExtractorAccessor) graphics).mmcr$getGuiRenderState().addGuiElement(new FloatBlitRenderState(
-                    RenderPipelines.GUI_TEXTURED,
-                    TextureSetup.singleTexture(textureView, sampler),
-                    new Matrix3x2f(graphics.pose()),
-                    tile.x(), tile.y() + tile.maskTop(), tile.x() + tile.width(), tile.y() + tile.maskTop() + tile.height(),
-                    uv.u0(), uv.u1(), uv.v0(), uv.v1(), color, null));
+            graphics.enableScissor(tile.x(), tile.y() + tile.maskTop(),
+                    tile.x() + tile.width(), tile.y() + tile.maskTop() + tile.height());
+            graphics.blit(tile.x(), tile.y(), 0, TILE_SIZE, TILE_SIZE, sprite,
+                    1.0F, 1.0F, 1.0F, 1.0F);
+            graphics.disableScissor();
         }
+        graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     static Uv tileUv(float u0, float v0, float u1, float v1, Tile tile) {
@@ -113,10 +96,6 @@ public final class FluidGuiRenderer {
             xOffset += widths[xTile];
         }
         return result;
-    }
-
-    private static FluidModel model(FluidStack fluid) {
-        return Minecraft.getInstance().getModelManager().getFluidStateModelSet().get(fluid.getFluid().defaultFluidState());
     }
 
     private static int[] tileDimensions(int dimension) {

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
@@ -15,12 +16,12 @@ public class StyledButton extends Button {
     }
 
     @Override
-    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         drawBackground(graphics);
-        extractDefaultLabel(graphics.textRendererForWidget(this, GuiGraphicsExtractor.HoveredTextEffects.NONE));
+        renderString(graphics, Minecraft.getInstance().font, getFGColor());
     }
 
-    protected void drawBackground(GuiGraphicsExtractor graphics) {
+    protected void drawBackground(GuiGraphics graphics) {
         int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
         int borderColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
         graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), borderColor);

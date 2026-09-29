@@ -1,9 +1,9 @@
 package cn.howxu.mmcr.client.render;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.data.AtlasIds;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -23,11 +23,11 @@ public final class ChemicalGuiRenderer {
         return new ChemicalRenderState(identifier, tint, fillHeight);
     }
 
-    public static void drawChemical(GuiGraphicsExtractor graphics, ChemicalRenderState state,
-                                    int x, int y, int width, int height) {
+    public static void drawChemical(GuiGraphics graphics, ChemicalRenderState state,
+                                     int x, int y, int width, int height) {
         if (state.identifier() == null || state.fillHeight() <= 0 || width <= 0 || height <= 0) return;
-        TextureAtlasSprite sprite = Minecraft.getInstance().getAtlasManager()
-                .getAtlasOrThrow(AtlasIds.BLOCKS).getSprite(state.identifier());
+        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS)
+                .apply(state.identifier());
         int fillHeight = Math.min(state.fillHeight(), height);
         FluidGuiRenderer.drawSprite(graphics, sprite, state.tint(), x, y + height - fillHeight,
                 width, fillHeight);
