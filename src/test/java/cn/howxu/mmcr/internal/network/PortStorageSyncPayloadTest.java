@@ -1,7 +1,5 @@
 package cn.howxu.mmcr.internal.network;
 
-import cn.howxu.mmcr.api.capability.sync.CapabilitySyncEntry;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
@@ -9,6 +7,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.registries.BaseMappedRegistry;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -39,8 +40,8 @@ class PortStorageSyncPayloadTest {
     void payload_codec_round_trips_position_kind_order_resource_identity_and_long_values() {
         PktPortStorageSyncPayload payload = new PktPortStorageSyncPayload(
                 new BlockPos(1, 2, 3), PortKinds.COMBINED_INPUT.id(),
-                List.of(new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), 0, new byte[] {1, 2, 3}),
-                        new CapabilitySyncEntry(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), 1, new byte[] {4, 5})));
+                List.of(new PktPortStorageSyncPayload.ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(), 3L, 64L)),
+                List.of(new PktPortStorageSyncPayload.FluidStorageEntry(1, new FluidStack(Fluids.WATER, 1), 5L, 8L)));
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktPortStorageSyncPayload.STREAM_CODEC.encode(buffer, payload);
@@ -48,38 +49,25 @@ class PortStorageSyncPayloadTest {
 
         assertThat(decoded.pos()).isEqualTo(payload.pos());
         assertThat(decoded.kind()).isEqualTo(payload.kind());
-        assertThat(decoded.entries()).hasSize(2);
-        assertThat(decoded.entries().getFirst().typeId()).isEqualTo(payload.entries().getFirst().typeId());
-        assertThat(decoded.entries().getFirst().payload()).containsExactly(1, 2, 3);
-        assertThat(decoded.entries()).extracting(CapabilitySyncEntry::capabilityIndex).containsExactly(0, 1);
+        assertThat(decoded.itemEntries()).containsExactlyElementsOf(payload.itemEntries());
+        assertThat(decoded.fluidEntries()).containsExactlyElementsOf(payload.fluidEntries());
     }
 
     @Test
     void payload_rejects_malformed_kind_negative_values_and_invalid_entry_counts() {
-        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO, "not a kind", List.of()))
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO, "not a kind", List.of(), List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), -1, new byte[0]))
+        assertThatThrownBy(() -> new PktPortStorageSyncPayload.ItemStorageEntry(-1, Items.IRON_INGOT.getDefaultInstance(), 1L, 1L))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        List<CapabilitySyncEntry> tooMany = new ArrayList<>();
+        List<PktPortStorageSyncPayload.ItemStorageEntry> tooMany = new ArrayList<>();
         for (int slot = 0; slot <= PktPortStorageSyncPayload.MAX_ENTRIES; slot++) {
-            tooMany.add(new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), slot, new byte[0]));
+            tooMany.add(new PktPortStorageSyncPayload.ItemStorageEntry(slot,
+                    Items.IRON_INGOT.getDefaultInstance(), 1L, 1L));
         }
         assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
-                PortKinds.EXTENDED_ITEM_INPUT.id(), tooMany))
+                PortKinds.EXTENDED_ITEM_INPUT.id(), tooMany, List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void payload_rejects_total_entry_bytes_above_the_packet_budget() {
-        List<CapabilitySyncEntry> entries = new ArrayList<>();
-        for (int index = 0; index < 17; index++) {
-            entries.add(new CapabilitySyncEntry(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), index,
-                    new byte[CapabilitySyncEntry.MAX_PAYLOAD_BYTES]));
-        }
-
-        assertThatThrownBy(() -> new PktPortStorageSyncPayload(BlockPos.ZERO,
-                PortKinds.EXTENDED_ITEM_INPUT.id(), entries)).isInstanceOf(IllegalArgumentException.class);
     }
 
     private static RegistryFriendlyByteBuf buffer() {

@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.internal.autoio;
 
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.nbt.CompoundTag;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -50,18 +49,18 @@ public final class AutoIOConfig {
         if (enabled) enabledSides.addAll(EnumSet.allOf(Direction.class));
     }
 
-    public void save(ValueOutput output) {
+    public void save(CompoundTag output) {
         output.putBoolean(ENABLED_KEY, enabled);
         output.putInt(SIDES_KEY, toMask(enabledSides));
     }
 
-    public void loadInto(ValueInput input) {
+    public void loadInto(CompoundTag input) {
         enabled = input.getBooleanOr(ENABLED_KEY, false);
         enabledSides.clear();
         enabledSides.addAll(fromMask(input.getIntOr(SIDES_KEY, toMask(EnumSet.allOf(Direction.class)))));
     }
 
-    public static AutoIOConfig load(ValueInput input) {
+    public static AutoIOConfig load(CompoundTag input) {
         AutoIOConfig config = new AutoIOConfig();
         config.loadInto(input);
         return config;

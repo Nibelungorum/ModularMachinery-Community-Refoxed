@@ -36,15 +36,15 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         this.kind = owner == null ? "extended_combined_input_advanced" : owner.kind().id();
         this.itemSlotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
-                : owner.itemStorage().size();
+                : owner.nativeItemHandler().getSlots();
         this.fluidTankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
-                : owner.fluidStorage().size();
+                : owner.nativeFluidHandler().getTanks();
         if (owner == null) {
             this.itemEntries = List.of();
             this.fluidEntries = List.of();
         } else {
-            this.itemEntries = PktPortStorageSyncPayload.itemEntries(owner.itemStorage());
-            this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.fluidStorage());
+            this.itemEntries = PktPortStorageSyncPayload.itemEntries(owner.nativeItemHandler());
+            this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
         }
         addPlayerSlots(playerInv, 47);
     }
@@ -87,7 +87,7 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
 
     public static void writeClientOpenData(FriendlyByteBuf buffer, ExtendedCombinedPortBlockEntity owner) {
         writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(),
-                owner.itemStorage().size(), owner.fluidStorage().size());
+                owner.nativeItemHandler().getSlots(), owner.nativeFluidHandler().getTanks());
     }
 
     public ExtendedCombinedPortBlockEntity owner() { return owner; }
@@ -110,10 +110,10 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
+    public void applySnapshot(PktPortStorageSyncPayload payload) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
-        List<ItemStorageEntry> nextItems = PktPortStorageSyncPayload.itemEntries(port.itemStorage());
-        List<FluidStorageEntry> nextFluids = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());
+        List<ItemStorageEntry> nextItems = payload.itemEntries();
+        List<FluidStorageEntry> nextFluids = payload.fluidEntries();
         for (ItemStorageEntry entry : nextItems) {
             if (entry.slot() >= itemSlotCount) throw new IllegalArgumentException("Item snapshot slot out of bounds");
         }

@@ -20,8 +20,6 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.core.Holder;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -56,9 +54,9 @@ class ExtendedPortScreenTest {
 
     @Test
     void combined_storage_has_one_logical_line_per_section_and_entry() {
-        ItemStorageEntry firstItem = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT), 12L, 64L);
-        ItemStorageEntry secondItem = new ItemStorageEntry(1, ItemResource.of(Items.GOLD_INGOT), 34L, 64L);
-        FluidStorageEntry fluid = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 56L, 78L);
+        ItemStorageEntry firstItem = new ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(), 12L, 64L);
+        ItemStorageEntry secondItem = new ItemStorageEntry(1, Items.GOLD_INGOT.getDefaultInstance(), 34L, 64L);
+        FluidStorageEntry fluid = new FluidStorageEntry(0, new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 1), 56L, 78L);
 
         assertThat(ExtendedCombinedScreen.displayLines(List.of(firstItem, secondItem), List.of(fluid)))
                 .hasSize(5)
@@ -104,7 +102,7 @@ class ExtendedPortScreenTest {
     @Test
     void empty_extended_item_storage_renders_a_light_green_empty_state() {
         assertThat(ExtendedItemScreen.displayLines(List.of(
-                new ItemStorageEntry(0, ItemResource.EMPTY, 0L, 64L))))
+                new ItemStorageEntry(0, net.minecraft.world.item.ItemStack.EMPTY, 0L, 64L))))
                 .singleElement()
                 .satisfies(line -> {
                     assertThat(line.getString()).isEqualTo("gui.mmcr.port.empty");
@@ -124,7 +122,7 @@ class ExtendedPortScreenTest {
 
     @Test
     void combined_storage_groups_content_and_marks_empty_group() {
-        ItemStorageEntry item = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT),
+        ItemStorageEntry item = new ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(),
                 1_200_123_543_243L, Long.MAX_VALUE);
 
         assertThat(ExtendedCombinedScreen.displayLines(List.of(item), List.of()))
@@ -135,7 +133,7 @@ class ExtendedPortScreenTest {
 
     @Test
     void extended_item_lines_use_normalized_quantity_and_component_resource_name() {
-        ItemStorageEntry entry = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT),
+        ItemStorageEntry entry = new ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(),
                 1_200_123_543_243L, Long.MAX_VALUE);
 
         assertThat(ExtendedItemScreen.displayLines(List.of(entry)).getFirst().getString())
@@ -149,8 +147,8 @@ class ExtendedPortScreenTest {
     void extended_item_names_preserve_vanilla_rarity_style() {
         var stack = Items.ENCHANTED_GOLDEN_APPLE.getDefaultInstance();
         stack.set(DataComponents.CUSTOM_NAME, Component.literal("Styled apple").withStyle(ChatFormatting.AQUA));
-        ItemStorageEntry entry = new ItemStorageEntry(0, ItemResource.of(stack), 1L, 64L);
-        Component styledName = entry.resource().toStack(1).getStyledHoverName();
+        ItemStorageEntry entry = new ItemStorageEntry(0, stack, 1L, 64L);
+        Component styledName = entry.resource().getStyledHoverName();
 
         assertThat(ExtendedItemScreen.displayLines(List.of(entry)).getFirst().getSiblings().getFirst())
                 .isEqualTo(styledName);
@@ -161,7 +159,7 @@ class ExtendedPortScreenTest {
 
     @Test
     void extended_fluid_lines_use_normalized_quantity_and_exact_hover_values() {
-        FluidStorageEntry entry = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER),
+        FluidStorageEntry entry = new FluidStorageEntry(0, new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 1),
                 5_000_000_000L, Long.MAX_VALUE);
 
         assertThat(ExtendedFluidScreen.displayLines(List.of(entry)).getFirst().getString())

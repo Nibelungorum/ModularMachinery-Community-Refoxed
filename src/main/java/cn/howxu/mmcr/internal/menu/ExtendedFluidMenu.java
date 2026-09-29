@@ -34,7 +34,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         this.kind = owner == null ? "extended_fluid_input_hatch_basic" : owner.kind().id();
         this.tankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
                 : owner.fluidStorage().size();
-        this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.fluidEntries(owner.fluidStorage());
+        this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
         addPlayerSlots(playerInv, 47);
     }
 
@@ -68,7 +68,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
     }
 
     public static void writeClientOpenData(FriendlyByteBuf buffer, ExtendedFluidHatchBlockEntity owner) {
-        writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(), owner.fluidStorage().size());
+        writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(), owner.nativeFluidHandler().getTanks());
     }
 
     public ExtendedFluidHatchBlockEntity owner() { return owner; }
@@ -89,9 +89,9 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
+    public void applySnapshot(PktPortStorageSyncPayload payload) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
-        List<FluidStorageEntry> nextEntries = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());
+        List<FluidStorageEntry> nextEntries = payload.fluidEntries();
         for (FluidStorageEntry entry : nextEntries) {
             if (entry.slot() >= tankCount) throw new IllegalArgumentException("Fluid snapshot slot out of bounds");
         }

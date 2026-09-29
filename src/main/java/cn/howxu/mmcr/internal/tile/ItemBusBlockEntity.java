@@ -8,11 +8,11 @@ import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -98,43 +98,45 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     public abstract IOPortKind kind();
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
-    private void saveItems(ValueOutput output) {
+    private void saveItems(CompoundTag output, HolderLookup.Provider registries) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = "_" + slot;
             ItemStack resource = storage.resource(slot);
             output.putBoolean("itemHasResource" + suffix, !resource.isEmpty());
             if (!resource.isEmpty()) {
-                output.store("itemResource" + suffix, ItemStack.CODEC, resource);
+                output.put("itemResource" + suffix, resource.save(registries));
                 output.putLong("itemAmount" + suffix, storage.amount(slot));
             }
         }
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
-            input.child("item").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                    .forEach(facet -> facet.load(child)));
+            super.loadAdditional(input, registries);
+            capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(input.getCompound(facet.stateKey()), registries));
         } finally {
             endLoadingAdditional();
         }
     }
 
-    private void loadItems(ValueInput input) {
+    private void loadItems(CompoundTag input, HolderLookup.Provider registries) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = "_" + slot;
-            if (input.getBooleanOr("itemHasResource" + suffix, false)) {
-                ItemStack resource = input.read("itemResource" + suffix, ItemStack.CODEC)
-                        .orElse(ItemStack.EMPTY);
-                long amount = input.getLong("itemAmount" + suffix).orElse(0L);
+            if (input.getBoolean("itemHasResource" + suffix)) {
+                ItemStack resource = ItemStack.parseOptional(registries, input.getCompound("itemResource" + suffix));
+                long amount = input.getLong("itemAmount" + suffix);
                 storage.setContents(slot, resource, amount);
             } else {
                 storage.setContents(slot, ItemStack.EMPTY, 0L);
@@ -149,13 +151,13 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         }
 
         @Override
-        public void save(ValueOutput output) {
-            saveItems(output);
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
+            saveItems(output, registries);
         }
 
         @Override
-        public void load(ValueInput input) {
-            loadItems(input);
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            loadItems(input, registries);
         }
     }
 }

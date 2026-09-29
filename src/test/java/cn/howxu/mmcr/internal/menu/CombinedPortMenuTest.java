@@ -60,7 +60,7 @@ class CombinedPortMenuTest {
         CombinedPortBlockEntity clientPort = new CombinedPortBlockEntity(
                 POS, ModBlocks.BLOCKS.get("combined_input_reinforced").get().defaultBlockState());
         clientMenu.applySnapshot(new PktPortStorageSyncPayload(POS,
-                "combined_input_reinforced", List.of()), clientPort);
+                "combined_input_reinforced", List.of(), List.of()));
 
         assertThat(clientMenu.owner()).isNull();
         assertThat(clientMenu.pos()).isEqualTo(POS);

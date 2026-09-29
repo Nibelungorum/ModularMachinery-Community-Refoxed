@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -17,8 +18,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import org.jetbrains.annotations.Nullable;
 
@@ -107,12 +106,12 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        var controllers = output.childrenList(LINKED_CONTROLLERS_KEY);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        ListTag controllers = new ListTag();
         for (var entry : linkedControllers.entrySet()) {
             var controller = entry.getKey();
-            var controllerOutput = controllers.addChild();
+            CompoundTag controllerOutput = new CompoundTag();
             controllerOutput.putInt(LINKED_CONTROLLER_X_KEY, controller.getX());
             controllerOutput.putInt(LINKED_CONTROLLER_Y_KEY, controller.getY());
             controllerOutput.putInt(LINKED_CONTROLLER_Z_KEY, controller.getZ());
@@ -121,21 +120,22 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             if (overrideTexture != null) {
                 controllerOutput.putString(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY, overrideTexture.toString());
             }
+            controllers.add(controllerOutput);
         }
+        output.put(LINKED_CONTROLLERS_KEY, controllers);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
         linkedControllers.clear();
-        for (var controllerInput : input.childrenListOrEmpty(LINKED_CONTROLLERS_KEY)) {
+        for (int index = 0; index < input.getListOrEmpty(LINKED_CONTROLLERS_KEY).size(); index++) {
+            CompoundTag controllerInput = input.getListOrEmpty(LINKED_CONTROLLERS_KEY).getCompoundOrEmpty(index);
             BlockPos controllerPos = new BlockPos(
-                    controllerInput.getIntOr(LINKED_CONTROLLER_X_KEY, 0),
-                    controllerInput.getIntOr(LINKED_CONTROLLER_Y_KEY, 0),
-                    controllerInput.getIntOr(LINKED_CONTROLLER_Z_KEY, 0));
-            String sourceBlock = controllerInput.getStringOr(LINKED_CONTROLLER_SOURCE_BLOCK_KEY,
-                    DEFAULT_APPEARANCE_SOURCE.blockId().toString());
-            String overrideTexture = controllerInput.getStringOr(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY, "");
+                    controllerInput.getInt(LINKED_CONTROLLER_X_KEY), controllerInput.getInt(LINKED_CONTROLLER_Y_KEY),
+                    controllerInput.getInt(LINKED_CONTROLLER_Z_KEY));
+            String sourceBlock = controllerInput.getString(LINKED_CONTROLLER_SOURCE_BLOCK_KEY);
+            String overrideTexture = controllerInput.getString(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY);
             linkedControllers.put(controllerPos, new MachineAppearanceSpec.TextureSource(
                     sourceBlock.isBlank() ? DEFAULT_APPEARANCE_SOURCE.blockId() : ResourceLocation.parse(sourceBlock),
                     overrideTexture.isBlank() ? null : ResourceLocation.parse(overrideTexture)));
@@ -158,14 +158,14 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     }
 
     @Override
-    public void handleUpdateTag(ValueInput input) {
-        super.handleUpdateTag(input);
+    public void handleUpdateTag(CompoundTag input, HolderLookup.Provider registries) {
+        super.handleUpdateTag(input, registries);
         requestModelDataUpdate();
     }
 
     @Override
-    public void onDataPacket(Connection net, ValueInput input) {
-        super.onDataPacket(net, input);
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
+        super.onDataPacket(net, packet, registries);
         requestModelDataUpdate();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);

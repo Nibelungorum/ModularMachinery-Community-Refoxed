@@ -11,10 +11,10 @@ import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 
 public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
@@ -82,19 +82,22 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     public abstract IOPortKind kind();
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
-            input.child("energy").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                    .forEach(facet -> facet.load(child)));
+            super.loadAdditional(input, registries);
+            capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(input.getCompound(facet.stateKey()), registries));
         } finally {
             endLoadingAdditional();
         }
@@ -107,13 +110,13 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
         }
 
         @Override
-        public void save(ValueOutput output) {
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
             output.putLong("amount", storage.getAmountAsLong());
         }
 
         @Override
-        public void load(ValueInput input) {
-            storage.setAmount(input.getLong("amount").orElse(0L));
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            storage.setAmount(input.getLong("amount"));
         }
     }
 }

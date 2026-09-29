@@ -32,6 +32,8 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -39,8 +41,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
@@ -633,27 +633,30 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        ValueOutput profiles = null;
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        CompoundTag profiles = null;
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             if (transferPolicy(capability).isEmpty()) continue;
-            if (profiles == null) profiles = output.child(AUTO_IO_CAPABILITIES_KEY);
-            autoIOConfig(capability.type()).save(profiles.child(capability.type().id().toString()));
+            if (profiles == null) profiles = new CompoundTag();
+            CompoundTag profile = new CompoundTag();
+            autoIOConfig(capability.type()).save(profile);
+            profiles.put(capability.type().id().toString(), profile);
         }
+        if (profiles != null) output.put(AUTO_IO_CAPABILITIES_KEY, profiles);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
         autoIOConfigs.clear();
-        Optional<ValueInput> profiles = input.child(AUTO_IO_CAPABILITIES_KEY);
-        if (profiles.isPresent()) {
+        if (input.contains(AUTO_IO_CAPABILITIES_KEY)) {
+            CompoundTag profiles = input.getCompound(AUTO_IO_CAPABILITIES_KEY);
             for (MachineCapability capability : capabilitySnapshot().capabilities()) {
                 if (transferPolicy(capability).isEmpty()) continue;
-                Optional<ValueInput> profile = profiles.get().child(capability.type().id().toString());
-                if (profile.isPresent()) {
-                    autoIOConfig(capability.type()).loadInto(profile.get());
+                String key = capability.type().id().toString();
+                if (profiles.contains(key)) {
+                    autoIOConfig(capability.type()).loadInto(profiles.getCompound(key));
                 }
             }
         }

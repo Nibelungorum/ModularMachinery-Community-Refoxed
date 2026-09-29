@@ -10,10 +10,10 @@ import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
@@ -81,43 +81,45 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     public abstract IOPortKind kind();
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
-    private void saveFluids(ValueOutput output) {
+    private void saveFluids(CompoundTag output, HolderLookup.Provider registries) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
             FluidStack resource = storage.resource(slot);
             output.putBoolean("tankHasFluid" + suffix, !resource.isEmpty());
             if (!resource.isEmpty()) {
-                output.store("tankFluid" + suffix, FluidStack.OPTIONAL_CODEC, resource);
+                output.put("tankFluid" + suffix, resource.saveOptional(registries));
                 output.putLong("tankAmount" + suffix, storage.amount(slot));
             }
         }
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
-            input.child("fluid").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                    .forEach(facet -> facet.load(child)));
+            super.loadAdditional(input, registries);
+            capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(input.getCompound(facet.stateKey()), registries));
         } finally {
             endLoadingAdditional();
         }
     }
 
-    private void loadFluids(ValueInput input) {
+    private void loadFluids(CompoundTag input, HolderLookup.Provider registries) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
-            if (input.getBooleanOr("tankHasFluid" + suffix, false)) {
-                FluidStack resource = input.read("tankFluid" + suffix, FluidStack.OPTIONAL_CODEC)
-                        .orElse(FluidStack.EMPTY);
-                long amount = input.getLong("tankAmount" + suffix).orElse(0L);
+            if (input.getBoolean("tankHasFluid" + suffix)) {
+                FluidStack resource = FluidStack.parseOptional(registries, input.getCompound("tankFluid" + suffix));
+                long amount = input.getLong("tankAmount" + suffix);
                 storage.setContents(slot, resource, amount);
             } else {
                 storage.setContents(slot, FluidStack.EMPTY, 0L);
@@ -132,13 +134,13 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         }
 
         @Override
-        public void save(ValueOutput output) {
-            saveFluids(output);
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
+            saveFluids(output, registries);
         }
 
         @Override
-        public void load(ValueInput input) {
-            loadFluids(input);
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            loadFluids(input, registries);
         }
     }
 }

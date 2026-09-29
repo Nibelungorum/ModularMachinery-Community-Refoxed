@@ -9,8 +9,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.core.Holder;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.fluids.FluidType;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -41,8 +39,8 @@ class CombinedPortScreenTest {
 
     @Test
     void extended_combined_lines_keep_item_section_before_fluid_section() {
-        ItemStorageEntry item = new ItemStorageEntry(0, ItemResource.of(Items.IRON_INGOT), 12L, 64L);
-        FluidStorageEntry fluid = new FluidStorageEntry(0, FluidResource.of(Fluids.WATER), 34L, 56L);
+        ItemStorageEntry item = new ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(), 12L, 64L);
+        FluidStorageEntry fluid = new FluidStorageEntry(0, new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 1), 34L, 56L);
 
         assertThat(ExtendedCombinedScreen.displayLines(List.of(item), List.of(fluid)))
                 .extracting(component -> component.getString())

@@ -128,7 +128,7 @@ public final class ExtendedFluidScreen extends AbstractPortScreen<ExtendedFluidM
 
     private static ControllerTextLine renderLine(FluidStorageEntry entry) {
         return new ControllerTextLine(displayLine(entry), TEXT_COLOR,
-                new ControllerTextLine.FluidIcon(entry.resource().toStack(1)), tooltipLines(entry));
+                new ControllerTextLine.FluidIcon(entry.resource().copyWithAmount(1)), tooltipLines(entry));
     }
 
     private static Component emptyLine() {

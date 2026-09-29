@@ -1,13 +1,11 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
-import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -17,6 +15,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.items.SlotItemHandler;
 
 import java.util.List;
 
@@ -49,9 +48,9 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         this.kind = owner == null ? "combined_input_basic" : owner.kind().id();
         this.displayEntries = owner == null ? List.of() : new MachineIoView(owner.capabilitySnapshot()).displays();
         this.itemSlotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
-                : owner.itemStorage().size();
+                : owner.nativeItemHandler().getSlots();
         this.fluidTankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
-                : owner.fluidStorage().size();
+                : owner.nativeFluidHandler().getTanks();
         this.fluidTankLayouts = layouts(fluidTankCount);
         addItemSlots(owner);
         addPlayerSlots(playerInv);
@@ -59,8 +58,8 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
             this.itemEntries = List.of();
             this.fluidEntries = List.of();
         } else {
-            this.itemEntries = PktPortStorageSyncPayload.itemEntries(owner.itemStorage());
-            this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.fluidStorage());
+            this.itemEntries = PktPortStorageSyncPayload.itemEntries(owner.nativeItemHandler());
+            this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
         }
     }
 
@@ -105,7 +104,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
 
     public static void writeClientOpenData(FriendlyByteBuf buffer, CombinedPortBlockEntity owner) {
         writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(),
-                owner.itemStorage().size(), owner.fluidStorage().size());
+                owner.nativeItemHandler().getSlots(), owner.nativeFluidHandler().getTanks());
     }
 
     public record FluidTankLayout(int slot, int x, int y) {
@@ -139,10 +138,10 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
+    public void applySnapshot(PktPortStorageSyncPayload payload) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
-        List<ItemStorageEntry> nextItems = PktPortStorageSyncPayload.itemEntries(port.itemStorage());
-        List<FluidStorageEntry> nextFluids = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());
+        List<ItemStorageEntry> nextItems = payload.itemEntries();
+        List<FluidStorageEntry> nextFluids = payload.fluidEntries();
         for (ItemStorageEntry entry : nextItems) {
             if (entry.slot() >= itemSlotCount) throw new IllegalArgumentException("Item snapshot slot out of bounds");
         }
@@ -151,7 +150,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         }
         itemEntries = nextItems;
         fluidEntries = nextFluids;
-        displayEntries = new MachineIoView(port.capabilitySnapshot()).displays();
+        displayEntries = List.of();
     }
 
     private void addItemSlots(CombinedPortBlockEntity owner) {
@@ -164,7 +163,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
             int x = layout.startX() + col * SLOT_SIZE;
             int y = layout.startY() + row * SLOT_SIZE;
             if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
-            else addSlot(new DirectionalItemSlot(owner.itemStorage(), index, x, y));
+        else addSlot(new SlotItemHandler(owner.nativeItemHandler(), index, x, y));
         }
     }
 

@@ -12,10 +12,10 @@ import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -101,70 +101,71 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        saveItems(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        saveItems(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
-            loadItems(input);
+            super.loadAdditional(input, registries);
+            loadItems(input, registries);
             capabilitySnapshot().facets(PersistenceFacet.class)
-                    .forEach(facet -> input.child(facet.stateKey()).ifPresent(facet::load));
+                    .forEach(facet -> facet.load(input.getCompound(facet.stateKey()), registries));
         } finally {
             endLoadingAdditional();
         }
     }
 
-    private void saveFluids(ValueOutput output) {
+    private void saveFluids(CompoundTag output, HolderLookup.Provider registries) {
         for (int slot = 0; slot < fluidStorage.size(); slot++) {
             String suffix = "_" + slot;
             FluidStack resource = fluidStorage.resource(slot);
             output.putBoolean("tankHasFluid" + suffix, !resource.isEmpty());
             if (!resource.isEmpty()) {
-                output.store("tankFluid" + suffix, FluidStack.OPTIONAL_CODEC, resource);
+                output.put("tankFluid" + suffix, resource.saveOptional(registries));
                 output.putLong("tankAmount" + suffix, fluidStorage.amount(slot));
             }
         }
     }
 
-    private void saveItems(ValueOutput output) {
+    private void saveItems(CompoundTag output, HolderLookup.Provider registries) {
         for (int slot = 0; slot < itemStorage.size(); slot++) {
             String suffix = "_" + slot;
             ItemStack resource = itemStorage.resource(slot);
             output.putBoolean("itemHasResource" + suffix, !resource.isEmpty());
             if (!resource.isEmpty()) {
-                output.store("itemResource" + suffix, ItemStack.CODEC, resource);
+                output.put("itemResource" + suffix, resource.save(registries));
                 output.putLong("itemAmount" + suffix, itemStorage.amount(slot));
             }
         }
     }
 
-    private void loadItems(ValueInput input) {
+    private void loadItems(CompoundTag input, HolderLookup.Provider registries) {
         for (int slot = 0; slot < itemStorage.size(); slot++) {
             String suffix = "_" + slot;
-            if (input.getBooleanOr("itemHasResource" + suffix, false)) {
-                ItemStack resource = input.read("itemResource" + suffix, ItemStack.CODEC)
-                        .orElse(ItemStack.EMPTY);
-                itemStorage.setContents(slot, resource, input.getLong("itemAmount" + suffix).orElse(0L));
+            if (input.getBoolean("itemHasResource" + suffix)) {
+                ItemStack resource = ItemStack.parseOptional(registries, input.getCompound("itemResource" + suffix));
+                itemStorage.setContents(slot, resource, input.getLong("itemAmount" + suffix));
             } else {
                 itemStorage.setContents(slot, ItemStack.EMPTY, 0L);
             }
         }
     }
 
-    private void loadFluids(ValueInput input) {
+    private void loadFluids(CompoundTag input, HolderLookup.Provider registries) {
         for (int slot = 0; slot < fluidStorage.size(); slot++) {
             String suffix = "_" + slot;
-            if (input.getBooleanOr("tankHasFluid" + suffix, false)) {
-                FluidStack resource = input.read("tankFluid" + suffix, FluidStack.OPTIONAL_CODEC)
-                        .orElse(FluidStack.EMPTY);
-                fluidStorage.setContents(slot, resource, input.getLong("tankAmount" + suffix).orElse(0L));
+            if (input.getBoolean("tankHasFluid" + suffix)) {
+                FluidStack resource = FluidStack.parseOptional(registries, input.getCompound("tankFluid" + suffix));
+                fluidStorage.setContents(slot, resource, input.getLong("tankAmount" + suffix));
             } else {
                 fluidStorage.setContents(slot, FluidStack.EMPTY, 0L);
             }
@@ -184,13 +185,13 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
         }
 
         @Override
-        public void save(ValueOutput output) {
-            saveFluids(output);
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
+            saveFluids(output, registries);
         }
 
         @Override
-        public void load(ValueInput input) {
-            loadFluids(input);
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            loadFluids(input, registries);
         }
     }
 

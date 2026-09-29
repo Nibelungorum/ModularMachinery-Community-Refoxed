@@ -11,8 +11,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 /**
  * Converts native resources at the main-thread boundary of async planning.
@@ -23,26 +23,30 @@ public final class NativeAsyncResourceValues {
     private NativeAsyncResourceValues() {
     }
 
-    public static AsyncResourceValue item(ItemResource resource) {
-        return new AsyncResourceValue(ResourceLocation.parse(resource.typeHolder().getRegisteredName()),
-                patch(resource.getComponentsPatch()));
+    public static AsyncResourceValue item(ItemStack resource) {
+        if (resource.isEmpty()) throw new IllegalArgumentException("Item resource must not be empty");
+        return new AsyncResourceValue(BuiltInRegistries.ITEM.getKey(resource.getItem()), patch(resource.getComponentsPatch()));
     }
 
-    public static ItemResource item(AsyncResourceValue value) {
+    public static ItemStack item(AsyncResourceValue value) {
         var item = BuiltInRegistries.ITEM.getValue(value.resourceId());
         if (item == null) throw new IllegalArgumentException("Unknown item resource: " + value.resourceId());
-        return ItemResource.of(item, patch(value.data()));
+        ItemStack stack = new ItemStack(item);
+        stack.applyComponents(patch(value.data()));
+        return stack;
     }
 
-    public static AsyncResourceValue fluid(FluidResource resource) {
-        return new AsyncResourceValue(ResourceLocation.parse(resource.typeHolder().getRegisteredName()),
-                patch(resource.getComponentsPatch()));
+    public static AsyncResourceValue fluid(FluidStack resource) {
+        if (resource.isEmpty()) throw new IllegalArgumentException("Fluid resource must not be empty");
+        return new AsyncResourceValue(BuiltInRegistries.FLUID.getKey(resource.getFluid()), patch(resource.getComponentsPatch()));
     }
 
-    public static FluidResource fluid(AsyncResourceValue value) {
+    public static FluidStack fluid(AsyncResourceValue value) {
         var fluid = BuiltInRegistries.FLUID.getValue(value.resourceId());
         if (fluid == null) throw new IllegalArgumentException("Unknown fluid resource: " + value.resourceId());
-        return FluidResource.of(fluid, patch(value.data()));
+        FluidStack stack = new FluidStack(fluid, 1);
+        stack.applyComponents(patch(value.data()));
+        return stack;
     }
 
     public static AsyncResourceValue chemical(ChemicalResource resource) {

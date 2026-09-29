@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.facet;
 
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 
 /**
  * Owns a namespaced persistent capability state.
@@ -11,7 +11,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 public interface PersistenceFacet extends CapabilityFacet {
     String stateKey();
 
-    void save(ValueOutput output);
+    void save(CompoundTag output, HolderLookup.Provider registries);
 
-    void load(ValueInput input);
+    void load(CompoundTag input, HolderLookup.Provider registries);
 }

@@ -86,7 +86,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         for (TankRenderOperation operation : tankRenderOperations(menu.fluidTankLayouts(), menu.fluidEntries(), texture(false))) {
             if (operation.kind() == TankRenderOperation.Kind.FILL) {
                 FluidStorageEntry entry = operation.entry();
-                FluidGuiRenderer.drawFluid(graphics, entry.resource().toStack((int) Math.min(entry.amount(), Integer.MAX_VALUE)),
+                FluidGuiRenderer.drawFluid(graphics, entry.resource().copyWithAmount((int) Math.min(entry.amount(), Integer.MAX_VALUE)),
                         leftPos + operation.x(), topPos + operation.y(), operation.width(), operation.height());
             } else {
                 graphics.blit(RenderPipelines.GUI_TEXTURED, operation.texture(), leftPos + operation.x(), topPos + operation.y(),
@@ -122,7 +122,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         for (ItemStorageEntry entry : menu.itemEntries()) {
             if (entry.amount() <= 0 || entry.resource().isEmpty() || entry.slot() >= menu.itemSlotCount()) continue;
             var slot = menu.getSlot(entry.slot());
-            ItemStack stack = entry.resource().toStack((int) Math.min(entry.amount(), Integer.MAX_VALUE));
+            ItemStack stack = entry.resource().copyWithCount((int) Math.min(entry.amount(), Integer.MAX_VALUE));
             graphics.item(stack, slot.x, slot.y, entry.slot());
         }
         for (CombinedPortMenu.FluidTankLayout layout : menu.fluidTankLayouts()) {

@@ -34,7 +34,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
         this.kind = owner == null ? "extended_item_input_bus_basic" : owner.kind().id();
         this.slotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
                 : owner.itemStorage().size();
-        this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.itemEntries(owner.itemStorage());
+        this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.itemEntries(owner.nativeItemHandler());
         addPlayerSlots(playerInv, 47);
     }
 
@@ -68,7 +68,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
     }
 
     public static void writeClientOpenData(FriendlyByteBuf buffer, ExtendedItemBusBlockEntity owner) {
-        writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(), owner.itemStorage().size());
+        writeClientOpenData(buffer, owner.getBlockPos(), owner.kind().id(), owner.nativeItemHandler().getSlots());
     }
 
     public ExtendedItemBusBlockEntity owner() { return owner; }
@@ -87,9 +87,9 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
+    public void applySnapshot(PktPortStorageSyncPayload payload) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
-        List<ItemStorageEntry> nextEntries = PktPortStorageSyncPayload.itemEntries(port.itemStorage());
+        List<ItemStorageEntry> nextEntries = payload.itemEntries();
         for (ItemStorageEntry entry : nextEntries) {
             if (entry.slot() >= slotCount) throw new IllegalArgumentException("Item snapshot slot out of bounds");
         }

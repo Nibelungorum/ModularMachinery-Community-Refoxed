@@ -185,7 +185,7 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
 
     private static Component itemLine(ItemStorageEntry entry) {
         return Component.literal(ReadableNumber.format(entry.amount()) + " ")
-                .append(entry.resource().toStack(1).getStyledHoverName());
+                .append(entry.resource().getStyledHoverName());
     }
 
     private static Component fluidLine(FluidStorageEntry entry) {
@@ -195,13 +195,13 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
 
     private static ControllerTextLine itemRenderLine(ItemStorageEntry entry) {
         return new ControllerTextLine(itemLine(entry), TEXT_COLOR,
-                new ControllerTextLine.ItemIcon(entry.resource().toStack(1)),
+                new ControllerTextLine.ItemIcon(entry.resource()),
                 ExtendedItemScreen.tooltipLines(entry));
     }
 
     private static ControllerTextLine fluidRenderLine(FluidStorageEntry entry) {
         return new ControllerTextLine(fluidLine(entry), TEXT_COLOR,
-                new ControllerTextLine.FluidIcon(entry.resource().toStack(1)),
+                new ControllerTextLine.FluidIcon(entry.resource().copyWithAmount(1)),
                 ExtendedFluidScreen.tooltipLines(entry));
     }
 

@@ -117,18 +117,18 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     }
 
     static List<Component> tooltipLines(ItemStorageEntry entry) {
-        return List.of(entry.resource().toStack(1).getStyledHoverName(), Component.literal(ReadableNumber.formatExact(entry.amount())
+        return List.of(entry.resource().getStyledHoverName(), Component.literal(ReadableNumber.formatExact(entry.amount())
                 + " / " + ReadableNumber.formatExact(entry.capacity())));
     }
 
     private static Component displayLine(ItemStorageEntry entry) {
         return Component.literal(ReadableNumber.format(entry.amount()) + " ")
-                .append(entry.resource().toStack(1).getStyledHoverName());
+                .append(entry.resource().getStyledHoverName());
     }
 
     private static ControllerTextLine renderLine(ItemStorageEntry entry) {
         return new ControllerTextLine(displayLine(entry), TEXT_COLOR,
-                new ControllerTextLine.ItemIcon(entry.resource().toStack(1)), tooltipLines(entry));
+                new ControllerTextLine.ItemIcon(entry.resource()), tooltipLines(entry));
     }
 
     private static Component emptyLine() {
