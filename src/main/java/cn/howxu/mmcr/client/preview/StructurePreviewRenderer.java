@@ -157,7 +157,11 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     private void releaseResources() {
         closed = true;
-        scene.dispose();
+        try {
+            guiRenderer.close();
+        } finally {
+            scene.dispose();
+        }
     }
 
     private void invalidateHoverInputs() {

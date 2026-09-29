@@ -59,7 +59,7 @@ class PreviewSceneMeshCompilerTest {
         AtomicReference<Runnable> pendingWorker = new AtomicReference<>();
         Executor executor = pendingWorker::set;
         PreviewSceneMeshCompiler.CompilationInput input = new PreviewSceneMeshCompiler.CompilationInput(
-                List.of(), PreviewVisibility.ALL, null, null, null, false, null);
+                List.of(), PreviewVisibility.ALL, null, null);
 
         var future = PreviewSceneMeshCompiler.compileAsync(input, null, new AtomicBoolean(), executor);
 

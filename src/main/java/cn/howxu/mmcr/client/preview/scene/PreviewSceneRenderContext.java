@@ -15,4 +15,4 @@ import net.minecraft.client.renderer.MultiBufferSource;
  * @author howxu <dev@howxu.cn>
  */
 public record PreviewSceneRenderContext(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
-                                        float partialTick) { }
+                                        float partialTick, int framebufferId) { }

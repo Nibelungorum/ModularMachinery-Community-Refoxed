@@ -64,8 +64,11 @@ public final class StructurePreviewPanel implements AutoCloseable {
             graphics.enableScissor(statusOriginX, statusOriginY,
                     statusOriginX + width, statusOriginY + height);
             try {
-                int x = statusOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
-                graphics.drawString(minecraft.font, status, x, statusOriginY + height / 2, 0xFFFFFFFF, false);
+                var pose = graphics.pose().last().pose();
+                int localOriginX = statusOriginX - Math.round(pose.m30());
+                int localOriginY = statusOriginY - Math.round(pose.m31());
+                int x = localOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
+                graphics.drawString(minecraft.font, status, x, localOriginY + height / 2, 0xFFFFFFFF, false);
             } finally {
                 graphics.disableScissor();
             }

@@ -11,13 +11,12 @@ import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
@@ -124,7 +123,7 @@ public final class PreviewSceneMeshCompiler {
 
     private static WorkerResult compilePartition(CompilationInput input, int startInclusive, int endExclusive,
                                                   PreviewSceneCamera camera, AtomicBoolean cancelled) {
-        SectionBufferBuilderPack builders = new SectionBufferBuilderPack();
+        Map<RenderType, ByteBufferBuilder> builders = new IdentityHashMap<>();
         Map<RenderType, BufferBuilder> started = new IdentityHashMap<>();
         Map<RenderType, MeshData> meshes = new IdentityHashMap<>();
         Set<BlockPos> blockEntities = new HashSet<>();
@@ -162,16 +161,17 @@ public final class PreviewSceneMeshCompiler {
             }
             if (cancelled.get()) throw new CancelledCompilation();
             VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
-            MeshData.SortState sortState = null;
+            Map<RenderType, MeshData.SortState> sortStates = new IdentityHashMap<>();
             for (Map.Entry<RenderType, BufferBuilder> entry : started.entrySet()) {
                 MeshData mesh = entry.getValue().build();
                 if (mesh == null) continue;
                 meshes.put(entry.getKey(), mesh);
-                if (entry.getKey() == RenderType.translucent()) {
-                    sortState = mesh.sortQuads(builders.buffer(entry.getKey()), sorting);
+                if (entry.getKey().sortOnUpload()) {
+                    MeshData.SortState sortState = mesh.sortQuads(builders.get(entry.getKey()), sorting);
+                    if (sortState != null) sortStates.put(entry.getKey(), sortState);
                 }
             }
-            return new WorkerResult(new PreviewSceneMeshCache.MeshPart(builders, meshes, sortState), blockEntities);
+            return new WorkerResult(new PreviewSceneMeshCache.MeshPart(builders, meshes, sortStates), blockEntities);
         } catch (Throwable throwable) {
             closeWorkerResources(meshes, builders, throwable);
             rethrow(throwable);
@@ -198,7 +198,7 @@ public final class PreviewSceneMeshCompiler {
     }
 
     private static void closeWorkerResources(Map<RenderType, MeshData> meshes,
-                                             SectionBufferBuilderPack builders, Throwable failure) {
+                                             Map<RenderType, ByteBufferBuilder> builders, Throwable failure) {
         meshes.values().forEach(mesh -> {
             try {
                 mesh.close();
@@ -206,10 +206,12 @@ public final class PreviewSceneMeshCompiler {
                 failure.addSuppressed(cleanupFailure);
             }
         });
-        try {
-            builders.close();
-        } catch (RuntimeException cleanupFailure) {
-            failure.addSuppressed(cleanupFailure);
+        for (ByteBufferBuilder builder : builders.values()) {
+            try {
+                builder.close();
+            } catch (RuntimeException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
         }
     }
 
@@ -220,9 +222,10 @@ public final class PreviewSceneMeshCompiler {
     }
 
     private static BufferBuilder builderFor(Map<RenderType, BufferBuilder> started,
-                                             SectionBufferBuilderPack builders, RenderType layer) {
-        return started.computeIfAbsent(layer, key -> new BufferBuilder(builders.buffer(key), VertexFormat.Mode.QUADS,
-                key.format()));
+                                             Map<RenderType, ByteBufferBuilder> builders, RenderType layer) {
+        return started.computeIfAbsent(layer, key -> new BufferBuilder(
+                builders.computeIfAbsent(key, ignored -> new ByteBufferBuilder(key.bufferSize())),
+                key.mode(), key.format()));
     }
 
     private record SectionOriginConsumer(VertexConsumer delegate, float x, float y, float z)
