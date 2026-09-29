@@ -16,20 +16,17 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.JsonOps;
-import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
-import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
-import mekanism.api.resource.LargeResourceStack;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -111,7 +108,7 @@ class ChemicalConsumeChanceTest {
     void chemical_handler_returns_no_extract_when_consume_chance_is_zero() {
         Holder.Reference<Chemical> chemical = registerChemical("zero_consume");
         FakeChemicalTank tank = new FakeChemicalTank(2_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
-        tank.setContents(ChemicalResource.of(chemical), 1_000L, null);
+        tank.setStack(new ChemicalStack(chemical, 1_000L));
         FakeChemicalPort port = new FakeChemicalPort(tank, IOType.INPUT);
         LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
                 ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0F);
@@ -130,7 +127,7 @@ class ChemicalConsumeChanceTest {
     void chemical_handler_uses_consume_profile_when_consume_chance_is_partial() {
         Holder.Reference<Chemical> chemical = registerChemical("partial_consume");
         FakeChemicalTank tank = new FakeChemicalTank(10_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
-        tank.setContents(ChemicalResource.of(chemical), 5_000L, null);
+        tank.setStack(new ChemicalStack(chemical, 5_000L));
         FakeChemicalPort port = new FakeChemicalPort(tank, IOType.INPUT);
         LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
                 ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0.5F);
@@ -216,7 +213,7 @@ class ChemicalConsumeChanceTest {
     private static final class FakeChemicalTank implements IChemicalTank {
         private final long capacity;
         private final ChemicalAttributeValidator attributeValidator;
-        private ChemicalResource resource = ChemicalResource.EMPTY;
+        private ChemicalStack identity = ChemicalStack.EMPTY;
         private long amount;
 
         private FakeChemicalTank(long capacity, ChemicalAttributeValidator attributeValidator) {
@@ -225,47 +222,34 @@ class ChemicalConsumeChanceTest {
         }
 
         @Override
-        public LargeResourceStack<ChemicalResource> asStack() {
-            return new LargeResourceStack<>(resource, amount);
+        public ChemicalStack getStack() {
+            return identity.isEmpty() ? ChemicalStack.EMPTY : identity.copyWithAmount(amount);
         }
 
         @Override
-        public int insert(ChemicalResource resource, int amount, TransactionContext transaction,
-                          AutomationType automationType) {
-            long moved = Math.min(amount, Math.max(0L, capacity - this.amount));
-            if (moved <= 0L || !isValid(resource)) return 0;
-            setContents(resource, this.amount + moved, transaction);
-            return (int) moved;
+        public void setStack(ChemicalStack stack) {
+            if (!stack.isEmpty() && !isValid(stack)) throw new IllegalArgumentException("Invalid chemical");
+            setStackUnchecked(stack);
         }
 
         @Override
-        public int extract(ChemicalResource resource, int amount, TransactionContext transaction,
-                           AutomationType automationType) {
-            if (!this.resource.equals(resource)) return 0;
-            long moved = Math.min(amount, this.amount);
-            setContents(this.resource, this.amount - moved, transaction);
-            return (int) moved;
+        public void setStackUnchecked(ChemicalStack stack) {
+            identity = stack.isEmpty() ? ChemicalStack.EMPTY : stack.copyWithAmount(1L);
+            amount = stack.isEmpty() ? 0L : stack.getAmount();
         }
 
         @Override
-        public long capacityAsLong(ChemicalResource resource) {
+        public long getCapacity() {
             return capacity;
         }
 
         @Override
-        public boolean isValid(ChemicalResource resource) {
-            return !resource.isEmpty();
+        public boolean isValid(ChemicalStack stack) {
+            return !stack.isEmpty();
         }
 
         @Override
-        public void setContents(LargeResourceStack<ChemicalResource> contents, TransactionContext transaction) {
-            resource = contents.resource();
-            amount = contents.amount();
-        }
-
-        @Override
-        public LargeResourceStack.StackHelper<ChemicalResource> stackHelper() {
-            return LargeResourceStack.CHEMICAL_HELPER;
+        public void onContentsChanged() {
         }
 
         @Override

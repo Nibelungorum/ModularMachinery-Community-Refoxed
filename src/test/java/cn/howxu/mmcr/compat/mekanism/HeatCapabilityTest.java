@@ -9,7 +9,6 @@ import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.heat.IHeatCapacitor;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -44,10 +43,7 @@ class HeatCapabilityTest {
                 9D, true, 9L))).isPresent();
         AsyncCapabilityOperation operation = planner.plan(snapshot, new AsyncCapabilityRequest.Heat(
                 capability.type().id(), 1L, 50D, false, 50L)).orElseThrow();
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(invokeCommit(facet, operation, transaction)).isTrue();
-            transaction.commit();
-        }
+        assertThat(invokeCommit(facet, operation)).isTrue();
 
         assertThat(heat.get()).isEqualTo(1_050D);
     }
@@ -58,6 +54,10 @@ class HeatCapabilityTest {
                     case "getHeat" -> heat.get();
                     case "getTemperature" -> heat.get() / capacity;
                     case "getHeatCapacity" -> capacity;
+                    case "setHeat" -> {
+                        heat.set((double) arguments[0]);
+                        yield null;
+                    }
                     case "handleHeat" -> {
                         heat.set(heat.get() + (double) arguments[0]);
                         yield null;
@@ -78,12 +78,10 @@ class HeatCapabilityTest {
         return method.invoke(facet);
     }
 
-    private static boolean invokeCommit(AsyncPlanningFacet facet, AsyncCapabilityOperation operation,
-                                        Transaction transaction) throws Exception {
-        Method method = AsyncPlanningFacet.class.getDeclaredMethod("commitOnServerThread",
-                AsyncCapabilityOperation.class,
-                net.neoforged.neoforge.transfer.transaction.TransactionContext.class);
+    private static boolean invokeCommit(AsyncPlanningFacet facet, AsyncCapabilityOperation operation) throws Exception {
+        Method method = AsyncPlanningFacet.class.getDeclaredMethod("commitNativeOnServerThread",
+                AsyncCapabilityOperation.class);
         method.setAccessible(true);
-        return ((cn.howxu.mmcr.api.capability.plan.CapabilityResult) method.invoke(facet, operation, transaction)).success();
+        return ((cn.howxu.mmcr.api.capability.plan.CapabilityResult) method.invoke(facet, operation)).success();
     }
 }

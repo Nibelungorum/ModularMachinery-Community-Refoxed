@@ -23,21 +23,17 @@ import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
-import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
-import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
-import mekanism.api.resource.LargeResourceStack;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -62,7 +58,7 @@ class AsyncChemicalPlanningTest {
 
     @Test
     void chemical_requirement_plans_from_a_worker_safe_snapshot() throws Exception {
-        ChemicalResource oxygen = ChemicalResource.of(registerChemical("async_oxygen"));
+        ChemicalStack oxygen = chemical("async_oxygen");
         ChemicalPortCapability capability = new ChemicalPortCapability(tank(oxygen, 1_000L), IOType.INPUT);
         AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
 
@@ -81,7 +77,7 @@ class AsyncChemicalPlanningTest {
 
     @Test
     void crafting_context_prepares_full_chance_chemical_input_for_async_extraction() throws Exception {
-        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_async_oxygen"));
+        ChemicalStack oxygen = chemical("crafting_context_async_oxygen");
 
         Object prepared = prepareChemicalInput(oxygen, 1F, 3L);
 
@@ -99,21 +95,21 @@ class AsyncChemicalPlanningTest {
 
     @Test
     void crafting_context_keeps_zero_chance_chemical_input_on_the_main_thread() throws Exception {
-        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_zero_oxygen"));
+        ChemicalStack oxygen = chemical("crafting_context_zero_oxygen");
 
         assertThat(prepareChemicalInput(oxygen, 0F)).isNull();
     }
 
     @Test
     void crafting_context_keeps_partial_chance_chemical_input_on_the_main_thread() throws Exception {
-        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_partial_oxygen"));
+        ChemicalStack oxygen = chemical("crafting_context_partial_oxygen");
 
         assertThat(prepareChemicalInput(oxygen, 0.5F)).isNull();
     }
 
     @Test
     void crafting_context_keeps_tag_chemical_input_on_the_main_thread() throws Exception {
-        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_tag_oxygen"));
+        ChemicalStack oxygen = chemical("crafting_context_tag_oxygen");
         LoadedChemicalRequirement input = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
                 ChemicalIngredient.tag(ResourceLocation.parse("mmcr_test:crafting_context_tag"), 100L), 1F, List.of(), 1F);
 
@@ -122,8 +118,8 @@ class AsyncChemicalPlanningTest {
 
     @Test
     void changed_chemical_tank_rejects_the_stale_async_intent_without_partial_consumption() throws Exception {
-        ChemicalResource oxygen = ChemicalResource.of(registerChemical("stale_oxygen"));
-        ChemicalResource hydrogen = ChemicalResource.of(registerChemical("stale_hydrogen"));
+        ChemicalStack oxygen = chemical("stale_oxygen");
+        ChemicalStack hydrogen = chemical("stale_hydrogen");
         FakeChemicalTank tank = tank(oxygen, 1_000L);
         ChemicalPortCapability capability = new ChemicalPortCapability(tank, IOType.INPUT);
         AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
@@ -131,13 +127,11 @@ class AsyncChemicalPlanningTest {
         AsyncCapabilityOperation operation = workerPlanner(facet).plan(snapshot, new AsyncCapabilityRequest.Resource(
                 capability.type().id(), 1L, List.of(new AsyncResourceAction(snapshot.slots().getFirst().resource().orElseThrow(),
                 100L, false)))).orElseThrow();
-        tank.setContents(hydrogen, 1_000L, null);
+        tank.setStack(hydrogen.copyWithAmount(1_000L));
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(commit(facet, operation, transaction).success()).isFalse();
-        }
-        assertThat(tank.resource()).isEqualTo(hydrogen);
-        assertThat(tank.amountAsLong()).isEqualTo(1_000L);
+        assertThat(commit(facet, operation).success()).isFalse();
+        assertThat(ChemicalStack.isSameChemical(tank.getStack(), hydrogen)).isTrue();
+        assertThat(tank.getStored()).isEqualTo(1_000L);
     }
 
     @Test
@@ -192,25 +186,25 @@ class AsyncChemicalPlanningTest {
         return (AsyncCapabilityPlanner) invoke(facet, "workerPlannerOnServerThread");
     }
 
-    private static CapabilityResult commit(AsyncPlanningFacet facet, AsyncCapabilityOperation operation,
-                                            TransactionContext transaction) throws Exception {
-        return (CapabilityResult) invoke(facet, "commitOnServerThread", AsyncCapabilityOperation.class,
-                TransactionContext.class, operation, transaction);
+    private static CapabilityResult commit(AsyncPlanningFacet facet, AsyncCapabilityOperation operation)
+            throws Exception {
+        return (CapabilityResult) invoke(facet, "commitNativeOnServerThread", AsyncCapabilityOperation.class,
+                operation);
     }
 
-    private static Object prepareChemicalInput(ChemicalResource chemical, float consumeChance) throws Exception {
+    private static Object prepareChemicalInput(ChemicalStack chemical, float consumeChance) throws Exception {
         return prepareChemicalInput(chemical, consumeChance, 1L);
     }
 
-    private static Object prepareChemicalInput(ChemicalResource chemical, float consumeChance, long parallelism)
+    private static Object prepareChemicalInput(ChemicalStack chemical, float consumeChance, long parallelism)
             throws Exception {
         LoadedChemicalRequirement input = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(ResourceLocation.parse(chemical.typeHolder().getRegisteredName()), 100L), 1F,
+                ChemicalIngredient.chemical(ResourceLocation.parse(chemical.getChemicalHolder().getRegisteredName()), 100L), 1F,
                 List.of(), consumeChance);
         return prepareChemicalInput(input, chemical, parallelism);
     }
 
-    private static Object prepareChemicalInput(LoadedChemicalRequirement input, ChemicalResource chemical,
+    private static Object prepareChemicalInput(LoadedChemicalRequirement input, ChemicalStack chemical,
                                                long parallelism) throws Exception {
         AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
                 new AsyncCapabilityPlanner.Resource(input.type().id()),
@@ -229,11 +223,11 @@ class AsyncChemicalPlanningTest {
         return method.invoke(facet);
     }
 
-    private static Object invoke(AsyncPlanningFacet facet, String name, Class<?> first, Class<?> second,
-                                 Object firstValue, Object secondValue) throws Exception {
-        Method method = AsyncPlanningFacet.class.getDeclaredMethod(name, first, second);
+    private static Object invoke(AsyncPlanningFacet facet, String name, Class<?> parameterType,
+                                 Object value) throws Exception {
+        Method method = AsyncPlanningFacet.class.getDeclaredMethod(name, parameterType);
         method.setAccessible(true);
-        return method.invoke(facet, firstValue, secondValue);
+        return method.invoke(facet, value);
     }
 
     private static Holder.Reference<Chemical> registerChemical(String path) {
@@ -248,15 +242,19 @@ class AsyncChemicalPlanningTest {
         });
     }
 
-    private static FakeChemicalTank tank(ChemicalResource resource, long amount) {
+    private static ChemicalStack chemical(String path) {
+        return new ChemicalStack(registerChemical(path), 1L);
+    }
+
+    private static FakeChemicalTank tank(ChemicalStack identity, long amount) {
         FakeChemicalTank tank = new FakeChemicalTank(1_000L);
-        tank.setContents(resource, amount, null);
+        tank.setStack(identity.copyWithAmount(amount));
         return tank;
     }
 
     private static final class FakeChemicalTank implements IChemicalTank {
         private final long capacity;
-        private ChemicalResource resource = ChemicalResource.EMPTY;
+        private ChemicalStack identity = ChemicalStack.EMPTY;
         private long amount;
 
         private FakeChemicalTank(long capacity) {
@@ -264,47 +262,34 @@ class AsyncChemicalPlanningTest {
         }
 
         @Override
-        public LargeResourceStack<ChemicalResource> asStack() {
-            return new LargeResourceStack<>(resource, amount);
+        public ChemicalStack getStack() {
+            return identity.isEmpty() ? ChemicalStack.EMPTY : identity.copyWithAmount(amount);
         }
 
         @Override
-        public int insert(ChemicalResource resource, int amount, TransactionContext transaction,
-                          AutomationType automationType) {
-            if (!isValid(resource) || (!this.resource.isEmpty() && !this.resource.equals(resource))) return 0;
-            int moved = (int) Math.min(amount, capacity - this.amount);
-            setContents(resource, this.amount + moved, transaction);
-            return moved;
+        public void setStack(ChemicalStack stack) {
+            if (!stack.isEmpty() && !isValid(stack)) throw new IllegalArgumentException("Invalid chemical");
+            setStackUnchecked(stack);
         }
 
         @Override
-        public int extract(ChemicalResource resource, int amount, TransactionContext transaction,
-                           AutomationType automationType) {
-            if (!this.resource.equals(resource)) return 0;
-            int moved = (int) Math.min(amount, this.amount);
-            setContents(this.resource, this.amount - moved, transaction);
-            return moved;
+        public void setStackUnchecked(ChemicalStack stack) {
+            identity = stack.isEmpty() ? ChemicalStack.EMPTY : stack.copyWithAmount(1L);
+            amount = stack.isEmpty() ? 0L : stack.getAmount();
         }
 
         @Override
-        public long capacityAsLong(ChemicalResource resource) {
+        public long getCapacity() {
             return capacity;
         }
 
         @Override
-        public boolean isValid(ChemicalResource resource) {
-            return !resource.isEmpty();
+        public boolean isValid(ChemicalStack stack) {
+            return !stack.isEmpty();
         }
 
         @Override
-        public void setContents(LargeResourceStack<ChemicalResource> contents, TransactionContext transaction) {
-            resource = contents.resource();
-            amount = contents.amount();
-        }
-
-        @Override
-        public LargeResourceStack.StackHelper<ChemicalResource> stackHelper() {
-            return LargeResourceStack.CHEMICAL_HELPER;
+        public void onContentsChanged() {
         }
 
         @Override

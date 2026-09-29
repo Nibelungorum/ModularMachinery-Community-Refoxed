@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -25,13 +24,17 @@ import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.heat.HeatAPI;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,6 +93,22 @@ class LoadedPortStorageTest {
     }
 
     @Test
+    void chemical_tank_round_trips_long_amount_through_compound_tag() {
+        long amount = (long) Integer.MAX_VALUE + 1L;
+        ChemicalStack chemical = chemical("persisted_long_amount", false);
+        IChemicalTank source = LoadedPortStorage.normalChemicalTank(amount, listener());
+        source.setStack(chemical.copyWithAmount(amount));
+        HolderLookup.Provider registries = HolderLookup.Provider.create(Stream.of(MekanismAPI.CHEMICAL_REGISTRY));
+
+        CompoundTag saved = source.serializeNBT(registries);
+        IChemicalTank restored = LoadedPortStorage.normalChemicalTank(amount, listener());
+        restored.deserializeNBT(registries, saved);
+
+        assertThat(ChemicalStack.isSameChemical(restored.getStack(), chemical)).isTrue();
+        assertThat(restored.getStored()).isEqualTo(amount);
+    }
+
+    @Test
     void heat_port_uses_fixed_capacity_and_local_ambient_temperature() {
         BasicHeatCapacitor capacitor = LoadedPortStorage.heatCapacitor(null, POS, listener());
 
@@ -97,6 +116,7 @@ class LoadedPortStorageTest {
         assertThat(capacitor.getTemperature()).isEqualTo(HeatAPI.getAmbientTemp(null, POS));
 
         capacitor.handleHeat(300D);
+        capacitor.update();
 
         assertThat(capacitor.getTemperature()).isEqualTo(HeatAPI.getAmbientTemp(null, POS) + 1D);
     }
@@ -109,7 +129,7 @@ class LoadedPortStorageTest {
                 LoadedPortStorage.heatCapacitor(null, POS, listener()), IOType.OUTPUT);
 
         assertThat(chemicalCapability.view().facets())
-                .contains(ResourceFacet.class, TransferFacet.class, OperationFacet.class,
+                .contains(TransferFacet.class, OperationFacet.class,
                         PresentationFacet.class, SyncFacet.class);
         assertThat(heatCapability.view().facets())
                 .contains(OperationFacet.class, PresentationFacet.class, SyncFacet.class)
