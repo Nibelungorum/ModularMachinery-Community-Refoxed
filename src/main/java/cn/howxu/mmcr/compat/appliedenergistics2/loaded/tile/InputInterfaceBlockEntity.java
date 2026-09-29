@@ -24,19 +24,19 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -132,7 +132,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        if (loadingProvenance || Transaction.getCurrentOpenedTransaction() != null) return;
+        if (loadingProvenance) return;
         reconcileNetworkOwned();
         notifyStorageChanged();
         notifyControllerOfInputChange();
@@ -205,29 +205,31 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
-    public void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         mainNode.serialize(output);
-        logic.writeToNBT(output);
-        var provenance = output.childrenList(NETWORK_OWNED_KEY);
+        logic.writeToNBT(output, registries);
+        ListTag provenance = new ListTag();
         for (int slot = 0; slot < networkOwned.length; slot++) {
             GenericStack owned = networkOwned[slot];
             if (owned == null || owned.amount() <= 0L) continue;
-            var entry = provenance.addChild();
+            CompoundTag entry = new CompoundTag();
             entry.putInt(NETWORK_OWNED_SLOT_KEY, slot);
-            GenericStack.writeTag(entry, owned);
+            entry.put("stack", GenericStack.writeTag(registries, owned));
+            provenance.add(entry);
         }
+        output.put(NETWORK_OWNED_KEY, provenance);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         loadingProvenance = true;
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
+            super.loadAdditional(input, registries);
             mainNode.deserialize(input);
-            readNetworkOwned(input);
-            logic.readFromNBT(input);
+            readNetworkOwned(input, registries);
+            logic.readFromNBT(input, registries);
             reconcileNetworkOwned();
         } finally {
             endLoadingAdditional();
@@ -267,11 +269,12 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         }
     }
 
-    private void readNetworkOwned(ValueInput input) {
+    private void readNetworkOwned(CompoundTag input, HolderLookup.Provider registries) {
         Arrays.fill(networkOwned, null);
-        for (ValueInput entry : input.childrenListOrEmpty(NETWORK_OWNED_KEY)) {
-            int slot = entry.getIntOr(NETWORK_OWNED_SLOT_KEY, -1);
-            GenericStack owned = GenericStack.readTag(entry);
+        for (int index = 0; index < input.getListOrEmpty(NETWORK_OWNED_KEY).size(); index++) {
+            CompoundTag entry = input.getListOrEmpty(NETWORK_OWNED_KEY).getCompoundOrEmpty(index);
+            int slot = entry.getInt(NETWORK_OWNED_SLOT_KEY);
+            GenericStack owned = GenericStack.readTag(registries, entry.getCompound("stack"));
             if (slot >= 0 && slot < networkOwned.length && owned != null && owned.amount() > 0L) {
                 networkOwned[slot] = owned;
             }

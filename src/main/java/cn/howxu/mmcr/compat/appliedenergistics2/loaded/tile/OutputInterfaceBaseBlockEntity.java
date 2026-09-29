@@ -20,6 +20,8 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -28,9 +30,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,7 +111,6 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        if (Transaction.getCurrentOpenedTransaction() != null) return;
         notifyStorageChanged();
     }
 
@@ -137,19 +135,19 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
     }
 
     @Override
-    public void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         mainNode.serialize(output);
-        logic.writeToNBT(output);
+        logic.writeToNBT(output, registries);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
+            super.loadAdditional(input, registries);
             mainNode.deserialize(input);
-            logic.readFromNBT(input);
+            logic.readFromNBT(input, registries);
         } finally {
             endLoadingAdditional();
         }

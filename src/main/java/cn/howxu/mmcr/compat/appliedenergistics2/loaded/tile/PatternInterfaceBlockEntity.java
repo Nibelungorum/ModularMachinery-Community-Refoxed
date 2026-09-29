@@ -41,20 +41,19 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -87,7 +86,6 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final OutputResourceStorage<ItemResource> itemOutputStorage;
     private final OutputResourceStorage<FluidResource> fluidOutputStorage;
     private long observedReturnInventoryAmount;
-    private boolean returnInventorySnapshotPending;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -282,10 +280,6 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveChanges() {
         observedReturnInventoryAmount = returnInventoryAmount();
-        if (Transaction.getCurrentOpenedTransaction() != null) {
-            returnInventorySnapshotPending = true;
-            return;
-        }
         notifyStorageChanged();
     }
 
@@ -350,10 +344,6 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void tick() {
         super.tick();
-        if (returnInventorySnapshotPending) {
-            returnInventorySnapshotPending = false;
-            notifyStorageChanged();
-        }
         long currentAmount = returnInventoryAmount();
         if (currentAmount < observedReturnInventoryAmount) onNativeReturnInventoryDrained();
         observedReturnInventoryAmount = currentAmount;
@@ -367,19 +357,19 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
-    public void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         mainNode.serialize(output);
-        logic.writeToNBT(output);
+        logic.writeToNBT(output, registries);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
+            super.loadAdditional(input, registries);
             mainNode.deserialize(input);
-            logic.readFromNBT(input);
+            logic.readFromNBT(input, registries);
         } finally {
             endLoadingAdditional();
         }

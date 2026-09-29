@@ -6,6 +6,7 @@ import appeng.api.networking.storage.IStorageService;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -17,23 +18,19 @@ import com.glodblock.github.appflux.common.me.key.FluxKey;
 import com.glodblock.github.appflux.common.me.key.type.EnergyType;
 import java.util.Map;
 import java.util.Optional;
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Adapts the AppFlux FE key in an AE2 storage service to MMCR's local energy caches.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements ExactPrefetchBridge {
+public final class FluxEnergyNetwork implements ExactPrefetchBridge {
     private static final FluxKey FLUX_KEY = FluxKey.of(EnergyType.FE);
 
     private final IStorageService storageService;
     private final MEStorage storage;
     private final IActionSource source;
     private final EnergyStorage energy;
-    private long extractedInTransaction;
 
     public FluxEnergyNetwork(IStorageService storageService, IActionSource source) {
         this.storageService = storageService;
@@ -55,7 +52,7 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
         if (requestedAmount <= 0L || energy == null || energy.extract(requestedAmount, true) != requestedAmount) {
             return Optional.empty();
         }
-        return Optional.of(transaction -> extractExactly(requestedAmount, transaction));
+        return Optional.of((NativeCapabilityOperation) () -> extractExactly(requestedAmount));
     }
 
     public long drainPending(FluxEnergyBuffer pending) {
@@ -63,12 +60,7 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
         long accepted = energy.insert(pending.amount(), false);
         if (accepted <= 0L) return 0L;
         if (accepted > pending.amount()) throw new IllegalStateException("network accepted more energy than requested");
-        try (Transaction transaction = Transaction.openRoot()) {
-            if (pending.extract(accepted, transaction) != accepted) {
-                throw new IllegalStateException("pending energy changed during network drain");
-            }
-            transaction.commit();
-        }
+        if (pending.extract(accepted) != accepted) throw new IllegalStateException("pending energy changed during network drain");
         return accepted;
     }
 
@@ -77,12 +69,7 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
         long accepted = energy.insert(buffer.idleExcess(), false);
         if (accepted <= 0L) return 0L;
         if (accepted > buffer.idleExcess()) throw new IllegalStateException("network accepted more energy than requested");
-        try (Transaction transaction = Transaction.openRoot()) {
-            if (buffer.returnIdle(accepted, transaction) != accepted) {
-                throw new IllegalStateException("idle energy changed during network return");
-            }
-            transaction.commit();
-        }
+        if (buffer.returnIdle(accepted) != accepted) throw new IllegalStateException("idle energy changed during network return");
         return accepted;
     }
 
@@ -94,41 +81,12 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
         return energy != null;
     }
 
-    private CapabilityResult extractExactly(long requestedAmount, TransactionContext transaction) {
+    private CapabilityResult extractExactly(long requestedAmount) {
         long simulated = energy.extract(requestedAmount, true);
         if (simulated != requestedAmount) return missingInput();
-        updateSnapshots(transaction);
         long extracted = energy.extract(requestedAmount, false);
-        extractedInTransaction += extracted;
         if (extracted == requestedAmount) return CapabilityResult.successful();
-        if (extracted > 0L) {
-            restore(extracted);
-            extractedInTransaction -= extracted;
-        }
         return missingInput();
-    }
-
-    @Override
-    protected Long createSnapshot() {
-        return extractedInTransaction;
-    }
-
-    @Override
-    protected void revertToSnapshot(Long snapshot) {
-        long extracted = extractedInTransaction - snapshot;
-        if (extracted > 0L) restore(extracted);
-        extractedInTransaction = snapshot;
-    }
-
-    @Override
-    protected void onRootCommit(Long originalState) {
-        extractedInTransaction = 0L;
-    }
-
-    private void restore(long extracted) {
-        if (energy.insert(extracted, false) != extracted) {
-            throw new IllegalStateException("unable to compensate AppFlux extraction");
-        }
     }
 
     private static CapabilityResult missingInput() {

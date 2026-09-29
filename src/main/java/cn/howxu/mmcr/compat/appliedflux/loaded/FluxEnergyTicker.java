@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.appliedflux.loaded;
 import appeng.api.networking.ticking.TickRateModulation;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyOutputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -18,10 +17,7 @@ public final class FluxEnergyTicker {
     public static TickRateModulation input(boolean active, int ticksSinceLastCall, FluxEnergyBuffer buffer,
                                             @Nullable FluxEnergyNetwork network) {
         if (!active) return TickRateModulation.SLEEP;
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (int tick = 0; tick < Math.max(1, ticksSinceLastCall); tick++) buffer.advanceIdle(transaction);
-            transaction.commit();
-        }
+        for (int tick = 0; tick < Math.max(1, ticksSinceLastCall); tick++) buffer.advanceIdle();
         if (!buffer.isIdleReady()) {
             return buffer.idleExcess() > FluxEnergyBuffer.IDLE_SOFT_LIMIT
                     ? TickRateModulation.SLOWER : TickRateModulation.SLEEP;

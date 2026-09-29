@@ -2,7 +2,6 @@ package cn.howxu.mmcr.api.capability.facet;
 
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -53,7 +52,7 @@ public interface RecipeEnergyPrefetchFacet extends CapabilityFacet {
      */
     long releaseReservation(long amount);
 
-    default CapabilityResult consumeReservation(long amount, TransactionContext transaction) {
+    default CapabilityResult consumeReservation(long amount) {
         return CapabilityResult.successful();
     }
 

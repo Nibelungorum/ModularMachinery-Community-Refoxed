@@ -15,12 +15,11 @@ import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * Common no-menu AE2 grid-node lifecycle for AppFlux energy ports.
@@ -68,7 +67,7 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
 
     @Override
     public void saveChanges() {
-        if (Transaction.getCurrentOpenedTransaction() == null) notifyStorageChanged();
+        notifyStorageChanged();
     }
 
     @Override
@@ -77,19 +76,21 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
     }
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
         mainNode.serialize(output);
-        energyBuffer().save(output.child(ENERGY_CACHE_KEY));
+        CompoundTag cache = new CompoundTag();
+        energyBuffer().save(cache);
+        output.put(ENERGY_CACHE_KEY, cache);
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
+            super.loadAdditional(input, registries);
             mainNode.deserialize(input);
-            input.child(ENERGY_CACHE_KEY).ifPresent(energyBuffer()::load);
+            if (input.contains(ENERGY_CACHE_KEY)) energyBuffer().load(input.getCompound(ENERGY_CACHE_KEY));
         } finally {
             endLoadingAdditional();
         }

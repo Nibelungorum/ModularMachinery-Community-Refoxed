@@ -1,22 +1,19 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded.storage;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.minecraft.nbt.CompoundTag;
 
 /**
- * Transactional local cache for AppFlux energy before a network bridge is available.
+ * Local AppFlux energy cache. Network operations are deliberately native and
+ * immediate: neither AE2 nor a foreign energy store offers rollback here.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FluxEnergyBuffer extends SnapshotJournal<FluxEnergyBuffer.Metadata> {
+public final class FluxEnergyBuffer {
     public static final long IDLE_SOFT_LIMIT = 10_000L;
     public static final int IDLE_DELAY_TICKS = 200;
 
     private final LongValueStorage storage;
-    private final Runnable onChange;
     private long reserved;
     private long idleExcess;
     private int idleTicks;
@@ -26,8 +23,7 @@ public final class FluxEnergyBuffer extends SnapshotJournal<FluxEnergyBuffer.Met
     }
 
     public FluxEnergyBuffer(Runnable onChange) {
-        this.onChange = onChange == null ? () -> {} : onChange;
-        storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, this.onChange);
+        storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, onChange);
     }
 
     public LongValueStorage storage() {
@@ -46,27 +42,20 @@ public final class FluxEnergyBuffer extends SnapshotJournal<FluxEnergyBuffer.Met
         return idleExcess;
     }
 
-    public int idleTicks() {
-        return idleTicks;
-    }
-
     public boolean isIdleReady() {
         return idleExcess > IDLE_SOFT_LIMIT && idleTicks >= IDLE_DELAY_TICKS;
     }
 
-    public void reserve(long requested, TransactionContext transaction) {
-        if (requested <= 0L) throw new IllegalArgumentException("reservation must be positive");
-        if (requested > available()) throw new IllegalArgumentException("reservation exceeds local energy");
-        updateSnapshots(transaction);
+    public void reserve(long requested) {
+        if (requested <= 0L || requested > available()) throw new IllegalArgumentException("Invalid reservation");
         reserved += requested;
         idleExcess -= Math.min(idleExcess, requested);
         resetIdleTicks();
     }
 
-    public long extract(long requested, TransactionContext transaction) {
-        long extracted = storage.extract(requested, transaction);
+    public long extract(long requested) {
+        long extracted = storage.extract(requested, false);
         if (extracted <= 0L) return 0L;
-        updateSnapshots(transaction);
         long reservedExtracted = Math.min(reserved, extracted);
         reserved -= reservedExtracted;
         idleExcess -= Math.min(idleExcess, extracted - reservedExtracted);
@@ -74,56 +63,48 @@ public final class FluxEnergyBuffer extends SnapshotJournal<FluxEnergyBuffer.Met
         return extracted;
     }
 
-    /** Returns only idle, unreserved energy to a network without consuming reservations. */
-    public long returnIdle(long requested, TransactionContext transaction) {
+    public long returnIdle(long requested) {
         if (requested <= 0L || idleExcess <= 0L) return 0L;
-        long returned = storage.extract(Math.min(requested, idleExcess), transaction);
+        long returned = storage.extract(Math.min(requested, idleExcess), false);
         if (returned <= 0L) return 0L;
-        updateSnapshots(transaction);
         idleExcess -= returned;
         resetIdleTicks();
         return returned;
     }
 
-    public long insert(long requested, TransactionContext transaction) {
-        long inserted = storage.insert(requested, transaction);
+    public long insert(long requested) {
+        long inserted = storage.insert(requested, false);
         if (inserted <= 0L) return 0L;
-        updateSnapshots(transaction);
         idleExcess = saturatingAdd(idleExcess, inserted);
         resetIdleTicks();
         return inserted;
     }
 
-    public long releaseReservation(long requested, TransactionContext transaction) {
-        if (requested <= 0L) return 0L;
-        long released = Math.min(requested, reserved);
-        if (released <= 0L) return 0L;
-        updateSnapshots(transaction);
+    public long releaseReservation(long requested) {
+        long released = Math.min(Math.max(0L, requested), reserved);
+        if (released == 0L) return 0L;
         reserved -= released;
         idleExcess = saturatingAdd(idleExcess, released);
         resetIdleTicks();
         return released;
     }
 
-    /** Records a server tick while preserving reservations from idle-cache eviction. */
-    public void advanceIdle(TransactionContext transaction) {
-        if (idleExcess <= IDLE_SOFT_LIMIT || idleTicks >= IDLE_DELAY_TICKS) return;
-        updateSnapshots(transaction);
-        idleTicks++;
+    public void advanceIdle() {
+        if (idleExcess > IDLE_SOFT_LIMIT && idleTicks < IDLE_DELAY_TICKS) idleTicks++;
     }
 
-    public void save(ValueOutput output) {
+    public void save(CompoundTag output) {
         output.putLong("amount", amount());
         output.putLong("reserved", reserved);
         output.putLong("idle_excess", idleExcess);
         output.putInt("idle_ticks", idleTicks);
     }
 
-    public void load(ValueInput input) {
-        storage.setAmount(input.getLongOr("amount", 0L));
-        reserved = Math.min(Math.max(0L, input.getLongOr("reserved", 0L)), amount());
-        idleExcess = Math.min(Math.max(0L, input.getLongOr("idle_excess", 0L)), available());
-        idleTicks = Math.max(0, input.getIntOr("idle_ticks", 0));
+    public void load(CompoundTag input) {
+        storage.setAmount(input.getLong("amount"));
+        reserved = Math.min(Math.max(0L, input.getLong("reserved")), amount());
+        idleExcess = Math.min(Math.max(0L, input.getLong("idle_excess")), available());
+        idleTicks = Math.max(0, input.getInt("idle_ticks"));
     }
 
     public void setAmount(long amount) {
@@ -143,25 +124,5 @@ public final class FluxEnergyBuffer extends SnapshotJournal<FluxEnergyBuffer.Met
 
     private static long saturatingAdd(long first, long second) {
         return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
-    }
-
-    @Override
-    protected Metadata createSnapshot() {
-        return new Metadata(reserved, idleExcess, idleTicks);
-    }
-
-    @Override
-    protected void revertToSnapshot(Metadata snapshot) {
-        reserved = snapshot.reserved();
-        idleExcess = snapshot.idleExcess();
-        idleTicks = snapshot.idleTicks();
-    }
-
-    @Override
-    protected void onRootCommit(Metadata originalState) {
-        if (!originalState.equals(createSnapshot())) onChange.run();
-    }
-
-    protected record Metadata(long reserved, long idleExcess, int idleTicks) {
     }
 }
