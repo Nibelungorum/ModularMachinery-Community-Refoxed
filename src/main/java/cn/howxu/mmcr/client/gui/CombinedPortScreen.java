@@ -8,7 +8,8 @@ import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -76,8 +77,9 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
+        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage) return;
 
@@ -87,7 +89,7 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
                 FluidGuiRenderer.drawFluid(graphics, entry.resource().copyWithAmount((int) Math.min(entry.amount(), Integer.MAX_VALUE)),
                         leftPos + operation.x(), topPos + operation.y(), operation.width(), operation.height());
             } else {
-                graphics.blit(operation.texture(), leftPos + operation.x(), topPos + operation.y(),
+                graphics.blit(RenderPipelines.GUI_TEXTURED, operation.texture(), leftPos + operation.x(), topPos + operation.y(),
                         operation.sourceX(), operation.sourceY(), operation.width(), operation.height(),
                         GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
             }
@@ -114,14 +116,14 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     @Override
-    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
+    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
         for (ItemStorageEntry entry : menu.itemEntries()) {
             if (entry.amount() <= 0 || entry.resource().isEmpty() || entry.slot() >= menu.itemSlotCount()) continue;
             var slot = menu.getSlot(entry.slot());
             ItemStack stack = entry.resource().copyWithCount((int) Math.min(entry.amount(), Integer.MAX_VALUE));
-            graphics.renderItem(stack, slot.x, slot.y, entry.slot());
+            graphics.item(stack, slot.x, slot.y, entry.slot());
         }
         for (CombinedPortMenu.FluidTankLayout layout : menu.fluidTankLayouts()) {
             FluidStorageEntry entry = menu.fluidEntries().stream()
@@ -134,19 +136,19 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
         renderCustomDisplays(graphics);
     }
 
-    private void renderCustomDisplays(GuiGraphics graphics) {
+    private void renderCustomDisplays(GuiGraphicsExtractor graphics) {
         int y = CAPABILITY_SELECTOR_Y;
         for (CapabilityDisplay display : menu.displayEntries()) {
             if (display.label().equals("item") && display.unit().equals("item")
                     || display.label().equals("fluid") && display.unit().equals("mB")) continue;
             int x = CAPABILITY_SELECTOR_X;
             if (display.icon().isPresent()) {
-                graphics.renderItem(display.icon().get().stack(), x, y, y);
+                graphics.item(display.icon().get().stack(), x, y, y);
                 x += 18;
             }
             Component text = Component.literal(display.label() + ": " + display.value()
                     + (display.unit().isEmpty() ? "" : " " + display.unit()));
-            graphics.drawString(font, text, x, y, 0x404040, false);
+            graphics.text(font, text, x, y, 0x404040, false);
             addTooltip(leftPos + x, topPos + y, font.width(text), 10, List.of(text));
             y += 18;
         }

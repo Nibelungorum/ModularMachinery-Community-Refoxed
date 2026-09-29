@@ -20,7 +20,7 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
@@ -28,7 +28,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -123,7 +123,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     @Override
-    protected final void slotClicked(Slot slot, int slotIndex, int mouseButton, ClickType clickType) {
+    protected final void slotClicked(Slot slot, int slotIndex, int mouseButton, ContainerInput clickType) {
         if (menu instanceof ItemBusMenu itemBus && hidesSlotOnAutoIOPage(itemBus, autoIOPage, slot, slotIndex)
                 || menu instanceof CombinedPortMenu combined && hidesSlotOnAutoIOPage(combined, autoIOPage, slot, slotIndex)) return;
         super.slotClicked(slot, slotIndex, mouseButton, clickType);
@@ -158,17 +158,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
-        renderTooltip(graphics, mouseX, mouseY);
-    }
-
-    @Override
-    protected void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        super.renderTooltip(graphics, mouseX, mouseY);
+    protected void extractTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        super.extractTooltip(graphics, mouseX, mouseY);
         for (TooltipEntry entry : tooltipEntries) {
             if (contains(entry.x(), entry.y(), entry.width(), entry.height(), mouseX, mouseY)) {
-                graphics.renderComponentTooltip(font, entry.lines(), mouseX, mouseY);
+                graphics.setComponentTooltipForNextFrame(font, entry.lines(), mouseX, mouseY);
                 return;
             }
         }
@@ -441,12 +435,6 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             super(x, y, width, height, message, onPress);
         }
 
-        protected final void renderBackground(GuiGraphics graphics) {
-            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
-            int borderColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
-            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), borderColor);
-            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
-        }
     }
 
     static class AutoIOToggleButton extends AutoIOStyledButton {
@@ -465,19 +453,19 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         }
 
         @Override
-        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            renderBackground(graphics);
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            drawBackground(graphics);
             Font font = Minecraft.getInstance().font;
-            graphics.pose().pushPose();
-            graphics.pose().scale(AUTO_IO_TOGGLE_TEXT_SCALE, AUTO_IO_TOGGLE_TEXT_SCALE, 1.0F);
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(AUTO_IO_TOGGLE_TEXT_SCALE, AUTO_IO_TOGGLE_TEXT_SCALE);
             renderCenteredLine(graphics, font, typeLine, getY() + 2);
             renderCenteredLine(graphics, font, stateLine, getY() + 11);
-            graphics.pose().popPose();
+            graphics.pose().popMatrix();
         }
 
-        private void renderCenteredLine(GuiGraphics graphics, Font font, Component text, int y) {
+        private void renderCenteredLine(GuiGraphicsExtractor graphics, Font font, Component text, int y) {
             int textX = (int) ((getX() + (getWidth() - font.width(text) * AUTO_IO_TOGGLE_TEXT_SCALE) / 2.0F) / AUTO_IO_TOGGLE_TEXT_SCALE);
-            graphics.drawString(font, text, textX, (int) (y / AUTO_IO_TOGGLE_TEXT_SCALE), 0xFFFFFFFF, false);
+            graphics.text(font, text, textX, (int) (y / AUTO_IO_TOGGLE_TEXT_SCALE), 0xFFFFFFFF, false);
         }
     }
 
@@ -487,11 +475,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         }
 
         @Override
-        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            renderBackground(graphics);
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            drawBackground(graphics);
             Font font = Minecraft.getInstance().font;
-            graphics.drawString(font, getMessage(), getX() + (getWidth() - font.width(getMessage())) / 2,
-                    getY() + 6, 0xFFFFFFFF, false);
+            graphics.text(font, getMessage(), getX() + (getWidth() - font.width(getMessage())) / 2, getY() + 6, 0xFFFFFFFF, false);
         }
     }
 
@@ -508,8 +495,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         }
 
         @Override
-        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            renderBackground(graphics);
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            drawBackground(graphics);
             if (selected.getAsBoolean()) {
                 graphics.fill(getX() + 3, getY() + 3, getX() + getWidth() - 3, getY() + getHeight() - 3, 0xFF2E7D32);
                 graphics.fill(getX() + 2, getY() + 2, getX() + getWidth() - 2, getY() + 3, 0xFF66BB6A);
@@ -518,7 +505,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 graphics.fill(getX() + getWidth() - 3, getY() + 2, getX() + getWidth() - 2, getY() + getHeight() - 2, 0xFF66BB6A);
             }
             ItemStack icon = portSupplier.get() == null ? ItemStack.EMPTY : portSupplier.get().adjacentSide(side).icon();
-            if (!icon.isEmpty()) graphics.renderItem(icon, getX() + 2, getY() + 2, 0);
+            if (!icon.isEmpty()) graphics.item(icon, getX() + 2, getY() + 2, 0);
         }
     }
 }
