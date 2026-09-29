@@ -356,8 +356,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             int textY = detailTextY(topPos, textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
-        renderScrollableTooltip(graphics, mouseX, mouseY, DETAIL_X);
         graphics.pose().popMatrix();
+        renderScrollableTooltip(graphics, mouseX, mouseY, DETAIL_X);
     }
 
     static Component detailTitle(Component title, String machineName, int threadIndex) {

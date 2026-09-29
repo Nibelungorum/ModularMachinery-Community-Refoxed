@@ -12,7 +12,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 
 /**
  * Standalone fluid GUI renderer adapted from LowDragLib2's 16-pixel tiling and tint approach,
-     * modified for MMCR and NeoForge 21.1.1.
+ * modified for MMCR and NeoForge 21.1.1.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -59,16 +59,14 @@ public final class FluidGuiRenderer {
     public static void drawSprite(GuiGraphics graphics, TextureAtlasSprite sprite, int color,
                                    int x, int y, int width, int height) {
         if (sprite == null || width <= 0 || height <= 0) return;
-        graphics.setColor((color >> 16 & 0xFF) / 255F, (color >> 8 & 0xFF) / 255F,
-                (color & 0xFF) / 255F, (color >>> 24) / 255F);
         for (Tile tile : tiles(x, y, width, height)) {
             graphics.enableScissor(tile.x(), tile.y() + tile.maskTop(),
                     tile.x() + tile.width(), tile.y() + tile.maskTop() + tile.height());
             graphics.blit(tile.x(), tile.y(), 0, TILE_SIZE, TILE_SIZE, sprite,
-                    1.0F, 1.0F, 1.0F, 1.0F);
+                    (color >> 16 & 0xFF) / 255F, (color >> 8 & 0xFF) / 255F,
+                    (color & 0xFF) / 255F, (color >>> 24) / 255F);
             graphics.disableScissor();
         }
-        graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     static Uv tileUv(float u0, float v0, float u1, float v1, Tile tile) {

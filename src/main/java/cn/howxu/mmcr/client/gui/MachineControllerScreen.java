@@ -94,8 +94,9 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
         graphics.text(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
-        renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE), mouseX, mouseY);
+        renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE));
         graphics.pose().popMatrix();
+        renderScrollableTooltip(graphics, mouseX, mouseY, titleLabelX);
     }
 
     @Override
@@ -105,7 +106,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         extractTooltip(graphics, mouseX, mouseY);
     }
 
-    private void renderScrollableText(GuiGraphicsExtractor graphics, int x, int mouseX, int mouseY) {
+    private void renderScrollableText(GuiGraphicsExtractor graphics, int x) {
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
@@ -115,7 +116,6 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
             int textY = detailTextY(textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
-        renderScrollableTooltip(graphics, mouseX, mouseY, titleLabelX);
     }
 
     static int detailTextY(int localY) {
