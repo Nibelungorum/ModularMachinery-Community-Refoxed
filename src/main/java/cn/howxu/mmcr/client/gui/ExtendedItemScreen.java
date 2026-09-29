@@ -6,8 +6,7 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -62,19 +61,18 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
-        graphics.text(font, title, TITLE_X, TITLE_Y, TEXT_COLOR, false);
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE);
+        graphics.drawString(font, title, TITLE_X, TITLE_Y, TEXT_COLOR, false);
+        graphics.pose().pushPose();
+        graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE, 1.0F);
         List<ItemStorageEntry> entries = nonEmptyEntries(menu.entries());
         clampTextScrollOffset();
         int row = 0;
@@ -82,14 +80,14 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
             Component empty = emptyLine();
             if (isTextLineVisible(row)) {
                 int y = textLineY(visibleTextRow(row));
-                graphics.text(font, empty, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                graphics.drawString(font, empty, (int) (ROW_X / TEXT_DETAIL_SCALE),
                         (int) (y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
             }
         } else {
             Component stored = Component.translatable("gui.mmcr.port.stored");
             if (isTextLineVisible(row)) {
                 int y = textLineY(visibleTextRow(row));
-                graphics.text(font, stored, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                graphics.drawString(font, stored, (int) (ROW_X / TEXT_DETAIL_SCALE),
                         (int) (y / TEXT_DETAIL_SCALE), 0xFF55FF55, false);
             }
             row = 1;
@@ -107,7 +105,7 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
                     (int) ((line.textXOffset() + font.width(line.text())) * TEXT_DETAIL_SCALE),
                     TEXT_DETAIL_LINE_SPACING, line.tooltip());
         }
-        graphics.pose().popMatrix();
+        graphics.pose().popPose();
     }
 
     static List<Component> displayLines(List<ItemStorageEntry> entries) {

@@ -9,7 +9,7 @@ import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -19,7 +19,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
@@ -107,11 +107,8 @@ public final class TerminalScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        graphics.fill(left(), top(), left() + PANEL_WIDTH, top() + PANEL_HEIGHT, 0xFFB6E4F2);
-        graphics.fill(left(), top(), left() + PANEL_WIDTH, top() + 1, 0xFF40798B);
-        graphics.fill(left(), top() + PANEL_HEIGHT - 1, left() + PANEL_WIDTH, top() + PANEL_HEIGHT, 0xFF40798B);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         text(graphics, machineLabel(), 8, 8);
         Component storageLabel = storageLabel();
         if (storageLabel != null) text(graphics, storageLabel, 8, 22);
@@ -124,12 +121,20 @@ public final class TerminalScreen extends Screen {
         if (!view.slotStack().isEmpty()) {
             int slotX = left() + layout().slotX();
             int slotY = top() + 55;
-            graphics.item(view.slotStack(), slotX, slotY, 0);
+            graphics.renderItem(view.slotStack(), slotX, slotY, 0);
             if (mouseX >= slotX && mouseX < slotX + 16 && mouseY >= slotY && mouseY < slotY + 16) {
-                graphics.setComponentTooltipForNextFrame(font,
+                graphics.renderComponentTooltip(font,
                         getTooltipFromItem(Minecraft.getInstance(), view.slotStack()), mouseX, mouseY);
             }
         }
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(graphics, mouseX, mouseY, partialTick);
+        graphics.fill(left(), top(), left() + PANEL_WIDTH, top() + PANEL_HEIGHT, 0xFFB6E4F2);
+        graphics.fill(left(), top(), left() + PANEL_WIDTH, top() + 1, 0xFF40798B);
+        graphics.fill(left(), top() + PANEL_HEIGHT - 1, left() + PANEL_WIDTH, top() + PANEL_HEIGHT, 0xFF40798B);
     }
 
     @Override
@@ -216,7 +221,7 @@ public final class TerminalScreen extends Screen {
 
     private void send(TerminalAction action, int value, ResourceLocation firstId, ResourceLocation secondId) {
         if (!canSend(action)) return;
-        ClientPacketDistributor.sendToServer(new PktTerminalActionPayload(action, value, firstId, secondId));
+        PacketDistributor.sendToServer(new PktTerminalActionPayload(action, value, firstId, secondId));
         if (closesAfter(action)) Minecraft.getInstance().setScreen(null);
     }
 
@@ -388,8 +393,8 @@ public final class TerminalScreen extends Screen {
         return (height - PANEL_HEIGHT) / 2;
     }
 
-    private void text(GuiGraphicsExtractor graphics, Component text, int x, int y) {
-        graphics.text(font, text, left() + x, top() + y, TEXT_COLOR, false);
+    private void text(GuiGraphics graphics, Component text, int x, int y) {
+        graphics.drawString(font, text, left() + x, top() + y, TEXT_COLOR, false);
     }
 
     record LevelView(boolean typeButtonActive, boolean levelButtonActive, ResourceLocation typeId, ResourceLocation levelId,

@@ -7,18 +7,16 @@ import cn.howxu.mmcr.internal.menu.SmartInterfaceMenu;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.input.KeyEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -51,7 +49,9 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     private Button next;
 
     public SmartInterfaceScreen(SmartInterfaceMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, 166);
+        super(menu, inventory, title);
+        imageWidth = 176;
+        imageHeight = 166;
         inventoryLabelY = -1000;
     }
 
@@ -81,12 +81,12 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (event.key() == 257 || event.key() == 335) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 257 || keyCode == 335) {
             sendValue();
             return true;
         }
-        return super.keyPressed(event);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
@@ -96,36 +96,36 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
     }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        extractBackground(graphics, mouseX, mouseY, partialTicks);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         SmartInterfaceBlockEntity smartInterface = smartInterface();
         List<String> parameterTypes = parameterTypes();
         String typeName = selectedTypeName();
         SmartInterfaceType type = selectedType();
         if (smartInterface == null || typeName == null) {
             renderLabel(graphics, Component.translatable("mmcr.smart_interface.empty_binding"), CONTENT_X, TITLE_Y + LINE_HEIGHT);
-            return;
+        } else {
+            renderLabel(graphics, Component.translatable("mmcr.smart_interface.title", showing + 1, parameterTypes.size()), CONTENT_X, TITLE_Y);
+            if (type != null) {
+                float value = smartInterface.value(typeName).orElse(type.defaultValue());
+                renderLabel(graphics, currentValueLabel(type, value), CONTENT_X, TITLE_Y + LINE_HEIGHT);
+                renderLabel(graphics, descriptionLabel(type), CONTENT_X, TITLE_Y + LINE_HEIGHT * 2);
+            }
         }
-        renderLabel(graphics, Component.translatable("mmcr.smart_interface.title", showing + 1, parameterTypes.size()), CONTENT_X, TITLE_Y);
-        if (type == null) return;
-        float value = smartInterface.value(typeName).orElse(type.defaultValue());
-        renderLabel(graphics, currentValueLabel(type, value), CONTENT_X, TITLE_Y + LINE_HEIGHT);
-        renderLabel(graphics, descriptionLabel(type), CONTENT_X, TITLE_Y + LINE_HEIGHT * 2);
+        renderTooltip(graphics, mouseX, mouseY);
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, 256, 256);
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, 256, 256);
     }
 
-    private void renderLabel(GuiGraphicsExtractor graphics, Component label, int x, int y) {
-        graphics.text(font, label, leftPos + x, topPos + y, LABEL_COLOR, false);
+    private void renderLabel(GuiGraphics graphics, Component label, int x, int y) {
+        graphics.drawString(font, label, leftPos + x, topPos + y, LABEL_COLOR, false);
     }
 
     static Optional<Float> parseValue(String value, SmartInterfaceType.ValueType valueType) {
@@ -173,7 +173,7 @@ public final class SmartInterfaceScreen extends AbstractContainerScreen<SmartInt
         if (type == null || typeName == null) return;
         Optional<Float> value = parseValue(valueInput.getValue(), type.valueType());
         if (value.isEmpty()) return;
-        ClientPacketDistributor.sendToServer(new PktSmartInterfaceUpdatePayload(menu.pos(), typeName, value.get()));
+        PacketDistributor.sendToServer(new PktSmartInterfaceUpdatePayload(menu.pos(), typeName, value.get()));
         valueInput.setValue("");
     }
 

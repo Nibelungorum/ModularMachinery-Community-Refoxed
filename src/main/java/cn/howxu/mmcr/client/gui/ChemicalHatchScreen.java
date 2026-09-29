@@ -6,8 +6,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -42,14 +41,14 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
     @Override protected ResourceLocation texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
-        graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
+        graphics.drawString(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         Component chemicalName = menu.chemicalName();
         boolean hasChemical = menu.chemicalResourceLocation() != null;
         if (hasChemical) {
-            graphics.text(font, chemicalName, titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
+            graphics.drawString(font, chemicalName, titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
         }
         if (menu.chemicalCapacity() <= 0) return;
         CapabilityDisplay display = menu.displayEntries().stream().findFirst()
@@ -59,22 +58,21 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
                 ReadableNumber.format(menu.chemicalCapacity()),
                 Component.translatable("mmcr.unit.chemical"));
         int textY = titleLabelY + (hasChemical ? 19 : 12);
-        graphics.text(font, amount, titleLabelX, textY, TITLE_COLOR, false);
+        graphics.drawString(font, amount, titleLabelX, textY, TITLE_COLOR, false);
         addTooltip(leftPos + titleLabelX, topPos + textY, font.width(amount), 10,
                 FluidHatchScreen.tooltipLines(menu.chemicalAmount(), menu.chemicalCapacity(),
                         hasChemical ? chemicalName : null, display.unit()));
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage || menu.chemicalCapacity() <= 0) return;
         ChemicalGuiRenderer.ChemicalRenderState state = renderState(menu, TANK_H);
         ChemicalGuiRenderer.drawChemical(graphics, state, leftPos + TANK_X, topPos + TANK_Y,
                 TANK_W, TANK_H);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + TANK_X, topPos + TANK_Y,
+        graphics.blit(TEXTURE, leftPos + TANK_X, topPos + TANK_Y,
                 176, 0, TANK_W, TANK_H, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }
 

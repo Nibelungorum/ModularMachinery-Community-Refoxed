@@ -6,8 +6,7 @@ import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 import java.util.Optional;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -44,9 +43,9 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
     @Override protected ResourceLocation texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
-        if (!autoIOPage) graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
+        if (!autoIOPage) graphics.drawString(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         if (!autoIOPage && menu.energyCapacity() > 0) {
             CapabilityDisplay display = menu.displayEntries().stream().findFirst()
                     .orElse(new CapabilityDisplay("energy", "0", "FE", Optional.empty()));
@@ -54,21 +53,20 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
                     + ReadableNumber.format(menu.energyCapacity()) + " " + display.unit());
             int x = leftPos + titleLabelX;
             int y = topPos + titleLabelY + 12;
-            graphics.text(font, amount, titleLabelX, titleLabelY + 12, TITLE_COLOR, false);
+            graphics.drawString(font, amount, titleLabelX, titleLabelY + 12, TITLE_COLOR, false);
             addTooltip(x, y, font.width(amount), 10, tooltipLines(menu.storedEnergy(), menu.energyCapacity(), display.unit()));
         }
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         long capacity = menu.energyCapacity();
         if (autoIOPage || capacity <= 0) return;
         long stored = menu.storedEnergy();
         int filled = filledHeight(stored, capacity);
-        if (filled > 0) graphics.blit(RenderPipelines.GUI_TEXTURED, BAR_TEXTURE, leftPos + ENERGY_X,
+        if (filled > 0) graphics.blit(BAR_TEXTURE, leftPos + ENERGY_X,
                 topPos + ENERGY_Y + ENERGY_H - filled, 196, ENERGY_H - filled, ENERGY_W, filled,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }

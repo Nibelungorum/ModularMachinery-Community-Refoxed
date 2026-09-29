@@ -10,10 +10,7 @@ import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -288,15 +285,14 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(BACKGROUND, leftPos, topPos, 0, 0,
                 IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT);
     }
 
     @Override
-    public void extractRenderState(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         scrollOffset = clampScrollOffset(scrollOffset, menu.threads().size());
         int visibleThreadCount = visibleThreadCount(menu.threads().size());
         boolean showOutputIcon = ClientConfig.showFactoryThreadOutputIcon();
@@ -310,7 +306,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             int progressOverlayX = progressOverlayX(elementX);
             int progressOverlayY = progressOverlayY(y);
             ResourceLocation elements = thread.index() == menu.selectedThread().index() ? SELECTED_ELEMENTS : ELEMENTS;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, elements, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
+            graphics.blit(elements, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
                     THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
             int progress = progressWidth(thread.tick(), thread.totalTick());
             if (progress > 0) graphics.fill(progressOverlayX, progressOverlayY,
@@ -336,17 +332,17 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         if (shouldRenderScrollbar(menu.threads().size())) {
             int scrollbarX = leftPos + SCROLLBAR_X;
             int scrollbarY = topPos + scrollbarHandleY(scrollOffset, menu.threads().size());
-            graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, scrollbarX, scrollbarY, 0, 0,
+            graphics.blit(SCROLLER, scrollbarX, scrollbarY, 0, 0,
                     SCROLLBAR_HANDLE_WIDTH, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
         }
         FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
         int x = leftPos + DETAIL_X;
         int y = topPos + 12;
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE);
+        graphics.pose().pushPose();
+        graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE, 1.0F);
         x = (int) (x / DETAIL_TEXT_SCALE);
         y = (int) (y / DETAIL_TEXT_SCALE);
-        graphics.text(font, detailTitle(title, menu.machineName(), selected.index()), x, detailTitleY(y),
+        graphics.drawString(font, detailTitle(title, menu.machineName(), selected.index()), x, detailTitleY(y),
                 CONTROLLER_TITLE_COLOR, false);
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
@@ -357,7 +353,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             int textY = detailTextY(topPos, textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
-        graphics.pose().popMatrix();
+        graphics.pose().popPose();
+        renderTooltip(graphics, mouseX, mouseY);
         renderScrollableTooltip(graphics, mouseX, mouseY, DETAIL_X);
     }
 
@@ -366,60 +363,60 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return Component.empty().append(name).append(" #" + threadIndex);
     }
 
-    private void renderThreadText(GuiGraphicsExtractor graphics, Component text, int x, int y) {
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(x, y);
-        graphics.pose().scale(THREAD_TEXT_SCALE, THREAD_TEXT_SCALE);
-        graphics.text(font, text, 0, 0, THREAD_TEXT_COLOR, false);
-        graphics.pose().popMatrix();
+    private void renderThreadText(GuiGraphics graphics, Component text, int x, int y) {
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, y, 0);
+        graphics.pose().scale(THREAD_TEXT_SCALE, THREAD_TEXT_SCALE, 1.0F);
+        graphics.drawString(font, text, 0, 0, THREAD_TEXT_COLOR, false);
+        graphics.pose().popPose();
     }
 
-    private void renderThreadProgress(GuiGraphicsExtractor graphics, int percent, int x, int y) {
+    private void renderThreadProgress(GuiGraphics graphics, int percent, int x, int y) {
         Component text = Component.literal(percent + "%");
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(x, y);
-        graphics.pose().scale(THREAD_PROGRESS_TEXT_SCALE, THREAD_PROGRESS_TEXT_SCALE);
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, y, 0);
+        graphics.pose().scale(THREAD_PROGRESS_TEXT_SCALE, THREAD_PROGRESS_TEXT_SCALE, 1.0F);
         int availableWidth = (int) (THREAD_OUTPUT_ICON_SIZE / THREAD_PROGRESS_TEXT_SCALE);
-        graphics.text(font, text, (availableWidth - font.width(text)) / 2, 0, THREAD_TEXT_COLOR, false);
-        graphics.pose().popMatrix();
+        graphics.drawString(font, text, (availableWidth - font.width(text)) / 2, 0, THREAD_TEXT_COLOR, false);
+        graphics.pose().popPose();
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0) {
-            if (mouseOverScrollbar((int) event.x(), (int) event.y())) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            if (mouseOverScrollbar((int) mouseX, (int) mouseY)) {
                 draggingScrollbar = true;
                 scrollbarDragOffsetY = Math.max(0, Math.min(SCROLLBAR_HANDLE_HEIGHT,
-                        (int) event.y() - topPos - scrollbarHandleY(scrollOffset, menu.threads().size())));
-                scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, menu.threads().size(), scrollbarDragOffsetY);
+                        (int) mouseY - topPos - scrollbarHandleY(scrollOffset, menu.threads().size())));
+                scrollOffset = scrollOffsetFromScrollbarY((int) mouseY - topPos, menu.threads().size(), scrollbarDragOffsetY);
                 return true;
             }
             int threadIndex = threadIndexAt(leftPos + THREAD_ROW_X, topPos + THREAD_ROW_Y, scrollOffset,
-                    (int) event.x(), (int) event.y(), menu.threads());
+                    (int) mouseX, (int) mouseY, menu.threads());
             if (threadIndex >= 0) {
                 menu.selectThread(threadIndex);
                 return true;
             }
         }
-        return super.mouseClicked(event, doubleClick);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
-        if (event.button() == 0 && draggingScrollbar) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && draggingScrollbar) {
             draggingScrollbar = false;
             return true;
         }
-        return super.mouseReleased(event);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (draggingScrollbar) {
-            scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, menu.threads().size(), scrollbarDragOffsetY);
+            scrollOffset = scrollOffsetFromScrollbarY((int) mouseY - topPos, menu.threads().size(), scrollbarDragOffsetY);
             return true;
         }
-        return super.mouseDragged(event, deltaX, deltaY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
     @Override

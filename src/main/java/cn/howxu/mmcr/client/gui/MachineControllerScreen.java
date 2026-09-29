@@ -8,9 +8,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -84,27 +82,25 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(BACKGROUND, leftPos, topPos, 0, 0,
                 IMAGE_WIDTH, IMAGE_HEIGHT, 256, 256);
     }
 
     @Override
-    protected void extractLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
-        graphics.text(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.pose().pushPose();
+        graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE, 1.0F);
+        graphics.drawString(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
         renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE));
-        graphics.pose().popMatrix();
-        renderScrollableTooltip(graphics, mouseX, mouseY, titleLabelX);
+        graphics.pose().popPose();
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        extractBackground(graphics, mouseX, mouseY, partialTicks);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-        extractTooltip(graphics, mouseX, mouseY);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderTooltip(graphics, mouseX, mouseY);
+        renderScrollableTooltip(graphics, mouseX, mouseY, titleLabelX);
     }
 
     private void renderScrollableText(GuiGraphics graphics, int x) {

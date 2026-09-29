@@ -31,7 +31,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -193,14 +193,14 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 topPos + autoIOSideButtonY(2), autoIOToggleLabel(), button -> {
             IOPortBlockEntity port = portEntity();
             boolean enabled = port == null || !selectedAutoIOConfig().enabled();
-            ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
+            PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
                     AutoIOAction.SET_ENABLED, null, enabled));
             button.setFocused(false);
         }));
 
         ejectButton = addRenderableWidget(new EjectButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
                 Component.translatable("mmcr.auto_io.eject_contents"), button -> {
-            ClientPacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId(),
+            PacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId(),
                     Minecraft.getInstance().hasShiftDown()));
                 button.setFocused(false);
         }, topPos + autoIOSideButtonY(1)));
@@ -215,12 +215,12 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                             clicked.setFocused(false);
                             IOPortBlockEntity port = portEntity();
                             if (shiftAllSidesCell && Minecraft.getInstance().hasShiftDown()) {
-                                ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
+                                PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
                                         AutoIOAction.SET_ALL_SIDES, null, false));
                                 return;
                             }
                             boolean enabled = port == null || !selectedAutoIOConfig().isSideEnabled(side);
-                            ClientPacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
+                            PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
                                     AutoIOAction.SET_SIDE, side, enabled));
                         }, () -> portEntity() != null && selectedAutoIOConfig().isSideEnabled(side), this::portEntity));
                 autoIOSideButtons.put(side, button);

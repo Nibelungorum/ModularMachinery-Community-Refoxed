@@ -9,7 +9,7 @@ import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -20,7 +20,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.OptionalInt;
 
@@ -101,14 +101,14 @@ public final class MultiblockDetectorScreen extends Screen {
         javaExportButton = addRenderableWidget(new StyledButton(footerX, panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT,
                 Component.translatable("gui.mmcr.multiblock_detector.export.java"), button -> {
-                    ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
+                    PacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
                     setFocused(null);
                 }));
         kubeJsExportButton = addRenderableWidget(new StyledButton(
                 footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
                 FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT,
                 Component.translatable("gui.mmcr.multiblock_detector.export.kubejs"), button -> {
-                    ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
+                    PacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
                     setFocused(null);
                 }));
         maskButton = addRenderableWidget(new StyledButton(
@@ -132,7 +132,19 @@ public final class MultiblockDetectorScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderLabel(graphics, title, CONTENT_X, TITLE_ROW);
+        renderLabel(graphics, controllerLabel(), CONTENT_X, CONTROLLER_ROW);
+        renderLabel(graphics, pointLabel(Point.FIRST), CONTENT_X, FIRST_LABEL_ROW);
+        renderLabel(graphics, pointLabel(Point.SECOND), CONTENT_X, SECOND_LABEL_ROW);
+        renderPointRow(graphics, Point.FIRST, FIRST_INPUT_ROW);
+        renderPointRow(graphics, Point.SECOND, SECOND_INPUT_ROW);
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(graphics, mouseX, mouseY, partialTick);
         int left = panelLeft();
         int top = panelTop();
         int right = left + PANEL_WIDTH;
@@ -146,14 +158,6 @@ public final class MultiblockDetectorScreen extends Screen {
         graphics.fill(left + 1, bottom - 2, right - 1, bottom - 1, INNER_BORDER_COLOR);
         graphics.fill(left + 1, top + 1, left + 2, bottom - 1, INNER_BORDER_COLOR);
         graphics.fill(right - 2, top + 1, right - 1, bottom - 1, INNER_BORDER_COLOR);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-
-        renderLabel(graphics, title, CONTENT_X, TITLE_ROW);
-        renderLabel(graphics, controllerLabel(), CONTENT_X, CONTROLLER_ROW);
-        renderLabel(graphics, pointLabel(Point.FIRST), CONTENT_X, FIRST_LABEL_ROW);
-        renderLabel(graphics, pointLabel(Point.SECOND), CONTENT_X, SECOND_LABEL_ROW);
-        renderPointRow(graphics, Point.FIRST, FIRST_INPUT_ROW);
-        renderPointRow(graphics, Point.SECOND, SECOND_INPUT_ROW);
     }
 
     @Override
@@ -232,7 +236,7 @@ public final class MultiblockDetectorScreen extends Screen {
         detector.set(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get(), selection);
         if (maskEnabled) detector.set(ModDataComponents.MULTIBLOCK_DETECTOR_MASK.get(), true);
         else detector.remove(ModDataComponents.MULTIBLOCK_DETECTOR_MASK.get());
-        ClientPacketDistributor.sendToServer(new PktMultiblockDetectorUpdatePayload(selection, maskEnabled));
+        PacketDistributor.sendToServer(new PktMultiblockDetectorUpdatePayload(selection, maskEnabled));
     }
 
     private void updateWidgets() {
@@ -258,18 +262,18 @@ public final class MultiblockDetectorScreen extends Screen {
         }
     }
 
-    private void renderPointRow(GuiGraphicsExtractor graphics, Point point, int row) {
+    private void renderPointRow(GuiGraphics graphics, Point point, int row) {
         BlockPos value = point.value(selection);
-        graphics.text(font, blockName(value), panelLeft() + CONTENT_X, panelTop() + row + 5, TEXT_COLOR, false);
+        graphics.drawString(font, blockName(value), panelLeft() + CONTENT_X, panelTop() + row + 5, TEXT_COLOR, false);
         for (Axis axis : AXES) {
-            graphics.text(font, Component.translatable("gui.mmcr.multiblock_detector.axis." + axis.getSerializedName()),
+            graphics.drawString(font, Component.translatable("gui.mmcr.multiblock_detector.axis." + axis.getSerializedName()),
                     panelLeft() + inputX(axis) - AXIS_LABEL_WIDTH,
                     panelTop() + row + 5, TEXT_COLOR, false);
         }
     }
 
-    private void renderLabel(GuiGraphicsExtractor graphics, Component label, int x, int y) {
-        graphics.text(font, label, panelLeft() + x, panelTop() + y, TEXT_COLOR, false);
+    private void renderLabel(GuiGraphics graphics, Component label, int x, int y) {
+        graphics.drawString(font, label, panelLeft() + x, panelTop() + y, TEXT_COLOR, false);
     }
 
     private Component controllerLabel() {

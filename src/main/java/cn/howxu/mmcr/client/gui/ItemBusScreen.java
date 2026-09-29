@@ -3,8 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -47,18 +46,17 @@ public final class ItemBusScreen extends AbstractPortScreen<ItemBusMenu> {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         if (autoIOPage) {
             int height = Math.min(imageHeight, BASE_BACKGROUND_HEIGHT);
-            graphics.blit(RenderPipelines.GUI_TEXTURED, texture(true), leftPos, topPos, 0, 0,
+            graphics.blit(texture(true), leftPos, topPos, 0, 0,
                     imageWidth, height, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
             return;
         }
         for (int destY = 0; destY < imageHeight;) {
             int height = destY == 0 ? Math.min(BASE_BACKGROUND_HEIGHT, imageHeight) : Math.min(SLOT_SIZE, imageHeight - destY);
             int sourceY = destY == 0 ? 0 : GUI_TEXTURE_SIZE - height;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, texture(false), leftPos, topPos + destY, 0, sourceY,
+            graphics.blit(texture(false), leftPos, topPos + destY, 0, sourceY,
                     imageWidth, height, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
             destY += height;
         }

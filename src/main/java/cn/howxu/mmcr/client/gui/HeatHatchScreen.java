@@ -7,8 +7,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 import mekanism.common.util.UnitDisplayUtils.TemperatureUnit;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -62,17 +61,17 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
     }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
-        graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
+        graphics.drawString(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         long heat = menu.heatAmount();
         long capacity = menu.heatCapacity();
-        graphics.text(font, Component.translatable("gui.mmcr.heat.amount", ReadableNumber.format(heat),
+        graphics.drawString(font, Component.translatable("gui.mmcr.heat.amount", ReadableNumber.format(heat),
                 Component.translatable("mmcr.unit.heat")), titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
-        graphics.text(font, Component.translatable("gui.mmcr.heat.capacity", ReadableNumber.format(capacity),
+        graphics.drawString(font, Component.translatable("gui.mmcr.heat.capacity", ReadableNumber.format(capacity),
                 Component.translatable("mmcr.unit.heat_capacity")), titleLabelX, titleLabelY + 20, TITLE_COLOR, false);
-        graphics.text(font, Component.translatable("gui.mmcr.heat.temperature",
+        graphics.drawString(font, Component.translatable("gui.mmcr.heat.temperature",
                 String.format(Locale.ROOT, "%.1f", menu.temperature()),
                 Component.literal(MekanismTemperatureDisplay.symbol(MekanismTemperatureDisplay.configuredUnit()))),
                 titleLabelX, titleLabelY + 30, TITLE_COLOR, false);
@@ -82,19 +81,16 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage) return;
         int filled = FluidGuiRenderer.fillHeight(menu.heatAmount(), menu.heatCapacity(), HEAT_H);
         if (filled > 0) {
-            graphics.blit(RenderPipelines.GUI_TEXTURED, BAR_TEXTURE, leftPos + HEAT_X,
+            graphics.blit(BAR_TEXTURE, leftPos + HEAT_X,
                     topPos + HEAT_Y + HEAT_H - filled, 196, HEAT_H - filled, HEAT_W, filled,
                     GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         }
-        // graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + HEAT_X, topPos + HEAT_Y,
-        //         176, 0, HEAT_W, HEAT_H, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }
 
     private static long safeWhole(double value) {

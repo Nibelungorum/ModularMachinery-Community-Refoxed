@@ -2,14 +2,12 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
 
@@ -65,66 +63,66 @@ public final class RecipePoolScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, left(), top(), 0, 0,
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(graphics, mouseX, mouseY, partialTick);
+        graphics.blit(BACKGROUND, left(), top(), 0, 0,
                 IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_HEIGHT);
         int visible = Math.min(VISIBLE_ROWS, recipePoolIds.size() - scrollOffset);
         for (int row = 0; row < visible; row++) {
             ResourceLocation poolId = recipePoolIds.get(scrollOffset + row);
             int y = top() + ROW_Y + row * (ROW_HEIGHT + ROW_GAP);
             ResourceLocation texture = poolId.equals(selectedRecipePoolId) ? SELECTED_ELEMENTS : ELEMENTS;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, texture, left() + ROW_X, y, 0, 0,
+            graphics.blit(texture, left() + ROW_X, y, 0, 0,
                     ROW_WIDTH, ROW_HEIGHT, 256, 256);
             String label = fitLabel(RecipePoolDisplayName.component(poolId).getString(), ROW_WIDTH - 6);
             int textX = left() + ROW_X + (ROW_WIDTH - font.width(label)) / 2;
             int textY = y + (ROW_HEIGHT - font.lineHeight) / 2;
-            graphics.text(font, Component.literal(label), textX, textY, TEXT_COLOR, false);
+            graphics.drawString(font, Component.literal(label), textX, textY, TEXT_COLOR, false);
         }
         int handleY = top() + scrollbarHandleY(scrollOffset, recipePoolIds.size());
-        graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, left() + SCROLLBAR_X, handleY, 0, 0,
+        graphics.blit(SCROLLER, left() + SCROLLBAR_X, handleY, 0, 0,
                 SCROLLBAR_RIGHT - SCROLLBAR_X, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0) {
-            if (mouseOverScrollbar((int) event.x(), (int) event.y())) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            if (mouseOverScrollbar((int) mouseX, (int) mouseY)) {
                 draggingScrollbar = true;
                 scrollbarDragOffsetY = Math.max(0, Math.min(SCROLLBAR_HANDLE_HEIGHT,
-                        (int) event.y() - top() - scrollbarHandleY(scrollOffset, recipePoolIds.size())));
-                scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - top(), recipePoolIds.size(),
+                        (int) mouseY - top() - scrollbarHandleY(scrollOffset, recipePoolIds.size())));
+                scrollOffset = scrollOffsetFromScrollbarY((int) mouseY - top(), recipePoolIds.size(),
                         scrollbarDragOffsetY);
                 return true;
             }
-            int index = rowIndexAt(left(), top(), scrollOffset, (int) event.x(), (int) event.y(), recipePoolIds.size());
+            int index = rowIndexAt(left(), top(), scrollOffset, (int) mouseX, (int) mouseY, recipePoolIds.size());
             if (index >= 0) {
                 selectedRecipePoolId = recipePoolIds.get(index);
-                ClientPacketDistributor.sendToServer(new PktRecipePoolSelectPayload(controllerPos, selectedRecipePoolId));
+                PacketDistributor.sendToServer(new PktRecipePoolSelectPayload(controllerPos, selectedRecipePoolId));
                 minecraft.setScreen(parent);
                 return true;
             }
         }
-        return super.mouseClicked(event, doubleClick);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
-        if (event.button() == 0 && draggingScrollbar) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && draggingScrollbar) {
             draggingScrollbar = false;
             return true;
         }
-        return super.mouseReleased(event);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (draggingScrollbar) {
-            scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - top(), recipePoolIds.size(),
+            scrollOffset = scrollOffsetFromScrollbarY((int) mouseY - top(), recipePoolIds.size(),
                     scrollbarDragOffsetY);
             return true;
         }
-        return super.mouseDragged(event, deltaX, deltaY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
     @Override

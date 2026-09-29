@@ -2,9 +2,8 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.UpgradeBusMenu;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -20,21 +19,28 @@ public final class UpgradeBusScreen extends AbstractContainerScreen<UpgradeBusMe
     private static final int SLOT_SIZE = 18;
 
     public UpgradeBusScreen(UpgradeBusMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, menu.imageHeight());
+        super(menu, inventory, title);
+        imageWidth = 176;
+        imageHeight = menu.imageHeight();
         inventoryLabelY = -1000;
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         ResourceLocation texture = MMCR.id(menu.texturePath());
         for (int destY = 0; destY < imageHeight;) {
             int height = destY == 0 ? Math.min(BASE_BACKGROUND_HEIGHT, imageHeight)
                     : Math.min(SLOT_SIZE, imageHeight - destY);
             int sourceY = destY == 0 ? 0 : GUI_TEXTURE_SIZE - height;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, texture, leftPos, topPos + destY, 0, sourceY,
+            graphics.blit(texture, leftPos, topPos + destY, 0, sourceY,
                     imageWidth, height, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
             destY += height;
         }
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderTooltip(graphics, mouseX, mouseY);
     }
 }

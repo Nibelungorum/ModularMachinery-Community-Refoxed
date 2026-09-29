@@ -7,8 +7,7 @@ import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 import java.util.Optional;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -44,14 +43,14 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
     @Override protected ResourceLocation texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
-        graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
+        graphics.drawString(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         FluidStack fluid = fluidStack();
         if (!fluid.isEmpty()) {
             Component fluidName = fluid.getHoverName();
-            graphics.text(font, fluidName, titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
+            graphics.drawString(font, fluidName, titleLabelX, titleLabelY + 10, TITLE_COLOR, false);
             addTooltip(leftPos + titleLabelX, topPos + titleLabelY + 10, font.width(fluidName), 10,
                     tooltipLines(menu.fluidAmount(), menu.fluidCapacity(), fluidName));
         }
@@ -61,16 +60,15 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
                     .orElse(new CapabilityDisplay("fluid", "0", "mB", Optional.empty()));
             Component amount = Component.literal(ReadableNumber.format(menu.fluidAmount()) + " / "
                     + ReadableNumber.format(menu.fluidCapacity()) + " " + display.unit());
-            graphics.text(font, amount, titleLabelX, textY, TITLE_COLOR, false);
+            graphics.drawString(font, amount, titleLabelX, textY, TITLE_COLOR, false);
             addTooltip(leftPos + titleLabelX, topPos + textY, font.width(amount), 10,
                     tooltipLines(menu.fluidAmount(), menu.fluidCapacity(), fluid.isEmpty() ? null : fluid.getHoverName(), display.unit()));
         }
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage || menu.fluidCapacity() <= 0) return;
         FluidStack fluid = fluidStack();
@@ -78,7 +76,7 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
         if (!fluid.isEmpty() && filled > 0) {
             FluidGuiRenderer.drawFluid(graphics, fluid, leftPos + TANK_X, topPos + TANK_Y + TANK_H - filled, TANK_W, filled);
         }
-        graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + TANK_X, topPos + TANK_Y, 176, 0, TANK_W, TANK_H,
+        graphics.blit(TEXTURE, leftPos + TANK_X, topPos + TANK_Y, 176, 0, TANK_W, TANK_H,
                 GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }
 

@@ -7,8 +7,7 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -65,26 +64,25 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        graphics.blit(texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
     }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;
-        graphics.text(font, title, TITLE_X, TITLE_Y, TEXT_COLOR, false);
+        graphics.drawString(font, title, TITLE_X, TITLE_Y, TEXT_COLOR, false);
 
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE);
+        graphics.pose().pushPose();
+        graphics.pose().scale(TEXT_DETAIL_SCALE, TEXT_DETAIL_SCALE, 1.0F);
         List<ItemStorageEntry> itemEntries = nonEmptyItems(menu.itemEntries());
         List<FluidStorageEntry> fluidEntries = nonEmptyFluids(menu.fluidEntries());
         clampTextScrollOffset();
         int lineIndex = drawItems(graphics, itemEntries, 0);
         drawFluids(graphics, fluidEntries, lineIndex);
-        graphics.pose().popMatrix();
+        graphics.pose().popPose();
     }
 
     static List<Component> displayLines(List<ItemStorageEntry> itemEntries, List<FluidStorageEntry> fluidEntries) {
@@ -106,11 +104,11 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         return List.copyOf(lines);
     }
 
-    private int drawItems(GuiGraphicsExtractor graphics, List<ItemStorageEntry> entries, int lineIndex) {
+    private int drawItems(GuiGraphics graphics, List<ItemStorageEntry> entries, int lineIndex) {
         if (entries.isEmpty()) {
             if (isTextLineVisible(lineIndex)) {
                 int y = textLineY(visibleTextRow(lineIndex));
-                graphics.text(font, emptySectionLine("gui.mmcr.port.items"),
+                graphics.drawString(font, emptySectionLine("gui.mmcr.port.items"),
                         (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
                         0xFF55FF55, false);
             }
@@ -118,7 +116,7 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         }
         if (isTextLineVisible(lineIndex)) {
             int y = textLineY(visibleTextRow(lineIndex));
-            graphics.text(font, sectionLabel("gui.mmcr.port.items"),
+            graphics.drawString(font, sectionLabel("gui.mmcr.port.items"),
                     (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
                     0xFF55FF55, false);
         }
@@ -140,11 +138,11 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         return lineIndex;
     }
 
-    private int drawFluids(GuiGraphicsExtractor graphics, List<FluidStorageEntry> entries, int lineIndex) {
+    private int drawFluids(GuiGraphics graphics, List<FluidStorageEntry> entries, int lineIndex) {
         if (entries.isEmpty()) {
             if (isTextLineVisible(lineIndex)) {
                 int y = textLineY(visibleTextRow(lineIndex));
-                graphics.text(font, emptySectionLine("gui.mmcr.port.fluids"),
+                graphics.drawString(font, emptySectionLine("gui.mmcr.port.fluids"),
                         (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
                         0xFF55FF55, false);
             }
@@ -152,7 +150,7 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
         }
         if (isTextLineVisible(lineIndex)) {
             int y = textLineY(visibleTextRow(lineIndex));
-            graphics.text(font, sectionLabel("gui.mmcr.port.fluids"),
+            graphics.drawString(font, sectionLabel("gui.mmcr.port.fluids"),
                     (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE),
                     0xFF55FF55, false);
         }
