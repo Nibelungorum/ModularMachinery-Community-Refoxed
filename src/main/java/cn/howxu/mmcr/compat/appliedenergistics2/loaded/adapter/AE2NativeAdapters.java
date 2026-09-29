@@ -92,6 +92,18 @@ public final class AE2NativeAdapters {
         return true;
     }
 
+    /** Creates an isolated slot-accurate view for cumulative return-inventory simulation. */
+    public static GenericStackInv copyForSimulation(GenericStackInv inventory) {
+        GenericStackInv copy = new SimulatedInventory(inventory);
+        copy.beginBatch();
+        try {
+            for (int slot = 0; slot < inventory.size(); slot++) copy.setStack(slot, inventory.getStack(slot));
+        } finally {
+            copy.endBatchSuppressed();
+        }
+        return copy;
+    }
+
     public static boolean canReturn(GenericStackInv request, GenericStackInv returns, AEKeyType type,
                                     IActionSource source) {
         for (int slot = 0; slot < request.size(); slot++) {
@@ -146,6 +158,20 @@ public final class AE2NativeAdapters {
         public long getMaxAmount(AEKey key) {
             return Long.MAX_VALUE;
         }
+    }
+
+    private static final class SimulatedInventory extends GenericStackInv {
+        private final GenericStackInv source;
+
+        private SimulatedInventory(GenericStackInv source) {
+            super(null, source.getMode(), source.size());
+            this.source = Objects.requireNonNull(source, "source");
+        }
+
+        @Override public boolean isSupportedType(AEKeyType type) { return source.isSupportedType(type); }
+        @Override public boolean isAllowedIn(int slot, AEKey key) { return source.isAllowedIn(slot, key); }
+        @Override public long getMaxAmount(AEKey key) { return source.getMaxAmount(key); }
+        @Override public boolean canInsert() { return source.canInsert(); }
     }
 
     private static final class InventoryItems implements IItemHandler, NativeStackSync.Item {

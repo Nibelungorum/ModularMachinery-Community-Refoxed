@@ -72,10 +72,12 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                     || reservation.parallelism() != batchSize) return false;
 
             try (reservation) {
+                appeng.helpers.externalstorage.GenericStackInv simulatedReturns =
+                        AE2NativeAdapters.copyForSimulation(host.getLogic().getReturnInv());
                 for (LaneRequest request : laneRequests) {
-                    if (!AE2NativeAdapters.canReturn(request.itemRequest(), host.getLogic().getReturnInv(),
+                    if (!AE2NativeAdapters.returnRemaining(request.itemRequest(), simulatedReturns,
                             appeng.api.stacks.AEKeyType.items(), appeng.api.networking.security.IActionSource.ofMachine(host))
-                            || !AE2NativeAdapters.canReturn(request.fluidRequest(), host.getLogic().getReturnInv(),
+                            || !AE2NativeAdapters.returnRemaining(request.fluidRequest(), simulatedReturns,
                             appeng.api.stacks.AEKeyType.fluids(), appeng.api.networking.security.IActionSource.ofMachine(host))) {
                         return false;
                     }
