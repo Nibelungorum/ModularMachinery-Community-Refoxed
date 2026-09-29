@@ -18,7 +18,7 @@ class DataRepositoryApiTest {
         BlockPos controllerPos = new BlockPos(1, 2, 3);
         DataReservation reservation = new DataReservation() {
             @Override
-            public boolean commit(DataStorage.Transaction transaction) {
+            public boolean commit() {
                 return true;
             }
 

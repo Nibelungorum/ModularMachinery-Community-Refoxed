@@ -7,8 +7,10 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
@@ -380,12 +382,14 @@ class PublicApiLifecycleTest {
 
         for (CapabilitySnapshot snapshot : snapshots) {
             for (MachineCapability capability : snapshot.capabilities()) {
-                ValueFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
-                if (facet == null) facet = capability.facet(ValueFacet.class).orElse(null);
-                if (facet == null) continue;
-                assertThat(facet.isStateless() || !snapshot.facets(PersistenceFacet.class).isEmpty())
+                boolean nativeStorage = capability.facet(ItemHandlerFacet.class).isPresent()
+                        || capability.facet(FluidHandlerFacet.class).isPresent()
+                        || capability.facet(EnergyStorageFacet.class).isPresent();
+                ValueFacet<?> value = capability.facet(ValueFacet.class).orElse(null);
+                if (!nativeStorage && (value == null || value.isStateless())) continue;
+                assertThat(snapshot.facets(PersistenceFacet.class))
                         .as(capability.type().id().toString())
-                        .isTrue();
+                        .isNotEmpty();
             }
         }
     }
@@ -402,7 +406,7 @@ class PublicApiLifecycleTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed");
 
-        assertThat(snapshot.capabilities().getFirst().facet(ResourceFacet.class)).isPresent();
+        assertThat(snapshot.capabilities().getFirst().facet(ItemHandlerFacet.class)).isPresent();
     }
 
     private static MachineDefinition machine(String path) {

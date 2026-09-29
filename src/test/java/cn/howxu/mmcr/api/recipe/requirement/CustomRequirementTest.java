@@ -26,7 +26,6 @@ import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -161,8 +160,7 @@ class CustomRequirementTest {
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
             VirtualRequest virtual = (VirtualRequest) request;
-            return transaction -> {
-                storage.updateSnapshots(transaction);
+            return () -> {
                 return storage.extract(virtual.parallelism(), false) == virtual.parallelism()
                         ? CapabilityResult.successful()
                         : CapabilityResult.failure(ExecutionStatus.blocked(TYPE_ID, TYPE_ID,

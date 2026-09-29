@@ -16,7 +16,6 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
 import java.util.Set;
@@ -71,16 +70,16 @@ public final class TestScalarFacet implements MachineCapability, ScalarFacet {
 
     @Override
     public CapabilityOperation prepareScalar(CapabilityRequest request) {
-        if (request == null || request.ioType() != ioType) return ignored -> failed("scalar_direction");
-        return transaction -> commit(request.parallelism(), transaction);
+        if (request == null || request.ioType() != ioType) return () -> failed("scalar_direction");
+        return () -> commit(request.parallelism());
     }
 
-    private CapabilityResult commit(long delta, TransactionContext transaction) {
+    private CapabilityResult commit(long delta) {
         if (delta <= 0L) return failed("scalar_delta");
         long moved = ioType == IOType.OUTPUT ? storage.insert(delta, true) : storage.extract(delta, true);
         if (moved != delta) return failed("scalar_capacity");
-        if (ioType == IOType.OUTPUT) storage.insert(delta, transaction);
-        else storage.extract(delta, transaction);
+        if (ioType == IOType.OUTPUT) storage.insert(delta, false);
+        else storage.extract(delta, false);
         return CapabilityResult.successful();
     }
 

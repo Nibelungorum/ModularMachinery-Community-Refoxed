@@ -3,14 +3,10 @@ package cn.howxu.mmcr.api.capability;
 import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import org.junit.jupiter.api.Test;
 
 import java.util.stream.Stream;
@@ -26,13 +22,14 @@ class CapabilityPersistenceTest {
     @Test
     void custom_resource_scalar_and_presentation_state_round_trip_in_named_children() {
         StateFacet source = new StateFacet("custom", 12, 34L, "ready");
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        HolderLookup.Provider registries = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag output = new CompoundTag();
+        CompoundTag state = new CompoundTag();
 
-        source.save(output.child(source.stateKey()));
+        source.save(state, registries);
+        output.put(source.stateKey(), state);
         StateFacet restored = new StateFacet("custom", 0, 0L, "");
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()),
-                output.buildResult()).childOrEmpty(restored.stateKey()));
+        restored.load(output.getCompoundOrEmpty(restored.stateKey()), registries);
 
         assertThat(restored.resource).isEqualTo(12);
         assertThat(restored.scalar).isEqualTo(34L);
@@ -67,12 +64,12 @@ class CapabilityPersistenceTest {
         }
 
         @Override public String stateKey() { return key; }
-        @Override public void save(ValueOutput output) {
+        @Override public void save(CompoundTag output, HolderLookup.Provider registries) {
             output.putInt("resource", resource);
             output.putLong("scalar", scalar);
             output.putString("presentation", presentation);
         }
-        @Override public void load(ValueInput input) {
+        @Override public void load(CompoundTag input, HolderLookup.Provider registries) {
             resource = input.getIntOr("resource", 0);
             scalar = input.getLongOr("scalar", 0L);
             presentation = input.getStringOr("presentation", "");

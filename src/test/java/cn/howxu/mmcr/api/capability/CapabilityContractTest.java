@@ -9,9 +9,6 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,28 +24,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CapabilityContractTest {
 
     @Test
-    void capability_operation_commits_only_when_the_root_transaction_commits() {
+    void capability_operation_commits_prepared_change() {
         TestCapability capability = new TestCapability();
         CapabilityOperation operation = capability.prepare(new TestRequest(IOType.INPUT, 1));
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(operation.commit(transaction).success()).isTrue();
-            assertThat(capability.amount()).isZero();
-            transaction.commit();
-        }
-
+        assertThat(operation.commit().success()).isTrue();
         assertThat(capability.amount()).isEqualTo(1L);
-    }
-
-    @Test
-    void capability_operation_is_rolled_back_when_the_root_transaction_does_not_commit() {
-        TestCapability capability = new TestCapability();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            capability.prepare(new TestRequest(IOType.INPUT, 1)).commit(transaction);
-        }
-
-        assertThat(capability.amount()).isZero();
     }
 
     @Test
@@ -129,26 +110,7 @@ class CapabilityContractTest {
 
     private static final class TestCapability implements MachineCapability, OperationFacet {
         private final CapabilityDirections directions;
-        private final SnapshotJournal<Long> journal = new SnapshotJournal<>() {
-            @Override
-            protected Long createSnapshot() {
-                return pending;
-            }
-
-            @Override
-            protected void revertToSnapshot(Long snapshot) {
-                pending = snapshot;
-            }
-
-            @Override
-            protected void onRootCommit(Long originalState) {
-                amount += pending;
-                pending = 0;
-            }
-        };
-
         private long amount;
-        private long pending;
 
         private TestCapability() {
             this(CapabilityDirections.input());
@@ -195,13 +157,9 @@ class CapabilityContractTest {
 
         @Override
         public CapabilityOperation prepareOperation(CapabilityRequest request) {
-            return new CapabilityOperation() {
-                @Override
-                public CapabilityResult commit(TransactionContext transaction) {
-                    journal.updateSnapshots(transaction);
-                    pending += request.parallelism();
-                    return CapabilityResult.successful();
-                }
+            return () -> {
+                amount += request.parallelism();
+                return CapabilityResult.successful();
             };
         }
 

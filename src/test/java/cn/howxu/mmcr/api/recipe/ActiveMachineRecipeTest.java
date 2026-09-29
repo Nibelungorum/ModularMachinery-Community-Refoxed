@@ -16,10 +16,8 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -67,16 +65,12 @@ class ActiveMachineRecipeTest {
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(
                 RegistryOps.create(JsonOps.INSTANCE, lookup), root).getOrThrow();
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe);
-        TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+        CompoundTag serialized = new CompoundTag();
 
-        TagValueOutput withoutRegistryContext = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
-        assertThatCode(() -> active.serialize(withoutRegistryContext)).doesNotThrowAnyException();
-        assertThat(withoutRegistryContext.buildResult().getBooleanOr("has_recipe_definition", false)).isFalse();
         assertThatCode(() -> active.serialize(serialized, lookup)).doesNotThrowAnyException();
-        assertThat(serialized.buildResult().getBooleanOr("has_recipe_definition", false)).isTrue();
-        assertThat(serialized.buildResult().getIntOr("recipe_definition_version", -1)).isEqualTo(3);
-        ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, lookup, serialized.buildResult()));
+        assertThat(serialized.getBooleanOr("has_recipe_definition", false)).isTrue();
+        assertThat(serialized.getIntOr("recipe_definition_version", -1)).isEqualTo(3);
+        ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(serialized, lookup);
         assertThat(loaded.successful()).isTrue();
         assertThat(loaded.recipe()).isNotNull();
         assertThat(loaded.recipe().getRecipe().id()).isEqualTo(recipe.id());
@@ -93,13 +87,11 @@ class ActiveMachineRecipeTest {
         root.add("requirements", new JsonArray());
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(
                 RegistryOps.create(JsonOps.INSTANCE, lookup), root).getOrThrow();
-        TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
-        new ActiveMachineRecipe(recipe).serialize(serialized, lookup);
-        var legacyData = serialized.buildResult();
+        CompoundTag legacyData = new CompoundTag();
+        new ActiveMachineRecipe(recipe).serialize(legacyData, lookup);
         legacyData.putInt("recipe_definition_version", 2);
 
-        assertThat(ActiveMachineRecipe.load(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
-                legacyData)).successful()).isFalse();
+        assertThat(ActiveMachineRecipe.load(legacyData, lookup).successful()).isFalse();
     }
 
     @Test
@@ -110,13 +102,12 @@ class ActiveMachineRecipeTest {
         MachineRecipe foreign = new MachineRecipe(recipeId, foreignPool, 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
-        TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
+        HolderLookup.Provider registries = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag serialized = new CompoundTag();
         try {
-            new ActiveMachineRecipe(foreign).serialize(serialized);
+            new ActiveMachineRecipe(foreign).serialize(serialized, registries);
 
-            assertThat(ActiveMachineRecipe.loadForPool(TagValueInput.create(ProblemReporter.DISCARDING,
-                    HolderLookup.Provider.create(Stream.empty()), serialized.buildResult()),
+            assertThat(ActiveMachineRecipe.loadForPool(serialized, registries,
                     MMCR.id("test_cube")).successful()).isFalse();
         } finally {
             RecipeRegistry.replaceDynamic(Map.of());
@@ -130,12 +121,11 @@ class ActiveMachineRecipeTest {
         MachineRecipe registered = new MachineRecipe(registeredId, MMCR.id("test_cube"), 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());
         RecipeRegistry.replaceDynamic(Map.of(registeredId, registered));
-        TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+        CompoundTag serialized = new CompoundTag();
 
         try {
             ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.loadForPool(
-                    TagValueInput.create(ProblemReporter.DISCARDING, lookup, serialized.buildResult()),
-                    MMCR.id("test_cube"));
+                    serialized, lookup, MMCR.id("test_cube"));
 
             assertThat(loaded.successful()).isFalse();
         } finally {
@@ -151,20 +141,18 @@ class ActiveMachineRecipeTest {
         RuntimeTestFixtures.registerRecipePool(poolId);
         MachineRecipe recipe = new MachineRecipe(recipeId, poolId, 20, List.of(), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of());
-        TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+        CompoundTag serialized = new CompoundTag();
 
         try {
             RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe));
             new ActiveMachineRecipe(recipe).serialize(serialized, lookup);
             RecipeRegistry.replaceDynamic(Map.of());
 
-            assertThat(ActiveMachineRecipe.loadForPool(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
-                    serialized.buildResult()), poolId).successful()).isFalse();
+            assertThat(ActiveMachineRecipe.loadForPool(serialized, lookup, poolId).successful()).isFalse();
 
             RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe));
 
-            assertThat(ActiveMachineRecipe.loadForPool(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
-                    serialized.buildResult()), poolId).recipe()).isNotNull();
+            assertThat(ActiveMachineRecipe.loadForPool(serialized, lookup, poolId).recipe()).isNotNull();
         } finally {
             RecipeRegistry.replaceDynamic(Map.of());
         }

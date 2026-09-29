@@ -52,7 +52,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.crafting.ICustomIngredient;
 import net.neoforged.neoforge.common.crafting.IngredientType;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -360,9 +359,9 @@ class RecipeCandidateIndexTest {
     @Test
     void search_prefers_missing_output_after_a_feasible_input_over_unrelated_missing_inputs() {
         BulkItemStorage storage = new BulkItemStorage(1, null);
-        ItemResource copper = ItemResource.of(Items.RAW_COPPER);
-        assertThat(storage.insert(copper, 1L, false)).isEqualTo(1L);
-        assertThat(storage.resource(0)).isEqualTo(copper);
+        ItemStack copper = new ItemStack(Items.RAW_COPPER);
+        assertThat(storage.forceInsert(copper, 1L, false)).isEqualTo(1L);
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), copper)).isTrue();
         assertThat(storage.amount(0)).isEqualTo(1L);
         MachineRecipe copperRecipe = recipeWithRequirements("copper_missing_output", List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.RAW_COPPER), 1,
@@ -387,8 +386,8 @@ class RecipeCandidateIndexTest {
     @Test
     void search_prefers_missing_energy_after_a_feasible_input_over_unrelated_missing_inputs() {
         BulkItemStorage storage = new BulkItemStorage(1, null);
-        ItemResource copper = ItemResource.of(Items.RAW_COPPER);
-        assertThat(storage.insert(copper, 1L, false)).isEqualTo(1L);
+        ItemStack copper = new ItemStack(Items.RAW_COPPER);
+        assertThat(storage.forceInsert(copper, 1L, false)).isEqualTo(1L);
         MachineRecipe copperRecipe = recipeWithRequirements("copper_missing_energy", List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.RAW_COPPER), 1,
                         ItemStack.EMPTY),

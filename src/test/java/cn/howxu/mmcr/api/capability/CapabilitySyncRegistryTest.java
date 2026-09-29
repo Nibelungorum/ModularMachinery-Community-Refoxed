@@ -87,7 +87,7 @@ class CapabilitySyncRegistryTest {
                 @Override public Set<Class<? extends CapabilityFacet>> facets() { return Set.of(SyncFacet.class); }
             };
         }
-        @Override public CapabilityOperation prepare(CapabilityRequest request) { return ignored -> CapabilityResult.successful(); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return CapabilityResult::successful; }
         @Override public void encode(RegistryFriendlyByteBuf buffer) { buffer.writeVarInt(value); }
         @Override public void decode(RegistryFriendlyByteBuf buffer) { value = buffer.readVarInt(); }
     }

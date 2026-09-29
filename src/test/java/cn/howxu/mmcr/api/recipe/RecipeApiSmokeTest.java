@@ -26,9 +26,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -315,11 +312,10 @@ class RecipeApiSmokeTest {
         active.setParallelism(2);
         active.getDataCompound().putInt("custom", 42);
 
-        TagValueOutput output = TagValueOutput.createWithContext(
-                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()));
-        active.serialize(output);
-        var back = ActiveMachineRecipe.from(TagValueInput.create(
-                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        HolderLookup.Provider registries = HolderLookup.Provider.create(Stream.empty());
+        CompoundTag output = new CompoundTag();
+        active.serialize(output, registries);
+        var back = ActiveMachineRecipe.from(output, registries);
 
         assertThat(back.getRecipe()).isEqualTo(recipe);
         assertThat(back.getTick()).isEqualTo(50);

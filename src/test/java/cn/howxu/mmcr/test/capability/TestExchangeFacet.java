@@ -16,7 +16,6 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
 import java.util.Set;
@@ -83,16 +82,16 @@ public final class TestExchangeFacet implements MachineCapability, ExchangeFacet
 
     @Override
     public CapabilityOperation prepareExchange(double requested) {
-        return transaction -> commit(requested, transaction);
+        return () -> commit(requested);
     }
 
-    private CapabilityResult commit(double requested, TransactionContext transaction) {
+    private CapabilityResult commit(double requested) {
         if (!Double.isFinite(requested) || requested != Math.rint(requested)) return failed("exchange_delta");
         long amount = (long) Math.abs(requested);
         long moved = requested >= 0D ? storage.insert(amount, true) : storage.extract(amount, true);
         if (moved != amount) return failed("exchange_capacity");
-        if (requested >= 0D) storage.insert(amount, transaction);
-        else storage.extract(amount, transaction);
+        if (requested >= 0D) storage.insert(amount, false);
+        else storage.extract(amount, false);
         return CapabilityResult.successful();
     }
 

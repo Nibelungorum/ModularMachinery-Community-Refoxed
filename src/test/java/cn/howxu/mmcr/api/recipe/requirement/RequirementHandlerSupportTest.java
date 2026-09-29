@@ -114,7 +114,7 @@ class RequirementHandlerSupportTest {
         @Override
         public CapabilityOperation prepareOperation(CapabilityRequest request) {
             this.request = (CapabilityRequests.ResourceRequest<?>) request;
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
 
         private CapabilityRequests.ResourceRequest<?> request() {

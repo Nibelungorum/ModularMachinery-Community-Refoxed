@@ -10,7 +10,6 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -47,7 +46,7 @@ class CapabilityTickContractTest {
     @Test
     void result_copies_operations_and_retains_the_requested_phase_order() {
         List<CapabilityOperation> operations = new ArrayList<>();
-        operations.add(transaction -> CapabilityResult.successful());
+        operations.add(CapabilityResult::successful);
         CapabilityTickResult result = new CapabilityTickResult(operations, null, false);
         operations.clear();
 
@@ -70,31 +69,9 @@ class CapabilityTickContractTest {
     }
 
     @Test
-    void rejected_operation_rolls_back_earlier_operations_in_the_same_phase() {
-        LongValueStorage storage = new LongValueStorage(10L, 10L, null);
-        ResourceLocation source = ResourceLocation.fromNamespaceAndPath("mmcr_test", "facet");
-        ExecutionStatus blocked = ExecutionStatus.blocked(ResourceLocation.fromNamespaceAndPath("mmcr_test", "blocked"), source,
-                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
-                        null, null, Map.of()));
-        TickCapability capability = new TickCapability(context -> new CapabilityTickResult(List.of(
-                transaction -> {
-                    storage.insert(1L, transaction);
-                    return CapabilityResult.successful();
-                }, transaction -> CapabilityResult.failure(blocked)), null, false));
-        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        CapabilityTickContext context = new CapabilityTickContext(0L, CapabilityTickPhase.BEFORE_RECIPE, null, 1L,
-                new CapabilitySnapshot(List.of(capability)), controller.behaviorContext());
-
-        CapabilityTickResult result = new ComponentRuntime().executeTickPhase(context);
-
-        assertThat(result.failure()).isSameAs(blocked);
-        assertThat(storage.amount()).isZero();
-    }
-
-    @Test
     void operation_without_status_uses_the_typed_failure_reason() {
         TickCapability capability = new TickCapability(context -> new CapabilityTickResult(
-                List.of(transaction -> null), null, false));
+                List.of(() -> null), null, false));
         var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CapabilityTickContext context = new CapabilityTickContext(0L, CapabilityTickPhase.BEFORE_RECIPE, null, 1L,
                 new CapabilitySnapshot(List.of(capability)), controller.behaviorContext());
@@ -111,7 +88,7 @@ class CapabilityTickContractTest {
         TickCapability first = new TickCapability(context -> {
             phases.add(context.phase());
             return context.phase() == CapabilityTickPhase.IDLE ? CapabilityTickResult.empty()
-                    : new CapabilityTickResult(List.of(transaction -> CapabilityResult.successful()), null, false);
+                    : new CapabilityTickResult(List.of(CapabilityResult::successful), null, false);
         });
         TickCapability second = new TickCapability(context -> {
             phases.add(context.phase());

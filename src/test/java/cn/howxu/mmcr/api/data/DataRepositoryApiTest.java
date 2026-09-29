@@ -3,7 +3,6 @@ package cn.howxu.mmcr.api.data;
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +31,7 @@ class DataRepositoryApiTest {
     void unavailable_request_is_explicit_and_available_request_retains_test_reservation() {
         DataReservation reservation = new DataReservation() {
             @Override
-            public boolean commit(TransactionContext transaction) {
+            public boolean commit() {
                 return true;
             }
 
@@ -47,7 +46,7 @@ class DataRepositoryApiTest {
                 MMCR.id("future_repository"), BlockPos.ZERO, "energy", DataValueType.LONG, DataValue.of(12L))
                 .reservation()).isEmpty();
         assertThat(request.reservation()).containsSame(reservation);
-        assertThat(reservation.commit(null)).isTrue();
+        assertThat(reservation.commit()).isTrue();
     }
 
     @Test

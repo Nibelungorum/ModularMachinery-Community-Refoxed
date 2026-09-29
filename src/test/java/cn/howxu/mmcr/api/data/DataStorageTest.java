@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.data;
 
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -56,7 +55,7 @@ class DataStorageTest {
     }
 
     @Test
-    void values_cache_invalidates_after_mutations_and_rollback() {
+    void values_cache_invalidates_after_mutations() {
         List<Map<String, DataValue>> notifications = new ArrayList<>();
         DataStorage storage = new DataStorage(notifications::add);
         Map<String, DataValue> initial = storage.values();
@@ -73,63 +72,7 @@ class DataStorageTest {
         storage.remove("payload");
         assertThat(notifications).hasSize(2);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            storage.set("temporary", DataValue.of(1), transaction);
-            assertThat(storage.values()).containsEntry("temporary", DataValue.of(1));
-        }
-        assertThat(storage.contains("temporary")).isFalse();
-        assertThat(storage.values()).isEmpty();
-        assertThat(notifications).hasSize(2);
         assertThatThrownBy(initial::clear).isInstanceOf(UnsupportedOperationException.class);
-    }
-
-    @Test
-    void transaction_rollback_restores_the_original_map_without_notification() {
-        List<Map<String, DataValue>> changes = new ArrayList<>();
-        DataStorage storage = new DataStorage(changes::add);
-        storage.set("answer", DataValue.of(42));
-        changes.clear();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.set("answer", DataValue.of(43), transaction)).isTrue();
-            assertThat(storage.set("other", DataValue.of("temporary"), transaction)).isTrue();
-            assertThat(changes).isEmpty();
-        }
-
-        assertThat(storage.values()).containsExactly(Map.entry("answer", DataValue.of(42)));
-        assertThat(changes).isEmpty();
-    }
-
-    @Test
-    void root_commit_notifies_once_after_multiple_transaction_writes() {
-        List<Map<String, DataValue>> changes = new ArrayList<>();
-        DataStorage storage = new DataStorage(changes::add);
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.set("first", DataValue.of(1), transaction)).isTrue();
-            assertThat(storage.set("second", DataValue.of(2), transaction)).isTrue();
-            assertThat(changes).isEmpty();
-            transaction.commit();
-        }
-
-        assertThat(changes).containsExactly(storage.values());
-        assertThat(storage.contentFingerprint()).isEqualTo(storage.values());
-    }
-
-    @Test
-    void transaction_no_op_does_not_notify_or_change_the_stored_value() {
-        List<Map<String, DataValue>> changes = new ArrayList<>();
-        DataStorage storage = new DataStorage(changes::add);
-        storage.set("answer", DataValue.of(42));
-        changes.clear();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.set("answer", DataValue.of(42), transaction)).isFalse();
-            transaction.commit();
-        }
-
-        assertThat(storage.get("answer")).contains(DataValue.of(42));
-        assertThat(changes).isEmpty();
     }
 
     @Test

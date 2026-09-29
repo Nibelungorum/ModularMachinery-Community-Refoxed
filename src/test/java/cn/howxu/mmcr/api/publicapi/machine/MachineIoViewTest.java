@@ -9,8 +9,8 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ExchangeFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
@@ -53,9 +53,9 @@ class MachineIoViewTest {
     }
 
     @Test
-    void custom_resource_scalar_and_exchange_capabilities_use_presentation_entries() {
+    void native_scalar_and_exchange_capabilities_use_presentation_entries() {
         CapabilityDisplayRegistry registry = new CapabilityDisplayRegistry();
-        MachineCapability resource = new TestCapability("test_resource", ResourceFacet.class);
+        MachineCapability resource = new TestCapability("test_resource", ItemHandlerFacet.class);
         MachineCapability scalar = new TestCapability("test_scalar", ScalarFacet.class);
         MachineCapability exchange = new TestCapability("test_exchange", ExchangeFacet.class);
         registry.register(resource.type(), ignored -> List.of(new CapabilityDisplay("resource", "4", "units", Optional.empty())));

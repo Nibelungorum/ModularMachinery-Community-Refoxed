@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.assertj.core.api.Assertions;
 
 /**
@@ -44,11 +43,4 @@ public final class CapabilityContractAssertions {
         Assertions.assertThat(result.success()).isTrue();
     }
 
-    public static void assertRollsBack(TestScalarFacet facet) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            IOType direction = facet.directions().values().iterator().next();
-            assertCommitted(facet.prepareScalar(request(direction, 1L)).commit(transaction));
-        }
-        Assertions.assertThat(facet.amount()).isZero();
-    }
 }

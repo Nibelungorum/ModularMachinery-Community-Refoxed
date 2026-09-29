@@ -1,17 +1,26 @@
 package cn.howxu.mmcr.api.capability;
 
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
+import cn.howxu.mmcr.api.capability.facet.ExchangeFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.NetworkParticipantFacet;
+import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.test.capability.CapabilityContractAssertions;
 import cn.howxu.mmcr.test.capability.TestExchangeFacet;
 import cn.howxu.mmcr.test.capability.TestNetworkParticipantFacet;
-import cn.howxu.mmcr.test.capability.TestResource;
-import cn.howxu.mmcr.test.capability.TestResourceFacet;
-import cn.howxu.mmcr.test.capability.TestScalarFacet;
-import cn.howxu.mmcr.api.capability.facet.ExchangeFacet;
-import cn.howxu.mmcr.api.capability.facet.NetworkParticipantFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
-import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.util.IOType;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,74 +29,52 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Reusable contracts for the four public capability facet families.
+ * Reusable contracts for the public capability facet families.
  *
  * @author howxu <dev@howxu.cn>
  */
 class CapabilityFacetContractTest {
     @Test
-    void resource_facet_matches_identity_and_commits_only_at_transaction_root() {
-        TestResourceFacet facet = new TestResourceFacet();
-        TestResource iron = new TestResource("iron");
-        TestResource gold = new TestResource("gold");
+    void native_handler_facets_preserve_handler_identity_and_contents() {
+        LongItemStorage items = new LongItemStorage(1, 10L, () -> {});
+        LongFluidStorage fluids = new LongFluidStorage(1, 1_000L, () -> {});
+        LongEnergyStorage energy = new LongEnergyStorage(100L, 100L, () -> {});
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
+        fluids.setContents(0, new FluidStack(Fluids.WATER, 1), 500L);
+        energy.setAmount(40L);
+        ItemBusCapability itemCapability = new ItemBusCapability(items, IOType.INPUT);
+        FluidHatchCapability fluidCapability = new FluidHatchCapability(fluids, IOType.INPUT);
+        EnergyHatchCapability energyCapability = new EnergyHatchCapability(energy, IOType.INPUT);
+        CapabilitySnapshot snapshot = new CapabilitySnapshot(List.of(
+                itemCapability, fluidCapability, energyCapability));
 
-        assertThat(facet.facet(ResourceFacet.class)).contains(facet);
-        assertThat(new CapabilitySnapshot(List.of(facet)).facets(ResourceFacet.class)).containsExactly(facet);
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(facet.storage().insert(0, iron, 3L, transaction)).isEqualTo(3L);
-            assertThat(facet.storage().insert(0, gold, 1L, transaction)).isZero();
-            assertThat(facet.storage().amount(0)).isEqualTo(3L);
-        }
-        assertThat(facet.storage().amount(0)).isZero();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(facet.storage().insert(0, iron, 3L, transaction)).isEqualTo(3L);
-            transaction.commit();
-        }
-        assertThat(facet.storage().resource(0)).isEqualTo(iron);
-        assertThat(facet.storage().amount(0)).isEqualTo(3L);
+        assertThat(itemCapability.facet(ItemHandlerFacet.class)).get().extracting(ItemHandlerFacet::itemHandler)
+                .isSameAs(items);
+        assertThat(fluidCapability.facet(FluidHandlerFacet.class)).get().extracting(FluidHandlerFacet::fluidHandler)
+                .isSameAs(fluids);
+        assertThat(energyCapability.facet(EnergyStorageFacet.class)).get().extracting(EnergyStorageFacet::energyStorage)
+                .isSameAs(energy);
+        assertThat(snapshot.facets(ItemHandlerFacet.class)).containsExactly(itemCapability);
+        assertThat(snapshot.facets(FluidHandlerFacet.class)).containsExactly(fluidCapability);
+        assertThat(snapshot.facets(EnergyStorageFacet.class)).containsExactly(energyCapability);
+        assertThat(items.resource(0).is(Items.IRON_INGOT)).isTrue();
+        assertThat(fluids.resource(0).is(Fluids.WATER)).isTrue();
+        assertThat(energy.getAmountAsLong()).isEqualTo(40L);
     }
 
     @Test
-    void scalar_facet_supports_simulation_commit_and_rollback() {
-        TestScalarFacet facet = new TestScalarFacet(IOType.OUTPUT);
+    void scalar_facet_commits_typed_requests_and_rejects_invalid_direction() {
+        LongEnergyStorage storage = new LongEnergyStorage(10L, 10L, () -> {});
+        EnergyHatchCapability facet = new EnergyHatchCapability(storage, IOType.OUTPUT);
 
         assertThat(facet.facet(ScalarFacet.class)).contains(facet);
-        assertThat(new CapabilitySnapshot(List.of(facet)).facets(ScalarFacet.class)).containsExactly(facet);
-
-        assertThat(facet.insert(2L, true)).isEqualTo(2L);
-        assertThat(facet.amount()).isZero();
-        CapabilityContractAssertions.assertRollsBack(facet);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(facet.prepareScalar(CapabilityContractAssertions.request(
-                    IOType.INPUT, 1L)).commit(transaction).success())
-                    .isFalse();
-            transaction.commit();
-        }
-        assertThat(facet.amount()).isZero();
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(facet.prepareScalar(CapabilityContractAssertions.request(
-                    IOType.OUTPUT, -1L)).commit(transaction).success())
-                    .isFalse();
-            transaction.commit();
-        }
-        assertThat(facet.amount()).isZero();
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityContractAssertions.assertCommitted(facet.prepareScalar(
-                    CapabilityContractAssertions.request(IOType.OUTPUT, 2L)).commit(transaction));
-            transaction.commit();
-        }
-        assertThat(facet.amount()).isEqualTo(2L);
-
-        TestScalarFacet inputFacet = new TestScalarFacet(IOType.INPUT);
-        inputFacet.setAmount(2L);
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityContractAssertions.assertCommitted(inputFacet.prepareScalar(
-                    CapabilityContractAssertions.request(IOType.INPUT, 1L)).commit(transaction));
-            transaction.commit();
-        }
-        assertThat(inputFacet.amount()).isEqualTo(1L);
+        assertThat(facet.facet(EnergyStorageFacet.class)).contains(facet);
+        assertThat(facet.prepareScalar(new CapabilityRequests.ValueRequest(
+                facet.type(), IOType.OUTPUT, 1L, 2L, true)).commit().success()).isTrue();
+        assertThat(storage.getAmountAsLong()).isEqualTo(2L);
+        assertThatThrownBy(() -> facet.prepareScalar(new CapabilityRequests.ValueRequest(
+                facet.type(), IOType.INPUT, 1L, 1L, false)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -97,29 +84,13 @@ class CapabilityFacetContractTest {
         assertThat(facet.facet(ExchangeFacet.class)).contains(facet);
         assertThat(new CapabilitySnapshot(List.of(facet)).facets(ExchangeFacet.class)).containsExactly(facet);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityContractAssertions.assertCommitted(facet.prepareExchange(3D).commit(transaction));
-            CapabilityContractAssertions.assertCommitted(facet.prepareExchange(-1D).commit(transaction));
-            transaction.commit();
-        }
+        CapabilityContractAssertions.assertCommitted(facet.prepareExchange(3D).commit());
+        CapabilityContractAssertions.assertCommitted(facet.prepareExchange(-1D).commit());
         assertThat(facet.potential()).isEqualTo(2D);
         assertThat(facet.capacity()).isGreaterThanOrEqualTo(facet.potential());
         assertThat(facet.conductance()).isPositive();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(facet.prepareExchange(9D).commit(transaction).success()).isFalse();
-            transaction.commit();
-        }
-        assertThat(facet.potential()).isEqualTo(2D);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(facet.prepareExchange(-9D).commit(transaction).success()).isFalse();
-            transaction.commit();
-        }
-        assertThat(facet.potential()).isEqualTo(2D);
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityContractAssertions.assertCommitted(facet.prepareExchange(1D).commit(transaction));
-            assertThat(facet.prepareExchange(9D).commit(transaction).success()).isFalse();
-        }
+        assertThat(facet.prepareExchange(9D).commit().success()).isFalse();
+        assertThat(facet.prepareExchange(-9D).commit().success()).isFalse();
         assertThat(facet.potential()).isEqualTo(2D);
     }
 
@@ -143,7 +114,6 @@ class CapabilityFacetContractTest {
         assertThat(detachedSnapshot).isNotSameAs(attachedSnapshot);
         assertThat(detachedSnapshot.capabilities()).isEmpty();
         assertThat(attachedSnapshot.capabilities()).containsExactly(facet);
-        assertThat(attachedSnapshot.facets(NetworkParticipantFacet.class)).containsExactly(facet);
         assertThatThrownBy(() -> attachedSnapshot.capabilities().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
     }

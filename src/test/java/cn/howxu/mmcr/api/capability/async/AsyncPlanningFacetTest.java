@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -236,13 +235,13 @@ class AsyncPlanningFacetTest {
         assertThat(AsyncPlanningFacet.class.isInterface()).isFalse();
         assertThat(Modifier.isFinal(AsyncPlanningFacet.class.getMethod("captureSnapshot").getModifiers())).isTrue();
         assertThat(Modifier.isFinal(AsyncPlanningFacet.class.getMethod("workerPlanner").getModifiers())).isTrue();
-        assertThat(Modifier.isFinal(AsyncPlanningFacet.class.getMethod("commit", AsyncCapabilityOperation.class,
-                TransactionContext.class).getModifiers())).isTrue();
+        assertThat(Modifier.isFinal(AsyncPlanningFacet.class.getMethod("commit",
+                AsyncCapabilityOperation.class).getModifiers())).isTrue();
 
         assertThatThrownBy(() -> AsyncPlanningFacet.class.getMethod("captureSnapshotOnServerThread"))
                 .isInstanceOf(NoSuchMethodException.class);
-        assertThatThrownBy(() -> AsyncPlanningFacet.class.getMethod("commitOnServerThread",
-                AsyncCapabilityOperation.class, TransactionContext.class))
+        assertThatThrownBy(() -> AsyncPlanningFacet.class.getMethod("commitNativeOnServerThread",
+                AsyncCapabilityOperation.class))
                 .isInstanceOf(NoSuchMethodException.class);
     }
 
@@ -257,7 +256,7 @@ class AsyncPlanningFacetTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("workerPlanner requires the server thread");
         assertThatThrownBy(() -> facet.commit(
-                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 32L, false), null))
+                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 32L, false)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("commit requires the server thread");
         assertThat(facet.captured).isFalse();
@@ -283,8 +282,7 @@ class AsyncPlanningFacetTest {
         }
 
         @Override
-        protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                         TransactionContext transaction) {
+        protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
             committed.set(true);
             throw new AssertionError("commit should not run");
         }
