@@ -1,13 +1,13 @@
 package cn.howxu.mmcr.compat.appliedflux;
 
+import appeng.api.config.Actionable;
+import appeng.api.networking.ticking.TickRateModulation;
 import cn.howxu.mmcr.compat.appliedflux.loaded.FluxEnergyNetwork;
 import cn.howxu.mmcr.compat.appliedflux.loaded.FluxEnergyTicker;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyOutputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.test.TestBootstrap;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import appeng.api.networking.ticking.TickRateModulation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +17,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Verifies the optional AppFlux bridge and its transactional network adapter.
+ * Verifies the optional AppFlux bridge and its native network adapter.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -43,12 +43,10 @@ class AppliedFluxBridgeTest {
         RecordingStorage storage = new RecordingStorage(100L, 100L);
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(network.planExactExtract(40L).orElseThrow().commit(transaction).success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(network.planExactExtract(40L).orElseThrow().commit().success()).isTrue();
 
-        assertThat(storage.calls).containsExactly("extract:40:true", "extract:40:true", "extract:40:false");
+        assertThat(storage.calls).containsExactly("extract:40:SIMULATE", "extract:40:SIMULATE",
+                "extract:40:MODULATE");
         assertThat(storage.amount).isEqualTo(60L);
     }
 
@@ -58,26 +56,24 @@ class AppliedFluxBridgeTest {
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
 
         assertThat(network.planExactExtract(40L)).isEmpty();
-        assertThat(storage.calls).containsExactly("extract:40:true");
+        assertThat(storage.calls).containsExactly("extract:40:SIMULATE");
     }
 
     @Test
-    void shortModulationIsCompensatedAndReportedAsFailure() {
+    void shortModulationIsReportedAsFailureAfterImmediateExtraction() {
         RecordingStorage storage = new RecordingStorage(100L, 100L);
         storage.modulatedExtractionLimit = 25L;
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(network.planExactExtract(40L).orElseThrow().commit(transaction).success()).isFalse();
-            transaction.commit();
-        }
+        assertThat(network.planExactExtract(40L).orElseThrow().commit().success()).isFalse();
 
-        assertThat(storage.calls).containsExactly("extract:40:true", "extract:40:true", "extract:40:false", "insert:25:false");
-        assertThat(storage.amount).isEqualTo(100L);
+        assertThat(storage.calls).containsExactly("extract:40:SIMULATE", "extract:40:SIMULATE",
+                "extract:40:MODULATE");
+        assertThat(storage.amount).isEqualTo(75L);
     }
 
     @Test
-    void successfulPrefetchIsCompensatedWhenTheRootTransactionAborts() {
+    void successfulPrefetchImmediatelyUpdatesNetworkAndLocalBuffer() {
         RecordingStorage storage = new RecordingStorage(100L, 100L);
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
@@ -85,18 +81,7 @@ class AppliedFluxBridgeTest {
                 network::planExactExtract);
         var plan = capability.planPrefetch(40L).orElseThrow();
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(plan.operation().commit(transaction).success()).isTrue();
-        }
-
-        assertThat(storage.amount).isEqualTo(100L);
-        assertThat(buffer.amount()).isZero();
-        assertThat(buffer.reserved()).isZero();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(plan.operation().commit(transaction).success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(plan.operation().commit().success()).isTrue();
 
         assertThat(storage.amount).isEqualTo(60L);
         assertThat(buffer.amount()).isEqualTo(40L);
@@ -109,10 +94,7 @@ class AppliedFluxBridgeTest {
         storage.modulatedInsertionLimit = 30L;
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
         FluxEnergyBuffer pending = new FluxEnergyBuffer();
-        try (Transaction transaction = Transaction.openRoot()) {
-            pending.insert(80L, transaction);
-            transaction.commit();
-        }
+        pending.insert(80L);
 
         assertThat(network.drainPending(pending)).isEqualTo(30L);
         assertThat(pending.amount()).isEqualTo(50L);
@@ -124,12 +106,9 @@ class AppliedFluxBridgeTest {
         RecordingStorage storage = new RecordingStorage(0L, 3_000L);
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
-        try (Transaction transaction = Transaction.openRoot()) {
-            buffer.insert(20_000L, transaction);
-            buffer.reserve(5_000L, transaction);
-            for (int tick = 0; tick < FluxEnergyBuffer.IDLE_DELAY_TICKS; tick++) buffer.advanceIdle(transaction);
-            transaction.commit();
-        }
+        buffer.insert(20_000L);
+        buffer.reserve(5_000L);
+        for (int tick = 0; tick < FluxEnergyBuffer.IDLE_DELAY_TICKS; tick++) buffer.advanceIdle();
 
         assertThat(network.returnIdle(buffer)).isEqualTo(3_000L);
         assertThat(storage.amount).isEqualTo(3_000L);
@@ -189,10 +168,7 @@ class AppliedFluxBridgeTest {
 
     private static FluxEnergyBuffer committedBuffer(long amount) {
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
-        try (Transaction transaction = Transaction.openRoot()) {
-            buffer.insert(amount, transaction);
-            transaction.commit();
-        }
+        buffer.insert(amount);
         return buffer;
     }
 
@@ -210,9 +186,10 @@ class AppliedFluxBridgeTest {
 
         @Override
         public long extract(long requested, boolean simulate) {
-            calls.add("extract:" + requested + ":" + simulate);
+            Actionable action = Actionable.ofSimulate(simulate);
+            calls.add("extract:" + requested + ":" + action);
             long extracted = Math.min(requested, amount);
-            if (!simulate) {
+            if (action == Actionable.MODULATE) {
                 extracted = Math.min(extracted, modulatedExtractionLimit);
                 amount -= extracted;
             }
@@ -221,9 +198,10 @@ class AppliedFluxBridgeTest {
 
         @Override
         public long insert(long requested, boolean simulate) {
-            calls.add("insert:" + requested + ":" + simulate);
+            Actionable action = Actionable.ofSimulate(simulate);
+            calls.add("insert:" + requested + ":" + action);
             long inserted = Math.min(requested, capacity - amount);
-            if (!simulate) {
+            if (action == Actionable.MODULATE) {
                 inserted = Math.min(inserted, modulatedInsertionLimit);
                 amount += inserted;
             }
