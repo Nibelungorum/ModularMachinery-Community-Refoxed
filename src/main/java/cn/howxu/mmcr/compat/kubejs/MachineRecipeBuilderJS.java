@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
@@ -183,9 +184,9 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    public MachineRecipeBuilderJS conditions(List<RecipeModifier> conditions) {
+    public MachineRecipeBuilderJS conditions(List<MachineModifier> conditions) {
         this.conditions.clear();
-        this.conditions.addAll(conditions);
+        this.conditions.addAll(MachineModifier.recipeModifiers(conditions));
         return this;
     }
 

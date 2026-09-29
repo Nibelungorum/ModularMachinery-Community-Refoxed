@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
@@ -30,11 +31,16 @@ import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
+import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalTank;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
@@ -48,7 +54,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class ChemicalPortCapability implements LoadedMekanismBridge.ChemicalPort,
-        TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
+        ChemicalViewFacet, TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
 
     private final ChemicalPortBlockEntity port;
@@ -99,13 +105,44 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
             }
         };
         this.view = CapabilityFactories.view(TYPE, directions(),
-                Set.of(TransferFacet.class, OperationFacet.class, PresentationFacet.class,
+                Set.of(ChemicalViewFacet.class, TransferFacet.class, OperationFacet.class, PresentationFacet.class,
                         SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     @Override
     public IChemicalTank chemicalTank() {
         return chemicalTank;
+    }
+
+    @Override
+    public Optional<ResourceLocation> chemicalId() {
+        ChemicalStack stack = chemicalTank.getStack();
+        return stack.isEmpty() ? Optional.empty()
+                : Optional.of(ResourceLocation.parse(stack.getChemicalHolder().getRegisteredName()));
+    }
+
+    @Override
+    public long amount() {
+        return Math.max(0L, chemicalTank.getStored());
+    }
+
+    @Override
+    public boolean matchesTag(ResourceLocation tagId) {
+        ChemicalStack stack = chemicalTank.getStack();
+        return tagId != null && !stack.isEmpty()
+                && stack.getChemicalHolder().is(TagKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, tagId));
+    }
+
+    @Override
+    public long outputCapacity(ResourceLocation chemicalId) {
+        if (chemicalId == null) return 0L;
+        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+                ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId));
+        if (holder.isEmpty()) return 0L;
+        ChemicalStack stack = new ChemicalStack(holder.get(), 1L);
+        ChemicalStack current = chemicalTank.getStack();
+        if ((!current.isEmpty() && !ChemicalStack.isSameChemical(current, stack)) || !chemicalTank.isValid(stack)) return 0L;
+        return Math.max(0L, chemicalTank.getCapacity() - chemicalTank.getStored());
     }
 
     @Override

@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.compat.mekanism.HeatViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
@@ -40,7 +41,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
-        OperationFacet, PresentationFacet, SyncFacet {
+        HeatViewFacet, OperationFacet, PresentationFacet, SyncFacet {
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.HEAT);
 
     private final IHeatCapacitor heatCapacitor;
@@ -89,7 +90,8 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
             }
         };
         this.view = CapabilityFactories.view(TYPE, directions(),
-                Set.of(OperationFacet.class, PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
+                Set.of(HeatViewFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                        AsyncPlanningFacet.class));
     }
 
     public HeatPortCapability(HeatPortBlockEntity port) {
@@ -99,6 +101,21 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     @Override
     public IHeatHandler heatHandler() {
         return heatCapacitor;
+    }
+
+    @Override
+    public double heat() {
+        return heatCapacitor.getHeat();
+    }
+
+    @Override
+    public double temperature() {
+        return heatCapacitor.getTemperature();
+    }
+
+    @Override
+    public double heatCapacity() {
+        return heatCapacitor.getHeatCapacity();
     }
 
     @Override

@@ -10,7 +10,10 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
+import cn.howxu.mmcr.api.compat.mekanism.HeatViewFacet;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -43,6 +46,23 @@ public final class MachineIoView {
     public record ResourceAmount<R>(R resource, long amount) {
         public ResourceAmount {
             if (resource == null || amount < 0L) throw new IllegalArgumentException("invalid resource amount");
+        }
+    }
+
+    /**
+     * State of one heat capability in snapshot order.
+     *
+     * @param heat stored heat
+     * @param temperature current temperature in kelvin
+     * @param heatCapacity heat capacity, not a maximum storage amount
+     * @author howxu <dev@howxu.cn>
+     */
+    public record HeatState(double heat, double temperature, double heatCapacity) {
+        public HeatState {
+            if (!Double.isFinite(heat) || heat < 0D || !Double.isFinite(temperature) || temperature < 0D
+                    || !Double.isFinite(heatCapacity) || heatCapacity < 0D) {
+                throw new IllegalArgumentException("invalid heat state");
+            }
         }
     }
 
@@ -103,6 +123,55 @@ public final class MachineIoView {
             }
         }
         return resourceAmounts(amounts);
+    }
+
+    public List<ResourceAmount<ResourceLocation>> chemicalInputs() {
+        Map<ResourceLocation, Long> amounts = new LinkedHashMap<>();
+        for (MachineCapability capability : capabilities(IOType.INPUT)) {
+            ChemicalViewFacet facet = capability.facet(ChemicalViewFacet.class).orElse(null);
+            if (facet == null || facet.amount() <= 0L) continue;
+            facet.chemicalId().ifPresent(id -> amounts.merge(id, facet.amount(), MachineIoView::saturatedAdd));
+        }
+        return resourceAmounts(amounts);
+    }
+
+    public long chemicalAmount(ResourceLocation chemicalId) {
+        Objects.requireNonNull(chemicalId, "chemicalId");
+        long amount = 0L;
+        for (ResourceAmount<ResourceLocation> input : chemicalInputs()) {
+            if (chemicalId.equals(input.resource())) amount = saturatedAdd(amount, input.amount());
+        }
+        return amount;
+    }
+
+    public long chemicalTagAmount(ResourceLocation tagId) {
+        Objects.requireNonNull(tagId, "tagId");
+        long amount = 0L;
+        for (MachineCapability capability : capabilities(IOType.INPUT)) {
+            ChemicalViewFacet facet = capability.facet(ChemicalViewFacet.class).orElse(null);
+            if (facet != null && facet.amount() > 0L && facet.matchesTag(tagId)) {
+                amount = saturatedAdd(amount, facet.amount());
+            }
+        }
+        return amount;
+    }
+
+    public long chemicalOutputCapacity(ResourceLocation chemicalId) {
+        Objects.requireNonNull(chemicalId, "chemicalId");
+        long capacity = 0L;
+        for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
+            ChemicalViewFacet facet = capability.facet(ChemicalViewFacet.class).orElse(null);
+            if (facet != null) capacity = saturatedAdd(capacity, Math.max(0L, facet.outputCapacity(chemicalId)));
+        }
+        return capacity;
+    }
+
+    public List<HeatState> heatInputs() {
+        return heatStates(IOType.INPUT);
+    }
+
+    public List<HeatState> heatOutputs() {
+        return heatStates(IOType.OUTPUT);
     }
 
     public long energyInput() {
@@ -240,6 +309,15 @@ public final class MachineIoView {
         List<ResourceAmount<R>> result = new ArrayList<>(amounts.size());
         amounts.forEach((resource, amount) -> result.add(new ResourceAmount<>(resource, amount)));
         return List.copyOf(result);
+    }
+
+    private List<HeatState> heatStates(IOType ioType) {
+        List<HeatState> states = new ArrayList<>();
+        for (MachineCapability capability : capabilities(ioType)) {
+            HeatViewFacet facet = capability.facet(HeatViewFacet.class).orElse(null);
+            if (facet != null) states.add(new HeatState(facet.heat(), facet.temperature(), facet.heatCapacity()));
+        }
+        return List.copyOf(states);
     }
 
     private static long saturatedAdd(long first, long second) {
