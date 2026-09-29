@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.runtime.IJeiKeyMapping;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.input.InputWithModifiers;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,11 +40,6 @@ class JeiStructurePreviewWidgetTest {
             @Override
             public int getModifiers() {
                 return 0;
-            }
-
-            @Override
-            public InputWithModifiers getInputWithModifiers() {
-                return null;
             }
 
             @Override

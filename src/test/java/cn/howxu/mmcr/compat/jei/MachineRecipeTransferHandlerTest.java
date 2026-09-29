@@ -12,8 +12,9 @@ import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -117,12 +118,22 @@ class MachineRecipeTransferHandlerTest {
             }
 
             @Override
+            public Stream<ITypedIngredient<?>> getDisplayedIngredients() {
+                return ingredients.stream();
+            }
+
+            @Override
+            public Optional<TagKey<?>> getTagKey() {
+                return Optional.empty();
+            }
+
+            @Override
             public RecipeIngredientRole getRole() {
                 return RecipeIngredientRole.INPUT;
             }
 
             @Override
-            public void drawHighlight(GuiGraphicsExtractor guiGraphics, int color) {
+            public void drawHighlight(GuiGraphics guiGraphics, int color) {
             }
 
             @Override
