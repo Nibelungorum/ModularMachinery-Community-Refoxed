@@ -18,6 +18,8 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -82,6 +84,47 @@ class SmartInterfaceBlockEntityTest {
     }
 
     @Test
+    void legacy_controller_pos_schema_preserves_multiple_bindings_and_skips_missing_positions() {
+        BlockPos first = new BlockPos(12, 34, 56);
+        BlockPos second = new BlockPos(-7, 8, -9);
+        ListTag controllers = new ListTag();
+        controllers.add(controllerEntryWithPos(first));
+        controllers.add(new CompoundTag());
+        controllers.add(controllerEntryWithPos(second));
+
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
+        var restored = createSmartInterface();
+        restored.loadAdditional(serializedState(controllers), lookup);
+
+        assertThat(restored.controllerPositions()).containsExactly(first, second);
+
+        CompoundTag saved = new CompoundTag();
+        restored.saveAdditional(saved, lookup);
+        ListTag savedControllers = saved.getCompound("state").getList("controllers", Tag.TAG_COMPOUND);
+        assertThat(savedControllers).allSatisfy(entry -> {
+            CompoundTag controller = (CompoundTag) entry;
+            assertThat(controller.contains("pos", Tag.TAG_INT_ARRAY)).isTrue();
+            assertThat(controller.contains("x")).isFalse();
+            assertThat(controller.contains("y")).isFalse();
+            assertThat(controller.contains("z")).isFalse();
+        });
+    }
+
+    @Test
+    void direct_xyz_controller_schema_fallback_preserves_multiple_bindings() {
+        BlockPos first = new BlockPos(3, 4, 5);
+        BlockPos second = new BlockPos(-6, 70, 8);
+        ListTag controllers = new ListTag();
+        controllers.add(controllerEntryWithCoordinates(first));
+        controllers.add(controllerEntryWithCoordinates(second));
+
+        var restored = createSmartInterface();
+        restored.loadAdditional(serializedState(controllers), HolderLookup.Provider.create(Stream.empty()));
+
+        assertThat(restored.controllerPositions()).containsExactly(first, second);
+    }
+
+    @Test
     void sync_types_uses_registered_minimum_value() {
         var owner = createSmartInterface();
 
@@ -140,6 +183,28 @@ class SmartInterfaceBlockEntityTest {
     private static SmartInterfaceBlockEntity createSmartInterface() {
         return (SmartInterfaceBlockEntity) ModBlockEntities.SMART_INTERFACE.get().create(
                 BlockPos.ZERO, ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+    }
+
+    private static CompoundTag serializedState(ListTag controllers) {
+        CompoundTag state = new CompoundTag();
+        state.put("controllers", controllers);
+        CompoundTag serialized = new CompoundTag();
+        serialized.put("state", state);
+        return serialized;
+    }
+
+    private static CompoundTag controllerEntryWithPos(BlockPos pos) {
+        CompoundTag entry = new CompoundTag();
+        entry.putIntArray("pos", new int[]{pos.getX(), pos.getY(), pos.getZ()});
+        return entry;
+    }
+
+    private static CompoundTag controllerEntryWithCoordinates(BlockPos pos) {
+        CompoundTag entry = new CompoundTag();
+        entry.putInt("x", pos.getX());
+        entry.putInt("y", pos.getY());
+        entry.putInt("z", pos.getZ());
+        return entry;
     }
 
     private static CraftingRuntime controllerRuntime(MachineControllerBlockEntity controller) {

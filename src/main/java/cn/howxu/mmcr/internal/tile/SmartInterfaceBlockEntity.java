@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
 
@@ -178,11 +179,11 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         output.put(VALUES_KEY, serializedValues);
         ListTag serializedControllers = new ListTag();
         controllers.forEach(pos -> {
-            CompoundTag entry = new CompoundTag();
-            entry.putInt("x", pos.getX());
-            entry.putInt("y", pos.getY());
-            entry.putInt("z", pos.getZ());
-            serializedControllers.add(entry);
+            BlockPos.CODEC.encodeStart(NbtOps.INSTANCE, pos).result().ifPresent(serializedPos -> {
+                CompoundTag entry = new CompoundTag();
+                entry.put("pos", serializedPos);
+                serializedControllers.add(entry);
+            });
         });
         output.put(CONTROLLERS_KEY, serializedControllers);
     }
@@ -210,9 +211,23 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         ListTag serializedControllers = input.getList(CONTROLLERS_KEY, Tag.TAG_COMPOUND);
         for (int index = 0; index < serializedControllers.size(); index++) {
             CompoundTag entry = serializedControllers.getCompound(index);
-            controllers.add(new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z")).immutable());
+            readControllerPos(entry).ifPresent(pos -> controllers.add(pos.immutable()));
         }
         capabilityStorage.replace(values);
+    }
+
+    private static Optional<BlockPos> readControllerPos(CompoundTag entry) {
+        Tag serializedPos = entry.get("pos");
+        if (serializedPos != null) {
+            Optional<BlockPos> decoded = BlockPos.CODEC.parse(NbtOps.INSTANCE, serializedPos).result();
+            if (decoded.isPresent()) return decoded;
+        }
+        if (entry.contains("x", Tag.TAG_INT)
+                && entry.contains("y", Tag.TAG_INT)
+                && entry.contains("z", Tag.TAG_INT)) {
+            return Optional.of(new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z")));
+        }
+        return Optional.empty();
     }
 
     private void changed() {
