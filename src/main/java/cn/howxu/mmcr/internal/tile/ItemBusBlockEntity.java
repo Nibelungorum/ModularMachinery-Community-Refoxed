@@ -41,6 +41,11 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
+    public LongItemStorage nativeItemHandler() {
+        return storage;
+    }
+
+    @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()

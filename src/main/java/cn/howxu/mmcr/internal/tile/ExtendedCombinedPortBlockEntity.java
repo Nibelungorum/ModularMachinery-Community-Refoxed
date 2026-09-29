@@ -54,8 +54,18 @@ public class ExtendedCombinedPortBlockEntity extends IOPortBlockEntity {
         return itemStorage;
     }
 
+    @Override
+    public LongItemStorage nativeItemHandler() {
+        return itemStorage;
+    }
+
     /** Native fluid handler; the Transfer-backed port accessor is migrated by the capability task. */
     public LongFluidStorage fluidHandler() {
+        return fluidStorage;
+    }
+
+    @Override
+    public LongFluidStorage nativeFluidHandler() {
         return fluidStorage;
     }
 

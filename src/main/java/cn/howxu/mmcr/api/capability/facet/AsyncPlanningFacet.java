@@ -69,6 +69,14 @@ public abstract class AsyncPlanningFacet implements CapabilityFacet {
     }
 
     /**
+     * Applies an operation without a Transfer transaction for native runtime execution.
+     * Compatibility facets keep the transaction overload until Task 7/8.
+     */
+    public final CapabilityResult commit(AsyncCapabilityOperation operation) {
+        return commit(operation, null);
+    }
+
+    /**
      * Captures live capability values after {@link #captureSnapshot()} has checked the server thread.
      *
      * @return worker-safe capability values

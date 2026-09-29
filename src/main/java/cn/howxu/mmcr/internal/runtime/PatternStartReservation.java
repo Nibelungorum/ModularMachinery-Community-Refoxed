@@ -78,7 +78,7 @@ public final class PatternStartReservation implements AutoCloseable {
         Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (status != Status.RESERVED || rolledBack) return false;
         try (Transaction transaction = Transaction.openRoot()) {
-            if (!runtime.commitPatternPlan(preparedStart, transaction)) {
+            if (!runtime.commitPatternPlan(preparedStart)) {
                 rollback();
                 return false;
             }
@@ -92,8 +92,8 @@ public final class PatternStartReservation implements AutoCloseable {
         return true;
     }
 
-    boolean commitPlan(TransactionContext transaction) {
-        return status == Status.RESERVED && !rolledBack && runtime.commitPatternPlan(preparedStart, transaction);
+    boolean commitPlan() {
+        return status == Status.RESERVED && !rolledBack && runtime.commitPatternPlan(preparedStart);
     }
 
     void activate() {

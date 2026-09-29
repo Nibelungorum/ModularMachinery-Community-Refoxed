@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.util.IOType;
@@ -53,6 +54,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                                 PlanningContext context) {
         if (requirement.fePerTick() <= 0) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+        }
+        if (capabilities.stream().anyMatch(capability -> capability.facet(EnergyStorageFacet.class).isPresent())) {
+            return NativeRequirementPlanning.energy(requirement, capabilities, context);
         }
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         List<MachineCapability> plannedCapabilities = insert

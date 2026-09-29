@@ -8,6 +8,20 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * @author howxu <dev@howxu.cn>
  */
 public interface CapabilityOperation {
+    /**
+     * Applies this operation without participating in a Transfer transaction.
+     * Built-in native item, fluid, and energy operations use this entry point.
+     */
+    default CapabilityResult commit() {
+        return commit(null);
+    }
+
+    /**
+     * Legacy compatibility bridge for capability integrations that still require Transfer.
+     *
+     * @deprecated Task 7/8 will replace compatibility operations with native handlers.
+     */
+    @Deprecated(forRemoval = true)
     CapabilityResult commit(TransactionContext transaction);
 
     /**

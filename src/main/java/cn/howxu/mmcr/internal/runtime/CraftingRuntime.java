@@ -59,8 +59,6 @@ import net.minecraft.nbt.LongTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -196,22 +194,21 @@ public final class CraftingRuntime {
         return commitPatternStart(prepared, ignored -> { });
     }
 
-    /** Commits a prepared pattern start with related storage writes in the same input transaction. */
-    public boolean commitPatternStart(PreparedStart prepared, Consumer<TransactionContext> transactionWrites) {
+    /** Commits a prepared pattern start without a Transfer transaction. */
+    public boolean commitPatternStart(PreparedStart prepared, Consumer<?> transactionWrites) {
         if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
         if (!preparedStartCurrent(prepared)) {
             discardPatternStart(prepared);
             return false;
         }
         boolean committed = false;
-        try (Transaction transaction = Transaction.openRoot()) {
-            ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
+        try {
+            ExecutionStatus commitFailure = commitPreparedStart(prepared);
             if (commitFailure != null) {
                 fail(commitFailure);
                 return false;
             }
-            transactionWrites.accept(transaction);
-            transaction.commit();
+            transactionWrites.accept(null);
             committed = true;
         } finally {
             if (!committed) discardPatternStart(prepared);
@@ -220,13 +217,13 @@ public final class CraftingRuntime {
         return true;
     }
 
-    boolean commitPatternPlan(PreparedStart prepared, TransactionContext transaction) {
+    boolean commitPatternPlan(PreparedStart prepared) {
         if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
         if (!preparedStartCurrent(prepared)) {
             discardPatternStart(prepared);
             return false;
         }
-        ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
+        ExecutionStatus commitFailure = commitPreparedStart(prepared);
         if (commitFailure == null) return true;
         fail(commitFailure);
         return false;
@@ -374,10 +371,9 @@ public final class CraftingRuntime {
         PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion(runtime), effective, plan,
                 prefetches);
         boolean committed = false;
-        try (Transaction transaction = Transaction.openRoot()) {
-            ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
+        try {
+            ExecutionStatus commitFailure = commitPreparedStart(prepared);
             if (commitFailure != null) return fail(commitFailure);
-            transaction.commit();
             committed = true;
         } finally {
             if (!committed) releasePreparedPrefetches(prepared);
@@ -1119,13 +1115,13 @@ public final class CraftingRuntime {
         return List.copyOf(prefetches);
     }
 
-    private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared, TransactionContext transaction) {
-        if (!prepared.plan().commitInputs(transaction)) {
+    private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared) {
+        if (!prepared.plan().commitInputs()) {
             ExecutionStatus failure = prepared.plan().failure();
             return failure == null ? missingInputStatus() : failure;
         }
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
-            CapabilityResult result = prefetch.plan().operation().commit(transaction);
+            CapabilityResult result = prefetch.plan().operation().commit();
             if (result == null || !result.success()) {
                 return result == null || result.status() == null ? missingInputStatus() : result.status();
             }
@@ -1263,11 +1259,11 @@ public final class CraftingRuntime {
         long remaining = Math.min(prefetchedEnergyPerTick, prefetchedEnergyRemaining);
         if (remaining <= 0L) return null;
         List<ActivePrefetch> next = new ArrayList<>(activePrefetches.size());
-        try (Transaction transaction = Transaction.openRoot()) {
+        try {
             for (ActivePrefetch prefetch : activePrefetches) {
                 long consumed = Math.min(remaining, prefetch.remaining());
                 if (consumed > 0L) {
-                    CapabilityResult result = prefetch.facet().consumeReservation(consumed, transaction);
+                    CapabilityResult result = prefetch.facet().consumeReservation(consumed, null);
                     if (result == null || !result.success()) {
                         return result == null || result.status() == null ? missingInputStatus() : result.status();
                     }
@@ -1275,7 +1271,6 @@ public final class CraftingRuntime {
                 next.add(new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed));
                 remaining -= consumed;
             }
-            transaction.commit();
         }
         activePrefetches = List.copyOf(next);
         prefetchedEnergyRemaining = Math.max(0L, prefetchedEnergyRemaining - prefetchedEnergyPerTick);
@@ -1354,20 +1349,19 @@ public final class CraftingRuntime {
         List<AsyncPlanningFacet> facets = components.capabilities().stream()
                 .map(capability -> capability.facet(AsyncPlanningFacet.class).orElse(null))
                 .filter(Objects::nonNull).toList();
-        try (Transaction transaction = Transaction.openRoot()) {
+        try {
             for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
                 if (operation.capabilityIndex() >= facets.size()) {
                     waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()));
                     return false;
                 }
-                CapabilityResult result = facets.get(operation.capabilityIndex()).commit(operation.operation(), transaction);
+                CapabilityResult result = facets.get(operation.capabilityIndex()).commit(operation.operation());
                 if (result == null || !result.success()) {
                     waiting(result == null ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of())
                             : result.status());
                     return false;
                 }
             }
-            transaction.commit();
             ExecutionStatus prefetchFailure = consumePrefetchedEnergy();
             if (prefetchFailure != null) {
                 waiting(prefetchFailure);

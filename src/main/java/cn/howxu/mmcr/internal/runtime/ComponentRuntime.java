@@ -34,7 +34,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.resource.Resource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -136,16 +135,13 @@ public final class ComponentRuntime {
             if (stateChanged) markCapabilityPresentationChanged();
             return new CapabilityTickResult(operations, null, stateChanged);
         }
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (CapabilityOperation operation : operations) {
-                CapabilityResult result = operation.commit(transaction);
-                if (result == null || !result.success()) {
-                    ExecutionStatus failure = result == null || result.status() == null
-                            ? UNSPECIFIED_TICK_OPERATION_FAILURE : result.status();
-                    return new CapabilityTickResult(operations, failure, stateChanged);
-                }
+        for (CapabilityOperation operation : operations) {
+            CapabilityResult result = operation.commit();
+            if (result == null || !result.success()) {
+                ExecutionStatus failure = result == null || result.status() == null
+                        ? UNSPECIFIED_TICK_OPERATION_FAILURE : result.status();
+                return new CapabilityTickResult(operations, failure, stateChanged);
             }
-            transaction.commit();
         }
         if (stateChanged) markCapabilityPresentationChanged();
         return new CapabilityTickResult(operations, null, stateChanged);

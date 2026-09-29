@@ -43,6 +43,9 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
@@ -277,6 +280,21 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public LongValueStorage getEnergyStorage() {
         throw new IllegalStateException("Port does not expose energy storage: " + kind().id());
+    }
+
+    /** Native handler access used by requirement execution; external capability exposure remains Task 5. */
+    public IItemHandler nativeItemHandler() {
+        throw new IllegalStateException("Port does not expose an item handler: " + kind().id());
+    }
+
+    /** Native handler access used by requirement execution; external capability exposure remains Task 5. */
+    public IFluidHandler nativeFluidHandler() {
+        throw new IllegalStateException("Port does not expose a fluid handler: " + kind().id());
+    }
+
+    /** Native handler access used by requirement execution; external capability exposure remains Task 5. */
+    public IEnergyStorage nativeEnergyStorage() {
+        throw new IllegalStateException("Port does not expose an energy storage: " + kind().id());
     }
 
     public AutoIOConfig autoIOConfig() {

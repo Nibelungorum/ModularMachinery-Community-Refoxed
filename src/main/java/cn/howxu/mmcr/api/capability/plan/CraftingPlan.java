@@ -59,7 +59,7 @@ public final class CraftingPlan {
     }
 
     public boolean commit() {
-        return commit(ignored -> { });
+        return commit(ignored -> true);
     }
 
     public boolean commit(Consumer<TransactionContext> transactionWrites) {
@@ -114,11 +114,24 @@ public final class CraftingPlan {
 
     private boolean commit(IntPredicate selector) {
         if (failure != null) return false;
-        try (Transaction transaction = Transaction.openRoot()) {
-            if (!commitOperations(transaction, selector)) return false;
-            transaction.commit();
-            return true;
+        return commitOperations(selector);
+    }
+
+    private boolean commitOperations(IntPredicate selector) {
+        for (RequirementPlan requirement : requirements) {
+            if (!selector.test(requirement.requirementIndex())) continue;
+            for (CapabilityOperation operation : requirement.operations()) {
+                CapabilityResult result = operation.commit();
+                if (result == null || !result.success()) {
+                    if (failure == null) {
+                        failure = result == null || result.status() == null
+                                ? UNSPECIFIED_OPERATION_FAILURE : result.status();
+                    }
+                    return false;
+                }
+            }
         }
+        return true;
     }
 
     private boolean commitOperations(TransactionContext transaction, IntPredicate selector) {

@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.publicapi.data.DataStorage;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -20,8 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Entry point for capability planning from a direct tick behavior.
@@ -115,11 +112,6 @@ public final class MachineIoPlan {
     }
 
     public CommitResult commit() {
-        return commit(ignored -> { });
-    }
-
-    public CommitResult commit(Consumer<TransactionContext> transactionWrites) {
-        Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (consumed) return new CommitResult(false, null);
         consumed = true;
         if (simulation == null || !simulation.successful() || simulation.plan() == null) {
@@ -127,17 +119,11 @@ public final class MachineIoPlan {
         }
         try {
             CraftingPlan plan = simulation.plan();
-            boolean successful = plan.commit(transactionWrites);
+            boolean successful = plan.commit();
             return new CommitResult(successful, successful ? null : plan.failure());
         } finally {
             consumed = true;
         }
-    }
-
-    public CommitResult commitData(Consumer<DataStorage.Transaction> transactionWrites) {
-        Objects.requireNonNull(transactionWrites, "transactionWrites");
-        return commit(transaction -> transactionWrites.accept(
-                DataStorage.Transaction.view(transaction)));
     }
 
     public List<OutputSimulation> outputSimulations() {

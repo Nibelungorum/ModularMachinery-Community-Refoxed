@@ -57,7 +57,7 @@ public final class PatternStartBatchReservation implements AutoCloseable {
         if (status != Status.RESERVED) return false;
         try (Transaction transaction = Transaction.openRoot()) {
             for (PatternStartReservation reservation : reservations) {
-                if (reservation.commitPlan(transaction)) continue;
+                if (reservation.commitPlan()) continue;
                 rollback();
                 return false;
             }

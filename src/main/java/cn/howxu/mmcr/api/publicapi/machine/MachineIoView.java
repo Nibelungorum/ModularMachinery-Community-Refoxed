@@ -4,6 +4,9 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
@@ -78,6 +81,15 @@ public final class MachineIoView {
     public List<ResourceAmount<ItemResource>> itemInputs() {
         Map<ItemResource, Long> amounts = new LinkedHashMap<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
+            ItemHandlerFacet nativeFacet = capability.facet(ItemHandlerFacet.class).orElse(null);
+            if (nativeFacet != null && nativeFacet.itemHandler() != null) {
+                var handler = nativeFacet.itemHandler();
+                for (int slot = 0; slot < handler.getSlots(); slot++) {
+                    ItemStack stack = handler.getStackInSlot(slot);
+                    if (!stack.isEmpty()) amounts.merge(ItemResource.of(stack), itemAmount(handler, slot), MachineIoView::saturatedAdd);
+                }
+                continue;
+            }
             ResourceStorage<?> storage = resourceStorage(capability, ItemResource.class);
             if (storage == null) continue;
             for (int slot = 0; slot < storage.size(); slot++) {
@@ -93,6 +105,15 @@ public final class MachineIoView {
     public List<ResourceAmount<FluidResource>> fluidInputs() {
         Map<FluidResource, Long> amounts = new LinkedHashMap<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
+            FluidHandlerFacet nativeFacet = capability.facet(FluidHandlerFacet.class).orElse(null);
+            if (nativeFacet != null && nativeFacet.fluidHandler() != null) {
+                var handler = nativeFacet.fluidHandler();
+                for (int tank = 0; tank < handler.getTanks(); tank++) {
+                    FluidStack stack = handler.getFluidInTank(tank);
+                    if (!stack.isEmpty()) amounts.merge(FluidResource.of(stack), fluidAmount(handler, tank), MachineIoView::saturatedAdd);
+                }
+                continue;
+            }
             ResourceStorage<?> storage = resourceStorage(capability, FluidResource.class);
             if (storage == null) continue;
             for (int slot = 0; slot < storage.size(); slot++) {
@@ -108,6 +129,11 @@ public final class MachineIoView {
     public long energyInput() {
         long amount = 0L;
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
+            EnergyStorageFacet nativeFacet = capability.facet(EnergyStorageFacet.class).orElse(null);
+            if (nativeFacet != null && nativeFacet.energyStorage() != null) {
+                amount = saturatedAdd(amount, energyAmount(nativeFacet.energyStorage()));
+                continue;
+            }
             LongValueStorage storage = valueStorage(capability, LongValueStorage.class);
             if (storage != null) {
                 amount = saturatedAdd(amount, Math.max(0L, storage.amount()));
@@ -145,6 +171,17 @@ public final class MachineIoView {
         ItemResource resource = ItemResource.of(stack);
         long capacity = 0L;
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
+            ItemHandlerFacet nativeFacet = capability.facet(ItemHandlerFacet.class).orElse(null);
+            if (nativeFacet != null && nativeFacet.itemHandler() != null) {
+                var handler = nativeFacet.itemHandler();
+                for (int slot = 0; slot < handler.getSlots(); slot++) {
+                    ItemStack current = handler.getStackInSlot(slot);
+                    if (handler.isItemValid(slot, stack) && (current.isEmpty() || ItemStack.isSameItemSameComponents(current, stack))) {
+                        capacity = saturatedAdd(capacity, Math.max(0L, itemCapacity(handler, slot) - itemAmount(handler, slot)));
+                    }
+                }
+                continue;
+            }
             ResourceStorage<?> storage = resourceStorage(capability, ItemResource.class);
             if (storage == null) continue;
             for (int slot = 0; slot < storage.size(); slot++) {
@@ -168,6 +205,17 @@ public final class MachineIoView {
         FluidResource resource = FluidResource.of(stack);
         long capacity = 0L;
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
+            FluidHandlerFacet nativeFacet = capability.facet(FluidHandlerFacet.class).orElse(null);
+            if (nativeFacet != null && nativeFacet.fluidHandler() != null) {
+                var handler = nativeFacet.fluidHandler();
+                for (int tank = 0; tank < handler.getTanks(); tank++) {
+                    FluidStack current = handler.getFluidInTank(tank);
+                    if (handler.isFluidValid(tank, stack) && (current.isEmpty() || FluidStack.isSameFluidSameComponents(current, stack))) {
+                        capacity = saturatedAdd(capacity, Math.max(0L, fluidCapacity(handler, tank) - fluidAmount(handler, tank)));
+                    }
+                }
+                continue;
+            }
             ResourceStorage<?> storage = resourceStorage(capability, FluidResource.class);
             if (storage == null) continue;
             for (int slot = 0; slot < storage.size(); slot++) {
@@ -185,6 +233,11 @@ public final class MachineIoView {
     public long energyOutputCapacity() {
         long capacity = 0L;
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
+            EnergyStorageFacet nativeFacet = capability.facet(EnergyStorageFacet.class).orElse(null);
+            if (nativeFacet != null && nativeFacet.energyStorage() != null) {
+                capacity = saturatedAdd(capacity, Math.max(0L, energyCapacity(nativeFacet.energyStorage()) - energyAmount(nativeFacet.energyStorage())));
+                continue;
+            }
             LongValueStorage storage = valueStorage(capability, LongValueStorage.class);
             if (storage != null) {
                 capacity = saturatedAdd(capacity, Math.max(0L, storage.capacity() - storage.amount()));
@@ -246,5 +299,35 @@ public final class MachineIoView {
 
     private static long saturatedAdd(long first, long second) {
         return second > 0L && first > Long.MAX_VALUE - second ? Long.MAX_VALUE : first + second;
+    }
+
+    private static long itemAmount(net.neoforged.neoforge.items.IItemHandler handler, int slot) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
+                ? storage.amount(slot) : handler.getStackInSlot(slot).getCount();
+    }
+
+    private static long itemCapacity(net.neoforged.neoforge.items.IItemHandler handler, int slot) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
+                ? storage.capacity(slot) : handler.getSlotLimit(slot);
+    }
+
+    private static long fluidAmount(net.neoforged.neoforge.fluids.capability.IFluidHandler handler, int tank) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.amount(tank) : handler.getFluidInTank(tank).getAmount();
+    }
+
+    private static long fluidCapacity(net.neoforged.neoforge.fluids.capability.IFluidHandler handler, int tank) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.capacity(tank) : handler.getTankCapacity(tank);
+    }
+
+    private static long energyAmount(net.neoforged.neoforge.energy.IEnergyStorage storage) {
+        return storage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler longStorage
+                ? longStorage.getAmountAsLong() : storage.getEnergyStored();
+    }
+
+    private static long energyCapacity(net.neoforged.neoforge.energy.IEnergyStorage storage) {
+        return storage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler longStorage
+                ? longStorage.getCapacityAsLong() : storage.getMaxEnergyStored();
     }
 }

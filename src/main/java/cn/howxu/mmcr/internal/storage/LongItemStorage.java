@@ -51,8 +51,12 @@ public class LongItemStorage implements IItemHandlerModifiable {
     }
 
     public long forceInsert(ItemStack stack, long amount, boolean simulate) {
+        return forceInsert(0, stack, amount, simulate);
+    }
+
+    public long forceInsert(int slot, ItemStack stack, long amount, boolean simulate) {
         if (stack == null || stack.isEmpty() || !validator.test(stack)) return 0L;
-        return storage.insertDirect(0, stack, amount, simulate);
+        return storage.insertDirect(slot, stack, amount, simulate);
     }
 
     public long forceExtract(int slot, long amount, boolean simulate) {

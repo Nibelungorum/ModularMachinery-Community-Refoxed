@@ -43,6 +43,11 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
+    public LongEnergyStorage nativeEnergyStorage() {
+        return storage;
+    }
+
+    @Override
     public LongValueStorage getEnergyStorage() {
         return storage.storage();
     }

@@ -74,13 +74,21 @@ public final class LongFluidStorage implements IFluidHandler {
     }
 
     public long forceInsert(FluidStack stack, boolean simulate) {
+        return forceInsert(0, stack, stack == null ? 0L : stack.getAmount(), simulate);
+    }
+
+    public long forceInsert(int slot, FluidStack stack, long amount, boolean simulate) {
         if (stack == null || stack.isEmpty()) return 0L;
-        return storage.insertDirect(0, stack, stack.getAmount(), simulate);
+        return storage.insertDirect(slot, stack, amount, simulate);
     }
 
     public long forceExtract(long max, boolean simulate) {
-        FluidStack resource = resource(0);
-        return resource.isEmpty() ? 0L : storage.extractDirect(0, resource, max, simulate);
+        return forceExtract(0, max, simulate);
+    }
+
+    public long forceExtract(int slot, long max, boolean simulate) {
+        FluidStack resource = resource(slot);
+        return resource.isEmpty() ? 0L : storage.extractDirect(slot, resource, max, simulate);
     }
 
     @Override

@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 
 /**
  * Machine capability backed by a long energy value storage.
@@ -45,23 +47,30 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class EnergyHatchCapability implements MachineCapability, ScalarFacet, ValueFacet<LongValueStorage>,
-        TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
+        EnergyStorageFacet, TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
     private final IOPortBlockEntity port;
     private final IOType ioType;
     private final LongValueStorage storage;
+    private final IEnergyStorage energyStorage;
     private final CapabilityView view;
     private final AsyncPlanningFacet asyncPlanning;
 
     public EnergyHatchCapability(LongValueStorage storage, IOType ioType) {
-        this(null, storage, ioType);
+        this(null, storage, null, ioType);
     }
 
     public EnergyHatchCapability(IOPortBlockEntity port, LongValueStorage storage, IOType ioType) {
+        this(port, storage, null, ioType);
+    }
+
+    public EnergyHatchCapability(IOPortBlockEntity port, LongValueStorage storage, IEnergyStorage energyStorage,
+                                 IOType ioType) {
         if (storage == null) throw new IllegalArgumentException("storage must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
+        this.energyStorage = energyStorage;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
             public Object planningIdentity() {
@@ -86,16 +95,21 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
             }
         };
         this.view = CapabilityFactories.view(type(), directions(),
-                Set.of(ScalarFacet.class, ValueFacet.class, TransferFacet.class, OperationFacet.class,
+                Set.of(ScalarFacet.class, ValueFacet.class, EnergyStorageFacet.class, TransferFacet.class, OperationFacet.class,
                         PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
-        this(port, port.getEnergyStorage(), port.ioType());
+        this(port, port.getEnergyStorage(), port.nativeEnergyStorage(), port.ioType());
     }
 
     public LongValueStorage storage() {
         return storage;
+    }
+
+    @Override
+    public IEnergyStorage energyStorage() {
+        return energyStorage;
     }
 
     @Nullable
@@ -150,6 +164,9 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
+        if (request instanceof CapabilityRequests.ValueRequest valueRequest && energyStorage != null) {
+            return ignored -> commitNative(valueRequest);
+        }
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
@@ -164,6 +181,29 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
                             "available", Long.toString(Math.max(0L, moved)),
                             "shortfall", Long.toString(Math.max(0L, valueRequest.amount() - moved))));
         };
+    }
+
+    private CapabilityResult commitNative(CapabilityRequests.ValueRequest request) {
+        long remaining = request.amount();
+        while (remaining > 0L) {
+            int chunk = (int) Math.min(remaining, Integer.MAX_VALUE);
+            long simulated = moveEnergy(chunk, request.insert(), true);
+            if (simulated != chunk) return failure(request.insert()
+                    ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+            long committed = moveEnergy(chunk, request.insert(), false);
+            if (committed != chunk) return failure(request.insert()
+                    ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+            remaining -= chunk;
+        }
+        return CapabilityResult.successful();
+    }
+
+    private long moveEnergy(long amount, boolean insert, boolean simulate) {
+        if (energyStorage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler storage) {
+            return insert ? storage.insertLong(amount, simulate) : storage.extractLong(amount, simulate);
+        }
+        int requested = (int) Math.min(amount, Integer.MAX_VALUE);
+        return insert ? energyStorage.receiveEnergy(requested, simulate) : energyStorage.extractEnergy(requested, simulate);
     }
 
     @Override

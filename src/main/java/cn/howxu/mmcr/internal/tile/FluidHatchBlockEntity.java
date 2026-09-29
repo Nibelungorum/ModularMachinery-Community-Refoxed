@@ -39,6 +39,11 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
+    public LongFluidStorage nativeFluidHandler() {
+        return storage;
+    }
+
+    @Override
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()

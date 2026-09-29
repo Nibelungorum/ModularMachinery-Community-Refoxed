@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
@@ -89,6 +90,9 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.item() == null) {
             return RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT);
+        }
+        if (capabilities.stream().anyMatch(capability -> capability.facet(ItemHandlerFacet.class).isPresent())) {
+            return NativeRequirementPlanning.item(requirement, capabilities, context);
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
@@ -75,6 +76,9 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
+        if (capabilities.stream().anyMatch(capability -> capability.facet(FluidHandlerFacet.class).isPresent())) {
+            return NativeRequirementPlanning.fluid(requirement, capabilities, context);
+        }
         IOType direction = IOType.valueOf(requirement.io().name());
         long maximum = fluidMaximum(requirement, plannedCapabilities, parallelism, allowPartialOutput);
         if (maximum <= 0) {

@@ -10,6 +10,9 @@ import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
@@ -34,34 +37,34 @@ public final class BuiltinCapabilityDefinitions {
     public static void register() {
         CapabilityRegistry.register(new CapabilityDefinition(
                 ITEM_TYPE,
-                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                Set.of(ResourceFacet.class, ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
                         TransferFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createItem));
         CapabilityRegistry.register(new CapabilityDefinition(
                 FLUID_TYPE,
-                Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                Set.of(ResourceFacet.class, FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
                         TransferFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createFluid));
         CapabilityRegistry.register(new CapabilityDefinition(
                 ENERGY_TYPE,
-                Set.of(ScalarFacet.class, ValueFacet.class, SyncFacet.class, TransferFacet.class,
+                Set.of(ScalarFacet.class, ValueFacet.class, EnergyStorageFacet.class, SyncFacet.class, TransferFacet.class,
                         OperationFacet.class, PresentationFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createEnergy));
     }
 
     private static MachineCapability createItem(CapabilityCreationContext context) {
         IOPortBlockEntity port = port(context);
-        return new ItemBusCapability(port, port.itemStorage(), context.ioType());
+        return new ItemBusCapability(port, port.nativeItemHandler(), context.ioType());
     }
 
     private static MachineCapability createFluid(CapabilityCreationContext context) {
         IOPortBlockEntity port = port(context);
-        return new FluidHatchCapability(port, port.fluidStorage(), context.ioType());
+        return new FluidHatchCapability(port, port.nativeFluidHandler(), context.ioType());
     }
 
     private static MachineCapability createEnergy(CapabilityCreationContext context) {
         IOPortBlockEntity port = port(context);
-        return new EnergyHatchCapability(port, port.getEnergyStorage(), context.ioType());
+        return new EnergyHatchCapability(port, port.getEnergyStorage(), port.nativeEnergyStorage(), context.ioType());
     }
 
     private static IOPortBlockEntity port(CapabilityCreationContext context) {
