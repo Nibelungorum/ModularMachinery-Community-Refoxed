@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -18,7 +19,6 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
 import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
@@ -49,9 +49,11 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
+import mekanism.api.Action;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
-import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.ChemicalStack;
+import mekanism.api.chemical.IChemicalHandler;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
@@ -70,13 +72,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.network.IContainerFactory;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Comparator;
@@ -101,20 +98,31 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         @Override
         default CapabilityOperation prepare(CapabilityRequest request) {
             if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
-                return transaction -> capabilityFailure(this, BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+                return (NativeCapabilityOperation) () -> capabilityFailure(this, BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
             if (!view().directions().supports(resourceRequest.ioType())) {
                 FailureReason reason = resourceRequest.ioType() == IOType.OUTPUT
                         ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
                         : MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
-                return transaction -> capabilityFailure(this, reason);
+                return (NativeCapabilityOperation) () -> capabilityFailure(this, reason);
             }
-            return transaction -> {
+            return (NativeCapabilityOperation) () -> {
                 for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
-                    if (!(action.resource() instanceof ChemicalResource resource)) {
+                    if (!(action.resource() instanceof ChemicalStack resource) || resource.isEmpty()) {
                         return capabilityFailure(this, MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
                     }
-                    long moved = transfer(chemicalTank(), resource, action.amount(), transaction, action.insert());
+                    long moved = transfer(chemicalTank(), ChemicalPortCapability.identity(resource), action.amount(),
+                            action.insert(), Action.SIMULATE);
+                    if (moved != action.amount()) {
+                        return capabilityFailure(this, action.insert()
+                                ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
+                                : MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+                    }
+                }
+                for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
+                    ChemicalStack resource = (ChemicalStack) action.resource();
+                    long moved = transfer(chemicalTank(), ChemicalPortCapability.identity(resource), action.amount(),
+                            action.insert(), Action.EXECUTE);
                     if (moved != action.amount()) {
                         return capabilityFailure(this, action.insert()
                                 ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
@@ -379,8 +387,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (port == null) return false;
             IChemicalTank tank = port.chemicalTank();
             return capability.directions().supports(IOType.OUTPUT)
-                    ? tank.amountAsLong() > 0L
-                    : tank.amountAsLong() < tank.capacityAsLong(tank.resource());
+                    ? tank.getStored() > 0L
+                    : tank.getStored() < tank.getCapacity();
         }
 
         @Override
@@ -395,50 +403,32 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (port == null || transfer == null) {
                 return transferBlocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
-            if (context.eject() ? port.chemicalTank().amountAsLong() <= 0L : !hasWork(port)) {
+            if (context.eject() ? port.chemicalTank().getStored() <= 0L : !hasWork(port)) {
                 return transferBlocked(BuiltinFailureReasons.NO_WORK);
             }
-            ResourceHandler<ChemicalResource> adjacent = adjacentChemical(context.capability(), context.side());
+            IChemicalHandler adjacent = adjacentChemical(context.capability(), context.side());
             if (adjacent == null) return transferBlocked(BuiltinFailureReasons.NO_TARGET);
-            ResourceHandler<ChemicalResource> internal = ChemicalPortCapability.resourceHandler(port.chemicalTank());
-            int limit = (int) Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(),
-                    Integer.MAX_VALUE);
-            ChemicalResource selected = context.ejectionResource() instanceof ChemicalResource chemical
-                    ? chemical : null;
-            Predicate<ChemicalResource> filter = selected == null ? resource -> true : selected::equals;
+            long limit = Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(), Long.MAX_VALUE);
             long moved = context.eject()
-                    ? moveResource(internal, adjacent, filter, limit, context)
+                    ? moveChemical(port.chemicalTank(), adjacent, limit, context.simulate())
                     : context.ioType() == IOType.INPUT
-                    ? moveResource(adjacent, internal, resource -> true, limit, context)
-                    : moveResource(internal, adjacent, resource -> true, limit, context);
+                    ? moveChemical(adjacent, port.chemicalTank(), limit, context.simulate())
+                    : moveChemical(port.chemicalTank(), adjacent, limit, context.simulate());
             return TransferResult.moved(moved);
         }
 
         private static boolean hasWork(ChemicalPort port) {
             IChemicalTank tank = port.chemicalTank();
-            return tank.amountAsLong() < tank.capacityAsLong(tank.resource());
+            return tank.getStored() < tank.getCapacity();
         }
 
-        private static ResourceHandler<ChemicalResource> adjacentChemical(MachineCapability capability,
-                                                                            Direction side) {
+        private static IChemicalHandler adjacentChemical(MachineCapability capability, Direction side) {
             TransferFacet transfer = transferFacet(capability);
             if (transfer == null || transfer.level() == null || side == null) return null;
             return transfer.level().getCapability(Capabilities.CHEMICAL.block(),
                     transfer.position().relative(side), side.getOpposite());
         }
 
-        private static long moveResource(ResourceHandler<ChemicalResource> from,
-                                         ResourceHandler<ChemicalResource> to, Predicate<ChemicalResource> filter,
-                                         int limit,
-                                         TransferContext context) {
-            if (limit <= 0) return 0L;
-            if (!context.simulate()) {
-                return ResourceHandlerUtil.move(from, to, filter, limit, context.transaction());
-            }
-            try (Transaction transaction = Transaction.open(context.transaction())) {
-                return ResourceHandlerUtil.move(from, to, filter, limit, transaction);
-            }
-        }
     }
 
     private static TransferFacet transferFacet(MachineCapability capability) {
@@ -465,8 +455,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     private static final class ChemicalHandler implements RequirementHandler<LoadedChemicalRequirement> {
-        private final Map<ChemicalPort, ResourceStorage<ChemicalResource>> storages = new IdentityHashMap<>();
-
         @Override
         public RequirementPlan plan(LoadedChemicalRequirement requirement, List<MachineCapability> capabilities,
                                     PlanningContext context) {
@@ -583,34 +571,32 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             long parallelism = input ? consumed.consumedBatches(rawParallelism) : rawParallelism;
             long amount = RequirementHandlerSupport.scaled(requirement.ingredient().amount(), parallelism);
             long requested = !input ? amount : 0L;
-            ChemicalResource requestedResource = matcher.exactHolder() == null ? null
-                    : ChemicalResource.of(matcher.exactHolder());
-            Map<MachineCapability, List<CapabilityRequests.ResourceAction<ChemicalResource>>> actions =
+            ChemicalStack requestedResource = matcher.exactHolder() == null ? null
+                    : new ChemicalStack(matcher.exactHolder(), 1L);
+            Map<MachineCapability, List<CapabilityRequests.ResourceAction<ChemicalStack>>> actions =
                     new LinkedHashMap<>();
             long remaining = amount;
             for (ChemicalPort port : ports) {
-                ResourceStorage<ChemicalResource> storage = storage(port);
-                long currentAmount = reservations.amount(storage, 0);
-                Object reservedResource = reservations.resource(storage, 0);
+                ChemicalStack current = ChemicalPortCapability.identity(port.chemicalTank().getStack());
+                long currentAmount = port.chemicalTank().getStored();
                 if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                    if (!(reservedResource instanceof ChemicalResource resource) || resource.isEmpty()
-                            || currentAmount <= 0L || !matcher.matches(resource.typeHolder())
-                            || !port.chemicalTank().isCurrentValidForExtraction(AutomationType.INTERNAL)) continue;
-                    long moved = Math.min(remaining, currentAmount);
-                    if (reservations.reserveExtract(storage, 0, resource, moved)) {
+                    if (current.isEmpty() || !matcher.matches(current.getChemicalHolder())
+                            || port.chemicalTank().extract(1L, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) continue;
+                    long available = reservations.outputAvailable(port, current, currentAmount);
+                    long moved = Math.min(remaining, available);
+                    if (reservations.reserveOutput(port, current, moved)) {
                         actions.computeIfAbsent(port, ignored -> new ArrayList<>())
-                                .add(new CapabilityRequests.ResourceAction<>(0, resource, moved, false));
+                                .add(new CapabilityRequests.ResourceAction<>(0, current, moved, false));
                         remaining -= moved;
                     }
                 } else {
-                    if (requestedResource == null || reservedResource instanceof ChemicalResource resource
-                            && !resource.isEmpty() && !resource.equals(requestedResource)) continue;
-                    if (!port.chemicalTank().getAttributeValidator().process(requestedResource.typeHolder())
-                            || !port.chemicalTank().isValidForInsertion(requestedResource, AutomationType.INTERNAL)) continue;
-                    long capacity = Math.max(0L,
-                            port.chemicalTank().capacityAsLong(requestedResource) - currentAmount);
+                    if (requestedResource == null || !current.isEmpty()
+                            && !ChemicalStack.isSameChemical(current, requestedResource)
+                            || !port.chemicalTank().isValid(requestedResource)) continue;
+                    long capacity = reservations.outputAvailable(port, requestedResource,
+                            Math.max(0L, port.chemicalTank().getCapacity() - currentAmount));
                     long moved = Math.min(remaining, capacity);
-                    if (moved > 0L && reservations.reserveInsert(storage, 0, requestedResource, moved)) {
+                    if (moved > 0L && reservations.reserveOutput(port, requestedResource, moved)) {
                         actions.computeIfAbsent(port, ignored -> new ArrayList<>())
                                 .add(new CapabilityRequests.ResourceAction<>(0, requestedResource, moved, true));
                         remaining -= moved;
@@ -637,39 +623,33 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     RequirementHandlerSupport.outputSimulation(requested, amount - remaining));
         }
 
-        private ResourceStorage<ChemicalResource> storage(ChemicalPort port) {
-            return storages.computeIfAbsent(port, ChemicalPortStorage::new);
-        }
-
         private long inputMaximum(ChemicalMatcher matcher, List<ChemicalPort> ports,
-                                  long amount, long requested) {
+                                   long amount, long requested) {
             long available = 0L;
             for (ChemicalPort port : ports) {
-                ResourceStorage<ChemicalResource> storage = storage(port);
-                ChemicalResource resource = storage.resource(0);
-                if (resource == null || resource.isEmpty() || !matcher.matches(resource.typeHolder())
-                        || !port.chemicalTank().isCurrentValidForExtraction(AutomationType.INTERNAL)) continue;
-                available = RequirementHandlerSupport.saturatingAdd(available, storage.amount(0));
+                ChemicalStack resource = port.chemicalTank().getStack();
+                if (resource.isEmpty() || !matcher.matches(resource.getChemicalHolder())
+                        || port.chemicalTank().extract(1L, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) continue;
+                available = RequirementHandlerSupport.saturatingAdd(available, port.chemicalTank().getStored());
             }
             return Math.min(requested, available / amount);
         }
 
         private OutputCapacity outputCapacity(Holder<Chemical> holder, List<ChemicalPort> ports) {
-            ChemicalResource resource = ChemicalResource.of(holder);
+            ChemicalStack resource = new ChemicalStack(holder, 1L);
             long capacity = 0L;
             boolean rejected = false;
             for (ChemicalPort port : ports) {
                 IChemicalTank tank = port.chemicalTank();
-                if (!tank.getAttributeValidator().process(holder)) {
+                if (!tank.getAttributeValidator().process(resource)) {
                     rejected |= resource.isRadioactive();
                     continue;
                 }
-                if (!tank.isValidForInsertion(resource, AutomationType.INTERNAL)) continue;
-                ResourceStorage<ChemicalResource> storage = storage(port);
-                ChemicalResource current = storage.resource(0);
-                if (current != null && !current.isEmpty() && !current.equals(resource)) continue;
+                if (!tank.isValid(resource)) continue;
+                ChemicalStack current = tank.getStack();
+                if (!current.isEmpty() && !ChemicalStack.isSameChemical(current, resource)) continue;
                 capacity = RequirementHandlerSupport.saturatingAdd(capacity,
-                        Math.max(0L, tank.capacityAsLong(resource) - storage.amount(0)));
+                        Math.max(0L, tank.getCapacity() - tank.getStored()));
             }
             return new OutputCapacity(capacity, rejected);
         }
@@ -680,9 +660,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     .filter(port -> port.view().directions().supports(direction)).toList();
         }
 
-        private static Predicate<Object> chemicalMatcher(ChemicalMatcher matcher) {
-            return resource -> resource instanceof ChemicalResource chemical
-                    && !chemical.isEmpty() && matcher.matches(chemical.typeHolder());
+        private static java.util.function.Predicate<Object> chemicalMatcher(ChemicalMatcher matcher) {
+            return resource -> resource instanceof ChemicalStack chemical
+                    && !chemical.isEmpty() && matcher.matches(chemical.getChemicalHolder());
         }
     }
 
@@ -697,9 +677,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     .filter(port -> port.view().directions().supports(direction)).toList();
             if (requirement.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE) {
                 boolean sufficient = ports.stream().anyMatch(port ->
-                        port.heatHandler().getTemperature() >= requirement.heat().value());
+                    port.heatHandler().getTotalTemperature() >= requirement.heat().value());
                 double availableTemperature = ports.stream()
-                        .mapToDouble(port -> port.heatHandler().getTemperature())
+                        .mapToDouble(port -> port.heatHandler().getTotalTemperature())
                         .max().orElse(0D);
                 return sufficient
                         ? new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null)
@@ -746,9 +726,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             }
             if (amount == 0D) return new RequirementPlan.OperationPlan(List.of(), null);
             HeatPort port = ports.getFirst();
-            CapabilityOperation operation = transaction -> {
+            CapabilityOperation operation = (NativeCapabilityOperation) () -> {
                 try {
-                    port.heatHandler().handleHeat(amount, transaction);
+                    port.heatHandler().handleHeat(amount);
                 } catch (RuntimeException exception) {
                     return capabilityFailure(requirement.type().id(), MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
                             Map.of("requested_heat", Long.toString(requestedHeat(requirement.heat().value(), parallelism))));
@@ -781,60 +761,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     private record OutputCapacity(long amount, boolean radioactivityRejected) {
     }
 
-    private record ChemicalPortStorage(ChemicalPort port) implements ResourceStorage<ChemicalResource> {
-        @Override
-        public Class<ChemicalResource> resourceType() {
-            return ChemicalResource.class;
-        }
-
-        @Override
-        public int size() {
-            return 1;
-        }
-
-        @Override
-        public ChemicalResource resource(int slot) {
-            checkSlot(slot);
-            return port.chemicalTank().resource();
-        }
-
-        @Override
-        public long amount(int slot) {
-            checkSlot(slot);
-            return port.chemicalTank().amountAsLong();
-        }
-
-        @Override
-        public long capacity(int slot, ChemicalResource resource) {
-            checkSlot(slot);
-            return port.chemicalTank().capacityAsLong(resource == null
-                    ? port.chemicalTank().resource() : resource);
-        }
-
-        @Override
-        public boolean isValid(int slot, ChemicalResource resource) {
-            checkSlot(slot);
-            return !resource.isEmpty() && port.chemicalTank().getAttributeValidator().process(resource.typeHolder())
-                    && port.chemicalTank().isValid(resource);
-        }
-
-        @Override
-        public long insert(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
-            checkSlot(slot);
-            return transfer(port.chemicalTank(), resource, amount, transaction, true);
-        }
-
-        @Override
-        public long extract(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
-            checkSlot(slot);
-            return transfer(port.chemicalTank(), resource, amount, transaction, false);
-        }
-
-        private static void checkSlot(int slot) {
-            if (slot != 0) throw new IndexOutOfBoundsException("chemical port slot must be zero");
-        }
-    }
-
     private static CapabilityResult capabilityFailure(MachineCapability capability, FailureReason reason) {
         return capabilityFailure(capability.type().id(), reason, Map.of());
     }
@@ -846,19 +772,28 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return CapabilityResult.failure(ExecutionStatus.blocked(source, source, occurrence));
     }
 
-    private static long transfer(IChemicalTank tank, ChemicalResource resource, long amount,
-                                 TransactionContext transaction, boolean insert) {
-        long remaining = amount;
-        long movedTotal = 0L;
-        while (remaining > 0L) {
-            int request = (int) Math.min(remaining, Integer.MAX_VALUE);
-            int moved = insert ? tank.insert(resource, request, transaction, AutomationType.INTERNAL)
-                    : tank.extract(resource, request, transaction, AutomationType.INTERNAL);
-            if (moved <= 0) break;
-            movedTotal += moved;
-            remaining -= moved;
+    static long transfer(IChemicalTank tank, ChemicalStack identity, long amount, boolean insert, Action action) {
+        if (amount <= 0L || identity.isEmpty()) return 0L;
+        if (insert) {
+            ChemicalStack remainder = tank.insert(identity.copyWithAmount(amount), action, AutomationType.INTERNAL);
+            return amount - remainder.getAmount();
         }
-        return movedTotal;
+        ChemicalStack current = tank.getStack();
+        if (current.isEmpty() || !ChemicalStack.isSameChemical(current, identity)) return 0L;
+        return tank.extract(amount, action, AutomationType.INTERNAL).getAmount();
+    }
+
+    private static long moveChemical(IChemicalHandler source, IChemicalHandler destination, long limit,
+                                     boolean simulate) {
+        if (limit <= 0L) return 0L;
+        ChemicalStack extracted = source.extractChemical(limit, Action.SIMULATE);
+        if (extracted.isEmpty()) return 0L;
+        ChemicalStack remainder = destination.insertChemical(extracted, Action.SIMULATE);
+        long moved = extracted.getAmount() - remainder.getAmount();
+        if (moved <= 0L || simulate) return Math.max(0L, moved);
+        ChemicalStack committed = source.extractChemical(moved, Action.EXECUTE);
+        if (committed.getAmount() != moved) return 0L;
+        return moved - destination.insertChemical(committed, Action.EXECUTE).getAmount();
     }
 
     private static long requestedHeat(double heat, long parallelism) {

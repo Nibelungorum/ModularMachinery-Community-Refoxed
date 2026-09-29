@@ -15,13 +15,11 @@ import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import mekanism.common.capabilities.heat.ITileHeatHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -36,24 +34,29 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     private final BasicHeatCapacitor heatCapacitor;
     private final IHeatHandler externalHeatHandler = new IHeatHandler() {
         @Override
-        public double getTemperature() {
+        public int getHeatCapacitorCount() {
+            return 1;
+        }
+
+        @Override
+        public double getTemperature(int capacitor) {
             return heatCapacitor.getTemperature();
         }
 
         @Override
-        public double getInverseConduction() {
+        public double getInverseConduction(int capacitor) {
             return ioType() == IOType.OUTPUT ? OUTPUT_INVERSE_CONDUCTION : heatCapacitor.getInverseConduction();
         }
 
         @Override
-        public double getHeatCapacity() {
+        public double getHeatCapacity(int capacitor) {
             return heatCapacitor.getHeatCapacity();
         }
 
         @Override
-        public void handleHeat(double transfer, TransactionContext transaction) {
+        public void handleHeat(int capacitor, double transfer) {
             if (ioType() == IOType.INPUT && transfer < 0D || ioType() == IOType.OUTPUT && transfer > 0D) return;
-            heatCapacitor.handleHeat(transfer, transaction);
+            heatCapacitor.handleHeat(transfer);
         }
     };
     private CapabilitySnapshot capabilitySnapshot;
@@ -82,12 +85,12 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     }
 
     @Override
-    public @Nullable IHeatCapacitor getHeatCapacitor(@Nullable Direction side) {
-        if (side == null) return heatCapacitor;
+    public List<IHeatCapacitor> getHeatCapacitors(@Nullable Direction side) {
+        if (side == null) return List.of(heatCapacitor);
         boolean exposed = kind().definition().bindings().stream()
                 .filter(binding -> binding.type().id().equals(MekanismRecipeTypes.HEAT))
                 .anyMatch(binding -> isNativeSideExposed(binding, side));
-        return exposed ? heatCapacitor : null;
+        return exposed ? List.of(heatCapacitor) : List.of();
     }
 
     @Override
@@ -102,18 +105,19 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     }
 
     @Override
-    public HeatAPI.HeatTransfer simulate(TransactionContext transaction) {
-        double adjacent = ioType() == IOType.OUTPUT ? simulateAdjacent(transaction) : 0D;
+    public HeatAPI.HeatTransfer simulate() {
+        double adjacent = ioType() == IOType.OUTPUT ? simulateAdjacent() : 0D;
         double environment = 0D;
         for (Direction side : Direction.values()) {
-            IHeatCapacitor capacitor = getHeatCapacitor(side);
-            if (capacitor == null) continue;
+            List<IHeatCapacitor> capacitors = getHeatCapacitors(side);
+            if (capacitors.isEmpty()) continue;
+            IHeatCapacitor capacitor = capacitors.getFirst();
             double temperatureDifference = capacitor.getTemperature() - getAmbientTemperature(side);
             if (temperatureDifference <= 0D) continue;
             double inverseConduction = HeatAPI.AIR_INVERSE_COEFFICIENT
                     + capacitor.getInverseInsulation() + capacitor.getInverseConduction();
             double temperatureTransfer = temperatureDifference / inverseConduction;
-            capacitor.handleHeat(-temperatureTransfer * capacitor.getHeatCapacity(), transaction);
+            capacitor.handleHeat(-temperatureTransfer * capacitor.getHeatCapacity());
             environment += temperatureTransfer;
         }
         return new HeatAPI.HeatTransfer(adjacent, environment);
@@ -123,10 +127,7 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     protected void tick() {
         super.tick();
         if (level == null || level.isClientSide()) return;
-        try (Transaction transaction = Transaction.openRoot()) {
-            simulate(transaction);
-            transaction.commit();
-        }
+        simulate();
     }
 
     @Override
@@ -160,19 +161,22 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     public abstract IOPortKind kind();
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
-            input.child("heat").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                    .forEach(facet -> facet.load(child)));
+            super.loadAdditional(input, registries);
+            capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(input.getCompound(facet.stateKey()), registries));
         } finally {
             endLoadingAdditional();
         }
@@ -185,18 +189,13 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
         }
 
         @Override
-        public void save(ValueOutput output) {
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
             output.putDouble("stored_heat", heatCapacitor.getHeat());
         }
 
         @Override
-        public void load(ValueInput input) {
-            // Mekanism 10.8 serializes heat_capacity from the heat value. Ports have a fixed capacity,
-            // so retain it and only restore the stored heat from either the new or legacy data shape.
-            double heat = input.getDoubleOr("stored_heat", input.read("state", IHeatCapacitor.CapacitorState.CODEC)
-                    .map(IHeatCapacitor.CapacitorState::heat)
-                    .orElse(heatCapacitor.getHeat()));
-            heatCapacitor.setHeat(heat, null);
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            if (input.contains("stored_heat")) heatCapacitor.setHeat(input.getDouble("stored_heat"));
         }
     }
 }

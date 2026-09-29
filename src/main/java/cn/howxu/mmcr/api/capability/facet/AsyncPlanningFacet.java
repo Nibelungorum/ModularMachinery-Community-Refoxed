@@ -106,8 +106,11 @@ public abstract class AsyncPlanningFacet implements CapabilityFacet {
      * @param transaction transaction used to apply the operation
      * @return the operation result
      */
-    protected abstract CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                              TransactionContext transaction);
+    protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                     TransactionContext transaction) {
+        if (supportsNativeExecution()) return commitNativeOnServerThread(operation);
+        throw new UnsupportedOperationException("Async operation requires the legacy TransactionContext boundary");
+    }
 
     /** Applies an operation after the no-transaction entry point checked the server thread. */
     protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {

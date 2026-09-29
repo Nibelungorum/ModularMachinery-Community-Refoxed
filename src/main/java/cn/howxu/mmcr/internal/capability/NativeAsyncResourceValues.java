@@ -5,7 +5,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
-import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.ChemicalStack;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -49,15 +49,16 @@ public final class NativeAsyncResourceValues {
         return stack;
     }
 
-    public static AsyncResourceValue chemical(ChemicalResource resource) {
-        return new AsyncResourceValue(ResourceLocation.parse(resource.typeHolder().getRegisteredName()), "");
+    public static AsyncResourceValue chemical(ChemicalStack stack) {
+        if (stack.isEmpty()) throw new IllegalArgumentException("Chemical resource must not be empty");
+        return new AsyncResourceValue(ResourceLocation.parse(stack.getChemicalHolder().getRegisteredName()), "");
     }
 
-    public static ChemicalResource chemical(AsyncResourceValue value) {
+    public static ChemicalStack chemical(AsyncResourceValue value) {
         Holder.Reference<Chemical> chemical = MekanismAPI.CHEMICAL_REGISTRY.get(
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, value.resourceId()))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown chemical resource: " + value.resourceId()));
-        return ChemicalResource.of(chemical);
+        return new ChemicalStack(chemical, 1L);
     }
 
     private static String patch(DataComponentPatch patch) {

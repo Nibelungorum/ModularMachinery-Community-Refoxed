@@ -8,17 +8,15 @@ import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.chemical.BasicChemicalTank;
-import mekanism.api.chemical.ChemicalResource;
 import mekanism.api.chemical.IChemicalTank;
-import mekanism.api.functions.ConstantPredicates;
+import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import mekanism.api.radiation.IRadiationManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.ResourceHandler;
 
 import java.util.List;
 
@@ -35,33 +33,27 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
                                       IOPortKind kind, long capacity, boolean radioactive) {
         super(type, pos, state);
         this.radioactive = radioactive;
-        this.chemicalTank = radioactive
-                ? radioactiveChemicalTank(capacity, this::markChemicalChanged)
-                : normalChemicalTank(capacity, this::markChemicalChanged);
+        this.chemicalTank = chemicalTank(capacity, radioactive, kind.ioType(), this::markChemicalChanged);
     }
 
     public boolean isRadioactive() {
         return radioactive;
     }
 
-    public static IChemicalTank normalChemicalTank(long capacity, IContentsListener listener) {
-        return BasicChemicalTank.createAllValid(capacity,
-                ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrueBi(),
-                resource -> !resource.value().isRadioactive(), listener);
-    }
-
-    public static IChemicalTank radioactiveChemicalTank(long capacity, IContentsListener listener) {
-        return BasicChemicalTank.createAllValid(capacity,
-                ConstantPredicates.alwaysTrueBi(), ConstantPredicates.alwaysTrueBi(),
-                resource -> resource.value().isRadioactive(), listener);
+    private static IChemicalTank chemicalTank(long capacity, boolean radioactive, IOType ioType,
+                                              IContentsListener listener) {
+        return BasicChemicalTank.createModern(capacity,
+                (stack, automation) -> automation != AutomationType.EXTERNAL || ioType != IOType.INPUT,
+                (stack, automation) -> automation != AutomationType.EXTERNAL || ioType != IOType.OUTPUT,
+                stack -> stack.isRadioactive() == radioactive, ChemicalAttributeValidator.ALWAYS_ALLOW, listener);
     }
 
     public IChemicalTank chemicalTank() {
         return chemicalTank;
     }
 
-    public ResourceHandler<ChemicalResource> chemicalHandler(Direction side) {
-        return ChemicalPortCapability.resourceHandler(chemicalTank, AutomationType.EXTERNAL, ioType());
+    public IChemicalTank chemicalHandler(Direction side) {
+        return chemicalTank;
     }
 
     @Override
@@ -86,7 +78,7 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
     public void preRemoveSideEffects(BlockPos pos, BlockState state) {
         if (level != null && !level.isClientSide() && IRadiationManager.INSTANCE.isRadiationEnabled()) {
             IRadiationManager.INSTANCE.dumpRadiation(level, worldPosition,
-                    chemicalTank.resource(), chemicalTank.amountAsLong());
+                    chemicalTank.getStack(), chemicalTank.getStored());
         }
         super.preRemoveSideEffects(pos, state);
     }
@@ -104,19 +96,22 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
     public abstract IOPortKind kind();
 
     @Override
-    protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        capabilitySnapshot().facets(PersistenceFacet.class)
-                .forEach(facet -> facet.save(output.child(facet.stateKey())));
+    protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        capabilitySnapshot().facets(PersistenceFacet.class).forEach(facet -> {
+            CompoundTag state = new CompoundTag();
+            facet.save(state, registries);
+            output.put(facet.stateKey(), state);
+        });
     }
 
     @Override
-    protected void loadAdditional(ValueInput input) {
+    protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         beginLoadingAdditional();
         try {
-            super.loadAdditional(input);
-            input.child("chemical").ifPresent(child -> capabilitySnapshot().facets(PersistenceFacet.class)
-                    .forEach(facet -> facet.load(child)));
+            super.loadAdditional(input, registries);
+            capabilitySnapshot().facets(PersistenceFacet.class)
+                    .forEach(facet -> facet.load(input.getCompound(facet.stateKey()), registries));
         } finally {
             endLoadingAdditional();
         }
@@ -129,13 +124,13 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
         }
 
         @Override
-        public void save(ValueOutput output) {
-            chemicalTank.serialize(output);
+        public void save(CompoundTag output, HolderLookup.Provider registries) {
+            output.merge(chemicalTank.serializeNBT(registries));
         }
 
         @Override
-        public void load(ValueInput input) {
-            chemicalTank.deserialize(input);
+        public void load(CompoundTag input, HolderLookup.Provider registries) {
+            chemicalTank.deserializeNBT(registries, input);
         }
     }
 }

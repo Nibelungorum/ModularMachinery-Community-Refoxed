@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -28,7 +29,6 @@ import cn.howxu.mmcr.util.IOType;
 import mekanism.api.heat.IHeatCapacitor;
 import mekanism.api.heat.IHeatHandler;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.List;
 import java.util.Map;
@@ -71,8 +71,12 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
             }
 
             @Override
-            protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
-                                                              TransactionContext transaction) {
+            public boolean supportsNativeExecution() {
+                return true;
+            }
+
+            @Override
+            protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
                 if (!(operation instanceof AsyncCapabilityOperation.Heat heat)) {
                     return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
                 }
@@ -82,7 +86,7 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
                             : failure(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
                 }
                 try {
-                    heatCapacitor.handleHeat(heat.value(), transaction);
+                    heatCapacitor.handleHeat(heat.value());
                     return CapabilityResult.successful();
                 } catch (RuntimeException exception) {
                     return failure(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED);
@@ -131,9 +135,9 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
-            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            return (NativeCapabilityOperation) () -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> {
+        return (NativeCapabilityOperation) () -> {
             double amount = valueRequest.amount();
             if (!valueRequest.insert() && heatCapacitor.getHeat() < amount) {
                 double available = Math.max(0D, heatCapacitor.getHeat());
@@ -143,7 +147,7 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
                                 "shortfall", Double.toString(Math.max(0D, amount - available))));
             }
             try {
-                heatCapacitor.handleHeat(valueRequest.insert() ? amount : -amount, transaction);
+                heatCapacitor.handleHeat(valueRequest.insert() ? amount : -amount);
             } catch (RuntimeException exception) {
                 return failure(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
                         Map.of("requested_heat", Long.toString(valueRequest.amount())));
@@ -174,7 +178,7 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
                 || capacity != heatCapacitor.getHeatCapacity()) {
             throw new IllegalArgumentException("Invalid heat sync state");
         }
-        heatCapacitor.setHeat(heat, null);
+        heatCapacitor.setHeat(heat);
     }
 
     private CapabilityResult failure(FailureReason reason) {
