@@ -20,8 +20,9 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.*;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -353,14 +354,19 @@ class AE2InputInterfaceKindTest {
         assertThat(capabilities).hasSize(2)
                 .extracting(capability -> capability.type().id())
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(capabilities.stream()
+                .filter(capability -> capability.type().id().equals(PortFamilyIds.ITEM))
+                .findFirst().orElseThrow().facet(ItemHandlerFacet.class))
+                .get().extracting(ItemHandlerFacet::itemHandler).isSameAs(entity.nativeItemHandler());
+        assertThat(capabilities.stream()
+                .filter(capability -> capability.type().id().equals(PortFamilyIds.FLUID))
+                .findFirst().orElseThrow().facet(FluidHandlerFacet.class))
+                .get().extracting(FluidHandlerFacet::fluidHandler).isSameAs(entity.nativeFluidHandler());
         assertThat(capabilities).allSatisfy(capability -> {
             assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
             assertThat(capability.directions().supports(IOType.OUTPUT)).isFalse();
-            assertThat(capability.facet(ResourceFacet.class)).isPresent();
             assertThat(capability.facet(OperationFacet.class)).isPresent();
         });
-        assertThat(entity.nativeItemHandler()).isNotNull();
-        assertThat(entity.nativeFluidHandler()).isNotNull();
     }
 
     @Test
