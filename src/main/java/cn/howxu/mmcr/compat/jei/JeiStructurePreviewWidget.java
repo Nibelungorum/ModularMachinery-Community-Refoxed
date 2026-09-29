@@ -72,6 +72,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
     @Override public ScreenRectangle getScreenRectangle() { return new ScreenRectangle(x, y, LAYOUT_WIDTH, height + 54); }
+    @Override public ScreenRectangle getArea() { return getScreenRectangle(); }
 
     @Override
     public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
