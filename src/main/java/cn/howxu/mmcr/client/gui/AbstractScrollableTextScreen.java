@@ -28,7 +28,10 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
 
     protected AbstractScrollableTextScreen(M menu, Inventory inventory,
                                            Component title, int imageWidth, int imageHeight) {
-        super(menu, inventory, title, imageWidth, imageHeight);
+        super(menu, inventory, title);
+        this.imageWidth = imageWidth;
+        this.imageHeight = imageHeight;
+        this.inventoryLabelY = imageHeight - 94;
     }
 
     static int visibleLineCount(int viewportHeight, float scale, int lineSpacing, int fontLineHeight) {

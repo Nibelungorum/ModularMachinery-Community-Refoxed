@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -90,7 +91,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected void extractLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
         graphics.text(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
@@ -106,7 +107,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         extractTooltip(graphics, mouseX, mouseY);
     }
 
-    private void renderScrollableText(GuiGraphicsExtractor graphics, int x) {
+    private void renderScrollableText(GuiGraphics graphics, int x) {
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();

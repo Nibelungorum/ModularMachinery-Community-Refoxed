@@ -9,6 +9,7 @@ import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -294,7 +295,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+    public void extractRenderState(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         scrollOffset = clampScrollOffset(scrollOffset, menu.threads().size());
         int visibleThreadCount = visibleThreadCount(menu.threads().size());

@@ -158,6 +158,12 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderTooltip(graphics, mouseX, mouseY);
+    }
+
+    @Override
     protected void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
         for (TooltipEntry entry : tooltipEntries) {
             if (contains(entry.x(), entry.y(), entry.width(), entry.height(), mouseX, mouseY)) {
