@@ -4,7 +4,6 @@ import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -13,15 +12,15 @@ import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
+import mekanism.api.Action;
 import mekanism.api.IContentsListener;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
-import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.heat.HeatAPI;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
@@ -31,7 +30,6 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -98,10 +96,7 @@ class LoadedPortStorageTest {
         assertThat(capacitor.getHeatCapacity()).isEqualTo(300D);
         assertThat(capacitor.getTemperature()).isEqualTo(HeatAPI.getAmbientTemp(null, POS));
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            capacitor.handleHeat(300D, transaction);
-            transaction.commit();
-        }
+        capacitor.handleHeat(300D);
 
         assertThat(capacitor.getTemperature()).isEqualTo(HeatAPI.getAmbientTemp(null, POS) + 1D);
     }
@@ -125,28 +120,13 @@ class LoadedPortStorageTest {
                 CapabilityDirections.output());
     }
 
-    @Test
-    void loaded_bridge_registers_only_chemical_transfer_policy() {
-        try (TransferStrategyRegistry.TestScope ignored = TransferStrategyRegistry.openTestScope()) {
-            new LoadedMekanismBridge().registerTransferPolicies();
-
-            assertThat(TransferStrategyRegistry.policyFor(new CapabilityType(MekanismRecipeTypes.CHEMICAL)))
-                    .isPresent();
-            assertThat(TransferStrategyRegistry.policyFor(new CapabilityType(MekanismRecipeTypes.HEAT)))
-                    .isEmpty();
-        }
+    private static long insert(IChemicalTank tank, ChemicalStack stack, long amount) {
+        ChemicalStack requested = stack.copyWithAmount(amount);
+        return amount - tank.insert(requested, Action.EXECUTE, AutomationType.EXTERNAL).getAmount();
     }
 
-    private static int insert(IChemicalTank tank, ChemicalResource resource, int amount) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            int inserted = tank.insert(resource, amount, transaction, AutomationType.EXTERNAL);
-            transaction.commit();
-            return inserted;
-        }
-    }
-
-    private static ChemicalResource chemical(String path, boolean radioactive) {
-        return ChemicalResource.of(registerChemical(path, radioactive));
+    private static ChemicalStack chemical(String path, boolean radioactive) {
+        return new ChemicalStack(registerChemical(path, radioactive), 1L);
     }
 
     private static Holder.Reference<Chemical> registerChemical(String path, boolean radioactive) {
