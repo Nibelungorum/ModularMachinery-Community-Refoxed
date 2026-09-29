@@ -71,11 +71,6 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
             }
 
             @Override
-            public boolean supportsNativeExecution() {
-                return true;
-            }
-
-            @Override
             protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
                 if (!(operation instanceof AsyncCapabilityOperation.Heat heat)) {
                     return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);

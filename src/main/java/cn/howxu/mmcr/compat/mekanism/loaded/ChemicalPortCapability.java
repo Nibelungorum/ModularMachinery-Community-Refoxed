@@ -94,11 +94,6 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
             }
 
             @Override
-            public boolean supportsNativeExecution() {
-                return true;
-            }
-
-            @Override
             protected CapabilityResult commitNativeOnServerThread(AsyncCapabilityOperation operation) {
                 return commitAsync(operation);
             }

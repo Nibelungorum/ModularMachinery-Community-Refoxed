@@ -59,7 +59,6 @@ import net.minecraft.nbt.LongTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -69,7 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
 
 /**
  * Owns one recipe lifecycle. Capability plans are the only mutable-resource boundary.
@@ -210,18 +208,6 @@ public final class CraftingRuntime {
         }
         activatePatternStart(prepared);
         return true;
-    }
-
-    /**
-     * Legacy transaction callback boundary. Native pattern starts cannot share a Transfer transaction.
-     */
-    public boolean commitPatternStart(PreparedStart prepared, Consumer<TransactionContext> transactionWrites) {
-        Objects.requireNonNull(transactionWrites, "transactionWrites");
-        if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
-        discardPatternStart(prepared);
-        fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START,
-                Map.of("reason", "transaction_callback_unsupported")));
-        return false;
     }
 
     boolean commitPatternPlan(PreparedStart prepared) {
@@ -1128,7 +1114,6 @@ public final class CraftingRuntime {
             return failure == null ? missingInputStatus() : failure;
         }
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
-            if (!prefetch.plan().operation().supportsNativeExecution()) return missingInputStatus();
             CapabilityResult result = prefetch.plan().operation().commit();
             if (result == null || !result.success()) {
                 return result == null || result.status() == null ? missingInputStatus() : result.status();
@@ -1345,8 +1330,7 @@ public final class CraftingRuntime {
         try {
             for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
                 if (operation.capabilityIndex() >= facets.size()
-                        || facets.get(operation.capabilityIndex()) == null
-                        || !facets.get(operation.capabilityIndex()).supportsNativeExecution()) {
+                        || facets.get(operation.capabilityIndex()) == null) {
                     waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()));
                     return false;
                 }

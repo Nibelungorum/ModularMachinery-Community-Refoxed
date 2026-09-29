@@ -47,7 +47,7 @@ import net.minecraft.world.phys.BlockHitResult;
 
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.transfer.fluid.FluidUtil;
+import net.neoforged.neoforge.fluids.FluidUtil;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
@@ -101,7 +101,7 @@ public class IOPortBlock extends Block implements EntityBlock {
         }
         if (!ItemSpecialOperationUtil.isSpecialOperated(player) && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
-            if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection(), null)) {
+            if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection())) {
                 return InteractionResult.SUCCESS;
             }
         }

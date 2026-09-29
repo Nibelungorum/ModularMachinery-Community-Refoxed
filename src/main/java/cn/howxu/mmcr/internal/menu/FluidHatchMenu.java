@@ -10,8 +10,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,9 +30,9 @@ public class FluidHatchMenu extends AbstractMachineMenu {
         this.level = playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         this.amount = addLongDataSlot(owner == null ? LongDataSlot.standalone()
-                : new LongDataSlot(() -> owner.getResourceHandler(null).getAmountAsLong(0)));
+                : new LongDataSlot(() -> fluidAmount(owner.nativeFluidHandler())));
         this.capacity = addLongDataSlot(owner == null ? LongDataSlot.standalone()
-                : new LongDataSlot(() -> owner.getResourceHandler(null).getCapacityAsLong(0, FluidResource.EMPTY)));
+                : new LongDataSlot(() -> fluidCapacity(owner.nativeFluidHandler())));
         addPlayerSlots(playerInv);
     }
 
@@ -56,14 +56,14 @@ public class FluidHatchMenu extends AbstractMachineMenu {
 
     public BlockPos pos() { return pos; }
 
-    public ResourceHandler<FluidResource> storage() {
+    public IFluidHandler storage() {
         FluidHatchBlockEntity hatch = resolvedOwner();
-        return hatch == null ? null : hatch.getResourceHandler(null);
+        return hatch == null ? null : hatch.nativeFluidHandler();
     }
 
     public long fluidAmount() {
-        ResourceHandler<FluidResource> storage = storage();
-        return storage == null ? amount.value() : storage.getAmountAsLong(0);
+        IFluidHandler storage = storage();
+        return storage == null ? amount.value() : fluidAmount(storage);
     }
 
     public long fluidCapacity() {
@@ -81,12 +81,22 @@ public class FluidHatchMenu extends AbstractMachineMenu {
     }
 
     static long fluidCapacity(FluidHatchBlockEntity hatch) {
-        return hatch.getResourceHandler(null).getCapacityAsLong(0, FluidResource.EMPTY);
+        return fluidCapacity(hatch.nativeFluidHandler());
     }
 
     private FluidHatchBlockEntity resolvedOwner() {
         if (owner != null) return owner;
         return level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null;
+    }
+
+    private static long fluidAmount(IFluidHandler handler) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.amount(0) : handler.getFluidInTank(0).getAmount();
+    }
+
+    private static long fluidCapacity(IFluidHandler handler) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.capacity(0) : handler.getTankCapacity(0);
     }
 
     @Override

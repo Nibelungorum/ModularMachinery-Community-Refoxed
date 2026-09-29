@@ -85,7 +85,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, ResourceLocation capabilityId
         var capability = port.capability(type);
         CapabilityTransferPolicies.ensureRegistered();
         return capability != null && capability.directions().supports(port.ioType())
-                && CapabilityTransferPolicies.policyFor(capability).isPresent();
+                && CapabilityTransferPolicies.handlerFor(capability).isPresent();
     }
 
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {

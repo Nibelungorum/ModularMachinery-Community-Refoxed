@@ -6,7 +6,6 @@ import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -15,7 +14,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 
 public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
 
@@ -34,7 +32,7 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
         }
     }
 
-    public EnergyHandler getEnergyHandler(Direction side) {
+    public LongEnergyStorage getEnergyHandler(Direction side) {
         return storage;
     }
 
@@ -45,11 +43,6 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
     @Override
     public LongEnergyStorage nativeEnergyStorage() {
         return storage;
-    }
-
-    @Override
-    public LongValueStorage getEnergyStorage() {
-        return storage.storage();
     }
 
     @Override

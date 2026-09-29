@@ -8,10 +8,6 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import cn.howxu.mmcr.api.capability.transfer.TransferContext;
-import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
-import cn.howxu.mmcr.api.capability.transfer.TransferResult;
-import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
@@ -33,9 +29,6 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.resource.Resource;
 
 /**
  * Built-in automatic IO policies registered by capability identity.
@@ -43,10 +36,13 @@ import net.neoforged.neoforge.transfer.resource.Resource;
  * @author howxu <dev@howxu.cn>
  */
 public final class CapabilityTransferPolicies {
+    private static final Map<cn.howxu.mmcr.api.capability.CapabilityType, AutoIoHandler> HANDLERS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static boolean frozen;
+
     static {
-        TransferStrategyRegistry.register(BuiltinCapabilityDefinitions.ITEM_TYPE, new ItemPolicy());
-        TransferStrategyRegistry.register(BuiltinCapabilityDefinitions.FLUID_TYPE, new FluidPolicy());
-        TransferStrategyRegistry.register(BuiltinCapabilityDefinitions.ENERGY_TYPE, new EnergyPolicy());
+        register(BuiltinCapabilityDefinitions.ITEM_TYPE, new ItemPolicy());
+        register(BuiltinCapabilityDefinitions.FLUID_TYPE, new FluidPolicy());
+        register(BuiltinCapabilityDefinitions.ENERGY_TYPE, new EnergyPolicy());
     }
 
     private CapabilityTransferPolicies() {
@@ -56,16 +52,29 @@ public final class CapabilityTransferPolicies {
         MekanismBridge.get().registerTransferPolicies();
     }
 
-    public static Optional<TransferPolicy> policyFor(MachineCapability capability) {
-        if (capability == null || capability.type() == null
-                || capability.facet(TransferFacet.class).isEmpty()) return Optional.empty();
-        return TransferStrategyRegistry.policyFor(capability.type());
+    public static synchronized void register(cn.howxu.mmcr.api.capability.CapabilityType type, AutoIoHandler handler) {
+        if (frozen) throw new IllegalStateException("Automatic I/O registry is frozen");
+        if (HANDLERS.putIfAbsent(type, handler) != null) throw new IllegalArgumentException("Duplicate automatic I/O handler: " + type.id());
     }
 
-    private static TransferResult blocked(FailureReason reason) {
+    public static Optional<AutoIoHandler> handlerFor(MachineCapability capability) {
+        if (capability == null || capability.type() == null
+                || capability.facet(TransferFacet.class).isEmpty()) return Optional.empty();
+        return Optional.ofNullable(HANDLERS.get(capability.type()));
+    }
+
+    public static boolean isRegistered(cn.howxu.mmcr.api.capability.CapabilityType type) {
+        return type != null && HANDLERS.containsKey(type);
+    }
+
+    public static synchronized void freeze() {
+        frozen = true;
+    }
+
+    private static AutoIoResult blocked(FailureReason reason) {
         FailureOccurrence occurrence = FailureOccurrence.at(reason, MMCR.id("auto_io"),
                 FailurePhase.CAPABILITY_COMMIT, null, null, Map.of());
-        return TransferResult.blocked(ExecutionStatus.blocked(MMCR.id("auto_io"), MMCR.id("auto_io"), occurrence));
+        return AutoIoResult.blocked(ExecutionStatus.blocked(MMCR.id("auto_io"), MMCR.id("auto_io"), occurrence));
     }
 
     private static boolean canWork(Level level, Direction side) {
@@ -76,7 +85,7 @@ public final class CapabilityTransferPolicies {
         return position.relative(side);
     }
 
-    private static final class ItemPolicy implements TransferPolicy {
+    private static final class ItemPolicy implements AutoIoHandler {
         @Override
         public boolean hasWork(MachineCapability capability) {
             IItemHandler handler = CapabilityFactories.itemHandler(capability);
@@ -99,35 +108,35 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
-        public List<Resource> ejectionResources(MachineCapability capability) {
+        public List<Object> ejectionResources(MachineCapability capability) {
             IItemHandler handler = CapabilityFactories.itemHandler(capability);
             if (handler == null) return List.of();
-            LinkedHashSet<Resource> resources = new LinkedHashSet<>();
+            LinkedHashSet<Object> resources = new LinkedHashSet<>();
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 ItemStack stack = handler.getStackInSlot(slot);
-                if (!stack.isEmpty() && itemAmount(handler, slot) > 0L) resources.add(ItemResource.of(stack));
+                if (!stack.isEmpty() && itemAmount(handler, slot) > 0L) resources.add(stack.copyWithCount(1));
             }
             return List.copyOf(resources);
         }
 
         @Override
-        public TransferResult transfer(TransferContext context) {
-            IItemHandler internal = CapabilityFactories.itemHandler(context.capability());
-            TransferFacet transfer = transferFacet(context.capability());
+        public AutoIoResult transfer(MachineCapability capability, Direction side, Object selectedResource, long ejectionLimit) {
+            IItemHandler internal = CapabilityFactories.itemHandler(capability);
+            TransferFacet transfer = transferFacet(capability);
             if (internal == null || transfer == null) return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
-            if (context.eject() ? !hasStoredContents(internal) : !hasWork(context.capability())) {
+            boolean eject = ejectionLimit > 0L;
+            if (eject ? !hasStoredContents(internal) : !hasWork(capability)) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
             }
-            IItemHandler adjacent = adjacentItem(context.capability(), context.side());
+            IItemHandler adjacent = adjacentItem(capability, side);
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
-            long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
-            Predicate<ItemStack> filter = ejectionItemFilter(context);
-            long moved = context.eject()
-                    ? moveItems(internal, adjacent, filter, limit, context.simulate())
-                    : context.ioType() == IOType.INPUT
-                    ? moveItems(adjacent, internal, stack -> true, limit, context.simulate())
-                    : moveItems(internal, adjacent, stack -> true, limit, context.simulate());
-            return TransferResult.moved(moved);
+            long limit = eject ? ejectionLimit : transfer.transferLimit();
+            Predicate<ItemStack> filter = ejectionItemFilter(selectedResource);
+            long moved = eject ? moveItems(internal, adjacent, filter, limit, false)
+                    : capability.directions().supports(IOType.INPUT)
+                    ? moveItems(adjacent, internal, stack -> true, limit, false)
+                    : moveItems(internal, adjacent, stack -> true, limit, false);
+            return AutoIoResult.moved(moved);
         }
 
         private static boolean hasStoredContents(IItemHandler handler) {
@@ -145,7 +154,7 @@ public final class CapabilityTransferPolicies {
         }
     }
 
-    private static final class FluidPolicy implements TransferPolicy {
+    private static final class FluidPolicy implements AutoIoHandler {
         @Override
         public boolean hasWork(MachineCapability capability) {
             IFluidHandler handler = CapabilityFactories.fluidHandler(capability);
@@ -168,35 +177,35 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
-        public List<Resource> ejectionResources(MachineCapability capability) {
+        public List<Object> ejectionResources(MachineCapability capability) {
             IFluidHandler handler = CapabilityFactories.fluidHandler(capability);
             if (handler == null) return List.of();
-            LinkedHashSet<Resource> resources = new LinkedHashSet<>();
+            LinkedHashSet<Object> resources = new LinkedHashSet<>();
             for (int tank = 0; tank < handler.getTanks(); tank++) {
                 FluidStack stack = handler.getFluidInTank(tank);
-                if (!stack.isEmpty() && fluidAmount(handler, tank) > 0L) resources.add(FluidResource.of(stack));
+                if (!stack.isEmpty() && fluidAmount(handler, tank) > 0L) resources.add(stack.copyWithAmount(1));
             }
             return List.copyOf(resources);
         }
 
         @Override
-        public TransferResult transfer(TransferContext context) {
-            IFluidHandler internal = CapabilityFactories.fluidHandler(context.capability());
-            TransferFacet transfer = transferFacet(context.capability());
+        public AutoIoResult transfer(MachineCapability capability, Direction side, Object selectedResource, long ejectionLimit) {
+            IFluidHandler internal = CapabilityFactories.fluidHandler(capability);
+            TransferFacet transfer = transferFacet(capability);
             if (internal == null || transfer == null) return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
-            if (context.eject() ? !hasStoredContents(internal) : !hasWork(context.capability())) {
+            boolean eject = ejectionLimit > 0L;
+            if (eject ? !hasStoredContents(internal) : !hasWork(capability)) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
             }
-            IFluidHandler adjacent = adjacentFluid(context.capability(), context.side());
+            IFluidHandler adjacent = adjacentFluid(capability, side);
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
-            long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
-            Predicate<FluidStack> filter = ejectionFluidFilter(context);
-            long moved = context.eject()
-                    ? moveFluids(internal, adjacent, filter, limit, context.simulate())
-                    : context.ioType() == IOType.INPUT
-                    ? moveFluids(adjacent, internal, stack -> true, limit, context.simulate())
-                    : moveFluids(internal, adjacent, stack -> true, limit, context.simulate());
-            return TransferResult.moved(moved);
+            long limit = eject ? ejectionLimit : transfer.transferLimit();
+            Predicate<FluidStack> filter = ejectionFluidFilter(selectedResource);
+            long moved = eject ? moveFluids(internal, adjacent, filter, limit, false)
+                    : capability.directions().supports(IOType.INPUT)
+                    ? moveFluids(adjacent, internal, stack -> true, limit, false)
+                    : moveFluids(internal, adjacent, stack -> true, limit, false);
+            return AutoIoResult.moved(moved);
         }
 
         private static boolean hasStoredContents(IFluidHandler handler) {
@@ -214,7 +223,7 @@ public final class CapabilityTransferPolicies {
         }
     }
 
-    private static final class EnergyPolicy implements TransferPolicy {
+    private static final class EnergyPolicy implements AutoIoHandler {
         @Override
         public boolean hasWork(MachineCapability capability) {
             IEnergyStorage storage = CapabilityFactories.energyStorage(capability);
@@ -229,22 +238,21 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
-        public TransferResult transfer(TransferContext context) {
-            IEnergyStorage internal = CapabilityFactories.energyStorage(context.capability());
-            TransferFacet transfer = transferFacet(context.capability());
+        public AutoIoResult transfer(MachineCapability capability, Direction side, Object selectedResource, long ejectionLimit) {
+            IEnergyStorage internal = CapabilityFactories.energyStorage(capability);
+            TransferFacet transfer = transferFacet(capability);
             if (internal == null || transfer == null) return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
-            if (context.eject() ? energyAmount(internal) <= 0L : !hasWork(context.capability())) {
+            boolean eject = ejectionLimit > 0L;
+            if (eject ? energyAmount(internal) <= 0L : !hasWork(capability)) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
             }
-            IEnergyStorage adjacent = adjacentEnergy(context.capability(), context.side());
+            IEnergyStorage adjacent = adjacentEnergy(capability, side);
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
-            long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
-            long moved = context.eject()
-                    ? moveEnergy(internal, adjacent, limit, context.simulate())
-                    : context.ioType() == IOType.INPUT
-                    ? moveEnergy(adjacent, internal, limit, context.simulate())
-                    : moveEnergy(internal, adjacent, limit, context.simulate());
-            return TransferResult.moved(moved);
+            long limit = eject ? ejectionLimit : transfer.transferLimit();
+            long moved = eject ? moveEnergy(internal, adjacent, limit, false)
+                    : capability.directions().supports(IOType.INPUT)
+                    ? moveEnergy(adjacent, internal, limit, false) : moveEnergy(internal, adjacent, limit, false);
+            return AutoIoResult.moved(moved);
         }
 
         private static IEnergyStorage adjacentEnergy(MachineCapability capability, Direction side) {
@@ -259,14 +267,12 @@ public final class CapabilityTransferPolicies {
         return capability == null ? null : capability.facet(TransferFacet.class).orElse(null);
     }
 
-    private static Predicate<ItemStack> ejectionItemFilter(TransferContext context) {
-        Resource selected = context.ejectionResource();
-        return selected == null ? stack -> true : stack -> selected.equals(ItemResource.of(stack));
+    private static Predicate<ItemStack> ejectionItemFilter(Object selected) {
+        return selected instanceof ItemStack item ? stack -> ItemStack.isSameItemSameComponents(item, stack) : stack -> true;
     }
 
-    private static Predicate<FluidStack> ejectionFluidFilter(TransferContext context) {
-        Resource selected = context.ejectionResource();
-        return selected == null ? stack -> true : stack -> selected.equals(FluidResource.of(stack));
+    private static Predicate<FluidStack> ejectionFluidFilter(Object selected) {
+        return selected instanceof FluidStack fluid ? stack -> FluidStack.isSameFluidSameComponents(fluid, stack) : stack -> true;
     }
 
     private static long moveItems(IItemHandler from, IItemHandler to, Predicate<ItemStack> filter,

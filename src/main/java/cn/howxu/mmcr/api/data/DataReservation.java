@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.api.data;
 
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-
-/** Future transactional reservation boundary for lazy data repositories.
+/** Reservation boundary for lazy data repositories.
  *
  * <p>Implementations decide how a reservation is committed or cancelled;
  * this module intentionally provides no concrete repository implementation.</p>
@@ -10,7 +8,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * @author howxu <dev@howxu.cn>
  */
 public interface DataReservation {
-    boolean commit(TransactionContext transaction);
+    boolean commit();
 
     void cancel();
 }

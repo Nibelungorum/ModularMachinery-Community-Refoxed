@@ -33,7 +33,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         this.kind = owner == null ? "extended_fluid_input_hatch_basic" : owner.kind().id();
         this.tankCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).fluidTankCount()
-                : owner.fluidStorage().size();
+                : owner.nativeFluidHandler().getTanks();
         this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
         addPlayerSlots(playerInv, 47);
     }

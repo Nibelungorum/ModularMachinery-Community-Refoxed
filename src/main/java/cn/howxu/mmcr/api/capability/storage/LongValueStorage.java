@@ -1,14 +1,11 @@
 package cn.howxu.mmcr.api.capability.storage;
 
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-
 /**
  * Long-backed value storage with capacity and per-operation transfer limits.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class LongValueStorage extends SnapshotJournal<Long> implements CapabilityStorage {
+public final class LongValueStorage implements CapabilityStorage {
     private final long capacity;
     private final long transferLimit;
     private final Runnable onChange;
@@ -43,22 +40,13 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         return insertInternal(requested, simulate, true, true);
     }
 
-    public long insert(long requested, TransactionContext transaction) {
-        updateSnapshots(transaction);
-        return insertInternal(requested, false, true, false);
-    }
-
     public long extract(long requested, boolean simulate) {
         return extractInternal(requested, simulate, true, true);
     }
 
-    public long extract(long requested, TransactionContext transaction) {
-        updateSnapshots(transaction);
-        return extractInternal(requested, false, true, false);
-    }
-
     public void setAmount(long value) {
         long clamped = clamp(value);
+        if (amount == clamped) return;
         amount = clamped;
         onChange.run();
     }
@@ -83,23 +71,6 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
             if (notify) onChange.run();
         }
         return moved;
-    }
-
-    @Override
-    protected Long createSnapshot() {
-        return amount;
-    }
-
-    @Override
-    protected void revertToSnapshot(Long snapshot) {
-        amount = snapshot == null ? 0L : snapshot;
-    }
-
-    @Override
-    protected void onRootCommit(Long originalState) {
-        if (originalState == null || originalState != amount) {
-            onChange.run();
-        }
     }
 
     private long clamp(long value) {

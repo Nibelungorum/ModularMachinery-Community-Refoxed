@@ -160,12 +160,12 @@ public class ItemBusMenu extends AbstractMachineMenu {
             int x = layout.startX() + col * SLOT_SIZE;
             int y = layout.startY() + row * SLOT_SIZE;
             if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
-            else addSlot(new DirectionalItemSlot(owner.itemStorage(), index, x, y));
+            else addSlot(new DirectionalItemSlot(owner.nativeItemHandler(), index, x, y));
         }
     }
 
     private static int slotCount(IOPortBlockEntity owner) {
-        return owner == null ? DEFAULT_BUS_SLOT_COUNT : owner.itemStorage().size();
+        return owner == null ? DEFAULT_BUS_SLOT_COUNT : owner.nativeItemHandler().getSlots();
     }
 
     private static ItemBusSize size(IOPortBlockEntity owner) {

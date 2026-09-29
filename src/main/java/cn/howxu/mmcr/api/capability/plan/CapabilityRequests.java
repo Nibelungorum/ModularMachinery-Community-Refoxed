@@ -63,6 +63,7 @@ public final class CapabilityRequests {
         }
     }
 
+    /** Compatibility request for external resource families not backed by native handlers. */
     public record ResourceAction<R>(int slot, R resource, long amount, boolean insert) {
         public ResourceAction {
             if (slot < 0) throw new IllegalArgumentException("slot must be non-negative");
@@ -71,6 +72,7 @@ public final class CapabilityRequests {
         }
     }
 
+    /** Compatibility request for external resource families not backed by native handlers. */
     public record ResourceRequest<R>(CapabilityType type, IOType ioType, long parallelism,
                                      List<ResourceAction<R>> actions) implements CapabilityRequest {
         public ResourceRequest {

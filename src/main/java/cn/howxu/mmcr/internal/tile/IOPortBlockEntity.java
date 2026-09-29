@@ -12,16 +12,13 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.api.capability.transfer.TransferContext;
-import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
-import cn.howxu.mmcr.api.capability.transfer.TransferResult;
-import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
+import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
+import cn.howxu.mmcr.internal.autoio.AutoIoResult;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -45,10 +42,7 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.resource.Resource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 
 import java.util.TreeMap;
 import java.util.EnumSet;
@@ -123,13 +117,18 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private void notifyAvailabilityChanges() {
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
-            Object resource = valueStorage == null ? null : capability.type();
+            IEnergyStorage energyStorage = CapabilityFactories.energyStorage(capability);
+            Object resource = valueStorage == null && energyStorage == null ? null : capability.type();
             List<Object> resources = new ArrayList<>();
             List<SlotAvailability> slots = new ArrayList<>();
             if (resource != null) resources.add(resource);
             long amount = 0L;
             if (valueStorage != null) {
                 amount = valueStorage.amount();
+                slots.add(new SlotAvailability(resource, amount));
+            } else if (energyStorage != null) {
+                amount = energyStorage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler storage
+                        ? storage.getAmountAsLong() : energyStorage.getEnergyStored();
                 slots.add(new SlotAvailability(resource, amount));
             } else {
                 IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);
@@ -143,8 +142,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                                     ? storage.amount(slot) : ((FluidStack) nativeResource).getAmount()
                             : itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
                                     ? storage.amount(slot) : ((ItemStack) nativeResource).getCount();
-                    Object slotResource = nativeResource instanceof ItemStack stack ? ItemResource.of(stack)
-                            : FluidResource.of((FluidStack) nativeResource);
+                    Object slotResource = nativeResource;
                     amount += slotAmount;
                     slots.add(new SlotAvailability(slotResource, slotAmount));
                     if (slotAmount > 0L && !isEmptyNativeResource(nativeResource)) {
@@ -159,7 +157,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
             boolean resourceChanged = previous != null && !resources.equals(previousResources);
             if (amount > previousAmount && capability.directions().supports(IOType.INPUT)) {
-                ResourceAvailabilityNotifier.Reason reason = valueStorage != null
+                ResourceAvailabilityNotifier.Reason reason = valueStorage != null || energyStorage != null
                                 ? ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE
                                 : ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE;
                 for (Object available : resources) notifyControllers(reason, available);
@@ -285,18 +283,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         });
     }
 
-    public ResourceStorage<ItemResource> itemStorage() {
-        throw new IllegalStateException("Port does not expose item storage: " + kind().id());
-    }
-
-    public ResourceStorage<FluidResource> fluidStorage() {
-        throw new IllegalStateException("Port does not expose fluid storage: " + kind().id());
-    }
-
-    public LongValueStorage getEnergyStorage() {
-        throw new IllegalStateException("Port does not expose energy storage: " + kind().id());
-    }
-
     /** Native item handler used by requirement execution and external capability exposure. */
     public IItemHandler nativeItemHandler() {
         throw new IllegalStateException("Port does not expose an item handler: " + kind().id());
@@ -349,8 +335,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     protected boolean hasAutoIOTransferWork() {
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-            TransferPolicy policy = transferPolicy(capability).orElse(null);
-            if (policy != null && policy.hasWork(capability)) return true;
+            AutoIoHandler handler = transferHandler(capability).orElse(null);
+            if (handler != null && handler.hasWork(capability)) return true;
         }
         return false;
     }
@@ -472,8 +458,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (level == null || level.isClientSide()) return;
         boolean rebuiltCandidates = consumeAutoIOCacheDirty();
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-            TransferPolicy policy = transferPolicy(capability).orElse(null);
-            if (policy == null) {
+            AutoIoHandler handler = transferHandler(capability).orElse(null);
+            if (handler == null) {
                 autoIOConfigs.remove(capability.type());
                 autoIOStates.remove(capability.type());
                 continue;
@@ -481,7 +467,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             AutoIOConfig config = autoIOConfig(capability.type());
             if (!config.enabled() || config.enabledSides().isEmpty()) continue;
             AutoIOState state = autoIOStates.computeIfAbsent(capability.type(), ignored -> new AutoIOState());
-            if (rebuiltCandidates) rebuildAutoIOCandidates(capability, policy, config, state);
+            if (rebuiltCandidates) rebuildAutoIOCandidates(capability, handler, config, state);
             if (state.candidateSides.isEmpty()) {
                 if (rebuiltCandidates) {
                     state.ticksUntilTransfer = ServerConfig.autoIoMinDelayTicks() - 1;
@@ -491,10 +477,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     state.ticksUntilTransfer--;
                     continue;
                 }
-                rebuildAutoIOCandidates(capability, policy, config, state);
+                rebuildAutoIOCandidates(capability, handler, config, state);
                 if (state.candidateSides.isEmpty()) continue;
             }
-            if (!policy.hasWork(capability)) continue;
+            if (!handler.hasWork(capability)) continue;
             if (state.ticksUntilTransfer > 0) {
                 state.ticksUntilTransfer--;
                 continue;
@@ -502,11 +488,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
             boolean moved = false;
             for (Direction side : state.candidateSides) {
-                TransferResult result;
-                try (Transaction transaction = Transaction.openRoot()) {
-                    result = policy.transfer(TransferContext.commit(capability, side, 1L, transaction));
-                    if (result.successful()) transaction.commit();
-                }
+                AutoIoResult result = handler.transfer(capability, side, null, 0L);
                 moved |= result.successful();
             }
             if (moved) incrementAutoIOSuccess(state);
@@ -515,18 +497,18 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         }
     }
 
-    private void rebuildAutoIOCandidates(MachineCapability capability, TransferPolicy policy,
+    private void rebuildAutoIOCandidates(MachineCapability capability, AutoIoHandler handler,
                                          AutoIOConfig config, AutoIOState state) {
         state.candidateSides.clear();
         for (Direction side : config.enabledSides()) {
-            if (policy.hasAdjacentTarget(capability, side)) state.candidateSides.add(side);
+            if (handler.hasAdjacentTarget(capability, side)) state.candidateSides.add(side);
         }
     }
 
     private @Nullable MachineCapability autoIOCapability() {
         List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
         return capabilities.stream()
-                .filter(capability -> transferPolicy(capability).isPresent())
+                .filter(capability -> transferHandler(capability).isPresent())
                 .findFirst().orElse(null);
     }
 
@@ -534,7 +516,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (type == null) return null;
         return capabilitySnapshot().capabilities().stream()
                 .filter(capability -> type.equals(capability.type()))
-                .filter(capability -> transferPolicy(capability).isPresent())
+                .filter(capability -> transferHandler(capability).isPresent())
                 .findFirst().orElse(null);
     }
 
@@ -556,8 +538,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (level == null || level.isClientSide() || ioType() != IOType.INPUT) return false;
         MachineCapability capability = capability(type);
         if (capability == null || !capability.directions().supports(IOType.INPUT)) return false;
-        TransferPolicy policy = capability == null ? null : transferPolicy(capability).orElse(null);
-        if (capability == null || policy == null) return false;
+        AutoIoHandler handler = capability == null ? null : transferHandler(capability).orElse(null);
+        if (capability == null || handler == null) return false;
         if (isUsedByActiveRecipe()) return false;
         List<Direction> sides = new ArrayList<>(List.of(Direction.values()));
         for (int index = sides.size() - 1; index > 0; index--) {
@@ -567,25 +549,21 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             sides.set(swapIndex, side);
         }
         boolean moved = false;
-        List<Resource> resources = policy.ejectionResources(capability);
-        if (resources.isEmpty()) return ejectResource(policy, capability, null, sides);
+        List<Object> resources = handler.ejectionResources(capability);
+        if (resources.isEmpty()) return ejectResource(handler, capability, null, sides);
         int resourceCount = allResources ? resources.size() : 1;
         for (int resourceIndex = 0; resourceIndex < resourceCount; resourceIndex++) {
-            moved |= ejectResource(policy, capability, resources.get(resourceIndex), sides);
+            moved |= ejectResource(handler, capability, resources.get(resourceIndex), sides);
         }
         return moved;
     }
 
-    private static boolean ejectResource(TransferPolicy policy, MachineCapability capability,
-                                         @Nullable Resource resource, List<Direction> sides) {
+    private static boolean ejectResource(AutoIoHandler handler, MachineCapability capability,
+                                         @Nullable Object resource, List<Direction> sides) {
         long remaining = Integer.MAX_VALUE;
         boolean moved = false;
         for (Direction side : sides) {
-            TransferResult result;
-            try (Transaction transaction = Transaction.openRoot()) {
-                result = policy.eject(TransferContext.commit(capability, side, 1L, transaction), resource, remaining);
-                if (result.successful()) transaction.commit();
-            }
+            AutoIoResult result = handler.transfer(capability, side, resource, remaining);
             moved |= result.successful();
             remaining -= Math.min(remaining, result.amount());
             if (remaining == 0L) break;
@@ -593,13 +571,13 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         return moved;
     }
 
-    private static Optional<TransferPolicy> transferPolicy(MachineCapability capability) {
+    private static Optional<AutoIoHandler> transferHandler(MachineCapability capability) {
         if (capability == null || capability.type() == null
                 || capability.facet(TransferFacet.class).isEmpty()) {
             return Optional.empty();
         }
         CapabilityTransferPolicies.ensureRegistered();
-        return TransferStrategyRegistry.policyFor(capability.type());
+        return CapabilityTransferPolicies.handlerFor(capability);
     }
 
     protected boolean isUsedByActiveRecipe() {
@@ -637,7 +615,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         super.saveAdditional(output, registries);
         CompoundTag profiles = null;
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-            if (transferPolicy(capability).isEmpty()) continue;
+            if (transferHandler(capability).isEmpty()) continue;
             if (profiles == null) profiles = new CompoundTag();
             CompoundTag profile = new CompoundTag();
             autoIOConfig(capability.type()).save(profile);
@@ -653,7 +631,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (input.contains(AUTO_IO_CAPABILITIES_KEY)) {
             CompoundTag profiles = input.getCompound(AUTO_IO_CAPABILITIES_KEY);
             for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-                if (transferPolicy(capability).isEmpty()) continue;
+                if (transferHandler(capability).isEmpty()) continue;
                 String key = capability.type().id().toString();
                 if (profiles.contains(key)) {
                     autoIOConfig(capability.type()).loadInto(profiles.getCompound(key));

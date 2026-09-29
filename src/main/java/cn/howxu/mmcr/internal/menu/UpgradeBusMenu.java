@@ -163,7 +163,7 @@ public final class UpgradeBusMenu extends AbstractMachineMenu {
             int x = layout.startX() + column * SLOT_SIZE;
             int y = layout.startY() + row * SLOT_SIZE;
             if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
-            else addSlot(new DirectionalItemSlot(owner.itemStorage(), index, x, y));
+            else addSlot(new DirectionalItemSlot(owner.nativeItemHandler(), index, x, y));
         }
     }
 

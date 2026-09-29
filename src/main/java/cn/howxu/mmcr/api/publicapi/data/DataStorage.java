@@ -3,8 +3,6 @@ package cn.howxu.mmcr.api.publicapi.data;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Objects;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /** Public view of a machine's typed data storage.
  * @author howxu <dev@howxu.cn>
@@ -37,31 +35,9 @@ public final class DataStorage {
 
     public void set(String key, DataValue value) { storage.set(key, DataValue.toInternal(value)); }
 
-    public boolean set(String key, DataValue value, Transaction transaction) {
-        Objects.requireNonNull(transaction, "transaction");
-        return storage.set(key, DataValue.toInternal(value), transaction.context);
-    }
-
     public Optional<DataValue> remove(String key) { return storage.remove(key).map(DataValue::fromInternal); }
 
     /** Internal bridge value for MMCR adapters. */
     public Object bridgeValue() { return storage; }
 
-    /** Public write transaction shared with a machine I/O commit.
-     * @author howxu <dev@howxu.cn>
-     */
-    public static final class Transaction {
-        private final TransactionContext context;
-
-        private Transaction(TransactionContext context) {
-            this.context = context;
-        }
-
-        public static Transaction view(Object context) {
-            if (!(context instanceof TransactionContext transaction)) {
-                throw new IllegalArgumentException("context must be a transaction");
-            }
-            return new Transaction(transaction);
-        }
-    }
 }

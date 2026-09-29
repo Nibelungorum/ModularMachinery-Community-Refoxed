@@ -96,7 +96,6 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
 
     private FluidStack fluidStack() {
         var storage = menu.storage();
-        if (storage == null || storage.getResource(0).isEmpty()) return FluidStack.EMPTY;
-        return storage.getResource(0).toStack(Math.min(storage.getAmountAsInt(0), Integer.MAX_VALUE));
+        return storage == null ? FluidStack.EMPTY : storage.getFluidInTank(0).copy();
     }
 }

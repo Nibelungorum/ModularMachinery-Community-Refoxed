@@ -1,10 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
-import cn.howxu.mmcr.api.capability.facet.ValueFacet;
-import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
-import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
@@ -14,11 +10,9 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.SaturatingLong;
 import cn.howxu.mmcr.util.IOType;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,15 +85,6 @@ public final class RequirementHandlerSupport {
                 factory, reservationFactory);
     }
 
-    static ResourceStorage<?> resourceStorage(MachineCapability capability, Class<?> resourceType) {
-        if (capability == null) return null;
-        ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
-        if (facet != null) return facet.resourceType().equals(resourceType) ? facet.storage() : null;
-        ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
-        return valueFacet != null && valueFacet.storage() instanceof ResourceStorage<?> storage
-                && storage.resourceType().equals(resourceType) ? storage : null;
-    }
-
     public static long scaled(long amount, long parallelism) {
         return SaturatingLong.multiply(amount, parallelism);
     }
@@ -132,27 +117,6 @@ public final class RequirementHandlerSupport {
                         operationPlan.outputSimulation());
             }
         };
-    }
-
-    public static <R> RequirementPlan.OperationPlan resourceOperations(
-            Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap,
-            IOType direction, long parallelism, boolean materialize, OutputSimulation outputSimulation) {
-        return resourceOperations(actionMap, List.of(), direction, parallelism, materialize, outputSimulation);
-    }
-
-    public static <R> RequirementPlan.OperationPlan resourceOperations(
-            Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap,
-            List<CapabilityOperation> dynamicOperations, IOType direction,
-            long parallelism, boolean materialize, OutputSimulation outputSimulation) {
-        List<CapabilityOperation> operations = new ArrayList<>(dynamicOperations);
-        if (materialize) {
-            for (Map.Entry<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> entry : actionMap.entrySet()) {
-                operations.add(entry.getKey().prepare(new CapabilityRequests.ResourceRequest<>(
-                        entry.getKey().view().type(), direction,
-                        parallelism, entry.getValue())));
-            }
-        }
-        return new RequirementPlan.OperationPlan(List.copyOf(operations), null, outputSimulation);
     }
 
     public static long saturatingAdd(long first, long second) {

@@ -10,7 +10,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
+import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 
 import java.util.List;
 import java.util.Optional;
@@ -55,13 +55,13 @@ public class EnergyHatchMenu extends AbstractMachineMenu {
 
     public BlockPos pos() { return pos; }
 
-    public EnergyHandler storage() {
+    public LongEnergyHandler storage() {
         EnergyHatchBlockEntity hatch = resolvedOwner();
         return hatch == null ? null : hatch.getEnergyHandler(null);
     }
 
     public long storedEnergy() {
-        EnergyHandler storage = storage();
+        LongEnergyHandler storage = storage();
         return storage == null ? stored.value() : storage.getAmountAsLong();
     }
 

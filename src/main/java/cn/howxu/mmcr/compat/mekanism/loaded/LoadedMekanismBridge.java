@@ -20,10 +20,9 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.api.capability.transfer.TransferContext;
-import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
-import cn.howxu.mmcr.api.capability.transfer.TransferResult;
-import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
+import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
+import cn.howxu.mmcr.internal.autoio.AutoIoResult;
+import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -348,8 +347,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     @Override
     public synchronized void registerTransferPolicies() {
         CapabilityType type = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
-        if (TransferStrategyRegistry.policyFor(type).isEmpty()) {
-            TransferStrategyRegistry.register(type, new ChemicalTransferPolicy());
+        if (!CapabilityTransferPolicies.isRegistered(type)) {
+            CapabilityTransferPolicies.register(type, new ChemicalTransferPolicy());
         }
     }
 
@@ -380,7 +379,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         OutputRegistry.register(type);
     }
 
-    private static final class ChemicalTransferPolicy implements TransferPolicy {
+    private static final class ChemicalTransferPolicy implements AutoIoHandler {
         @Override
         public boolean hasWork(MachineCapability capability) {
             ChemicalPort port = chemicalPort(capability);
@@ -397,24 +396,24 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
 
         @Override
-        public TransferResult transfer(TransferContext context) {
-            ChemicalPort port = chemicalPort(context.capability());
-            TransferFacet transfer = transferFacet(context.capability());
+        public AutoIoResult transfer(MachineCapability capability, Direction side, Object selectedResource, long ejectionLimit) {
+            ChemicalPort port = chemicalPort(capability);
+            TransferFacet transfer = transferFacet(capability);
             if (port == null || transfer == null) {
                 return transferBlocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
-            if (context.eject() ? port.chemicalTank().getStored() <= 0L : !hasWork(port)) {
+            boolean eject = ejectionLimit > 0L;
+            if (eject ? port.chemicalTank().getStored() <= 0L : !hasWork(port)) {
                 return transferBlocked(BuiltinFailureReasons.NO_WORK);
             }
-            IChemicalHandler adjacent = adjacentChemical(context.capability(), context.side());
+            IChemicalHandler adjacent = adjacentChemical(capability, side);
             if (adjacent == null) return transferBlocked(BuiltinFailureReasons.NO_TARGET);
-            long limit = Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(), Long.MAX_VALUE);
-            long moved = context.eject()
-                    ? moveChemical(port.chemicalTank(), adjacent, limit, context.simulate())
-                    : context.ioType() == IOType.INPUT
-                    ? moveChemical(adjacent, port.chemicalTank(), limit, context.simulate())
-                    : moveChemical(port.chemicalTank(), adjacent, limit, context.simulate());
-            return TransferResult.moved(moved);
+            long limit = eject ? ejectionLimit : transfer.transferLimit();
+            long moved = eject ? moveChemical(port.chemicalTank(), adjacent, limit, false)
+                    : capability.directions().supports(IOType.INPUT)
+                    ? moveChemical(adjacent, port.chemicalTank(), limit, false)
+                    : moveChemical(port.chemicalTank(), adjacent, limit, false);
+            return AutoIoResult.moved(moved);
         }
 
         private static boolean hasWork(ChemicalPort port) {
@@ -439,11 +438,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return capability instanceof ChemicalPort port ? port : null;
     }
 
-    private static TransferResult transferBlocked(FailureReason reason) {
+    private static AutoIoResult transferBlocked(FailureReason reason) {
         ResourceLocation source = MMCR.id("auto_io");
         FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
                 null, null, Map.of());
-        return TransferResult.blocked(ExecutionStatus.blocked(source, source, occurrence));
+        return AutoIoResult.blocked(ExecutionStatus.blocked(source, source, occurrence));
     }
 
     public static RequirementHandler<LoadedChemicalRequirement> chemicalHandler() {

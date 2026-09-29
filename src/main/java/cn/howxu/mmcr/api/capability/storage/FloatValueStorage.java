@@ -1,19 +1,16 @@
 package cn.howxu.mmcr.api.capability.storage;
 
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * Transactional named float values used by smart-interface capabilities.
+ * Named float values used by smart-interface capabilities.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>> implements CapabilityStorage {
+public final class FloatValueStorage implements CapabilityStorage {
     private final Map<String, Float> values = new LinkedHashMap<>();
     private final Consumer<Map<String, Float>> rootCommitListener;
 
@@ -34,8 +31,11 @@ public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>>
     }
 
     public void replace(Map<String, Float> nextValues) {
+        Map<String, Float> replacement = nextValues == null ? Map.of() : Map.copyOf(nextValues);
+        if (values.equals(replacement)) return;
         values.clear();
-        if (nextValues != null) values.putAll(nextValues);
+        values.putAll(replacement);
+        rootCommitListener.accept(Map.copyOf(values));
     }
 
     @Override
@@ -48,28 +48,14 @@ public final class FloatValueStorage extends SnapshotJournal<Map<String, Float>>
             throw new IllegalArgumentException("invalid value");
         }
         values.put(key, value);
-    }
-
-    public boolean set(String key, float value, TransactionContext transaction) {
-        if (!values.containsKey(key) || !Float.isFinite(value)) return false;
-        updateSnapshots(transaction);
-        values.put(key, value);
-        return true;
-    }
-
-    @Override
-    protected Map<String, Float> createSnapshot() {
-        return new LinkedHashMap<>(values);
-    }
-
-    @Override
-    protected void revertToSnapshot(Map<String, Float> snapshot) {
-        values.clear();
-        if (snapshot != null) values.putAll(snapshot);
-    }
-
-    @Override
-    protected void onRootCommit(Map<String, Float> originalState) {
         rootCommitListener.accept(Map.copyOf(values));
+    }
+
+    public boolean setExisting(String key, float value) {
+        if (!values.containsKey(key) || !Float.isFinite(value)) return false;
+        if (Float.compare(values.get(key), value) == 0) return true;
+        values.put(key, value);
+        rootCommitListener.accept(Map.copyOf(values));
+        return true;
     }
 }

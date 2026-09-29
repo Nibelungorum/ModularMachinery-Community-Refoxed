@@ -2,8 +2,6 @@ package cn.howxu.mmcr.internal.runtime;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Consumer;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * Owns every lane reservation admitted for one external pattern batch.
@@ -57,16 +55,6 @@ public final class PatternStartBatchReservation implements AutoCloseable {
         reservations.forEach(PatternStartReservation::activate);
         status = Status.COMMITTED;
         return true;
-    }
-
-    /**
-     * Legacy transaction callback boundary. Native pattern starts cannot share a Transfer transaction.
-     */
-    public boolean commit(Consumer<TransactionContext> transactionWrites) {
-        Objects.requireNonNull(transactionWrites, "transactionWrites");
-        if (status != Status.RESERVED) return false;
-        rollback();
-        return false;
     }
 
     public void rollback() {

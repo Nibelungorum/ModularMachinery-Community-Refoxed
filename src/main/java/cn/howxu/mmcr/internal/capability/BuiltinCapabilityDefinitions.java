@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
@@ -46,7 +45,7 @@ public final class BuiltinCapabilityDefinitions {
                 BuiltinCapabilityDefinitions::createFluid));
         CapabilityRegistry.register(new CapabilityDefinition(
                 ENERGY_TYPE,
-                Set.of(ScalarFacet.class, ValueFacet.class, EnergyStorageFacet.class, SyncFacet.class, TransferFacet.class,
+                Set.of(ScalarFacet.class, EnergyStorageFacet.class, SyncFacet.class, TransferFacet.class,
                         OperationFacet.class, PresentationFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createEnergy));
     }
@@ -63,7 +62,7 @@ public final class BuiltinCapabilityDefinitions {
 
     private static MachineCapability createEnergy(CapabilityCreationContext context) {
         IOPortBlockEntity port = port(context);
-        return new EnergyHatchCapability(port, port.getEnergyStorage(), port.nativeEnergyStorage(), context.ioType());
+        return new EnergyHatchCapability(port, port.nativeEnergyStorage(), context.ioType());
     }
 
     private static IOPortBlockEntity port(CapabilityCreationContext context) {

@@ -7,21 +7,16 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.MMCR;
 import java.util.Set;
-import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 
 /**
- * Executes all prepared requirement operations as one atomic transaction.
+ * Executes prepared native requirement operations in plan order.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -59,35 +54,12 @@ public final class CraftingPlan {
     }
 
     public boolean commit() {
-        return commit(ignored -> true);
-    }
-
-    public boolean commit(Consumer<TransactionContext> transactionWrites) {
-        Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (failure != null) return false;
-        try (Transaction transaction = Transaction.openRoot()) {
-            if (!commitOperations(transaction, ignored -> true)) return false;
-            transactionWrites.accept(transaction);
-            transaction.commit();
-            return true;
-        }
-    }
-
-    /** Commits this plan into a caller-owned transaction. */
-    public boolean commit(TransactionContext transaction) {
-        if (failure != null) return false;
-        return commitOperations(Objects.requireNonNull(transaction, "transaction"), ignored -> true);
+        return commitOperations(ignored -> true);
     }
 
     public boolean commitInputs() {
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT);
-    }
-
-    /** Commits only input operations into a caller-owned transaction. */
-    public boolean commitInputs(TransactionContext transaction) {
-        if (failure != null) return false;
-        return commitOperations(Objects.requireNonNull(transaction, "transaction"),
-                requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT);
     }
 
     public boolean commitOutputs() {
@@ -121,28 +93,7 @@ public final class CraftingPlan {
         for (RequirementPlan requirement : requirements) {
             if (!selector.test(requirement.requirementIndex())) continue;
             for (CapabilityOperation operation : requirement.operations()) {
-                if (!operation.supportsNativeExecution()) {
-                    if (failure == null) failure = UNSPECIFIED_OPERATION_FAILURE;
-                    return false;
-                }
                 CapabilityResult result = operation.commit();
-                if (result == null || !result.success()) {
-                    if (failure == null) {
-                        failure = result == null || result.status() == null
-                                ? UNSPECIFIED_OPERATION_FAILURE : result.status();
-                    }
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private boolean commitOperations(TransactionContext transaction, IntPredicate selector) {
-        for (RequirementPlan requirement : requirements) {
-            if (!selector.test(requirement.requirementIndex())) continue;
-            for (CapabilityOperation operation : requirement.operations()) {
-                CapabilityResult result = operation.commit(transaction);
                 if (result == null || !result.success()) {
                     if (failure == null) {
                         failure = result == null || result.status() == null

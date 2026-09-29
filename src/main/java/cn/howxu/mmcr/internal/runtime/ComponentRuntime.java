@@ -15,7 +15,6 @@ import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -33,7 +32,8 @@ import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.transfer.resource.Resource;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -115,7 +115,7 @@ public final class ComponentRuntime {
     }
 
     /**
-     * Plans each tick facet in snapshot order and commits the resulting operations atomically.
+     * Plans each tick facet in snapshot order and commits the resulting native operations.
      */
     public CapabilityTickResult executeTickPhase(CapabilityTickContext context) {
         Objects.requireNonNull(context, "context");
@@ -136,9 +136,6 @@ public final class ComponentRuntime {
             return new CapabilityTickResult(operations, null, stateChanged);
         }
         for (CapabilityOperation operation : operations) {
-            if (!operation.supportsNativeExecution()) {
-                return new CapabilityTickResult(operations, UNSPECIFIED_TICK_OPERATION_FAILURE, stateChanged);
-            }
             CapabilityResult result = operation.commit();
             if (result == null || !result.success()) {
                 ExecutionStatus failure = result == null || result.status() == null
@@ -171,14 +168,15 @@ public final class ComponentRuntime {
         List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(capabilities.size());
         for (MachineCapability capability : capabilities) {
             LongValueStorage value = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
-            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
             for (IOType direction : capability.view().directions().values()) {
                 if (value != null) {
                     snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
                             capability.type() == null ? null : capability.type().id(), direction,
                             value.amount(), value.capacity(), List.of()));
-                } else if (resourceStorage != null) {
-                    snapshots.add(resourcePresentation(capability, resourceStorage, direction));
+                } else if (CapabilityFactories.itemHandler(capability) != null) {
+                    snapshots.add(itemPresentation(capability, CapabilityFactories.itemHandler(capability), direction));
+                } else if (CapabilityFactories.fluidHandler(capability) != null) {
+                    snapshots.add(fluidPresentation(capability, CapabilityFactories.fluidHandler(capability), direction));
                 } else {
                     snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
                         capability.type() == null ? null : capability.type().id(), direction, 0L, 0L, List.of()));
@@ -510,20 +508,37 @@ public final class ComponentRuntime {
         }
     }
 
-    private static ControllerRuntimeSnapshot.CapabilityPresentation resourcePresentation(
-            MachineCapability capability, ResourceStorage<?> storage, IOType direction) {
-        List<ControllerRuntimeSnapshot.StorageSlot> slots = new ArrayList<>(storage.size());
+    private static ControllerRuntimeSnapshot.CapabilityPresentation itemPresentation(
+            MachineCapability capability, IItemHandler handler, IOType direction) {
+        List<ControllerRuntimeSnapshot.StorageSlot> slots = new ArrayList<>(handler.getSlots());
         long amount = 0L;
         long capacity = 0L;
-        for (int slot = 0; slot < storage.size(); slot++) {
-            Object resource = storage.resource(slot);
-            long slotAmount = storage.amount(slot);
-            long slotCapacity = storage.capacityResource(slot, resource);
-            String resourceId = resource == null || (resource instanceof Resource empty && empty.isEmpty())
-                    ? "" : String.valueOf(resource);
-            slots.add(new ControllerRuntimeSnapshot.StorageSlot(resourceId, slotAmount, slotCapacity));
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            var stack = handler.getStackInSlot(slot);
+            long slotAmount = stack.getCount();
+            long slotCapacity = handler.getSlotLimit(slot);
+            slots.add(new ControllerRuntimeSnapshot.StorageSlot(stack.isEmpty() ? "" : String.valueOf(stack.getItem()),
+                    slotAmount, slotCapacity));
             amount = saturatedAdd(amount, slotAmount);
             capacity = saturatedAdd(capacity, slotCapacity);
+        }
+        return new ControllerRuntimeSnapshot.CapabilityPresentation(
+                capability.type() == null ? null : capability.type().id(), direction, amount, capacity, slots);
+    }
+
+    private static ControllerRuntimeSnapshot.CapabilityPresentation fluidPresentation(
+            MachineCapability capability, IFluidHandler handler, IOType direction) {
+        List<ControllerRuntimeSnapshot.StorageSlot> slots = new ArrayList<>(handler.getTanks());
+        long amount = 0L;
+        long capacity = 0L;
+        for (int tank = 0; tank < handler.getTanks(); tank++) {
+            var stack = handler.getFluidInTank(tank);
+            long tankAmount = stack.getAmount();
+            long tankCapacity = handler.getTankCapacity(tank);
+            slots.add(new ControllerRuntimeSnapshot.StorageSlot(stack.isEmpty() ? "" : String.valueOf(stack.getFluid()),
+                    tankAmount, tankCapacity));
+            amount = saturatedAdd(amount, tankAmount);
+            capacity = saturatedAdd(capacity, tankCapacity);
         }
         return new ControllerRuntimeSnapshot.CapabilityPresentation(
                 capability.type() == null ? null : capability.type().id(), direction, amount, capacity, slots);

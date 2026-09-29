@@ -32,7 +32,6 @@ import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
-import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import java.util.Collections;
@@ -41,7 +40,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.server.level.ServerLevel;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -1013,14 +1012,12 @@ public final class FactoryRuntime {
         boolean supported = false;
         for (MachineCapability capability : controller.componentRuntime().capabilities()) {
             if (capability == null || !capability.directions().supports(IOType.INPUT)) continue;
-            var storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
-            if (storage == null) continue;
+            IItemHandler handler = capability.facet(cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet.class)
+                    .map(cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet::itemHandler).orElse(null);
+            if (handler == null) continue;
             supported = true;
-            for (int slot = 0; slot < storage.size(); slot++) {
-                Object resource = storage.resource(slot);
-                if (resource instanceof ItemResource item && !item.isEmpty()) {
-                    items.add(item.toStack(1).getItem());
-                }
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                if (!handler.getStackInSlot(slot).isEmpty()) items.add(handler.getStackInSlot(slot).getItem());
             }
         }
         return supported && !items.isEmpty() ? items : null;

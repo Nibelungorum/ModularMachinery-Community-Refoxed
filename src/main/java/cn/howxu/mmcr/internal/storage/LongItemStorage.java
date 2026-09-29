@@ -10,7 +10,7 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
  * @author howxu <dev@howxu.cn>
  */
 public class LongItemStorage implements IItemHandlerModifiable {
-    private final LongResourceStorage<ItemStack> storage;
+    private final LongSlotStorage<ItemStack> storage;
     private final Predicate<ItemStack> validator;
 
     public LongItemStorage(int slots, long capacity, Runnable onChange) {
@@ -20,7 +20,7 @@ public class LongItemStorage implements IItemHandlerModifiable {
     public LongItemStorage(int slots, long capacity, Predicate<ItemStack> validator, Runnable onChange) {
         if (validator == null) throw new IllegalArgumentException("validator must not be null");
         this.validator = validator;
-        this.storage = new LongResourceStorage<>(slots, capacity, ItemStack::isEmpty,
+        this.storage = new LongSlotStorage<>(slots, capacity, ItemStack::isEmpty,
                 stack -> stack.copyWithCount(1), ItemStack::isSameItemSameComponents, onChange);
     }
 

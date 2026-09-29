@@ -76,8 +76,8 @@ public class DATA_STORAGE_MACHINE {
                                 BigInteger next = stored.add(BigInteger.valueOf(low));
                                 var inputSimulation = inputPlan.simulate();
 
-                                if (inputSimulation.energySatisfied() && inputPlan.commitData(transaction ->
-                                        storage.set("energy", DataValue.of(next), transaction)).successful()) {
+                                if (inputSimulation.energySatisfied() && inputPlan.commit().successful()) {
+                                    storage.set("energy", DataValue.of(next));
                                     stored = next;
                                 }
                             }
@@ -106,9 +106,9 @@ public class DATA_STORAGE_MACHINE {
                                         if (accepted > 0) {
                                             BigInteger finalStored = stored.subtract(BigInteger.valueOf(accepted));
 
-                                        if (outputPlan.commitData(transaction ->
-                                                storage.set("energy", DataValue.of(finalStored), transaction)).successful()) {
-                                                stored = finalStored;
+                                        if (outputPlan.commit().successful()) {
+                                            storage.set("energy", DataValue.of(finalStored));
+                                            stored = finalStored;
                                             }
                                         }
                                     }

@@ -31,8 +31,8 @@ import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -311,7 +311,7 @@ public final class CraftingContext {
             List<AsyncCapabilityRequest> requests = new ArrayList<>();
             if (item.io() == RecipeModifier.IOType.INPUT) {
                 for (AsyncResourceValue value : resources(capabilities, item.type().id(), IOType.INPUT)) {
-                    ItemResource resource;
+                    ItemStack resource;
                     try {
                         resource = NativeAsyncResourceValues.item(value);
                     } catch (IllegalArgumentException exception) {
@@ -323,7 +323,7 @@ public final class CraftingContext {
                 }
             } else if (!item.stack(null).isEmpty()) {
                 requests.add(resourceRequest(item.type().id(), parallelism,
-                        NativeAsyncResourceValues.item(ItemResource.of(item.stack(null))), amount, true));
+                        NativeAsyncResourceValues.item(item.stack(null)), amount, true));
             }
             return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
                     IOType.valueOf(item.io().name()), requests);
@@ -336,7 +336,7 @@ public final class CraftingContext {
             List<AsyncCapabilityRequest> requests = new ArrayList<>();
             if (fluid.io() == RecipeModifier.IOType.INPUT) {
                 for (AsyncResourceValue value : resources(capabilities, fluid.type().id(), IOType.INPUT)) {
-                    FluidResource resource;
+                    FluidStack resource;
                     try {
                         resource = NativeAsyncResourceValues.fluid(value);
                     } catch (IllegalArgumentException exception) {
@@ -348,7 +348,7 @@ public final class CraftingContext {
                 }
             } else if (!fluid.stack().isEmpty()) {
                 requests.add(resourceRequest(fluid.type().id(), parallelism,
-                        NativeAsyncResourceValues.fluid(FluidResource.of(fluid.stack())), amount, true));
+                        NativeAsyncResourceValues.fluid(fluid.stack()), amount, true));
             }
             return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
                     IOType.valueOf(fluid.io().name()), requests);

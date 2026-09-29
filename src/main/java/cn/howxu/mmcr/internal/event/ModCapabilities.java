@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
@@ -29,12 +28,6 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.TransferPreconditions;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.resource.Resource;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 public final class ModCapabilities {
     public static final BlockCapability<IItemHandler, Direction> ITEM_BLOCK = Capabilities.ItemHandler.BLOCK;
@@ -174,16 +167,6 @@ public final class ModCapabilities {
         return null;
     }
 
-    /**
-     * Legacy bridge for AE2's independently versioned Transfer capability exposure.
-     * Built-in ports register the native NeoForge handler constants above instead.
-     */
-    public static <R extends Resource> ResourceHandler<R> resourceStorageHandler(ResourceStorage<R> storage,
-                                                                                  boolean canInsert,
-                                                                                  boolean canExtract) {
-        return new ResourceStorageHandler<>(storage, canInsert, canExtract);
-    }
-
     private record DirectionalItemHandler(IItemHandler handler, boolean canInsert, boolean canExtract)
             implements IItemHandler {
         @Override public int getSlots() { return handler.getSlots(); }
@@ -252,32 +235,4 @@ public final class ModCapabilities {
         }
     }
 
-    private record ResourceStorageHandler<R extends Resource>(ResourceStorage<R> storage, boolean canInsert,
-                                                               boolean canExtract) implements ResourceHandler<R> {
-        @Override public int size() { return storage.size(); }
-        @Override public R getResource(int slot) {
-            R resource = storage.resource(slot);
-            return resource == null ? emptyResource() : resource;
-        }
-        @Override public long getAmountAsLong(int slot) { return storage.amount(slot); }
-        @Override public long getCapacityAsLong(int slot, R resource) { return storage.capacity(slot, resource); }
-        @Override public boolean isValid(int slot, R resource) {
-            TransferPreconditions.checkNonEmpty(resource);
-            return storage.isValid(slot, resource);
-        }
-        @Override public int insert(int slot, R resource, int amount, TransactionContext transaction) {
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            return canInsert ? (int) storage.insert(slot, resource, amount, transaction) : 0;
-        }
-        @Override public int extract(int slot, R resource, int amount, TransactionContext transaction) {
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            return canExtract ? (int) storage.extract(slot, resource, amount, transaction) : 0;
-        }
-        @SuppressWarnings("unchecked")
-        private R emptyResource() {
-            if (storage.resourceType() == ItemResource.class) return (R) ItemResource.EMPTY;
-            if (storage.resourceType() == FluidResource.class) return (R) FluidResource.EMPTY;
-            throw new IllegalStateException("Missing empty resource for " + storage.resourceType().getName());
-        }
-    }
 }

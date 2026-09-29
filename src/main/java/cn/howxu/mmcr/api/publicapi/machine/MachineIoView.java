@@ -2,8 +2,6 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
-import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
@@ -12,14 +10,11 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,49 +73,33 @@ public final class MachineIoView {
                 .toList();
     }
 
-    public List<ResourceAmount<ItemResource>> itemInputs() {
-        Map<ItemResource, Long> amounts = new LinkedHashMap<>();
+    public List<ResourceAmount<ItemStack>> itemInputs() {
+        Map<ItemStack, Long> amounts = new LinkedHashMap<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
             ItemHandlerFacet nativeFacet = capability.facet(ItemHandlerFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.itemHandler() != null) {
                 var handler = nativeFacet.itemHandler();
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
                     ItemStack stack = handler.getStackInSlot(slot);
-                    if (!stack.isEmpty()) amounts.merge(ItemResource.of(stack), itemAmount(handler, slot), MachineIoView::saturatedAdd);
+                    if (!stack.isEmpty()) amounts.merge(stack.copyWithCount(1), itemAmount(handler, slot), MachineIoView::saturatedAdd);
                 }
                 continue;
-            }
-            ResourceStorage<?> storage = resourceStorage(capability, ItemResource.class);
-            if (storage == null) continue;
-            for (int slot = 0; slot < storage.size(); slot++) {
-                Object value = storage.resource(slot);
-                long amount = storage.amount(slot);
-                if (!(value instanceof ItemResource resource) || resource.isEmpty() || amount <= 0L) continue;
-                amounts.merge(resource, amount, MachineIoView::saturatedAdd);
             }
         }
         return resourceAmounts(amounts);
     }
 
-    public List<ResourceAmount<FluidResource>> fluidInputs() {
-        Map<FluidResource, Long> amounts = new LinkedHashMap<>();
+    public List<ResourceAmount<FluidStack>> fluidInputs() {
+        Map<FluidStack, Long> amounts = new LinkedHashMap<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
             FluidHandlerFacet nativeFacet = capability.facet(FluidHandlerFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.fluidHandler() != null) {
                 var handler = nativeFacet.fluidHandler();
                 for (int tank = 0; tank < handler.getTanks(); tank++) {
                     FluidStack stack = handler.getFluidInTank(tank);
-                    if (!stack.isEmpty()) amounts.merge(FluidResource.of(stack), fluidAmount(handler, tank), MachineIoView::saturatedAdd);
+                    if (!stack.isEmpty()) amounts.merge(stack.copyWithAmount(1), fluidAmount(handler, tank), MachineIoView::saturatedAdd);
                 }
                 continue;
-            }
-            ResourceStorage<?> storage = resourceStorage(capability, FluidResource.class);
-            if (storage == null) continue;
-            for (int slot = 0; slot < storage.size(); slot++) {
-                Object value = storage.resource(slot);
-                long amount = storage.amount(slot);
-                if (!(value instanceof FluidResource resource) || resource.isEmpty() || amount <= 0L) continue;
-                amounts.merge(resource, amount, MachineIoView::saturatedAdd);
             }
         }
         return resourceAmounts(amounts);
@@ -145,9 +124,9 @@ public final class MachineIoView {
     public long itemAmount(Ingredient ingredient) {
         Objects.requireNonNull(ingredient, "ingredient");
         long amount = 0L;
-        for (ResourceAmount<ItemResource> input : itemInputs()) {
-            ItemResource resource = input.resource();
-            if (ingredient.test(resource.toStack(Math.min(resource.getMaxStackSize(), Integer.MAX_VALUE)))) {
+        for (ResourceAmount<ItemStack> input : itemInputs()) {
+            ItemStack resource = input.resource();
+            if (ingredient.test(resource)) {
                 amount = saturatedAdd(amount, input.amount());
             }
         }
@@ -157,9 +136,9 @@ public final class MachineIoView {
     public long fluidAmount(FluidIngredient ingredient) {
         Objects.requireNonNull(ingredient, "ingredient");
         long amount = 0L;
-        for (ResourceAmount<FluidResource> input : fluidInputs()) {
-            FluidResource resource = input.resource();
-            if (ingredient.test(resource.toStack((int) Math.min(input.amount(), Integer.MAX_VALUE)))) {
+        for (ResourceAmount<FluidStack> input : fluidInputs()) {
+            FluidStack resource = input.resource();
+            if (ingredient.test(resource.copyWithAmount((int) Math.min(input.amount(), Integer.MAX_VALUE)))) {
                 amount = saturatedAdd(amount, input.amount());
             }
         }
@@ -168,7 +147,6 @@ public final class MachineIoView {
 
     public long itemOutputCapacity(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return 0L;
-        ItemResource resource = ItemResource.of(stack);
         long capacity = 0L;
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
             ItemHandlerFacet nativeFacet = capability.facet(ItemHandlerFacet.class).orElse(null);
@@ -182,27 +160,12 @@ public final class MachineIoView {
                 }
                 continue;
             }
-            ResourceStorage<?> storage = resourceStorage(capability, ItemResource.class);
-            if (storage == null) continue;
-            for (int slot = 0; slot < storage.size(); slot++) {
-                Object current = storage.resource(slot);
-                long amount = storage.amount(slot);
-                if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
-                if (!storage.isValidResource(slot, resource)) continue;
-                long slotCapacity = storage.capacityResource(slot, resource);
-                ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
-                if (facet == null || !facet.supportsLargeStacks()) {
-                    slotCapacity = Math.min(slotCapacity, resource.getMaxStackSize());
-                }
-                capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - amount));
-            }
         }
         return capacity;
     }
 
     public long fluidOutputCapacity(FluidStack stack) {
         if (stack == null || stack.isEmpty()) return 0L;
-        FluidResource resource = FluidResource.of(stack);
         long capacity = 0L;
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
             FluidHandlerFacet nativeFacet = capability.facet(FluidHandlerFacet.class).orElse(null);
@@ -215,16 +178,6 @@ public final class MachineIoView {
                     }
                 }
                 continue;
-            }
-            ResourceStorage<?> storage = resourceStorage(capability, FluidResource.class);
-            if (storage == null) continue;
-            for (int slot = 0; slot < storage.size(); slot++) {
-                Object current = storage.resource(slot);
-                long amount = storage.amount(slot);
-                if (current instanceof FluidResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
-                if (!storage.isValidResource(slot, resource)) continue;
-                long slotCapacity = storage.capacityResource(slot, resource);
-                capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - amount));
             }
         }
         return capacity;
@@ -275,18 +228,10 @@ public final class MachineIoView {
                 .toList();
     }
 
-    private static ResourceStorage<?> resourceStorage(MachineCapability capability, Class<?> resourceType) {
-        ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
-        if (facet != null) return facet.resourceType().equals(resourceType) ? facet.storage() : null;
-        ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
-        return valueFacet != null && valueFacet.storage() instanceof ResourceStorage<?> storage
-                && storage.resourceType().equals(resourceType) ? storage : null;
-    }
-
     @SuppressWarnings("unchecked")
     private static <S extends CapabilityStorage> S valueStorage(
             MachineCapability capability, Class<S> storageType) {
-        ValueFacet<?> facet = capability == null ? null : capability.facet(ValueFacet.class).orElse(null);
+        cn.howxu.mmcr.api.capability.facet.ValueFacet<?> facet = capability == null ? null : capability.facet(cn.howxu.mmcr.api.capability.facet.ValueFacet.class).orElse(null);
         return facet != null && storageType.isInstance(facet.storage())
                 ? (S) facet.storage() : null;
     }

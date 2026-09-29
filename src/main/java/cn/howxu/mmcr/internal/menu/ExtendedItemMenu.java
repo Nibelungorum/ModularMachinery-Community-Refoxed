@@ -33,7 +33,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         this.kind = owner == null ? "extended_item_input_bus_basic" : owner.kind().id();
         this.slotCount = owner == null ? PktPortStorageSyncPayload.requireKind(kind).itemSlotCount()
-                : owner.itemStorage().size();
+                : owner.nativeItemHandler().getSlots();
         this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.itemEntries(owner.nativeItemHandler());
         addPlayerSlots(playerInv, 47);
     }

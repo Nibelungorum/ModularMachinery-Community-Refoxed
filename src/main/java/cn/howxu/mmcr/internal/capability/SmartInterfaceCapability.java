@@ -72,7 +72,7 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
         if (!(request instanceof CapabilityRequests.SmartValueRequest)
                 || !TYPE.equals(request.type())
                 || !directions().supports(request.ioType())) {
-            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            return () -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         return CapabilityFactories.operation(this, request);
     }
@@ -87,9 +87,9 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.SmartValueRequest smart)) {
-            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            return () -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> storage.set(smart.interfaceType(), smart.value(), transaction)
+        return () -> storage.setExisting(smart.interfaceType(), smart.value())
                 ? CapabilityResult.successful()
                 : failure(BuiltinFailureReasons.SMART_VALUE);
     }

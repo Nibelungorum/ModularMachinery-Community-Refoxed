@@ -13,7 +13,7 @@ import java.util.function.UnaryOperator;
  * @param <R> stored resource type
  * @author howxu <dev@howxu.cn>
  */
-public class LongResourceStorage<R> {
+public class LongSlotStorage<R> {
     private final long capacity;
     private final Predicate<R> empty;
     private final UnaryOperator<R> copy;
@@ -22,7 +22,7 @@ public class LongResourceStorage<R> {
     private final List<R> resources;
     private final long[] amounts;
 
-    public LongResourceStorage(int slots, long capacity, Predicate<R> empty, UnaryOperator<R> copy,
+    public LongSlotStorage(int slots, long capacity, Predicate<R> empty, UnaryOperator<R> copy,
                                BiPredicate<R, R> matches, Runnable onChange) {
         if (slots <= 0) throw new IllegalArgumentException("slots must be positive");
         if (capacity < 0L) throw new IllegalArgumentException("capacity must be non-negative");

@@ -9,14 +9,14 @@ import net.neoforged.neoforge.fluids.capability.IFluidHandler;
  * @author howxu <dev@howxu.cn>
  */
 public final class LongFluidStorage implements IFluidHandler {
-    private final LongResourceStorage<FluidStack> storage;
+    private final LongSlotStorage<FluidStack> storage;
 
     public LongFluidStorage(long capacity, Runnable onChange) {
         this(1, capacity, onChange);
     }
 
     public LongFluidStorage(int slots, long capacity, Runnable onChange) {
-        storage = new LongResourceStorage<>(slots, capacity, FluidStack::isEmpty,
+        storage = new LongSlotStorage<>(slots, capacity, FluidStack::isEmpty,
                 stack -> stack.copyWithAmount(1), FluidStack::isSameFluidSameComponents, onChange);
     }
 

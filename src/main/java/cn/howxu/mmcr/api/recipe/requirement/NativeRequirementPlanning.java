@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -53,7 +54,10 @@ final class NativeRequirementPlanning {
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         if (maximum <= 0L && !partial) return blocked(requirement, context, insert, requestedAmount, available);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
-                (parallelism, ignored) -> itemOperations(requirement, ordered, context, parallelism, requested, insert, partial));
+                (parallelism, reservations) -> itemOperations(requirement, ordered, context, parallelism, requested,
+                        insert, partial, reservations),
+                RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> itemOperations(
+                        requirement, ordered, context, parallelism, requested, insert, partial, reservations)));
     }
 
     static RequirementPlan fluid(FluidRequirement requirement, List<MachineCapability> capabilities,
@@ -81,7 +85,10 @@ final class NativeRequirementPlanning {
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         if (maximum <= 0L && !partial) return blocked(requirement, context, insert, requestedAmount, available);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
-                (parallelism, ignored) -> fluidOperations(requirement, ordered, context, parallelism, requested, insert, partial));
+                (parallelism, reservations) -> fluidOperations(requirement, ordered, context, parallelism, requested,
+                        insert, partial, reservations),
+                RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> fluidOperations(
+                        requirement, ordered, context, parallelism, requested, insert, partial, reservations)));
     }
 
     static RequirementPlan energy(EnergyRequirement requirement, List<MachineCapability> capabilities,
@@ -103,12 +110,16 @@ final class NativeRequirementPlanning {
         if (maximum <= 0L && !partial) return blocked(requirement, context, insert,
                 RequirementHandlerSupport.scaled(perBatch, context.requestedParallelism()), available);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
-                (parallelism, ignored) -> energyOperations(requirement, ordered, context, parallelism, insert, partial));
+                (parallelism, reservations) -> energyOperations(requirement, ordered, context, parallelism, insert,
+                        partial, reservations),
+                RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> energyOperations(
+                        requirement, ordered, context, parallelism, insert, partial, reservations)));
     }
 
     private static RequirementPlan.OperationPlan itemOperations(ItemRequirement requirement, List<MachineCapability> capabilities,
-                                                                  PlanningContext context, long parallelism, ItemStack output,
-                                                                  boolean insert, boolean partial) {
+                                                                   PlanningContext context, long parallelism, ItemStack output,
+                                                                   boolean insert, boolean partial,
+                                                                   PlanningReservations reservations) {
         long remaining = RequirementHandlerSupport.scaled(insert ? output.getCount() : requirement.count(), parallelism);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
@@ -117,13 +128,16 @@ final class NativeRequirementPlanning {
             List<CapabilityRequests.ItemAction> actions = new ArrayList<>();
             IItemHandler handler = facet.itemHandler();
             for (int slot = 0; slot < handler.getSlots() && remaining > 0L; slot++) {
-                ItemStack current = handler.getStackInSlot(slot);
+                ItemStack current = reservations.item(handler, slot);
                 if (!insert && (current.isEmpty() || requirement.item() == null || !requirement.item().test(current)
                         || !requirement.components().matches(current))) continue;
                 if (insert && !handler.isItemValid(slot, output)
                         || insert && !current.isEmpty() && !ItemStack.isSameItemSameComponents(current, output)) continue;
-                long moved = Math.min(remaining, insert ? itemCapacity(handler, slot) - itemAmount(handler, slot) : itemAmount(handler, slot));
+                long moved = Math.min(remaining, insert ? itemCapacity(handler, slot) - reservations.itemAmount(handler, slot)
+                        : reservations.itemAmount(handler, slot));
                 if (moved <= 0L) continue;
+                if (insert ? !reservations.reserveItemInsert(handler, slot, output, moved, itemCapacity(handler, slot))
+                        : !reservations.reserveItemExtract(handler, slot, current, moved)) continue;
                 actions.add(new CapabilityRequests.ItemAction(slot, insert ? output : current, moved, insert));
                 remaining -= moved;
             }
@@ -136,7 +150,8 @@ final class NativeRequirementPlanning {
 
     private static RequirementPlan.OperationPlan fluidOperations(FluidRequirement requirement, List<MachineCapability> capabilities,
                                                                    PlanningContext context, long parallelism, FluidStack output,
-                                                                   boolean insert, boolean partial) {
+                                                                   boolean insert, boolean partial,
+                                                                   PlanningReservations reservations) {
         long remaining = RequirementHandlerSupport.scaled(insert ? output.getAmount() : requirement.amount(), parallelism);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
@@ -145,12 +160,15 @@ final class NativeRequirementPlanning {
             IFluidHandler handler = facet.fluidHandler();
             List<CapabilityRequests.FluidAction> actions = new ArrayList<>();
             for (int tank = 0; tank < handler.getTanks() && remaining > 0L; tank++) {
-                FluidStack current = handler.getFluidInTank(tank);
+                FluidStack current = reservations.fluid(handler, tank);
                 if (!insert && (current.isEmpty() || requirement.fluid() == null || !requirement.fluid().test(current))) continue;
                 if (insert && !handler.isFluidValid(tank, output)
                         || insert && !current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, output)) continue;
-                long moved = Math.min(remaining, insert ? fluidCapacity(handler, tank) - fluidAmount(handler, tank) : fluidAmount(handler, tank));
+                long moved = Math.min(remaining, insert ? fluidCapacity(handler, tank) - reservations.fluidAmount(handler, tank)
+                        : reservations.fluidAmount(handler, tank));
                 if (moved <= 0L) continue;
+                if (insert ? !reservations.reserveFluidInsert(handler, tank, output, moved, fluidCapacity(handler, tank))
+                        : !reservations.reserveFluidExtract(handler, tank, current, moved)) continue;
                 actions.add(new CapabilityRequests.FluidAction(tank, insert ? output : current, moved, insert));
                 remaining -= moved;
             }
@@ -162,8 +180,9 @@ final class NativeRequirementPlanning {
     }
 
     private static RequirementPlan.OperationPlan energyOperations(EnergyRequirement requirement, List<MachineCapability> capabilities,
-                                                                    PlanningContext context, long parallelism,
-                                                                    boolean insert, boolean partial) {
+                                                                     PlanningContext context, long parallelism,
+                                                                     boolean insert, boolean partial,
+                                                                     PlanningReservations reservations) {
         long remaining = RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {

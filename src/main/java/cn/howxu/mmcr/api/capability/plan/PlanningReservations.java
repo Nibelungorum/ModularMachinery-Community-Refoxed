@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import java.util.HashMap;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -19,56 +20,48 @@ public final class PlanningReservations {
     private final Map<Object, Map<Object, Long>> outputReservations = new IdentityHashMap<>();
     private final Map<LongValueStorage, Long> values = new IdentityHashMap<>();
 
-    public Object resource(ResourceStorage<?> storage, int slot) {
-        ResourceReservation reservation = reservation(storage, slot, false);
-        if (reservation == null) return storage.resource(slot);
-        return reservation.insertedResource == null ? storage.resource(slot) : reservation.insertedResource;
+    public ItemStack item(IItemHandler handler, int slot) {
+        ResourceReservation reservation = reservation(handler, slot, false);
+        return reservation == null || reservation.insertedResource == null
+                ? handler.getStackInSlot(slot) : ((ItemStack) reservation.insertedResource).copy();
     }
 
-    public long amount(ResourceStorage<?> storage, int slot) {
-        Long amount = virtualAmount(storage, slot);
-        return amount == null ? 0L : amount;
+    public FluidStack fluid(IFluidHandler handler, int tank) {
+        ResourceReservation reservation = reservation(handler, tank, false);
+        return reservation == null || reservation.insertedResource == null
+                ? handler.getFluidInTank(tank) : ((FluidStack) reservation.insertedResource).copy();
     }
 
-    public boolean reserveExtract(ResourceStorage<?> storage, int slot, Object resource, long amount) {
-        if (amount <= 0L || !storage.resourceType().isInstance(resource)) return false;
-        Object current = resource(storage, slot);
-        Long currentAmount = virtualAmount(storage, slot);
-        if (!storage.resourceType().isInstance(current) || !current.equals(resource)
-                || currentAmount == null || currentAmount < amount) return false;
-        ResourceReservation reservation = reservation(storage, slot, false);
-        long extracted;
-        try {
-            extracted = Math.addExact(reservation == null ? 0L : reservation.extracted, amount);
-        } catch (ArithmeticException ignored) {
-            return false;
-        }
-        if (reservation == null) reservation = reservation(storage, slot, true);
-        reservation.extracted = extracted;
-        return true;
+    public long itemAmount(IItemHandler handler, int slot) {
+        return virtualAmount(handler, slot, handler.getStackInSlot(slot).getCount());
     }
 
-    public boolean reserveInsert(ResourceStorage<?> storage, int slot, Object resource, long amount) {
-        if (amount <= 0L || !storage.resourceType().isInstance(resource)
-                || !storage.isValidResource(slot, resource)) return false;
-        ResourceReservation reservation = reservation(storage, slot, false);
-        Object current = resource(storage, slot);
-        Long currentAmount = virtualAmount(storage, slot);
-        long capacity = storage.capacityResource(slot, resource);
-        if (currentAmount == null || currentAmount < 0L || capacity < 0L || currentAmount > capacity
-                || mismatchedNonEmptyResource(current, resource)
-                || amount > capacity - currentAmount) return false;
-        if (reservation == null) reservation = reservation(storage, slot, true);
-        if (reservation.insertedResource != null && !reservation.insertedResource.equals(resource)) return false;
-        long inserted;
-        try {
-            inserted = Math.addExact(reservation.inserted, amount);
-        } catch (ArithmeticException ignored) {
-            return false;
-        }
-        reservation.insertedResource = resource;
-        reservation.inserted = inserted;
-        return true;
+    public long fluidAmount(IFluidHandler handler, int tank) {
+        return virtualAmount(handler, tank, handler.getFluidInTank(tank).getAmount());
+    }
+
+    public boolean reserveItemExtract(IItemHandler handler, int slot, ItemStack stack, long amount) {
+        ItemStack current = item(handler, slot);
+        if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, stack)) return false;
+        return reserveExtract(handler, slot, stack, amount, ItemStack::isSameItemSameComponents,
+                (storage, reservedSlot) -> itemAmount((IItemHandler) storage, reservedSlot));
+    }
+
+    public boolean reserveItemInsert(IItemHandler handler, int slot, ItemStack stack, long amount, long capacity) {
+        return reserveInsert(handler, slot, stack, amount, capacity, ItemStack::isSameItemSameComponents,
+                (storage, reservedSlot) -> itemAmount((IItemHandler) storage, reservedSlot));
+    }
+
+    public boolean reserveFluidExtract(IFluidHandler handler, int tank, FluidStack stack, long amount) {
+        FluidStack current = fluid(handler, tank);
+        if (current.isEmpty() || !FluidStack.isSameFluidSameComponents(current, stack)) return false;
+        return reserveExtract(handler, tank, stack, amount, FluidStack::isSameFluidSameComponents,
+                (storage, reservedTank) -> fluidAmount((IFluidHandler) storage, reservedTank));
+    }
+
+    public boolean reserveFluidInsert(IFluidHandler handler, int tank, FluidStack stack, long amount, long capacity) {
+        return reserveInsert(handler, tank, stack, amount, capacity, FluidStack::isSameFluidSameComponents,
+                (storage, reservedTank) -> fluidAmount((IFluidHandler) storage, reservedTank));
     }
 
     public long outputAvailable(Object identity, Object key, long capacity) {
@@ -138,13 +131,13 @@ public final class PlanningReservations {
         return true;
     }
 
-    private Long virtualAmount(ResourceStorage<?> storage, int slot) {
+    private long virtualAmount(Object storage, int slot, long amount) {
         ResourceReservation reservation = reservation(storage, slot, false);
+        if (reservation == null) return amount;
         try {
-            long amount = Math.subtractExact(storage.amount(slot), reservation == null ? 0L : reservation.extracted);
-            return Math.addExact(amount, reservation == null ? 0L : reservation.inserted);
+            return Math.addExact(Math.subtractExact(amount, reservation.extracted), reservation.inserted);
         } catch (ArithmeticException ignored) {
-            return null;
+            return 0L;
         }
     }
 
@@ -174,19 +167,37 @@ public final class PlanningReservations {
         if (key == null) throw new IllegalArgumentException("key must not be null");
     }
 
-    private static boolean mismatchedNonEmptyResource(Object current, Object requested) {
-        if (current instanceof ItemResource item) return !item.isEmpty() && !item.equals(requested);
-        if (current instanceof FluidResource fluid) return !fluid.isEmpty() && !fluid.equals(requested);
-        return false;
+    private <R> boolean reserveExtract(Object storage, int slot, R resource, long amount,
+                                       ResourceMatcher<R> matcher, AmountReader reader) {
+        if (amount <= 0L) return false;
+        ResourceReservation reservation = reservation(storage, slot, false);
+        Object current = reservation == null || reservation.insertedResource == null
+                ? null : reservation.insertedResource;
+        if (current != null && !matcher.matches(resource, (R) current) || reader.amount(storage, slot) < amount) return false;
+        if (reservation == null) reservation = reservation(storage, slot, true);
+        reservation.extracted += amount;
+        return true;
     }
 
-    private ResourceReservation reservation(ResourceStorage<?> storage, int slot, boolean create) {
-        Object identity = storage.reservationIdentity();
-        Map<Integer, ResourceReservation> bySlot = resources.get(identity);
+    private <R> boolean reserveInsert(Object storage, int slot, R resource, long amount, long capacity,
+                                      ResourceMatcher<R> matcher, AmountReader reader) {
+        if (amount <= 0L || capacity < 0L || reader.amount(storage, slot) > capacity) return false;
+        ResourceReservation reservation = reservation(storage, slot, false);
+        Object current = reservation == null ? null : reservation.insertedResource;
+        if (current != null && !matcher.matches(resource, (R) current)) return false;
+        if (amount > capacity - reader.amount(storage, slot)) return false;
+        if (reservation == null) reservation = reservation(storage, slot, true);
+        reservation.insertedResource = resource;
+        reservation.inserted += amount;
+        return true;
+    }
+
+    private ResourceReservation reservation(Object storage, int slot, boolean create) {
+        Map<Integer, ResourceReservation> bySlot = resources.get(storage);
         if (bySlot == null) {
             if (!create) return null;
             bySlot = new HashMap<>();
-            resources.put(identity, bySlot);
+            resources.put(storage, bySlot);
         }
         ResourceReservation reservation = bySlot.get(slot);
         if (reservation == null && create) {
@@ -200,5 +211,15 @@ public final class PlanningReservations {
         private long extracted;
         private long inserted;
         private Object insertedResource;
+    }
+
+    @FunctionalInterface
+    private interface ResourceMatcher<R> {
+        boolean matches(R first, R second);
+    }
+
+    @FunctionalInterface
+    private interface AmountReader {
+        long amount(Object storage, int slot);
     }
 }

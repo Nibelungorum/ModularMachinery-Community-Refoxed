@@ -1,8 +1,5 @@
 package cn.howxu.mmcr.api.data;
 
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -11,10 +8,10 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import org.jetbrains.annotations.Nullable;
 
-/** Ordered, typed, transaction-aware machine data storage.
+/** Ordered, typed machine data storage.
  * @author howxu <dev@howxu.cn>
  */
-public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
+public final class DataStorage {
     private final Map<String, DataValue> values = new LinkedHashMap<>();
     private final Consumer<Map<String, DataValue>> changeListener;
     private @Nullable Map<String, DataValue> immutableValuesCache;
@@ -55,17 +52,6 @@ public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
         changeListener.accept(values());
     }
 
-    public boolean set(String key, DataValue value, TransactionContext transaction) {
-        requireValidKey(key);
-        Objects.requireNonNull(value, "value");
-        Objects.requireNonNull(transaction, "transaction");
-        if (value.equals(values.get(key))) return false;
-        updateSnapshots(transaction);
-        values.put(key, value);
-        invalidateValuesCache();
-        return true;
-    }
-
     public Optional<DataValue> remove(String key) {
         requireValidKey(key);
         DataValue previous = values.remove(key);
@@ -78,26 +64,6 @@ public final class DataStorage extends SnapshotJournal<Map<String, DataValue>> {
 
     public Object contentFingerprint() {
         return values();
-    }
-
-    @Override
-    protected Map<String, DataValue> createSnapshot() {
-        return new LinkedHashMap<>(values);
-    }
-
-    @Override
-    protected void revertToSnapshot(Map<String, DataValue> snapshot) {
-        values.clear();
-        if (snapshot != null) values.putAll(snapshot);
-        invalidateValuesCache();
-    }
-
-    @Override
-    protected void onRootCommit(Map<String, DataValue> originalState) {
-        if (!Objects.equals(originalState, values)) {
-            invalidateValuesCache();
-            changeListener.accept(values());
-        }
     }
 
     private void invalidateValuesCache() {
