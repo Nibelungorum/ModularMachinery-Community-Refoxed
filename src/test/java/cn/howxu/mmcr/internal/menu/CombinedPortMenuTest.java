@@ -71,6 +71,18 @@ class CombinedPortMenuTest {
     }
 
     @Test
+    void combined_snapshot_keeps_existing_capability_display_entries() {
+        CombinedPortBlockEntity owner = new CombinedPortBlockEntity(
+                POS, ModBlocks.BLOCKS.get("combined_input_reinforced").get().defaultBlockState());
+        CombinedPortMenu menu = new CombinedPortMenu(1, emptyInventory(), owner);
+        var displays = menu.displayEntries();
+
+        menu.applySnapshot(new PktPortStorageSyncPayload(POS, "combined_input_reinforced", List.of(), List.of()));
+
+        assertThat(menu.displayEntries()).isSameAs(displays).isNotEmpty();
+    }
+
+    @Test
     void combined_client_open_rejects_invalid_counts() {
         FriendlyByteBuf invalidItemCount = new FriendlyByteBuf(Unpooled.buffer());
         invalidItemCount.writeBlockPos(POS);

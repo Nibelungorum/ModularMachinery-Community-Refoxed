@@ -7,6 +7,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -40,8 +41,10 @@ class PortStorageSyncPayloadTest {
     void payload_codec_round_trips_position_kind_order_resource_identity_and_long_values() {
         PktPortStorageSyncPayload payload = new PktPortStorageSyncPayload(
                 new BlockPos(1, 2, 3), PortKinds.COMBINED_INPUT.id(),
-                List.of(new PktPortStorageSyncPayload.ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(), 3L, 64L)),
-                List.of(new PktPortStorageSyncPayload.FluidStorageEntry(1, new FluidStack(Fluids.WATER, 1), 5L, 8L)));
+                List.of(new PktPortStorageSyncPayload.ItemStorageEntry(0, Items.IRON_INGOT.getDefaultInstance(), 3L, 64L),
+                        new PktPortStorageSyncPayload.ItemStorageEntry(1, ItemStack.EMPTY, 0L, 8L)),
+                List.of(new PktPortStorageSyncPayload.FluidStorageEntry(1, new FluidStack(Fluids.WATER, 1), 5L, 8L),
+                        new PktPortStorageSyncPayload.FluidStorageEntry(2, FluidStack.EMPTY, 0L, 9L)));
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktPortStorageSyncPayload.STREAM_CODEC.encode(buffer, payload);
@@ -49,8 +52,14 @@ class PortStorageSyncPayloadTest {
 
         assertThat(decoded.pos()).isEqualTo(payload.pos());
         assertThat(decoded.kind()).isEqualTo(payload.kind());
-        assertThat(decoded.itemEntries()).containsExactlyElementsOf(payload.itemEntries());
-        assertThat(decoded.fluidEntries()).containsExactlyElementsOf(payload.fluidEntries());
+        assertThat(decoded.itemEntries()).hasSameSizeAs(payload.itemEntries());
+        assertThat(decoded.fluidEntries()).hasSameSizeAs(payload.fluidEntries());
+        for (int index = 0; index < payload.itemEntries().size(); index++) {
+            assertItemEntry(payload.itemEntries().get(index), decoded.itemEntries().get(index));
+        }
+        for (int index = 0; index < payload.fluidEntries().size(); index++) {
+            assertFluidEntry(payload.fluidEntries().get(index), decoded.fluidEntries().get(index));
+        }
     }
 
     @Test
@@ -74,5 +83,29 @@ class PortStorageSyncPayloadTest {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 new RegistryAccess.ImmutableRegistryAccess(
                         List.of(BuiltInRegistries.ITEM, BuiltInRegistries.FLUID)));
+    }
+
+    private static void assertItemEntry(PktPortStorageSyncPayload.ItemStorageEntry expected,
+                                        PktPortStorageSyncPayload.ItemStorageEntry actual) {
+        assertThat(actual.slot()).isEqualTo(expected.slot());
+        assertThat(actual.amount()).isEqualTo(expected.amount());
+        assertThat(actual.capacity()).isEqualTo(expected.capacity());
+        assertThat(actual.resource().isEmpty()).isEqualTo(expected.resource().isEmpty());
+        if (!expected.resource().isEmpty()) {
+            assertThat(ItemStack.isSameItemSameComponents(actual.resource(), expected.resource())).isTrue();
+            assertThat(actual.resource().getCount()).isOne();
+        }
+    }
+
+    private static void assertFluidEntry(PktPortStorageSyncPayload.FluidStorageEntry expected,
+                                         PktPortStorageSyncPayload.FluidStorageEntry actual) {
+        assertThat(actual.slot()).isEqualTo(expected.slot());
+        assertThat(actual.amount()).isEqualTo(expected.amount());
+        assertThat(actual.capacity()).isEqualTo(expected.capacity());
+        assertThat(actual.resource().isEmpty()).isEqualTo(expected.resource().isEmpty());
+        if (!expected.resource().isEmpty()) {
+            assertThat(FluidStack.isSameFluidSameComponents(actual.resource(), expected.resource())).isTrue();
+            assertThat(actual.resource().getAmount()).isOne();
+        }
     }
 }

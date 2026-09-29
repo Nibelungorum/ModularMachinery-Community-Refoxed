@@ -150,7 +150,6 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         }
         itemEntries = nextItems;
         fluidEntries = nextFluids;
-        displayEntries = List.of();
     }
 
     private void addItemSlots(CombinedPortBlockEntity owner) {
