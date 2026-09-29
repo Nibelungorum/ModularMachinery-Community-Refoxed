@@ -81,7 +81,7 @@ public final class WorldPreviewMeshCompiler {
         return layer.sortOnUpload();
     }
 
-    static boolean needsTranslucentResort(Vec3 previousCamera, Vec3 camera) {
+    static boolean needsResort(Vec3 previousCamera, Vec3 camera) {
         return previousCamera == null || !previousCamera.equals(camera);
     }
 
@@ -154,17 +154,18 @@ public final class WorldPreviewMeshCompiler {
                 }
             }
             if (cancelled.get()) throw new CancelledCompilation();
-            MeshData.SortState sortState = null;
+            Map<RenderType, MeshData.SortState> sortStates = new LinkedHashMap<>();
             VertexSorting sorting = VertexSorting.byDistance((float) camera.x, (float) camera.y, (float) camera.z);
             for (Map.Entry<RenderType, BufferBuilder> entry : started.entrySet()) {
                 MeshData mesh = entry.getValue().build();
                 if (mesh == null) continue;
                 if (hasSortMetadata(entry.getKey())) {
-                    sortState = mesh.sortQuads(builders.buffer(entry.getKey()), sorting);
+                    MeshData.SortState sortState = mesh.sortQuads(builders.buffer(entry.getKey()), sorting);
+                    if (sortState != null) sortStates.put(entry.getKey(), sortState);
                 }
                 meshes.put(entry.getKey(), mesh);
             }
-            return new WorldPreviewMesh(builders, meshes, sortState, blockEntities);
+            return new WorldPreviewMesh(builders, meshes, sortStates, blockEntities);
         } catch (RuntimeException exception) {
             List<AutoCloseable> closeables = new ArrayList<>(meshes.values());
             closeables.add(builders);

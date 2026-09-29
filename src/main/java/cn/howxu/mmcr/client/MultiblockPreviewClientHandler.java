@@ -169,9 +169,15 @@ public final class MultiblockPreviewClientHandler {
 
     public static void invalidateWorldPreviewForReload() {
         Minecraft.getInstance().execute(() -> {
+            cancelCompilation();
             worldMeshRequest = null;
             worldMeshCompileInput = null;
             worldMeshCache.clear();
+            if (gpuMesh != null) {
+                gpuMesh.close();
+                gpuMesh = null;
+            }
+            gpuMeshKey = null;
         });
     }
 
@@ -288,9 +294,10 @@ public final class MultiblockPreviewClientHandler {
             } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
                 mesh.draw(RenderType.cutout());
             } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
-                mesh.resortTranslucent(camera);
+                mesh.resort(RenderType.translucent(), camera);
                 mesh.draw(RenderType.translucent());
             } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
+                mesh.resort(RenderType.tripwire(), camera);
                 mesh.draw(RenderType.tripwire());
             }
         } finally {

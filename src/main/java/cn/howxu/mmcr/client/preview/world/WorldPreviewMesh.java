@@ -23,27 +23,27 @@ public final class WorldPreviewMesh implements AutoCloseable {
     private final AutoCloseable builders;
     private final SectionBufferBuilderPack sortableBuilders;
     private final Map<RenderType, MeshData> meshes;
-    private final MeshData.SortState translucentSortState;
+    private final Map<RenderType, MeshData.SortState> sortStates;
     private final Set<BlockPos> blockEntityPositions;
     private boolean closed;
 
     WorldPreviewMesh(SectionBufferBuilderPack builders, Map<RenderType, MeshData> meshes,
-            MeshData.SortState translucentSortState, Set<BlockPos> blockEntityPositions) {
-        this(builders, builders, meshes, translucentSortState, blockEntityPositions);
+            Map<RenderType, MeshData.SortState> sortStates, Set<BlockPos> blockEntityPositions) {
+        this(builders, builders, meshes, sortStates, blockEntityPositions);
     }
 
     WorldPreviewMesh(AutoCloseable builders, Map<RenderType, MeshData> meshes,
-            MeshData.SortState translucentSortState, Set<BlockPos> blockEntityPositions) {
-        this(builders, null, meshes, translucentSortState, blockEntityPositions);
+            Map<RenderType, MeshData.SortState> sortStates, Set<BlockPos> blockEntityPositions) {
+        this(builders, null, meshes, sortStates, blockEntityPositions);
     }
 
     private WorldPreviewMesh(AutoCloseable builders, SectionBufferBuilderPack sortableBuilders,
             Map<RenderType, MeshData> meshes,
-            MeshData.SortState translucentSortState, Set<BlockPos> blockEntityPositions) {
+            Map<RenderType, MeshData.SortState> sortStates, Set<BlockPos> blockEntityPositions) {
         this.builders = Objects.requireNonNull(builders, "builders");
         this.sortableBuilders = sortableBuilders;
         this.meshes = Map.copyOf(meshes);
-        this.translucentSortState = translucentSortState;
+        this.sortStates = Map.copyOf(sortStates);
         this.blockEntityPositions = Set.copyOf(blockEntityPositions);
     }
 
@@ -51,17 +51,18 @@ public final class WorldPreviewMesh implements AutoCloseable {
         return meshes;
     }
 
-    public MeshData.SortState translucentSortState() {
-        return translucentSortState;
+    public Map<RenderType, MeshData.SortState> sortStates() {
+        return sortStates;
     }
 
     public Set<BlockPos> blockEntityPositions() {
         return blockEntityPositions;
     }
 
-    ByteBufferBuilder.Result sortedTranslucentIndex(Vec3 camera) {
-        if (translucentSortState == null || sortableBuilders == null) return null;
-        return translucentSortState.buildSortedIndexBuffer(sortableBuilders.buffer(RenderType.translucent()),
+    ByteBufferBuilder.Result sortedIndex(RenderType layer, Vec3 camera) {
+        MeshData.SortState sortState = sortStates.get(layer);
+        if (sortState == null || sortableBuilders == null) return null;
+        return sortState.buildSortedIndexBuffer(sortableBuilders.buffer(layer),
                 VertexSorting.byDistance((float) camera.x, (float) camera.y, (float) camera.z));
     }
 

@@ -98,19 +98,20 @@ class WorldPreviewMeshCompilerTest {
     }
 
     @Test
-    void translucentLayerPublishesSortMetadata() {
+    void sortedLayersPublishSortMetadata() {
         assertThat(WorldPreviewMeshCompiler.hasSortMetadata(RenderType.translucent())).isTrue();
+        assertThat(WorldPreviewMeshCompiler.hasSortMetadata(RenderType.tripwire())).isTrue();
         assertThat(WorldPreviewMeshCompiler.hasSortMetadata(RenderType.solid())).isFalse();
     }
 
     @Test
-    void translucentSortIsRebuiltWhenCameraMovesWithinTheSameBlock() {
+    void sortedLayerIsRebuiltWhenCameraMovesWithinTheSameBlock() {
         var camera = new Vec3(1.25, 2.5, 3.75);
 
-        // assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(null, camera)).isTrue();
-        assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(camera,
+        assertThat(WorldPreviewMeshCompiler.needsResort(null, camera)).isTrue();
+        assertThat(WorldPreviewMeshCompiler.needsResort(camera,
                 new Vec3(1.5, 2.5, 3.75))).isTrue();
-        assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(camera, camera)).isFalse();
+        assertThat(WorldPreviewMeshCompiler.needsResort(camera, camera)).isFalse();
     }
 
     @Test
@@ -141,7 +142,7 @@ class WorldPreviewMeshCompilerTest {
                 List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE,
                 new Vec3(0, 0, 0), new AtomicBoolean())) {
             assertThat(mesh.meshes()).containsKey(RenderType.translucent());
-            assertThat(mesh.translucentSortState()).isNotNull();
+            assertThat(mesh.sortStates()).containsKey(RenderType.translucent());
         }
     }
 
@@ -172,7 +173,7 @@ class WorldPreviewMeshCompilerTest {
     void worldPreviewMeshCloseIsIdempotent() {
         var owner = new CloseCounter();
         var meshData = nonEmptyMeshData();
-        var mesh = new WorldPreviewMesh(owner, Map.of(RenderType.solid(), meshData), null, Set.of());
+        var mesh = new WorldPreviewMesh(owner, Map.of(RenderType.solid(), meshData), Map.of(), Set.of());
 
         mesh.close();
         mesh.close();

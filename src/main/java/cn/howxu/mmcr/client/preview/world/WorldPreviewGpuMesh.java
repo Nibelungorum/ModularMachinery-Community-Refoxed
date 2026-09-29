@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -17,7 +18,7 @@ import java.util.Map;
 public final class WorldPreviewGpuMesh implements AutoCloseable {
     private final Map<RenderType, VertexBuffer> layers;
     private final WorldPreviewMesh source;
-    private Vec3 translucentCamera;
+    private final Map<RenderType, Vec3> sortedCameras = new HashMap<>();
     private boolean closed;
 
     private WorldPreviewGpuMesh(WorldPreviewMesh source, Map<RenderType, VertexBuffer> layers) {
@@ -61,16 +62,16 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         }
     }
 
-    public void resortTranslucent(Vec3 camera) {
+    public void resort(RenderType layer, Vec3 camera) {
         RenderSystem.assertOnRenderThread();
-        VertexBuffer buffer = layers.get(RenderType.translucent());
-        if (buffer == null || !WorldPreviewMeshCompiler.needsTranslucentResort(translucentCamera, camera)) return;
-        var sorted = source.sortedTranslucentIndex(camera);
+        VertexBuffer buffer = layers.get(layer);
+        if (buffer == null || !WorldPreviewMeshCompiler.needsResort(sortedCameras.get(layer), camera)) return;
+        var sorted = source.sortedIndex(layer, camera);
         if (sorted == null) return;
         buffer.bind();
         buffer.uploadIndexBuffer(sorted);
         VertexBuffer.unbind();
-        translucentCamera = camera;
+        sortedCameras.put(layer, camera);
     }
 
     @Override
