@@ -44,10 +44,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -108,11 +104,7 @@ class AsyncRequirementPlannerTest {
     @Test
     void capture_scope_reuses_one_snapshot_for_the_same_physical_storage() throws Exception {
         BulkItemStorage storage = new BulkItemStorage(64L, null);
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        try (Transaction transaction = Transaction.openRoot()) {
-            storage.insert(0, iron, 4L, transaction);
-            transaction.commit();
-        }
+        storage.forceInsert(new ItemStack(Items.IRON_INGOT, 1), 4L, false);
         ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                 ItemStack.EMPTY);
         CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
@@ -159,11 +151,7 @@ class AsyncRequirementPlannerTest {
     @Test
     void zero_consume_chance_item_input_does_not_create_an_async_extraction_request() throws Exception {
         BulkItemStorage storage = new BulkItemStorage(64L, null);
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        try (Transaction transaction = Transaction.openRoot()) {
-            storage.insert(0, iron, 2L, transaction);
-            transaction.commit();
-        }
+        storage.forceInsert(new ItemStack(Items.IRON_INGOT, 1), 2L, false);
         ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
                 ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F);
         CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
@@ -185,7 +173,7 @@ class AsyncRequirementPlannerTest {
 
     @Test
     void partial_consume_chance_item_input_does_not_create_an_async_extraction_request() throws Exception {
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemStack iron = new ItemStack(Items.IRON_INGOT, 1);
         ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
                 ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F);
 
@@ -194,7 +182,7 @@ class AsyncRequirementPlannerTest {
 
     @Test
     void zero_consume_chance_fluid_input_does_not_create_an_async_extraction_request() throws Exception {
-        FluidResource water = FluidResource.of(Fluids.WATER);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
         FluidRequirement input = new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 100,
                 FluidStack.EMPTY, 1F, List.of(), 0F);
 
@@ -203,35 +191,11 @@ class AsyncRequirementPlannerTest {
 
     @Test
     void partial_consume_chance_fluid_input_does_not_create_an_async_extraction_request() throws Exception {
-        FluidResource water = FluidResource.of(Fluids.WATER);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
         FluidRequirement input = new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 100,
                 FluidStack.EMPTY, 1F, List.of(), 0.5F);
 
         assertThat(prepareAsyncInput(input, NativeAsyncResourceValues.fluid(water), 100L)).isNull();
-    }
-
-    @Test
-    void resource_group_commit_rolls_back_its_prefix_when_a_later_operation_is_rejected() throws Exception {
-        BulkItemStorage storage = new BulkItemStorage(64L, null);
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        try (Transaction transaction = Transaction.openRoot()) {
-            storage.insert(0, iron, 2L, transaction);
-            transaction.commit();
-        }
-        ItemBusCapability capability = new ItemBusCapability(storage, IOType.INPUT);
-        AsyncCapabilityOperation group = new AsyncCapabilityOperation.Group(List.of(
-                new AsyncCapabilityOperation.Resource(capability.type().id(), 0,
-                        NativeAsyncResourceValues.item(iron), 1L, false),
-                new AsyncCapabilityOperation.Resource(capability.type().id(), 0,
-                        new AsyncResourceValue(MMCR.id("gold_ingot"), "{}"), 1L, false)));
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(commit(capability, group, transaction).success()).isFalse();
-            transaction.commit();
-        }
-
-        assertThat(storage.amount(0)).isEqualTo(2L);
-        assertThat(storage.resource(0)).isEqualTo(iron);
     }
 
     @Test
@@ -244,10 +208,7 @@ class AsyncRequirementPlannerTest {
                 new AsyncCapabilityRequest.Scalar(capability.type().id(), 3L, 60L, false)).orElseThrow();
         storage.setAmount(40L);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(commit(capability, operation, transaction).success()).isFalse();
-            transaction.commit();
-        }
+        assertThat(commit(capability, operation).success()).isFalse();
 
         assertThat(storage.amount()).isEqualTo(40L);
     }
@@ -390,19 +351,10 @@ class AsyncRequirementPlannerTest {
         }
     }
 
-    private static CapabilityResult commit(ItemBusCapability capability, AsyncCapabilityOperation operation,
-                                            TransactionContext transaction) throws Exception {
-        Method method = ItemBusCapability.class.getDeclaredMethod("commitAsync", AsyncCapabilityOperation.class,
-                TransactionContext.class);
+    private static CapabilityResult commit(EnergyHatchCapability capability, AsyncCapabilityOperation operation)
+            throws Exception {
+        Method method = EnergyHatchCapability.class.getDeclaredMethod("commitAsync", AsyncCapabilityOperation.class);
         method.setAccessible(true);
-        return (CapabilityResult) method.invoke(capability, operation, transaction);
-    }
-
-    private static CapabilityResult commit(EnergyHatchCapability capability, AsyncCapabilityOperation operation,
-                                            TransactionContext transaction) throws Exception {
-        Method method = EnergyHatchCapability.class.getDeclaredMethod("commitAsync", AsyncCapabilityOperation.class,
-                TransactionContext.class);
-        method.setAccessible(true);
-        return (CapabilityResult) method.invoke(capability, operation, transaction);
+        return (CapabilityResult) method.invoke(capability, operation);
     }
 }

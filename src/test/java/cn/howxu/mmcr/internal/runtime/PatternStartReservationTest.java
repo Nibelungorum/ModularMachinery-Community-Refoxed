@@ -20,7 +20,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -44,8 +44,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -273,9 +271,8 @@ class PatternStartReservationTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), ordinaryInput);
         formForPattern(controller, true);
         setItem(ordinaryInput.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
-        LongResourceStorage<ItemResource> requestStorage = new LongResourceStorage<>(ItemResource.class, 1, 64,
-                ItemResource::isEmpty, null);
-        requestStorage.setContents(0, ItemResource.of(stack(Items.IRON_INGOT, 1)), 1);
+        LongItemStorage requestStorage = new LongItemStorage(1, 64, null);
+        requestStorage.setContents(0, stack(Items.IRON_INGOT, 1), 1);
         MachineCapability request = new ItemBusCapability(requestStorage, IOType.INPUT);
         MachineRecipe recipe = recipe("reservation_atomic_inputs", List.of(input(Items.IRON_INGOT, 2)));
         RecipeRegistry.registerStatic(recipe);
@@ -294,9 +291,8 @@ class PatternStartReservationTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), ordinaryInput);
         formForPattern(controller, true);
         setItem(ordinaryInput.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
-        LongResourceStorage<ItemResource> requestStorage = new LongResourceStorage<>(ItemResource.class, 1, 64,
-                ItemResource::isEmpty, null);
-        requestStorage.setContents(0, ItemResource.of(stack(Items.IRON_INGOT, 1)), 1);
+        LongItemStorage requestStorage = new LongItemStorage(1, 64, null);
+        requestStorage.setContents(0, stack(Items.IRON_INGOT, 1), 1);
         MachineCapability request = new ItemBusCapability(requestStorage, IOType.INPUT);
         RecipeRegistry.registerStatic(recipe("reservation_insufficient_request", List.of(input(Items.IRON_INGOT, 3))));
 
@@ -456,14 +452,8 @@ class PatternStartReservationTest {
         return stack;
     }
 
-    private static void setItem(cn.howxu.mmcr.api.capability.storage.ResourceStorage<ItemResource> storage,
-                                int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = storage.resource(slot);
-            if (current != null && !current.isEmpty()) storage.extract(slot, current, storage.amount(slot), transaction);
-            storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
-        }
+    private static void setItem(LongItemStorage storage, int slot, ItemStack stack) {
+        storage.setContents(slot, stack, stack.getCount());
     }
 
     private static MachineControllerBlockEntity factoryController() {

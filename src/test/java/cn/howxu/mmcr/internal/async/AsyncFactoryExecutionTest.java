@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -42,8 +42,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.fml.config.IConfigSpec;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -385,13 +383,8 @@ class AsyncFactoryExecutionTest {
         return controller;
     }
 
-    private static void setItem(ResourceStorage<ItemResource> storage, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = storage.resource(0);
-            if (current != null && !current.isEmpty()) storage.extract(0, current, storage.amount(0), transaction);
-            if (!stack.isEmpty()) storage.insert(0, ItemResource.of(stack), stack.getCount(), transaction);
-            transaction.commit();
-        }
+    private static void setItem(LongItemStorage storage, ItemStack stack) {
+        storage.setContents(0, stack, stack.getCount());
     }
 
     private static void completeAsyncLevelTick(ServerLevel level) {

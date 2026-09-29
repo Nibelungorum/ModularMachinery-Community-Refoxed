@@ -12,7 +12,7 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -57,18 +57,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.minecraft.nbt.CompoundTag;
+import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.fml.config.IConfigSpec;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import org.junit.jupiter.api.AfterEach;
@@ -685,10 +681,10 @@ class FactoryRuntimeTest {
         saved.tick(List.of(recipe), 2);
         saved.pause();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
         FactoryRuntime restored = new FactoryRuntime();
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+        restored.load(output, controller, EMPTY_LOOKUP);
 
         assertThat(restored.laneLimit()).isEqualTo(2);
         assertThat(restored.isPaused()).isTrue();
@@ -699,12 +695,12 @@ class FactoryRuntimeTest {
     @Test
     void loadingCorruptLaneCountsIsBoundedBeforeAllocatingLanes() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        CompoundTag output = new CompoundTag();
         output.putInt("lane_limit", Integer.MAX_VALUE);
         output.putInt("lane_count", 1025);
 
         FactoryRuntime restored = new FactoryRuntime();
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+        restored.load(output, controller, EMPTY_LOOKUP);
 
         assertThat(restored.laneLimit()).isLessThanOrEqualTo(1024);
         assertThat(restored.laneCount()).isLessThanOrEqualTo(1024);
@@ -903,13 +899,11 @@ class FactoryRuntimeTest {
         MachineRecipe foreign = RecipeTestSupport.create(recipeId, foreignPool, 20, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        CompoundTag output = new CompoundTag();
         output.putBoolean("has_last", true);
         output.putString("last_recipe", recipeId.toString());
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()),
-                controller, List.of());
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP, List.of());
 
         assertThat(restored.lastRecipeId()).isNull();
     }
@@ -943,14 +937,11 @@ class FactoryRuntimeTest {
 
         assertThat(thread.searchAndStartRecipe(List.of(oldRecipe), 1,
                 controller.runtimeSnapshot().structure().version())).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()));
-        thread.save(output);
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
         RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()),
-                        output.buildResult()), controller, List.of(replacement));
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP, List.of(replacement));
         var snapshot = controller.runtimeSnapshot();
 
         assertThat(restored.runtime().active()).isFalse();
@@ -1008,7 +999,7 @@ class FactoryRuntimeTest {
         MachineRecipe candidate = inputRecipe("factory_input_wakeup");
 
         runtime.tick(List.of(candidate), 1, 0L);
-        runtime.wakeSearches(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT));
+        runtime.wakeSearches(Reason.INPUT_AVAILABLE, new ItemStack(Items.IRON_INGOT));
         runtime.tick(List.of(candidate), 1, 1L);
 
         assertThat(runtime.searchAttemptsForTesting()).isEqualTo(2);
@@ -1022,7 +1013,7 @@ class FactoryRuntimeTest {
         MachineRecipe candidate = inputRecipe("factory_resource_targeted_wakeup");
 
         runtime.tick(List.of(candidate), 1, 0L);
-        runtime.wakeSearches(Reason.INPUT_AVAILABLE, ItemResource.of(Items.GOLD_INGOT));
+        runtime.wakeSearches(Reason.INPUT_AVAILABLE, new ItemStack(Items.GOLD_INGOT));
         runtime.tick(List.of(candidate), 1, 1L);
         assertThat(runtime.searchAttemptsForTesting()).isEqualTo(1);
 
@@ -1030,7 +1021,7 @@ class FactoryRuntimeTest {
         runtime.tick(List.of(candidate), 1, 2L);
         assertThat(runtime.searchAttemptsForTesting()).isEqualTo(1);
 
-        runtime.wakeSearches(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT));
+        runtime.wakeSearches(Reason.INPUT_AVAILABLE, new ItemStack(Items.IRON_INGOT));
         runtime.tick(List.of(candidate), 1, 3L);
 
         assertThat(runtime.searchAttemptsForTesting()).isEqualTo(2);
@@ -1145,14 +1136,13 @@ class FactoryRuntimeTest {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(candidate), 1, 0L)).isFalse();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP);
 
-        assertThat(restored.matchesAvailability(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT))).isTrue();
-        assertThat(restored.matchesAvailability(Reason.INPUT_AVAILABLE, ItemResource.of(Items.GOLD_INGOT))).isFalse();
+        assertThat(restored.matchesAvailability(Reason.INPUT_AVAILABLE, new ItemStack(Items.IRON_INGOT))).isTrue();
+        assertThat(restored.matchesAvailability(Reason.INPUT_AVAILABLE, new ItemStack(Items.GOLD_INGOT))).isFalse();
     }
 
     @Test
@@ -1276,19 +1266,14 @@ class FactoryRuntimeTest {
         input.setLevel(level);
         input.linkControllerAppearance(controller.getBlockPos(), null);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            input.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-            transaction.commit();
-        }
+        input.itemStorage().forceInsert(0, new ItemStack(Items.IRON_INGOT), 1L, false);
         controller.notifiedResources.clear();
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            input.itemStorage().insert(1, ItemResource.of(Items.GOLD_INGOT), 1L, transaction);
-            transaction.commit();
-        }
+        input.itemStorage().forceInsert(1, new ItemStack(Items.GOLD_INGOT), 1L, false);
 
-        assertThat(controller.notifiedResources).contains(ItemResource.of(Items.IRON_INGOT),
-                ItemResource.of(Items.GOLD_INGOT));
+        assertThat(controller.notifiedResources).hasSize(2)
+                .anySatisfy(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.IRON_INGOT)))
+                .anySatisfy(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.GOLD_INGOT)));
     }
 
     @Test
@@ -1304,22 +1289,17 @@ class FactoryRuntimeTest {
         controller.setLevel(level);
         output.setLevel(level);
         output.linkControllerAppearance(controller.getBlockPos(), null);
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+        ItemStack iron = new ItemStack(Items.IRON_INGOT);
+        ItemStack gold = new ItemStack(Items.GOLD_INGOT);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            output.itemStorage().insert(0, iron, 2L, transaction);
-            output.itemStorage().insert(1, gold, 2L, transaction);
-            transaction.commit();
-        }
+        output.itemStorage().forceInsert(0, iron, 2L, false);
+        output.itemStorage().forceInsert(1, gold, 2L, false);
         controller.notifiedOutputResources.clear();
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            output.itemStorage().extract(1, gold, 1L, transaction);
-            transaction.commit();
-        }
+        output.itemStorage().forceExtract(1, 1L, false);
 
-        assertThat(controller.notifiedOutputResources).containsExactly(gold);
+        assertThat(controller.notifiedOutputResources).singleElement()
+                .satisfies(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.GOLD_INGOT)));
     }
 
     @Test
@@ -1328,95 +1308,28 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.linkControllerAppearance(controller.getBlockPos(), null);
         ItemBusCapability capability = (ItemBusCapability) input.capabilitySnapshot().capabilities().getFirst();
-        CapabilityRequests.ResourceRequest<ItemResource> request = new CapabilityRequests.ResourceRequest<>(
+        CapabilityRequests.ItemRequest request = new CapabilityRequests.ItemRequest(
                 capability.type(), IOType.INPUT, 1,
-                List.of(new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT), 1, true)));
+                List.of(new CapabilityRequests.ItemAction(0, new ItemStack(Items.IRON_INGOT), 1, true)));
 
         LevelStub.setGameTime(controller.getLevel(), 20L);
         long initial = controller.resourceAvailabilityEpoch();
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityResult result = capability.prepare(request).commit(transaction);
-            assertThat(result.success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(capability.prepare(request).commit().success()).isTrue();
 
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1);
     }
 
     @Test
-    void rolled_back_energy_capability_operation_does_not_notify_the_linked_controller() {
-        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
-        energy.linkControllerAppearance(controller.getBlockPos(), null);
-        EnergyHatchCapability capability = (EnergyHatchCapability) energy.capabilitySnapshot().capabilities().getFirst();
-        CapabilityRequests.ValueRequest request = new CapabilityRequests.ValueRequest(
-                capability.type(), IOType.INPUT, 1, 10L, true);
-
-        LevelStub.setGameTime(controller.getLevel(), 20L);
-        long initial = controller.resourceAvailabilityEpoch();
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityResult result = capability.prepare(request).commit(transaction);
-            assertThat(result.success()).isTrue();
-        }
-
-        assertThat(capability.storage().amount()).isZero();
-        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial);
-    }
-
-    @Test
-    void rolled_back_item_capability_operation_does_not_notify_the_linked_controller() {
+    void external_item_capability_notifies_once_after_insert() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.linkControllerAppearance(controller.getBlockPos(), null);
-        ItemBusCapability capability = (ItemBusCapability) input.capabilitySnapshot().capabilities().getFirst();
-        CapabilityRequests.ResourceRequest<ItemResource> request = new CapabilityRequests.ResourceRequest<>(
-                capability.type(), IOType.INPUT, 1,
-                List.of(new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT), 1, true)));
-
-        LevelStub.setGameTime(controller.getLevel(), 20L);
-        long initial = controller.resourceAvailabilityEpoch();
-        try (Transaction transaction = Transaction.openRoot()) {
-            CapabilityResult result = capability.prepare(request).commit(transaction);
-            assertThat(result.success()).isTrue();
-        }
-
-        assertThat(capability.storage().amount(0)).isZero();
-        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial);
-    }
-
-    @Test
-    void external_item_capability_does_not_notify_before_root_transaction_commit() {
-        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.linkControllerAppearance(controller.getBlockPos(), null);
-        ResourceHandler<ItemResource> handler = externalItemHandler(input);
+        IItemHandler handler = externalItemHandler(input);
         LevelStub.setGameTime(controller.getLevel(), 20L);
         long initial = controller.resourceAvailabilityEpoch();
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(handler.insert(0, ItemResource.of(Items.IRON_INGOT), 1, transaction)).isEqualTo(1);
-            assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial);
-        }
-
-        assertThat(input.itemStorage().amount(0)).isZero();
-        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial);
-    }
-
-    @Test
-    void external_item_capability_notifies_once_after_root_transaction_commit() {
-        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
-        input.linkControllerAppearance(controller.getBlockPos(), null);
-        ResourceHandler<ItemResource> handler = externalItemHandler(input);
-        LevelStub.setGameTime(controller.getLevel(), 20L);
-        long initial = controller.resourceAvailabilityEpoch();
-
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(handler.insert(0, ItemResource.of(Items.IRON_INGOT), 1, transaction)).isEqualTo(1);
-            assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial);
-            transaction.commit();
-            assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1L);
-        }
+        assertThat(handler.insertItem(0, new ItemStack(Items.IRON_INGOT), false)).isEmpty();
+        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1L);
 
         assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
@@ -1427,12 +1340,9 @@ class FactoryRuntimeTest {
                 ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.linkControllerAppearance(controller.getBlockPos(), null);
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
-        try (Transaction transaction = Transaction.openRoot()) {
-            input.itemStorage().insert(0, iron, 1L, transaction);
-            transaction.commit();
-        }
+        ItemStack iron = new ItemStack(Items.IRON_INGOT);
+        ItemStack gold = new ItemStack(Items.GOLD_INGOT);
+        input.itemStorage().forceInsert(0, iron, 1L, false);
 
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
@@ -1454,10 +1364,7 @@ class FactoryRuntimeTest {
 
         LevelStub.setGameTime(controller.getLevel(), 3L);
         long beforeGoldInsertEpoch = controller.resourceAvailabilityEpoch();
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(input.itemStorage().insert(1, gold, 1L, transaction)).isEqualTo(1L);
-            transaction.commit();
-        }
+        assertThat(input.itemStorage().forceInsert(1, gold, 1L, false)).isEqualTo(1L);
         assertThat(input.itemStorage().amount(1)).isEqualTo(1L);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeGoldInsertEpoch + 1L);
         assertThat(runtime.threadSnapshots().get(1).lastFailureUnloc())
@@ -1530,10 +1437,9 @@ class FactoryRuntimeTest {
                 thread.coreRecipeSetVersion());
         thread.recordSearchFailure(key, 0L);
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller,
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP,
                 List.of(candidate, other));
 
         assertThat(restored.canSearch(1L, key)).isTrue();
@@ -1553,10 +1459,9 @@ class FactoryRuntimeTest {
         thread.tick();
         assertThat(thread.runtime().active()).isFalse();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller,
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP,
                 List.of(candidate));
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
         var snapshot = controller.runtimeSnapshot();
@@ -1827,14 +1732,13 @@ class FactoryRuntimeTest {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
         thread.recordSearchFailure(searchKey(controller), 0L);
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        var tag = output.buildResult();
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
+        var tag = output;
         tag.remove("search_failure_streak");
         tag.remove("search_retry_remaining");
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, tag), controller);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(tag, controller, EMPTY_LOOKUP);
 
         assertThat(restored.canSearch(0L, searchKey(controller))).isTrue();
     }
@@ -1845,13 +1749,12 @@ class FactoryRuntimeTest {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
         assertThat(thread.searchAndStartRecipe(List.of(inputRecipe("retry_remaining_clamped")), 1, 0L)).isFalse();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        var tag = output.buildResult();
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
+        var tag = output;
         tag.putInt("search_retry_remaining", Integer.MAX_VALUE);
 
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, tag), controller);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(tag, controller, EMPTY_LOOKUP);
 
         assertThat(restored.canSearch(99L, searchKey(controller))).isFalse();
         assertThat(restored.canSearch(100L, searchKey(controller))).isTrue();
@@ -1866,10 +1769,9 @@ class FactoryRuntimeTest {
         thread.wakeSearch();
         LevelStub.setGameTime(controller.getLevel(), 1L);
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        thread.save(output);
-        FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+        CompoundTag output = new CompoundTag();
+        thread.save(output, EMPTY_LOOKUP);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP);
 
         assertThat(restored.canSearch(1L, key)).isTrue();
     }
@@ -1893,26 +1795,17 @@ class FactoryRuntimeTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1, ItemStack.EMPTY)));
     }
 
-    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = storage.resource(slot);
-            if (current != null && !current.isEmpty()) {
-                storage.extract(slot, current, storage.amount(slot), transaction);
-            }
-            if (!stack.isEmpty()) {
-                storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            }
-            transaction.commit();
-        }
+    private static void setItem(LongItemStorage storage, int slot, ItemStack stack) {
+        storage.setContents(slot, stack, stack.getCount());
     }
 
     @SuppressWarnings("unchecked")
-    private static ResourceHandler<ItemResource> externalItemHandler(ItemInputBusBlockEntity input) {
+    private static IItemHandler externalItemHandler(ItemInputBusBlockEntity input) {
         try {
-            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ResourceStorageHandler");
-            var constructor = type.getDeclaredConstructor(ResourceStorage.class, boolean.class, boolean.class);
+            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$DirectionalItemHandler");
+            var constructor = type.getDeclaredConstructor(IItemHandler.class, boolean.class, boolean.class);
             constructor.setAccessible(true);
-            return (ResourceHandler<ItemResource>) constructor.newInstance(input.itemStorage(), true, true);
+            return (IItemHandler) constructor.newInstance(input.nativeItemHandler(), true, true);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to create the production item capability adapter", exception);
         }

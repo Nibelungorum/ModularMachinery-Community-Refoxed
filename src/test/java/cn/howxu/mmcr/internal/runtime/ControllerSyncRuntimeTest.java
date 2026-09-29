@@ -51,8 +51,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -335,15 +333,7 @@ class ControllerSyncRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
         ItemStack inputStack = new ItemStack(Items.IRON_INGOT, 4);
         inputStack.set(DataComponents.MAX_STACK_SIZE, 64);
-        try (Transaction transaction = Transaction.openRoot()) {
-            input.itemStorage().insert(
-                    0,
-                    ItemResource.of(inputStack),
-                    inputStack.getCount(),
-                    transaction
-            );
-            transaction.commit();
-        }
+        input.itemStorage().forceInsert(0, inputStack, inputStack.getCount(), false);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Initial Threads", pattern,

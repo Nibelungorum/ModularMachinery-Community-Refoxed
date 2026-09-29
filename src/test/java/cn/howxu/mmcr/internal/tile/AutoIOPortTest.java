@@ -18,10 +18,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.items.IItemHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -151,13 +149,13 @@ class AutoIOPortTest {
         ExtendedFluidHatchBlockEntity source = extendedFluidHatch("extended_fluid_input_hatch_basic", BlockPos.ZERO);
         ExtendedFluidHatchBlockEntity target = extendedFluidHatch("extended_fluid_input_hatch_basic",
                 new BlockPos(1, 0, 0));
-        source.fluidStorage().setContents(0, FluidResource.of(Fluids.WATER), 2_000L);
-        source.fluidStorage().setContents(1, FluidResource.of(Fluids.LAVA), 3_000L);
+        source.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 2_000L);
+        source.fluidStorage().setContents(1, new FluidStack(Fluids.LAVA, 1), 3_000L);
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
         LevelStub.setCapability(level, ModCapabilities.FLUID_BLOCK, target.getBlockPos(),
-                target.getResourceHandler(null));
+                target.nativeFluidHandler());
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.FLUID_TYPE, false)).isTrue();
         assertThat(source.fluidStorage().amount(0)).isZero();
@@ -205,10 +203,7 @@ class AutoIOPortTest {
     }
 
     private static void setItem(ItemBusBlockEntity port, int slot, net.minecraft.world.item.Item item, long amount) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.itemStorage().insert(slot, ItemResource.of(new ItemStack(item)), amount, transaction);
-            transaction.commit();
-        }
+        port.itemStorage().forceInsert(slot, new ItemStack(item), amount, false);
     }
 
     private static ExtendedItemBusBlockEntity extendedItemBus(String id, BlockPos pos) {
@@ -227,10 +222,9 @@ class AutoIOPortTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static ResourceHandler<ItemResource> itemHandler(ItemBusBlockEntity port, boolean canInsert,
-                                                              boolean canExtract) {
+    private static IItemHandler itemHandler(ItemBusBlockEntity port, boolean canInsert, boolean canExtract) {
         try {
-            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$ResourceStorageHandler");
+            Class<?> type = Class.forName("cn.howxu.mmcr.internal.event.ModCapabilities$DirectionalItemHandler");
             Constructor<?> constructor = null;
             for (Constructor<?> candidate : type.getDeclaredConstructors()) {
                 if (candidate.getParameterCount() == 3) {
@@ -240,7 +234,7 @@ class AutoIOPortTest {
             }
             if (constructor == null) throw new NoSuchMethodException("Item capability adapter constructor");
             constructor.setAccessible(true);
-            return (ResourceHandler<ItemResource>) constructor.newInstance(port.itemStorage(), canInsert, canExtract);
+            return (IItemHandler) constructor.newInstance(port.nativeItemHandler(), canInsert, canExtract);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to create the production item capability adapter", exception);
         }

@@ -4,7 +4,9 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
@@ -52,9 +54,9 @@ class BuiltinCapabilityDefinitionsTest {
         CapabilityDefinition fluid = CapabilityRegistry.get(BuiltinCapabilityDefinitions.FLUID_TYPE);
         CapabilityDefinition energy = CapabilityRegistry.get(BuiltinCapabilityDefinitions.ENERGY_TYPE);
 
-        assertThat(item.facets()).contains(ResourceFacet.class, OperationFacet.class);
-        assertThat(fluid.facets()).contains(ResourceFacet.class, OperationFacet.class);
-        assertThat(energy.facets()).contains(ScalarFacet.class, OperationFacet.class);
+        assertThat(item.facets()).contains(ItemHandlerFacet.class, OperationFacet.class);
+        assertThat(fluid.facets()).contains(FluidHandlerFacet.class, OperationFacet.class);
+        assertThat(energy.facets()).contains(ScalarFacet.class, EnergyStorageFacet.class, OperationFacet.class);
         assertThat(item.facets()).contains(AsyncPlanningFacet.class);
         assertThat(fluid.facets()).contains(AsyncPlanningFacet.class);
         assertThat(energy.facets()).contains(AsyncPlanningFacet.class);
@@ -75,9 +77,10 @@ class BuiltinCapabilityDefinitionsTest {
         assertThat(item).isInstanceOf(ItemBusCapability.class);
         assertThat(fluid).isInstanceOf(FluidHatchCapability.class);
         assertThat(energy).isInstanceOf(EnergyHatchCapability.class);
-        assertThat(item.facet(ResourceFacet.class)).isPresent();
-        assertThat(fluid.facet(ResourceFacet.class)).isPresent();
+        assertThat(item.facet(ItemHandlerFacet.class)).isPresent();
+        assertThat(fluid.facet(FluidHandlerFacet.class)).isPresent();
         assertThat(energy.facet(ScalarFacet.class)).isPresent();
+        assertThat(energy.facet(EnergyStorageFacet.class)).isPresent();
         assertThat(item.facet(OperationFacet.class)).isPresent();
         assertThat(fluid.facet(OperationFacet.class)).isPresent();
         assertThat(energy.facet(OperationFacet.class)).isPresent();

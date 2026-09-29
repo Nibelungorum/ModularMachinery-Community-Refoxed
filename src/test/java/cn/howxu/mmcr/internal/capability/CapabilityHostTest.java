@@ -8,19 +8,19 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
-import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -29,16 +29,16 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,53 +86,41 @@ class CapabilityHostTest {
     }
 
     @Test
-    void item_capability_uses_slot_resource_storage_and_operation_contract() {
+    void item_capability_uses_native_item_handler_and_operation_contract() {
         MachineCapability capability = port("item_input_bus").capabilitySnapshot().capabilities().getFirst();
         ItemBusCapability item = (ItemBusCapability) capability;
-        ResourceStorage<ItemResource> storage = item.storage();
+        IItemHandler handler = item.itemHandler();
 
-        assertThat(storage.size()).isGreaterThan(1);
-        ItemResource iron = ironResource();
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, iron, 3L, transaction))
-                    .isEqualTo(3L);
-            assertThat(item.prepare(request(item)).commit(transaction).success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(handler.getSlots()).isGreaterThan(1);
+        ItemStack iron = new ItemStack(Items.IRON_INGOT, 3);
+        assertThat(handler.insertItem(0, iron, false)).isEmpty();
+        assertThat(item.prepare(request(item)).commit().success()).isTrue();
 
-        assertThat(storage.amount(0)).isEqualTo(3L);
-        assertThat(storage.resource(0)).isEqualTo(iron);
+        assertThat(handler.getStackInSlot(0)).isEqualTo(iron);
     }
 
     @Test
     void fluid_capability_uses_long_fluid_storage() {
         MachineCapability capability = port("fluid_input_hatch").capabilitySnapshot().capabilities().getFirst();
         FluidHatchCapability fluid = (FluidHatchCapability) capability;
-        ResourceStorage<FluidResource> storage = fluid.storage();
+        IFluidHandler handler = fluid.fluidHandler();
 
-        assertThat(fluid.storage()).isInstanceOf(LongFluidStorage.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, FluidResource.of(Fluids.WATER), 750L, transaction))
-                    .isEqualTo(750L);
-            transaction.commit();
-        }
+        assertThat(handler).isInstanceOf(LongFluidStorage.class);
+        FluidStack water = new FluidStack(Fluids.WATER, 750);
+        assertThat(handler.fill(water, IFluidHandler.FluidAction.EXECUTE)).isEqualTo(750);
 
-        assertThat(storage.amount(0)).isEqualTo(750L);
-        assertThat(storage.resource(0)).isEqualTo(FluidResource.of(Fluids.WATER));
+        assertThat(handler.getFluidInTank(0)).isEqualTo(water);
     }
 
     @Test
     void energy_capability_uses_long_value_storage() {
         MachineCapability capability = port("energy_input_hatch_tiny").capabilitySnapshot().capabilities().getFirst();
         EnergyHatchCapability energy = (EnergyHatchCapability) capability;
-        LongValueStorage storage = energy.storage();
+        LongEnergyStorage storage = (LongEnergyStorage) energy.energyStorage();
 
-        assertThat(storage.insert(2_000L, false)).isEqualTo(500L);
-        assertThat(storage.amount()).isEqualTo(500L);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(energy.prepare(request(energy)).commit(transaction).success()).isTrue();
-            transaction.commit();
-        }
+        assertThat(storage.insertLong(2_000L, false)).isEqualTo(500L);
+        assertThat(storage.getAmountAsLong()).isEqualTo(500L);
+        assertThat(energy.prepare(request(energy)).commit().success()).isTrue();
     }
 
     @Test
@@ -146,28 +134,25 @@ class CapabilityHostTest {
         EnergyHatchCapability energy = (EnergyHatchCapability) CapabilityRegistry.get(BuiltinCapabilityDefinitions.ENERGY_TYPE)
                 .factory().create(context(host));
 
-        assertThat(item.storage()).isSameAs(host.itemStorage());
-        assertThat(fluid.storage()).isSameAs(host.fluidStorage());
-        assertThat(energy.storage()).isSameAs(host.getEnergyStorage());
+        assertThat(item.itemHandler()).isSameAs(host.nativeItemHandler());
+        assertThat(fluid.fluidHandler()).isSameAs(host.nativeFluidHandler());
+        assertThat(energy.energyStorage()).isSameAs(host.nativeEnergyStorage());
         assertThat(item.directions().supports(IOType.INPUT)).isTrue();
         assertThat(fluid.directions().supports(IOType.INPUT)).isTrue();
         assertThat(energy.directions().supports(IOType.INPUT)).isTrue();
     }
 
     private static CapabilityRequest request(MachineCapability capability) {
-        if (capability.facet(ResourceFacet.class).isPresent()) {
-            return new CapabilityRequests.ResourceRequest<>(capability.type(), IOType.INPUT, 1, List.of());
+        if (capability.facet(ItemHandlerFacet.class).isPresent()) {
+            return new CapabilityRequests.ItemRequest(capability.type(), IOType.INPUT, 1, List.of());
         }
-        if (capability.facet(ValueFacet.class).map(ValueFacet::storage).filter(LongValueStorage.class::isInstance).isPresent()) {
+        if (capability.facet(FluidHandlerFacet.class).isPresent()) {
+            return new CapabilityRequests.FluidRequest(capability.type(), IOType.INPUT, 1, List.of());
+        }
+        if (capability.facet(EnergyStorageFacet.class).isPresent()) {
             return new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT, 1, 1, false);
         }
         return new TestRequest(capability.type(), IOType.INPUT, 1);
-    }
-
-    private static ItemResource ironResource() {
-        ItemStack stack = Items.IRON_INGOT.getDefaultInstance();
-        stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        return ItemResource.of(stack);
     }
 
     private static IOPortBlockEntity port(String id) {
@@ -219,10 +204,9 @@ class CapabilityHostTest {
     }
 
     private static final class StorageHost extends IOPortBlockEntity {
-        private final ResourceStorage<ItemResource> itemStorage = new LongResourceStorage<>(
-                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
-        private final ResourceStorage<FluidResource> fluidStorage = new LongFluidStorage(2, 100L, () -> {});
-        private final LongValueStorage energyStorage = new LongValueStorage(100L, 20L, () -> {});
+        private final LongItemStorage itemStorage = new LongItemStorage(2, 100L, () -> {});
+        private final LongFluidStorage fluidStorage = new LongFluidStorage(2, 100L, () -> {});
+        private final LongEnergyStorage energyStorage = new LongEnergyStorage(100L, 20L, () -> {});
 
         private StorageHost() {
             super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
@@ -232,9 +216,9 @@ class CapabilityHostTest {
         @Override public IOType ioType() { return IOType.INPUT; }
         @Override public IOPortKind kind() { return PortKinds.ITEM_INPUT; }
         @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of()); }
-        @Override public ResourceStorage<ItemResource> itemStorage() { return itemStorage; }
-        @Override public ResourceStorage<FluidResource> fluidStorage() { return fluidStorage; }
-        @Override public LongValueStorage getEnergyStorage() { return energyStorage; }
+        @Override public IItemHandler nativeItemHandler() { return itemStorage; }
+        @Override public IFluidHandler nativeFluidHandler() { return fluidStorage; }
+        @Override public IEnergyStorage nativeEnergyStorage() { return energyStorage; }
     }
 
     private record TestCapability(String id) implements MachineCapability {
@@ -249,7 +233,7 @@ class CapabilityHostTest {
             }
         }; }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
     }
 }

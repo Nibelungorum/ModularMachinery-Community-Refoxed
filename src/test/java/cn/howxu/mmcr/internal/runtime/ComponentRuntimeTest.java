@@ -6,7 +6,6 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -30,7 +29,8 @@ import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -41,7 +41,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -189,11 +188,10 @@ class ComponentRuntimeTest {
 
     @Test
     void empty_resource_storage_presentation_keeps_capacity_without_null_resource_names() {
-        ResourceStorage<ItemResource> storage = new LongResourceStorage<>(
-                ItemResource.class, 2, 100L, resource -> resource.isEmpty(), () -> {});
+        LongItemStorage storage = new LongItemStorage(2, 100L, () -> {});
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceComponents(List.of(component(
-                new TestCapabilityHost(List.of(new TestCapability("empty", storage))), "empty")));
+                new TestCapabilityHost(List.of(new ItemBusCapability(storage, IOType.INPUT))), "empty")));
 
         ControllerRuntimeSnapshot.CapabilityPresentation presentation =
                 runtime.capabilityPresentations().getFirst();
@@ -210,14 +208,13 @@ class ComponentRuntimeTest {
 
     @Test
     void resource_presentation_saturates_multi_slot_long_amounts_and_capacity() {
-        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
-                ItemResource.class, 2, Long.MAX_VALUE, resource -> resource.isEmpty(), () -> {});
-        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        LongItemStorage storage = new LongItemStorage(2, Long.MAX_VALUE, () -> {});
+        ItemStack iron = new ItemStack(Items.IRON_INGOT, 1);
         storage.setContents(0, iron, Long.MAX_VALUE);
         storage.setContents(1, iron, Long.MAX_VALUE);
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceComponents(List.of(component(
-                new TestCapabilityHost(List.of(new TestCapability("items", storage))), "items")));
+                new TestCapabilityHost(List.of(new ItemBusCapability(storage, IOType.INPUT))), "items")));
 
         ControllerRuntimeSnapshot.CapabilityPresentation presentation = runtime.capabilityPresentations().getFirst();
 
@@ -542,7 +539,7 @@ class ComponentRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
     }
 
@@ -577,7 +574,7 @@ class ComponentRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
     }
 }

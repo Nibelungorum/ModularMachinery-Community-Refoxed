@@ -14,7 +14,6 @@ import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -70,7 +69,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -103,12 +102,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -369,7 +362,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void failedStartReportsStructuredMissingResourceAndRollsBackRootTransaction() {
+    void failed_start_reports_structured_missing_resource_without_consuming_input() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
@@ -573,13 +566,12 @@ class CraftingRuntimeTest {
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
         network.clearReservations();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isTrue();
         assertThat(network.reserved()).isEqualTo(4L);
@@ -599,13 +591,12 @@ class CraftingRuntimeTest {
         runtime.tick();
         runtime.tick();
         assertThat(runtime.finishPending()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
         network.clearReservations();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isTrue();
         assertThat(network.reserved()).isZero();
@@ -622,14 +613,13 @@ class CraftingRuntimeTest {
         RecipeRegistry.registerStatic(recipe);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
         first.clearReservations();
         second.clearReservations();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(first.reserved()).isEqualTo(2L);
         assertThat(second.reserved()).isEqualTo(4L);
@@ -650,15 +640,14 @@ class CraftingRuntimeTest {
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
-        ListTag allocations = output.buildResult().getCompound("recipe").orElseThrow()
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
+        ListTag allocations = output.getCompound("recipe").orElseThrow()
                 .getCompound("data").orElseThrow().getListOrEmpty("prefetched_energy_allocations");
         network.clearReservations();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(allocations).hasSize(1);
         assertThat(allocations.getCompoundOrEmpty(0).getStringOr("key", "")).isEqualTo("test:prefetch");
@@ -707,15 +696,14 @@ class CraftingRuntimeTest {
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
         first.clearReservations();
         second.clearReservations();
         second.failRestore();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
@@ -725,7 +713,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void patternStartCommitsPrefetchesWithItsInputTransactionAndRollsBackPreparedReservations() {
+    void pattern_start_commits_prefetches_and_releases_prepared_reservations() {
         PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
         MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1105,11 +1093,11 @@ class CraftingRuntimeTest {
 
         runtime.start(recipe, 1);
         runtime.tick();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isTrue();
         assertThat(restored.finishPending()).isTrue();
@@ -1134,12 +1122,11 @@ class CraftingRuntimeTest {
         runtime.finish();
 
         assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
-        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(outputTag);
+        CompoundTag outputTag = new CompoundTag();
+        runtime.save(outputTag, EMPTY_LOOKUP);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP,
-                outputTag.buildResult()), null);
+        restored.load(outputTag, null, EMPTY_LOOKUP);
 
         assertThat(restored.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
     }
@@ -1153,11 +1140,11 @@ class CraftingRuntimeTest {
                         MMCR.id("runtime_custom_source"), FailurePhase.RUNTIME, null, null, Map.of()));
 
         saved.recordSearchFailure(failure);
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.failure().reason()).isEqualTo(REGISTERED_RUNTIME_REASON);
         assertThat(restored.failureUnloc()).isEqualTo(REGISTERED_RUNTIME_REASON.translationKey());
@@ -1179,15 +1166,15 @@ class CraftingRuntimeTest {
         saved.tick();
         saved.finish();
 
-        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(outputTag);
-        CompoundTag legacy = outputTag.buildResult();
+        CompoundTag outputTag = new CompoundTag();
+        saved.save(outputTag, EMPTY_LOOKUP);
+        CompoundTag legacy = outputTag;
         legacy.remove("failure");
         legacy.putBoolean("has_failure", true);
         legacy.putString("failure_reason", "no_output_capacity");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, legacy), null);
+        restored.load(legacy, null, EMPTY_LOOKUP);
 
         assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(restored.failure().failure().trace().frames().getFirst().phase()).isEqualTo(FailurePhase.FINISH);
@@ -1196,14 +1183,14 @@ class CraftingRuntimeTest {
 
     @Test
     void inactive_runtime_migrates_unknown_legacy_failure_with_raw_reason_id() {
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        CompoundTag output = new CompoundTag();
         output.putBoolean("active", false);
         output.putBoolean("has_failure", true);
         output.putString("failure_reason", "legacy:removed_reason");
 
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.UNKNOWN);
         assertThat(restored.failure().details()).containsEntry("raw_reason_id", "legacy:removed_reason");
@@ -1211,14 +1198,14 @@ class CraftingRuntimeTest {
 
     @Test
     void inactive_runtime_clears_malformed_legacy_failure_reason() {
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        CompoundTag output = new CompoundTag();
         output.putBoolean("active", false);
         output.putBoolean("has_failure", true);
         output.putString("failure_reason", "not a valid identifier");
 
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.failure()).isNull();
     }
@@ -1243,15 +1230,14 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(outputTag);
-        CompoundTag savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag outputTag = new CompoundTag();
+        saved.save(outputTag, EMPTY_LOOKUP);
+        CompoundTag savedRecipeTag = outputTag.getCompound("recipe").orElseThrow();
         assertThat(savedRecipeTag.getBooleanOr("has_effective_definition", false)).isTrue();
         savedRecipeTag.putInt("totalTick", 99);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+        restored.load(outputTag, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isTrue();
         assertThat(starts).hasValue(1);
@@ -1284,9 +1270,9 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        CompoundTag root = output.buildResult();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        CompoundTag root = output;
         CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
@@ -1294,8 +1280,7 @@ class CraftingRuntimeTest {
         recipeTag.putInt("effective_execution_snapshot_version", 1);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+        restored.load(root, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1309,15 +1294,15 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        CompoundTag root = output.buildResult();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        CompoundTag root = output;
         CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
         recipeTag.putBoolean("has_effective_execution_snapshot", true);
         recipeTag.putInt("effective_execution_snapshot_version", 2);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
+        restored.load(root, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isTrue();
     }
@@ -1329,15 +1314,15 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        CompoundTag root = output.buildResult();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        CompoundTag root = output;
         CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, root), null);
+        restored.load(root, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1370,15 +1355,14 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
         savedRecipeTag.remove("has_input_consumption_plan");
         savedRecipeTag.remove("inputConsumptionPlan");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1395,14 +1379,14 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        CompoundTag recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        CompoundTag recipeTag = output.getCompound("recipe").orElseThrow();
         ListTag requirements = recipeTag.get("effective_requirements").asList().orElseThrow();
         requirements.getFirst().asCompound().orElseThrow().putInt("count", -1);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1447,17 +1431,16 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(oldRecipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(outputTag);
-        var savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag outputTag = new CompoundTag();
+        saved.save(outputTag, EMPTY_LOOKUP);
+        var savedRecipeTag = outputTag.getCompound("recipe").orElseThrow();
         assertThat(savedRecipeTag.getBooleanOr("has_recipe_definition", false)).isTrue();
         assertThat(savedRecipeTag.getCompound("recipe_definition").orElseThrow().isEmpty()).isFalse();
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+        restored.load(outputTag, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1474,9 +1457,9 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
         savedRecipeTag.remove("has_recipe_definition");
         savedRecipeTag.remove("recipe_definition");
         savedRecipeTag.remove("recipe_definition_version");
@@ -1488,7 +1471,7 @@ class CraftingRuntimeTest {
         savedRecipeTag.remove("effective_outputs");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isTrue();
         assertThat(restored.recipe()).isEqualTo(recipe);
@@ -1507,12 +1490,11 @@ class CraftingRuntimeTest {
             CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
             assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-            saved.save(output);
+            CompoundTag output = new CompoundTag();
+            saved.save(output, EMPTY_LOOKUP);
 
             CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-            restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                    RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+            restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
             assertThat(restored.active()).isTrue();
             assertThat(restored.activeRecipe().effectiveRequirements()).singleElement()
@@ -1552,9 +1534,9 @@ class CraftingRuntimeTest {
             assertThat(presentation.parallelism()).isEqualTo(1L);
         });
 
-        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(outputTag);
-        CompoundTag root = outputTag.buildResult();
+        CompoundTag outputTag = new CompoundTag();
+        saved.save(outputTag, EMPTY_LOOKUP);
+        CompoundTag root = outputTag;
         CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
@@ -1564,8 +1546,7 @@ class CraftingRuntimeTest {
         recipeTag.putInt("totalTick", 1);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+        restored.load(root, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isTrue();
         assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isTrue();
@@ -1591,9 +1572,9 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        CompoundTag root = output.buildResult();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        CompoundTag root = output;
         CompoundTag recipeTag = root.getCompound("recipe").orElseThrow();
         recipeTag.remove("has_effective_definition");
         recipeTag.remove("effective_definition_version");
@@ -1604,8 +1585,7 @@ class CraftingRuntimeTest {
         recipeTag.putInt("tick", 2);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), root), null);
+        restored.load(root, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1620,13 +1600,13 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
         savedRecipeTag.remove("recipe_definition");
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1641,13 +1621,13 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        var savedRecipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        var savedRecipeTag = output.getCompound("recipe").orElseThrow();
         savedRecipeTag.putString("recipe_definition_fingerprint", "0".repeat(64));
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1666,17 +1646,16 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(outputTag);
-        var savedRecipeTag = outputTag.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag outputTag = new CompoundTag();
+        saved.save(outputTag, EMPTY_LOOKUP);
+        var savedRecipeTag = outputTag.getCompound("recipe").orElseThrow();
         CompoundTag malformedPlan = new CompoundTag();
         malformedPlan.putIntArray("consumedInputBatches", new int[]{1});
         savedRecipeTag.put("inputConsumptionPlan", malformedPlan);
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
+        restored.load(outputTag, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1692,15 +1671,15 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        var recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        var recipeTag = output.getCompound("recipe").orElseThrow();
         assertThat(recipeTag.getStringOr("recipe_definition_fingerprint", ""))
                 .matches("[0-9a-f]{64}");
         recipeTag.getCompound("recipe_definition").orElseThrow().putInt("tick_time", 99);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1713,13 +1692,13 @@ class CraftingRuntimeTest {
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe(recipePath, 20, List.of()), 1).isCrafting()).isTrue();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        saved.save(output);
-        CompoundTag recipeTag = output.buildResult().getCompound("recipe").orElseThrow();
+        CompoundTag output = new CompoundTag();
+        saved.save(output, EMPTY_LOOKUP);
+        CompoundTag recipeTag = output.getCompound("recipe").orElseThrow();
         mutate.accept(recipeTag);
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+        restored.load(output, null, EMPTY_LOOKUP);
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
@@ -1772,17 +1751,8 @@ class CraftingRuntimeTest {
         return stack;
     }
 
-    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = storage.resource(slot);
-            if (current != null && !current.isEmpty()) {
-                storage.extract(slot, current, storage.amount(slot), transaction);
-            }
-            if (!stack.isEmpty()) {
-                storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            }
-            transaction.commit();
-        }
+    private static void setItem(LongItemStorage storage, int slot, ItemStack stack) {
+        storage.setContents(slot, stack, stack.getCount());
     }
 
     private static void assertPrefetchRestoreFails(String recipePath, Consumer<CompoundTag> mutation) {
@@ -1793,16 +1763,15 @@ class CraftingRuntimeTest {
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
-        runtime.save(output);
-        CompoundTag data = output.buildResult().getCompound("recipe").orElseThrow()
+        CompoundTag output = new CompoundTag();
+        runtime.save(output, EMPTY_LOOKUP);
+        CompoundTag data = output.getCompound("recipe").orElseThrow()
                 .getCompound("data").orElseThrow();
         mutation.accept(data);
         network.clearReservations();
 
         CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
-        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
-                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+        restored.load(output, null, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
@@ -1810,10 +1779,8 @@ class CraftingRuntimeTest {
         assertThat(network.released()).isZero();
     }
 
-    private static ItemStack item(ResourceStorage<ItemResource> storage, int slot) {
-        ItemResource resource = storage.resource(slot);
-        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
-                : resource.toStack((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
+    private static ItemStack item(LongItemStorage storage, int slot) {
+        return storage.getStackInSlot(slot);
     }
 
     private static CraftingRuntime controllerRuntime(MachineControllerBlockEntity controller) {
@@ -1921,7 +1888,7 @@ class CraftingRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
 
         @Override
@@ -2010,8 +1977,8 @@ class CraftingRuntimeTest {
             long accepted = Math.min(Math.max(0L, requestedAmount), Math.max(0L, storage.amount() - planned));
             if (accepted <= 0L) return Optional.empty();
             planned += accepted;
-            return Optional.of(new PrefetchPlan(accepted, transaction -> {
-                long extracted = storage.extract(accepted, transaction);
+            return Optional.of(new PrefetchPlan(accepted, () -> {
+                long extracted = storage.extract(accepted, false);
                 if (extracted != accepted) return CapabilityResult.failure(ExecutionStatus.blocked(type.id(), type.id(),
                         FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, type.id(),
                                 FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
@@ -2131,13 +2098,13 @@ class CraftingRuntimeTest {
         }
     }
 
-    private static final class ThrowingItemStorage extends LongResourceStorage<ItemResource> {
+    private static final class ThrowingItemStorage extends LongItemStorage {
         private ThrowingItemStorage() {
-            super(ItemResource.class, 1, 100L, ItemResource::isEmpty, () -> {});
+            super(1, 100L, () -> {});
         }
 
         @Override
-        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+        public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
             throw new IllegalStateException("expected finish capability operation failure");
         }
     }

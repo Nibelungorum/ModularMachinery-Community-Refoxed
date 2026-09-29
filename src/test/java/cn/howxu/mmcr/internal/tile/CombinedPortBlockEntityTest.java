@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -19,17 +18,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.util.ProblemReporter;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -91,16 +86,13 @@ class CombinedPortBlockEntityTest {
     @Test
     void ordinaryCombinedItemAndFluidStorageAreIndependent() {
         CombinedPortBlockEntity port = combined("combined_input_reinforced");
-        ResourceStorage<ItemResource> items = port.itemStorage();
-        ResourceStorage<FluidResource> fluids = port.fluidStorage();
-        ItemResource iron = itemResource(Items.IRON_INGOT);
-        FluidResource water = FluidResource.of(Fluids.WATER);
+        var items = port.itemStorage();
+        var fluids = port.fluidStorage();
+        ItemStack iron = itemStack(Items.IRON_INGOT);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
 
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(items.insert(0, iron, 64L, transaction)).isEqualTo(64L);
-            assertThat(fluids.insert(0, water, 256_000L, transaction)).isEqualTo(256_000L);
-            transaction.commit();
-        }
+        assertThat(items.forceInsert(0, iron, 64L, false)).isEqualTo(64L);
+        assertThat(fluids.forceInsert(0, water, 256_000L, false)).isEqualTo(256_000L);
 
         assertThat(items.amount(0)).isEqualTo(64L);
         assertThat(fluids.amount(0)).isEqualTo(256_000L);
@@ -166,59 +158,52 @@ class CombinedPortBlockEntityTest {
     void extendedCombinedFluidStorageSavesEmptySlotsAndRoundTripsPopulatedSlots() {
         HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
         ExtendedCombinedPortBlockEntity empty = extendedCombined("extended_combined_input_ultimate");
-        TagValueOutput emptyOutput = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+        CompoundTag emptyOutput = new CompoundTag();
 
-        empty.saveAdditional(emptyOutput);
+        empty.saveAdditional(emptyOutput, lookup);
 
         ExtendedCombinedPortBlockEntity source = extendedCombined("extended_combined_input_ultimate");
-        FluidResource water = FluidResource.of(Fluids.WATER);
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(source.fluidStorage().insert(1, water, 1_234L, transaction)).isEqualTo(1_234L);
-            transaction.commit();
-        }
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
-        source.saveAdditional(output);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
+        assertThat(source.fluidStorage().forceInsert(1, water, 1_234L, false)).isEqualTo(1_234L);
+        CompoundTag output = new CompoundTag();
+        source.saveAdditional(output, lookup);
 
         ExtendedCombinedPortBlockEntity restored = extendedCombined("extended_combined_input_ultimate");
-        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, lookup, output.buildResult()));
+        restored.loadAdditional(output, lookup);
 
-        assertThat(restored.fluidStorage().resource(0)).isNull();
+        assertThat(restored.fluidStorage().resource(0)).isEmpty();
         assertThat(restored.fluidStorage().resource(1)).isEqualTo(water);
         assertThat(restored.fluidStorage().amount(1)).isEqualTo(1_234L);
-        assertThat(restored.fluidStorage().resource(2)).isNull();
+        assertThat(restored.fluidStorage().resource(2)).isEmpty();
     }
 
     private static void assertExtendedCombined(String id, int itemTypes, int fluidTypes) {
         IOPortBlockEntity port = port(id);
-        ResourceStorage<ItemResource> items = port.itemStorage();
-        ResourceStorage<FluidResource> fluids = port.fluidStorage();
-        List<ItemResource> resources = List.of(
-                itemResource(Items.IRON_INGOT), itemResource(Items.GOLD_INGOT), itemResource(Items.DIAMOND),
-                itemResource(Items.EMERALD), itemResource(Items.COPPER_INGOT), itemResource(Items.REDSTONE),
-                itemResource(Items.LAPIS_LAZULI), itemResource(Items.QUARTZ), itemResource(Items.COAL),
-                itemResource(Items.NETHERITE_INGOT), itemResource(Items.RAW_IRON), itemResource(Items.RAW_GOLD),
-                itemResource(Items.RAW_COPPER), itemResource(Items.COBBLESTONE), itemResource(Items.STONE),
-                itemResource(Items.DIRT), itemResource(Items.SAND), itemResource(Items.GRAVEL));
-        ItemResource newItem = itemResource(Items.NETHER_STAR);
-        FluidResource newFluid = FluidResource.of(Fluids.LAVA);
+        var items = port.itemStorage();
+        var fluids = port.fluidStorage();
+        List<ItemStack> resources = List.of(
+                itemStack(Items.IRON_INGOT), itemStack(Items.GOLD_INGOT), itemStack(Items.DIAMOND),
+                itemStack(Items.EMERALD), itemStack(Items.COPPER_INGOT), itemStack(Items.REDSTONE),
+                itemStack(Items.LAPIS_LAZULI), itemStack(Items.QUARTZ), itemStack(Items.COAL),
+                itemStack(Items.NETHERITE_INGOT), itemStack(Items.RAW_IRON), itemStack(Items.RAW_GOLD),
+                itemStack(Items.RAW_COPPER), itemStack(Items.COBBLESTONE), itemStack(Items.STONE),
+                itemStack(Items.DIRT), itemStack(Items.SAND), itemStack(Items.GRAVEL));
+        ItemStack newItem = itemStack(Items.NETHER_STAR);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
+        FluidStack newFluid = new FluidStack(Fluids.LAVA, 1);
 
         assertThat(items.size()).isEqualTo(itemTypes);
         assertThat(fluids.size()).isEqualTo(fluidTypes);
-        assertThat(items.capacity(0, resources.getFirst())).isEqualTo(Long.MAX_VALUE);
-        assertThat(fluids.capacity(0, FluidResource.of(Fluids.WATER))).isEqualTo(Long.MAX_VALUE);
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (int slot = 0; slot < itemTypes; slot++) {
-                assertThat(items.insert(slot, resources.get(slot), Long.MAX_VALUE, transaction))
-                        .isEqualTo(Long.MAX_VALUE);
-            }
-            for (int slot = 0; slot < fluidTypes; slot++) {
-                assertThat(fluids.insert(slot, FluidResource.of(Fluids.WATER), Long.MAX_VALUE, transaction))
-                        .isEqualTo(Long.MAX_VALUE);
-                assertThat(fluids.insert(slot, newFluid, 1L, transaction)).isZero();
-            }
-            assertThat(items.insert(0, newItem, 1L, transaction)).isZero();
-            transaction.commit();
+        assertThat(items.capacity(0)).isEqualTo(Long.MAX_VALUE);
+        assertThat(fluids.capacity(0)).isEqualTo(Long.MAX_VALUE);
+        for (int slot = 0; slot < itemTypes; slot++) {
+            assertThat(items.forceInsert(slot, resources.get(slot), Long.MAX_VALUE, false)).isEqualTo(Long.MAX_VALUE);
         }
+        for (int slot = 0; slot < fluidTypes; slot++) {
+            assertThat(fluids.forceInsert(slot, water, Long.MAX_VALUE, false)).isEqualTo(Long.MAX_VALUE);
+            assertThat(fluids.forceInsert(slot, newFluid, 1L, false)).isZero();
+        }
+        assertThat(items.forceInsert(0, newItem, 1L, false)).isZero();
     }
 
     private static void assertCapabilityOrder(String id) {
@@ -251,9 +236,9 @@ class CombinedPortBlockEntityTest {
         return (IOPortBlockEntity) ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, state);
     }
 
-    private static ItemResource itemResource(Item item) {
+    private static ItemStack itemStack(Item item) {
         ItemStack stack = item.getDefaultInstance();
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        return ItemResource.of(stack);
+        return stack;
     }
 }

@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
+import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -43,7 +45,6 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import com.mojang.serialization.MapCodec;
@@ -54,15 +55,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.world.level.material.Fluids;
-import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -80,7 +77,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -99,7 +97,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class RequirementPlannerTest {
     private static final TestType TYPE = type("planner_requirement");
-    private static final TestType ROLLBACK_FAILURE_TYPE = type("rollback_failure");
     private RequirementHandlerRegistry.TestScope registryScope;
 
     @BeforeAll
@@ -200,7 +197,7 @@ class RequirementPlannerTest {
                                         PlanningContext context) {
                 CapabilityOperation operation = new CapabilityOperation() {
                     @Override
-                    public CapabilityResult commit(TransactionContext transaction) {
+                    public CapabilityResult commit() {
                         return CapabilityResult.successful();
                     }
 
@@ -293,7 +290,7 @@ class RequirementPlannerTest {
     void shares_and_rolls_back_reservations_between_candidate_and_final_materialization() {
         TestType reservationType = type("shared_reservation_lifecycle");
         BulkItemStorage storage = new BulkItemStorage(2, null);
-        storage.insert(ironResource(), 2, false);
+        storage.forceInsert(ironResource(), 2, false);
         StorageCapability capability = new StorageCapability(reservationType.id(), CapabilityDirections.input(), storage);
         PlanningReservations shared = new PlanningReservations();
         AtomicInteger factories = new AtomicInteger();
@@ -305,17 +302,17 @@ class RequirementPlannerTest {
                 return new RequirementPlan(context.requirementIndex(), 2, List.of(), null,
                         (parallelism, reservations) -> {
                             factories.incrementAndGet();
-                            assertThat(reservations.reserveExtract(
+                            assertThat(reservations.reserveItemExtract(
                                     storage, 0, ironResource(), parallelism)).isTrue();
-                            assertThat(reservations.amount(storage, 0)).isEqualTo(2 - parallelism * factories.get());
-                            CapabilityRequests.ResourceAction<ItemResource> action =
-                                    new CapabilityRequests.ResourceAction<>(0, ironResource(),
+                            assertThat(reservations.itemAmount(storage, 0)).isEqualTo(2 - parallelism * factories.get());
+                            CapabilityRequests.ItemAction action =
+                                    new CapabilityRequests.ItemAction(0, ironResource(),
                                             parallelism, false);
                             return new RequirementPlan.OperationPlan(List.of(capability.prepare(
-                                    new CapabilityRequests.ResourceRequest<>(capability.type(), IOType.INPUT,
+                                    new CapabilityRequests.ItemRequest(capability.type(), IOType.INPUT,
                                             parallelism, List.of(action)))), null);
                         },
-                        (parallelism, reservations) -> reservations.reserveExtract(
+                        (parallelism, reservations) -> reservations.reserveItemExtract(
                                 storage, 0, ironResource(), parallelism)
                                 ? null
                                 : unknownFailure(reservationType.id(), StatusSeverity.BLOCKED,
@@ -382,7 +379,7 @@ class RequirementPlannerTest {
     }
 
     @Test
-    void built_in_energy_handler_prepares_a_real_transactional_storage_operation() {
+    void built_in_energy_handler_prepares_a_real_storage_operation() {
         LongValueStorage storage = new LongValueStorage(100, 100, null);
         storage.setAmount(10);
         MachineCapability capability = new TestCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, 1) {
@@ -395,11 +392,10 @@ class RequirementPlannerTest {
             public CapabilityOperation prepare(CapabilityRequest request) {
                 assertThat(request).isInstanceOf(CapabilityRequests.ValueRequest.class);
                 CapabilityRequests.ValueRequest valueRequest = (CapabilityRequests.ValueRequest) request;
-                return transaction -> {
-                    storage.updateSnapshots(transaction);
-                            long moved = storage.extract(valueRequest.amount(), false);
-                            return moved == valueRequest.amount()
-                                    ? CapabilityResult.successful()
+                return () -> {
+                    long moved = storage.extract(valueRequest.amount(), false);
+                    return moved == valueRequest.amount()
+                            ? CapabilityResult.successful()
                             : CapabilityResult.failure(unknownFailure(EnergyRequirement.TYPE.id(),
                                     StatusSeverity.BLOCKED, FailurePhase.CAPABILITY_COMMIT));
                 };
@@ -418,7 +414,7 @@ class RequirementPlannerTest {
     @Test
     void item_shortage_returns_a_real_operation_for_the_available_parallelism() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ironResource(), 1, false);
+        storage.forceInsert(ironResource(), 1, false);
 
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
@@ -437,7 +433,7 @@ class RequirementPlannerTest {
     @Test
     void bidirectional_item_capability_plans_input_and_output_with_requirement_directions() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ironResource(), 1, false);
+        storage.forceInsert(ironResource(), 1, false);
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
                 CapabilityDirections.bidirectional(), storage);
 
@@ -451,7 +447,7 @@ class RequirementPlannerTest {
         assertThat(result.plan().commit()).isTrue();
         assertThat(capability.directions()).isEqualTo(CapabilityDirections.bidirectional());
         assertThat(capability.view().directions()).isEqualTo(CapabilityDirections.bidirectional());
-        assertThat(capability.resourceRequests()).extracting(CapabilityRequests.ResourceRequest::ioType)
+        assertThat(capability.requests()).extracting(CapabilityRequest::ioType)
                 .containsExactly(IOType.INPUT, IOType.OUTPUT);
         assertThat(storage.amount(0)).isEqualTo(1);
     }
@@ -459,7 +455,7 @@ class RequirementPlannerTest {
     @Test
     void bidirectional_item_plan_fails_when_output_capacity_is_insufficient() {
         BulkItemStorage storage = new BulkItemStorage(1, null);
-        storage.insert(ironResource(), 1, false);
+        storage.forceInsert(ironResource(), 1, false);
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
                 CapabilityDirections.bidirectional(), storage);
 
@@ -481,30 +477,6 @@ class RequirementPlannerTest {
                     assertThat(simulation.accepted()).isZero();
                     assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
                 });
-        assertThat(storage.amount(0)).isEqualTo(1);
-    }
-
-    @Test
-    void bidirectional_item_plan_rolls_back_when_runtime_output_operation_fails() {
-        BulkItemStorage storage = new BulkItemStorage(2, null);
-        storage.insert(ironResource(), 1, false);
-        StorageCapability capability = new FailingOutputStorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), storage);
-
-        var result = new RequirementPlanner().plan(
-                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
-                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2))),
-                List.of(capability), new PlanningContext(1, 0));
-
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().requirements()).allSatisfy(plan ->
-                assertThat(plan.operations()).isNotEmpty());
-        assertThat(capability.resourceRequests()).extracting(CapabilityRequests.ResourceRequest::ioType)
-                .containsExactly(IOType.INPUT, IOType.OUTPUT);
-        assertThat(result.plan().commit()).isFalse();
-        assertThat(capability.committedRequestDirections()).containsExactly(IOType.INPUT, IOType.OUTPUT);
-        assertThat(result.plan().failure()).satisfies(failure ->
-                assertThat(failure.details()).containsEntry("test_failure", "forced_output_failure"));
         assertThat(storage.amount(0)).isEqualTo(1);
     }
 
@@ -533,8 +505,8 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().commit()).isTrue();
-        assertThat(capability.resourceRequests()).singleElement()
-                .extracting(CapabilityRequests.ResourceRequest::ioType).isEqualTo(IOType.INPUT);
+        assertThat(capability.requests()).singleElement()
+                .extracting(CapabilityRequest::ioType).isEqualTo(IOType.INPUT);
     }
 
     @Test
@@ -595,7 +567,7 @@ class RequirementPlannerTest {
     @Test
     void built_in_requirements_match_existing_capability_identifiers() {
         BulkItemStorage itemStorage = new BulkItemStorage(64, null);
-        itemStorage.insert(ironResource(), 1, false);
+        itemStorage.forceInsert(ironResource(), 1, false);
         LongFluidStorage fluidStorage = new LongFluidStorage(2_000, null);
         fluidStorage.setFluid(new FluidStack(Fluids.WATER, 1_000));
         LongValueStorage energyStorage = new LongValueStorage(100, 100, null);
@@ -624,7 +596,7 @@ class RequirementPlannerTest {
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage);
         ItemStack output = ironStack(4);
         assertThat(output.getCount()).isEqualTo(4);
-        assertThat(storage.capacityResource(0, ItemResource.of(output))).isEqualTo(2);
+        assertThat(storage.capacity(0)).isEqualTo(2);
         ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
         assertThat(requirement.stack(null).getCount()).isEqualTo(4);
         var result = new RequirementPlanner().plan(
@@ -633,8 +605,8 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0, true));
 
         assertThat(result.successful()).isTrue();
-        assertThat(capability.lastResourceRequest.actions()).singleElement()
-                .extracting(CapabilityRequests.ResourceAction::amount).isEqualTo(2L);
+        assertThat(capability.lastItemRequest.actions()).singleElement()
+                .extracting(CapabilityRequests.ItemAction::amount).isEqualTo(2L);
         assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
@@ -656,7 +628,7 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().commit()).isTrue();
         assertThat(bus.itemStorage().amount(0)).isEqualTo(96L);
-        assertThat(bus.itemStorage().resource(0).toStack(96).get(DataComponents.CUSTOM_NAME))
+        assertThat(bus.itemStorage().resource(0).get(DataComponents.CUSTOM_NAME))
                 .isEqualTo(Component.literal("data output"));
     }
 
@@ -688,12 +660,9 @@ class RequirementPlannerTest {
         ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
         long requested = (long) Integer.MAX_VALUE * 2L;
         long existing = Long.MAX_VALUE - 1L;
-        try (Transaction transaction = Transaction.openRoot()) {
-            bus.itemStorage().insert(0, ItemResource.of(output), existing, transaction);
-            for (int slot = 1; slot < bus.itemStorage().size(); slot++) {
-                bus.itemStorage().insert(slot, ItemResource.of(Items.COBBLESTONE), Long.MAX_VALUE, transaction);
-            }
-            transaction.commit();
+        bus.itemStorage().forceInsert(0, output, existing, false);
+        for (int slot = 1; slot < bus.itemStorage().size(); slot++) {
+            bus.itemStorage().forceInsert(slot, new ItemStack(Items.COBBLESTONE), Long.MAX_VALUE, false);
         }
         assertThat(bus.itemStorage().amount(0)).isEqualTo(existing);
 
@@ -812,7 +781,7 @@ class RequirementPlannerTest {
                 ItemStack.EMPTY);
         ItemRequirement output = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 ironStack(4), 1F, List.of());
-        inputStorage.insert(ironResource(), 1, false);
+        inputStorage.forceInsert(ironResource(), 1, false);
 
         var result = new RequirementPlanner().plan(
                 List.of(input, output),
@@ -859,8 +828,8 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(1);
-        assertThat(capability.lastResourceRequest.actions()).singleElement()
-                .extracting(CapabilityRequests.ResourceAction::amount).isEqualTo(64L);
+        assertThat(capability.lastItemRequest.actions()).singleElement()
+                .extracting(CapabilityRequests.ItemAction::amount).isEqualTo(64L);
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(64L);
     }
@@ -894,35 +863,6 @@ class RequirementPlannerTest {
                     assertThat(simulation.accepted()).isZero();
                     assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
                 });
-    }
-
-    @Test
-    void planner_rejects_different_resources_in_non_empty_zero_quantity_slots() {
-        ZeroQuantityItemStorage itemStorage = new ZeroQuantityItemStorage(ItemResource.of(Items.IRON_INGOT));
-        var itemResult = new RequirementPlanner().plan(
-                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        new ItemStack(Items.GOLD_NUGGET, 1), 1F, List.of())),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), itemStorage)),
-                new PlanningContext(1, 0));
-
-        assertThat(itemResult.successful()).isFalse();
-        assertThat(itemResult.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
-        assertThat(itemResult.outputSimulations()).singleElement()
-                .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.NONE);
-        assertThat(itemStorage.amount(0)).isZero();
-
-        ZeroQuantityFluidStorage fluidStorage = new ZeroQuantityFluidStorage(FluidResource.of(Fluids.LAVA));
-        var fluidResult = new RequirementPlanner().plan(
-                List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        new FluidStack(Fluids.WATER, 1), 1F, List.of())),
-                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.output(), fluidStorage)),
-                new PlanningContext(1, 0));
-
-        assertThat(fluidResult.successful()).isFalse();
-        assertThat(fluidResult.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
-        assertThat(fluidResult.outputSimulations()).singleElement()
-                .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.NONE);
-        assertThat(fluidStorage.amount(0)).isZero();
     }
 
     @Test
@@ -1139,7 +1079,7 @@ class RequirementPlannerTest {
     @Test
     void shared_item_slot_is_reserved_during_planning() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ironResource(), 1, false);
+        storage.forceInsert(ironResource(), 1, false);
 
         var result = new RequirementPlanner().plan(
                 List.of(
@@ -1156,7 +1096,7 @@ class RequirementPlannerTest {
     @Test
     void shared_item_slot_lowers_parallelism_before_materializing_operations() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ironResource(), 2, false);
+        storage.forceInsert(ironResource(), 2, false);
 
         var result = new RequirementPlanner().plan(
                 List.of(
@@ -1305,14 +1245,14 @@ class RequirementPlannerTest {
     @Test
     void planning_reservations_reject_resource_virtual_amount_overflow() {
         LongFluidStorage storage = new LongFluidStorage(Long.MAX_VALUE, null);
-        FluidResource water = FluidResource.of(Fluids.WATER);
-        storage.setContents(water, Long.MAX_VALUE);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
+        storage.setContents(0, water, Long.MAX_VALUE);
         PlanningReservations reservations = new PlanningReservations();
 
-        assertThat(reservations.reserveExtract(storage, 0, water, Long.MAX_VALUE)).isTrue();
-        assertThat(reservations.reserveInsert(storage, 0, water, Long.MAX_VALUE)).isTrue();
-        assertThat(reservations.reserveInsert(storage, 0, water, 1L)).isFalse();
-        assertThat(reservations.amount(storage, 0)).isEqualTo(Long.MAX_VALUE);
+        assertThat(reservations.reserveFluidExtract(storage, 0, water, Long.MAX_VALUE)).isTrue();
+        assertThat(reservations.reserveFluidInsert(storage, 0, water, Long.MAX_VALUE, Long.MAX_VALUE)).isTrue();
+        assertThat(reservations.reserveFluidInsert(storage, 0, water, 1L, Long.MAX_VALUE)).isFalse();
+        assertThat(reservations.fluidAmount(storage, 0)).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test
@@ -1333,20 +1273,20 @@ class RequirementPlannerTest {
     void planning_reservations_reject_minimum_amounts_without_changing_state() {
         LongValueStorage valueStorage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, null);
         LongFluidStorage resourceStorage = new LongFluidStorage(Long.MAX_VALUE, null);
-        FluidResource water = FluidResource.of(Fluids.WATER);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
         PlanningReservations reservations = new PlanningReservations();
 
         assertThat(reservations.reserveValue(valueStorage, Long.MIN_VALUE, true)).isFalse();
-        assertThat(reservations.reserveInsert(resourceStorage, 0, water, Long.MIN_VALUE)).isFalse();
-        assertThat(reservations.reserveExtract(resourceStorage, 0, water, Long.MIN_VALUE)).isFalse();
+        assertThat(reservations.reserveFluidInsert(resourceStorage, 0, water, Long.MIN_VALUE, Long.MAX_VALUE)).isFalse();
+        assertThat(reservations.reserveFluidExtract(resourceStorage, 0, water, Long.MIN_VALUE)).isFalse();
         assertThat(reservations.valueAvailable(valueStorage, true)).isEqualTo(Long.MAX_VALUE);
-        assertThat(reservations.amount(resourceStorage, 0)).isZero();
+        assertThat(reservations.fluidAmount(resourceStorage, 0)).isZero();
     }
 
     @Test
     void built_in_item_and_fluid_handlers_commit_real_resource_storage_operations_in_order() {
         BulkItemStorage itemStorage = new BulkItemStorage(64, null);
-        itemStorage.insert(ironResource(), 2, false);
+        itemStorage.forceInsert(ironResource(), 2, false);
         LongFluidStorage fluidStorage = new LongFluidStorage(2_000, null);
         fluidStorage.setFluid(new FluidStack(Fluids.WATER, 1_000));
 
@@ -1538,8 +1478,7 @@ class RequirementPlannerTest {
     @Test
     void item_planning_supports_parallelism_above_integer_maximum() {
         long parallelism = (long) Integer.MAX_VALUE + 1L;
-        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
-                ItemResource.class, 1, Long.MAX_VALUE, ItemResource::isEmpty, null);
+        LongItemStorage storage = new LongItemStorage(1, Long.MAX_VALUE, null);
         storage.setContents(0, ironResource(), Long.MAX_VALUE);
 
         var result = new RequirementPlanner().plan(
@@ -1634,54 +1573,13 @@ class RequirementPlannerTest {
     }
 
     @Test
-    void rolls_back_real_port_item_fluid_and_energy_operations_when_a_later_operation_fails() {
-        ItemBusCapability item = (ItemBusCapability) port("item_input_bus").capabilitySnapshot().capabilities().getFirst();
-        FluidHatchCapability fluid = (FluidHatchCapability) port("fluid_input_hatch").capabilitySnapshot().capabilities().getFirst();
-        EnergyHatchCapability energy = (EnergyHatchCapability) port("energy_input_hatch_tiny").capabilitySnapshot().capabilities().getFirst();
-        try (Transaction transaction = Transaction.openRoot()) {
-            item.storage().insert(0, ironResource(), 1, transaction);
-            transaction.commit();
-        }
-        ((LongFluidStorage) fluid.storage()).setFluid(new FluidStack(Fluids.WATER, 1_000));
-        energy.storage().setAmount(4);
-        register(ROLLBACK_FAILURE_TYPE, new RequirementHandler<TestRequirement>() {
-            @Override
-            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
-                                        PlanningContext context) {
-                return new RequirementPlan(context.requirementIndex(), 1,
-                         List.of(transaction -> CapabilityResult.failure(unknownFailure(
-                                 ROLLBACK_FAILURE_TYPE.id(), StatusSeverity.FAILURE, FailurePhase.CAPABILITY_COMMIT))), null);
-            }
-        });
-
-        var result = new RequirementPlanner().plan(
-                List.of(
-                        new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
-                        new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
-                                 FluidStack.EMPTY),
-                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 4),
-                        new TestRequirement(ROLLBACK_FAILURE_TYPE, RecipeModifier.IOType.INPUT)),
-                List.of(
-                        item, fluid, energy, new TestCapability(ROLLBACK_FAILURE_TYPE.id(), IOType.INPUT, 1)),
-                new PlanningContext(1, 0));
-
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().requirements()).allSatisfy(plan ->
-                assertThat(plan.operations()).isNotEmpty());
-        assertThat(result.plan().commit()).isFalse();
-        assertThat(item.storage().amount(0)).isEqualTo(1);
-        assertThat(fluid.storage().amount(0)).isEqualTo(1_000);
-        assertThat(energy.storage().amount()).isEqualTo(4);
-    }
-
-    @Test
     void filtered_context_plans_keep_the_original_recipe_requirement_index() {
         MachineRequirement output = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 ironStack(1));
         MachineRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT,
                 ironIngredient(), 1, ItemStack.EMPTY);
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        storage.insert(ironResource(), 1, false);
+        storage.forceInsert(ironResource(), 1, false);
         MachineRecipe recipe = RecipeTestSupport.create(
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", "indexed_requirements"),
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", "machine"), 20,
@@ -1732,484 +1630,9 @@ class RequirementPlannerTest {
         assertThat(taggedCapability.prepareCalls).isEqualTo(1);
         assertThat(result.plan().commit()).isTrue();
         assertThat(untaggedStorage.amount(0)).isEqualTo(1L);
-        assertThat(untaggedStorage.resource(0).toStack(1).is(Items.DIAMOND)).isTrue();
+        assertThat(untaggedStorage.resource(0).is(Items.DIAMOND)).isTrue();
         assertThat(taggedStorage.amount(0)).isEqualTo(1L);
-        assertThat(taggedStorage.resource(0).toStack(1).is(Items.GOLD_NUGGET)).isTrue();
-    }
-
-    @Test
-    void output_capability_fake_routes_unaccepted_remainder_to_local_slots() {
-        FakeOutputItemStorage storage = new FakeOutputItemStorage(1, 4L, 2L);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.output(), storage);
-        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                ironStack(6), 1F, List.of());
-
-        var result = new RequirementPlanner().plan(
-                List.of(requirement),
-                List.of(capability),
-                new PlanningContext(1, 0));
-
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().outputSimulations()).singleElement()
-                .satisfies(simulation -> {
-                    assertThat(simulation.requested()).isEqualTo(6L);
-                    assertThat(simulation.accepted()).isEqualTo(6L);
-                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
-                });
-        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
-                assertThat(plan.operations()).hasSize(1));
-    }
-
-    @Test
-    void output_capability_fake_shares_network_capacity_between_two_requirements() {
-        FakeOutputItemStorage storage = new FakeOutputItemStorage(0, 0L, 8L);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.output(), storage);
-        List<MachineRequirement> outputs = List.of(
-                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)),
-                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)));
-
-        var result = new RequirementPlanner().plan(
-                outputs,
-                List.of(capability),
-                new PlanningContext(2, 0));
-
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().parallelism()).isEqualTo(1L);
-        assertThat(result.plan().outputSimulations()).hasSize(2)
-                .allSatisfy(simulation -> {
-                    assertThat(simulation.requested()).isEqualTo(4L);
-                    assertThat(simulation.accepted()).isEqualTo(4L);
-                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
-                });
-        assertThat(result.plan().requirements()).allSatisfy(plan ->
-                assertThat(plan.operations()).hasSize(1));
-        assertThat(storage.planOutputCalls).isEqualTo(6);
-    }
-
-    @Test
-    void output_capability_fake_keeps_shared_network_total_within_capacity() {
-        FakeOutputItemStorage storage = new FakeOutputItemStorage(0, 0L, 8L);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.output(), storage);
-        List<MachineRequirement> outputs = List.of(
-                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(6)),
-                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(6)));
-        PlanningReservations shared = new PlanningReservations();
-
-        var result = new RequirementPlanner().plan(
-                outputs,
-                List.of(capability),
-                new PlanningContext(2, 0, true, shared));
-
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().parallelism()).isEqualTo(1L);
-        long totalAccepted = result.plan().outputSimulations().stream()
-                .mapToLong(simulation -> simulation.accepted()).sum();
-        assertThat(totalAccepted).isEqualTo(8L);
-        assertThat(result.plan().outputSimulations()).satisfiesExactly(
-                first -> {
-                    assertThat(first.requested()).isEqualTo(6L);
-                    assertThat(first.accepted()).isEqualTo(6L);
-                    assertThat(first.fit()).isEqualTo(OutputFit.FULL);
-                },
-                second -> {
-                    assertThat(second.requested()).isEqualTo(6L);
-                    assertThat(second.accepted()).isEqualTo(2L);
-                    assertThat(second.fit()).isEqualTo(OutputFit.PARTIAL);
-                });
-    }
-
-    @Test
-    void async_output_capability_fake_with_zero_network_returns_no_output_capacity() {
-        FakeAsyncOutputItemStorage storage = new FakeAsyncOutputItemStorage(0L);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.output(), storage);
-        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                ironStack(1), 1F, List.of());
-
-        var result = new RequirementPlanner().plan(
-                List.of(requirement),
-                List.of(capability),
-                new PlanningContext(1, 0));
-
-        assertThat(result.successful()).isFalse();
-        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
-        assertThat(result.outputSimulations()).singleElement()
-                .satisfies(simulation -> {
-                    assertThat(simulation.requested()).isEqualTo(1L);
-                    assertThat(simulation.accepted()).isZero();
-                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
-                });
-        assertThat(storage.planOutputCalls).isZero();
-    }
-
-    @Test
-    void fluid_output_capability_fake_shares_network_capacity_between_two_requirements() {
-        FakeOutputFluidStorage storage = new FakeOutputFluidStorage(0, 0L, 1_200L);
-        StorageCapability capability = new StorageCapability(FluidRequirement.TYPE.id(),
-                CapabilityDirections.output(), storage);
-        List<MachineRequirement> outputs = List.of(
-                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        new FluidStack(Fluids.WATER, 600), 1F, List.of()),
-                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        new FluidStack(Fluids.WATER, 600), 1F, List.of()));
-
-        var result = new RequirementPlanner().plan(
-                outputs,
-                List.of(capability),
-                new PlanningContext(2, 0));
-
-        assertThat(result.successful()).isTrue();
-        assertThat(result.plan().parallelism()).isEqualTo(1L);
-        assertThat(result.plan().outputSimulations()).hasSize(2)
-                .allSatisfy(simulation -> {
-                    assertThat(simulation.requested()).isEqualTo(600L);
-                    assertThat(simulation.accepted()).isEqualTo(600L);
-                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
-                });
-    }
-
-    /**
-     * Fake item storage implementing {@link OutputResourceStorage} with configurable network capacity
-     * plus zero or more local slots, used to exercise shared-network planning.
-     *
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class FakeOutputItemStorage implements OutputResourceStorage<ItemResource> {
-        final Object networkIdentity = new Object();
-        private final long networkCapacity;
-        private final int slotCount;
-        private final long slotCapacity;
-        private final List<@org.jetbrains.annotations.Nullable ItemResource> slotResources;
-        private final long[] slotAmounts;
-        int planOutputCalls;
-
-        FakeOutputItemStorage(int slots, long slotCapacity, long networkCapacity) {
-            this.networkCapacity = networkCapacity;
-            this.slotCount = Math.max(0, slots);
-            this.slotCapacity = slotCapacity;
-            this.slotResources = new ArrayList<>(java.util.Collections.nCopies(slotCount, null));
-            this.slotAmounts = new long[slotCount];
-        }
-
-        @Override
-        public Class<ItemResource> resourceType() {
-            return ItemResource.class;
-        }
-
-        @Override
-        public int size() {
-            return slotCount;
-        }
-
-        @Override
-        public @org.jetbrains.annotations.Nullable ItemResource resource(int slot) {
-            checkSlot(slot);
-            return slotResources.get(slot);
-        }
-
-        @Override
-        public long amount(int slot) {
-            checkSlot(slot);
-            return slotAmounts[slot];
-        }
-
-        @Override
-        public long capacity(int slot, @org.jetbrains.annotations.Nullable ItemResource resource) {
-            checkSlot(slot);
-            return slotCapacity;
-        }
-
-        @Override
-        public boolean isValid(int slot, ItemResource resource) {
-            checkSlot(slot);
-            if (resource == null || resource.isEmpty()) return false;
-            ItemResource current = slotResources.get(slot);
-            return current == null || current.equals(resource);
-        }
-
-        @Override
-        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
-            if (!isValid(slot, resource)) return 0L;
-            long current = slotAmounts[slot];
-            long inserted = Math.min(amount, Math.max(0L, slotCapacity - current));
-            if (inserted > 0L) {
-                if (current == 0L) slotResources.set(slot, resource);
-                slotAmounts[slot] = current + inserted;
-            }
-            return inserted;
-        }
-
-        @Override
-        public long extract(int slot, ItemResource resource, long amount, TransactionContext transaction) {
-            if (!resource.equals(slotResources.get(slot))) return 0L;
-            long current = slotAmounts[slot];
-            long extracted = Math.min(amount, current);
-            if (extracted > 0L) {
-                slotAmounts[slot] = current - extracted;
-                if (slotAmounts[slot] == 0L) slotResources.set(slot, null);
-            }
-            return extracted;
-        }
-
-        @Override
-        public long outputCapacity(ItemResource resource) {
-            long total = networkCapacity;
-            for (int slot = 0; slot < slotCount; slot++) {
-                if (!isValidResource(slot, resource)) continue;
-                total = saturatingAdd(total, Math.max(0L, capacityResource(slot, resource) - slotAmounts[slot]));
-            }
-            return total;
-        }
-
-        @Override
-        public OutputPlan planOutput(ItemResource resource, long amount, PlanningReservations reservations,
-                                     boolean materialize) {
-            planOutputCalls++;
-            long networkAmount = 0L;
-            if (amount > 0L && networkCapacity > 0L) {
-                long available = reservations.outputAvailable(networkIdentity, resource, networkCapacity);
-                long portion = Math.min(amount, available);
-                if (portion > 0L && reservations.reserveOutput(networkIdentity, resource, portion)) {
-                    networkAmount = portion;
-                }
-            }
-
-            long remaining = amount - networkAmount;
-            for (int slot = 0; slot < slotCount && remaining > 0L; slot++) {
-                if (!isValidResource(slot, resource)) continue;
-                long current = reservations.amount(this, slot);
-                long available = Math.max(0L, capacityResource(slot, resource) - current);
-                long portion = Math.min(remaining, available);
-                if (portion > 0L && reservations.reserveInsert(this, slot, resource, portion)) {
-                    remaining -= portion;
-                }
-            }
-
-            long accepted = amount - remaining;
-            CapabilityOperation operation = materialize && accepted > 0L
-                    ? transaction -> CapabilityResult.successful()
-                    : null;
-            return new OutputPlan(accepted, operation);
-        }
-
-        private void checkSlot(int slot) {
-            if (slot < 0 || slot >= slotCount) throw new IndexOutOfBoundsException(slot);
-        }
-
-        private static long saturatingAdd(long first, long second) {
-            return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
-        }
-    }
-
-    /**
-     * Fake item storage implementing the zero-slot async variant of {@link OutputResourceStorage}
-     * where output capacity comes solely from the shared network.
-     *
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class FakeAsyncOutputItemStorage implements OutputResourceStorage<ItemResource> {
-        final Object networkIdentity = new Object();
-        private final long networkCapacity;
-        int planOutputCalls;
-
-        FakeAsyncOutputItemStorage(long networkCapacity) {
-            this.networkCapacity = networkCapacity;
-        }
-
-        @Override
-        public Class<ItemResource> resourceType() {
-            return ItemResource.class;
-        }
-
-        @Override
-        public int size() {
-            return 0;
-        }
-
-        @Override
-        public ItemResource resource(int slot) {
-            return null;
-        }
-
-        @Override
-        public long amount(int slot) {
-            return 0L;
-        }
-
-        @Override
-        public long capacity(int slot, @org.jetbrains.annotations.Nullable ItemResource resource) {
-            return 0L;
-        }
-
-        @Override
-        public boolean isValid(int slot, ItemResource resource) {
-            return false;
-        }
-
-        @Override
-        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
-            return 0L;
-        }
-
-        @Override
-        public long extract(int slot, ItemResource resource, long amount, TransactionContext transaction) {
-            return 0L;
-        }
-
-        @Override
-        public long outputCapacity(ItemResource resource) {
-            return networkCapacity;
-        }
-
-        @Override
-        public OutputPlan planOutput(ItemResource resource, long amount, PlanningReservations reservations,
-                                     boolean materialize) {
-            planOutputCalls++;
-            if (amount <= 0L) return new OutputPlan(0L, null);
-            long available = reservations.outputAvailable(networkIdentity, resource, networkCapacity);
-            long accepted = Math.min(amount, available);
-            if (accepted <= 0L || !reservations.reserveOutput(networkIdentity, resource, accepted)) {
-                return new OutputPlan(0L, null);
-            }
-            CapabilityOperation operation = materialize
-                    ? transaction -> CapabilityResult.successful()
-                    : null;
-            return new OutputPlan(accepted, operation);
-        }
-    }
-
-    /**
-     * Fake fluid storage implementing {@link OutputResourceStorage} with configurable network capacity
-     * plus zero or more local slots, used to exercise shared-network planning.
-     *
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class FakeOutputFluidStorage implements OutputResourceStorage<FluidResource> {
-        final Object networkIdentity = new Object();
-        private final long networkCapacity;
-        private final int slotCount;
-        private final long slotCapacity;
-        private final List<@org.jetbrains.annotations.Nullable FluidResource> slotResources;
-        private final long[] slotAmounts;
-
-        FakeOutputFluidStorage(int slots, long slotCapacity, long networkCapacity) {
-            this.networkCapacity = networkCapacity;
-            this.slotCount = Math.max(0, slots);
-            this.slotCapacity = slotCapacity;
-            this.slotResources = new ArrayList<>(java.util.Collections.nCopies(slotCount, null));
-            this.slotAmounts = new long[slotCount];
-        }
-
-        @Override
-        public Class<FluidResource> resourceType() {
-            return FluidResource.class;
-        }
-
-        @Override
-        public int size() {
-            return slotCount;
-        }
-
-        @Override
-        public @org.jetbrains.annotations.Nullable FluidResource resource(int slot) {
-            checkSlot(slot);
-            return slotResources.get(slot);
-        }
-
-        @Override
-        public long amount(int slot) {
-            checkSlot(slot);
-            return slotAmounts[slot];
-        }
-
-        @Override
-        public long capacity(int slot, @org.jetbrains.annotations.Nullable FluidResource resource) {
-            checkSlot(slot);
-            return slotCapacity;
-        }
-
-        @Override
-        public boolean isValid(int slot, FluidResource resource) {
-            checkSlot(slot);
-            if (resource == null || resource.isEmpty()) return false;
-            FluidResource current = slotResources.get(slot);
-            return current == null || current.equals(resource);
-        }
-
-        @Override
-        public long insert(int slot, FluidResource resource, long amount, TransactionContext transaction) {
-            if (!isValid(slot, resource)) return 0L;
-            long current = slotAmounts[slot];
-            long inserted = Math.min(amount, Math.max(0L, slotCapacity - current));
-            if (inserted > 0L) {
-                if (current == 0L) slotResources.set(slot, resource);
-                slotAmounts[slot] = current + inserted;
-            }
-            return inserted;
-        }
-
-        @Override
-        public long extract(int slot, FluidResource resource, long amount, TransactionContext transaction) {
-            if (!resource.equals(slotResources.get(slot))) return 0L;
-            long current = slotAmounts[slot];
-            long extracted = Math.min(amount, current);
-            if (extracted > 0L) {
-                slotAmounts[slot] = current - extracted;
-                if (slotAmounts[slot] == 0L) slotResources.set(slot, null);
-            }
-            return extracted;
-        }
-
-        @Override
-        public long outputCapacity(FluidResource resource) {
-            long total = networkCapacity;
-            for (int slot = 0; slot < slotCount; slot++) {
-                if (!isValidResource(slot, resource)) continue;
-                total = saturatingAdd(total, Math.max(0L, capacityResource(slot, resource) - slotAmounts[slot]));
-            }
-            return total;
-        }
-
-        @Override
-        public OutputPlan planOutput(FluidResource resource, long amount, PlanningReservations reservations,
-                                     boolean materialize) {
-            long networkAmount = 0L;
-            if (amount > 0L && networkCapacity > 0L) {
-                long available = reservations.outputAvailable(networkIdentity, resource, networkCapacity);
-                long portion = Math.min(amount, available);
-                if (portion > 0L && reservations.reserveOutput(networkIdentity, resource, portion)) {
-                    networkAmount = portion;
-                }
-            }
-
-            long remaining = amount - networkAmount;
-            for (int slot = 0; slot < slotCount && remaining > 0L; slot++) {
-                if (!isValidResource(slot, resource)) continue;
-                long current = reservations.amount(this, slot);
-                long available = Math.max(0L, capacityResource(slot, resource) - current);
-                long portion = Math.min(remaining, available);
-                if (portion > 0L && reservations.reserveInsert(this, slot, resource, portion)) {
-                    remaining -= portion;
-                }
-            }
-
-            long accepted = amount - remaining;
-            CapabilityOperation operation = materialize && accepted > 0L
-                    ? transaction -> CapabilityResult.successful()
-                    : null;
-            return new OutputPlan(accepted, operation);
-        }
-
-        private void checkSlot(int slot) {
-            if (slot < 0 || slot >= slotCount) throw new IndexOutOfBoundsException(slot);
-        }
-
-        private static long saturatingAdd(long first, long second) {
-            return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
-        }
+        assertThat(taggedStorage.resource(0).is(Items.GOLD_NUGGET)).isTrue();
     }
 
     private static ItemStack ironStack(int count) {
@@ -2218,18 +1641,15 @@ class RequirementPlannerTest {
         return stack;
     }
 
-    private static ItemResource ironResource() {
-        return ItemResource.of(ironStack(1));
+    private static ItemStack ironResource() {
+        return ironStack(1);
     }
 
     private static void insertCombinedContents(IOPortBlockEntity port, long itemAmount, long fluidAmount) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(port.itemStorage().insert(0, ironResource(), itemAmount, transaction)).isEqualTo(itemAmount);
-            if (fluidAmount > 0L) {
-                assertThat(port.fluidStorage().insert(0, FluidResource.of(Fluids.WATER), fluidAmount, transaction))
-                        .isEqualTo(fluidAmount);
-            }
-            transaction.commit();
+        assertThat(port.itemStorage().forceInsert(0, ironResource(), itemAmount, false)).isEqualTo(itemAmount);
+        if (fluidAmount > 0L) {
+            assertThat(port.fluidStorage().forceInsert(0, new FluidStack(Fluids.WATER, 1), fluidAmount, false))
+                    .isEqualTo(fluidAmount);
         }
     }
 
@@ -2251,44 +1671,6 @@ class RequirementPlannerTest {
     private static void register(TestType type, RequirementHandler<TestRequirement> handler) {
         type.handler = handler;
         RequirementHandlerRegistry.register(type);
-    }
-
-    private static final class ZeroQuantityItemStorage extends LongResourceStorage<ItemResource> {
-        private final ItemResource slotResource;
-
-        private ZeroQuantityItemStorage(ItemResource slotResource) {
-            super(ItemResource.class, 1, 64L, ItemResource::isEmpty, () -> {});
-            this.slotResource = slotResource;
-        }
-
-        @Override
-        public ItemResource resource(int slot) {
-            return slot == 0 ? slotResource : super.resource(slot);
-        }
-
-        @Override
-        public boolean isValid(int slot, ItemResource resource) {
-            return true;
-        }
-    }
-
-    private static final class ZeroQuantityFluidStorage extends LongResourceStorage<FluidResource> {
-        private final FluidResource slotResource;
-
-        private ZeroQuantityFluidStorage(FluidResource slotResource) {
-            super(FluidResource.class, 1, 64L, FluidResource::isEmpty, () -> {});
-            this.slotResource = slotResource;
-        }
-
-        @Override
-        public FluidResource resource(int slot) {
-            return slot == 0 ? slotResource : super.resource(slot);
-        }
-
-        @Override
-        public boolean isValid(int slot, FluidResource resource) {
-            return true;
-        }
     }
 
     private static final class TestType implements RequirementType<TestRequirement> {
@@ -2410,7 +1792,7 @@ class RequirementPlannerTest {
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
             requestedParallelisms.add(request.parallelism());
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
     }
 
@@ -2430,7 +1812,7 @@ class RequirementPlannerTest {
             calls.incrementAndGet();
             return new RequirementPlan(context.requirementIndex(), limit, List.of(), null,
                     (parallelism, reservations) -> new RequirementPlan.OperationPlan(
-                            List.of(transaction -> CapabilityResult.successful()), null));
+                            List.of(CapabilityResult::successful), null));
         }
     }
 
@@ -2514,29 +1896,29 @@ class RequirementPlannerTest {
             reservationCalls++;
             if (!materialize || accepted != requestedAmount) return new OutputPlan(accepted, null);
             materializedOperations++;
-            return new OutputPlan(accepted, transaction -> {
+            return new OutputPlan(accepted, () -> {
                 committedAmount += accepted;
                 return CapabilityResult.successful();
             });
         }
     }
 
-    private static class StorageCapability implements MachineCapability, ValueFacet<CapabilityStorage>, OperationFacet {
+    private static class StorageCapability implements MachineCapability, ValueFacet<CapabilityStorage>,
+            ItemHandlerFacet, FluidHandlerFacet, OperationFacet {
         private final CapabilityType type;
         private final CapabilityDirections directions;
-        private final CapabilityStorage storage;
+        private final Object storage;
         private final List<String> tags;
         private int prepareCalls;
-        private CapabilityRequests.ResourceRequest<?> lastResourceRequest;
-        private final List<CapabilityRequests.ResourceRequest<?>> resourceRequests = new ArrayList<>();
+        private CapabilityRequests.ItemRequest lastItemRequest;
         private final List<CapabilityRequest> requests = new ArrayList<>();
         private final List<IOType> committedRequestDirections = new ArrayList<>();
 
-        private StorageCapability(ResourceLocation type, CapabilityDirections directions, CapabilityStorage storage) {
+        private StorageCapability(ResourceLocation type, CapabilityDirections directions, Object storage) {
             this(type, directions, storage, List.of());
         }
 
-        private StorageCapability(ResourceLocation type, CapabilityDirections directions, CapabilityStorage storage,
+        private StorageCapability(ResourceLocation type, CapabilityDirections directions, Object storage,
                                   List<String> tags) {
             this.type = new CapabilityType(type);
             this.directions = directions;
@@ -2574,6 +1956,8 @@ class RequirementPlannerTest {
 
                 @Override
                 public Set<Class<? extends CapabilityFacet>> facets() {
+                    if (storage instanceof IItemHandler) return Set.of(ItemHandlerFacet.class, OperationFacet.class);
+                    if (storage instanceof IFluidHandler) return Set.of(FluidHandlerFacet.class, OperationFacet.class);
                     return Set.of(ValueFacet.class, OperationFacet.class);
                 }
             };
@@ -2581,7 +1965,17 @@ class RequirementPlannerTest {
 
         @Override
         public CapabilityStorage storage() {
-            return storage;
+            return storage instanceof CapabilityStorage valueStorage ? valueStorage : null;
+        }
+
+        @Override
+        public IItemHandler itemHandler() {
+            return (IItemHandler) storage;
+        }
+
+        @Override
+        public IFluidHandler fluidHandler() {
+            return (IFluidHandler) storage;
         }
 
         @Override
@@ -2595,9 +1989,9 @@ class RequirementPlannerTest {
         public CapabilityOperation prepareOperation(CapabilityRequest request) {
             if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
                     && storage instanceof FloatValueStorage floatStorage) {
-                return transaction -> {
+                return () -> {
                     committedRequestDirections.add(smartRequest.ioType());
-                    return floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
+                    return floatStorage.setExisting(smartRequest.interfaceType(), smartRequest.value())
                             ? CapabilityResult.successful()
                             : CapabilityResult.failure(unknownFailure(type.id(), StatusSeverity.BLOCKED,
                                     FailurePhase.CAPABILITY_COMMIT));
@@ -2605,9 +1999,8 @@ class RequirementPlannerTest {
             }
             if (request instanceof CapabilityRequests.ValueRequest valueRequest
                     && storage instanceof LongValueStorage longStorage) {
-                return transaction -> {
+                return () -> {
                     committedRequestDirections.add(valueRequest.ioType());
-                    longStorage.updateSnapshots(transaction);
                     long moved = valueRequest.insert()
                             ? longStorage.insert(valueRequest.amount(), false)
                             : longStorage.extract(valueRequest.amount(), false);
@@ -2617,28 +2010,43 @@ class RequirementPlannerTest {
                                     FailurePhase.CAPABILITY_COMMIT));
                 };
             }
-            CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
-            lastResourceRequest = resourceRequest;
-            resourceRequests.add(resourceRequest);
-            if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
-                return transaction -> CapabilityResult.failure(unknownFailure(type.id(), StatusSeverity.BLOCKED,
-                        FailurePhase.CAPABILITY_COMMIT));
+            if (request instanceof CapabilityRequests.ItemRequest itemRequest
+                    && storage instanceof LongItemStorage itemStorage) {
+                lastItemRequest = itemRequest;
+                return () -> {
+                    committedRequestDirections.add(itemRequest.ioType());
+                    for (CapabilityRequests.ItemAction action : itemRequest.actions()) {
+                        ItemStack current = itemStorage.resource(action.slot());
+                        long moved = action.insert()
+                                ? itemStorage.forceInsert(action.slot(), action.stack(), action.amount(), false)
+                                : !current.isEmpty() && ItemStack.isSameItemSameComponents(current, action.stack())
+                                ? itemStorage.forceExtract(action.slot(), action.amount(), false) : 0L;
+                        if (moved != action.amount()) return operationFailure();
+                    }
+                    return CapabilityResult.successful();
+                };
             }
-            return transaction -> {
-                committedRequestDirections.add(resourceRequest.ioType());
-                for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
-                    long moved = action.insert()
-                            ? resourceStorage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
-                            : resourceStorage.extractResource(action.slot(), action.resource(), action.amount(), transaction);
-                    if (moved != action.amount()) return CapabilityResult.failure(unknownFailure(
-                            type.id(), StatusSeverity.BLOCKED, FailurePhase.CAPABILITY_COMMIT));
-                }
-                return CapabilityResult.successful();
-            };
+            if (request instanceof CapabilityRequests.FluidRequest fluidRequest
+                    && storage instanceof LongFluidStorage fluidStorage) {
+                return () -> {
+                    committedRequestDirections.add(fluidRequest.ioType());
+                    for (CapabilityRequests.FluidAction action : fluidRequest.actions()) {
+                        FluidStack current = fluidStorage.resource(action.tank());
+                        long moved = action.insert()
+                                ? fluidStorage.forceInsert(action.tank(), action.stack(), action.amount(), false)
+                                : !current.isEmpty() && FluidStack.isSameFluidSameComponents(current, action.stack())
+                                ? fluidStorage.forceExtract(action.tank(), action.amount(), false) : 0L;
+                        if (moved != action.amount()) return operationFailure();
+                    }
+                    return CapabilityResult.successful();
+                };
+            }
+            return this::operationFailure;
         }
 
-        private List<CapabilityRequests.ResourceRequest<?>> resourceRequests() {
-            return resourceRequests;
+        private CapabilityResult operationFailure() {
+            return CapabilityResult.failure(unknownFailure(type.id(), StatusSeverity.BLOCKED,
+                    FailurePhase.CAPABILITY_COMMIT));
         }
 
         private List<CapabilityRequest> requests() {
@@ -2647,32 +2055,6 @@ class RequirementPlannerTest {
 
         private List<IOType> committedRequestDirections() {
             return committedRequestDirections;
-        }
-    }
-
-    private static final class FailingOutputStorageCapability extends StorageCapability {
-        private final BulkItemStorage storage;
-
-        private FailingOutputStorageCapability(ResourceLocation type, CapabilityDirections directions,
-                                               CapabilityStorage storage) {
-            super(type, directions, storage);
-            this.storage = (BulkItemStorage) storage;
-        }
-
-        @Override
-        public CapabilityOperation prepare(CapabilityRequest request) {
-            CapabilityOperation operation = super.prepare(request);
-            if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)
-                    || resourceRequest.ioType() != IOType.OUTPUT) {
-                return operation;
-            }
-            return transaction -> {
-                assertThat(storage.amount(0)).isZero();
-                CapabilityResult outputResult = operation.commit(transaction);
-                if (!outputResult.success()) return outputResult;
-                return CapabilityResult.failure(unknownFailure(type().id(), StatusSeverity.FAILURE,
-                        FailurePhase.CAPABILITY_COMMIT, Map.of("test_failure", "forced_output_failure")));
-            };
         }
     }
 

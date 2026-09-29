@@ -16,7 +16,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
@@ -84,8 +84,6 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
@@ -846,26 +844,15 @@ class MachineBehaviorRuntimeTest {
                 ItemStack.EMPTY, 1F, List.of());
     }
 
-    private static void setItem(ResourceStorage<ItemResource> storage, int slot, ItemStack stack) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            ItemResource current = storage.resource(slot);
-            if (current != null && !current.isEmpty()) {
-                storage.extract(slot, current, storage.amount(slot), transaction);
-            }
-            if (!stack.isEmpty()) {
-                storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
-            }
-            transaction.commit();
-        }
+    private static void setItem(LongItemStorage storage, int slot, ItemStack stack) {
+        storage.setContents(slot, stack, stack.getCount());
     }
 
-    private static ItemStack item(ResourceStorage<ItemResource> storage, int slot) {
-        ItemResource resource = storage.resource(slot);
-        return resource == null || resource.isEmpty() ? ItemStack.EMPTY
-                : resource.toStack((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
+    private static ItemStack item(LongItemStorage storage, int slot) {
+        return storage.getStackInSlot(slot);
     }
 
-    private static long itemAmount(ResourceStorage<ItemResource> storage) {
+    private static long itemAmount(LongItemStorage storage) {
         long amount = 0L;
         for (int slot = 0; slot < storage.size(); slot++) amount += storage.amount(slot);
         return amount;
@@ -934,7 +921,7 @@ class MachineBehaviorRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
 
         @Override
