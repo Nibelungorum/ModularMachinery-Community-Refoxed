@@ -14,32 +14,26 @@ import appeng.core.definitions.AEItems;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
-import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 import java.lang.reflect.Method;
 
@@ -103,10 +97,10 @@ public class AE2AsyncOutputInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Async output interface does not expose ME_STORAGE externally");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.ItemHandler.BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Async output interface does not expose an external item handler");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.FluidHandler.BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Async output interface does not expose an external fluid handler");
 
@@ -125,10 +119,10 @@ public class AE2AsyncOutputInterfaceGameTest {
                             .noneMatch(type -> type.id().equals(MekanismPortFamilies.CHEMICAL)
                                     || type.id().equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL)),
                     "Async output interface does not expose a chemical capability");
-            helper.assertTrue(port.itemStorage().size() == 0,
-                    "Async output item storage reports zero local slots");
-            helper.assertTrue(port.fluidStorage().size() == 0,
-                    "Async output fluid storage reports zero local slots");
+            helper.assertTrue(port.nativeItemHandler().getSlots() == 9,
+                    "Async output exposes the native nine-slot item cache");
+            helper.assertTrue(port.nativeFluidHandler().getTanks() == 9,
+                    "Async output exposes the native nine-tank fluid cache");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Async output interface storage starts empty");
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null,
@@ -136,26 +130,14 @@ public class AE2AsyncOutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(4, () -> {
-            PlanningReservations reservations = new PlanningReservations();
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            OutputResourceStorage.OutputPlan itemPlan = ((OutputResourceStorage) port.itemStorage())
-                    .planOutput(ItemResource.of(Items.IRON_INGOT), ITEM_AMOUNT, reservations, true);
-            helper.assertTrue(itemPlan.accepted() == ITEM_AMOUNT,
-                    "Async output item plan accepts the requested amount");
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            OutputResourceStorage.OutputPlan fluidPlan = ((OutputResourceStorage) port.fluidStorage())
-                    .planOutput(FluidResource.of(Fluids.WATER), FLUID_AMOUNT, new PlanningReservations(), true);
-            helper.assertTrue(fluidPlan.accepted() == FLUID_AMOUNT,
-                    "Async output fluid plan accepts the requested amount");
-            try (Transaction transaction = Transaction.openRoot()) {
-                if (itemPlan.operation() != null) {
-                    itemPlan.operation().commit(transaction);
-                }
-                if (fluidPlan.operation() != null) {
-                    fluidPlan.operation().commit(transaction);
-                }
-                transaction.commit();
-            }
+            ItemStack itemRemainder = port.nativeItemHandler().insertItem(0,
+                    new ItemStack(Items.IRON_INGOT, (int) ITEM_AMOUNT), false);
+            int fluidInserted = port.nativeFluidHandler().fill(
+                    new FluidStack(Fluids.WATER, (int) FLUID_AMOUNT), IFluidHandler.FluidAction.EXECUTE);
+            helper.assertTrue(itemRemainder.isEmpty(),
+                    "Async output item handler accepts the requested amount");
+            helper.assertTrue(fluidInserted == FLUID_AMOUNT,
+                    "Async output fluid handler accepts the requested amount");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Async output interface storage stays empty immediately after planning");
         });
@@ -178,53 +160,42 @@ public class AE2AsyncOutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(30, () -> {
-            PlanningReservations reservations = new PlanningReservations();
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            OutputResourceStorage.OutputPlan plan = ((OutputResourceStorage) port.itemStorage())
-                    .planOutput(ItemResource.of(Items.IRON_INGOT), ITEM_AMOUNT, reservations, true);
-            helper.assertTrue(plan.accepted() == 0L,
-                    "Disconnected network reports zero accepted item output");
-            helper.assertTrue(plan.operation() == null,
-                    "Disconnected network plan returns a null operation");
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            OutputResourceStorage.OutputPlan fluidPlan = ((OutputResourceStorage) port.fluidStorage())
-                    .planOutput(FluidResource.of(Fluids.WATER), FLUID_AMOUNT, new PlanningReservations(), true);
-            helper.assertTrue(fluidPlan.accepted() == 0L,
-                    "Disconnected network reports zero accepted fluid output");
-            helper.assertTrue(fluidPlan.operation() == null,
-                    "Disconnected network fluid plan returns a null operation");
+            ItemStack itemRemainder = port.nativeItemHandler().insertItem(0,
+                    new ItemStack(Items.IRON_INGOT, (int) ITEM_AMOUNT), false);
+            int fluidInserted = port.nativeFluidHandler().fill(
+                    new FluidStack(Fluids.WATER, (int) FLUID_AMOUNT), IFluidHandler.FluidAction.EXECUTE);
+            helper.assertTrue(itemRemainder.isEmpty(),
+                    "Disconnected output caches the accepted item amount locally");
+            helper.assertTrue(fluidInserted == FLUID_AMOUNT,
+                    "Disconnected output caches the accepted fluid amount locally");
         });
 
         helper.runAtTickTime(31, () -> {
             reloadBlockEntity(port, helper);
             helper.assertTrue(port.getInterfaceLogic().getConfig().getStack(0) == null,
                     "Save/load preserves an empty async output interface config slot 0");
-            helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
-                    "Save/load preserves an empty async output interface storage");
+            helper.assertTrue(port.getInterfaceLogic().getStorage().getAmount(0) == ITEM_AMOUNT
+                            && port.getInterfaceLogic().getStorage().getAmount(1) == FLUID_AMOUNT,
+                    "Save/load preserves the disconnected native output cache");
             for (int slot = 0; slot < port.getInterfaceLogic().getConfig().size(); slot++) {
                 helper.assertTrue(port.getInterfaceLogic().getConfig().getStack(slot) == null,
                         "Save/load keeps every async output config slot null at slot=" + slot);
             }
-            helper.assertTrue(port.itemStorage().size() == 0,
-                    "Save/load leaves the async output item storage size at zero");
-            helper.assertTrue(port.fluidStorage().size() == 0,
-                    "Save/load leaves the async output fluid storage size at zero");
             helper.succeed();
         });
     }
 
     private static void reloadBlockEntity(BlockEntity entity, GameTestHelper helper) {
         try {
-            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
+            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             save.setAccessible(true);
-            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", ValueInput.class);
+            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             load.setAccessible(true);
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess());
-            save.invoke(entity, output);
-            CompoundTag tag = output.buildResult();
-            load.invoke(entity, TagValueInput.create(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess(), tag));
+            CompoundTag tag = new CompoundTag();
+            save.invoke(entity, tag, helper.getLevel().registryAccess());
+            load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
         }

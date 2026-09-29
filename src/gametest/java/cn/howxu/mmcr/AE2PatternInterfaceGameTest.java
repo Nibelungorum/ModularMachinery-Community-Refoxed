@@ -42,6 +42,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -53,7 +54,6 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.Item;
@@ -63,14 +63,8 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Field;
@@ -147,11 +141,9 @@ public class AE2PatternInterfaceGameTest {
             GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
             GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
             ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos, ItemBusBlockEntity.class);
-            try (Transaction transaction = Transaction.openRoot()) {
-                helper.assertTrue(ordinaryInput.itemStorage().insert(0, ItemResource.of(Items.COAL), 1L, transaction) == 1L,
-                        "Ordinary input bus accepts the remaining coal ingredient");
-                transaction.commit();
-            }
+            helper.assertTrue(ordinaryInput.nativeItemHandler().insertItem(
+                            0, new ItemStack(Items.COAL), false).isEmpty(),
+                    "Ordinary input bus accepts the remaining coal ingredient");
             controller.requestImmediateStructureCheck();
         });
 
@@ -328,10 +320,7 @@ public class AE2PatternInterfaceGameTest {
             GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
             GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
             ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos, ItemBusBlockEntity.class);
-            try (Transaction transaction = Transaction.openRoot()) {
-                ordinaryInput.itemStorage().insert(0, ItemResource.of(Items.COAL), 1L, transaction);
-                transaction.commit();
-            }
+            ordinaryInput.nativeItemHandler().insertItem(0, new ItemStack(Items.COAL), false);
             controller.requestImmediateStructureCheck();
         });
 
@@ -571,12 +560,12 @@ public class AE2PatternInterfaceGameTest {
 
     private static CompoundTag save(BlockEntity entity, GameTestHelper helper) {
         try {
-            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
+            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             save.setAccessible(true);
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess());
-            save.invoke(entity, output);
-            return output.buildResult();
+            CompoundTag output = new CompoundTag();
+            save.invoke(entity, output, helper.getLevel().registryAccess());
+            return output;
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to save block entity " + entity, exception);
         }
@@ -584,10 +573,10 @@ public class AE2PatternInterfaceGameTest {
 
     private static void load(BlockEntity entity, GameTestHelper helper, CompoundTag data) {
         try {
-            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", ValueInput.class);
+            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             load.setAccessible(true);
-            load.invoke(entity, TagValueInput.create(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess(), data));
+            load.invoke(entity, data, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
         }

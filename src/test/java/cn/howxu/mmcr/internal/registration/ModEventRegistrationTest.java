@@ -46,6 +46,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.bus.api.Event;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -208,7 +209,7 @@ class ModEventRegistrationTest {
         ModEventRegistration.EventHandlers.production().capabilities().accept(event);
 
         assertThat(ExternalCapabilityRegistry.global().isFrozen()).isTrue();
-        assertThat(event.isBlockRegistered(ModCapabilities.ITEM_BLOCK,
+        assertThat(event.isBlockRegistered(Capabilities.ItemHandler.BLOCK,
                 ModBlocks.BLOCKS.get("item_input_bus").get())).isTrue();
     }
 

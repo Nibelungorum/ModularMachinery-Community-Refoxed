@@ -35,6 +35,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -42,6 +43,7 @@ import io.netty.channel.ChannelFutureListener;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -53,7 +55,6 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.InteractionResult;
@@ -64,17 +65,12 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Method;
@@ -196,10 +192,10 @@ public class AE2InterfaceGameTest {
                             && Objects.requireNonNull(entity.getInterfaceLogic().getConfig().getStack(1)).what()
                                     .equals(AEFluidKey.of(Fluids.WATER)),
                     "AE2 config slot 1 holds the water filter");
-            helper.assertTrue(entity.itemStorage().reservationIdentity() == storageInv,
-                    "MMCR item storage view shares the AE2 GenericStackInv identity");
-            helper.assertTrue(entity.fluidStorage().reservationIdentity() == storageInv,
-                    "MMCR fluid storage view shares the AE2 GenericStackInv identity");
+            helper.assertTrue(entity.nativeItemHandler() instanceof NativeStackSync.Item,
+                    "MMCR item capability uses the native AE2 item adapter");
+            helper.assertTrue(entity.nativeFluidHandler() instanceof NativeStackSync.Fluid,
+                    "MMCR fluid capability uses the native AE2 fluid adapter");
 
             AE2Bridge bridge = AE2Bridge.get();
             helper.assertTrue(bridge instanceof LoadedAE2Bridge,
@@ -233,9 +229,9 @@ public class AE2InterfaceGameTest {
                 genericInv.insert(1, AEFluidKey.of(Fluids.WATER), INITIAL_FLUID_AMOUNT,
                         Actionable.MODULATE);
             }
-            helper.assertTrue(entity.itemStorage().amount(0) == INITIAL_ITEM_COUNT,
+            helper.assertTrue(entity.nativeItemHandler().getStackInSlot(0).getCount() == INITIAL_ITEM_COUNT,
                     "GENERIC_INTERNAL_INV item insert flows into the MMCR item storage view");
-            helper.assertTrue(entity.fluidStorage().amount(1) == INITIAL_FLUID_AMOUNT,
+            helper.assertTrue(entity.nativeFluidHandler().getFluidInTank(1).getAmount() == INITIAL_FLUID_AMOUNT,
                     "GENERIC_INTERNAL_INV fluid insert flows into the MMCR fluid storage view");
 
         });
@@ -250,51 +246,44 @@ public class AE2InterfaceGameTest {
                         InputInterfaceBlockEntity.class);
                 helper.assertTrue(controller.structureSnapshot().formed(),
                         "MMCR multiblock containing AE2 input interface forms");
-                helper.assertTrue(entity.itemStorage().amount(0) <= INITIAL_ITEM_COUNT - 1L,
+                helper.assertTrue(entity.nativeItemHandler().getStackInSlot(0).getCount() <= INITIAL_ITEM_COUNT - 1L,
                         "MMCR recipe consumes an iron ingot from the AE2 local inventory amount="
-                                + entity.itemStorage().amount(0));
-                helper.assertTrue(entity.fluidStorage().amount(1) <= INITIAL_FLUID_AMOUNT - 1_000L,
+                                + entity.nativeItemHandler().getStackInSlot(0).getCount());
+                helper.assertTrue(entity.nativeFluidHandler().getFluidInTank(1).getAmount() <= INITIAL_FLUID_AMOUNT - 1_000L,
                         "MMCR recipe consumes 1000 mB of water from the AE2 local inventory fluidAmount="
-                                + entity.fluidStorage().amount(1));
+                                + entity.nativeFluidHandler().getFluidInTank(1).getAmount());
                 helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
                         "MMCR controller reports the recipe has completed");
                 helper.assertTrue(controller.runtimeSnapshot().linkedPortPositions().contains(portWorldPos),
                         "MMCR controller links the AE2 input interface as an input port");
 
-                long itemBeforeRollback = entity.itemStorage().amount(0);
-                long fluidBeforeRollback = entity.fluidStorage().amount(1);
-                try (Transaction transaction = Transaction.openRoot()) {
-                    entity.itemStorage().extract(0,
-                            ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-                    entity.fluidStorage().extract(1,
-                            FluidResource.of(Fluids.WATER), 1_000L, transaction);
-                }
-                helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeRollback,
-                        "AE2 local inventory item amount is unchanged after a rolled-back extraction");
-                helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeRollback,
-                        "AE2 local inventory fluid amount is unchanged after a rolled-back extraction");
+                long itemBeforeRollback = entity.nativeItemHandler().getStackInSlot(0).getCount();
+                long fluidBeforeRollback = entity.nativeFluidHandler().getFluidInTank(1).getAmount();
+                entity.nativeItemHandler().extractItem(0, 1, true);
+                entity.nativeFluidHandler().drain(new FluidStack(Fluids.WATER, 1_000),
+                        IFluidHandler.FluidAction.SIMULATE);
+                helper.assertTrue(entity.nativeItemHandler().getStackInSlot(0).getCount() == itemBeforeRollback,
+                        "AE2 local inventory item amount is unchanged after a simulated extraction");
+                helper.assertTrue(entity.nativeFluidHandler().getFluidInTank(1).getAmount() == fluidBeforeRollback,
+                        "AE2 local inventory fluid amount is unchanged after a simulated extraction");
 
-                long itemBeforeCommit = entity.itemStorage().amount(0);
-                try (Transaction transaction = Transaction.openRoot()) {
-                    entity.itemStorage().extract(0,
-                            ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-                    transaction.commit();
-                }
-                helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeCommit - 1L,
+                long itemBeforeCommit = entity.nativeItemHandler().getStackInSlot(0).getCount();
+                entity.nativeItemHandler().extractItem(0, 1, false);
+                helper.assertTrue(entity.nativeItemHandler().getStackInSlot(0).getCount() == itemBeforeCommit - 1L,
                         "AE2 local inventory item amount is reduced by 1 after a committed extraction amount="
-                                + entity.itemStorage().amount(0));
+                                + entity.nativeItemHandler().getStackInSlot(0).getCount());
 
                 entity.getInterfaceLogic().getConfig().setStack(2,
                         new GenericStack(AEItemKey.of(Items.COAL), 4L));
                 entity.getInterfaceLogic().setPriority(42);
                 entity.getInterfaceLogic().getUpgrades().addItems(AEItems.FUZZY_CARD.stack());
-                long itemBeforeReload = entity.itemStorage().amount(0);
-                long fluidBeforeReload = entity.fluidStorage().amount(1);
+                long itemBeforeReload = entity.nativeItemHandler().getStackInSlot(0).getCount();
+                long fluidBeforeReload = entity.nativeFluidHandler().getFluidInTank(1).getAmount();
                 long bucketDropsBefore = fluidBeforeReload / 1000L;
                 reloadBlockEntity(entity, helper);
-                helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeReload,
+                helper.assertTrue(entity.nativeItemHandler().getStackInSlot(0).getCount() == itemBeforeReload,
                         "Item storage amount survives a save/load cycle");
-                helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeReload,
+                helper.assertTrue(entity.nativeFluidHandler().getFluidInTank(1).getAmount() == fluidBeforeReload,
                         "Fluid storage amount survives a save/load cycle");
                 helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(0) != null
                                 && Objects.requireNonNull(entity.getInterfaceLogic().getConfig().getStack(0)).what()
@@ -440,11 +429,8 @@ public class AE2InterfaceGameTest {
             InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
             helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(35) == CONFIGURED_ITEM_AMOUNT,
                     "ExtendedAE slot 35 stocks the configured AE-owned resources");
-            try (Transaction transaction = Transaction.openRoot()) {
-                helper.assertTrue(input.itemStorage().extract(35, ItemResource.of(Items.IRON_INGOT), 1L, transaction) == 1L,
-                        "Committed machine extraction consumes an AE-owned resource");
-                transaction.commit();
-            }
+            helper.assertTrue(input.nativeItemHandler().extractItem(35, 1, false).getCount() == 1,
+                    "Committed machine extraction consumes an AE-owned resource");
             input.getInterfaceLogic().getStorage().insert(35, AEItemKey.of(Items.IRON_INGOT), MANUAL_ITEM_AMOUNT,
                     Actionable.MODULATE);
             input.getInterfaceLogic().getConfig().setStack(35, null);
@@ -539,16 +525,15 @@ public class AE2InterfaceGameTest {
 
     private static void reloadBlockEntity(BlockEntity entity, GameTestHelper helper) {
         try {
-            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
+            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             save.setAccessible(true);
-            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", ValueInput.class);
+            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             load.setAccessible(true);
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess());
-            save.invoke(entity, output);
-            CompoundTag tag = output.buildResult();
-            load.invoke(entity, TagValueInput.create(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess(), tag));
+            CompoundTag tag = new CompoundTag();
+            save.invoke(entity, tag, helper.getLevel().registryAccess());
+            load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
         }

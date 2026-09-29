@@ -21,6 +21,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.capabilities.Capabilities;
 
 /**
  * Deterministic GameTest coverage for the optional AppFlux ME Flux port integration.
@@ -85,14 +86,16 @@ public class AppliedFluxInterfaceGameTest {
                     "AppFlux output exposes the AE2 in-world grid node host");
 
             BlockState inputState = helper.getLevel().getBlockState(helper.absolutePos(inputPos));
+            BlockState outputState = helper.getLevel().getBlockState(helper.absolutePos(outputPos));
             BlockEntity inputEntity = helper.getBlockEntity(inputPos, BlockEntity.class);
-            helper.assertTrue(cn.howxu.mmcr.internal.event.ModCapabilities.ENERGY_BLOCK.getCapability(
+            BlockEntity outputEntity = helper.getBlockEntity(outputPos, BlockEntity.class);
+            helper.assertTrue(Capabilities.EnergyStorage.BLOCK.getCapability(
                             helper.getLevel(), helper.absolutePos(inputPos), inputState,
                             inputEntity, Direction.NORTH) == null,
                     "External NeoForge FE capability must remain suppressed on the AppFlux input");
-            helper.assertTrue(cn.howxu.mmcr.internal.event.ModCapabilities.ENERGY_BLOCK.getCapability(
-                            helper.getLevel(), helper.absolutePos(outputPos), inputState,
-                            inputEntity, Direction.NORTH) == null,
+            helper.assertTrue(Capabilities.EnergyStorage.BLOCK.getCapability(
+                            helper.getLevel(), helper.absolutePos(outputPos), outputState,
+                            outputEntity, Direction.NORTH) == null,
                     "External NeoForge FE capability must remain suppressed on the AppFlux output");
 
             helper.succeed();

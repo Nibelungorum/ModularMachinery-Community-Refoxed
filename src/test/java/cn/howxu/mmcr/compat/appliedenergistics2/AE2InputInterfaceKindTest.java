@@ -47,6 +47,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterAll;
@@ -319,9 +320,9 @@ class AE2InputInterfaceKindTest {
 
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         var level = LevelStub.create(Blocks.IRON_BLOCK, 1, 1, 1, BlockPos.ZERO);
-        assertThat(ModCapabilities.ITEM_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+        assertThat(Capabilities.ItemHandler.BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
                 .isNotNull();
-        assertThat(ModCapabilities.FLUID_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+        assertThat(Capabilities.FluidHandler.BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
                 .isNotNull();
         assertThat(AECapabilities.GENERIC_INTERNAL_INV.getCapability(level, BlockPos.ZERO, state, entity,
                 Direction.NORTH)).isNull();
@@ -370,9 +371,9 @@ class AE2InputInterfaceKindTest {
 
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         var level = LevelStub.create(Blocks.IRON_BLOCK, 1, 1, 1, BlockPos.ZERO);
-        assertThat(ModCapabilities.ITEM_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+        assertThat(Capabilities.ItemHandler.BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
                 .isNull();
-        assertThat(ModCapabilities.FLUID_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+        assertThat(Capabilities.FluidHandler.BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
                 .isNull();
         assertThat(AECapabilities.GENERIC_INTERNAL_INV.getCapability(level, BlockPos.ZERO, state, entity,
                 Direction.NORTH)).isNull();

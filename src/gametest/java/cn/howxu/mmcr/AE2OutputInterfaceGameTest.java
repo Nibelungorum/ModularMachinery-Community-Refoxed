@@ -20,39 +20,30 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
-import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
-import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.items.IItemHandler;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -125,10 +116,10 @@ public class AE2OutputInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Output interface does not expose ME_STORAGE externally");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.ItemHandler.BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) != null,
                     "Output interface exposes an external item handler");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.FluidHandler.BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) != null,
                     "Output interface exposes an external fluid handler");
 
@@ -150,19 +141,20 @@ public class AE2OutputInterfaceGameTest {
         helper.runAtTickTime(4, () -> {
             MachineCapability itemCapability = capabilityOf(port, PortFamilyIds.ITEM);
             MachineCapability fluidCapability = capabilityOf(port, PortFamilyIds.FLUID);
-            try (Transaction transaction = Transaction.openRoot()) {
-                CapabilityOperation itemOperation = itemCapability.prepare(requestOf(itemCapability,
-                        ItemResource.of(Items.IRON_INGOT), ITEM_AMOUNT, true));
-                CapabilityResult itemResult = itemOperation.commit(transaction);
-                helper.assertTrue(itemResult.success(),
-                        "Output item capability operation commits successfully");
-                CapabilityOperation fluidOperation = fluidCapability.prepare(requestOf(fluidCapability,
-                        FluidResource.of(Fluids.WATER), FLUID_AMOUNT, true));
-                CapabilityResult fluidResult = fluidOperation.commit(transaction);
-                helper.assertTrue(fluidResult.success(),
-                        "Output fluid capability operation commits successfully");
-                transaction.commit();
-            }
+            CapabilityOperation itemOperation = itemCapability.prepare(new CapabilityRequests.ItemRequest(
+                    itemCapability.type(), IOType.OUTPUT, 1L,
+                    java.util.List.of(new CapabilityRequests.ItemAction(
+                            0, new ItemStack(Items.IRON_INGOT), ITEM_AMOUNT, true))));
+            CapabilityResult itemResult = itemOperation.commit();
+            helper.assertTrue(itemResult.success(),
+                    "Output item capability operation commits successfully");
+            CapabilityOperation fluidOperation = fluidCapability.prepare(new CapabilityRequests.FluidRequest(
+                    fluidCapability.type(), IOType.OUTPUT, 1L,
+                    java.util.List.of(new CapabilityRequests.FluidAction(
+                            0, new FluidStack(Fluids.WATER, 1), FLUID_AMOUNT, true))));
+            CapabilityResult fluidResult = fluidOperation.commit();
+            helper.assertTrue(fluidResult.success(),
+                    "Output fluid capability operation commits successfully");
             helper.assertTrue(itemChest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT),
                             ITEM_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT,
                     "Item ME Chest receives the full 16 iron output");
@@ -185,19 +177,14 @@ public class AE2OutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(6, () -> {
-            PlanningReservations reservations = new PlanningReservations();
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            OutputResourceStorage.OutputPlan plan = ((OutputResourceStorage) port.itemStorage())
-                    .planOutput(ItemResource.of(Items.IRON_INGOT), OVER_CAPACITY_AMOUNT,
-                            reservations, true);
-            helper.assertTrue(plan.accepted() == LOCAL_CACHE_ITEM_CAPACITY,
-                    "Over-capacity plan accepts the 576 iron units that fit in nine 64-item cache slots");
-            try (Transaction transaction = Transaction.openRoot()) {
-                if (plan.operation() != null) {
-                    plan.operation().commit(transaction);
-                }
-                transaction.commit();
+            IItemHandler itemHandler = port.nativeItemHandler();
+            long accepted = 0L;
+            for (int slot = 0; slot < itemHandler.getSlots(); slot++) {
+                ItemStack requested = new ItemStack(Items.IRON_INGOT, 64);
+                accepted += requested.getCount() - itemHandler.insertItem(slot, requested, false).getCount();
             }
+            helper.assertTrue(accepted == LOCAL_CACHE_ITEM_CAPACITY,
+                    "Native handler accepts the 576 iron units that fit in nine 64-item cache slots");
             long cacheAmount = 0L;
             int occupiedSlots = 0;
             for (int slot = 0; slot < port.getInterfaceLogic().getStorage().size(); slot++) {
@@ -226,17 +213,13 @@ public class AE2OutputInterfaceGameTest {
             helper.assertTrue(occupiedSlots == 9 && cacheAmount == LOCAL_CACHE_ITEM_CAPACITY,
                     "Output cache preserves all 576 iron units across a save/load cycle while over-capacity");
 
-            ResourceHandler<ItemResource> externalItems = helper.getLevel().getCapability(
-                    Capabilities.Item.BLOCK, helper.absolutePos(portPos),
+            IItemHandler externalItems = helper.getLevel().getCapability(
+                    Capabilities.ItemHandler.BLOCK, helper.absolutePos(portPos),
                     helper.getLevel().getBlockState(helper.absolutePos(portPos)), port, Direction.NORTH);
             helper.assertTrue(externalItems != null,
                     "External item handler is available while the output cache is occupied");
-            try (Transaction transaction = Transaction.openRoot()) {
-                helper.assertTrue(externalItems.extract(0, ItemResource.of(Items.IRON_INGOT), 1,
-                                transaction) == 1,
-                        "External item extraction removes one item from the output cache");
-                transaction.commit();
-            }
+            helper.assertTrue(externalItems.extractItem(0, 1, false).getCount() == 1,
+                    "External item extraction removes one item from the output cache");
             helper.assertTrue(port.getInterfaceLogic().getStorage().getAmount(0) == 63L,
                     "External item extraction changes the local output cache");
 
@@ -326,26 +309,17 @@ public class AE2OutputInterfaceGameTest {
                 .orElseThrow(() -> new AssertionError("Missing capability for family " + familyId));
     }
 
-    private static cn.howxu.mmcr.api.capability.plan.CapabilityRequests.ResourceRequest<?> requestOf(
-            MachineCapability capability, Object resource, long amount, boolean insert) {
-        return new cn.howxu.mmcr.api.capability.plan.CapabilityRequests.ResourceRequest<>(
-                capability.type(), IOType.OUTPUT, 1L,
-                java.util.List.of(new cn.howxu.mmcr.api.capability.plan.CapabilityRequests.ResourceAction<>(
-                        0, resource, amount, insert)));
-    }
-
     private static void reloadBlockEntity(BlockEntity entity, GameTestHelper helper) {
         try {
-            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
+            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             save.setAccessible(true);
-            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", ValueInput.class);
+            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             load.setAccessible(true);
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess());
-            save.invoke(entity, output);
-            CompoundTag tag = output.buildResult();
-            load.invoke(entity, TagValueInput.create(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess(), tag));
+            CompoundTag tag = new CompoundTag();
+            save.invoke(entity, tag, helper.getLevel().registryAccess());
+            load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
         }

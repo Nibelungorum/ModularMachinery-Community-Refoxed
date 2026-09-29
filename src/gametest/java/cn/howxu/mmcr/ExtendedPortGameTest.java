@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -24,6 +23,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.capabilities.BlockCapability;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
@@ -95,9 +95,9 @@ public class ExtendedPortGameTest {
         helper.setBlock(fluidPos, ModBlocks.BLOCKS.get("extended_fluid_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("extended_energy_input_hatch_reinforced").get().defaultBlockState());
 
-        IItemHandler items = capability(helper, itemPos, ModCapabilities.ITEM_BLOCK);
-        IFluidHandler fluids = capability(helper, fluidPos, ModCapabilities.FLUID_BLOCK);
-        IEnergyStorage energy = capability(helper, energyPos, ModCapabilities.ENERGY_BLOCK);
+        IItemHandler items = capability(helper, itemPos, Capabilities.ItemHandler.BLOCK);
+        IFluidHandler fluids = capability(helper, fluidPos, Capabilities.FluidHandler.BLOCK);
+        IEnergyStorage energy = capability(helper, energyPos, Capabilities.EnergyStorage.BLOCK);
         helper.assertTrue(items != null, "Standalone extended item capability is present");
         helper.assertTrue(fluids != null, "Standalone extended fluid capability is present");
         helper.assertTrue(energy != null, "Standalone extended energy capability is present");
@@ -120,9 +120,9 @@ public class ExtendedPortGameTest {
         BlockPos worldPos = helper.absolutePos(portPos);
         BlockEntity blockEntity = helper.getLevel().getBlockEntity(worldPos);
 
-        IItemHandler itemHandler = ModCapabilities.ITEM_BLOCK.getCapability(
+        IItemHandler itemHandler = Capabilities.ItemHandler.BLOCK.getCapability(
                 helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos), blockEntity, Direction.EAST);
-        IFluidHandler fluidHandler = ModCapabilities.FLUID_BLOCK.getCapability(
+        IFluidHandler fluidHandler = Capabilities.FluidHandler.BLOCK.getCapability(
                 helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos), blockEntity, Direction.WEST);
         helper.assertTrue(itemHandler != null, "Extended combined item handler is exposed");
         helper.assertTrue(fluidHandler != null, "Extended combined fluid handler is exposed");

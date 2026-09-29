@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -30,6 +29,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.capabilities.Capabilities;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -74,7 +74,7 @@ public class CombinedPortGameTest {
                 ModBlocks.BLOCKS.get("extended_combined_input_advanced").get().defaultBlockState());
         BlockPos extendedWorldPos = helper.absolutePos(extendedPos);
         BlockEntity extended = helper.getLevel().getBlockEntity(extendedWorldPos);
-        helper.assertTrue(ModCapabilities.FLUID_BLOCK.getCapability(
+        helper.assertTrue(Capabilities.FluidHandler.BLOCK.getCapability(
                         helper.getLevel(), extendedWorldPos, helper.getLevel().getBlockState(extendedWorldPos),
                         extended, Direction.UP) != null,
                 "Extended combined fluid capability is available");

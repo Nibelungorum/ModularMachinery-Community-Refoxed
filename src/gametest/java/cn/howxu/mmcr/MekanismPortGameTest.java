@@ -19,11 +19,12 @@ import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
+import mekanism.api.Action;
 import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
-import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.heat.HeatAPI;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
@@ -32,6 +33,7 @@ import mekanism.common.tile.transmitter.TileEntityThermodynamicConductor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -40,20 +42,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
@@ -73,20 +69,13 @@ public class MekanismPortGameTest {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
 
-        ChemicalResource radioactive = registerRadioactiveChemical("radioactive_blocked");
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_accepted");
+        ChemicalStack radioactive = registerRadioactiveChemical("radioactive_blocked");
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_accepted");
 
-        try (Transaction tx = Transaction.openRoot()) {
-            int insertedRadioactive = port.chemicalTank().insert(
-                    radioactive, 1_000, tx, AutomationType.EXTERNAL);
-            helper.assertValueEqual(0, insertedRadioactive,
-                    "Normal chemical port rejects radioactive chemicals");
-            int insertedOxygen = port.chemicalTank().insert(
-                    oxygen, 1_000, tx, AutomationType.EXTERNAL);
-            helper.assertValueEqual(1_000, insertedOxygen,
-                    "Normal chemical port accepts non-radioactive chemicals");
-            tx.commit();
-        }
+        helper.assertValueEqual(0L, insert(port, radioactive, 1_000L),
+                "Normal chemical port rejects radioactive chemicals");
+        helper.assertValueEqual(1_000L, insert(port, oxygen, 1_000L),
+                "Normal chemical port accepts non-radioactive chemicals");
         helper.succeed();
     }
 
@@ -95,20 +84,13 @@ public class MekanismPortGameTest {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
         ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
 
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_rejected_by_radio");
-        ChemicalResource radioactive = registerRadioactiveChemical("radioactive_accepted_by_radio");
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_rejected_by_radio");
+        ChemicalStack radioactive = registerRadioactiveChemical("radioactive_accepted_by_radio");
 
-        try (Transaction tx = Transaction.openRoot()) {
-            int insertedOxygen = port.chemicalTank().insert(
-                    oxygen, 1_000, tx, AutomationType.EXTERNAL);
-            helper.assertValueEqual(0, insertedOxygen,
-                    "Radioactive chemical port rejects non-radioactive chemicals");
-            int insertedRadioactive = port.chemicalTank().insert(
-                    radioactive, 1_000, tx, AutomationType.EXTERNAL);
-            helper.assertValueEqual(1_000, insertedRadioactive,
-                    "Radioactive chemical port accepts radioactive chemicals");
-            tx.commit();
-        }
+        helper.assertValueEqual(0L, insert(port, oxygen, 1_000L),
+                "Radioactive chemical port rejects non-radioactive chemicals");
+        helper.assertValueEqual(1_000L, insert(port, radioactive, 1_000L),
+                "Radioactive chemical port accepts radioactive chemicals");
         helper.succeed();
     }
 
@@ -116,11 +98,7 @@ public class MekanismPortGameTest {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
         ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.chemicalTank().insert(registerRadioactiveChemical("wrench_protection"), 1_000,
-                    transaction, AutomationType.EXTERNAL);
-            transaction.commit();
-        }
+        insert(port, registerRadioactiveChemical("wrench_protection"), 1_000L);
 
         ServerPlayer player = wrenchPlayer(helper);
         player.setPose(Pose.CROUCHING);
@@ -150,7 +128,7 @@ public class MekanismPortGameTest {
                         MekanismPortSizes.CHEMICAL_ELITE_CAPACITY),
                 new TierExpectation("chemical_input_hatch_ultimate",
                         MekanismPortSizes.CHEMICAL_ULTIMATE_CAPACITY));
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_capacity_probe");
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_capacity_probe");
         for (TierExpectation tier : tiers) {
             BlockPos pos = new BlockPos(0, 1, 0);
             helper.setBlock(pos, ModBlocks.BLOCKS.get(tier.port()).get().defaultBlockState());
@@ -166,7 +144,7 @@ public class MekanismPortGameTest {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
         ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
-        ChemicalResource radioactive = registerRadioactiveChemical("radioactive_capacity_probe");
+        ChemicalStack radioactive = registerRadioactiveChemical("radioactive_capacity_probe");
         helper.assertValueEqual(MekanismPortSizes.RADIOACTIVE_CHEMICAL_CAPACITY,
                 capacityForResource(port, radioactive),
                 "Radioactive chemical port reports the documented fixed capacity");
@@ -217,10 +195,7 @@ public class MekanismPortGameTest {
         double before = port.heatCapacitor().getHeat();
 
         double delta = 0.25D;
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.heatCapacitor().handleHeat(delta, transaction);
-            transaction.commit();
-        }
+        port.heatCapacitor().handleHeat(delta);
 
         helper.assertValueEqual(before + delta, port.heatCapacitor().getHeat(),
                 "Heat output port stores the heat delta delivered through handleHeat");
@@ -243,11 +218,8 @@ public class MekanismPortGameTest {
         setHeat(port, ambient * port.heatCapacitor().getHeatCapacity()
                 + port.heatCapacitor().getHeatCapacity() * 100D);
         double before = port.heatCapacitor().getHeat();
-        try (Transaction transaction = Transaction.openRoot()) {
-            capability.handleHeat(10D, transaction);
-            capability.handleHeat(-4D, transaction);
-            transaction.commit();
-        }
+        capability.handleHeat(10D);
+        capability.handleHeat(-4D);
         helper.assertValueEqual(before - 4D, port.heatCapacitor().getHeat(),
                 "The exposed heat output handler rejects external heat input and permits external extraction");
         helper.succeed();
@@ -476,11 +448,8 @@ public class MekanismPortGameTest {
             helper.assertTrue(outputHandler.getInverseConduction() > 1E300,
                     "Heat output presents an effectively insulated inbound boundary to a conductor");
             double before = output.heatCapacitor().getHeat();
-            try (Transaction transaction = Transaction.openRoot()) {
-                conductor.getTransmitter().buffer.handleHeat(30_000D, transaction);
-                conductor.getTransmitter().simulate(transaction);
-                transaction.commit();
-            }
+            conductor.getTransmitter().buffer.handleHeat(30_000D);
+            conductor.getTransmitter().simulate();
             helper.assertValueEqual(before, output.heatCapacitor().getHeat(),
                     "A thermodynamic conductor cannot inject heat into a heat output port");
             helper.succeed();
@@ -495,8 +464,8 @@ public class MekanismPortGameTest {
         ChemicalPortBlockEntity input = helper.getBlockEntity(inputPos, ChemicalPortBlockEntity.class);
         ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
 
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_auto_import");
-        source.chemicalTank().setContents(oxygen, 5_000L, null);
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_auto_import");
+        source.chemicalTank().setStack(oxygen.copyWithAmount(5_000L));
 
         input.toggleAutoIOEnabled();
         input.setAllAutoIOSides(false);
@@ -504,9 +473,9 @@ public class MekanismPortGameTest {
 
         helper.runAtTickTime(60, input::serverTick);
         helper.runAtTickTime(80, () -> {
-            helper.assertValueEqual(5_000L, input.chemicalTank().amountAsLong(),
+            helper.assertValueEqual(5_000L, input.chemicalTank().getStored(),
                     "Chemical input auto-imports 5_000 units from the adjacent output port");
-            helper.assertTrue(source.chemicalTank().amountAsLong() < 5_000L,
+            helper.assertTrue(source.chemicalTank().getStored() < 5_000L,
                     "Adjacent chemical output port loses contents to the auto-import");
             helper.succeed();
         });
@@ -523,20 +492,17 @@ public class MekanismPortGameTest {
         ChemicalPortBlockEntity north = helper.getBlockEntity(northReceiver, ChemicalPortBlockEntity.class);
         ChemicalPortBlockEntity south = helper.getBlockEntity(southReceiver, ChemicalPortBlockEntity.class);
 
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_eject");
-        try (Transaction tx = Transaction.openRoot()) {
-            source.chemicalTank().insert(oxygen, 2_000, tx, AutomationType.EXTERNAL);
-            tx.commit();
-        }
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_eject");
+        insert(source, oxygen, 2_000L);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(),
                     "Chemical input ejection runs the underlying transfer policy");
-            long northAmount = north.chemicalTank().amountAsLong();
-            long southAmount = south.chemicalTank().amountAsLong();
+            long northAmount = north.chemicalTank().getStored();
+            long southAmount = south.chemicalTank().getStored();
             helper.assertValueEqual(2_000L, northAmount + southAmount,
                     "Both adjacent chemical input ports collectively receive the 2_000 ejected units");
-            helper.assertValueEqual(0L, source.chemicalTank().amountAsLong(),
+            helper.assertValueEqual(0L, source.chemicalTank().getStored(),
                     "Chemical input port is empty after ejection");
             helper.succeed();
         });
@@ -550,23 +516,20 @@ public class MekanismPortGameTest {
         ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
         ChemicalPortBlockEntity receiver = helper.getBlockEntity(receiverPos, ChemicalPortBlockEntity.class);
 
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_eject_remainder");
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_eject_remainder");
         long partialCapacity = MekanismPortSizes.CHEMICAL_BASIC_CAPACITY - 2_000L;
-        try (Transaction tx = Transaction.openRoot()) {
-            source.chemicalTank().insert(oxygen, 3_000, tx, AutomationType.EXTERNAL);
-            receiver.chemicalTank().insert(oxygen, (int) partialCapacity, tx, AutomationType.EXTERNAL);
-            tx.commit();
-        }
+        insert(source, oxygen, 3_000L);
+        insert(receiver, oxygen, partialCapacity);
 
         helper.runAtTickTime(20, () -> {
-            long beforeMove = source.chemicalTank().amountAsLong();
+            long beforeMove = source.chemicalTank().getStored();
             helper.assertTrue(source.ejectContents(),
                     "Chemical input ejection runs against a partial target");
-            long movedAmount = receiver.chemicalTank().amountAsLong() - partialCapacity;
+            long movedAmount = receiver.chemicalTank().getStored() - partialCapacity;
             helper.assertValueEqual(partialCapacity + movedAmount,
-                    receiver.chemicalTank().amountAsLong(),
+                    receiver.chemicalTank().getStored(),
                     "Chemical receiver accepted exactly the partial remaining capacity");
-            helper.assertValueEqual(beforeMove - movedAmount, source.chemicalTank().amountAsLong(),
+            helper.assertValueEqual(beforeMove - movedAmount, source.chemicalTank().getStored(),
                     "Chemical input port preserves the unsent remainder after partial ejection");
             helper.succeed();
         });
@@ -580,8 +543,8 @@ public class MekanismPortGameTest {
         ChemicalPortBlockEntity chemical = helper.getBlockEntity(chemicalPos, ChemicalPortBlockEntity.class);
         HeatPortBlockEntity heat = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
 
-        ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_persist");
-        chemical.chemicalTank().setContents(oxygen, 12_345L, null);
+        ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_persist");
+        chemical.chemicalTank().setStack(oxygen.copyWithAmount(12_345L));
         double ambient = HeatAPI.getAmbientTemp(heat.getLevel(), heat.getBlockPos());
         double baseline = ambient * heat.heatCapacitor().getHeatCapacity();
         setHeat(heat, baseline * 7.25D);
@@ -593,9 +556,9 @@ public class MekanismPortGameTest {
         reloadBlockEntity(chemical, helper);
         reloadBlockEntity(heat, helper);
 
-        helper.assertValueEqual(12_345L, chemical.chemicalTank().amountAsLong(),
+        helper.assertValueEqual(12_345L, chemical.chemicalTank().getStored(),
                 "Chemical tank contents survive a save/load cycle");
-        helper.assertValueEqual(oxygen, chemical.chemicalTank().resource(),
+        helper.assertTrue(ChemicalStack.isSameChemical(oxygen, chemical.chemicalTank().getStack()),
                 "Chemical tank resource identity survives a save/load cycle");
         helper.assertValueEqual(heatBefore, heat.heatCapacitor().getHeat(),
                 "Heat capacitor value survives a save/load cycle");
@@ -679,11 +642,8 @@ public class MekanismPortGameTest {
                 "Heat capability is exposed on the EAST side of a heat input port");
 
         double before = heat.heatCapacitor().getHeat();
-        try (Transaction transaction = Transaction.openRoot()) {
-            capability.handleHeat(10.25D, transaction);
-            capability.handleHeat(-0.25D, transaction);
-            transaction.commit();
-        }
+        capability.handleHeat(10.25D);
+        capability.handleHeat(-0.25D);
         helper.assertValueEqual(before + 10.25D, heat.heatCapacitor().getHeat(),
                 "The exposed Mekanism heat input handler accepts heat but rejects external extraction");
         helper.succeed();
@@ -711,8 +671,8 @@ public class MekanismPortGameTest {
         helper.succeed();
     }
 
-    private static long capacityForResource(ChemicalPortBlockEntity port, ChemicalResource resource) {
-        return port.chemicalTank().capacityAsLong(resource);
+    private static long capacityForResource(ChemicalPortBlockEntity port, ChemicalStack resource) {
+        return port.chemicalTank().isValid(resource) ? port.chemicalTank().getCapacity() : 0L;
     }
 
     private static ServerPlayer wrenchPlayer(GameTestHelper helper) {
@@ -722,35 +682,36 @@ public class MekanismPortGameTest {
     }
 
     private static void setHeat(HeatPortBlockEntity port, double target) {
-        try (Transaction transaction = Transaction.openRoot()) {
-            port.heatCapacitor().setHeat(target, transaction);
-            transaction.commit();
-        }
+        port.heatCapacitor().setHeat(target);
     }
 
     private static void reloadBlockEntity(BlockEntity entity, GameTestHelper helper) {
         try {
-            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
+            Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             save.setAccessible(true);
-            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", ValueInput.class);
+            Method load = BlockEntity.class.getDeclaredMethod("loadAdditional", CompoundTag.class,
+                    HolderLookup.Provider.class);
             load.setAccessible(true);
-            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess());
-            save.invoke(entity, output);
-            CompoundTag tag = output.buildResult();
-            load.invoke(entity, TagValueInput.create(ProblemReporter.DISCARDING,
-                    helper.getLevel().registryAccess(), tag));
+            CompoundTag tag = new CompoundTag();
+            save.invoke(entity, tag, helper.getLevel().registryAccess());
+            load.invoke(entity, tag, helper.getLevel().registryAccess());
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
         }
     }
 
-    private static ChemicalResource registerOxygenLikeChemical(String path) {
-        return ChemicalResource.of(registerChemical(path, false));
+    private static long insert(ChemicalPortBlockEntity port, ChemicalStack stack, long amount) {
+        return amount - port.chemicalTank().insert(stack.copyWithAmount(amount), Action.EXECUTE,
+                AutomationType.EXTERNAL).getAmount();
     }
 
-    private static ChemicalResource registerRadioactiveChemical(String path) {
-        return ChemicalResource.of(registerChemical(path, true));
+    private static ChemicalStack registerOxygenLikeChemical(String path) {
+        return new ChemicalStack(registerChemical(path, false), 1L);
+    }
+
+    private static ChemicalStack registerRadioactiveChemical(String path) {
+        return new ChemicalStack(registerChemical(path, true), 1L);
     }
 
     private static Holder.Reference<Chemical> registerChemical(String path, boolean radioactive) {

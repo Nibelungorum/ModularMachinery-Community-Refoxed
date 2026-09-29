@@ -32,12 +32,11 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import com.mojang.authlib.GameProfile;
 
@@ -122,10 +121,10 @@ public class AE2StockingInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose ME_STORAGE");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.ItemHandler.BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose an external item handler");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.FluidHandler.BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose an external fluid handler");
 
@@ -186,39 +185,36 @@ public class AE2StockingInterfaceGameTest {
             helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(1)).amount() == FLUID_AMOUNT,
                     "Fluid display mirror follows the watcher amount");
 
-            CapabilityRequests.ResourceRequest<ItemResource> itemRequest = new CapabilityRequests.ResourceRequest<>(
+            CapabilityRequests.ItemRequest itemRequest = new CapabilityRequests.ItemRequest(
                     itemCapability.type(), IOType.INPUT, 1L,
-                    List.of(new CapabilityRequests.ResourceAction<>(
-                            0, ItemResource.of(Items.IRON_INGOT), 3L, false)));
-            CapabilityRequests.ResourceRequest<FluidResource> fluidRequest = new CapabilityRequests.ResourceRequest<>(
+                    List.of(new CapabilityRequests.ItemAction(
+                            0, new ItemStack(Items.IRON_INGOT), 3L, false)));
+            CapabilityRequests.FluidRequest fluidRequest = new CapabilityRequests.FluidRequest(
                     fluidCapability.type(), IOType.INPUT, 1L,
-                    List.of(new CapabilityRequests.ResourceAction<>(
-                            1, FluidResource.of(Fluids.WATER), 1_000L, false)));
+                    List.of(new CapabilityRequests.FluidAction(
+                            0, new FluidStack(Fluids.WATER, 1), 1_000L, false)));
             CapabilityOperation itemOperation = itemCapability.prepare(itemRequest);
             CapabilityOperation fluidOperation = fluidCapability.prepare(fluidRequest);
             MEStorage itemNetwork = itemChest.getInventory();
             MEStorage fluidNetwork = fluidChest.getInventory();
-            try (Transaction transaction = Transaction.openRoot()) {
-                CapabilityResult itemResult = itemOperation.commit(transaction);
-                CapabilityResult fluidResult = fluidOperation.commit(transaction);
-                helper.assertTrue(itemResult.success(),
-                        "Stocking item capability operation commits successfully");
-                helper.assertTrue(fluidResult.success(),
-                        "Stocking fluid capability operation commits successfully");
-                helper.assertTrue(itemNetwork.extract(AEItemKey.of(Items.IRON_INGOT), ITEM_AMOUNT,
-                                Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT,
-                        "Item MEStorage is unchanged before the root transaction commits");
-                helper.assertTrue(fluidNetwork.extract(AEFluidKey.of(Fluids.WATER), FLUID_AMOUNT,
-                                Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT,
-                        "Fluid MEStorage is unchanged before the root transaction commits");
-                transaction.commit();
-                helper.assertTrue(itemNetwork.extract(AEItemKey.of(Items.IRON_INGOT), ITEM_AMOUNT,
-                                Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT - 3L,
-                        "Item MEStorage quantity is deducted after transaction commit");
-                helper.assertTrue(fluidNetwork.extract(AEFluidKey.of(Fluids.WATER), FLUID_AMOUNT,
-                                Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT - 1_000L,
-                        "Fluid MEStorage quantity is deducted after transaction commit");
-            }
+            helper.assertTrue(itemNetwork.extract(AEItemKey.of(Items.IRON_INGOT), ITEM_AMOUNT,
+                            Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT,
+                    "Preparing the item operation does not mutate MEStorage");
+            helper.assertTrue(fluidNetwork.extract(AEFluidKey.of(Fluids.WATER), FLUID_AMOUNT,
+                            Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT,
+                    "Preparing the fluid operation does not mutate MEStorage");
+            CapabilityResult itemResult = itemOperation.commit();
+            CapabilityResult fluidResult = fluidOperation.commit();
+            helper.assertTrue(itemResult.success(),
+                    "Stocking item capability operation commits successfully");
+            helper.assertTrue(fluidResult.success(),
+                    "Stocking fluid capability operation commits successfully");
+            helper.assertTrue(itemNetwork.extract(AEItemKey.of(Items.IRON_INGOT), ITEM_AMOUNT,
+                            Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT - 3L,
+                    "Item MEStorage quantity is deducted after operation commit");
+            helper.assertTrue(fluidNetwork.extract(AEFluidKey.of(Fluids.WATER), FLUID_AMOUNT,
+                            Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT - 1_000L,
+                    "Fluid MEStorage quantity is deducted after operation commit");
         });
 
         helper.runAtTickTime(12, () -> {

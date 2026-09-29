@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -20,6 +19,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +58,7 @@ class AutoIOPortTest {
         assertThat(source.ejectContents()).isFalse();
         assertThat(source.itemStorage().amount(0)).isEqualTo(3L);
 
-        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents()).isTrue();
@@ -74,7 +74,7 @@ class AutoIOPortTest {
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
-        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
         int updatesBefore = LevelStub.sentBlockUpdates(level);
 
@@ -99,7 +99,7 @@ class AutoIOPortTest {
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
-        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents()).isTrue();
@@ -116,7 +116,7 @@ class AutoIOPortTest {
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
-        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, false)).isTrue();
@@ -136,7 +136,7 @@ class AutoIOPortTest {
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
-        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, false)).isTrue();
@@ -154,7 +154,7 @@ class AutoIOPortTest {
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
-        LevelStub.setCapability(level, ModCapabilities.FLUID_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.FluidHandler.BLOCK, target.getBlockPos(),
                 target.nativeFluidHandler());
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.FLUID_TYPE, false)).isTrue();
@@ -184,7 +184,7 @@ class AutoIOPortTest {
         Level level = controller.getLevel();
         LevelStub.putBlockEntity(level, target);
         target.setLevel(level);
-        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+        LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
         source.linkControllerAppearance(controller.getBlockPos(), MMCR.id("test_factory_port"));
 
