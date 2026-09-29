@@ -1,8 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
@@ -10,7 +9,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -24,7 +22,7 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
     private static final String CONTENTS_VERSION_KEY = "contents_version";
 
     private final UpgradeBusSize size;
-    private final LongResourceStorage<ItemResource> storage;
+    private final LongItemStorage storage;
     private final List<Runnable> controllerChangeListeners = new CopyOnWriteArrayList<>();
     private long contentsVersion;
 
@@ -32,25 +30,24 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
         super(ModBlockEntities.BES.get(blockEntityId(size)).get(), pos, state);
         if (size == null) throw new IllegalArgumentException("Upgrade bus size must not be null");
         this.size = size;
-        this.storage = new LongResourceStorage<>(ItemResource.class, size.slots(), 64L,
-                ItemResource::isEmpty, this::onContentsChanged);
+        this.storage = new LongItemStorage(size.slots(), 64L, this::onContentsChanged);
     }
 
     public UpgradeBusSize size() {
         return size;
     }
 
-    public ResourceStorage<ItemResource> itemStorage() {
+    public LongItemStorage itemHandler() {
         return storage;
     }
 
     public List<ItemStack> itemSnapshot() {
         return IntStream.range(0, storage.size())
                 .mapToObj(slot -> {
-                    ItemResource resource = storage.resource(slot);
-                    return resource == null || resource.isEmpty()
+                    ItemStack resource = storage.resource(slot);
+                    return resource.isEmpty()
                             ? ItemStack.EMPTY
-                            : resource.toStack((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
+                            : resource.copyWithCount((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
                 })
                 .toList();
     }
@@ -83,10 +80,10 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
         super.saveAdditional(output);
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = "_" + slot;
-            ItemResource resource = storage.resource(slot);
-            output.putBoolean("itemHasResource" + suffix, resource != null && !resource.isEmpty());
-            if (resource != null && !resource.isEmpty()) {
-                output.store("itemResource" + suffix, ItemResource.OPTIONAL_CODEC, resource);
+            ItemStack resource = storage.resource(slot);
+            output.putBoolean("itemHasResource" + suffix, !resource.isEmpty());
+            if (!resource.isEmpty()) {
+                output.store("itemResource" + suffix, ItemStack.CODEC, resource);
                 output.putLong("itemAmount" + suffix, storage.amount(slot));
             }
         }
@@ -99,11 +96,11 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = "_" + slot;
             if (input.getBooleanOr("itemHasResource" + suffix, false)) {
-                ItemResource resource = input.read("itemResource" + suffix, ItemResource.OPTIONAL_CODEC)
-                        .orElse(ItemResource.EMPTY);
+                ItemStack resource = input.read("itemResource" + suffix, ItemStack.CODEC)
+                        .orElse(ItemStack.EMPTY);
                 storage.setContents(slot, resource, input.getLong("itemAmount" + suffix).orElse(0L));
             } else {
-                storage.setContents(slot, ItemResource.EMPTY, 0L);
+                storage.setContents(slot, ItemStack.EMPTY, 0L);
             }
         }
         contentsVersion = input.getLong(CONTENTS_VERSION_KEY).orElse(0L);

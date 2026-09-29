@@ -1,14 +1,13 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.internal.storage.LongResourceStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -18,13 +17,8 @@ import org.jetbrains.annotations.Nullable;
  */
 public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
 
-    private final LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, Long.MAX_VALUE,
-            ItemResource::isEmpty, this::onContentsChanged) {
-        @Override
-        public boolean isValid(int slot, ItemResource resource) {
-            return resource.toStack(1).is(ModItems.THREAD_DISPERSER.get()) && super.isValid(slot, resource);
-        }
-    };
+    private final LongItemStorage storage = new LongItemStorage(1, Long.MAX_VALUE,
+            stack -> stack.is(ModItems.THREAD_DISPERSER.get()), this::onContentsChanged);
     private @Nullable MachineControllerBlockEntity owner;
 
     public FactorySchedulerBlockEntity(BlockPos pos, BlockState state) {
@@ -40,7 +34,7 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
         return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
     }
 
-    public ResourceStorage<ItemResource> itemStorage() {
+    public LongItemStorage itemHandler() {
         return storage;
     }
 
@@ -57,10 +51,10 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        ItemResource resource = storage.resource(0);
-        output.putBoolean("itemHasResource", resource != null && !resource.isEmpty());
-        if (resource != null && !resource.isEmpty()) {
-            output.store("itemResource", ItemResource.OPTIONAL_CODEC, resource);
+        ItemStack resource = storage.resource(0);
+        output.putBoolean("itemHasResource", !resource.isEmpty());
+        if (!resource.isEmpty()) {
+            output.store("itemResource", ItemStack.CODEC, resource);
             output.putLong("itemAmount", storage.amount(0));
         }
     }
@@ -69,11 +63,11 @@ public class FactorySchedulerBlockEntity extends LinkedAppearanceBlockEntity {
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         if (input.getBooleanOr("itemHasResource", false)) {
-            ItemResource resource = input.read("itemResource", ItemResource.OPTIONAL_CODEC)
-                    .orElse(ItemResource.EMPTY);
+            ItemStack resource = input.read("itemResource", ItemStack.CODEC)
+                    .orElse(ItemStack.EMPTY);
             storage.setContents(0, resource, input.getLong("itemAmount").orElse(0L));
         } else {
-            storage.setContents(0, ItemResource.EMPTY, 0L);
+            storage.setContents(0, ItemStack.EMPTY, 0L);
         }
     }
 

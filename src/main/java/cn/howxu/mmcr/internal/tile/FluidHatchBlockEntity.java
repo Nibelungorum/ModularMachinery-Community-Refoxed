@@ -14,8 +14,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
 
@@ -34,12 +33,8 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         }
     }
 
-    public ResourceHandler<FluidResource> getResourceHandler(Direction side) {
-        return storage;
-    }
-
-    @Override
-    public LongFluidStorage fluidStorage() {
+    /** Native fluid handler; the Transfer-backed port accessor is migrated by the capability task. */
+    public LongFluidStorage fluidHandler(Direction side) {
         return storage;
     }
 
@@ -90,10 +85,10 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
     private void saveFluids(ValueOutput output) {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
-            FluidResource resource = storage.resource(slot);
+            FluidStack resource = storage.resource(slot);
             output.putBoolean("tankHasFluid" + suffix, !resource.isEmpty());
             if (!resource.isEmpty()) {
-                output.store("tankFluid" + suffix, FluidResource.OPTIONAL_CODEC, resource);
+                output.store("tankFluid" + suffix, FluidStack.OPTIONAL_CODEC, resource);
                 output.putLong("tankAmount" + suffix, storage.amount(slot));
             }
         }
@@ -115,12 +110,12 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         for (int slot = 0; slot < storage.size(); slot++) {
             String suffix = slot == 0 ? "" : "_" + slot;
             if (input.getBooleanOr("tankHasFluid" + suffix, false)) {
-                FluidResource resource = input.read("tankFluid" + suffix, FluidResource.OPTIONAL_CODEC)
-                        .orElse(FluidResource.EMPTY);
+                FluidStack resource = input.read("tankFluid" + suffix, FluidStack.OPTIONAL_CODEC)
+                        .orElse(FluidStack.EMPTY);
                 long amount = input.getLong("tankAmount" + suffix).orElse(0L);
                 storage.setContents(slot, resource, amount);
             } else {
-                storage.setContents(slot, FluidResource.EMPTY, 0L);
+                storage.setContents(slot, FluidStack.EMPTY, 0L);
             }
         }
     }

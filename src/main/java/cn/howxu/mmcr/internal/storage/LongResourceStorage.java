@@ -1,15 +1,11 @@
 package cn.howxu.mmcr.internal.storage;
 
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 /**
  * Fixed-slot, long-backed storage for resources with one resource identity per slot.
@@ -17,116 +13,70 @@ import java.util.function.Predicate;
  * @param <R> stored resource type
  * @author howxu <dev@howxu.cn>
  */
-public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.Snapshot<R>>
-        implements ResourceStorage<R> {
-    private final Class<R> resourceType;
+public class LongResourceStorage<R> {
     private final long capacity;
     private final Predicate<R> empty;
+    private final UnaryOperator<R> copy;
+    private final BiPredicate<R, R> matches;
     private final Runnable onChange;
     private final List<R> resources;
     private final long[] amounts;
 
-    public LongResourceStorage(Class<R> resourceType, int slots, long capacity,
-                               Predicate<R> empty, Runnable onChange) {
-        if (resourceType == null) throw new IllegalArgumentException("resourceType must not be null");
+    public LongResourceStorage(int slots, long capacity, Predicate<R> empty, UnaryOperator<R> copy,
+                               BiPredicate<R, R> matches, Runnable onChange) {
         if (slots <= 0) throw new IllegalArgumentException("slots must be positive");
         if (capacity < 0L) throw new IllegalArgumentException("capacity must be non-negative");
-        if (empty == null) throw new IllegalArgumentException("empty must not be null");
-        this.resourceType = resourceType;
+        if (empty == null || copy == null || matches == null) {
+            throw new IllegalArgumentException("resource functions must not be null");
+        }
         this.capacity = capacity;
         this.empty = empty;
+        this.copy = copy;
+        this.matches = matches;
         this.onChange = onChange == null ? () -> {} : onChange;
         this.resources = new ArrayList<>(Collections.nCopies(slots, null));
         this.amounts = new long[slots];
     }
 
-    @Override
-    public Class<R> resourceType() {
-        return resourceType;
-    }
-
-    @Override
     public int size() {
         return amounts.length;
     }
 
-    @Override
-    @Nullable
     public R resource(int slot) {
         checkSlot(slot);
-        return resources.get(slot);
+        R resource = resources.get(slot);
+        return resource == null ? null : copy.apply(resource);
     }
 
-    @Override
     public long amount(int slot) {
         checkSlot(slot);
         return amounts[slot];
     }
 
-    @Override
-    public long capacity(int slot, @Nullable R resource) {
+    public long capacity(int slot) {
         checkSlot(slot);
         return capacity;
     }
 
-    @Override
     public boolean isValid(int slot, R resource) {
         checkSlot(slot);
         checkResource(resource);
-        return isEmptyResource(resources.get(slot)) || resources.get(slot).equals(resource);
+        R stored = resources.get(slot);
+        return stored == null || matches.test(stored, resource);
     }
 
-    @Override
-    public long insert(int slot, R resource, long amount, TransactionContext transaction) {
+    /** Sets a slot directly for persistence and native handler adapters. */
+    public void setContents(int slot, R resource, long amount) {
         checkSlot(slot);
-        checkResource(resource);
-        checkNonNegative(amount);
-        if (amount == 0L || !isValid(slot, resource)) return 0L;
+        long storedAmount = Math.min(Math.max(amount, 0L), capacity);
+        R storedResource = storedAmount == 0L || isEmptyResource(resource) ? null : copyResource(resource);
+        if (storedResource == null) storedAmount = 0L;
 
-        long inserted = Math.min(amount, Math.max(0L, capacity(slot, resource) - amounts[slot]));
-        if (inserted > 0L) {
-            updateSnapshots(transaction);
-            if (isEmptyResource(resources.get(slot))) resources.set(slot, resource);
-            amounts[slot] += inserted;
-        }
-        return inserted;
-    }
-
-    @Override
-    public long extract(int slot, R resource, long amount, TransactionContext transaction) {
-        checkSlot(slot);
-        checkResource(resource);
-        checkNonNegative(amount);
-        if (amount == 0L || amounts[slot] == 0L || !resource.equals(resources.get(slot))) return 0L;
-
-        long extracted = Math.min(amount, amounts[slot]);
-        if (extracted > 0L) {
-            updateSnapshots(transaction);
-            amounts[slot] -= extracted;
-            if (amounts[slot] == 0L) resources.set(slot, null);
-        }
-        return extracted;
-    }
-
-    /**
-     * Sets a slot directly for persistence and compatibility adapters.
-     */
-    public void setContents(int slot, @Nullable R resource, long amount) {
-        checkSlot(slot);
-        long storedAmount = Math.min(amount, capacity(slot, resource));
-        if (storedAmount <= 0L || isEmptyResource(resource)) {
-            resources.set(slot, null);
-            amounts[slot] = 0L;
-        } else {
-            checkResource(resource);
-            resources.set(slot, resource);
-            amounts[slot] = storedAmount;
-        }
+        R previous = resources.get(slot);
+        if (amounts[slot] == storedAmount && sameResource(previous, storedResource)) return;
+        resources.set(slot, storedResource);
+        amounts[slot] = storedAmount;
         onChange.run();
-    }
-
-    protected final long slotCapacity() {
-        return capacity;
     }
 
     protected final long insertDirect(int slot, R resource, long requested, boolean simulate) {
@@ -134,9 +84,9 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
         checkResource(resource);
         if (requested <= 0L || !isValid(slot, resource)) return 0L;
 
-        long inserted = Math.min(requested, Math.max(0L, capacity(slot, resource) - amounts[slot]));
+        long inserted = Math.min(requested, capacity - amounts[slot]);
         if (!simulate && inserted > 0L) {
-            if (isEmptyResource(resources.get(slot))) resources.set(slot, resource);
+            if (resources.get(slot) == null) resources.set(slot, copyResource(resource));
             amounts[slot] += inserted;
             onChange.run();
         }
@@ -146,7 +96,10 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
     protected final long extractDirect(int slot, R resource, long requested, boolean simulate) {
         checkSlot(slot);
         checkResource(resource);
-        if (requested <= 0L || amounts[slot] == 0L || !resource.equals(resources.get(slot))) return 0L;
+        R stored = resources.get(slot);
+        if (requested <= 0L || amounts[slot] == 0L || stored == null || !matches.test(stored, resource)) {
+            return 0L;
+        }
 
         long extracted = Math.min(requested, amounts[slot]);
         if (!simulate && extracted > 0L) {
@@ -157,52 +110,26 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
         return extracted;
     }
 
-    @Override
-    protected Snapshot<R> createSnapshot() {
-        return new Snapshot<>(Collections.unmodifiableList(new ArrayList<>(resources)), amounts.clone());
+    private R copyResource(R resource) {
+        checkResource(resource);
+        R copied = copy.apply(resource);
+        if (isEmptyResource(copied)) throw new IllegalArgumentException("Resource copy must be non-empty");
+        return copied;
     }
 
-    @Override
-    protected void revertToSnapshot(Snapshot<R> snapshot) {
-        resources.clear();
-        if (snapshot != null) {
-            resources.addAll(snapshot.resources());
-            System.arraycopy(snapshot.amounts(), 0, amounts, 0, amounts.length);
-        } else {
-            resources.addAll(Collections.nCopies(amounts.length, null));
-            Arrays.fill(amounts, 0L);
-        }
-        if (snapshot == null || !snapshot.resources().equals(resources) || !Arrays.equals(snapshot.amounts(), amounts)) {
-            onChange.run();
-        }
+    private boolean sameResource(R first, R second) {
+        return first == second || first != null && second != null && matches.test(first, second);
     }
 
-    @Override
-    protected void onRootCommit(Snapshot<R> originalState) {
-        if (originalState == null
-                || !originalState.resources().equals(resources)
-                || !Arrays.equals(originalState.amounts(), amounts)) {
-            onChange.run();
-        }
-    }
-
-    private boolean isEmptyResource(@Nullable R resource) {
+    private boolean isEmptyResource(R resource) {
         return resource == null || empty.test(resource);
     }
 
     private void checkResource(R resource) {
-        if (!resourceType.isInstance(resource) || empty.test(resource)) {
-            throw new IllegalArgumentException("Expected resource to be non-empty: " + resource);
-        }
+        if (isEmptyResource(resource)) throw new IllegalArgumentException("Expected a non-empty resource");
     }
 
     private void checkSlot(int slot) {
         if (slot < 0 || slot >= amounts.length) throw new IndexOutOfBoundsException(slot);
     }
-
-    private void checkNonNegative(long amount) {
-        if (amount < 0L) throw new IllegalArgumentException("Expected value to be non-negative: " + amount);
-    }
-
-    protected record Snapshot<R>(List<R> resources, long[] amounts) {}
 }

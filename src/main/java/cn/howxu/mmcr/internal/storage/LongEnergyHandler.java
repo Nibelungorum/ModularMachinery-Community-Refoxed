@@ -1,17 +1,20 @@
 package cn.howxu.mmcr.internal.storage;
 
-import net.neoforged.neoforge.transfer.energy.EnergyHandler;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 
 /**
- * Extended energy handler contract for long-sized transfers within MMCR.
+ * Extended native energy storage contract with long internal accounting.
  *
  * @author howxu <dev@howxu.cn>
  */
-public interface LongEnergyHandler extends EnergyHandler {
+public interface LongEnergyHandler extends IEnergyStorage {
     long getTransferLimit();
 
-    long insertLong(long amount, TransactionContext transaction);
+    long getAmountAsLong();
 
-    long extractLong(long amount, TransactionContext transaction);
+    long getCapacityAsLong();
+
+    long insertLong(long amount, boolean simulate);
+
+    long extractLong(long amount, boolean simulate);
 }
