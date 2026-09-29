@@ -1,11 +1,11 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
@@ -23,8 +23,8 @@ public final class StockingInterfaceKind implements InterfaceLogicKind {
     public static final StockingInterfaceKind INSTANCE = new StockingInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(IOPortBlockEntity::itemStorage, false),
-            AE2ResourceFamilies.FLUID.inputBinding(IOPortBlockEntity::fluidStorage, false)));
+            AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler()),
+            AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler())));
 
     private StockingInterfaceKind() {}
 

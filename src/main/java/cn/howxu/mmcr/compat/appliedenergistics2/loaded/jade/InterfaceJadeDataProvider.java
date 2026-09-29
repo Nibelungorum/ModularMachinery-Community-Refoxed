@@ -6,21 +6,17 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
-import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jspecify.annotations.NonNull;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IServerDataProvider;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -67,20 +63,8 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
     }
 
     private static Stream<CapabilityDisplay> outputDisplays(MachineCapability capability) {
-        return capability.facet(PresentationFacet.class).stream().flatMap(facet -> {
-            List<CapabilityDisplay> displays = facet.displays(capability.view());
-            return capability.facet(ResourceFacet.class)
-                    .map(resources -> IntStream.range(0,
-                                    Math.min(displays.size(), resources.storage().size()))
-                            .filter(slot -> belongsToOutputFamily(displays.get(slot), resources.storage().resource(slot)))
-                            .mapToObj(displays::get))
-                    .orElseGet(displays::stream);
-        });
-    }
-
-    private static boolean belongsToOutputFamily(CapabilityDisplay display, Object resource) {
-        return (display.label().equals("item") && resource instanceof ItemResource)
-                || (display.label().equals("fluid") && resource instanceof FluidResource);
+        return capability.facet(PresentationFacet.class).stream()
+                .flatMap(facet -> facet.displays(capability.view()).stream());
     }
 
     static List<OutputPresentation> outputs(CompoundTag data) {

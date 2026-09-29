@@ -1,38 +1,29 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
 import appeng.api.networking.GridHelper;
-import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
-import appeng.api.networking.security.IActionSource;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import net.minecraft.resources.ResourceLocation;
 import appeng.api.stacks.AEItemKey;
-import appeng.api.stacks.KeyCounter;
-import appeng.api.storage.MEStorage;
 import appeng.api.util.AECableType;
 import appeng.core.definitions.AEBlocks;
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
-import appeng.me.storage.NullInventory;
 import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
 import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
@@ -52,8 +43,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -83,8 +74,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final PatternProviderLogic logic;
     private final PatternInterfaceCraftingMachine craftingMachine = new PatternInterfaceCraftingMachine(this);
     private final AtomicInteger nextPatternController = new AtomicInteger();
-    private final OutputResourceStorage<ItemResource> itemOutputStorage;
-    private final OutputResourceStorage<FluidResource> fluidOutputStorage;
+    private final IItemHandler itemHandler;
+    private final IFluidHandler fluidHandler;
     private long observedReturnInventoryAmount;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
@@ -92,11 +83,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         this.kind = kind;
         PatternLogicKind logicKind = (PatternLogicKind) kind;
         logic = logicKind.createPatternLogic(mainNode, this);
-        // PatternProviderLogic must return completed pattern outputs to the grid itself so AE2 can settle the craft.
-        itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), () -> null,
-                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
-        fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), () -> null,
-                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
+        itemHandler = AE2NativeAdapters.items(logic.getReturnInv());
+        fluidHandler = AE2NativeAdapters.fluids(logic.getReturnInv());
     }
 
     @Override
@@ -294,45 +282,13 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
-    public ResourceStorage<ItemResource> itemStorage() {
-        return itemInputStorage();
+    public IItemHandler nativeItemHandler() {
+        return itemHandler;
     }
 
     @Override
-    public ResourceStorage<FluidResource> fluidStorage() {
-        return fluidInputStorage();
-    }
-
-    public ResourceStorage<ItemResource> itemInputStorage() {
-        return AE2ResourceFamilies.ITEM.patternInputView(networkStorage());
-    }
-
-    public ResourceStorage<FluidResource> fluidInputStorage() {
-        return AE2ResourceFamilies.FLUID.patternInputView(networkStorage());
-    }
-
-    public PatternRequestResourceStorage<ItemResource> itemRequestStorage(KeyCounter[] inputHolders) {
-        return AE2ResourceFamilies.ITEM.patternRequestView(inputHolders);
-    }
-
-    public PatternRequestResourceStorage<FluidResource> fluidRequestStorage(KeyCounter[] inputHolders) {
-        return AE2ResourceFamilies.FLUID.patternRequestView(inputHolders);
-    }
-
-    public OutputResourceStorage<ItemResource> itemOutputStorage() {
-        return itemOutputStorage;
-    }
-
-    public OutputResourceStorage<FluidResource> fluidOutputStorage() {
-        return fluidOutputStorage;
-    }
-
-    public PatternReturnResourceStorage<ItemResource> itemReturnStorage() {
-        return AE2ResourceFamilies.ITEM.patternReturnView(logic.getReturnInv());
-    }
-
-    public PatternReturnResourceStorage<FluidResource> fluidReturnStorage() {
-        return AE2ResourceFamilies.FLUID.patternReturnView(logic.getReturnInv());
+    public IFluidHandler nativeFluidHandler() {
+        return fluidHandler;
     }
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
@@ -410,11 +366,6 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     private void onNetworkChanged() {
         if (!logic.getReturnInv().isEmpty() || logic.isBusy()) logic.onMainNodeStateChanged();
-    }
-
-    private MEStorage networkStorage() {
-        IGrid grid = mainNode.getGrid();
-        return grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
     }
 
     private long returnInventoryAmount() {

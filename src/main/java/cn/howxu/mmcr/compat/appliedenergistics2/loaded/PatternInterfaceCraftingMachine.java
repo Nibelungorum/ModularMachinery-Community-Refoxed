@@ -10,17 +10,13 @@ import appeng.api.stacks.KeyCounter;
 import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,28 +57,40 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         if (batchSize <= 0L || outputs == null || !hasSupportedInputs(pattern)) return false;
 
         try {
-            PatternRequestState originalRequest = new PatternRequestState(inputHolders, 1);
             List<LaneRequest> laneRequests = new ArrayList<>();
             PatternStartBatchReservation reservation = host.reservePatternStarts(outputs, batchSize, parallelism -> {
-                PatternRequestState requestState = new PatternRequestState(slice(inputHolders, parallelism, batchSize), 2);
-                PatternRequestResourceStorage<ItemResource> itemRequest = AE2ResourceFamilies.ITEM.patternRequestView(requestState);
-                PatternRequestResourceStorage<FluidResource> fluidRequest = AE2ResourceFamilies.FLUID.patternRequestView(requestState);
+                KeyCounter[] slice = slice(inputHolders, parallelism, batchSize);
+                appeng.helpers.externalstorage.GenericStackInv itemRequest = AE2NativeAdapters.requestInventory(slice,
+                        appeng.api.stacks.AEKeyType.items());
+                appeng.helpers.externalstorage.GenericStackInv fluidRequest = AE2NativeAdapters.requestInventory(slice,
+                        appeng.api.stacks.AEKeyType.fluids());
                 laneRequests.add(new LaneRequest(itemRequest, fluidRequest));
-                return List.of(new ItemBusCapability(itemRequest, IOType.INPUT),
-                        new FluidHatchCapability(fluidRequest, IOType.INPUT));
+                return List.of(new ItemBusCapability(AE2NativeAdapters.items(itemRequest), IOType.INPUT),
+                        new FluidHatchCapability(AE2NativeAdapters.fluids(fluidRequest), IOType.INPUT));
             });
             if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
                     || reservation.parallelism() != batchSize) return false;
 
             try (reservation) {
-                return reservation.commit(transaction -> {
-                    for (LaneRequest request : laneRequests) {
-                        boolean itemsAccepted = request.itemRequest().accept(host.itemReturnStorage(), transaction);
-                        boolean fluidsAccepted = request.fluidRequest().accept(host.fluidReturnStorage(), transaction);
-                        if (!itemsAccepted || !fluidsAccepted) throw ReturnCapacityException.INSTANCE;
+                for (LaneRequest request : laneRequests) {
+                    if (!AE2NativeAdapters.canReturn(request.itemRequest(), host.getLogic().getReturnInv(),
+                            appeng.api.stacks.AEKeyType.items(), appeng.api.networking.security.IActionSource.ofMachine(host))
+                            || !AE2NativeAdapters.canReturn(request.fluidRequest(), host.getLogic().getReturnInv(),
+                            appeng.api.stacks.AEKeyType.fluids(), appeng.api.networking.security.IActionSource.ofMachine(host))) {
+                        return false;
                     }
-                    originalRequest.acceptAll(transaction);
-                });
+                }
+                if (!reservation.commit()) return false;
+                for (LaneRequest request : laneRequests) {
+                    if (!AE2NativeAdapters.returnRemaining(request.itemRequest(), host.getLogic().getReturnInv(),
+                            appeng.api.stacks.AEKeyType.items(), appeng.api.networking.security.IActionSource.ofMachine(host))
+                            || !AE2NativeAdapters.returnRemaining(request.fluidRequest(), host.getLogic().getReturnInv(),
+                            appeng.api.stacks.AEKeyType.fluids(), appeng.api.networking.security.IActionSource.ofMachine(host))) {
+                        return false;
+                    }
+                }
+                for (KeyCounter holder : inputHolders) holder.clear();
+                return true;
             }
         } catch (RuntimeException exception) {
             return false;
@@ -105,8 +113,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         return slice;
     }
 
-    private record LaneRequest(PatternRequestResourceStorage<ItemResource> itemRequest,
-                               PatternRequestResourceStorage<FluidResource> fluidRequest) {
+    private record LaneRequest(appeng.helpers.externalstorage.GenericStackInv itemRequest,
+                               appeng.helpers.externalstorage.GenericStackInv fluidRequest) {
     }
 
     @Override
@@ -135,11 +143,4 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         return List.copyOf(outputs);
     }
 
-    private static final class ReturnCapacityException extends RuntimeException {
-        private static final ReturnCapacityException INSTANCE = new ReturnCapacityException();
-
-        private ReturnCapacityException() {
-            super(null, null, false, false);
-        }
-    }
 }

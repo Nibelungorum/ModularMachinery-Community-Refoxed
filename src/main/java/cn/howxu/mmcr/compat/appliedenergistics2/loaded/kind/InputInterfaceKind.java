@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
@@ -22,8 +23,8 @@ public final class InputInterfaceKind implements InterfaceLogicKind {
     public static final InputInterfaceKind INSTANCE = new InputInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false),
-            AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
+            AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler()),
+            AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler())));
 
     private InputInterfaceKind() {}
 

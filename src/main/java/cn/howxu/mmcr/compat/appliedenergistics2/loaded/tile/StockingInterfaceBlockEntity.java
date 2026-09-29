@@ -23,10 +23,8 @@ import appeng.me.storage.NullInventory;
 import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -44,9 +42,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -85,8 +82,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
                 @Override
                 public void onStackChange(AEKey what, long amount) {
-                    itemStorage.onStackChange(what, amount);
-                    fluidStorage.onStackChange(what, amount);
                     updateStorageMirror(what, amount);
                     notifyStorageChanged();
                     notifyControllerOfInputChange();
@@ -94,10 +89,10 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
             });
     private final IManagedGridNode uiNode = GridHelper.createManagedNode(this, UI_NODE_LISTENER);
     private final InterfaceLogic logic;
-    private final LiveResourceStorage<ItemResource> itemStorage = new LiveResourceStorage<>(
-            AE2ResourceFamilies.ITEM.stockingInputView(NullInventory.of(), List.of()));
-    private final LiveResourceStorage<FluidResource> fluidStorage = new LiveResourceStorage<>(
-            AE2ResourceFamilies.FLUID.stockingInputView(NullInventory.of(), List.of()));
+    private final IItemHandler itemHandler = AE2NativeAdapters.networkItems(this::networkStorage, this::configuredKeys,
+            appeng.api.networking.security.IActionSource.ofMachine(this));
+    private final IFluidHandler fluidHandler = AE2NativeAdapters.networkFluids(this::networkStorage, this::configuredKeys,
+            appeng.api.networking.security.IActionSource.ofMachine(this));
     @Nullable
     private IStackWatcher storageWatcher;
     private long storageMirrorRefreshes;
@@ -179,13 +174,13 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
-    public ResourceStorage<ItemResource> itemStorage() {
-        return itemStorage;
+    public IItemHandler nativeItemHandler() {
+        return itemHandler;
     }
 
     @Override
-    public ResourceStorage<FluidResource> fluidStorage() {
-        return fluidStorage;
+    public IFluidHandler nativeFluidHandler() {
+        return fluidHandler;
     }
 
     @Override
@@ -276,11 +271,12 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     private void refreshNetworkStorage() {
+        // Native handlers resolve the current grid and configuration lazily.
+    }
+
+    private MEStorage networkStorage() {
         IGrid grid = mainNode.getGrid();
-        MEStorage storage = grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
-        List<AEKey> keys = configuredKeys();
-        itemStorage.rebind(AE2ResourceFamilies.ITEM.stockingInputView(storage, keys));
-        fluidStorage.rebind(AE2ResourceFamilies.FLUID.stockingInputView(storage, keys));
+        return grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
     }
 
     private List<AEKey> configuredKeys() {
@@ -319,10 +315,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
             for (int slot = 0; slot < logic.getConfig().size(); slot++) {
                 AEKey key = logic.getConfig().getKey(slot);
                 long amount = reportAmounts && key != null ? cachedInventory.get(key) : 0L;
-                if (key != null) {
-                    itemStorage.onStackChange(key, amount);
-                    fluidStorage.onStackChange(key, amount);
-                }
                 storage.setStack(slot, key == null || amount <= 0L ? null : new GenericStack(key, amount));
             }
         } finally {
@@ -367,64 +359,4 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         }
     }
 
-    private static final class LiveResourceStorage<R> implements ResourceStorage<R> {
-        private NetworkResourceStorage<R> delegate;
-
-        private LiveResourceStorage(NetworkResourceStorage<R> delegate) {
-            this.delegate = delegate;
-        }
-
-        private void rebind(NetworkResourceStorage<R> delegate) {
-            this.delegate = delegate;
-        }
-
-        private void onStackChange(AEKey key, long amount) {
-            delegate.onStackChange(key, amount);
-        }
-
-        @Override
-        public Class<R> resourceType() {
-            return delegate.resourceType();
-        }
-
-        @Override
-        public int size() {
-            return delegate.size();
-        }
-
-        @Override
-        public Object reservationIdentity() {
-            return delegate.reservationIdentity();
-        }
-
-        @Override
-        public @Nullable R resource(int slot) {
-            return delegate.resource(slot);
-        }
-
-        @Override
-        public long amount(int slot) {
-            return delegate.amount(slot);
-        }
-
-        @Override
-        public long capacity(int slot, @Nullable R resource) {
-            return delegate.capacity(slot, resource);
-        }
-
-        @Override
-        public boolean isValid(int slot, R resource) {
-            return delegate.isValid(slot, resource);
-        }
-
-        @Override
-        public long insert(int slot, R resource, long amount, TransactionContext transaction) {
-            return delegate.insert(slot, resource, amount, transaction);
-        }
-
-        @Override
-        public long extract(int slot, R resource, long amount, TransactionContext transaction) {
-            return delegate.extract(slot, resource, amount, transaction);
-        }
-    }
 }

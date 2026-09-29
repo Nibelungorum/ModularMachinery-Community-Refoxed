@@ -14,8 +14,7 @@ import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -35,8 +34,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,8 +63,8 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
             .setInWorldNode(true);
     private final InterfaceLogic logic;
     private final GenericStack[] networkOwned;
-    private final ResourceStorage<ItemResource> itemStorage;
-    private final ResourceStorage<FluidResource> fluidStorage;
+    private final IItemHandler itemHandler;
+    private final IFluidHandler fluidHandler;
     private CapabilitySnapshot capabilitySnapshot;
     private boolean loadingProvenance;
 
@@ -75,8 +74,8 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
         logic = logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
         networkOwned = new GenericStack[logic.getStorage().size()];
-        itemStorage = AE2ResourceFamilies.ITEM.standardInputView(logic.getStorage());
-        fluidStorage = AE2ResourceFamilies.FLUID.standardInputView(logic.getStorage());
+        itemHandler = AE2NativeAdapters.items(logic.getStorage());
+        fluidHandler = AE2NativeAdapters.fluids(logic.getStorage());
     }
 
     @Override
@@ -185,13 +184,13 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
-    public ResourceStorage<ItemResource> itemStorage() {
-        return itemStorage;
+    public IItemHandler nativeItemHandler() {
+        return itemHandler;
     }
 
     @Override
-    public ResourceStorage<FluidResource> fluidStorage() {
-        return fluidStorage;
+    public IFluidHandler nativeFluidHandler() {
+        return fluidHandler;
     }
 
     @Override

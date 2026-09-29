@@ -265,13 +265,15 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
                         : itemHandler.extractItem(action.slot(), chunk, true);
                 long moved = action.insert() ? chunk - simulated.getCount() : simulated.getCount();
                 if (moved != chunk) return failure(action.insert()
-                        ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+                                ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                        movementDetails(chunk, moved));
                 net.minecraft.world.item.ItemStack executed = action.insert()
                         ? itemHandler.insertItem(action.slot(), stack, false)
                         : itemHandler.extractItem(action.slot(), chunk, false);
                 long committed = action.insert() ? chunk - executed.getCount() : executed.getCount();
                 if (committed != chunk) return failure(action.insert()
-                        ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+                                ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                        movementDetails(chunk, committed));
                 remaining -= chunk;
             }
         }
@@ -300,16 +302,23 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
 
     private long itemAmount(int slot) {
         return itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
+                ? storage.amount(slot) : itemHandler instanceof NativeStackSync.Item storage
                 ? storage.amount(slot) : itemHandler.getStackInSlot(slot).getCount();
     }
 
     private long itemCapacity(int slot) {
         return itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
+                ? storage.capacity(slot) : itemHandler instanceof NativeStackSync.Item storage
                 ? storage.capacity(slot) : itemHandler.getSlotLimit(slot);
     }
 
     private CapabilityResult failure(FailureReason reason) {
         return failure(reason, Map.of());
+    }
+
+    private static Map<String, String> movementDetails(long required, long moved) {
+        return Map.of("required", Long.toString(required), "available", Long.toString(Math.max(0L, moved)),
+                "shortfall", Long.toString(Math.max(0L, required - moved)));
     }
 
     private CapabilityResult failure(FailureReason reason, Map<String, String> details) {
@@ -386,6 +395,20 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
                 }
                 nativeStorage.setContents(slot, resource.isEmpty() ? net.minecraft.world.item.ItemStack.EMPTY
                         : resource.toStack(1), amount);
+            }
+            return;
+        }
+        if (itemHandler instanceof NativeStackSync.Item nativeStorage) {
+            for (int slot = 0; slot < count; slot++) {
+                ItemResource resource = ItemResource.STREAM_CODEC.decode(buffer);
+                long amount = buffer.readLong();
+                long capacity = buffer.readLong();
+                if (amount < 0L || capacity < amount) {
+                    throw new IllegalArgumentException("Invalid item sync amount");
+                }
+                nativeStorage.setContents(slot, resource.isEmpty() ? net.minecraft.world.item.ItemStack.EMPTY
+                        : resource.toStack(1), amount);
+                if (amount > nativeStorage.capacity(slot)) throw new IllegalArgumentException("Item sync state does not fit");
             }
             return;
         }

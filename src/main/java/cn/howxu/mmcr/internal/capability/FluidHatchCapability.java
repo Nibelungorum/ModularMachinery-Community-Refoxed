@@ -252,11 +252,13 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
                 long simulated = action.insert() ? fluidHandler.fill(stack, IFluidHandler.FluidAction.SIMULATE)
                         : fluidHandler.drain(stack, IFluidHandler.FluidAction.SIMULATE).getAmount();
                 if (simulated != chunk) return failure(action.insert()
-                        ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+                                ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                        movementDetails(chunk, simulated));
                 long committed = action.insert() ? fluidHandler.fill(stack, IFluidHandler.FluidAction.EXECUTE)
                         : fluidHandler.drain(stack, IFluidHandler.FluidAction.EXECUTE).getAmount();
                 if (committed != chunk) return failure(action.insert()
-                        ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+                                ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                        movementDetails(chunk, committed));
                 remaining -= chunk;
             }
         }
@@ -285,16 +287,23 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
 
     private long fluidAmount(int tank) {
         return fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.amount(tank) : fluidHandler instanceof NativeStackSync.Fluid storage
                 ? storage.amount(tank) : fluidHandler.getFluidInTank(tank).getAmount();
     }
 
     private long fluidCapacity(int tank) {
         return fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.capacity(tank) : fluidHandler instanceof NativeStackSync.Fluid storage
                 ? storage.capacity(tank) : fluidHandler.getTankCapacity(tank);
     }
 
     private CapabilityResult failure(FailureReason reason) {
         return failure(reason, Map.of());
+    }
+
+    private static Map<String, String> movementDetails(long required, long moved) {
+        return Map.of("required", Long.toString(required), "available", Long.toString(Math.max(0L, moved)),
+                "shortfall", Long.toString(Math.max(0L, required - moved)));
     }
 
     private CapabilityResult failure(FailureReason reason, Map<String, String> details) {
@@ -371,6 +380,20 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
                 }
                 nativeStorage.setContents(slot, resource.isEmpty() ? net.neoforged.neoforge.fluids.FluidStack.EMPTY
                         : resource.toStack(1), amount);
+            }
+            return;
+        }
+        if (fluidHandler instanceof NativeStackSync.Fluid nativeStorage) {
+            for (int slot = 0; slot < count; slot++) {
+                FluidResource resource = FluidResource.STREAM_CODEC.decode(buffer);
+                long amount = buffer.readLong();
+                long capacity = buffer.readLong();
+                if (amount < 0L || capacity < amount) {
+                    throw new IllegalArgumentException("Invalid fluid sync amount");
+                }
+                nativeStorage.setContents(slot, resource.isEmpty() ? net.neoforged.neoforge.fluids.FluidStack.EMPTY
+                        : resource.toStack(1), amount);
+                if (amount > nativeStorage.capacity(slot)) throw new IllegalArgumentException("Fluid sync state does not fit");
             }
             return;
         }

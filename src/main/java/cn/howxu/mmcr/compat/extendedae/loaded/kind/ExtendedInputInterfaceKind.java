@@ -5,6 +5,7 @@ import appeng.core.definitions.AEBlocks;
 import appeng.helpers.InterfaceLogic;
 import appeng.helpers.InterfaceLogicHost;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
@@ -18,8 +19,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 public final class ExtendedInputInterfaceKind implements InterfaceLogicKind {
     public static final ExtendedInputInterfaceKind INSTANCE = new ExtendedInputInterfaceKind();
     private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false),
-            AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
+            AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler()),
+            AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler())));
     private ExtendedInputInterfaceKind() {}
     @Override public String id() { return "eae_me_extended_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }
