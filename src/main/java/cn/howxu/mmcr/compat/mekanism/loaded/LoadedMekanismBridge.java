@@ -669,8 +669,15 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
 
         private static java.util.function.Predicate<Object> chemicalMatcher(ChemicalMatcher matcher) {
-            return resource -> resource instanceof ChemicalStack chemical
-                    && !chemical.isEmpty() && matcher.matches(chemical.getChemicalHolder());
+            return resource -> {
+                if (resource instanceof ChemicalStack chemical) {
+                    return !chemical.isEmpty() && matcher.matches(chemical.getChemicalHolder());
+                }
+                if (!(resource instanceof ResourceLocation chemicalId)) return false;
+                return MekanismAPI.CHEMICAL_REGISTRY.getHolder(
+                                ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId))
+                        .map(matcher::matches).orElse(false);
+            };
         }
     }
 

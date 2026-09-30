@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
@@ -118,7 +119,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             IEnergyStorage energyStorage = CapabilityFactories.energyStorage(capability);
-            Object resource = valueStorage == null && energyStorage == null ? null : capability.type();
+            ChemicalViewFacet chemical = capability.facet(ChemicalViewFacet.class).orElse(null);
+            Object resource = chemical == null
+                    ? valueStorage == null && energyStorage == null ? null : capability.type()
+                    : chemical.chemicalId().orElse(null);
             List<Object> resources = new ArrayList<>();
             List<SlotAvailability> slots = new ArrayList<>();
             if (resource != null) resources.add(resource);
@@ -129,6 +133,9 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             } else if (energyStorage != null) {
                 amount = energyStorage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler storage
                         ? storage.getAmountAsLong() : energyStorage.getEnergyStored();
+                slots.add(new SlotAvailability(resource, amount));
+            } else if (chemical != null) {
+                amount = chemical.amount();
                 slots.add(new SlotAvailability(resource, amount));
             } else {
                 IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);

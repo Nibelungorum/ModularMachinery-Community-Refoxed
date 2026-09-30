@@ -546,6 +546,7 @@ class MekanismRecipeHandlerTest {
                 MekanismFailureReasons.CHEMICAL_INPUT_MISSING.id());
         assertThat(chemicalInput.reason()).isEqualTo(RequirementHandler.WakeupReason.INPUT_AVAILABLE);
         assertThat(chemicalInput.matcher().test(resource)).isTrue();
+        assertThat(chemicalInput.matcher().test(chemical.key().location())).isTrue();
         assertThat(chemicalInput.matcher().test(ChemicalStack.EMPTY)).isFalse();
 
         ResourceWakeup chemicalOutput = chemicalHandler().resourceWakeups(
@@ -556,6 +557,7 @@ class MekanismRecipeHandlerTest {
                 MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED.id());
         assertThat(chemicalOutput.reason()).isEqualTo(RequirementHandler.WakeupReason.OUTPUT_CAPACITY);
         assertThat(chemicalOutput.matcher().test(resource)).isTrue();
+        assertThat(chemicalOutput.matcher().test(chemical.key().location())).isTrue();
 
         ResourceWakeup heatInput = heatHandler().resourceWakeups(
                 LoadedHeatRequirement.minimumTemperature(350D)).getFirst();

@@ -819,10 +819,13 @@ class CraftingRuntimeTest {
 
             assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
             runtime.tick();
+            heat.heatCapacitor().update();
             assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 5D);
             runtime.tick();
+            heat.heatCapacitor().update();
             assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 10D);
             runtime.tick();
+            heat.heatCapacitor().update();
 
             assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 15D);
             assertThat(runtime.finishPending()).isTrue();
@@ -2095,6 +2098,11 @@ class CraftingRuntimeTest {
 
         @Override
         public ThrowingItemStorage itemHandler() {
+            return storage;
+        }
+
+        @Override
+        public ThrowingItemStorage nativeItemHandler() {
             return storage;
         }
     }

@@ -225,7 +225,12 @@ public final class CraftingRuntime {
     void releasePreparedPrefetches(PreparedStart prepared) {
         if (prepared == null) return;
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
-            prefetch.facet().restoreReservation(prefetch.plan().amount());
+            if (prefetch.committed) {
+                prefetch.facet().releaseReservation(prefetch.plan().amount());
+                prefetch.committed = false;
+            } else {
+                prefetch.facet().restoreReservation(prefetch.plan().amount());
+            }
         }
     }
 
@@ -280,8 +285,24 @@ public final class CraftingRuntime {
         }
     }
 
-    record PreparedPrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet,
-                            RecipeEnergyPrefetchFacet.PrefetchPlan plan) {
+    static final class PreparedPrefetch {
+        private final String reservationKey;
+        private final RecipeEnergyPrefetchFacet facet;
+        private final RecipeEnergyPrefetchFacet.PrefetchPlan plan;
+        private boolean committed;
+
+        PreparedPrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet,
+                         RecipeEnergyPrefetchFacet.PrefetchPlan plan) {
+            this.reservationKey = reservationKey;
+            this.facet = facet;
+            this.plan = plan;
+        }
+
+        String reservationKey() { return reservationKey; }
+
+        RecipeEnergyPrefetchFacet facet() { return facet; }
+
+        RecipeEnergyPrefetchFacet.PrefetchPlan plan() { return plan; }
     }
 
     public CraftingStatus start(MachineRecipe recipe, long requestedParallelism) {
@@ -1113,15 +1134,16 @@ public final class CraftingRuntime {
     }
 
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared) {
-        if (!prepared.plan().commitInputs()) {
-            ExecutionStatus failure = prepared.plan().failure();
-            return failure == null ? missingInputStatus() : failure;
-        }
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
             CapabilityResult result = prefetch.plan().operation().commit();
             if (result == null || !result.success()) {
                 return result == null || result.status() == null ? missingInputStatus() : result.status();
             }
+            prefetch.committed = true;
+        }
+        if (!prepared.plan().commitInputs()) {
+            ExecutionStatus failure = prepared.plan().failure();
+            return failure == null ? missingInputStatus() : failure;
         }
         return null;
     }
