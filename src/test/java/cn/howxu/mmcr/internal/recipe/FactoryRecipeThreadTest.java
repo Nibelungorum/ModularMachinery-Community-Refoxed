@@ -163,7 +163,7 @@ class FactoryRecipeThreadTest {
                 20, List.of(), List.of());
         MachineRecipe second = RecipeTestSupport.create(MMCR.id("factory_selected_pool_second_recipe"), secondPool,
                 20, List.of(), List.of());
-        Map<Identifier, MachineRecipe> previous = RecipeRegistry.dynamicSnapshot();
+        Map<ResourceLocation, MachineRecipe> previous = RecipeRegistry.dynamicSnapshot();
         try {
             RecipeRegistry.replaceDynamic(Map.of(first.id(), first, second.id(), second), ignored -> true);
             FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);

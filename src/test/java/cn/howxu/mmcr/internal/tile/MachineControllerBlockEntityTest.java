@@ -1367,14 +1367,14 @@ class MachineControllerBlockEntityTest {
 
     @Test
     void selected_non_default_recipe_pool_uses_its_own_catalog() {
-        Identifier machineId = MMCR.id("controller_recipe_pool_catalog");
-        Identifier firstPool = MMCR.id("controller_recipe_pool_catalog_first");
-        Identifier secondPool = MMCR.id("controller_recipe_pool_catalog_second");
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_catalog");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_catalog_first");
+        ResourceLocation secondPool = MMCR.id("controller_recipe_pool_catalog_second");
         MachineRecipe firstRecipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_catalog_recipe_first"),
                 firstPool, 20, List.of(), List.of());
         MachineRecipe secondRecipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_catalog_recipe_second"),
                 secondPool, 20, List.of(), List.of());
-        Map<Identifier, MachineRecipe> previous = RecipeRegistry.dynamicSnapshot();
+        Map<ResourceLocation, MachineRecipe> previous = RecipeRegistry.dynamicSnapshot();
         try {
             RecipeRegistry.replaceDynamic(Map.of(firstRecipe.id(), firstRecipe, secondRecipe.id(), secondRecipe),
                     ignored -> true);

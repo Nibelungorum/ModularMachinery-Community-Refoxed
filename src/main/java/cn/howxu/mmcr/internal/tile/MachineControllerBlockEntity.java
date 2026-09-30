@@ -704,7 +704,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         ResourceLocation type = machine.registryName();
         cachedMachineReference = new MachineReference(type,
-                MachineReferenceHasher.hashForController(serverLevel.dimension().ResourceLocation(), type, getBlockPos()));
+                MachineReferenceHasher.hashForController(serverLevel.dimension().location(), type, getBlockPos()));
         cachedMachineReferenceStructureVersion = structureVersion;
         return cachedMachineReference;
     }
@@ -1113,8 +1113,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         int maxChunkX = (getBlockPos().getX() + box.maxX()) >> 4;
         int minChunkZ = (getBlockPos().getZ() + box.minZ()) >> 4;
         int maxChunkZ = (getBlockPos().getZ() + box.maxZ()) >> 4;
-        return chunkPos.x() >= minChunkX && chunkPos.x() <= maxChunkX
-                && chunkPos.z() >= minChunkZ && chunkPos.z() <= maxChunkZ;
+        return chunkPos.x >= minChunkX && chunkPos.x <= maxChunkX
+                && chunkPos.z >= minChunkZ && chunkPos.z <= maxChunkZ;
     }
 
     public void setLastFailure(@Nullable ExecutionStatus failure) {
@@ -1867,7 +1867,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long nextStructureSafetyCheckTick(long gameTime) {
         int interval = ServerConfig.structureSafetyCheckIntervalTicks();
         long dimensionHash = level == null || level.dimension() == null
-                ? 0L : level.dimension().ResourceLocation().hashCode();
+                ? 0L : level.dimension().location().hashCode();
         long phase = Math.floorMod(getBlockPos().asLong() ^ dimensionHash, interval);
         long delay = Math.floorMod(phase - Math.floorMod(gameTime, interval), interval);
         return gameTime + (delay == 0L ? interval : delay);
@@ -2759,7 +2759,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     + " worldPos=" + first.worldPos()
                     + " expected=" + first.expected()
                     + " actualState=" + first.actualState()
-                    + " actualBlock=" + first.actualState().getBlock().builtInRegistryHolder().key().ResourceLocation()
+                    + " actualBlock=" + first.actualState().getBlock().builtInRegistryHolder().key().location()
                     + " actualBlockEntity=" + (actualBlockEntity == null ? "none" : actualBlockEntity.getClass().getSimpleName());
         }
 
@@ -3435,7 +3435,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ChunkPos controllerChunk = new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4);
         for (ChunkPos chunkPos : structure.criticalChunks()) {
             if (chunkPos.equals(controllerChunk)) continue;
-            if (!level.hasChunk(chunkPos.x(), chunkPos.z())) return false;
+            if (!level.hasChunk(chunkPos.x, chunkPos.z)) return false;
         }
         return true;
     }
