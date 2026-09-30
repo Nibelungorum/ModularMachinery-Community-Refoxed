@@ -13,11 +13,10 @@ import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.IRecipeManager;
-import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -63,7 +62,6 @@ class JeiRuntimeReloaderTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        Items.IRON_NUGGET.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         JeiRuntimeReloader.setClientExecutorForTesting(Runnable::run);
     }
 
@@ -140,7 +138,7 @@ class JeiRuntimeReloaderTest {
         ResourceLocation machineId = MMCR.id("test_machine_name");
         ResourceLocation recipeId = MMCR.id("initial_kubejs_recipe");
         MachineRecipe recipe = RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)));
         JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
         JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
@@ -158,7 +156,7 @@ class JeiRuntimeReloaderTest {
         ResourceLocation machineId = MMCR.id("test_machine_name");
         ResourceLocation recipeId = MMCR.id("readded_runtime_recipe");
         MachineRecipe recipe = RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)));
         JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
         JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
@@ -239,7 +237,7 @@ class JeiRuntimeReloaderTest {
         ResourceLocation machineId = MMCR.id("test_machine_name");
         ResourceLocation staticRecipeId = MMCR.id("pre_existing_static_recipe");
         RecipeRegistry.registerStatic(RecipeTestSupport.create(staticRecipeId, machineId, 20, List.of(),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))));
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1))));
         JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
@@ -261,7 +259,7 @@ class JeiRuntimeReloaderTest {
                         new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))),
                         PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY)),
                 Map.of(recipeId, RecipeTestSupport.create(recipeId, recipePoolId, 20, List.of(),
-                        List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)))),
+                        List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)))),
                 Map.of(), Map.of(), Map.of(machineId, List.of(recipePoolId)), 1L);
     }
 
@@ -279,9 +277,9 @@ class JeiRuntimeReloaderTest {
     }
 
     private static final class FakeRecipeManager {
-        private final List<IRecipeType<?>> addedTypes = new ArrayList<>();
+        private final List<RecipeType<?>> addedTypes = new ArrayList<>();
         private final List<ResourceLocation> addedRecipeIds = new ArrayList<>();
-        private final List<IRecipeType<?>> hiddenTypes = new ArrayList<>();
+        private final List<RecipeType<?>> hiddenTypes = new ArrayList<>();
         private final List<ResourceLocation> hiddenRecipeIds = new ArrayList<>();
         private final Set<ResourceLocation> hiddenRecipes = new LinkedHashSet<>();
         private final List<ResourceLocation> visibleRecipeIds = new ArrayList<>();
@@ -297,7 +295,7 @@ class JeiRuntimeReloaderTest {
                             if (failNextAdd.compareAndSet(true, false)) {
                                 throw new IllegalStateException("synthetic JEI reload failure");
                             }
-                            addedTypes.add((IRecipeType<?>) args[0]);
+                            addedTypes.add((RecipeType<?>) args[0]);
                             ((List<?>) args[1]).stream()
                                     .map(MachineRecipeDisplay.class::cast)
                                     .map(MachineRecipeDisplay::recipeId)
@@ -310,7 +308,7 @@ class JeiRuntimeReloaderTest {
                             return null;
                         }
                         if (method.getName().equals("hideRecipes")) {
-                            hiddenTypes.add((IRecipeType<?>) args[0]);
+                            hiddenTypes.add((RecipeType<?>) args[0]);
                             Collection<?> displays = (Collection<?>) args[1];
                             assertThat(displays).allMatch(MachineRecipeDisplay.class::isInstance);
                             displays.stream()
@@ -338,7 +336,7 @@ class JeiRuntimeReloaderTest {
                     });
         }
 
-        List<IRecipeType<?>> addedTypes() {
+        List<RecipeType<?>> addedTypes() {
             return addedTypes;
         }
 
@@ -346,7 +344,7 @@ class JeiRuntimeReloaderTest {
             return addedRecipeIds;
         }
 
-        List<IRecipeType<?>> hiddenTypes() {
+        List<RecipeType<?>> hiddenTypes() {
             return hiddenTypes;
         }
 

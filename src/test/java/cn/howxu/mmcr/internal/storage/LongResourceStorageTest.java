@@ -37,9 +37,9 @@ class LongResourceStorageTest {
         BulkItemStorage storage = new BulkItemStorage(100L, () -> {});
         ItemStack iron = new ItemStack(Items.IRON_INGOT, 30);
 
-        assertThat(storage.insertItem(0, iron, true)).isEmpty();
+        assertThat(storage.insertItem(0, iron, true).isEmpty()).isTrue();
         assertThat(storage.amount(0)).isZero();
-        assertThat(storage.insertItem(0, iron, false)).isEmpty();
+        assertThat(storage.insertItem(0, iron, false).isEmpty()).isTrue();
 
         assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), iron)).isTrue();
         assertThat(storage.resource(0).getCount()).isEqualTo(1);
@@ -63,7 +63,7 @@ class LongResourceStorageTest {
         assertThat(storage.amount(0)).isEqualTo(amount);
         assertThat(storage.getStackInSlot(0).getCount()).isEqualTo(Integer.MAX_VALUE);
         assertThat(storage.forceExtract(0, amount, false)).isEqualTo(amount);
-        assertThat(storage.resource(0)).isEmpty();
+        assertThat(storage.resource(0).isEmpty()).isTrue();
     }
 
     @Test
@@ -86,7 +86,7 @@ class LongResourceStorageTest {
         assertThat(drained.getAmount()).isEqualTo(water.getAmount());
 
         assertThat(storage.amount(0)).isZero();
-        assertThat(storage.resource(0)).isEmpty();
+        assertThat(storage.resource(0).isEmpty()).isTrue();
         assertThat(changes).hasValue(2);
     }
 
@@ -96,7 +96,7 @@ class LongResourceStorageTest {
         LongFluidStorage storage = new LongFluidStorage(amount + 1L, () -> {});
         FluidStack water = new FluidStack(Fluids.WATER, 1);
 
-        assertThat(storage.forceInsert(water, amount, false)).isEqualTo(amount);
+        assertThat(storage.forceInsert(0, water, amount, false)).isEqualTo(amount);
         assertThat(storage.getAmountAsLong()).isEqualTo(amount);
         assertThat(storage.getFluidInTank(0).getAmount()).isEqualTo(Integer.MAX_VALUE);
     }

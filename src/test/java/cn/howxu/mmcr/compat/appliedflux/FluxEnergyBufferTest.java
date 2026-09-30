@@ -50,7 +50,7 @@ class FluxEnergyBufferTest {
         assertThat(buffer.amount()).isEqualTo(120L);
         assertThat(buffer.reserved()).isEqualTo(20L);
         assertThat(buffer.idleExcess()).isEqualTo(100L);
-        assertThat(buffer.idleTicks()).isZero();
+        assertThat(buffer.isIdleReady()).isFalse();
     }
 
     @Test

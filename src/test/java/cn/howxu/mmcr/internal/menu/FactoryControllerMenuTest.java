@@ -36,7 +36,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void selected_thread_falls_back_to_the_base_lane_when_removed() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(snapshot(0, 1));
         menu.selectThread(1);
         assertThat(menu.selectedThreadIndex()).isEqualTo(1);
@@ -47,7 +47,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void empty_snapshot_keeps_the_base_thread_visible() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
 
         menu.applySnapshot(FactorySnapshot.empty());
 
@@ -56,7 +56,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void current_parallelism_uses_the_selected_active_thread() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 24L, false,
                 List.of(activeThread(0, 12), activeThread(1, 8)), "Factory", 0, null, List.of(), 0, 1));
 
@@ -68,7 +68,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void inactive_thread_reports_zero_parallelism_and_failure_is_exposed() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
          menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 1, 0, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, false, "", 0, 0, 1,
                         "gui.mmcr.controller.failure.missing_input")),
@@ -80,7 +80,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void player_inventory_is_shifted_right_of_factory_thread_list() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
 
         assertThat(menu.slots.getFirst().x).isEqualTo(112);
         assertThat(menu.slots.getFirst().y).isEqualTo(132);
@@ -90,7 +90,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void matched_stage_accessor_reads_from_snapshot() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 24L, false,
                 List.of(activeThread(0, 12), activeThread(1, 8)), "Factory", 0, null, List.of(), 4, 10));
 
@@ -104,7 +104,7 @@ class FactoryControllerMenuTest {
         var firstPool = MMCR.id("factory_menu_recipe_pool_first");
         var secondPool = MMCR.id("factory_menu_recipe_pool_second");
         MachineRegistry.replaceClientRecipePools(java.util.Map.of(machineId, List.of(firstPool, secondPool)));
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 1, 0, 1L, false,
                 List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "Factory", 0, null, List.of(), 0, 1,
                 machineId.toString(), secondPool.toString()));

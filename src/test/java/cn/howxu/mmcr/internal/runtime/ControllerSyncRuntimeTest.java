@@ -333,7 +333,7 @@ class ControllerSyncRuntimeTest {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
         ItemStack inputStack = new ItemStack(Items.IRON_INGOT, 4);
         inputStack.set(DataComponents.MAX_STACK_SIZE, 64);
-        input.itemStorage().forceInsert(0, inputStack, inputStack.getCount(), false);
+        input.itemHandler().forceInsert(0, inputStack, inputStack.getCount(), false);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Initial Threads", pattern,

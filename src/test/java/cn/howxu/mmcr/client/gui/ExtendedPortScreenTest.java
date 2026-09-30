@@ -9,6 +9,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -80,11 +81,11 @@ class ExtendedPortScreenTest {
 
         boolean textScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
         int offsetAfterTextScroll = screen.firstLine();
-        pageButton.onPress(null);
+        pageButton.onPress();
         int offsetAfterOpeningAutoIO = screen.firstLine();
         boolean autoIOScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
         int offsetAfterAutoIOScroll = screen.firstLine();
-        pageButton.onPress(null);
+        pageButton.onPress();
         int offsetAfterReturningToText = screen.firstLine();
         boolean reopenedTextScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
         int reopenedTextOffset = screen.firstLine();
@@ -148,7 +149,7 @@ class ExtendedPortScreenTest {
         var stack = Items.ENCHANTED_GOLDEN_APPLE.getDefaultInstance();
         stack.set(DataComponents.CUSTOM_NAME, Component.literal("Styled apple").withStyle(ChatFormatting.AQUA));
         ItemStorageEntry entry = new ItemStorageEntry(0, stack, 1L, 64L);
-        Component styledName = entry.resource().getStyledHoverName();
+        Component styledName = entry.resource().getHoverName();
 
         assertThat(ExtendedItemScreen.displayLines(List.of(entry)).getFirst().getSiblings().getFirst())
                 .isEqualTo(styledName);
@@ -240,6 +241,10 @@ class ExtendedPortScreenTest {
                     int.class, int.class, ResourceLocation.class);
             method.setAccessible(true);
             return (Button) method.invoke(this, 0, 0, BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+        }
+
+        @Override
+        protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         }
 
         private int firstLine() {

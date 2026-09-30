@@ -41,7 +41,7 @@ class MachineControllerMenuTest {
 
     @Test
     void client_menu_applies_machine_state_and_connected_host_from_the_final_payload() {
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
 
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "mmcr:recipe", true, true,
                 List.of("mmcr:steel"), "mmcr:test_cube", 2, 3, true,
@@ -64,7 +64,7 @@ class MachineControllerMenuTest {
         ResourceLocation firstPool = MMCR.id("menu_recipe_pool_first");
         ResourceLocation secondPool = MMCR.id("menu_recipe_pool_second");
         MachineRegistry.replaceClientRecipePools(Map.of(machineId, List.of(firstPool, secondPool)));
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         menu.applyClientSnapshot(new PktMachineStatePayload(BlockPos.ZERO, "", true, false, List.of(),
                 machineId.toString(), 0, 0, false, "", CraftingStatus.Status.IDLE, "", null, true, false,
                 0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(), 0, 1, secondPool.toString()));
@@ -76,7 +76,7 @@ class MachineControllerMenuTest {
 
     @Test
     void client_menu_keeps_parallel_controller_count_from_payload_after_data_slot_update() {
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "mmcr:recipe", true, true,
                 List.of(), "mmcr:test_cube", 0, 0, false, "",
                 CraftingStatus.Status.CRAFTING, "", null, true, false,
@@ -94,7 +94,7 @@ class MachineControllerMenuTest {
         MachineControllerMenu.writeClientOpenData(buffer, new BlockPos(7, 8, 9),
                 MMCR.id("test_cube"), MMCR.id("host"), 1, true, 4);
 
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null), buffer);
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null), buffer);
 
         assertThat(menu.controllerPos()).isEqualTo(new BlockPos(7, 8, 9));
         assertThat(menu.machineId()).isEqualTo(MMCR.id("test_cube"));
@@ -107,7 +107,7 @@ class MachineControllerMenuTest {
 
     @Test
     void module_menu_state_keeps_role_and_connected_host_identity_across_payload_updates() {
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null),
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null),
                 menuBuffer(new BlockPos(7, 8, 9), MMCR.id("module"), MMCR.id("host"), 2, true, 1));
 
         assertThat(menu.isModuleController()).isTrue();
@@ -128,7 +128,7 @@ class MachineControllerMenuTest {
 
     @Test
     void matched_stage_accessor_reads_from_client_snapshot() {
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "", true, false,
                 List.of(), "", 0, 0, false, "", CraftingStatus.Status.IDLE, "", null,
                 true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(), 4, 10));
@@ -139,7 +139,7 @@ class MachineControllerMenuTest {
 
     @Test
     void matched_stage_accessor_falls_back_when_no_snapshot_present() {
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
 
         assertThat(menu.matchedStage()).isZero();
         assertThat(menu.stageCount()).isEqualTo(1);

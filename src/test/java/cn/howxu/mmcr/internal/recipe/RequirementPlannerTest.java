@@ -67,6 +67,7 @@ import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -627,8 +628,8 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().commit()).isTrue();
-        assertThat(bus.itemStorage().amount(0)).isEqualTo(96L);
-        assertThat(bus.itemStorage().resource(0).get(DataComponents.CUSTOM_NAME))
+        assertThat(bus.itemHandler().amount(0)).isEqualTo(96L);
+        assertThat(bus.itemHandler().resource(0).get(DataComponents.CUSTOM_NAME))
                 .isEqualTo(Component.literal("data output"));
     }
 
@@ -648,7 +649,7 @@ class RequirementPlannerTest {
                 .satisfies(simulation -> assertThat(simulation.requested())
                         .isEqualTo((long) Integer.MAX_VALUE * 2L));
         assertThat(result.plan().commit()).isTrue();
-        assertThat(bus.itemStorage().amount(0)).isEqualTo((long) Integer.MAX_VALUE * 2L);
+        assertThat(bus.itemHandler().amount(0)).isEqualTo((long) Integer.MAX_VALUE * 2L);
     }
 
     @Test
@@ -660,11 +661,11 @@ class RequirementPlannerTest {
         ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
         long requested = (long) Integer.MAX_VALUE * 2L;
         long existing = Long.MAX_VALUE - 1L;
-        bus.itemStorage().forceInsert(0, output, existing, false);
-        for (int slot = 1; slot < bus.itemStorage().size(); slot++) {
-            bus.itemStorage().forceInsert(slot, new ItemStack(Items.COBBLESTONE), Long.MAX_VALUE, false);
+        bus.itemHandler().forceInsert(0, output, existing, false);
+        for (int slot = 1; slot < bus.itemHandler().size(); slot++) {
+            bus.itemHandler().forceInsert(slot, new ItemStack(Items.COBBLESTONE), Long.MAX_VALUE, false);
         }
-        assertThat(bus.itemStorage().amount(0)).isEqualTo(existing);
+        assertThat(bus.itemHandler().amount(0)).isEqualTo(existing);
 
         var full = new CraftingContext(bus.capabilitySnapshot())
                 .planOutputRequirements(List.of(requirement), 2L, false);
@@ -680,7 +681,7 @@ class RequirementPlannerTest {
                     assertThat(simulation.accepted()).isEqualTo(1L);
                 });
         assertThat(partial.plan().commit()).isTrue();
-        assertThat(bus.itemStorage().amount(0)).isEqualTo(Long.MAX_VALUE);
+        assertThat(bus.itemHandler().amount(0)).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test
@@ -1309,7 +1310,7 @@ class RequirementPlannerTest {
 
     @Test
     void oneCombinedInputPlansBothItemAndFluidRequirements() {
-        IOPortBlockEntity port = port("combined_input_reinforced");
+        CombinedPortBlockEntity port = (CombinedPortBlockEntity) port("combined_input_reinforced");
         insertCombinedContents(port, 2, 1_000L);
         ComponentRuntime runtime = runtimeFor(port);
 
@@ -1323,13 +1324,13 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
-        assertThat(port.itemStorage().amount(0)).isZero();
-        assertThat(port.fluidStorage().amount(0)).isZero();
+        assertThat(port.itemHandler().amount(0)).isZero();
+        assertThat(port.fluidHandler(null).amount(0)).isZero();
     }
 
     @Test
     void oneCombinedOutputPlansBothItemAndFluidOutputs() {
-        IOPortBlockEntity port = port("combined_output_reinforced");
+        CombinedPortBlockEntity port = (CombinedPortBlockEntity) port("combined_output_reinforced");
         ComponentRuntime runtime = runtimeFor(port);
 
         var result = new RequirementPlanner().plan(
@@ -1349,13 +1350,13 @@ class RequirementPlannerTest {
         assertThat(result.plan().outputSimulations().get(1).accepted()).isEqualTo(1_000L);
         assertThat(result.plan().outputSimulations().get(1).fit()).isEqualTo(OutputFit.FULL);
         assertThat(result.plan().commit()).isTrue();
-        assertThat(port.itemStorage().amount(0)).isEqualTo(2L);
-        assertThat(port.fluidStorage().amount(0)).isEqualTo(1_000L);
+        assertThat(port.itemHandler().amount(0)).isEqualTo(2L);
+        assertThat(port.fluidHandler(null).amount(0)).isEqualTo(1_000L);
     }
 
     @Test
     void itemAndFluidReservationsDoNotCollide() {
-        IOPortBlockEntity port = port("combined_input_reinforced");
+        CombinedPortBlockEntity port = (CombinedPortBlockEntity) port("combined_input_reinforced");
         insertCombinedContents(port, 2, 2_000L);
         ComponentRuntime runtime = runtimeFor(port);
 
@@ -1370,13 +1371,13 @@ class RequirementPlannerTest {
         assertThat(result.plan().parallelism()).isEqualTo(2);
         assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
-        assertThat(port.itemStorage().amount(0)).isZero();
-        assertThat(port.fluidStorage().amount(0)).isZero();
+        assertThat(port.itemHandler().amount(0)).isZero();
+        assertThat(port.fluidHandler(null).amount(0)).isZero();
     }
 
     @Test
     void repeatedItemRequirementsShareTheSameItemStorageReservation() {
-        IOPortBlockEntity port = port("combined_input_reinforced");
+        CombinedPortBlockEntity port = (CombinedPortBlockEntity) port("combined_input_reinforced");
         insertCombinedContents(port, 2, 0L);
         ComponentRuntime runtime = runtimeFor(port);
 
@@ -1390,7 +1391,7 @@ class RequirementPlannerTest {
         assertThat(result.plan().parallelism()).isEqualTo(1);
         assertThat(result.plan().requirements()).allSatisfy(plan -> assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
-        assertThat(port.itemStorage().amount(0)).isZero();
+        assertThat(port.itemHandler().amount(0)).isZero();
     }
 
     @Test
@@ -1662,9 +1663,10 @@ class RequirementPlannerTest {
     }
 
     private static void insertCombinedContents(IOPortBlockEntity port, long itemAmount, long fluidAmount) {
-        assertThat(port.itemStorage().forceInsert(0, ironResource(), itemAmount, false)).isEqualTo(itemAmount);
+        CombinedPortBlockEntity combined = (CombinedPortBlockEntity) port;
+        assertThat(combined.itemHandler().forceInsert(0, ironResource(), itemAmount, false)).isEqualTo(itemAmount);
         if (fluidAmount > 0L) {
-            assertThat(port.fluidStorage().forceInsert(0, new FluidStack(Fluids.WATER, 1), fluidAmount, false))
+            assertThat(combined.fluidHandler(null).forceInsert(0, new FluidStack(Fluids.WATER, 1), fluidAmount, false))
                     .isEqualTo(fluidAmount);
         }
     }

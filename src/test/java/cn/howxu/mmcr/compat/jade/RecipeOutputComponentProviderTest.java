@@ -84,7 +84,7 @@ class RecipeOutputComponentProviderTest {
         Holder.Reference<Chemical> chemical = registerChemical("jade_render_test");
         CompoundTag data = new CompoundTag();
         RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
-                new LoadedChemicalOutput(chemical.key().identifier(), 200L, 1F), 200L)));
+                new LoadedChemicalOutput(chemical.key().location(), 200L, 1F), 200L)));
 
         List<Object> calls = collect(data);
 
@@ -101,7 +101,7 @@ class RecipeOutputComponentProviderTest {
     void chemicalOutputContributesItsConfiguredAmountToControllerDisplay() {
         Holder.Reference<Chemical> chemical = registerChemical("jade_output_amount_test");
 
-        assertThat(MachineOutput.scaledAmount(new LoadedChemicalOutput(chemical.key().identifier(), 200L, 1F)))
+        assertThat(MachineOutput.scaledAmount(new LoadedChemicalOutput(chemical.key().location(), 200L, 1F)))
                 .isEqualTo(200L);
     }
 
@@ -155,17 +155,17 @@ class RecipeOutputComponentProviderTest {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", name));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        return registry.get(key).orElseGet(() -> {
-            registry.unfreeze(true);
+        return registry.getHolder(key).orElseGet(() -> {
+            registry.unfreeze();
             Chemical value = new Chemical(ChemicalBuilder.builder()) {
                 @Override
                 public boolean isRadioactive() {
                     return false;
                 }
             };
-            Registry.register(registry, key.identifier(), value);
+            Registry.registerForHolder(registry, key, value);
             registry.freeze();
-            return registry.get(key).orElseThrow();
+            return registry.getHolder(key).orElseThrow();
         });
     }
 }

@@ -20,10 +20,8 @@ import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
-import net.minecraft.core.HolderSet;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -62,16 +60,13 @@ class MachineRecipeCategoryTransferTest {
             RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
         }
         LoadedChemicalRequirement.installUnavailableHandler();
-        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         registerChemical("oxygen");
         registerChemical("hydrogen");
     }
 
     @Test
     void transferSlotsContainAllItemAndFluidInputsAndOutputs() throws Exception {
-        FluidIngredient fluidInput = FluidIngredient.of(HolderSet.direct(
-                Fluids.WATER.builtInRegistryHolder(), Fluids.LAVA.builtInRegistryHolder()));
+        FluidIngredient fluidInput = FluidIngredient.of(Fluids.WATER, Fluids.LAVA);
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_transfer_slots"), MMCR.id("blast_furnace"), 20,
                 List.of(
@@ -79,7 +74,7 @@ class MachineRecipeCategoryTransferTest {
                         new MachineIngredient.FluidIngredient(fluidInput, 250)),
                 List.of(new ItemStack(Items.GOLD_INGOT, 3)),
                 List.of(), 0, 1, false,
-                List.of(new FluidStack(Fluids.LAVA, 500, DataComponentPatch.builder()
+                List.of(new FluidStack(Fluids.LAVA.builtInRegistryHolder(), 500, DataComponentPatch.builder()
                         .set(DataComponents.CUSTOM_NAME, Component.literal("Fluid output"))
                         .build())));
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
@@ -142,12 +137,12 @@ class MachineRecipeCategoryTransferTest {
         assertThat(slots.get(0).chemicalAdds()).singleElement()
                 .satisfies(add -> {
                     assertThat(add.type()).isEqualTo(MekanismJEI.TYPE_CHEMICAL);
-                    assertThat(add.stack().amount()).isEqualTo(1_250);
+                    assertThat(add.stack().getAmount()).isEqualTo(1_250);
                 });
         assertThat(slots.get(1).chemicalAdds()).singleElement()
                 .satisfies(add -> {
                     assertThat(add.type()).isEqualTo(MekanismJEI.TYPE_CHEMICAL);
-                    assertThat(add.stack().amount()).isEqualTo(750);
+                    assertThat(add.stack().getAmount()).isEqualTo(750);
                 });
     }
 
@@ -315,9 +310,9 @@ class MachineRecipeCategoryTransferTest {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.parse("mekanism:" + path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        if (registry.get(key).isPresent()) return;
-        registry.unfreeze(true);
-        Registry.register(registry, key.identifier(), new Chemical(ChemicalBuilder.builder()) {
+        if (registry.getHolder(key).isPresent()) return;
+        registry.unfreeze();
+        Registry.register(registry, key.location(), new Chemical(ChemicalBuilder.builder()) {
             @Override
             public boolean isRadioactive() {
                 return false;

@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.mekanism;
 
-import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
@@ -17,10 +16,12 @@ import mekanism.api.AutomationType;
 import mekanism.api.Action;
 import mekanism.api.IContentsListener;
 import mekanism.api.MekanismAPI;
+import mekanism.api.chemical.BasicChemicalTank;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalTank;
+import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import mekanism.api.heat.HeatAPI;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import net.minecraft.core.Holder;
@@ -98,7 +99,8 @@ class LoadedPortStorageTest {
         ChemicalStack chemical = chemical("persisted_long_amount", false);
         IChemicalTank source = LoadedPortStorage.normalChemicalTank(amount, listener());
         source.setStack(chemical.copyWithAmount(amount));
-        HolderLookup.Provider registries = HolderLookup.Provider.create(Stream.of(MekanismAPI.CHEMICAL_REGISTRY));
+        HolderLookup.Provider registries = HolderLookup.Provider.create(
+                Stream.of(MekanismAPI.CHEMICAL_REGISTRY.asLookup()));
 
         CompoundTag saved = source.serializeNBT(registries);
         IChemicalTank restored = LoadedPortStorage.normalChemicalTank(amount, listener());
@@ -154,18 +156,20 @@ class LoadedPortStorageTest {
                 MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        return registry.get(key).orElseGet(() -> {
-            registry.unfreeze(true);
-            Chemical value = new Chemical(ChemicalBuilder.builder()) {
-                @Override
-                public boolean isRadioactive() {
-                    return radioactive;
-                }
-            };
-            Registry.register(registry, key.identifier(), value);
-            registry.freeze();
-            return registry.get(key).orElseThrow();
-        });
+        if (registry.get(key) != null) return registry.getHolder(key).orElseThrow();
+        registry.unfreeze();
+        if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+            Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+        }
+        Chemical value = new Chemical(ChemicalBuilder.builder()) {
+            @Override
+            public boolean isRadioactive() {
+                return radioactive;
+            }
+        };
+        Registry.registerForHolder(registry, key, value);
+        registry.freeze();
+        return registry.getHolder(key).orElseThrow();
     }
 
     private static IContentsListener listener() {
@@ -175,11 +179,15 @@ class LoadedPortStorageTest {
 
     private static final class LoadedPortStorage {
         private static IChemicalTank normalChemicalTank(long capacity, IContentsListener listener) {
-            return ChemicalPortBlockEntity.normalChemicalTank(capacity, listener);
+            return BasicChemicalTank.createModern(capacity, (stack, automation) -> true,
+                    (stack, automation) -> true, stack -> !stack.isRadioactive(),
+                    ChemicalAttributeValidator.ALWAYS_ALLOW, listener);
         }
 
         private static IChemicalTank radioactiveChemicalTank(long capacity, IContentsListener listener) {
-            return ChemicalPortBlockEntity.radioactiveChemicalTank(capacity, listener);
+            return BasicChemicalTank.createModern(capacity, (stack, automation) -> true,
+                    (stack, automation) -> true, ChemicalStack::isRadioactive,
+                    ChemicalAttributeValidator.ALWAYS_ALLOW, listener);
         }
 
         private static BasicHeatCapacitor heatCapacitor(

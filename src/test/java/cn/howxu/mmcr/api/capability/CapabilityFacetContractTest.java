@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.capability.CapabilityContractAssertions;
 import cn.howxu.mmcr.test.capability.TestExchangeFacet;
 import cn.howxu.mmcr.test.capability.TestNetworkParticipantFacet;
@@ -21,6 +22,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -34,6 +36,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class CapabilityFacetContractTest {
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
     @Test
     void native_handler_facets_preserve_handler_identity_and_contents() {
         LongItemStorage items = new LongItemStorage(1, 10L, () -> {});
@@ -72,7 +79,7 @@ class CapabilityFacetContractTest {
         assertThat(facet.prepareScalar(new CapabilityRequests.ValueRequest(
                 facet.type(), IOType.OUTPUT, 1L, 2L, true)).commit().success()).isTrue();
         assertThat(storage.getAmountAsLong()).isEqualTo(2L);
-        assertThatThrownBy(() -> facet.prepareScalar(new CapabilityRequests.ValueRequest(
+        assertThatThrownBy(() -> facet.prepare(new CapabilityRequests.ValueRequest(
                 facet.type(), IOType.INPUT, 1L, 1L, false)))
                 .isInstanceOf(IllegalArgumentException.class);
     }

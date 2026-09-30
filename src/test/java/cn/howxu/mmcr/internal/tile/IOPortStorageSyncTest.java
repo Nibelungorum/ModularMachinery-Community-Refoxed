@@ -5,6 +5,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
@@ -31,7 +32,7 @@ class IOPortStorageSyncTest {
         TrackingPort port = new TrackingPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_ITEM_INPUT.id()).get().defaultBlockState());
 
-        ((LongItemStorage) port.itemStorage()).setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        ((LongItemStorage) port.itemHandler()).setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
         assertThat(port.snapshotNotifications).isEqualTo(1);
 
         port.setAutoIOEnabled(true);
@@ -44,7 +45,7 @@ class IOPortStorageSyncTest {
         TrackingItemPort port = new TrackingItemPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
 
-        port.itemStorage().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        port.itemHandler().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
 
         assertThat(port.snapshotNotifications).isEqualTo(1);
     }
@@ -53,16 +54,16 @@ class IOPortStorageSyncTest {
     void every_input_item_or_fluid_storage_host_notifies_recipe_inputs() {
         TrackingPort extendedItem = new TrackingPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_ITEM_INPUT.id()).get().defaultBlockState());
-        ((LongItemStorage) extendedItem.itemStorage()).setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        ((LongItemStorage) extendedItem.itemHandler()).setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
 
         TrackingFluidPort extendedFluid = new TrackingFluidPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_FLUID_INPUT.id()).get().defaultBlockState());
-        extendedFluid.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
+        extendedFluid.fluidHandler(Direction.NORTH).setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
 
         TrackingCombinedPort combined = new TrackingCombinedPort(POS,
                 ModBlocks.BLOCKS.get(PortKinds.COMBINED_INPUT.id()).get().defaultBlockState());
-        combined.itemStorage().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
-        combined.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
+        combined.itemHandler().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        combined.fluidHandler(Direction.NORTH).setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
 
         assertThat(extendedItem.recipeInputNotifications).isEqualTo(1);
         assertThat(extendedFluid.recipeInputNotifications).isEqualTo(1);

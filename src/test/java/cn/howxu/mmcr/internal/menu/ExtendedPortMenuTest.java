@@ -148,7 +148,7 @@ class ExtendedPortMenuTest {
     }
 
     private static Inventory emptyInventory() {
-        return new Inventory(null, null);
+        return new Inventory(null);
     }
 
     private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {

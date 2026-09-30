@@ -250,7 +250,12 @@ public final class PreviewLevel extends Level {
         MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME,
                 Lifecycle.stable());
         Biome biome = new Biome.BiomeBuilder().hasPrecipitation(false).temperature(0.8F).downfall(0.0F)
-                .specialEffects(new BiomeSpecialEffects.Builder().waterColor(0x3F76E4).build())
+                .specialEffects(new BiomeSpecialEffects.Builder()
+                        .waterColor(0x3F76E4)
+                        .waterFogColor(0x050533)
+                        .fogColor(0xC0D8FF)
+                        .skyColor(0x78A7FF)
+                        .build())
                 .mobSpawnSettings(new MobSpawnSettings.Builder().build())
                 .generationSettings(new BiomeGenerationSettings.PlainBuilder().build())
                 .build();

@@ -22,6 +22,10 @@ runs {
             runtime("maven.modrinth:${tiab_id}:${tiab_version}")
             // modern ui
             // runtime("maven.modrinth:${mui_id}:${mui_version}")
+            // JECharacters
+            runtime("curse.maven:${jec_id}:${jec_version}")
+            // CustomSkinLoader
+            runtime("curse.maven:${csl_id}:${csl_version}")
         }
     }
 

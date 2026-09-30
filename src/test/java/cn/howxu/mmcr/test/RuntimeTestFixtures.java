@@ -230,7 +230,7 @@ public final class RuntimeTestFixtures {
         private long gameTime;
 
         private TestServerLevel() {
-            super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
+            super(null, null, null, null, Level.OVERWORLD, null, null, false, 0L, List.of(), false, null);
         }
 
         @Override public BlockState getBlockState(BlockPos pos) {
@@ -256,7 +256,7 @@ public final class RuntimeTestFixtures {
 
         @Override public long getGameTime() { return Math.max(1L, gameTime); }
 
-        @Override public RecipeManager recipeAccess() {
+        @Override public RecipeManager getRecipeManager() {
             return RECIPE_MANAGER;
         }
 

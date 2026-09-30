@@ -58,7 +58,7 @@ class PktAutoIOConfigPayloadTest {
 
     @Test
     void enabled_set_accepts_port_menu_without_side() throws Exception {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null), BlockPos.ZERO);
         ServerPlayer player = playerWith(menu);
 
         assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
@@ -104,7 +104,7 @@ class PktAutoIOConfigPayloadTest {
 
     @Test
     void side_set_requires_side() throws Exception {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null), BlockPos.ZERO);
         ServerPlayer player = playerWith(menu);
 
         assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_SIDE, null)).isFalse();
@@ -113,7 +113,7 @@ class PktAutoIOConfigPayloadTest {
 
     @Test
     void wrong_position_is_rejected_for_set_action() throws Exception {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null), BlockPos.ZERO);
         ServerPlayer player = playerWith(menu);
 
         assertThat(PktAutoIOConfigPayload.canUpdate(player, new BlockPos(1, 0, 0), AutoIOAction.SET_ENABLED, null)).isFalse();
@@ -121,7 +121,7 @@ class PktAutoIOConfigPayloadTest {
 
     @Test
     void still_invalid_menu_is_rejected_before_update() throws Exception {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO) {
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null), BlockPos.ZERO) {
             @Override
             public boolean stillValid(Player player) {
                 return false;
@@ -134,7 +134,7 @@ class PktAutoIOConfigPayloadTest {
 
     @Test
     void missing_capability_identity_is_rejected_before_update() throws Exception {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO);
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null), BlockPos.ZERO);
         ServerPlayer player = playerWith(menu);
 
         assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, null,
@@ -144,7 +144,7 @@ class PktAutoIOConfigPayloadTest {
     @Test
     void port_update_requires_the_menu_owner_to_be_the_target_port() {
         ItemInputBusBlockEntity owner = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null), owner);
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null), owner);
         ItemInputBusBlockEntity replacement = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
 
         assertThat(PktAutoIOConfigPayload.ownsMenu(menu, owner)).isTrue();
@@ -159,7 +159,7 @@ class PktAutoIOConfigPayloadTest {
 
     private static Inventory testInventory() throws Exception {
         Player player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
-        return new Inventory(player, null);
+        return new Inventory(player);
     }
 
     private static Unsafe unsafe() throws Exception {

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import java.lang.reflect.Field;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -128,6 +129,10 @@ class ScrollableTextScreenTest {
 
         private int firstLine() {
             return firstVisibleTextLine();
+        }
+
+        @Override
+        protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         }
 
         @Override

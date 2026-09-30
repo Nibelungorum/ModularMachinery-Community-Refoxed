@@ -54,7 +54,7 @@ class CraftingRuntimeChemicalConsumptionTest {
         List<MachineRequirement> requirements = List.of(chemicalInput, itemInput);
 
         CraftingPlan plan = new CraftingPlan(List.of(
-                new RequirementPlan(0, 1L, List.of(transaction -> null), null),
+                new RequirementPlan(0, 1L, List.of(() -> null), null),
                 new RequirementPlan(1, 1L, List.of(), null)),
                 1L, Map.of(
                         0, RecipeModifier.IOType.INPUT,

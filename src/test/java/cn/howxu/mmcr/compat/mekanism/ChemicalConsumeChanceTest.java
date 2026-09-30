@@ -111,7 +111,7 @@ class ChemicalConsumeChanceTest {
         tank.setStack(new ChemicalStack(chemical, 1_000L));
         FakeChemicalPort port = new FakeChemicalPort(tank, IOType.INPUT);
         LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0F);
+                ChemicalIngredient.chemical(chemical.key().location(), 1_000L), 1F, List.of(), 0F);
         RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
 
         RequirementPlan plan = handler.plan(requirement, List.of(port), emptyContext());
@@ -130,7 +130,7 @@ class ChemicalConsumeChanceTest {
         tank.setStack(new ChemicalStack(chemical, 5_000L));
         FakeChemicalPort port = new FakeChemicalPort(tank, IOType.INPUT);
         LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
-                ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0.5F);
+                ChemicalIngredient.chemical(chemical.key().location(), 1_000L), 1F, List.of(), 0.5F);
         RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
         PlanningContext context = new PlanningContext(10L, 0, false, new PlanningReservations(), Map.of());
 
@@ -161,18 +161,20 @@ class ChemicalConsumeChanceTest {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        return registry.get(key).orElseGet(() -> {
-            registry.unfreeze(true);
-            Chemical value = new Chemical(ChemicalBuilder.builder()) {
-                @Override
-                public boolean isRadioactive() {
-                    return false;
-                }
-            };
-            Registry.register(registry, key.identifier(), value);
-            registry.freeze();
-            return registry.get(key).orElseThrow();
-        });
+        if (registry.get(key) != null) return registry.getHolder(key).orElseThrow();
+        registry.unfreeze();
+        if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+            Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+        }
+        Chemical value = new Chemical(ChemicalBuilder.builder()) {
+            @Override
+            public boolean isRadioactive() {
+                return false;
+            }
+        };
+        Registry.registerForHolder(registry, key, value);
+        registry.freeze();
+        return registry.getHolder(key).orElseThrow();
     }
 
     private static final class FakeChemicalPort implements LoadedMekanismBridge.ChemicalPort {

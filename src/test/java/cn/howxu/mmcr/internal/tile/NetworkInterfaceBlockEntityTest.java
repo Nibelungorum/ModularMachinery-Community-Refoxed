@@ -120,7 +120,7 @@ class NetworkInterfaceBlockEntityTest {
             }
         };
 
-        networkInterface.preRemoveSideEffects(BlockPos.ZERO, networkInterface.getBlockState());
+        networkInterface.onBlockRemoved();
 
         assertThat(removedFromPeers[0]).isTrue();
     }

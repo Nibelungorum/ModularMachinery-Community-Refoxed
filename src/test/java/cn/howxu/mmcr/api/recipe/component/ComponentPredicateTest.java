@@ -6,7 +6,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -33,7 +32,6 @@ class ComponentPredicateTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     @Test
@@ -58,7 +56,7 @@ class ComponentPredicateTest {
                                 Component.literal("Required")).getOrThrow()))));
 
         assertThat(predicates.exactPatch()).isPresent();
-        assertThat(predicates.exactPatch().orElseThrow().getPatch(DataComponents.CUSTOM_NAME).orElseThrow())
+        assertThat(predicates.exactPatch().orElseThrow().get(DataComponents.CUSTOM_NAME).orElseThrow())
                 .isEqualTo(Component.literal("Required"));
     }
 
@@ -89,7 +87,7 @@ class ComponentPredicateTest {
 
         assertThat(predicates.matches(sword, RegistryOps.create(JsonOps.INSTANCE, lookup))).isTrue();
         DataComponentPatch patch = predicates.exactPatch().orElseThrow();
-        assertThat(patch.getPatch(DataComponents.ENCHANTMENTS).orElseThrow().getLevel(sharpness)).isEqualTo(2);
+        assertThat(patch.get(DataComponents.ENCHANTMENTS).orElseThrow().getLevel(sharpness)).isEqualTo(2);
     }
 
     @Test

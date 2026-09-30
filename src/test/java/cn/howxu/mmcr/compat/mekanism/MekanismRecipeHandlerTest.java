@@ -13,7 +13,6 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
-import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -31,10 +30,6 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
-import cn.howxu.mmcr.api.capability.transfer.TransferContext;
-import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
-import cn.howxu.mmcr.api.capability.transfer.TransferResult;
-import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -43,13 +38,13 @@ import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalTank;
+import mekanism.api.chemical.attribute.ChemicalAttribute;
 import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import mekanism.api.datamaps.chemical.attribute.IChemicalAttribute;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -238,7 +233,13 @@ class MekanismRecipeHandlerTest {
         LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
         Holder.Reference<Chemical> chemical = registerChemical("attribute_rejected");
         ChemicalAttributeValidator rejectAttributes =
-                new ChemicalAttributeValidator.ChemicalAttributeValidatorLegacyAdapter() {
+                new ChemicalAttributeValidator() {
+            @SuppressWarnings("removal")
+            @Override
+            public boolean validate(ChemicalAttribute attribute) {
+                return false;
+            }
+
             @Override
             public boolean validate(IChemicalAttribute attribute) {
                 return false;
@@ -253,7 +254,7 @@ class MekanismRecipeHandlerTest {
         FakeChemicalPort port = new FakeChemicalPort(tank, IOType.OUTPUT);
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.output(chemical.key().identifier(), 100L, 1F),
+                LoadedChemicalRequirement.output(chemical.key().location(), 100L, 1F),
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -271,7 +272,7 @@ class MekanismRecipeHandlerTest {
 
         RequirementPlan planned = chemicalHandler().plan(
                 LoadedChemicalRequirement.input(
-                        ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L)),
+                        ChemicalIngredient.chemical(chemical.key().location(), 1_000L)),
                 List.of(port), testContext());
         RequirementPlan materialized = planned.materialize(1, new PlanningReservations(), null);
 
@@ -301,7 +302,7 @@ class MekanismRecipeHandlerTest {
 
         RequirementPlan result = chemicalHandler().plan(
                 LoadedChemicalRequirement.input(
-                        ChemicalIngredient.chemical(chemical.key().identifier(), 1L)),
+                        ChemicalIngredient.chemical(chemical.key().location(), 1L)),
                 List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -316,7 +317,7 @@ class MekanismRecipeHandlerTest {
         tank.setStack(new ChemicalStack(chemical, 1_000L));
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L)),
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().location(), 1L)),
                 List.of(new FakeChemicalPort(tank, IOType.OUTPUT)), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -328,7 +329,13 @@ class MekanismRecipeHandlerTest {
         LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
         Holder.Reference<Chemical> chemical = registerChemical("radioactive", true);
         ChemicalAttributeValidator rejectAttributes =
-                new ChemicalAttributeValidator.ChemicalAttributeValidatorLegacyAdapter() {
+                new ChemicalAttributeValidator() {
+            @SuppressWarnings("removal")
+            @Override
+            public boolean validate(ChemicalAttribute attribute) {
+                return false;
+            }
+
             @Override
             public boolean validate(IChemicalAttribute attribute) {
                 return false;
@@ -343,7 +350,7 @@ class MekanismRecipeHandlerTest {
                 new FakeChemicalTank(1_000L, rejectAttributes), IOType.OUTPUT, true);
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F),
+                LoadedChemicalRequirement.output(chemical.key().location(), 1L, 1F),
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -366,7 +373,7 @@ class MekanismRecipeHandlerTest {
                 new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.OUTPUT, false);
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F),
+                LoadedChemicalRequirement.output(chemical.key().location(), 1L, 1F),
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -381,7 +388,7 @@ class MekanismRecipeHandlerTest {
                 new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.OUTPUT, true);
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F),
+                LoadedChemicalRequirement.output(chemical.key().location(), 1L, 1F),
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -396,7 +403,7 @@ class MekanismRecipeHandlerTest {
                 new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT, false);
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L)),
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().location(), 1L)),
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -411,7 +418,7 @@ class MekanismRecipeHandlerTest {
                 new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT, true);
 
         RequirementPlan result = chemicalHandler().plan(
-                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L)),
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().location(), 1L)),
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
@@ -503,23 +510,26 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
-    void chemical_automatic_io_failures_use_typed_capability_commit_reasons() {
-        try (TransferStrategyRegistry.TestScope ignored = TransferStrategyRegistry.openTestScope()) {
-            new LoadedMekanismBridge().registerTransferPolicies();
-            TransferPolicy policy = TransferStrategyRegistry.policyFor(
-                    new CapabilityType(MekanismRecipeTypes.CHEMICAL)).orElseThrow();
+    void chemical_capability_operations_use_typed_commit_failures() {
+        Holder.Reference<Chemical> chemical = registerChemical("capability_operation");
+        ChemicalPortCapability capability = new ChemicalPortCapability(
+                new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT);
 
-            TransferResult unsupported = policy.transfer(TransferContext.simulate(
-                    new FakeChemicalPort(new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT),
-                    IOType.INPUT, Direction.NORTH, 1L));
-            assertAutomaticIoFailure(unsupported, BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        CapabilityResult unsupported = capability.prepare(new CapabilityRequests.ValueRequest(
+                new CapabilityType(MekanismRecipeTypes.CHEMICAL), IOType.INPUT, 1L, 1L, false)).commit();
+        assertThat(unsupported.success()).isFalse();
+        assertThat(unsupported.status().reason()).isSameAs(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        assertThat(unsupported.status().failure().trace().frames().getFirst().phase())
+                .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
 
-            ChemicalPortCapability capability = new ChemicalPortCapability(
-                    new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT);
-            TransferContext context = TransferContext.simulate(capability, IOType.INPUT, Direction.NORTH, 1L);
-            assertAutomaticIoFailure(policy.eject(context), BuiltinFailureReasons.NO_WORK);
-            assertAutomaticIoFailure(policy.transfer(context), BuiltinFailureReasons.NO_TARGET);
-        }
+        ChemicalStack resource = new ChemicalStack(chemical, 1L);
+        CapabilityResult missing = capability.prepare(new CapabilityRequests.ResourceRequest<>(
+                new CapabilityType(MekanismRecipeTypes.CHEMICAL), IOType.INPUT, 1L,
+                List.of(new CapabilityRequests.ResourceAction<>(0, resource, 1L, false)))).commit();
+        assertThat(missing.success()).isFalse();
+        assertThat(missing.status().reason()).isSameAs(MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+        assertThat(missing.status().failure().trace().frames().getFirst().phase())
+                .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
     }
 
     @Test
@@ -530,7 +540,7 @@ class MekanismRecipeHandlerTest {
         ChemicalStack resource = new ChemicalStack(chemical, 1L);
 
         ResourceWakeup chemicalInput = chemicalHandler().resourceWakeups(
-                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L))).getFirst();
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().location(), 1L))).getFirst();
         assertThat(chemicalInput.failureReasonIds()).contains(
                 BuiltinFailureReasons.MISSING_INPUT.id(), BuiltinFailureReasons.PER_TICK.id(),
                 MekanismFailureReasons.CHEMICAL_INPUT_MISSING.id());
@@ -539,7 +549,7 @@ class MekanismRecipeHandlerTest {
         assertThat(chemicalInput.matcher().test(ChemicalStack.EMPTY)).isFalse();
 
         ResourceWakeup chemicalOutput = chemicalHandler().resourceWakeups(
-                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F)).getFirst();
+                LoadedChemicalRequirement.output(chemical.key().location(), 1L, 1F)).getFirst();
         assertThat(chemicalOutput.failureReasonIds()).contains(
                 BuiltinFailureReasons.MISSING_OUTPUT.id(), BuiltinFailureReasons.FINISH.id(),
                 MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.id(),
@@ -595,12 +605,12 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
-    void chemical_declarations_cap_long_amounts_at_the_native_stack_limit() {
+    void chemical_declarations_preserve_long_amounts_supported_by_mekanism_1_21_1() {
         ResourceLocation id = ResourceLocation.parse("mekanism:oxygen");
 
-        assertThat(ChemicalIngredient.chemical(id, Long.MAX_VALUE).amount()).isEqualTo((long) Integer.MAX_VALUE);
+        assertThat(ChemicalIngredient.chemical(id, Long.MAX_VALUE).amount()).isEqualTo(Long.MAX_VALUE);
         assertThat(cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput.of(id, Long.MAX_VALUE, 1F).amount())
-                .isEqualTo((long) Integer.MAX_VALUE);
+                .isEqualTo(Long.MAX_VALUE);
     }
 
     @SuppressWarnings("unchecked")
@@ -618,16 +628,6 @@ class MekanismRecipeHandlerTest {
         return new PlanningContext(1, 0);
     }
 
-    private static void assertAutomaticIoFailure(TransferResult result, FailureReason reason) {
-        assertThat(result.successful()).isFalse();
-        assertThat(result.failure()).isNotNull();
-        assertThat(result.failure().id()).isEqualTo(MMCR.id("auto_io"));
-        assertThat(result.failure().source()).isEqualTo(MMCR.id("auto_io"));
-        assertThat(result.failure().reason()).isSameAs(reason);
-        assertThat(result.failure().failure().trace().frames().getFirst().phase())
-                .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
-    }
-
     private static Holder.Reference<Chemical> registerChemical(String path) {
         return registerChemical(path, false);
     }
@@ -636,18 +636,20 @@ class MekanismRecipeHandlerTest {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        return registry.get(key).orElseGet(() -> {
-            registry.unfreeze(true);
-            Chemical value = new Chemical(ChemicalBuilder.builder()) {
-                @Override
-                public boolean isRadioactive() {
-                    return radioactive;
-                }
-            };
-            Registry.register(registry, key.identifier(), value);
-            registry.freeze();
-            return registry.get(key).orElseThrow();
-        });
+        if (registry.get(key) != null) return registry.getHolder(key).orElseThrow();
+        registry.unfreeze();
+        if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+            Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+        }
+        Chemical value = new Chemical(ChemicalBuilder.builder()) {
+            @Override
+            public boolean isRadioactive() {
+                return radioactive;
+            }
+        };
+        Registry.registerForHolder(registry, key, value);
+        registry.freeze();
+        return registry.getHolder(key).orElseThrow();
     }
 
     private static final class FakeChemicalPort implements LoadedMekanismBridge.ChemicalPort {

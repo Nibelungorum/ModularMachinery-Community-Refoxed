@@ -78,7 +78,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void mismatched_menu_position_is_rejected_without_ejecting() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), BlockPos.ZERO), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), BlockPos.ZERO), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
@@ -103,7 +103,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void distant_player_is_rejected_without_ejecting() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), new BlockPos(100, 2, 3));
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), port), new BlockPos(100, 2, 3));
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
@@ -113,7 +113,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void output_port_is_rejected_without_ejecting() throws Exception {
         ProbePort port = outputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
@@ -123,7 +123,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void matching_input_menu_ejects_port_contents() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isTrue();
@@ -134,7 +134,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void shift_ejection_requests_all_resources() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id(), true))).isTrue();
@@ -165,7 +165,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void ejectPacketTargetsOnly_the_requested_capability() throws Exception {
         ProbePort port = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), port), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.FLUID_TYPE.id()))).isFalse();
@@ -176,7 +176,7 @@ class PktEjectPortContentsPayloadTest {
     void stale_menu_owner_is_rejected_without_ejecting() throws Exception {
         ProbePort port = inputPort();
         ProbePort replacement = inputPort();
-        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), replacement), PORT_POS);
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null), replacement), PORT_POS);
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isFalse();
@@ -186,7 +186,7 @@ class PktEjectPortContentsPayloadTest {
     @Test
     void menu_still_valid_is_required_before_ejecting() throws Exception {
         ProbePort port = inputPort();
-        ItemBusMenu invalidMenu = new ItemBusMenu(1, new Inventory(null, null), port) {
+        ItemBusMenu invalidMenu = new ItemBusMenu(1, new Inventory(null), port) {
             @Override
             public boolean stillValid(Player ignored) {
                 return false;
@@ -244,7 +244,7 @@ class PktEjectPortContentsPayloadTest {
 
     private static Inventory testInventory() throws Exception {
         Player player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
-        return new Inventory(player, null);
+        return new Inventory(player);
     }
 
     private static Unsafe unsafe() throws Exception {
@@ -443,7 +443,7 @@ class PktEjectPortContentsPayloadTest {
         private IOPortBlockEntity port;
 
         private TestServerLevel() {
-            super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
+            super(null, null, null, null, Level.OVERWORLD, null, null, false, 0L, List.of(), false, null);
         }
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {

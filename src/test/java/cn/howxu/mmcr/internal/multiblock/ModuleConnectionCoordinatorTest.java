@@ -404,7 +404,7 @@ class ModuleConnectionCoordinatorTest {
         private boolean chunksLoaded;
 
         private TestServerLevel() {
-            super(null, null, null, null, null, null, false, 0L, List.of(), false);
+            super(null, null, null, null, null, null, null, false, 0L, List.of(), false, null);
         }
 
         @Override public BlockState getBlockState(BlockPos pos) {

@@ -71,10 +71,10 @@ class MachineBuilderJSTest {
                 .chancedItemOutput("mmcr:item_input_bus", 2, 0.5F);
 
         assertThat(builder.outputs)
-                .extracting(stack -> stack.typeHolder().unwrapKey())
+                .extracting(stack -> stack.getItemHolder().unwrapKey())
                 .allMatch(Optional::isPresent);
         assertThat(builder.outputs)
-                .extracting(stack -> stack.typeHolder().unwrapKey().orElseThrow().identifier())
+                .extracting(stack -> stack.getItemHolder().unwrapKey().orElseThrow().location())
                 .containsExactly(MMCR.id("item_output_bus"), MMCR.id("item_input_bus"));
     }
 

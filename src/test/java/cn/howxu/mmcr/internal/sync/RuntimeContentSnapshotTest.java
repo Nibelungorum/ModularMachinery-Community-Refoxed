@@ -32,7 +32,6 @@ import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderSet;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -89,7 +88,7 @@ class RuntimeContentSnapshotTest {
         MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
         VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT).listElements()
                 .forEach(holder -> Registry.register(enchantments,
-                        holder.key().identifier(), holder.value()));
+                        holder.key().location(), holder.value()));
         enchantments.freeze();
         List<Registry<?>> activeRegistries = new ArrayList<>();
         RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).registries()
@@ -226,8 +225,7 @@ class RuntimeContentSnapshotTest {
         assertThat(normalized).isInstanceOfSatisfying(JsonPrimitive.class, primitive ->
                 assertThat(primitive.getAsString()).isEqualTo("#minecraft:planks"));
         var ops = RegistryOps.create(JsonOps.INSTANCE, registries);
-        var encodedTag = Ingredient.CODEC.encodeStart(ops,
-                Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS))).getOrThrow();
+        var encodedTag = Ingredient.CODEC.encodeStart(ops, Ingredient.of(ItemTags.LOGS)).getOrThrow();
         assertThat(encodedTag.getAsString()).isEqualTo("#minecraft:logs");
     }
 

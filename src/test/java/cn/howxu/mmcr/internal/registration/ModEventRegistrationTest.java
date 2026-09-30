@@ -47,8 +47,8 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.bus.api.Event;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
-import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -56,7 +56,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
-import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -112,11 +111,11 @@ class ModEventRegistrationTest {
                 RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class, RegisterGameTestsEvent.class);
         assertThat(gameBus.types()).containsExactly(
                 BlockEvent.EntityPlaceEvent.class, BlockEvent.EntityMultiPlaceEvent.class,
-                BlockEvent.FluidPlaceBlockEvent.class, BreakBlockEvent.class, EntityJoinLevelEvent.class,
+                BlockEvent.FluidPlaceBlockEvent.class, BlockEvent.BreakEvent.class, EntityJoinLevelEvent.class,
                 ChunkEvent.Unload.class,
                 ChunkEvent.Load.class, LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
-                ServerAboutToStartEvent.class, ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
-                AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
+                ServerAboutToStartEvent.class, ServerStoppedEvent.class, ModifyDefaultComponentsEvent.class,
+                AddReloadListenerEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                 PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class);
 
         modBus.fireAll();
@@ -125,10 +124,10 @@ class ModEventRegistrationTest {
                 List.of(RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class,
                         RegisterGameTestsEvent.class, BlockEvent.EntityPlaceEvent.class,
                         BlockEvent.EntityMultiPlaceEvent.class, BlockEvent.FluidPlaceBlockEvent.class,
-                        BreakBlockEvent.class, EntityJoinLevelEvent.class, ChunkEvent.Unload.class, ChunkEvent.Load.class,
+                        BlockEvent.BreakEvent.class, EntityJoinLevelEvent.class, ChunkEvent.Unload.class, ChunkEvent.Load.class,
                         LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
-                        ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
-                        AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
+                        ServerStoppedEvent.class, ModifyDefaultComponentsEvent.class,
+                        AddReloadListenerEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                         PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class));
     }
 
@@ -289,14 +288,14 @@ class ModEventRegistrationTest {
                 recording(invoked, BlockEvent.EntityPlaceEvent.class),
                  recording(invoked, BlockEvent.EntityMultiPlaceEvent.class),
                  recording(invoked, BlockEvent.FluidPlaceBlockEvent.class),
-                 recording(invoked, BreakBlockEvent.class), recording(invoked, EntityJoinLevelEvent.class),
+                 recording(invoked, BlockEvent.BreakEvent.class), recording(invoked, EntityJoinLevelEvent.class),
                  recording(invoked, ChunkEvent.Unload.class),
                 recording(invoked, ChunkEvent.Load.class), recording(invoked, LevelTickEvent.Post.class),
                 recording(invoked, ServerTickEvent.Post.class),
                 recording(invoked, LevelEvent.Unload.class), recording(invoked, ServerAboutToStartEvent.class),
                 recording(invoked, ServerStoppedEvent.class),
-                recording(invoked, DefaultDataComponentsBoundEvent.class),
-                recording(invoked, AddServerReloadListenersEvent.class),
+                 recording(invoked, ModifyDefaultComponentsEvent.class),
+                 recording(invoked, AddReloadListenerEvent.class),
                 recording(invoked, PlayerEvent.PlayerLoggedInEvent.class),
                 recording(invoked, PlayerEvent.PlayerChangedDimensionEvent.class),
                 recording(invoked, RegisterCommandsEvent.class));

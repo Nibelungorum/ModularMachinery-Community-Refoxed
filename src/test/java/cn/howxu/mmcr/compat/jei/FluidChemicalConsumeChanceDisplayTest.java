@@ -50,9 +50,9 @@ class FluidChemicalConsumeChanceDisplayTest {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.parse("mekanism:oxygen"));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        if (registry.get(key).isPresent()) return;
-        registry.unfreeze(true);
-        Registry.register(registry, key.identifier(),
+        if (registry.getHolder(key).isPresent()) return;
+        registry.unfreeze();
+        Registry.register(registry, key.location(),
                 new Chemical(ChemicalBuilder.builder()) {
                     @Override
                     public boolean isRadioactive() {
@@ -106,7 +106,7 @@ class FluidChemicalConsumeChanceDisplayTest {
         assertThat(chemical.ingredient()).isInstanceOf(List.class);
         List<?> ingredients = (List<?>) chemical.ingredient();
         assertThat(ingredients).singleElement().isInstanceOf(ChemicalStack.class);
-        assertThat(((ChemicalStack) ingredients.getFirst()).amount()).isEqualTo(1_000);
+        assertThat(((ChemicalStack) ingredients.getFirst()).getAmount()).isEqualTo(1_000);
     }
 
     @Test

@@ -90,6 +90,12 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
 
     @Override public IItemHandler itemHandler() { return itemHandler; }
 
+    @Override
+    public boolean supportsLargeStacks() {
+        return port != null && (port.kind().extendedItemBusSize().isPresent()
+                || port.kind().extendedCombinedPortSize().isPresent());
+    }
+
     @Nullable @Override public Level level() { return port == null ? null : port.getLevel(); }
 
     @Override public BlockPos position() { return port == null ? BlockPos.ZERO : port.getBlockPos(); }

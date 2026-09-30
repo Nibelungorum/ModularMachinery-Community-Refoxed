@@ -28,7 +28,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -126,7 +125,7 @@ class BlueprintItemTest {
         List<Component> tooltip = new java.util.ArrayList<>();
 
         ModItems.BLUEPRINT.get().appendHoverText(blueprint, Item.TooltipContext.EMPTY,
-                TooltipDisplay.DEFAULT, tooltip::add, TooltipFlag.NORMAL);
+                tooltip, TooltipFlag.NORMAL);
 
         assertThat(tooltip).isNotEmpty();
         assertThat(tooltip.getFirst().getContents()).isInstanceOf(TranslatableContents.class);

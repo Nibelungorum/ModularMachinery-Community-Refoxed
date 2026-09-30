@@ -270,7 +270,7 @@ class PatternStartReservationTest {
         ItemInputBusBlockEntity ordinaryInput = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), ordinaryInput);
         formForPattern(controller, true);
-        setItem(ordinaryInput.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(ordinaryInput.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
         LongItemStorage requestStorage = new LongItemStorage(1, 64, null);
         requestStorage.setContents(0, stack(Items.IRON_INGOT, 1), 1);
         MachineCapability request = new ItemBusCapability(requestStorage, IOType.INPUT);
@@ -281,7 +281,7 @@ class PatternStartReservationTest {
 
         assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
         assertThat(reservation.commit()).isTrue();
-        assertThat(ordinaryInput.itemStorage().amount(0)).isZero();
+        assertThat(ordinaryInput.itemHandler().amount(0)).isZero();
         assertThat(requestStorage.amount(0)).isZero();
     }
 
@@ -290,7 +290,7 @@ class PatternStartReservationTest {
         ItemInputBusBlockEntity ordinaryInput = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), ordinaryInput);
         formForPattern(controller, true);
-        setItem(ordinaryInput.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(ordinaryInput.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
         LongItemStorage requestStorage = new LongItemStorage(1, 64, null);
         requestStorage.setContents(0, stack(Items.IRON_INGOT, 1), 1);
         MachineCapability request = new ItemBusCapability(requestStorage, IOType.INPUT);
@@ -298,7 +298,7 @@ class PatternStartReservationTest {
 
         assertThat(controller.reservePatternStart(PATTERN_PORT, List.of(), List.of(request)).status())
                 .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
-        assertThat(ordinaryInput.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(ordinaryInput.itemHandler().amount(0)).isEqualTo(1L);
         assertThat(requestStorage.amount(0)).isEqualTo(1L);
 
         MachineRecipe viable = recipe("reservation_request_retry", List.of(input(Items.IRON_INGOT, 2)));

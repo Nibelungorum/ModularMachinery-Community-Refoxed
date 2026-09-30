@@ -252,7 +252,7 @@ class CapabilityTransferPolicyTest {
 
         CompoundTag saved = new CompoundTag();
         port.saveTo(saved);
-        assertThat(saved.getCompound("auto_io_capabilities")).isEmpty();
+        assertThat(saved.getCompound("auto_io_capabilities").isEmpty()).isTrue();
 
         CompoundTag injected = new CompoundTag();
         CompoundTag profiles = new CompoundTag();
@@ -264,7 +264,7 @@ class CapabilityTransferPolicyTest {
         CompoundTag restored = new CompoundTag();
         port.saveTo(restored);
 
-        assertThat(restored.getCompound("auto_io_capabilities")).isEmpty();
+        assertThat(restored.getCompound("auto_io_capabilities").isEmpty()).isTrue();
         assertThat(port.ejectContents(capability.type())).isFalse();
         assertThat(port.ejectContents()).isFalse();
         assertThat(port.activeRecipeChecks()).isZero();
@@ -456,7 +456,7 @@ class CapabilityTransferPolicyTest {
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
             prepareCalls.incrementAndGet();
-            return transaction -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
 
         @Override

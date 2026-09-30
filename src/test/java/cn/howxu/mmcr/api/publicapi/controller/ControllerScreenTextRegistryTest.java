@@ -7,13 +7,12 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.SystemReport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.players.NameAndId;
-import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.util.debugchart.SampleLogger;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.junit.jupiter.api.AfterEach;
@@ -28,7 +27,6 @@ import java.lang.reflect.Modifier;
 import java.net.Proxy;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -264,7 +262,7 @@ class ControllerScreenTextRegistryTest {
         private Thread serverThread;
 
         private TestServer() {
-            super(null, null, null, null, Optional.empty(), Proxy.NO_PROXY, null, null, null, false);
+            super(null, null, null, null, Proxy.NO_PROXY, null, null, null);
         }
 
         @Override
@@ -278,13 +276,13 @@ class ControllerScreenTextRegistryTest {
         }
 
         @Override
-        public LevelBasedPermissionSet operatorUserPermissions() {
-            return LevelBasedPermissionSet.ALL;
+        public int getOperatorUserPermissionLevel() {
+            return 4;
         }
 
         @Override
-        public LevelBasedPermissionSet getFunctionCompilationPermissions() {
-            return LevelBasedPermissionSet.OWNER;
+        public int getFunctionCompilationLevel() {
+            return 4;
         }
 
         @Override
@@ -303,7 +301,12 @@ class ControllerScreenTextRegistryTest {
         }
 
         @Override
-        public boolean useNativeTransport() {
+        public boolean isEpollEnabled() {
+            return false;
+        }
+
+        @Override
+        public boolean isCommandBlockEnabled() {
             return false;
         }
 
@@ -318,7 +321,7 @@ class ControllerScreenTextRegistryTest {
         }
 
         @Override
-        public boolean isSingleplayerOwner(NameAndId nameAndId) {
+        public boolean isSingleplayerOwner(GameProfile profile) {
             return false;
         }
 

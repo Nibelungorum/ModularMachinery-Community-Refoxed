@@ -36,10 +36,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
@@ -74,7 +71,6 @@ class RecipeCandidateIndexTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bindComponents(Items.IRON_INGOT, Items.GOLD_INGOT, Items.DIAMOND, Items.RAW_COPPER, Items.RAW_IRON);
         TestBootstrap.registerType(new LevelType(LEVEL_TYPE, Component.literal("Recipe Search Level")));
         TestBootstrap.registerLevel(new MachineLevel(LEVEL, LEVEL_TYPE, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
@@ -118,7 +114,7 @@ class RecipeCandidateIndexTest {
 
     @Test
     void tagIngredientFallsBackWithoutDereferencingDuringIndexBuild() {
-        MachineRecipe tagged = itemRecipe("tagged", Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.SWORDS)));
+        MachineRecipe tagged = itemRecipe("tagged", Ingredient.of(ItemTags.SWORDS));
 
         RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(tagged));
 
@@ -152,8 +148,8 @@ class RecipeCandidateIndexTest {
             }
 
             @Override
-            public Stream<Holder<Item>> items() {
-                return Stream.of(Items.IRON_INGOT.builtInRegistryHolder());
+            public Stream<ItemStack> getItems() {
+                return Stream.of(Items.IRON_INGOT.getDefaultInstance());
             }
 
             @Override
@@ -510,19 +506,16 @@ class RecipeCandidateIndexTest {
         TagKey<Item> tag = TagKey.create(registry.key(), id("single_member"));
         registry.bindTags(Map.of(tag, List.of(holder)));
         registry.freeze();
-        return Ingredient.of(registry.get(tag).orElseThrow());
+        return Ingredient.of(tag);
     }
 
     private static Ingredient unboundTagIngredient() {
         TagKey<Item> tag = TagKey.create(Registries.ITEM, id("unbound"));
-        return Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
+        return Ingredient.of(tag);
     }
 
     private static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath("test", path);
     }
 
-    private static void bindComponents(Item... items) {
-        for (Item item : items) item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-    }
 }

@@ -33,7 +33,7 @@ class UpgradeBusBlockEntityTest {
     @Test
     void each_tier_creates_its_fixed_storage_size() {
         for (UpgradeBusSize size : UpgradeBusSize.values()) {
-            assertThat(create(size).itemStorage().size()).isEqualTo(size.slots());
+            assertThat(create(size).itemHandler().size()).isEqualTo(size.slots());
         }
     }
 
@@ -49,14 +49,14 @@ class UpgradeBusBlockEntityTest {
         UpgradeBusBlockEntity restored = create(UpgradeBusSize.ELITE);
         restored.loadAdditional(output, EMPTY_LOOKUP);
 
-        assertThat(restored.itemStorage().resource(0).getItem()).isEqualTo(Items.IRON_INGOT);
-        assertThat(restored.itemStorage().amount(0)).isEqualTo(3L);
-        assertThat(restored.itemStorage().resource(8).getItem()).isEqualTo(Items.GOLD_INGOT);
-        assertThat(restored.itemStorage().amount(8)).isEqualTo(7L);
+        assertThat(restored.itemHandler().resource(0).getItem()).isEqualTo(Items.IRON_INGOT);
+        assertThat(restored.itemHandler().amount(0)).isEqualTo(3L);
+        assertThat(restored.itemHandler().resource(8).getItem()).isEqualTo(Items.GOLD_INGOT);
+        assertThat(restored.itemHandler().amount(8)).isEqualTo(7L);
 
         List<ItemStack> snapshot = restored.itemSnapshot();
         snapshot.get(0).setCount(1);
-        assertThat(restored.itemStorage().amount(0)).isEqualTo(3L);
+        assertThat(restored.itemHandler().amount(0)).isEqualTo(3L);
     }
 
     @Test
@@ -66,18 +66,18 @@ class UpgradeBusBlockEntityTest {
         bus.addControllerChangeListener(notifications::incrementAndGet);
 
         long initial = bus.contentsVersion();
-        bus.itemStorage().insertItem(0, new ItemStack(Items.IRON_INGOT, 2), true);
+        bus.itemHandler().insertItem(0, new ItemStack(Items.IRON_INGOT, 2), true);
         assertThat(bus.contentsVersion()).isEqualTo(initial);
 
         insert(bus, 0, new ItemStack(Items.IRON_INGOT, 2));
         long afterInsert = bus.contentsVersion();
         assertThat(afterInsert).isGreaterThan(initial);
 
-        bus.itemStorage().extractItem(0, 1, false);
+        bus.itemHandler().extractItem(0, 1, false);
         long afterExtract = bus.contentsVersion();
         assertThat(afterExtract).isGreaterThan(afterInsert);
 
-        bus.itemStorage().setContents(0, new ItemStack(Items.GOLD_INGOT), 1L);
+        bus.itemHandler().setContents(0, new ItemStack(Items.GOLD_INGOT), 1L);
         assertThat(bus.contentsVersion()).isGreaterThan(afterExtract);
         assertThat(notifications).hasValue(3);
     }
@@ -89,6 +89,6 @@ class UpgradeBusBlockEntityTest {
     }
 
     private static void insert(UpgradeBusBlockEntity bus, int slot, ItemStack stack) {
-        bus.itemStorage().setContents(slot, stack, stack.getCount());
+        bus.itemHandler().setContents(slot, stack, stack.getCount());
     }
 }

@@ -39,7 +39,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -227,7 +226,7 @@ class MachineRecipeSchemaTest {
     void schema_exposes_requires_level_function_with_two_string_arguments() {
         var function = MachineRecipeSchema.SCHEMA.functions.get("requiresLevel");
 
-        assertThat(function.arguments()).containsExactly(StringComponent.ID, StringComponent.ID);
+        assertThat(function.arguments()).containsExactly(StringComponent.ID.instance(), StringComponent.ID.instance());
     }
 
     @Test
@@ -253,7 +252,6 @@ class MachineRecipeSchemaTest {
     }
 
     void builder_creates_component_bearing_item_output() {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("better_sword"));
 
         builder.itemOutputWithComponents("minecraft:diamond_sword", 1, json("""
@@ -267,7 +265,6 @@ class MachineRecipeSchemaTest {
 
     @Test
     void public_identifier_builder_defers_sharpness_four_named_output_until_recipe_context_is_available() {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("sharp_sword"));
 
         builder.itemOutputWithComponents("minecraft:diamond_sword", 1, json("""
@@ -282,7 +279,6 @@ class MachineRecipeSchemaTest {
 
     @Test
     void builder_keeps_plain_item_outputs_immediate() {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS(MMCR.id("plain_output"));
 
         builder.itemOutput("minecraft:diamond_sword", 2);

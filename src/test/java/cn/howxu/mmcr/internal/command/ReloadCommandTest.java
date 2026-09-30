@@ -18,7 +18,6 @@ import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.AfterEach;
@@ -102,7 +101,7 @@ class ReloadCommandTest {
                 return false;
             }
         };
-        return new CommandSourceStack(source, Vec3.ZERO, Vec2.ZERO, null, PermissionSet.ALL_PERMISSIONS,
+        return new CommandSourceStack(source, Vec3.ZERO, Vec2.ZERO, null, 4,
                 "test", Component.literal("test"), null, null);
     }
 

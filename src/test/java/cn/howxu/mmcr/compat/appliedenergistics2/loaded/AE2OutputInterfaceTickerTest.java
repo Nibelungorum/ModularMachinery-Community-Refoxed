@@ -4,23 +4,13 @@ import appeng.api.networking.IGridNode;
 import appeng.api.networking.ticking.IGridTickable;
 import appeng.api.networking.ticking.TickRateModulation;
 import appeng.api.stacks.AEItemKey;
-import appeng.api.stacks.AEKeyType;
-import appeng.api.stacks.AEKeyTypes;
-import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.GenericStack;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2TestFixtures;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
-import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,8 +29,8 @@ class AE2OutputInterfaceTickerTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
-        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
-        bindTestAE2InterfaceItem();
+        AE2TestFixtures.ensureAE2KeyTypesInitialized();
+        AE2TestFixtures.bindAE2InterfaceItem();
     }
 
     @Test
@@ -80,36 +70,6 @@ class AE2OutputInterfaceTickerTest {
                 new Class<?>[]{IGridNode.class},
                 (proxy, method, args) -> method.getName().equals("isActive")
                         ? active : defaultValue(method.getReturnType()));
-    }
-
-    private static boolean ae2KeyTypesAreInitialized() {
-        try {
-            return !AEKeyTypes.getAll().isEmpty();
-        } catch (IllegalStateException ignored) {
-            return false;
-        }
-    }
-
-    private static void initializeAE2KeyTypes() {
-        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
-        AEKeyTypesInternal.setRegistry(registry);
-        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
-        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
-        registry.freeze();
-    }
-
-    private static void bindTestAE2InterfaceItem() {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("ae2", "interface");
-        MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        registry.unfreeze(true);
-        try {
-            if (!registry.containsKey(id)) {
-                Registry.register(registry, id, new Item(new Item.Properties().setId(
-                        ResourceKey.create(Registries.ITEM, id))));
-            }
-        } finally {
-            registry.freeze();
-        }
     }
 
     private static Object defaultValue(Class<?> type) {

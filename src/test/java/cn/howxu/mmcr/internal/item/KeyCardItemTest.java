@@ -27,9 +27,7 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -42,7 +40,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -329,9 +326,9 @@ class KeyCardItemTest {
 
     @SuppressWarnings("unchecked")
     private static Item registerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
-        if (BuiltInRegistries.ITEM.containsKey(itemHolder.getId())) return BuiltInRegistries.ITEM.getValue(itemHolder.getId());
+        if (BuiltInRegistries.ITEM.containsKey(itemHolder.getId())) return BuiltInRegistries.ITEM.get(itemHolder.getId());
         MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        items.unfreeze(true);
+        items.unfreeze();
         Field entriesField = ModItems.REGISTER.getClass().getSuperclass().getDeclaredField("entries");
         entriesField.setAccessible(true);
         Map<DeferredHolder<Item, ? extends Item>, Supplier<? extends Item>> entries =
@@ -339,7 +336,6 @@ class KeyCardItemTest {
         Item item = entries.get(itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 1).build());
         return item;
     }
 
@@ -403,7 +399,7 @@ class KeyCardItemTest {
         private boolean shiftDown;
 
         private TestPlayer(Level level) {
-            super(level, new GameProfile(UUID.randomUUID(), "key-card-test"));
+            super(level, BlockPos.ZERO, 0.0F, new GameProfile(UUID.randomUUID(), "key-card-test"));
         }
 
         private void hold(ItemStack stack) {
@@ -419,7 +415,8 @@ class KeyCardItemTest {
             if (messages == null) messages = new ArrayList<>();
             messages.add(message);
         }
-        @Override public GameType gameMode() { return GameType.SURVIVAL; }
+        @Override public boolean isSpectator() { return false; }
+        @Override public boolean isCreative() { return false; }
     }
 
     private static final class TestServerLevel extends ServerLevel {
@@ -428,7 +425,7 @@ class KeyCardItemTest {
         private MinecraftServer server;
 
         private TestServerLevel() {
-            super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
+            super(null, null, null, null, Level.OVERWORLD, null, null, false, 0L, List.of(), false, null);
         }
 
         @Override public MinecraftServer getServer() { return server; }

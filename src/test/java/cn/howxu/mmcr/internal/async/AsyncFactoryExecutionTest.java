@@ -239,7 +239,7 @@ class AsyncFactoryExecutionTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
         RecipeRegistry.replaceDynamic(Map.of(specific.id(), specific, fallback.id(), fallback));
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        setItem(input.itemStorage(), new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), new ItemStack(Items.IRON_INGOT, 1));
 
         for (int pass = 0; pass < 8 && controller.runtimeSnapshot().factory().activeLaneCount() == 0; pass++) {
             controller.serverTick();
@@ -345,7 +345,7 @@ class AsyncFactoryExecutionTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
         RecipeRegistry.replaceDynamic(Map.of(specific.id(), specific, fallback.id(), fallback));
         ConfigTestSupport.setMachineWorkMode(mode);
-        setItem(input.itemStorage(), new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), new ItemStack(Items.IRON_INGOT, 1));
 
         for (int pass = 0; pass < 8; pass++) {
             controller.serverTick();

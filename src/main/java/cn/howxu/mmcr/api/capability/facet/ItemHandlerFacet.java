@@ -9,4 +9,8 @@ import net.neoforged.neoforge.items.IItemHandler;
  */
 public interface ItemHandlerFacet extends CapabilityFacet {
     IItemHandler itemHandler();
+
+    default boolean supportsLargeStacks() {
+        return false;
+    }
 }

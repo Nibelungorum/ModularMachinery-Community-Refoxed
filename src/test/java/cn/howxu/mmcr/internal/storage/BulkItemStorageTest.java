@@ -18,8 +18,8 @@ class BulkItemStorageTest {
     void matching_items_merge_through_native_handler_execution() {
         BulkItemStorage storage = new BulkItemStorage(100L, () -> {});
 
-        assertThat(storage.insertItem(0, new ItemStack(Items.IRON_INGOT, 40), false)).isEmpty();
-        assertThat(storage.insertItem(0, new ItemStack(Items.IRON_INGOT, 20), false)).isEmpty();
+        assertThat(storage.insertItem(0, new ItemStack(Items.IRON_INGOT, 40), false).isEmpty()).isTrue();
+        assertThat(storage.insertItem(0, new ItemStack(Items.IRON_INGOT, 20), false).isEmpty()).isTrue();
 
         assertThat(storage.amount(0)).isEqualTo(60L);
         assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), new ItemStack(Items.IRON_INGOT))).isTrue();
@@ -43,9 +43,9 @@ class BulkItemStorageTest {
         BulkItemStorage storage = new BulkItemStorage(100L, changes::incrementAndGet);
         ItemStack iron = new ItemStack(Items.IRON_INGOT, 20);
 
-        assertThat(storage.insertItem(0, iron, true)).isEmpty();
+        assertThat(storage.insertItem(0, iron, true).isEmpty()).isTrue();
         assertThat(storage.amount(0)).isZero();
-        assertThat(storage.insertItem(0, iron, false)).isEmpty();
+        assertThat(storage.insertItem(0, iron, false).isEmpty()).isTrue();
 
         assertThat(storage.amount(0)).isEqualTo(20L);
         assertThat(changes).hasValue(1);

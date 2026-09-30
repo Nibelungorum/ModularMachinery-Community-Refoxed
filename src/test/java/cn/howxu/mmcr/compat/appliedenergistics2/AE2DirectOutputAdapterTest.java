@@ -36,7 +36,7 @@ class AE2DirectOutputAdapterTest {
         IItemHandler handler = AE2NativeAdapters.outputItems(cache, () -> network, IActionSource.empty(), () -> {
         });
 
-        assertThat(handler.insertItem(0, iron.toStack(8), false)).isEmpty();
+        assertThat(handler.insertItem(0, iron.toStack(8), false).isEmpty()).isTrue();
 
         assertThat(network.amount).isEqualTo(8L);
         assertThat(cache.isEmpty()).isTrue();

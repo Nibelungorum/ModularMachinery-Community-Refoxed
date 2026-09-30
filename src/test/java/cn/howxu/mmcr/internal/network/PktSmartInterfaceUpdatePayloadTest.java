@@ -32,7 +32,7 @@ class PktSmartInterfaceUpdatePayloadTest {
 
     @Test
     void update_is_ignored_when_player_does_not_have_the_target_menu_open() throws Exception {
-        ServerPlayer player = playerWith(SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), BlockPos.ZERO));
+        ServerPlayer player = playerWith(SmartInterfaceMenu.clientOpen(1, new Inventory(null), BlockPos.ZERO));
 
         assertThat(PktSmartInterfaceUpdatePayload.canUpdate(player, new BlockPos(1, 2, 3), "temperature", 8F)).isFalse();
     }
@@ -40,7 +40,7 @@ class PktSmartInterfaceUpdatePayloadTest {
     @Test
     void can_update_requires_open_menu_matching_pos_type_and_finite_value() throws Exception {
         BlockPos pos = new BlockPos(1, 2, 3);
-        SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), pos);
+        SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new Inventory(null), pos);
         ServerPlayer player = playerWith(menu);
 
         assertThat(PktSmartInterfaceUpdatePayload.canUpdate(player, pos, "temperature", 12F)).isTrue();
@@ -72,7 +72,7 @@ class PktSmartInterfaceUpdatePayloadTest {
     @Test
     void stale_current_menu_is_rejected() throws Exception {
         BlockPos requestedPos = new BlockPos(1, 2, 3);
-        ServerPlayer player = playerWith(SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), requestedPos.above()));
+        ServerPlayer player = playerWith(SmartInterfaceMenu.clientOpen(1, new Inventory(null), requestedPos.above()));
 
         assertThat(PktSmartInterfaceUpdatePayload.canUpdate(player, requestedPos, "temperature", 12F)).isFalse();
     }
@@ -81,7 +81,7 @@ class PktSmartInterfaceUpdatePayloadTest {
     void update_requires_the_menu_owner_to_be_the_target_interface() {
         SmartInterfaceBlockEntity owner = new SmartInterfaceBlockEntity(BlockPos.ZERO,
                 ModBlocks.SMART_INTERFACE.get().defaultBlockState());
-        SmartInterfaceMenu menu = new SmartInterfaceMenu(1, new Inventory(null, null), owner);
+        SmartInterfaceMenu menu = new SmartInterfaceMenu(1, new Inventory(null), owner);
         SmartInterfaceBlockEntity replacement = new SmartInterfaceBlockEntity(BlockPos.ZERO,
                 ModBlocks.SMART_INTERFACE.get().defaultBlockState());
 

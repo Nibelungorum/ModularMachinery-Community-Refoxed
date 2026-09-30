@@ -86,7 +86,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void active_selected_thread_hides_aggregate_last_failure() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 1, 20,
                                 1, (ExecutionStatus) null),
@@ -150,7 +150,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void factory_screen_uses_text_for_the_selected_thread_only() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "lane-0", true, false, true,
                                 "mmcr:recipe_0", 1, 20, 1, (ExecutionStatus) null),
@@ -177,7 +177,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void factory_controller_viewport_wraps_long_external_text() throws Exception {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         ControllerScreenTextCache.replace(BlockPos.ZERO, 1L,
                 List.of(new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
                         MMCR.id("factory_long"), Component.literal("x".repeat(161)))));
@@ -202,7 +202,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void matched_stage_line_appears_after_status_when_formed_multi_stage() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
                         "mmcr:recipe", 1, 20, 1, (ExecutionStatus) null)),
@@ -215,7 +215,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void matched_stage_line_absent_when_not_formed() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(false, false, List.of(), 2, 0, 1L, false,
                 List.of(), "Factory", 0, null, List.of(), 0, 10));
 
@@ -225,7 +225,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void matched_stage_line_absent_for_single_stage_machine() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
                         "mmcr:recipe", 1, 20, 1, (ExecutionStatus) null)),
@@ -273,7 +273,7 @@ class FactoryControllerScreenTest {
     }
 
     private static FactoryControllerMenu menuWithDetailRows() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 3, 2, 8L, true,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 20, 20,
                         4, failure(MMCR.id("selected_failure")))),

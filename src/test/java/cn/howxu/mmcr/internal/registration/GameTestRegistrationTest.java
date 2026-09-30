@@ -6,18 +6,12 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import java.util.Set;
+import java.util.LinkedHashSet;
+import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.WritableRegistry;
-import net.minecraft.gametest.framework.GameTestInstance;
-import net.minecraft.gametest.framework.TestEnvironmentDefinition;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import com.mojang.serialization.Lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,24 +51,19 @@ class GameTestRegistrationTest {
 
     @Test
     void forwards_register_tests_to_present_source() {
-        WritableRegistry<TestEnvironmentDefinition<?>> environments = new MappedRegistry<>(
-                ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_environments")), Lifecycle.stable());
-        WritableRegistry<GameTestInstance> tests = new MappedRegistry<>(
-                ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_instances")), Lifecycle.stable());
-        RegisterGameTestsEvent event = new RegisterGameTestsEvent(environments, tests);
+        Set<Method> tests = new LinkedHashSet<>();
+        RegisterGameTestsEvent event = new RegisterGameTestsEvent(tests);
 
         GameTestRegistration.registerTests("cn.howxu.mmcr.OptionalGameTestSource", event);
 
         assertThat(OptionalGameTestSource.testsInvoked()).isTrue();
-        assertThat(tests.getValue(ResourceLocation.parse("mmcr:optional_source_test"))).isNotNull();
+        assertThat(tests).extracting(Method::getName).contains("optionalSourceTest");
     }
 
     @Test
     void ignores_absent_register_tests_source() {
         assertThatCode(() -> GameTestRegistration.registerTests(
-                "cn.howxu.mmcr.MissingGameTestRegistry", new RegisterGameTestsEvent(
-                        new MappedRegistry<>(ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_environments")), Lifecycle.stable()),
-                        new MappedRegistry<>(ResourceKey.createRegistryKey(ResourceLocation.parse("mmcr:test_instances")), Lifecycle.stable()))))
+                "cn.howxu.mmcr.MissingGameTestRegistry", new RegisterGameTestsEvent(new LinkedHashSet<>())))
                 .doesNotThrowAnyException();
     }
 

@@ -264,7 +264,7 @@ class MachineControllerBlockEntityTest {
         MachineControllerRuntime runtime = runtimeOf(controller);
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer player = player(level, controller.getBlockPos());
-        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null), controller);
         setPlayers(level, List.of(player));
         AtomicInteger invocations = new AtomicInteger();
         textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
@@ -292,11 +292,11 @@ class MachineControllerBlockEntityTest {
                 MMCR.id("audience_line"), Component.literal("visible"));
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer ordinary = player(level, controller.getBlockPos());
-        ordinary.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        ordinary.containerMenu = new MachineControllerMenu(1, new Inventory(null), controller);
         ServerPlayer factory = player(level, controller.getBlockPos());
-        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller);
+        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null), controller);
         ServerPlayer wrongPosition = player(level, controller.getBlockPos());
-        wrongPosition.containerMenu = new MachineControllerMenu(3, new Inventory(null, null),
+        wrongPosition.containerMenu = new MachineControllerMenu(3, new Inventory(null),
                 controller.getBlockPos().above());
         ServerPlayer closed = player(level, controller.getBlockPos());
         closed.containerMenu = closedMenu();
@@ -333,7 +333,7 @@ class MachineControllerBlockEntityTest {
         runtimeOf(factoryController).screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("factory_open_line"), Component.literal("factory open"));
         ServerPlayer factory = player((ServerLevel) factoryController.getLevel(), factoryController.getBlockPos());
-        new FactoryControllerMenu(2, new Inventory(null, null), factoryController, factory);
+        new FactoryControllerMenu(2, new Inventory(null), factoryController, factory);
         assertThat(textPackets(factory)).singleElement()
                 .satisfies(packet -> assertThat(packet.controllerPos()).isEqualTo(factoryController.getBlockPos()))
                 .satisfies(packet -> assertThat(packet.lines()).singleElement()
@@ -349,7 +349,7 @@ class MachineControllerBlockEntityTest {
                 MMCR.id("factory_lane_line"), Component.literal("factory lane"));
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer factory = player(level, controller.getBlockPos());
-        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller);
+        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null), controller);
         setPlayers(level, List.of(factory));
 
         invokeSyncOpenText(controller);
@@ -377,7 +377,7 @@ class MachineControllerBlockEntityTest {
         assertThat(lastSentRecipeScreenTextRevisions(controller)).containsEntry("removed", 1L);
 
         ServerPlayer factory = player(level, controller.getBlockPos());
-        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller);
+        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null), controller);
         setPlayers(level, List.of(factory));
         invokeSyncOpenText(controller);
 
@@ -443,7 +443,7 @@ class MachineControllerBlockEntityTest {
                 MMCR.id("clear_line"), Component.literal("clear"));
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer player = player(level, controller.getBlockPos());
-        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null), controller);
         setPlayers(level, List.of(player));
         invokeSyncOpenText(controller);
 
@@ -539,7 +539,7 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity controller = textController(machineId);
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer player = player(level, controller.getBlockPos());
-        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null), controller);
         setPlayers(level, List.of(player));
         AtomicInteger ticks = new AtomicInteger();
         AtomicBoolean updateText = new AtomicBoolean(true);
@@ -855,7 +855,7 @@ class MachineControllerBlockEntityTest {
 
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer player = testPlayer(level, controller.getBlockPos());
-        FactoryControllerMenu menu = new FactoryControllerMenu(1, new Inventory(player, null), controller, player);
+        FactoryControllerMenu menu = new FactoryControllerMenu(1, new Inventory(player), controller, player);
         player.containerMenu = menu;
         setField(ServerLevel.class, level, "players", List.of(player));
         assertThat(menu.machineName()).isEqualTo(firstMachine.displayNameKey());

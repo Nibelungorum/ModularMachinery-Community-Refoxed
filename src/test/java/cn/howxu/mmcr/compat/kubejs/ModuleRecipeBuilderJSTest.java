@@ -18,7 +18,6 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -123,8 +122,6 @@ class ModuleRecipeBuilderJSTest {
     void create_object_preserves_complete_public_recipe_values() {
         ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
-        Items.DIAMOND.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var itemInput = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2);
         var fluidInput = new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 500);
         var energyOutput = new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, 20);
@@ -257,8 +254,6 @@ class ModuleRecipeBuilderJSTest {
     void direct_output_lists_preserve_non_negative_normalized_values() {
         ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
-        Items.DIAMOND.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
 
         var itemOutput = new ItemStack(Items.DIAMOND, -1);
         var fluidOutput = new FluidStack(Fluids.WATER, -1);
@@ -283,8 +278,6 @@ class ModuleRecipeBuilderJSTest {
     void builder_preserves_component_tag_inputs_and_explicit_requirements() {
         ResourceLocation machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
-        Items.EMERALD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
 
         var recipe = new MachineRecipeBuilderJS("mmcr:component_tag_recipe")
                 .recipePool(machineId.toString())

@@ -3,11 +3,9 @@ package cn.howxu.mmcr.api.capability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import cn.howxu.mmcr.api.capability.transfer.TransferContext;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
@@ -65,15 +63,15 @@ class CapabilityContractTest {
     }
 
     @Test
-    void transfer_context_accepts_each_supported_bidirectional_request_direction() {
+    void capability_operation_accepts_each_supported_request_direction() {
         TestCapability bidirectional = new TestCapability(CapabilityDirections.bidirectional());
         TestCapability inputOnly = new TestCapability(CapabilityDirections.input());
 
-        assertThatCode(() -> TransferContext.simulate(bidirectional, IOType.INPUT, Direction.NORTH, 1L))
+        assertThatCode(() -> CapabilityFactories.operation(bidirectional, new TestRequest(IOType.INPUT, 1L)))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> TransferContext.simulate(bidirectional, IOType.OUTPUT, Direction.NORTH, 1L))
+        assertThatCode(() -> CapabilityFactories.operation(bidirectional, new TestRequest(IOType.OUTPUT, 1L)))
                 .doesNotThrowAnyException();
-        assertThatThrownBy(() -> TransferContext.simulate(inputOnly, IOType.OUTPUT, Direction.NORTH, 1L))
+        assertThatThrownBy(() -> CapabilityFactories.operation(inputOnly, new TestRequest(IOType.OUTPUT, 1L)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -96,8 +94,6 @@ class CapabilityContractTest {
 
         assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
         assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
-        assertThatThrownBy(() -> TransferContext.simulate(capability, Direction.NORTH, 1L))
-                .isInstanceOf(IllegalStateException.class);
     }
 
     private record TestRequest(IOType ioType, long parallelism) implements CapabilityRequest {

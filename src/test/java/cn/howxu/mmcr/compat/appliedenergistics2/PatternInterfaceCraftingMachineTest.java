@@ -1,9 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.crafting.IPatternDetails;
-import appeng.api.stacks.AEKeyType;
-import appeng.api.stacks.AEKeyTypes;
-import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
@@ -52,12 +49,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
-import com.mojang.serialization.Lifecycle;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -77,7 +72,7 @@ class PatternInterfaceCraftingMachineTest {
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
         TestBootstrap.bootstrapCapabilities();
-        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
+        AE2TestFixtures.ensureAE2KeyTypesInitialized();
         bindMissingContentItem();
         bindTestPatternInterfaceEntityType();
         bindTestPatternInterfaceBlock();
@@ -302,28 +297,12 @@ class PatternInterfaceCraftingMachineTest {
         return List.of(first, second);
     }
 
-    private static boolean ae2KeyTypesAreInitialized() {
-        try {
-            return !AEKeyTypes.getAll().isEmpty();
-        } catch (IllegalStateException ignored) {
-            return false;
-        }
-    }
-
-    private static void initializeAE2KeyTypes() {
-        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
-        AEKeyTypesInternal.setRegistry(registry);
-        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
-        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
-        registry.freeze();
-    }
-
     @SuppressWarnings("unchecked")
     private static void bindMissingContentItem() throws ReflectiveOperationException {
         MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        registry.unfreeze(true);
+        registry.unfreeze();
         try {
-            Item item = registry.getValue(AEItems.MISSING_CONTENT.id());
+            Item item = registry.get(AEItems.MISSING_CONTENT.id());
             if (item == null) {
                 item = new MissingContentItem(new Item.Properties());
                 Registry.register(registry, AEItems.MISSING_CONTENT.id(), item);
@@ -339,28 +318,15 @@ class PatternInterfaceCraftingMachineTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static void bindTestPatternInterfaceEntityType() {
-        ResourceLocation id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
-        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        registry.unfreeze(true);
-        try {
-            if (!registry.containsKey(id)) {
-                Registry.register(registry, id,
-                        new BlockEntityType<>(PatternInterfaceKind.INSTANCE.entityFactory(), Blocks.IRON_BLOCK));
-            }
-        } finally {
-            registry.freeze();
-        }
-        ModBlockEntities.BES.put(PatternInterfaceKind.INSTANCE.id(),
-                DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
+        AE2TestFixtures.bindEntityType(PatternInterfaceKind.INSTANCE.id(), PatternInterfaceKind.INSTANCE.entityFactory());
     }
 
     @SuppressWarnings("unchecked")
     private static void bindTestPatternInterfaceBlock() {
         ResourceLocation id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
         MappedRegistry<Block> registry = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
-        registry.unfreeze(true);
+        registry.unfreeze();
         try {
             if (!registry.containsKey(id)) {
                 Registry.register(registry, id, new IOPortBlock(PatternInterfaceKind.INSTANCE,

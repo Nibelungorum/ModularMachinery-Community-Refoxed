@@ -37,7 +37,7 @@ class UpgradeBusMenuTest {
 
     @Test
     void moves_items_between_player_inventory_and_upgrade_bus_slots() {
-        Inventory playerInventory = new Inventory(null, null);
+        Inventory playerInventory = new Inventory(null);
         ItemStack playerStack = new ItemStack(Items.IRON_INGOT, 4);
         playerStack.set(DataComponents.MAX_STACK_SIZE, 64);
         playerInventory.setItem(9, playerStack);
@@ -47,14 +47,14 @@ class UpgradeBusMenuTest {
         ItemStack movedToBus = menu.quickMoveStack(null, menu.playerInventorySlotStart());
 
         assertThat(movedToBus.getItem()).isEqualTo(Items.IRON_INGOT);
-        assertThat(owner.itemStorage().amount(0)).isEqualTo(4);
+        assertThat(owner.itemHandler().amount(0)).isEqualTo(4);
         assertThat(playerInventory.getItem(9).isEmpty()).isTrue();
 
         ItemStack movedToPlayer = menu.quickMoveStack(null, 0);
 
         assertThat(movedToPlayer.getItem()).isEqualTo(Items.IRON_INGOT);
-        assertThat(owner.itemStorage().amount(0)).isZero();
-        assertThat(owner.itemStorage().resource(0)).isNull();
+        assertThat(owner.itemHandler().amount(0)).isZero();
+        assertThat(owner.itemHandler().resource(0).isEmpty()).isTrue();
         assertThat(playerInventory.getItem(8).getCount()).isEqualTo(4);
     }
 
@@ -64,7 +64,7 @@ class UpgradeBusMenuTest {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         UpgradeBusMenu.writeClientOpenData(buffer, pos, UpgradeBusSize.ULTIMATE);
 
-        UpgradeBusMenu clientMenu = UpgradeBusMenu.clientOpen(1, new Inventory(null, null), buffer);
+        UpgradeBusMenu clientMenu = UpgradeBusMenu.clientOpen(1, new Inventory(null), buffer);
 
         assertThat(clientMenu.owner()).isNull();
         assertThat(clientMenu.pos()).isEqualTo(pos);

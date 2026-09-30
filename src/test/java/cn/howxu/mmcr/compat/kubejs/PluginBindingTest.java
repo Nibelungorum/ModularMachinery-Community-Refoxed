@@ -35,14 +35,9 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
-import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
-import dev.latvian.mods.kubejs.util.RegistryOpsContainer;
+import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import java.lang.reflect.Method;
 import net.minecraft.core.BlockPos;
-import net.minecraft.data.registries.VanillaRegistries;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.network.chat.Component;
@@ -55,7 +50,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.ScopedValue;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -799,7 +793,6 @@ class PluginBindingTest {
 
     @Test
     void public_recipe_builder_creates_a_component_output_in_recipe_event_context() {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:sharp_sword")
                 .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
@@ -809,10 +802,7 @@ class PluginBindingTest {
                         }
                         """));
 
-        var event = (RecipesKubeEvent) allocate(RecipesKubeEvent.class);
-        var ops = RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
-        setField(event, "ops", new RegistryOpsContainer(null, ops, null));
-        ScopedValue.where(RecipesKubeEvent.INSTANCE, event).run(builder::build);
+        withRegistryAccess(builder::build);
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("sharp_sword")).machineOutputs()).singleElement()
                 .isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
@@ -823,7 +813,6 @@ class PluginBindingTest {
 
     @Test
     void outputs_replaces_previously_declared_component_outputs() {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:replaced_component_output")
                 .recipePool("mmcr:test_machine_name")
                 .itemOutput("minecraft:iron_ingot", 1)
@@ -859,7 +848,6 @@ class PluginBindingTest {
 
     @Test
     void component_output_added_after_outputs_list_is_merged_at_the_new_position() {
-        Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:component_after_outputs")
                 .recipePool("mmcr:test_machine_name")
                 .outputs(List.of(new ItemStack(Items.DIAMOND)))
@@ -902,28 +890,25 @@ class PluginBindingTest {
     }
 
     private static MachineRecipe createInRecipeEvent(MachineRecipeBuilderJS builder) {
-        var event = (RecipesKubeEvent) allocate(RecipesKubeEvent.class);
-        var ops = RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
-        setField(event, "ops", new RegistryOpsContainer(null, ops, null));
         final MachineRecipe[] recipe = new MachineRecipe[1];
-        ScopedValue.where(RecipesKubeEvent.INSTANCE, event).run(() -> recipe[0] = builder.createObject());
+        withRegistryAccess(() -> recipe[0] = builder.createObject());
         return recipe[0];
+    }
+
+    private static void withRegistryAccess(Runnable action) {
+        RegistryAccessContainer previous = RegistryAccessContainer.current;
+        RegistryAccessContainer.current = RegistryAccessContainer.BUILTIN;
+        try {
+            action.run();
+        } finally {
+            RegistryAccessContainer.current = previous;
+        }
     }
 
     private static MachineControllerRuntime runtimeOf(MachineControllerBlockEntity controller) throws Exception {
         var field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
         field.setAccessible(true);
         return (MachineControllerRuntime) field.get(controller);
-    }
-
-    private static void setField(Object target, String name, Object value) {
-        try {
-            var field = target.getClass().getDeclaredField(name);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError(exception);
-        }
     }
 
     private static MachineStructureDefinition structure(ResourceLocation id) {

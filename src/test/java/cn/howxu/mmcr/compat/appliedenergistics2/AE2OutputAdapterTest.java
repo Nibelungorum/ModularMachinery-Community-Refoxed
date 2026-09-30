@@ -44,11 +44,11 @@ class AE2OutputAdapterTest {
                 changes::incrementAndGet);
         ItemStack stack = iron.toStack(8);
 
-        assertThat(handler.insertItem(0, stack, true)).isEmpty();
+        assertThat(handler.insertItem(0, stack, true).isEmpty()).isTrue();
         assertThat(network.amount()).isZero();
         assertThat(cache.isEmpty()).isTrue();
 
-        assertThat(handler.insertItem(0, stack, false)).isEmpty();
+        assertThat(handler.insertItem(0, stack, false).isEmpty()).isTrue();
         assertThat(network.amount()).isEqualTo(3L);
         assertThat(cache.getKey(0)).isEqualTo(iron);
         assertThat(cache.getAmount(0)).isEqualTo(5L);
@@ -65,7 +65,7 @@ class AE2OutputAdapterTest {
         IItemHandler handler = AE2NativeAdapters.outputItems(cache, () -> null, IActionSource.empty(), () -> {
         });
 
-        assertThat(handler.insertItem(0, iron.toStack(7), false)).isEmpty();
+        assertThat(handler.insertItem(0, iron.toStack(7), false).isEmpty()).isTrue();
 
         assertThat(cache.getKey(0)).isEqualTo(iron);
         assertThat(cache.getAmount(0)).isEqualTo(7L);
@@ -80,7 +80,7 @@ class AE2OutputAdapterTest {
         IItemHandler items = AE2NativeAdapters.outputItems(itemCache, () -> itemNetwork,
                 IActionSource.empty(), () -> {});
 
-        assertThat(items.insertItem(0, iron.toStack(8), false)).isEmpty();
+        assertThat(items.insertItem(0, iron.toStack(8), false).isEmpty()).isTrue();
         assertThat(itemNetwork.amount).isEqualTo(3L);
         assertThat(itemCache.getAmount(0)).isEqualTo(5L);
 
@@ -120,7 +120,7 @@ class AE2OutputAdapterTest {
     void flushUsesCommittedAmountAndSupportsNearMaximumLongAmounts() {
         AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
         long amount = Long.MAX_VALUE - 1L;
-        GenericStackInv cache = inventory(1, Long.MAX_VALUE);
+        GenericStackInv cache = longInventory(1, Long.MAX_VALUE);
         cache.setStack(0, new appeng.api.stacks.GenericStack(iron, amount));
         ShortfallStorage network = new ShortfallStorage(iron, Long.MAX_VALUE, amount - 1L);
 
@@ -144,6 +144,18 @@ class AE2OutputAdapterTest {
         GenericStackInv inventory = new GenericStackInv(Set.of(AEKeyType.fluids()), null,
                 GenericStackInv.Mode.STORAGE, 1);
         inventory.setCapacity(AEKeyType.fluids(), 10_000L);
+        return inventory;
+    }
+
+    private static GenericStackInv longInventory(int slots, long capacity) {
+        GenericStackInv inventory = new GenericStackInv(Set.of(AEKeyType.items()), null,
+                GenericStackInv.Mode.STORAGE, slots) {
+            @Override
+            public long getMaxAmount(AEKey key) {
+                return getCapacity(key.getType());
+            }
+        };
+        inventory.setCapacity(AEKeyType.items(), capacity);
         return inventory;
     }
 

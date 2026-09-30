@@ -446,7 +446,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        setItem(input.itemStorage(), 0, stack);
+        setItem(input.itemHandler(), 0, stack);
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
@@ -457,7 +457,7 @@ class FactoryRuntimeTest {
                         ItemStack.EMPTY)))), 1);
 
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
-        assertThat(input.itemStorage().amount(0)).isZero();
+        assertThat(input.itemHandler().amount(0)).isZero();
     }
 
     @Test
@@ -465,7 +465,7 @@ class FactoryRuntimeTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = asyncFactoryController(input);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
         FactoryRuntime runtime = new FactoryRuntime();
@@ -478,7 +478,7 @@ class FactoryRuntimeTest {
             assertThat(active.parallelism()).isEqualTo(1L);
             assertThat(active.recipe().id()).isEqualTo(MMCR.id("async_worker_fallback"));
         });
-        assertThat(input.itemStorage().amount(0)).isZero();
+        assertThat(input.itemHandler().amount(0)).isZero();
     }
 
     @Test
@@ -486,7 +486,7 @@ class FactoryRuntimeTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = asyncFactoryController(input);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
         FactoryRuntime runtime = new FactoryRuntime();
@@ -610,7 +610,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        setItem(input.itemStorage(), 0, stack);
+        setItem(input.itemHandler(), 0, stack);
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
@@ -625,7 +625,7 @@ class FactoryRuntimeTest {
 
         CraftingRuntime failed = runtime.activeRuntimes().getFirst();
         CraftingRuntime survivor = runtime.activeRuntimes().getLast();
-        setItem(input.itemStorage(), 0, ItemStack.EMPTY);
+        setItem(input.itemHandler(), 0, ItemStack.EMPTY);
         runtime.tick(candidates, 1);
 
         FactorySnapshot snapshot = runtime.snapshot();
@@ -637,7 +637,7 @@ class FactoryRuntimeTest {
         assertThat(failed.active()).isTrue();
         assertThat(survivor.active()).isTrue();
         assertThat(survivor.failure()).isNull();
-        assertThat(input.itemStorage().amount(0)).isZero();
+        assertThat(input.itemHandler().amount(0)).isZero();
         assertThat(snapshot.presentationLanes()).hasSize(2);
         assertThat(snapshot.presentationLanes().get(0).active()).isTrue();
         assertThat(snapshot.lanes().get(0).failure()).isNotNull();
@@ -1069,8 +1069,8 @@ class FactoryRuntimeTest {
 
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = sharedFactoryController(machineId, blockedId, output);
-        for (int slot = 0; slot < output.itemStorage().size(); slot++) {
-            setItem(output.itemStorage(), slot, new ItemStack(Items.COBBLESTONE, 64));
+        for (int slot = 0; slot < output.itemHandler().size(); slot++) {
+            setItem(output.itemHandler(), slot, new ItemStack(Items.COBBLESTONE, 64));
         }
 
         assertThat(controller.hasFactoryController()).isTrue();
@@ -1089,7 +1089,7 @@ class FactoryRuntimeTest {
         resolveSharedRequests(controller);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
 
-        setItem(output.itemStorage(), 0, ItemStack.EMPTY);
+        setItem(output.itemHandler(), 0, ItemStack.EMPTY);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
         RuntimeTestFixtures.advanceGameTime(controller.getLevel());
         runtime.tick(List.of(active, blocked), 1, 3L);
@@ -1243,11 +1243,11 @@ class FactoryRuntimeTest {
         input.linkControllerAppearance(controller.getBlockPos(), null);
 
         LevelStub.setGameTime(controller.getLevel(), 20L);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         long afterIron = controller.resourceAvailabilityEpoch();
 
         LevelStub.setGameTime(controller.getLevel(), 21L);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.GOLD_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.GOLD_INGOT, 1));
 
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(afterIron + 1);
     }
@@ -1266,10 +1266,10 @@ class FactoryRuntimeTest {
         input.setLevel(level);
         input.linkControllerAppearance(controller.getBlockPos(), null);
 
-        input.itemStorage().forceInsert(0, new ItemStack(Items.IRON_INGOT), 1L, false);
+        input.itemHandler().forceInsert(0, new ItemStack(Items.IRON_INGOT), 1L, false);
         controller.notifiedResources.clear();
 
-        input.itemStorage().forceInsert(1, new ItemStack(Items.GOLD_INGOT), 1L, false);
+        input.itemHandler().forceInsert(1, new ItemStack(Items.GOLD_INGOT), 1L, false);
 
         assertThat(controller.notifiedResources).hasSize(2)
                 .anySatisfy(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.IRON_INGOT)))
@@ -1292,11 +1292,11 @@ class FactoryRuntimeTest {
         ItemStack iron = new ItemStack(Items.IRON_INGOT);
         ItemStack gold = new ItemStack(Items.GOLD_INGOT);
 
-        output.itemStorage().forceInsert(0, iron, 2L, false);
-        output.itemStorage().forceInsert(1, gold, 2L, false);
+        output.itemHandler().forceInsert(0, iron, 2L, false);
+        output.itemHandler().forceInsert(1, gold, 2L, false);
         controller.notifiedOutputResources.clear();
 
-        output.itemStorage().forceExtract(1, 1L, false);
+        output.itemHandler().forceExtract(1, 1L, false);
 
         assertThat(controller.notifiedOutputResources).singleElement()
                 .satisfies(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.GOLD_INGOT)));
@@ -1328,10 +1328,10 @@ class FactoryRuntimeTest {
         LevelStub.setGameTime(controller.getLevel(), 20L);
         long initial = controller.resourceAvailabilityEpoch();
 
-        assertThat(handler.insertItem(0, new ItemStack(Items.IRON_INGOT), false)).isEmpty();
+        assertThat(handler.insertItem(0, new ItemStack(Items.IRON_INGOT), false).isEmpty()).isTrue();
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1L);
 
-        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -1342,7 +1342,7 @@ class FactoryRuntimeTest {
         input.linkControllerAppearance(controller.getBlockPos(), null);
         ItemStack iron = new ItemStack(Items.IRON_INGOT);
         ItemStack gold = new ItemStack(Items.GOLD_INGOT);
-        input.itemStorage().forceInsert(0, iron, 1L, false);
+        input.itemHandler().forceInsert(0, iron, 1L, false);
 
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
@@ -1364,8 +1364,8 @@ class FactoryRuntimeTest {
 
         LevelStub.setGameTime(controller.getLevel(), 3L);
         long beforeGoldInsertEpoch = controller.resourceAvailabilityEpoch();
-        assertThat(input.itemStorage().forceInsert(1, gold, 1L, false)).isEqualTo(1L);
-        assertThat(input.itemStorage().amount(1)).isEqualTo(1L);
+        assertThat(input.itemHandler().forceInsert(1, gold, 1L, false)).isEqualTo(1L);
+        assertThat(input.itemHandler().amount(1)).isEqualTo(1L);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeGoldInsertEpoch + 1L);
         assertThat(runtime.threadSnapshots().get(1).lastFailureUnloc())
                 .isEqualTo("gui.mmcr.controller.failure.missing_input");
@@ -1451,11 +1451,11 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.linkControllerAppearance(controller.getBlockPos(), null);
         MachineRecipe candidate = cancellingInputRecipe("factory_supplied_candidate_retry");
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(candidate), 1, 0L)).isTrue();
-        setItem(input.itemStorage(), 0, ItemStack.EMPTY);
+        setItem(input.itemHandler(), 0, ItemStack.EMPTY);
         thread.tick();
         assertThat(thread.runtime().active()).isFalse();
 
@@ -1463,7 +1463,7 @@ class FactoryRuntimeTest {
         thread.save(output, EMPTY_LOOKUP);
         FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP,
                 List.of(candidate));
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         var snapshot = controller.runtimeSnapshot();
 
         assertThat(restored.tryRestartLastRecipe(List.of(candidate), 1, snapshot.structure().version(),
@@ -1573,10 +1573,10 @@ class FactoryRuntimeTest {
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         List<MachineRecipe> candidates = RecipeRegistry.recipesForPool(MMCR.id("test_cube"));
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
 
         FactorySearchContext ironContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 0L);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.GOLD_INGOT, 1));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.GOLD_INGOT, 1));
         FactorySearchContext goldContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 1L);
 
         assertThat(ironContext.orderedCandidates()).containsExactly(iron);

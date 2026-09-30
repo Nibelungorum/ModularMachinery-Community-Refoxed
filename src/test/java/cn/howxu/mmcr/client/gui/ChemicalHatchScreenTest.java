@@ -16,6 +16,7 @@ import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
@@ -112,12 +113,12 @@ class ChemicalHatchScreenTest {
         ResourceKey<Chemical> key = ResourceKey.create(
                 MekanismAPI.CHEMICAL_REGISTRY_NAME, ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        return registry.get(key).orElseGet(() -> {
-            registry.unfreeze(true);
+        return registry.getHolder(key).orElseGet(() -> {
+            registry.unfreeze();
             Chemical value = new Chemical(ChemicalBuilder.builder().tint(EXPECTED_TINT));
-            Registry.register(registry, key.identifier(), value);
+            Registry.register(registry, key.location(), value);
             registry.freeze();
-            return registry.get(key).orElseThrow();
+            return registry.getHolder(key).orElseThrow();
         });
     }
 
@@ -136,7 +137,7 @@ class ChemicalHatchScreenTest {
 
     private static Inventory testInventory() throws Exception {
         Player player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
-        return new Inventory(player, null);
+        return new Inventory(player);
     }
 
     private static Unsafe unsafe() throws Exception {
@@ -185,6 +186,10 @@ class ChemicalHatchScreenTest {
                     .allocateInstance(CapabilityProbeScreen.class);
             setField(screen, "menu", menu);
             return screen;
+        }
+
+        @Override
+        protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         }
 
         @Override

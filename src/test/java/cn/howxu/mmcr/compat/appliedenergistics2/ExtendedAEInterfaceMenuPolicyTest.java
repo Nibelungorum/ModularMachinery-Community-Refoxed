@@ -1,10 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
-import appeng.api.stacks.AEKeyType;
-import appeng.api.stacks.AEKeyTypes;
-import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.menu.slot.AppEngSlot;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedInputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
@@ -12,29 +8,17 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterface
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.util.InterfaceMenuPolicy;
-import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.glodblock.github.extendedae.client.ExSemantics;
 import com.glodblock.github.extendedae.container.ContainerExInterface;
-import com.mojang.serialization.Lifecycle;
+import com.mojang.authlib.GameProfile;
 import java.lang.reflect.Constructor;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.EntityEquipment;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.neoforged.neoforge.registries.DeferredHolder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -49,9 +33,14 @@ class ExtendedAEInterfaceMenuPolicyTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
-        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
-        bindTestAE2InterfaceItem();
-        bindTestEntityType();
+        AE2TestFixtures.ensureAE2KeyTypesInitialized();
+        AE2TestFixtures.bindAE2InterfaceItem();
+        AE2TestFixtures.bindEntityType(ExtendedOutputInterfaceKind.INSTANCE.id(),
+                ExtendedOutputInterfaceKind.INSTANCE.entityFactory());
+        AE2TestFixtures.bindEntityType(AsyncOutputInterfaceKind.INSTANCE.id(),
+                AsyncOutputInterfaceKind.INSTANCE.entityFactory());
+        AE2TestFixtures.bindEntityType(ExtendedInputInterfaceKind.INSTANCE.id(),
+                ExtendedInputInterfaceKind.INSTANCE.entityFactory());
     }
 
     @Test
@@ -71,9 +60,7 @@ class ExtendedAEInterfaceMenuPolicyTest {
     void recognizesAllExtendedAeStorageSlotGroups() {
         OutputInterfaceBlockEntity output = outputHost();
         Player player = testPlayer();
-        EntityEquipment equipment = new EntityEquipment();
-        setPlayerField(player, "equipment", equipment);
-        Inventory playerInventory = new Inventory(player, equipment);
+        Inventory playerInventory = new Inventory(player);
         setPlayerField(player, "inventory", playerInventory);
         ContainerExInterface menu = new ContainerExInterface(ContainerExInterface.TYPE, 0,
                 playerInventory, output);
@@ -116,60 +103,6 @@ class ExtendedAEInterfaceMenuPolicyTest {
                 ExtendedInputInterfaceKind.INSTANCE);
     }
 
-    private static boolean ae2KeyTypesAreInitialized() {
-        try {
-            return !AEKeyTypes.getAll().isEmpty();
-        } catch (IllegalStateException ignored) {
-            return false;
-        }
-    }
-
-    private static void initializeAE2KeyTypes() {
-        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
-        AEKeyTypesInternal.setRegistry(registry);
-        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
-        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
-        registry.freeze();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void bindTestEntityType() {
-        bindTestEntityType(ExtendedOutputInterfaceKind.INSTANCE.id(), ExtendedOutputInterfaceKind.INSTANCE.entityFactory());
-        bindTestEntityType(AsyncOutputInterfaceKind.INSTANCE.id(), AsyncOutputInterfaceKind.INSTANCE.entityFactory());
-        bindTestEntityType(ExtendedInputInterfaceKind.INSTANCE.id(), ExtendedInputInterfaceKind.INSTANCE.entityFactory());
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T extends BlockEntity> void bindTestEntityType(String kind, BlockEntityType.BlockEntitySupplier<T> factory) {
-        ResourceLocation id = MMCR.id(kind);
-        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        registry.unfreeze(true);
-        try {
-            if (!registry.containsKey(id)) {
-                Registry.register(registry, id, new BlockEntityType<>(factory, Blocks.IRON_BLOCK));
-            }
-        } finally {
-            registry.freeze();
-        }
-        ModBlockEntities.BES.put(kind,
-                DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void bindTestAE2InterfaceItem() {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("ae2", "interface");
-        MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        registry.unfreeze(true);
-        try {
-            if (!registry.containsKey(id)) {
-                Registry.register(registry, id, new Item(new Item.Properties().setId(
-                        ResourceKey.create(Registries.ITEM, id))));
-            }
-        } finally {
-            registry.freeze();
-        }
-    }
-
     @SuppressWarnings("unchecked")
     private static Player testPlayer() {
         try {
@@ -200,12 +133,17 @@ class ExtendedAEInterfaceMenuPolicyTest {
 
     private static final class TestPlayer extends Player {
         private TestPlayer(Level level) {
-            super(level, null);
+            super(level, BlockPos.ZERO, 0F, new GameProfile(UUID.randomUUID(), "test"));
         }
 
         @Override
-        public GameType gameMode() {
-            return GameType.SURVIVAL;
+        public boolean isSpectator() {
+            return false;
+        }
+
+        @Override
+        public boolean isCreative() {
+            return false;
         }
     }
 }

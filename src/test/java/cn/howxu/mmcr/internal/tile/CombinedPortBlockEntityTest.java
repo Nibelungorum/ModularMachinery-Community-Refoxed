@@ -59,9 +59,9 @@ class CombinedPortBlockEntityTest {
                 .containsExactly(
                         new CapabilityType(PortFamilyIds.ITEM),
                         new CapabilityType(PortFamilyIds.FLUID));
-        assertThat(port.itemStorage()).isNotSameAs(port.fluidStorage());
-        assertThat(port.itemStorage().size()).isEqualTo(12);
-        assertThat(port.fluidStorage().size()).isEqualTo(2);
+        assertThat(port.itemHandler()).isNotSameAs(port.fluidHandler(Direction.NORTH));
+        assertThat(port.itemHandler().size()).isEqualTo(12);
+        assertThat(port.fluidHandler(Direction.NORTH).size()).isEqualTo(2);
         assertThat(port.kind().ioType()).isEqualTo(IOType.INPUT);
     }
 
@@ -86,8 +86,8 @@ class CombinedPortBlockEntityTest {
     @Test
     void ordinaryCombinedItemAndFluidStorageAreIndependent() {
         CombinedPortBlockEntity port = combined("combined_input_reinforced");
-        var items = port.itemStorage();
-        var fluids = port.fluidStorage();
+        var items = port.itemHandler();
+        var fluids = port.fluidHandler(Direction.NORTH);
         ItemStack iron = itemStack(Items.IRON_INGOT);
         FluidStack water = new FluidStack(Fluids.WATER, 1);
 
@@ -166,24 +166,24 @@ class CombinedPortBlockEntityTest {
 
         ExtendedCombinedPortBlockEntity source = extendedCombined("extended_combined_input_ultimate");
         FluidStack water = new FluidStack(Fluids.WATER, 1);
-        assertThat(source.fluidStorage().forceInsert(1, water, 1_234L, false)).isEqualTo(1_234L);
+        assertThat(source.fluidHandler().forceInsert(1, water, 1_234L, false)).isEqualTo(1_234L);
         CompoundTag output = new CompoundTag();
         source.saveAdditional(output, lookup);
 
         ExtendedCombinedPortBlockEntity restored = extendedCombined("extended_combined_input_ultimate");
         restored.loadAdditional(output, lookup);
 
-        assertThat(restored.fluidStorage().resource(0)).isEmpty();
-        assertThat(FluidStack.isSameFluidSameComponents(restored.fluidStorage().resource(1), water)).isTrue();
-        assertThat(restored.fluidStorage().resource(1).getAmount()).isEqualTo(1);
-        assertThat(restored.fluidStorage().amount(1)).isEqualTo(1_234L);
-        assertThat(restored.fluidStorage().resource(2)).isEmpty();
+        assertThat(restored.fluidHandler().resource(0)).isSameAs(FluidStack.EMPTY);
+        assertThat(FluidStack.isSameFluidSameComponents(restored.fluidHandler().resource(1), water)).isTrue();
+        assertThat(restored.fluidHandler().resource(1).getAmount()).isEqualTo(1);
+        assertThat(restored.fluidHandler().amount(1)).isEqualTo(1_234L);
+        assertThat(restored.fluidHandler().resource(2)).isSameAs(FluidStack.EMPTY);
     }
 
     private static void assertExtendedCombined(String id, int itemTypes, int fluidTypes) {
-        IOPortBlockEntity port = port(id);
-        var items = port.itemStorage();
-        var fluids = port.fluidStorage();
+        ExtendedCombinedPortBlockEntity port = extendedCombined(id);
+        var items = port.itemHandler();
+        var fluids = port.fluidHandler();
         List<ItemStack> resources = List.of(
                 itemStack(Items.IRON_INGOT), itemStack(Items.GOLD_INGOT), itemStack(Items.DIAMOND),
                 itemStack(Items.EMERALD), itemStack(Items.COPPER_INGOT), itemStack(Items.REDSTONE),

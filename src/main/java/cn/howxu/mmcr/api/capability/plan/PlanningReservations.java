@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
+import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import java.util.HashMap;
@@ -21,7 +22,7 @@ import java.util.Map;
 public final class PlanningReservations {
     private final Map<Object, Map<Integer, ResourceReservation>> resources = new IdentityHashMap<>();
     private final Map<Object, Map<Object, Long>> outputReservations = new IdentityHashMap<>();
-    private final Map<LongValueStorage, Long> values = new IdentityHashMap<>();
+    private final Map<Object, Long> values = new IdentityHashMap<>();
 
     public ItemStack item(IItemHandler handler, int slot) {
         ResourceReservation reservation = reservation(handler, slot, false);
@@ -105,30 +106,50 @@ public final class PlanningReservations {
     }
 
     public long valueAvailable(LongValueStorage storage, boolean insert) {
+        return valueAvailable(storage, storage.capacity(), storage.amount(), insert);
+    }
+
+    public long valueAvailable(LongEnergyHandler storage, boolean insert) {
+        return valueAvailable(storage, storage.getCapacityAsLong(), storage.getAmountAsLong(), insert);
+    }
+
+    public boolean reserveValue(LongValueStorage storage, long amount, boolean insert) {
+        return reserveValue(storage, storage.transferLimit(), storage.capacity(), storage.amount(), amount, insert,
+                true);
+    }
+
+    public boolean reserveValue(LongEnergyHandler storage, long amount, boolean insert) {
+        return reserveValue(storage, storage.getTransferLimit(), storage.getCapacityAsLong(),
+                storage.getAmountAsLong(), amount, insert, true);
+    }
+
+    public boolean reserveValueTotal(LongValueStorage storage, long amount, boolean insert) {
+        return reserveValue(storage, storage.transferLimit(), storage.capacity(), storage.amount(), amount, insert,
+                false);
+    }
+
+    public boolean reserveValueTotal(LongEnergyHandler storage, long amount, boolean insert) {
+        return reserveValue(storage, storage.getTransferLimit(), storage.getCapacityAsLong(),
+                storage.getAmountAsLong(), amount, insert, false);
+    }
+
+    private long valueAvailable(Object storage, long capacity, long amount, boolean insert) {
         long reserved = values.getOrDefault(storage, 0L);
         long available;
         try {
             available = insert
-                    ? Math.subtractExact(Math.subtractExact(storage.capacity(), storage.amount()), reserved)
-                    : Math.addExact(storage.amount(), reserved);
+                    ? Math.subtractExact(Math.subtractExact(capacity, amount), reserved)
+                    : Math.addExact(amount, reserved);
         } catch (ArithmeticException ignored) {
             return 0L;
         }
         return Math.max(0L, available);
     }
 
-    public boolean reserveValue(LongValueStorage storage, long amount, boolean insert) {
-        return reserveValue(storage, amount, insert, true);
-    }
-
-    public boolean reserveValueTotal(LongValueStorage storage, long amount, boolean insert) {
-        return reserveValue(storage, amount, insert, false);
-    }
-
-    private boolean reserveValue(LongValueStorage storage, long amount, boolean insert,
-                                 boolean enforceTransferLimit) {
-        if (amount <= 0L || enforceTransferLimit && amount > storage.transferLimit()
-                || valueAvailable(storage, insert) < amount) return false;
+    private boolean reserveValue(Object storage, long transferLimit, long capacity, long currentAmount,
+                                 long amount, boolean insert, boolean enforceTransferLimit) {
+        if (amount <= 0L || enforceTransferLimit && amount > transferLimit
+                || valueAvailable(storage, capacity, currentAmount, insert) < amount) return false;
         long reserved = values.getOrDefault(storage, 0L);
         long next;
         try {

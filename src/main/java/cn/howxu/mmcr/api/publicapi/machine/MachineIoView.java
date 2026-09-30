@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.HeatViewFacet;
+import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -101,7 +102,10 @@ public final class MachineIoView {
                 var handler = nativeFacet.itemHandler();
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
                     ItemStack stack = handler.getStackInSlot(slot);
-                    if (!stack.isEmpty()) amounts.merge(stack.copyWithCount(1), itemAmount(handler, slot), MachineIoView::saturatedAdd);
+                    long amount = itemAmount(handler, slot);
+                    if (!stack.isEmpty() && amount > 0L) {
+                        amounts.merge(stack.copyWithCount(1), amount, MachineIoView::saturatedAdd);
+                    }
                 }
                 continue;
             }
@@ -117,7 +121,10 @@ public final class MachineIoView {
                 var handler = nativeFacet.fluidHandler();
                 for (int tank = 0; tank < handler.getTanks(); tank++) {
                     FluidStack stack = handler.getFluidInTank(tank);
-                    if (!stack.isEmpty()) amounts.merge(stack.copyWithAmount(1), fluidAmount(handler, tank), MachineIoView::saturatedAdd);
+                    long amount = fluidAmount(handler, tank);
+                    if (!stack.isEmpty() && amount > 0L) {
+                        amounts.merge(stack.copyWithAmount(1), amount, MachineIoView::saturatedAdd);
+                    }
                 }
                 continue;
             }
@@ -224,7 +231,11 @@ public final class MachineIoView {
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
                     ItemStack current = handler.getStackInSlot(slot);
                     if (handler.isItemValid(slot, stack) && (current.isEmpty() || ItemStack.isSameItemSameComponents(current, stack))) {
-                        capacity = saturatedAdd(capacity, Math.max(0L, itemCapacity(handler, slot) - itemAmount(handler, slot)));
+                        long slotCapacity = itemCapacity(handler, slot);
+                        if (!nativeFacet.supportsLargeStacks()) {
+                            slotCapacity = Math.min(slotCapacity, stack.getMaxStackSize());
+                        }
+                        capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - itemAmount(handler, slot)));
                     }
                 }
                 continue;
@@ -326,22 +337,26 @@ public final class MachineIoView {
 
     private static long itemAmount(net.neoforged.neoforge.items.IItemHandler handler, int slot) {
         return handler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
-                ? storage.amount(slot) : handler.getStackInSlot(slot).getCount();
+                ? storage.amount(slot) : handler instanceof NativeStackSync.Item sync ? sync.amount(slot)
+                : handler.getStackInSlot(slot).getCount();
     }
 
     private static long itemCapacity(net.neoforged.neoforge.items.IItemHandler handler, int slot) {
         return handler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
-                ? storage.capacity(slot) : handler.getSlotLimit(slot);
+                ? storage.capacity(slot) : handler instanceof NativeStackSync.Item sync ? sync.capacity(slot)
+                : handler.getSlotLimit(slot);
     }
 
     private static long fluidAmount(net.neoforged.neoforge.fluids.capability.IFluidHandler handler, int tank) {
         return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
-                ? storage.amount(tank) : handler.getFluidInTank(tank).getAmount();
+                ? storage.amount(tank) : handler instanceof NativeStackSync.Fluid sync ? sync.amount(tank)
+                : handler.getFluidInTank(tank).getAmount();
     }
 
     private static long fluidCapacity(net.neoforged.neoforge.fluids.capability.IFluidHandler handler, int tank) {
         return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
-                ? storage.capacity(tank) : handler.getTankCapacity(tank);
+                ? storage.capacity(tank) : handler instanceof NativeStackSync.Fluid sync ? sync.capacity(tank)
+                : handler.getTankCapacity(tank);
     }
 
     private static long energyAmount(net.neoforged.neoforge.energy.IEnergyStorage storage) {

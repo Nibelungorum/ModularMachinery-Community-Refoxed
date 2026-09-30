@@ -79,7 +79,7 @@ class ControllerRecipeTextLinesTest {
     void itemOutputTextAndTooltipPreserveVanillaRarityStyle() {
         ItemStack stack = new ItemStack(Items.ENCHANTED_GOLDEN_APPLE);
         stack.set(DataComponents.CUSTOM_NAME, Component.literal("Styled apple").withStyle(ChatFormatting.AQUA));
-        Component styledName = stack.getStyledHoverName();
+        Component styledName = stack.getHoverName();
 
         ControllerTextLine line = ControllerRecipeTextLines.outputs(List.of(
                 new MachineOutputAmount(new MachineOutput.ItemOutput(stack, 1F), 1L))).getFirst();
@@ -103,7 +103,7 @@ class ControllerRecipeTextLinesTest {
         assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L))
                 .extracting(ControllerTextLine::text)
                 .contains(Component.translatable("gui.mmcr.controller.recipe_output.item", "6 ",
-                        new ItemStack(Items.DIAMOND).getStyledHoverName()));
+                        new ItemStack(Items.DIAMOND).getHoverName()));
     }
 
     @Test
@@ -135,7 +135,7 @@ class ControllerRecipeTextLinesTest {
                 Component.translatable("gui.mmcr.controller.recipe.energy_input", "400"),
                 Component.translatable("gui.mmcr.controller.recipe_output.title"),
                 Component.translatable("gui.mmcr.controller.recipe_output.item", "",
-                        new ItemStack(Items.DIAMOND).getStyledHoverName()));
+                         new ItemStack(Items.DIAMOND).getHoverName()));
         assertThat(lines.get(0).leftIndent()).isZero();
         assertThat(lines.get(1).leftIndent()).isZero();
         assertThat(lines.get(2).leftIndent()).isEqualTo(4);

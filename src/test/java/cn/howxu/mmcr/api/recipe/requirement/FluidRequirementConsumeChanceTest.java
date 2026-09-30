@@ -13,7 +13,6 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.material.Fluids;
@@ -35,7 +34,6 @@ class FluidRequirementConsumeChanceTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         water = FluidIngredient.of(Fluids.WATER);
     }
 

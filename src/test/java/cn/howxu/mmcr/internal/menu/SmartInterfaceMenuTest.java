@@ -31,7 +31,7 @@ class SmartInterfaceMenuTest {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeBlockPos(pos);
 
-        SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new Inventory(null, null), buffer);
+        SmartInterfaceMenu menu = SmartInterfaceMenu.clientOpen(1, new Inventory(null), buffer);
 
         assertThat(menu.pos()).isEqualTo(pos);
     }

@@ -93,7 +93,7 @@ class CapabilityHostTest {
 
         assertThat(handler.getSlots()).isGreaterThan(1);
         ItemStack iron = new ItemStack(Items.IRON_INGOT, 3);
-        assertThat(handler.insertItem(0, iron, false)).isEmpty();
+        assertThat(handler.insertItem(0, iron, false).isEmpty()).isTrue();
         assertThat(item.prepare(request(item)).commit().success()).isTrue();
 
         ItemStack stored = handler.getStackInSlot(0);

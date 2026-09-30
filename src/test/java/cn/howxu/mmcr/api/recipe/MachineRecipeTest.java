@@ -25,7 +25,6 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -34,7 +33,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
@@ -118,7 +116,6 @@ class MachineRecipeTest {
 
     @Test
     void outputs_roundtrip_native_component_stack() {
-        bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:better_diamond_sword");
         root.addProperty("recipe_pool", "mmcr:test_machine_name");
@@ -129,7 +126,7 @@ class MachineRecipeTest {
         var components = new JsonObject();
         var customName = new JsonObject();
         customName.addProperty("text", "Better钻石剑");
-        components.add("minecraft:custom_name", customName);
+        components.addProperty("minecraft:custom_name", customName.toString());
         var enchantments = new JsonObject();
         enchantments.addProperty("minecraft:sharpness", 4);
         components.add("minecraft:enchantments", enchantments);
@@ -147,7 +144,6 @@ class MachineRecipeTest {
 
     @Test
     void enchanted_output_components_use_bound_enchantment_holders_for_tooltips() {
-        bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:tooltip_safe_enchanted_output");
         root.addProperty("recipe_pool", "mmcr:machine");
@@ -173,12 +169,11 @@ class MachineRecipeTest {
                 .findFirst().orElseThrow();
         ItemStack stack = outputRequirement.stack(componentJsonOps());
         var enchantment = stack.get(DataComponents.ENCHANTMENTS).keySet().iterator().next();
-        assertThat(enchantment.unwrapKey().orElseThrow().identifier()).isEqualTo(ResourceLocation.parse("minecraft:sharpness"));
+        assertThat(enchantment.unwrapKey().orElseThrow().location()).isEqualTo(ResourceLocation.parse("minecraft:sharpness"));
     }
 
     @Test
     void input_requirement_components_match_runtime_stack_from_standard_json() {
-        bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:component_input");
         root.addProperty("recipe_pool", "mmcr:machine");
@@ -199,14 +194,13 @@ class MachineRecipeTest {
 
         assertThat(requirement.components().matches(actual)).isTrue();
         assertThat(actual.get(DataComponents.ENCHANTMENTS).getLevel(enchantment("minecraft:sharpness"))).isEqualTo(2);
-        assertThat(actual.get(DataComponents.ENCHANTMENTS).keySet().iterator().next().unwrapKey().orElseThrow().identifier())
+        assertThat(actual.get(DataComponents.ENCHANTMENTS).keySet().iterator().next().unwrapKey().orElseThrow().location())
                 .isEqualTo(ResourceLocation.parse("minecraft:sharpness"));
         assertThat(actual.get(DataComponents.REPAIR_COST)).isEqualTo(1);
     }
 
     @Test
     void output_requirement_components_roundtrip_from_standard_json() {
-        bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:component_output");
         root.addProperty("recipe_pool", "mmcr:machine");
@@ -289,7 +283,6 @@ class MachineRecipeTest {
 
     @Test
     void recipe_preserves_canonical_requirements_and_outputs() {
-        var nugget = bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(
                 MMCR.id("legacy"),
                 MMCR.id("machine"),
@@ -298,7 +291,7 @@ class MachineRecipeTest {
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2),
                         new MachineIngredient.EnergyIngredient(40)
                 ),
-                List.of(new ItemStack(nugget, 1))
+                List.of(new ItemStack(Items.IRON_NUGGET, 1))
         );
 
         assertThat(recipe.requirements()).hasSize(3);
@@ -332,9 +325,6 @@ class MachineRecipeTest {
                 itemOutputRequirement(itemId(Items.IRON_NUGGET), 3),
                 energyRequirement(60)
         ));
-
-        bindItemComponents(Items.IRON_NUGGET);
-        bindItemComponents(Items.GOLD_NUGGET);
 
         var recipe = MachineRecipe.CODEC.codec().parse(jsonOps(), root).getOrThrow();
         assertThat(recipe.requirements()).hasSize(3);
@@ -391,7 +381,6 @@ class MachineRecipeTest {
 
     @Test
     void fluidOnlyRequirementRecipeAssemblesEmptyItemStack() {
-        bindFluidComponents(Fluids.WATER);
         var recipe = RecipeTestSupport.create(
                 MMCR.id("fluid_only"),
                 MMCR.id("machine"),
@@ -406,7 +395,7 @@ class MachineRecipeTest {
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000)))
         );
 
-        assertThat(recipe.assemble(null)).isEmpty();
+        assertThat(recipe.assemble(null, VanillaRegistries.createLookup()).isEmpty()).isTrue();
     }
 
     @Test
@@ -450,8 +439,6 @@ class MachineRecipeTest {
 
     @Test
     void output_requirement_chance_roundtrips() {
-        bindItemComponents(Items.IRON_NUGGET);
-        bindFluidComponents(Fluids.WATER);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:chance_outputs");
         root.addProperty("recipe_pool", "mmcr:machine");
@@ -482,7 +469,6 @@ class MachineRecipeTest {
 
     @Test
     void machine_output_codec_roundtrips_item_output_and_defaults_missing_chance() {
-        bindItemComponents(Items.IRON_NUGGET);
         var output = new MachineOutput.ItemOutput(Items.IRON_NUGGET.getDefaultInstance().copyWithCount(4), 0.25F);
 
         var encoded = MachineOutput.CODEC.encodeStart(jsonOps(), output).getOrThrow().getAsJsonObject();
@@ -499,7 +485,6 @@ class MachineRecipeTest {
 
     @Test
     void machine_output_codec_roundtrips_fluid_output_and_clamps_chance() {
-        bindFluidComponents(Fluids.WATER);
         var overChance = new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 500), 2F);
 
         var encoded = MachineOutput.CODEC.encodeStart(jsonOps(), overChance).getOrThrow().getAsJsonObject();
@@ -517,7 +502,6 @@ class MachineRecipeTest {
 
     @Test
     void codec_preserves_raw_values_when_runtime_modifiers_change_derived_values() {
-        bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(
                 MMCR.id("raw_preserved"),
                 MMCR.id("machine"),
@@ -623,12 +607,6 @@ class MachineRecipeTest {
                         energy -> assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.OUTPUT));
     }
 
-    private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
-        var holder = fluid.builtInRegistryHolder();
-        holder.bindComponents(DataComponentMap.EMPTY);
-        return holder;
-    }
-
     private static JsonObject baseRecipeJson() {
         var root = new JsonObject();
         root.addProperty("id", "mmcr:partial_outputs");
@@ -660,12 +638,6 @@ class MachineRecipeTest {
         return BuiltInRegistries.ITEM.getKey(item).toString();
     }
 
-    private static Holder<Item> bindItemComponents(Item item) {
-        var holder = item.builtInRegistryHolder();
-        holder.bindComponents(DataComponentMap.EMPTY);
-        return holder;
-    }
-
     private static JsonArray itemOutputs(String itemId, int count) {
         var output = new JsonObject();
         output.addProperty("id", itemId);
@@ -694,7 +666,9 @@ class MachineRecipeTest {
         requirement.addProperty("type", "minecraft:item");
         requirement.addProperty("io", io);
         var item = new JsonArray();
-        item.add(itemId);
+        var ingredient = new JsonObject();
+        ingredient.addProperty("item", itemId);
+        item.add(ingredient);
         requirement.add("item", item);
         requirement.addProperty("count", count);
         return requirement;

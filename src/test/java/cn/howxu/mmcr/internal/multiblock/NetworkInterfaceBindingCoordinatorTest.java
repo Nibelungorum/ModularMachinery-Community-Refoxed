@@ -394,7 +394,7 @@ class NetworkInterfaceBindingCoordinatorTest {
         private MinecraftServer server;
 
         private TestServerLevel() {
-            super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
+            super(null, null, null, null, Level.OVERWORLD, null, null, false, 0L, List.of(), false, null);
         }
 
         @Override public MinecraftServer getServer() { return server; }

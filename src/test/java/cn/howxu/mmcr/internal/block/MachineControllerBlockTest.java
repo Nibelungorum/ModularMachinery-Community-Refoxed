@@ -98,7 +98,7 @@ class MachineControllerBlockTest {
         controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
                 null, scheduler, scheduler.getBlockPos(), scheduler.getBlockPos(), (String) null)));
 
-        AbstractContainerMenu menu = MachineControllerBlock.createMenu(1, new Inventory(null, null), null, controller);
+        AbstractContainerMenu menu = MachineControllerBlock.createMenu(1, new Inventory(null), null, controller);
 
         assertThat(menu).isInstanceOf(MachineControllerMenu.class);
         assertThat(menu).isNotInstanceOf(FactoryControllerMenu.class);

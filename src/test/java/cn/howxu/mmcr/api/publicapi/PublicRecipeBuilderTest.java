@@ -362,7 +362,7 @@ class PublicRecipeBuilderTest {
     private static RegistryAccess networkRegistryAccess() {
         MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
         VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT).listElements()
-                .forEach(holder -> Registry.register(enchantments, holder.key().identifier(), holder.value()));
+                .forEach(holder -> Registry.register(enchantments, holder.key().location(), holder.value()));
         enchantments.freeze();
         List<Registry<?>> registries = new ArrayList<>();
         RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).registries()

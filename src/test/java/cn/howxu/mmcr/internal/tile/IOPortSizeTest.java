@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -49,23 +50,23 @@ class IOPortSizeTest {
         ItemBusBlockEntity normal = itemBus("item_input_bus");
         ItemBusBlockEntity ludicrous = itemBus("item_output_bus_ludicrous");
 
-        assertThat(tiny.itemStorage().size()).isEqualTo(1);
-        assertThat(normal.itemStorage().size()).isEqualTo(6);
-        assertThat(ludicrous.itemStorage().size()).isEqualTo(32);
+        assertThat(tiny.itemHandler().size()).isEqualTo(1);
+        assertThat(normal.itemHandler().size()).isEqualTo(6);
+        assertThat(ludicrous.itemHandler().size()).isEqualTo(32);
     }
 
     @Test
     void itemBusCachesInventoryEmptyState() {
         ItemBusBlockEntity bus = itemBus("item_output_bus");
 
-        assertThat(isStorageEmpty(bus.itemStorage())).isTrue();
+        assertThat(isStorageEmpty(bus.itemHandler())).isTrue();
 
-        bus.itemStorage().forceInsert(0, new ItemStack(Items.IRON_INGOT), 1L, false);
-        assertThat(isStorageEmpty(bus.itemStorage())).isFalse();
+        bus.itemHandler().forceInsert(0, new ItemStack(Items.IRON_INGOT), 1L, false);
+        assertThat(isStorageEmpty(bus.itemHandler())).isFalse();
 
-        bus.itemStorage().forceExtract(0, bus.itemStorage().amount(0), false);
+        bus.itemHandler().forceExtract(0, bus.itemHandler().amount(0), false);
 
-        assertThat(isStorageEmpty(bus.itemStorage())).isTrue();
+        assertThat(isStorageEmpty(bus.itemHandler())).isTrue();
     }
 
     @Test
@@ -86,7 +87,7 @@ class IOPortSizeTest {
         List<ItemStack> resources = itemResources();
         for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
             ExtendedItemBusBlockEntity bus = extendedItemBus("extended_item_input_bus_" + size.id());
-            LongItemStorage storage = bus.itemStorage();
+            LongItemStorage storage = bus.itemHandler();
 
             assertThat(bus.capabilitySnapshot().capabilities()).hasSize(1)
                     .first().isInstanceOf(ItemBusCapability.class);
@@ -107,7 +108,7 @@ class IOPortSizeTest {
     void extendedFluidHatchUsesExpandedLongResourceTanksAndRejectsAResourceAfterAllTypesAreOccupied() {
         for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
             ExtendedFluidHatchBlockEntity hatch = extendedFluidHatch("extended_fluid_input_hatch_" + size.id());
-            LongFluidStorage storage = hatch.fluidStorage();
+            LongFluidStorage storage = hatch.fluidHandler(Direction.NORTH);
             FluidStack water = new FluidStack(Fluids.WATER, 1);
             FluidStack lava = new FluidStack(Fluids.LAVA, 1);
 
@@ -131,9 +132,9 @@ class IOPortSizeTest {
 
         assertThat(reinforced.capabilitySnapshot().capabilities()).hasSize(1)
                 .first().isInstanceOf(EnergyHatchCapability.class);
-        assertThat(reinforced.getEnergyStorage().capacity()).isEqualTo(Integer.MAX_VALUE);
-        assertThat(ultimate.getEnergyStorage().capacity()).isEqualTo(Long.MAX_VALUE);
-        assertThat(ultimate.getEnergyStorage().insert((long) Integer.MAX_VALUE + 1L, false))
+        assertThat(reinforced.energyStorage().getCapacityAsLong()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(ultimate.energyStorage().getCapacityAsLong()).isEqualTo(Long.MAX_VALUE);
+        assertThat(ultimate.energyStorage().insertLong((long) Integer.MAX_VALUE + 1L, false))
                 .isEqualTo((long) Integer.MAX_VALUE + 1L);
     }
 
@@ -203,7 +204,7 @@ class IOPortSizeTest {
     }
 
     private static LongFluidStorage tank(FluidHatchBlockEntity hatch) {
-        return hatch.fluidStorage();
+        return hatch.fluidHandler(Direction.NORTH);
     }
 
     private static boolean isStorageEmpty(LongItemStorage storage) {

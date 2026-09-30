@@ -33,6 +33,9 @@ final class NativeRequirementPlanning {
     static RequirementPlan item(ItemRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+        }
         if (!insert && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
@@ -49,21 +52,26 @@ final class NativeRequirementPlanning {
             ItemHandlerFacet facet = capability.facet(ItemHandlerFacet.class).orElse(null);
             if (facet == null || facet.itemHandler() == null) continue;
             available = RequirementHandlerSupport.saturatingAdd(available,
-                    itemAvailable(facet.itemHandler(), requirement, requested, insert));
+                    itemAvailable(facet.itemHandler(), requirement, requested, insert, facet.supportsLargeStacks()));
         }
-        long maximum = Math.min(context.requestedParallelism(), available / perBatch);
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        if (maximum <= 0L && !partial) return blocked(requirement, context, insert, requestedAmount, available);
+        long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
+        if (maximum <= 0L) return blocked(requirement, context, insert, requestedAmount, available);
+        RequirementHandlerSupport.ConsumeProfile consumed = insert ? null
+                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism());
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> itemOperations(requirement, ordered, context, parallelism, requested,
-                        insert, partial, reservations),
+                        insert, partial, consumed, reservations),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> itemOperations(
-                        requirement, ordered, context, parallelism, requested, insert, partial, reservations)));
+                        requirement, ordered, context, parallelism, requested, insert, partial, consumed, reservations)));
     }
 
     static RequirementPlan fluid(FluidRequirement requirement, List<MachineCapability> capabilities,
                                  PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+        }
         if (!insert && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
@@ -82,14 +90,16 @@ final class NativeRequirementPlanning {
             available = RequirementHandlerSupport.saturatingAdd(available,
                     fluidAvailable(facet.fluidHandler(), requirement, requested, insert));
         }
-        long maximum = Math.min(context.requestedParallelism(), available / perBatch);
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        if (maximum <= 0L && !partial) return blocked(requirement, context, insert, requestedAmount, available);
+        long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
+        if (maximum <= 0L) return blocked(requirement, context, insert, requestedAmount, available);
+        RequirementHandlerSupport.ConsumeProfile consumed = insert ? null
+                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism());
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> fluidOperations(requirement, ordered, context, parallelism, requested,
-                        insert, partial, reservations),
+                        insert, partial, consumed, reservations),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> fluidOperations(
-                        requirement, ordered, context, parallelism, requested, insert, partial, reservations)));
+                        requirement, ordered, context, parallelism, requested, insert, partial, consumed, reservations)));
     }
 
     static RequirementPlan energy(EnergyRequirement requirement, List<MachineCapability> capabilities,
@@ -103,12 +113,13 @@ final class NativeRequirementPlanning {
         for (MachineCapability capability : ordered) {
             EnergyStorageFacet facet = capability.facet(EnergyStorageFacet.class).orElse(null);
             if (facet != null && facet.energyStorage() != null) {
-                available = RequirementHandlerSupport.saturatingAdd(available, energyAvailable(facet.energyStorage(), insert));
+                available = RequirementHandlerSupport.saturatingAdd(available,
+                        energyAvailable(facet.energyStorage(), context.reservations(), insert));
             }
         }
-        long maximum = Math.min(context.requestedParallelism(), available / perBatch);
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        if (maximum <= 0L && !partial) return blocked(requirement, context, insert,
+        long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
+        if (maximum <= 0L) return blocked(requirement, context, insert,
                 RequirementHandlerSupport.scaled(perBatch, context.requestedParallelism()), available);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> energyOperations(requirement, ordered, context, parallelism, insert,
@@ -120,8 +131,10 @@ final class NativeRequirementPlanning {
     private static RequirementPlan.OperationPlan itemOperations(ItemRequirement requirement, List<MachineCapability> capabilities,
                                                                    PlanningContext context, long parallelism, ItemStack output,
                                                                    boolean insert, boolean partial,
+                                                                   RequirementHandlerSupport.ConsumeProfile consumed,
                                                                    PlanningReservations reservations) {
-        long remaining = RequirementHandlerSupport.scaled(insert ? output.getCount() : requirement.count(), parallelism);
+        long batches = insert ? parallelism : consumed.consumedBatches(parallelism);
+        long remaining = RequirementHandlerSupport.scaled(insert ? output.getCount() : requirement.count(), batches);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
             ItemHandlerFacet facet = capability.facet(ItemHandlerFacet.class).orElse(null);
@@ -134,10 +147,12 @@ final class NativeRequirementPlanning {
                         || !requirement.components().matches(current))) continue;
                 if (insert && !handler.isItemValid(slot, output)
                         || insert && !current.isEmpty() && !ItemStack.isSameItemSameComponents(current, output)) continue;
-                long moved = Math.min(remaining, insert ? itemCapacity(handler, slot) - reservations.itemAmount(handler, slot)
+                long capacity = itemCapacity(handler, slot);
+                if (insert && !facet.supportsLargeStacks()) capacity = Math.min(capacity, output.getMaxStackSize());
+                long moved = Math.min(remaining, insert ? capacity - reservations.itemAmount(handler, slot)
                         : reservations.itemAmount(handler, slot));
                 if (moved <= 0L) continue;
-                if (insert ? !reservations.reserveItemInsert(handler, slot, output, moved, itemCapacity(handler, slot))
+                if (insert ? !reservations.reserveItemInsert(handler, slot, output, moved, capacity)
                         : !reservations.reserveItemExtract(handler, slot, current, moved)) continue;
                 actions.add(new CapabilityRequests.ItemAction(slot, insert ? output : current, moved, insert));
                 remaining -= moved;
@@ -146,14 +161,16 @@ final class NativeRequirementPlanning {
                     capability.type(), IOType.valueOf(requirement.io().name()), parallelism, actions)));
         }
         return operationResult(requirement, context, operations, remaining, insert, partial,
-                RequirementHandlerSupport.scaled(output.getCount(), parallelism));
+                insert ? RequirementHandlerSupport.scaled(output.getCount(), parallelism) : 0L);
     }
 
     private static RequirementPlan.OperationPlan fluidOperations(FluidRequirement requirement, List<MachineCapability> capabilities,
                                                                    PlanningContext context, long parallelism, FluidStack output,
                                                                    boolean insert, boolean partial,
+                                                                   RequirementHandlerSupport.ConsumeProfile consumed,
                                                                    PlanningReservations reservations) {
-        long remaining = RequirementHandlerSupport.scaled(insert ? output.getAmount() : requirement.amount(), parallelism);
+        long batches = insert ? parallelism : consumed.consumedBatches(parallelism);
+        long remaining = RequirementHandlerSupport.scaled(insert ? output.getAmount() : requirement.amount(), batches);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
             FluidHandlerFacet facet = capability.facet(FluidHandlerFacet.class).orElse(null);
@@ -177,7 +194,7 @@ final class NativeRequirementPlanning {
                     capability.type(), IOType.valueOf(requirement.io().name()), parallelism, actions)));
         }
         return operationResult(requirement, context, operations, remaining, insert, partial,
-                RequirementHandlerSupport.scaled(output.getAmount(), parallelism));
+                insert ? RequirementHandlerSupport.scaled(output.getAmount(), parallelism) : 0L);
     }
 
     private static RequirementPlan.OperationPlan energyOperations(EnergyRequirement requirement, List<MachineCapability> capabilities,
@@ -189,13 +206,18 @@ final class NativeRequirementPlanning {
         for (MachineCapability capability : capabilities) {
             EnergyStorageFacet facet = capability.facet(EnergyStorageFacet.class).orElse(null);
             if (facet == null || facet.energyStorage() == null || remaining <= 0L) continue;
-            long moved = Math.min(remaining, energyAvailable(facet.energyStorage(), insert));
+            long moved = Math.min(remaining, Math.min(
+                    energyAvailable(facet.energyStorage(), reservations, insert),
+                    RequirementHandlerSupport.scaled(energyTransferLimit(facet.energyStorage()), parallelism)));
             if (moved <= 0L) continue;
+            if (facet.energyStorage() instanceof LongEnergyHandler storage
+                    && !reservations.reserveValueTotal(storage, moved, insert)) continue;
             operations.add(capability.prepare(new CapabilityRequests.ValueRequest(capability.type(),
                     IOType.valueOf(requirement.io().name()), parallelism, moved, insert)));
             remaining -= moved;
         }
-        return operationResult(requirement, context, operations, remaining, insert, partial, 0L);
+        return operationResult(requirement, context, operations, remaining, insert, partial,
+                insert ? RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism) : 0L);
     }
 
     private static RequirementPlan.OperationPlan operationResult(MachineRequirement requirement, PlanningContext context,
@@ -213,24 +235,39 @@ final class NativeRequirementPlanning {
 
     private static RequirementPlan blocked(MachineRequirement requirement, PlanningContext context, boolean insert,
                                            long requested, long available) {
-        return RequirementHandlerSupport.blockedPlan(requirement, context, insert ? BuiltinFailureReasons.MISSING_OUTPUT
-                : requirement instanceof EnergyRequirement ? BuiltinFailureReasons.MISSING_ENERGY
-                : BuiltinFailureReasons.MISSING_INPUT, Map.of("required", Long.toString(requested),
-                "available", Long.toString(available)));
+        Map<String, String> details = Map.of("required", Long.toString(requested),
+                "available", Long.toString(available));
+        if (insert) {
+            return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
+                    BuiltinFailureReasons.MISSING_OUTPUT, requested, details);
+        }
+        return RequirementHandlerSupport.blockedPlan(requirement, context,
+                requirement instanceof EnergyRequirement ? BuiltinFailureReasons.MISSING_ENERGY
+                        : BuiltinFailureReasons.MISSING_INPUT, details);
     }
 
-    private static long itemAvailable(IItemHandler handler, ItemRequirement requirement, ItemStack output, boolean insert) {
+    private static long itemAvailable(IItemHandler handler, ItemRequirement requirement, ItemStack output, boolean insert,
+                                     boolean supportsLargeStacks) {
         long result = 0L;
         for (int slot = 0; slot < handler.getSlots(); slot++) {
             ItemStack stack = handler.getStackInSlot(slot);
             if (insert) {
                 if (handler.isItemValid(slot, output) && (stack.isEmpty() || ItemStack.isSameItemSameComponents(stack, output))) {
-                    result = RequirementHandlerSupport.saturatingAdd(result, Math.max(0L, itemCapacity(handler, slot) - itemAmount(handler, slot)));
+                    long capacity = itemCapacity(handler, slot);
+                    if (!supportsLargeStacks) capacity = Math.min(capacity, output.getMaxStackSize());
+                    result = RequirementHandlerSupport.saturatingAdd(result,
+                            Math.max(0L, capacity - itemAmount(handler, slot)));
                 }
             } else if (!stack.isEmpty() && requirement.item() != null && requirement.item().test(stack)
                     && requirement.components().matches(stack)) result = RequirementHandlerSupport.saturatingAdd(result, itemAmount(handler, slot));
         }
         return result;
+    }
+
+    private static long maximum(long requested, long perBatch, long available, boolean insert, boolean partial) {
+        long maximum = Math.min(requested, available / perBatch);
+        if (insert && partial && available > 0L) return requested;
+        return insert && maximum == 0L && available > 0L ? 1L : maximum;
     }
 
     private static long fluidAvailable(IFluidHandler handler, FluidRequirement requirement, FluidStack output, boolean insert) {
@@ -248,10 +285,13 @@ final class NativeRequirementPlanning {
         return result;
     }
 
-    private static long energyAvailable(IEnergyStorage storage, boolean insert) {
-        if (storage instanceof LongEnergyHandler longStorage) return insert
-                ? longStorage.getCapacityAsLong() - longStorage.getAmountAsLong() : longStorage.getAmountAsLong();
+    private static long energyAvailable(IEnergyStorage storage, PlanningReservations reservations, boolean insert) {
+        if (storage instanceof LongEnergyHandler longStorage) return reservations.valueAvailable(longStorage, insert);
         return insert ? (long) storage.getMaxEnergyStored() - storage.getEnergyStored() : storage.getEnergyStored();
+    }
+
+    private static long energyTransferLimit(IEnergyStorage storage) {
+        return storage instanceof LongEnergyHandler longStorage ? longStorage.getTransferLimit() : Integer.MAX_VALUE;
     }
 
     private static long itemAmount(IItemHandler handler, int slot) {

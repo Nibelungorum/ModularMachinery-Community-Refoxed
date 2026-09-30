@@ -18,13 +18,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
@@ -89,7 +84,7 @@ class RecipeApiSmokeTest {
 
     @Test
     void recipe_codec_roundtrip_preserves_fluid_outputs_empty_and_one() {
-        var waterHolder = bindFluidComponents(Fluids.WATER);
+        var water = Fluids.WATER;
 
         var machineId = MMCR.id("fluid_outputs_machine");
 
@@ -107,7 +102,7 @@ class RecipeApiSmokeTest {
                 List.of(),
                 List.of(),
                 List.of(), 0, 1, false,
-                List.of(new FluidStack(waterHolder, 250))
+                List.of(new FluidStack(water, 250))
         );
 
         var ops = jsonOps();
@@ -127,16 +122,6 @@ class RecipeApiSmokeTest {
         assertThat(oneBack.id()).isEqualTo(oneRecipe.id());
         assertThat(oneBack.recipePoolId()).isEqualTo(oneRecipe.recipePoolId());
         assertThat(oneBack.tickTime()).isEqualTo(oneRecipe.tickTime());
-    }
-
-    private static Holder<Fluid> bindFluidComponents(Fluid fluid) {
-        var holder = fluid.builtInRegistryHolder();
-        holder.bindComponents(DataComponentMap.EMPTY);
-        return holder;
-    }
-
-    private static void bindItemComponents(Item item) {
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
 
     @Test
@@ -240,8 +225,6 @@ class RecipeApiSmokeTest {
 
     @Test
     void runtime_requirements_apply_all_supported_modifier_targets() {
-        bindFluidComponents(Fluids.WATER);
-        bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(
                 MMCR.id("runtime_modifiers"),
                 MMCR.id("runtime_machine"),

@@ -303,7 +303,7 @@ class AsyncCraftingExecutionTest {
         AsyncContinuation.Yield.MainThread screenFlush = (AsyncContinuation.Yield.MainThread) continuation.advance(context);
         continuation = screenFlush.resume().apply(MainThreadStep.Result.success());
         AsyncContinuation.Yield.MainThread sharedIo = (AsyncContinuation.Yield.MainThread) continuation.advance(context);
-        AsyncContinuation restart = ignored -> AsyncContinuation.Yield.complete();
+        AsyncContinuation restart = (AsyncExecutionContext ignoredContext) -> AsyncContinuation.Yield.complete();
 
         assertThat(sharedIo.resume().apply(MainThreadStep.Result.value(restart))).isSameAs(restart);
     }
@@ -371,10 +371,10 @@ class AsyncCraftingExecutionTest {
         public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
             planCalls.incrementAndGet();
             planThread.set(Thread.currentThread());
-            return Optional.of(new PrefetchPlan(requestedAmount, transaction -> {
+            return Optional.of(new PrefetchPlan(requestedAmount, () -> {
                 commitCalls.incrementAndGet();
                 commitThread.set(Thread.currentThread());
-                long extracted = storage.extract(requestedAmount, transaction);
+                long extracted = storage.extract(requestedAmount, false);
                 if (extracted != requestedAmount) throw new IllegalStateException("async prefetch storage shortage");
                 committedAmount.addAndGet(extracted);
                 return CapabilityResult.successful();
@@ -407,7 +407,7 @@ class AsyncCraftingExecutionTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return () -> CapabilityResult.successful();
         }
 
         private int planCalls() {

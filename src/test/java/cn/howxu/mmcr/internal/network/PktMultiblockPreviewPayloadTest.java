@@ -42,7 +42,7 @@ class PktMultiblockPreviewPayloadTest {
         PktMultiblockPreviewPayload.STREAM_CODEC.encode(buffer, payload);
         var decoded = PktMultiblockPreviewPayload.STREAM_CODEC.decode(buffer);
 
-        assertEquals(ResourceKey.create(Registries.DIMENSION, Level.OVERWORLD.identifier()), decoded.dimension());
+        assertEquals(ResourceKey.create(Registries.DIMENSION, Level.OVERWORLD.location()), decoded.dimension());
         assertEquals(new BlockPos(1, 2, 3), decoded.controllerPos());
         assertEquals(new BlockPos(4, 5, 6), decoded.entries().getFirst().relativePos());
         assertEquals(Blocks.IRON_BLOCK.defaultBlockState(), decoded.entries().getFirst().state());
@@ -79,7 +79,7 @@ class PktMultiblockPreviewPayloadTest {
         PktMultiblockPreviewPayload.STREAM_CODEC.encode(buffer, payload);
         var decoded = PktMultiblockPreviewPayload.STREAM_CODEC.decode(buffer);
 
-        assertEquals(ResourceKey.create(Registries.DIMENSION, Level.OVERWORLD.identifier()), decoded.dimension());
+        assertEquals(ResourceKey.create(Registries.DIMENSION, Level.OVERWORLD.location()), decoded.dimension());
         assertEquals(new BlockPos(1, 2, 3), decoded.controllerPos());
         assertEquals(List.of(), decoded.entries());
         assertEquals(0, decoded.durationTicks());

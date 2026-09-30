@@ -112,7 +112,7 @@ class CompiledMachinePatternTest {
     @Test
     void compiler_supports_non_dynamic_machine_without_replacements() {
         ResourceLocation id = MMCR.id("plain_machine");
-        Machine machine = new PlainMachine(id, "Plain Machine", pattern(), MachineControllerSpec.defaultsFor(id));
+        Machine machine = new PlainMachine(id, pattern(), MachineControllerSpec.defaultsFor(id));
 
         CompiledMachinePattern compiled = MachinePatternCompiler.compile(machine);
 
@@ -202,7 +202,6 @@ class CompiledMachinePatternTest {
 
     private record PlainMachine(
             ResourceLocation registryName,
-            String localizedName,
             BlockArray pattern,
             MachineControllerSpec controller
     ) implements Machine {

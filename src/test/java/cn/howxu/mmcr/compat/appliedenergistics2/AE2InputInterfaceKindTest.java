@@ -1,8 +1,5 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
-import appeng.api.stacks.AEKeyType;
-import appeng.api.stacks.AEKeyTypes;
-import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.GenericStack;
@@ -17,8 +14,6 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.*;
-import com.mojang.serialization.Lifecycle;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
@@ -30,26 +25,16 @@ import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
-import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.registries.DeferredHolder;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -70,8 +55,8 @@ class AE2InputInterfaceKindTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
-        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
-        bindTestAE2InterfaceItem();
+        AE2TestFixtures.ensureAE2KeyTypesInitialized();
+        AE2TestFixtures.bindAE2InterfaceItem();
         bindTestEntityType();
         AE2BridgeBootstrap.installForTesting(new LoadedAE2Bridge());
         PortKinds.clearForTesting();
@@ -510,57 +495,12 @@ class AE2InputInterfaceKindTest {
         return Set.copyOf((Set<GridFlags>) flagsField.get(initData));
     }
 
-    private static boolean ae2KeyTypesAreInitialized() {
-        try {
-            return !AEKeyTypes.getAll().isEmpty();
-        } catch (IllegalStateException ignored) {
-            return false;
-        }
-    }
-
     private static void bindTestEntityType() {
-        bindTestEntityType(InputInterfaceKind.INSTANCE);
-        bindTestEntityType(StockingInterfaceKind.INSTANCE);
-        bindTestEntityType(OutputInterfaceKind.INSTANCE);
-        bindTestEntityType(AsyncOutputInterfaceKind.INSTANCE);
-        bindTestEntityType(PatternInterfaceKind.INSTANCE);
+        AE2TestFixtures.bindEntityType(InputInterfaceKind.INSTANCE.id(), InputInterfaceKind.INSTANCE.entityFactory());
+        AE2TestFixtures.bindEntityType(StockingInterfaceKind.INSTANCE.id(), StockingInterfaceKind.INSTANCE.entityFactory());
+        AE2TestFixtures.bindEntityType(OutputInterfaceKind.INSTANCE.id(), OutputInterfaceKind.INSTANCE.entityFactory());
+        AE2TestFixtures.bindEntityType(AsyncOutputInterfaceKind.INSTANCE.id(), AsyncOutputInterfaceKind.INSTANCE.entityFactory());
+        AE2TestFixtures.bindEntityType(PatternInterfaceKind.INSTANCE.id(), PatternInterfaceKind.INSTANCE.entityFactory());
     }
 
-    private static void bindTestEntityType(IOPortKind kind) {
-        ResourceLocation id = MMCR.id(kind.id());
-        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        registry.unfreeze(true);
-        try {
-            if (!registry.containsKey(id)) {
-                Registry.register(registry, id,
-                        new BlockEntityType<>(kind.entityFactory(), Blocks.IRON_BLOCK));
-            }
-        } finally {
-            registry.freeze();
-        }
-        ModBlockEntities.BES.put(kind.id(),
-                DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
-    }
-
-    private static void bindTestAE2InterfaceItem() {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("ae2", "interface");
-        MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        registry.unfreeze(true);
-        try {
-            if (!registry.containsKey(id)) {
-                Registry.register(registry, id, new Item(new Item.Properties().setId(
-                        ResourceKey.create(Registries.ITEM, id))));
-            }
-        } finally {
-            registry.freeze();
-        }
-    }
-
-    private static void initializeAE2KeyTypes() {
-        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
-        AEKeyTypesInternal.setRegistry(registry);
-        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
-        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
-        registry.freeze();
-    }
 }

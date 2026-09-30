@@ -153,7 +153,7 @@ class ModCapabilitiesTest {
             };
         }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {
-            return context -> CapabilityResult.successful();
+            return CapabilityResult::successful;
         }
     }
 }

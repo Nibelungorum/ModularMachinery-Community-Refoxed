@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKey;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -30,9 +31,9 @@ class AE2InventoryAdapterTest {
         IItemHandler items = AE2NativeAdapters.items(inventory);
         ItemStack iron = new ItemStack(Items.IRON_INGOT, 4);
 
-        assertThat(items.insertItem(0, iron, true)).isEmpty();
-        assertThat(items.getStackInSlot(0)).isEmpty();
-        assertThat(items.insertItem(0, iron, false)).isEmpty();
+        assertThat(items.insertItem(0, iron, true).isEmpty()).isTrue();
+        assertThat(items.getStackInSlot(0).isEmpty()).isTrue();
+        assertThat(items.insertItem(0, iron, false).isEmpty()).isTrue();
 
         ItemStack stored = items.getStackInSlot(0);
         assertThat(ItemStack.isSameItemSameComponents(stored, iron)).isTrue();
@@ -47,7 +48,7 @@ class AE2InventoryAdapterTest {
         FluidStack water = new FluidStack(Fluids.WATER, 1_000);
 
         assertThat(fluids.fill(water, IFluidHandler.FluidAction.SIMULATE)).isEqualTo(1_000);
-        assertThat(fluids.getFluidInTank(0)).isEmpty();
+        assertThat(fluids.getFluidInTank(0).isEmpty()).isTrue();
         assertThat(fluids.fill(water, IFluidHandler.FluidAction.EXECUTE)).isEqualTo(1_000);
 
         FluidStack stored = fluids.getFluidInTank(0);
@@ -70,8 +71,8 @@ class AE2InventoryAdapterTest {
     @Test
     void native_sync_exposes_complete_long_item_and_fluid_amounts() {
         long amount = (long) Integer.MAX_VALUE + 42L;
-        IItemHandler items = AE2NativeAdapters.items(inventory(Set.of(AEKeyType.items())));
-        IFluidHandler fluids = AE2NativeAdapters.fluids(inventory(Set.of(AEKeyType.fluids())));
+        IItemHandler items = AE2NativeAdapters.items(longInventory(Set.of(AEKeyType.items())));
+        IFluidHandler fluids = AE2NativeAdapters.fluids(longInventory(Set.of(AEKeyType.fluids())));
 
         ((NativeStackSync.Item) items).setContents(0, new ItemStack(Items.IRON_INGOT), amount);
         ((NativeStackSync.Fluid) fluids).setContents(0, new FluidStack(Fluids.WATER, 1), amount);
@@ -90,5 +91,14 @@ class AE2InventoryAdapterTest {
 
     private static GenericStackInv inventory(Set<AEKeyType> types) {
         return new GenericStackInv(types, null, GenericStackInv.Mode.STORAGE, 1);
+    }
+
+    private static GenericStackInv longInventory(Set<AEKeyType> types) {
+        return new GenericStackInv(types, null, GenericStackInv.Mode.STORAGE, 1) {
+            @Override
+            public long getMaxAmount(AEKey key) {
+                return getCapacity(key.getType());
+            }
+        };
     }
 }

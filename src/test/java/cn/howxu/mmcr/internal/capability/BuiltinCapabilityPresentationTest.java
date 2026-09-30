@@ -2,8 +2,8 @@ package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.util.IOType;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BuiltinCapabilityPresentationTest {
     @Test
     void energy_capability_exposes_display_through_presentation_facet() {
-        LongValueStorage storage = new LongValueStorage(1_000L, 1_000L, null);
+        LongEnergyStorage storage = new LongEnergyStorage(1_000L, 1_000L, null);
         storage.setAmount(250L);
         EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.INPUT);
 

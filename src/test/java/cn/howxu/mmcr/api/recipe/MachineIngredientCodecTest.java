@@ -11,7 +11,6 @@ import com.mojang.serialization.JsonOps;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.Bootstrap;
@@ -129,7 +128,6 @@ class MachineIngredientCodecTest {
     }
 
     @Test void fluidRequirement_roundtrip_with_output_io() {
-        Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var requirement = new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1000));
 
         var json = MachineRequirement.CODEC.encodeStart(jsonOps(), requirement).getOrThrow();

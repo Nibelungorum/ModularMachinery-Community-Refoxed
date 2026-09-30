@@ -29,11 +29,10 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.data.PackOutput;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
-import net.minecraft.tags.TagLoader;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
@@ -45,9 +44,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -251,26 +252,24 @@ class PublicMachineBuilderTest {
         Map<ResourceLocation, Recipe<?>> recipes = new LinkedHashMap<>();
         RecipeOutput output = new RecipeOutput() {
             @Override
-            public void accept(ResourceKey<Recipe<?>> id, Recipe<?> recipe, AdvancementHolder advancement,
+            public void accept(ResourceLocation id, Recipe<?> recipe, AdvancementHolder advancement,
                                ICondition... conditions) {
-                recipes.put(id.identifier(), recipe);
+                recipes.put(id, recipe);
             }
 
             @Override
             public Advancement.Builder advancement() {
                 return Advancement.Builder.recipeAdvancement();
             }
-
-            @Override
-            public void includeRootAdvancement() {
-            }
         };
-        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.of(BuiltInRegistries.ITEM));
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.of(BuiltInRegistries.ITEM.asLookup()));
         assertThat(lookup.lookupOrThrow(Registries.ITEM).get(Tags.Items.INGOTS_COPPER)).isPresent();
-        ModRecipeProvider provider = new ModRecipeProvider(lookup, output);
-        Method buildRecipes = ModRecipeProvider.class.getDeclaredMethod("buildRecipes");
+        ModRecipeProvider provider = new ModRecipeProvider(new PackOutput(Path.of(".")),
+                CompletableFuture.completedFuture(lookup));
+        Method buildRecipes = ModRecipeProvider.class.getDeclaredMethod("buildRecipes",
+                RecipeOutput.class, HolderLookup.Provider.class);
         buildRecipes.setAccessible(true);
-        buildRecipes.invoke(provider);
+        buildRecipes.invoke(provider, output, lookup);
 
         for (UpgradeBusSize size : UpgradeBusSize.values()) {
             String id = "upgrade_bus_" + size.id();
@@ -301,8 +300,8 @@ class PublicMachineBuilderTest {
         tags.put(Tags.Items.NETHER_STARS, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.NETHER_STAR)));
         tags.put(ItemTags.create(ResourceLocation.withDefaultNamespace("bookshelf_books")),
                 List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.BOOK)));
-        BuiltInRegistries.ITEM.prepareTagReload(new TagLoader.LoadResult<>(Registries.ITEM, tags)).apply();
-        assertThat(BuiltInRegistries.ITEM.get(Tags.Items.INGOTS_COPPER)).isPresent();
+        BuiltInRegistries.ITEM.bindTags(tags);
+        assertThat(BuiltInRegistries.ITEM.getTag(Tags.Items.INGOTS_COPPER)).isPresent();
     }
 
     @Test

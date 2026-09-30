@@ -131,12 +131,12 @@ class MachineBehaviorRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> context.cancel()).build()));
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(runtime.start(recipe("behavior_start_veto_recipe", input(Items.IRON_INGOT)), 1).isCrafting())
                 .isFalse();
-        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -161,12 +161,12 @@ class MachineBehaviorRuntimeTest {
                     context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
                 }).build());
         controller.setMachine(machine);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(runtime.start(recipe("behavior_lifecycle", input(Items.IRON_INGOT), output(Items.IRON_NUGGET)), 1)
                 .isCrafting()).isFalse();
-        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
 
         var secondStart = runtime.start(recipe("behavior_lifecycle", input(Items.IRON_INGOT), output(Items.IRON_NUGGET)), 1);
         assertThat(secondStart.isCrafting())
@@ -178,7 +178,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(starts).hasValue(2);
         assertThat(ticks).hasValue(1);
         assertThat(finishes).hasValue(1);
-        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemHandler(), 0).is(Items.GOLD_NUGGET)).isTrue();
         assertThat(((ControllerScreenTextState) controller.behaviorContext().screenText()).snapshot().lines())
                 .anyMatch(line -> line.text().getString().equals("running"));
     }
@@ -203,7 +203,7 @@ class MachineBehaviorRuntimeTest {
                             ControllerScreenTextScope.CONTROLLER, MMCR.id("lane_finished"), Component.literal("finish"));
                     context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
                 }).build()));
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         runtime.setScreenText(laneText);
 
@@ -228,7 +228,7 @@ class MachineBehaviorRuntimeTest {
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> {
                     starts.incrementAndGet();
-                    assertThat(input.itemStorage().amount(0)).isEqualTo(2L);
+                    assertThat(input.itemHandler().amount(0)).isEqualTo(2L);
                     context.setDuration(2);
                     context.setRequirements(MachineRecipeConverter
                             .toPublicRequirements(List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
@@ -241,7 +241,7 @@ class MachineBehaviorRuntimeTest {
                             context.requirements().getFirst()).count()).isEqualTo(2);
                     ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(64);
                 }).build()));
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 2));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 2));
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("behavior_start_snapshot"), TEST_MACHINE_ID, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 input(Items.IRON_INGOT), output(Items.IRON_NUGGET)));
@@ -260,8 +260,8 @@ class MachineBehaviorRuntimeTest {
 
         assertThat(starts).hasValue(1);
         assertThat(ticks).hasValue(2);
-        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
-        assertThat(output.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(item(output.itemHandler(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -293,7 +293,7 @@ class MachineBehaviorRuntimeTest {
         runtime.tick();
         runtime.finish();
 
-        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemHandler(), 0).is(Items.GOLD_NUGGET)).isTrue();
     }
 
     @Test
@@ -317,9 +317,9 @@ class MachineBehaviorRuntimeTest {
         runtime.tick();
         runtime.finish();
 
-        assertThat(item(itemOutput.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
-        assertThat(itemOutput.itemStorage().amount(0)).isEqualTo(1L);
-        assertThat(fluidOutput.fluidStorage().getFluidStack().getAmount()).isEqualTo(1_000);
+        assertThat(item(itemOutput.itemHandler(), 0).is(Items.IRON_NUGGET)).isTrue();
+        assertThat(itemOutput.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(fluidOutput.fluidHandler(null).getAmountAsLong()).isEqualTo(1_000);
     }
 
     @Test
@@ -442,7 +442,7 @@ class MachineBehaviorRuntimeTest {
         BlockPos parallelPos = new BlockPos(2, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        setItem(scheduler.itemStorage(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
+        setItem(scheduler.itemHandler(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
         ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, parallelPos,
                 ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
         parallel.setCurrentParallelism(4);
@@ -483,7 +483,7 @@ class MachineBehaviorRuntimeTest {
         BlockPos parallelPos = new BlockPos(2, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(factoryPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        setItem(scheduler.itemStorage(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
+        setItem(scheduler.itemHandler(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2));
         ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, parallelPos,
                 ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
         parallel.setCurrentParallelism(4);
@@ -520,7 +520,7 @@ class MachineBehaviorRuntimeTest {
         UpgradeBusBlockEntity bus = new UpgradeBusBlockEntity(UpgradeBusSize.NORMAL, new BlockPos(1, 0, 0),
                 ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
         ItemStack source = new ItemStack(Items.IRON_INGOT, 2);
-        setItem(bus.itemStorage(), 0, source);
+        setItem(bus.itemHandler(), 0, source);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
         Machine machine = machine(TEST_MACHINE_ID, new BlockArray(Map.of(
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))),
@@ -548,11 +548,11 @@ class MachineBehaviorRuntimeTest {
         ItemOutputBusBlockEntity secondOutput = RuntimeTestFixtures.itemOutput(secondOutputPos);
         DataStorageBlockEntity dataStorage = (DataStorageBlockEntity) ModBlockEntities.DATA_STORAGE.get().create(
                 storagePos, ModBlocks.DATA_STORAGE.get().defaultBlockState());
-        setItem(firstInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
-        setItem(secondInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(firstInput.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(secondInput.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
         ItemStack initialOutput = new ItemStack(Items.GOLD_NUGGET, 63);
         initialOutput.set(DataComponents.MAX_STACK_SIZE, 64);
-        setItem(firstOutput.itemStorage(), 0, initialOutput);
+        setItem(firstOutput.itemHandler(), 0, initialOutput);
         dataStorage.storage().set("ticks", DataValue.of(0L));
 
         AtomicBoolean failFirstCommit = new AtomicBoolean(true);
@@ -593,14 +593,10 @@ class MachineBehaviorRuntimeTest {
                             });
                     assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(0L));
                     if (failFirstCommit.getAndSet(false)) {
-                        plan.commit(transaction -> {
-                            dataStorage.storage().set("ticks", DataValue.of(1L), transaction);
-                            throw new IllegalStateException("expected tick transaction failure");
-                        });
+                        throw new IllegalStateException("expected tick callback failure");
                     } else {
-                        assertThat(plan.commit(transaction ->
-                                dataStorage.storage().set("ticks", DataValue.of(1L), transaction)).successful())
-                                .isTrue();
+                        assertThat(plan.commit().successful()).isTrue();
+                        dataStorage.storage().set("ticks", DataValue.of(1L));
                     }
                 }).build());
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);
@@ -619,19 +615,19 @@ class MachineBehaviorRuntimeTest {
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(calls).hasValue(1);
-        assertThat(firstInput.itemStorage().amount(0)).isEqualTo(1L);
-        assertThat(secondInput.itemStorage().amount(0)).isEqualTo(1L);
-        assertThat(firstOutput.itemStorage().amount(0)).isEqualTo(63L);
-        assertThat(secondOutput.itemStorage().amount(0)).isZero();
+        assertThat(firstInput.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(secondInput.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(firstOutput.itemHandler().amount(0)).isEqualTo(63L);
+        assertThat(secondOutput.itemHandler().amount(0)).isZero();
         assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(0L));
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(calls).hasValue(2);
-        assertThat(firstInput.itemStorage().amount(0)).isZero();
-        assertThat(secondInput.itemStorage().amount(0)).isZero();
-        long outputCount = itemAmount(firstOutput.itemStorage()) + itemAmount(secondOutput.itemStorage());
+        assertThat(firstInput.itemHandler().amount(0)).isZero();
+        assertThat(secondInput.itemHandler().amount(0)).isZero();
+        long outputCount = itemAmount(firstOutput.itemHandler()) + itemAmount(secondOutput.itemHandler());
         assertThat(outputCount).isEqualTo(66L);
         assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(1L));
     }
@@ -699,7 +695,7 @@ class MachineBehaviorRuntimeTest {
                 })
                 .build());
         RuntimeTestFixtures.registerRecipePool(machineId);
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
         RuntimeTestFixtures.formStructureWithComponents(controller, recipeMachine, input, output);
         MachineRecipe lifecycleRecipe = recipe("behavior_recipe_hook_lifecycle", machineId,
                 input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
@@ -734,7 +730,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(preContexts.get(1).screenText()).isSameAs(postContexts.get(1).screenText());
         assertThat(((ControllerScreenTextState) preContexts.get(1).screenText()).snapshot().lines())
                  .singleElement().satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("post")));
-        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(item(output.itemHandler(), 0).is(Items.GOLD_NUGGET)).isTrue();
     }
 
     @Test
@@ -790,13 +786,13 @@ class MachineBehaviorRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .beforeStart(context -> { throw new IllegalStateException("test callback failure"); }).build()));
-        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThatCode(() -> runtime.start(recipe("behavior_exception_recipe", input(Items.IRON_INGOT)), 1))
                 .doesNotThrowAnyException();
         assertThat(runtime.active()).isFalse();
-        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
     }
 
     @Test
@@ -815,7 +811,7 @@ class MachineBehaviorRuntimeTest {
         assertThat(runtime.finish().getStatus())
                 .isEqualTo(CraftingStatus.Status.NO_RECIPE);
         assertThat(runtime.active()).isTrue();
-        assertThat(output.itemStorage().amount(0)).isZero();
+        assertThat(output.itemHandler().amount(0)).isZero();
     }
 
     private static Machine machine(ResourceLocation id, MachineBehavior behavior) {

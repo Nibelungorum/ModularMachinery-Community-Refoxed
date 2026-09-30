@@ -11,7 +11,6 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -38,12 +37,6 @@ class AutoIOPortTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(
-                DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
-        Items.IRON_INGOT.resetDefaultResource();
-        Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(
-                DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
-        Items.GOLD_INGOT.resetDefaultResource();
     }
 
     @Test
@@ -56,14 +49,14 @@ class AutoIOPortTest {
         target.setLevel(level);
 
         assertThat(source.ejectContents()).isFalse();
-        assertThat(source.itemStorage().amount(0)).isEqualTo(3L);
+        assertThat(source.itemHandler().amount(0)).isEqualTo(3L);
 
         LevelStub.setCapability(level, Capabilities.ItemHandler.BLOCK, target.getBlockPos(),
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents()).isTrue();
-        assertThat(source.itemStorage().amount(0)).isZero();
-        assertThat(target.itemStorage().amount(0)).isEqualTo(3L);
+        assertThat(source.itemHandler().amount(0)).isZero();
+        assertThat(target.itemHandler().amount(0)).isEqualTo(3L);
     }
 
     @Test
@@ -86,8 +79,8 @@ class AutoIOPortTest {
         assertThat(source.autoIOConfig().enabled()).isTrue();
         assertThat(source.autoIOConfig().enabledSides()).containsExactly(Direction.EAST);
         assertThat(source.autoIOCandidateCount()).isEqualTo(1);
-        assertThat(source.itemStorage().amount(0)).isZero();
-        assertThat(target.itemStorage().amount(0)).isEqualTo(3L);
+        assertThat(source.itemHandler().amount(0)).isZero();
+        assertThat(target.itemHandler().amount(0)).isEqualTo(3L);
         assertThat(LevelStub.sentBlockUpdates(level)).isGreaterThan(updatesBefore);
     }
 
@@ -103,8 +96,8 @@ class AutoIOPortTest {
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents()).isTrue();
-        assertThat(source.itemStorage().amount(0)).isZero();
-        assertThat(target.itemStorage().amount(0)).isEqualTo(4L);
+        assertThat(source.itemHandler().amount(0)).isZero();
+        assertThat(target.itemHandler().amount(0)).isEqualTo(4L);
     }
 
     @Test
@@ -120,12 +113,12 @@ class AutoIOPortTest {
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, false)).isTrue();
-        assertThat(source.itemStorage().amount(0)).isZero();
-        assertThat(source.itemStorage().amount(1)).isEqualTo(4L);
+        assertThat(source.itemHandler().amount(0)).isZero();
+        assertThat(source.itemHandler().amount(1)).isEqualTo(4L);
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, true)).isTrue();
-        assertThat(source.itemStorage().amount(1)).isZero();
-        assertThat(target.itemStorage().amount(0) + target.itemStorage().amount(1)).isEqualTo(7L);
+        assertThat(source.itemHandler().amount(1)).isZero();
+        assertThat(target.itemHandler().amount(0) + target.itemHandler().amount(1)).isEqualTo(7L);
     }
 
     @Test
@@ -140,8 +133,8 @@ class AutoIOPortTest {
                 itemHandler(target, true, false));
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, false)).isTrue();
-        assertThat(source.itemStorage().amount(0)).isZero();
-        assertThat(target.itemStorage().amount(0)).isEqualTo(2_100L);
+        assertThat(source.itemHandler().amount(0)).isZero();
+        assertThat(target.itemHandler().amount(0)).isEqualTo(2_100L);
     }
 
     @Test
@@ -149,8 +142,8 @@ class AutoIOPortTest {
         ExtendedFluidHatchBlockEntity source = extendedFluidHatch("extended_fluid_input_hatch_basic", BlockPos.ZERO);
         ExtendedFluidHatchBlockEntity target = extendedFluidHatch("extended_fluid_input_hatch_basic",
                 new BlockPos(1, 0, 0));
-        source.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 2_000L);
-        source.fluidStorage().setContents(1, new FluidStack(Fluids.LAVA, 1), 3_000L);
+        source.fluidHandler(Direction.NORTH).setContents(0, new FluidStack(Fluids.WATER, 1), 2_000L);
+        source.fluidHandler(Direction.NORTH).setContents(1, new FluidStack(Fluids.LAVA, 1), 3_000L);
         Level level = LevelStub.createWithBlockEntities(List.of(source, target));
         source.setLevel(level);
         target.setLevel(level);
@@ -158,12 +151,13 @@ class AutoIOPortTest {
                 target.nativeFluidHandler());
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.FLUID_TYPE, false)).isTrue();
-        assertThat(source.fluidStorage().amount(0)).isZero();
-        assertThat(source.fluidStorage().amount(1)).isEqualTo(3_000L);
+        assertThat(source.fluidHandler(Direction.NORTH).amount(0)).isZero();
+        assertThat(source.fluidHandler(Direction.NORTH).amount(1)).isEqualTo(3_000L);
 
         assertThat(source.ejectContents(BuiltinCapabilityDefinitions.FLUID_TYPE, true)).isTrue();
-        assertThat(source.fluidStorage().amount(1)).isZero();
-        assertThat(target.fluidStorage().amount(0) + target.fluidStorage().amount(1)).isEqualTo(5_000L);
+        assertThat(source.fluidHandler(Direction.NORTH).amount(1)).isZero();
+        assertThat(target.fluidHandler(Direction.NORTH).amount(0)
+                + target.fluidHandler(Direction.NORTH).amount(1)).isEqualTo(5_000L);
     }
 
     @Test
@@ -172,7 +166,7 @@ class AutoIOPortTest {
         setItems(output, 2L);
 
         assertThat(output.ejectContents()).isFalse();
-        assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
+        assertThat(output.itemHandler().amount(0)).isEqualTo(2L);
     }
 
     @Test
@@ -195,7 +189,7 @@ class AutoIOPortTest {
 
         assertThat(controller.isPortUsedByActiveRecipe(source.getBlockPos())).isTrue();
         assertThat(source.ejectContents()).isFalse();
-        assertThat(source.itemStorage().amount(0)).isEqualTo(3L);
+        assertThat(source.itemHandler().amount(0)).isEqualTo(3L);
     }
 
     private static void setItems(ItemBusBlockEntity port, long amount) {
@@ -203,7 +197,9 @@ class AutoIOPortTest {
     }
 
     private static void setItem(ItemBusBlockEntity port, int slot, net.minecraft.world.item.Item item, long amount) {
-        port.itemStorage().forceInsert(slot, new ItemStack(item), amount, false);
+        ItemStack stack = new ItemStack(item);
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        port.itemHandler().forceInsert(slot, stack, amount, false);
     }
 
     private static ExtendedItemBusBlockEntity extendedItemBus(String id, BlockPos pos) {

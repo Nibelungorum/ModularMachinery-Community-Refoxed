@@ -4,12 +4,9 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -25,7 +22,6 @@ class FactorySchedulerMenuTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         bind(ModUIs.FACTORY_SCHEDULER, new MenuType<>((containerId, playerInventory) -> new FactorySchedulerMenu(containerId, playerInventory), FeatureFlags.VANILLA_SET));
-        bindItemComponents(Items.IRON_INGOT);
     }
 
     @Test
@@ -37,11 +33,7 @@ class FactorySchedulerMenuTest {
     }
 
     private static Inventory emptyInventory() {
-        return new Inventory(null, null);
-    }
-
-    private static void bindItemComponents(Item item) {
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+        return new Inventory(null);
     }
 
     private static void bind(Object deferredHolder, MenuType<FactorySchedulerMenu> menuType) throws Exception {

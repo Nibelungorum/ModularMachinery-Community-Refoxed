@@ -53,12 +53,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.component.DataComponentInitializers;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
@@ -67,7 +62,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
 
@@ -77,8 +71,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.function.Supplier;
-
-import java.nio.file.Path;
 
 public final class TestBootstrap {
     private static boolean initialized;
@@ -121,34 +113,23 @@ public final class TestBootstrap {
                     || MachineRegistry.getCompiled(id("test_cube")) == null) {
                 restoreMachineDefinitions();
             }
-            bindAllVanillaItemComponents();
             return;
         }
 
         Class<?> fmlLoaderCls = Class.forName("net.neoforged.fml.loading.FMLLoader");
-        Class<?> distCls = Class.forName("net.neoforged.api.distmarker.Dist");
         Class<?> loadingModListCls = Class.forName("net.neoforged.fml.loading.LoadingModList");
-        var fmlCtor = fmlLoaderCls.getDeclaredConstructor(
-                ClassLoader.class, String[].class, distCls, boolean.class, Path.class);
-        fmlCtor.setAccessible(true);
-        Object fmlLoader = fmlCtor.newInstance(
-                Thread.currentThread().getContextClassLoader(), new String[0],
-                distCls.getField("CLIENT").get(null), false, Path.of("."));
-
-        var lmlCtor = loadingModListCls.getDeclaredConstructor(
-                List.class, List.class, List.class, List.class, Map.class);
-        lmlCtor.setAccessible(true);
-        Object emptyLoadingModList = lmlCtor.newInstance(
-                List.of(), List.of(), List.of(), List.of(), Map.of());
+        Object fmlLoader = fmlLoaderCls.getConstructor().newInstance();
+        Object emptyLoadingModList = loadingModListCls.getMethod(
+                "of", List.class, List.class, List.class, List.class, Map.class)
+                .invoke(null, List.of(), List.of(), List.of(), List.of(), Map.of());
         Field loadingModListField = fmlLoaderCls.getDeclaredField("loadingModList");
         loadingModListField.setAccessible(true);
-        loadingModListField.set(fmlLoader, emptyLoadingModList);
+        loadingModListField.set(null, emptyLoadingModList);
 
         Class.forName("net.minecraft.SharedConstants").getMethod("tryDetectVersion").invoke(null);
         NeoForge.EVENT_BUS.start();
         MachineDefinitions.beginRegistryPhase();
         Bootstrap.bootStrap();
-        bindAllVanillaItemComponents();
         bindPortBlocks();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
@@ -449,10 +430,10 @@ public final class TestBootstrap {
             MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
             BlockEntityType<?> type;
             if (BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(typeId)) {
-                type = BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(typeId);
+                type = BuiltInRegistries.BLOCK_ENTITY_TYPE.get(typeId);
             } else {
-                blockEntities.unfreeze(true);
-                type = new BlockEntityType<>(MachineControllerBlockEntity::new, block);
+                blockEntities.unfreeze();
+                type = BlockEntityType.Builder.of(MachineControllerBlockEntity::new, block).build(null);
                 Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, typeId, type);
                 blockEntities.freeze();
             }
@@ -465,9 +446,9 @@ public final class TestBootstrap {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         ResourceLocation id = MachineControllerSpec.defaultsFor(machineId).id();
         if (BuiltInRegistries.BLOCK.containsKey(id)) {
-            return (MachineControllerBlock) BuiltInRegistries.BLOCK.getValue(id);
+            return (MachineControllerBlock) BuiltInRegistries.BLOCK.get(id);
         }
-        blocks.unfreeze(true);
+        blocks.unfreeze();
         MachineControllerBlock block = new MachineControllerBlock(machineId, Blocks.IRON_BLOCK.properties());
         Registry.register(BuiltInRegistries.BLOCK, id, block);
         blocks.freeze();
@@ -489,9 +470,9 @@ public final class TestBootstrap {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         ResourceLocation id = MMCR.id(tier.idSuffix());
         if (BuiltInRegistries.BLOCK.containsKey(id)) {
-            return (ParallelControllerBlock) BuiltInRegistries.BLOCK.getValue(id);
+            return (ParallelControllerBlock) BuiltInRegistries.BLOCK.get(id);
         }
-        blocks.unfreeze(true);
+        blocks.unfreeze();
         ParallelControllerBlock block = new ParallelControllerBlock(
                 tier,
                 () -> ModBlockEntities.BES.get(tier.idSuffix()).get(),
@@ -503,10 +484,9 @@ public final class TestBootstrap {
 
     private static BlockEntityType<?> parallelControllerBlockEntityType(ParallelTier tier, ParallelControllerBlock block) {
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blockEntities.unfreeze(true);
-        BlockEntityType<?> beType = new BlockEntityType<>(
-                (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state),
-                block);
+        blockEntities.unfreeze();
+        BlockEntityType<?> beType = BlockEntityType.Builder.of(
+                (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state), block).build(null);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(tier.idSuffix()), beType);
         blockEntities.freeze();
         return beType;
@@ -525,7 +505,7 @@ public final class TestBootstrap {
 
     private static FactorySchedulerBlock factoryControllerBlock() {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
-        blocks.unfreeze(true);
+        blocks.unfreeze();
         FactorySchedulerBlock block = new FactorySchedulerBlock(
                 () -> ModBlockEntities.BES.get("factory_controller").get(),
                 Blocks.IRON_BLOCK.properties());
@@ -536,8 +516,8 @@ public final class TestBootstrap {
 
     private static BlockEntityType<?> factoryControllerBlockEntityType(FactorySchedulerBlock block) {
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blockEntities.unfreeze(true);
-        BlockEntityType<?> beType = new BlockEntityType<>(FactorySchedulerBlockEntity::new, block);
+        blockEntities.unfreeze();
+        BlockEntityType<?> beType = BlockEntityType.Builder.of(FactorySchedulerBlockEntity::new, block).build(null);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("factory_controller"), beType);
         blockEntities.freeze();
         return beType;
@@ -546,8 +526,8 @@ public final class TestBootstrap {
     private static void bindSmartInterface() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blocks.unfreeze(true);
-        blockEntities.unfreeze(true);
+        blocks.unfreeze();
+        blockEntities.unfreeze();
         SmartInterfaceBlock block = new SmartInterfaceBlock(
                 () -> ModBlockEntities.SMART_INTERFACE.get(), Blocks.IRON_BLOCK.properties());
         Registry.register(BuiltInRegistries.BLOCK, MMCR.id("smart_interface"), block);
@@ -556,7 +536,7 @@ public final class TestBootstrap {
         bind(ModItems.ITEMS.get("smart_interface"), item);
         Item.BY_BLOCK.put(block, item);
 
-        BlockEntityType<?> blockEntityType = new BlockEntityType<>(SmartInterfaceBlockEntity::new, block);
+        BlockEntityType<?> blockEntityType = BlockEntityType.Builder.of(SmartInterfaceBlockEntity::new, block).build(null);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("smart_interface"), blockEntityType);
         blockEntities.freeze();
         blocks.freeze();
@@ -566,8 +546,8 @@ public final class TestBootstrap {
     private static void bindModuleBridge() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blocks.unfreeze(true);
-        blockEntities.unfreeze(true);
+        blocks.unfreeze();
+        blockEntities.unfreeze();
         ModuleCouplerBlock block = new ModuleCouplerBlock(
                 () -> ModBlockEntities.MODULE_BRIDGE.get(), Blocks.IRON_BLOCK.properties());
         Registry.register(BuiltInRegistries.BLOCK, MMCR.id("module_bridge"), block);
@@ -576,7 +556,7 @@ public final class TestBootstrap {
         bind(ModItems.ITEMS.get("module_bridge"), item);
         Item.BY_BLOCK.put(block, item);
 
-        BlockEntityType<?> blockEntityType = new BlockEntityType<>(ModuleCouplerBlockEntity::new, block);
+        BlockEntityType<?> blockEntityType = BlockEntityType.Builder.of(ModuleCouplerBlockEntity::new, block).build(null);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("module_bridge"), blockEntityType);
         blockEntities.freeze();
         blocks.freeze();
@@ -586,8 +566,8 @@ public final class TestBootstrap {
     private static void bindNetworkInterface() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blocks.unfreeze(true);
-        blockEntities.unfreeze(true);
+        blocks.unfreeze();
+        blockEntities.unfreeze();
         NetworkInterfaceBlock block = new NetworkInterfaceBlock(
                 () -> ModBlockEntities.NETWORK_INTERFACE.get(), Blocks.IRON_BLOCK.properties());
         Registry.register(BuiltInRegistries.BLOCK, MMCR.id("network_interface"), block);
@@ -596,7 +576,7 @@ public final class TestBootstrap {
         bind(ModItems.ITEMS.get("network_interface"), item);
         Item.BY_BLOCK.put(block, item);
 
-        BlockEntityType<?> blockEntityType = new BlockEntityType<>(NetworkInterfaceBlockEntity::new, block);
+        BlockEntityType<?> blockEntityType = BlockEntityType.Builder.of(NetworkInterfaceBlockEntity::new, block).build(null);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("network_interface"), blockEntityType);
         blockEntities.freeze();
         blocks.freeze();
@@ -606,8 +586,8 @@ public final class TestBootstrap {
     private static void bindDataStorage() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blocks.unfreeze(true);
-        blockEntities.unfreeze(true);
+        blocks.unfreeze();
+        blockEntities.unfreeze();
         DataStorageBlock block = new DataStorageBlock(
                 () -> ModBlockEntities.DATA_STORAGE.get(), Blocks.IRON_BLOCK.properties());
         Registry.register(BuiltInRegistries.BLOCK, MMCR.id("data_storage"), block);
@@ -616,7 +596,7 @@ public final class TestBootstrap {
         bind(ModItems.ITEMS.get("data_storage"), item);
         Item.BY_BLOCK.put(block, item);
 
-        BlockEntityType<?> blockEntityType = new BlockEntityType<>(DataStorageBlockEntity::new, block);
+        BlockEntityType<?> blockEntityType = BlockEntityType.Builder.of(DataStorageBlockEntity::new, block).build(null);
         Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id("data_storage"), blockEntityType);
         blockEntities.freeze();
         blocks.freeze();
@@ -626,8 +606,8 @@ public final class TestBootstrap {
     private static void bindUpgradeBuses() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blocks.unfreeze(true);
-        blockEntities.unfreeze(true);
+        blocks.unfreeze();
+        blockEntities.unfreeze();
         for (UpgradeBusSize size : UpgradeBusSize.values()) {
             String name = "upgrade_bus_" + size.id();
             UpgradeBusBlock block = new UpgradeBusBlock(size,
@@ -643,9 +623,10 @@ public final class TestBootstrap {
 
             BlockEntityType<?> blockEntityType;
             if (BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(MMCR.id(name))) {
-                blockEntityType = BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(MMCR.id(name));
+                blockEntityType = BuiltInRegistries.BLOCK_ENTITY_TYPE.get(MMCR.id(name));
             } else {
-                blockEntityType = new BlockEntityType<>((pos, state) -> new UpgradeBusBlockEntity(size, pos, state), block);
+                blockEntityType = BlockEntityType.Builder.of(
+                        (pos, state) -> new UpgradeBusBlockEntity(size, pos, state), block).build(null);
                 Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(name), blockEntityType);
             }
             bind(ModBlockEntities.BES.get(name), blockEntityType);
@@ -672,45 +653,6 @@ public final class TestBootstrap {
         throw new NoSuchFieldException(name);
     }
 
-    private static void bindAllVanillaItemComponents() {
-        try {
-            Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-            Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-            Field initializersField = DataComponentInitializers.class.getDeclaredField("initializers");
-            initializersField.setAccessible(true);
-            Field keyField = null;
-            Field initializerField = null;
-            RegistryAccess registryAccess = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
-            for (Object entry : (List<?>) initializersField.get(BuiltInRegistries.DATA_COMPONENT_INITIALIZERS)) {
-                if (keyField == null) {
-                    keyField = entry.getClass().getDeclaredField("key");
-                    keyField.setAccessible(true);
-                    initializerField = entry.getClass().getDeclaredField("initializer");
-                    initializerField.setAccessible(true);
-                }
-                ResourceKey<?> key = (ResourceKey<?>) keyField.get(entry);
-                if (!key.isFor(Registries.ITEM)) continue;
-                @SuppressWarnings("unchecked")
-                ResourceKey<Item> itemKey = (ResourceKey<Item>) key;
-                Item item = BuiltInRegistries.ITEM.getValue(itemKey);
-                if (item == null) continue;
-
-                DataComponentMap.Builder builder = DataComponentMap.builder();
-                @SuppressWarnings("unchecked")
-                DataComponentInitializers.Initializer<Item> initializer =
-                        (DataComponentInitializers.Initializer<Item>) initializerField.get(entry);
-                try {
-                    initializer.run(builder, registryAccess, itemKey);
-                } catch (IllegalStateException ignored) {
-                    // The test bootstrap has no loaded tags for delayed components.
-                }
-                item.builtInRegistryHolder().bindComponents(builder.build());
-            }
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("Unable to bind vanilla item components", exception);
-        }
-    }
-
     @SuppressWarnings("unchecked")
     private static Supplier<Item> registeredItemSupplier(DeferredHolder<Item, Item> itemHolder) throws Exception {
         Field field = ModItems.REGISTER.getClass().getSuperclass().getDeclaredField("entries");
@@ -723,49 +665,20 @@ public final class TestBootstrap {
     private static Item registerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
         MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
         if (BuiltInRegistries.ITEM.containsKey(itemHolder.getId())) {
-            return BuiltInRegistries.ITEM.getValue(itemHolder.getId());
+            return BuiltInRegistries.ITEM.get(itemHolder.getId());
         }
-        items.unfreeze(true);
+        items.unfreeze();
         Item item = registeredItemSupplier(itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
-        if (itemHolder == ModItems.BLUEPRINT) bindItemComponents(item, itemHolder.getId());
-        else item.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
-                .set(DataComponents.MAX_STACK_SIZE, 64).build());
         return item;
-    }
-
-    private static void bindItemComponents(Item item, ResourceLocation id) throws Exception {
-        Field initializersField = DataComponentInitializers.class.getDeclaredField("initializers");
-        initializersField.setAccessible(true);
-        Field keyField = null;
-        Field initializerField = null;
-        RegistryAccess registryAccess = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
-        for (Object entry : (List<?>) initializersField.get(BuiltInRegistries.DATA_COMPONENT_INITIALIZERS)) {
-            if (keyField == null) {
-                keyField = entry.getClass().getDeclaredField("key");
-                keyField.setAccessible(true);
-                initializerField = entry.getClass().getDeclaredField("initializer");
-                initializerField.setAccessible(true);
-            }
-            ResourceKey<?> key = (ResourceKey<?>) keyField.get(entry);
-            if (!key.isFor(Registries.ITEM) || !key.identifier().equals(id)) continue;
-            DataComponentMap.Builder builder = DataComponentMap.builder();
-            @SuppressWarnings("unchecked")
-            DataComponentInitializers.Initializer<Item> initializer =
-                    (DataComponentInitializers.Initializer<Item>) initializerField.get(entry);
-            initializer.run(builder, registryAccess, ResourceKey.create(Registries.ITEM, id));
-            item.builtInRegistryHolder().bindComponents(builder.build());
-            return;
-        }
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     private static void bindPortBlocks() throws Exception {
         MappedRegistry<Block> blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
         MappedRegistry<BlockEntityType<?>> blockEntities = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
-        blocks.unfreeze(true);
-        blockEntities.unfreeze(true);
+        blocks.unfreeze();
+        blockEntities.unfreeze();
         for (var kind : PortKinds.all()) {
             Block block = new IOPortBlock(kind, () -> ModBlockEntities.BES.get(kind.id()).get(), Blocks.IRON_BLOCK.properties());
             if (!BuiltInRegistries.BLOCK.containsKey(MMCR.id(kind.id()))) {
@@ -779,9 +692,10 @@ public final class TestBootstrap {
 
             if (!BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(MMCR.id(kind.id()))) {
                 Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, MMCR.id(kind.id()),
-                        new BlockEntityType<>(kind.entityFactory(), block));
+                        BlockEntityType.Builder.of((BlockEntityType.BlockEntitySupplier) kind.entityFactory(), block)
+                                .build(null));
             }
-            bind(ModBlockEntities.BES.get(kind.id()), BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(MMCR.id(kind.id())));
+            bind(ModBlockEntities.BES.get(kind.id()), BuiltInRegistries.BLOCK_ENTITY_TYPE.get(MMCR.id(kind.id())));
         }
         blockEntities.freeze();
         blocks.freeze();

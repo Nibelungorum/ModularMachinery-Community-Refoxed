@@ -8,12 +8,12 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
+import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -37,8 +37,6 @@ class MachineRecipeTransferHandlerTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     @Test
@@ -153,6 +151,12 @@ class MachineRecipeTransferHandlerTest {
         public ItemStack getIngredient() {
             return stack;
         }
+
+        @Override
+        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
+            ItemStack normalized = ingredientHelper.normalizeIngredient(stack);
+            return normalized == stack ? this : new TypedItem(normalized);
+        }
     }
 
     private record TypedFluid(FluidStack stack) implements ITypedIngredient<FluidStack> {
@@ -164,6 +168,12 @@ class MachineRecipeTransferHandlerTest {
         @Override
         public FluidStack getIngredient() {
             return stack;
+        }
+
+        @Override
+        public ITypedIngredient<FluidStack> normalize(IIngredientHelper<FluidStack> ingredientHelper) {
+            FluidStack normalized = ingredientHelper.normalizeIngredient(stack);
+            return normalized == stack ? this : new TypedFluid(normalized);
         }
     }
 }

@@ -36,14 +36,10 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import net.minecraft.core.Holder;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.FluidTags;
-import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -77,7 +73,6 @@ import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import java.util.stream.IntStream;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceKey;
@@ -360,10 +355,6 @@ class MachineRecipeDisplayTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        bindItemComponents(
-                Items.COAL, Items.IRON_INGOT, Items.GOLD_INGOT, Items.IRON_NUGGET, Items.GOLD_NUGGET,
-                Items.DIAMOND_SWORD
-        );
     }
 
     @BeforeEach
@@ -384,7 +375,7 @@ class MachineRecipeDisplayTest {
                         new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250),
                         new MachineIngredient.EnergyIngredient(40)
                 ),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 4)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 4)),
                 List.of(),
                 3,
                 1,
@@ -418,7 +409,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("blast_furnace"),
                 80,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 2)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 2)),
                 List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 3.0F, RecipeModifier.Operation.MULTIPLY, false)),
                 0,
                 1
@@ -433,7 +424,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayPreservesItemOutputChanceForOverlay() {
-        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1);
+        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET), 1);
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_chanced_output"),
                 MMCR.id("blast_furnace"),
@@ -518,8 +509,7 @@ class MachineRecipeDisplayTest {
     void itemSlotsUseComponentAwareStacksForTagInputs() {
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
                 DataComponents.REPAIR_COST, ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive(3)))));
-        Ingredient tag = Ingredient.of(HolderSet.direct(
-                Items.DIAMOND_SWORD.builtInRegistryHolder(), Items.IRON_SWORD.builtInRegistryHolder()));
+        Ingredient tag = Ingredient.of(Items.DIAMOND_SWORD, Items.IRON_SWORD);
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("component_tag_jei_slot"), MMCR.id("test_machine_name"), 40,
                 List.of(new MachineIngredient.ItemIngredient(tag, 1, components, 1F)), List.of());
@@ -538,8 +528,7 @@ class MachineRecipeDisplayTest {
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
                 DataComponents.ENCHANTMENTS, ComponentPredicate.exact(new Dynamic<>(
                         RegistryOps.create(JsonOps.INSTANCE, lookup), enchantments))));
-        Ingredient tag = Ingredient.of(HolderSet.direct(
-                Items.DIAMOND_SWORD.builtInRegistryHolder(), Items.GOLDEN_SWORD.builtInRegistryHolder()));
+        Ingredient tag = Ingredient.of(Items.DIAMOND_SWORD, Items.GOLDEN_SWORD);
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("enchantment_tag_jei_slot"), MMCR.id("test_machine_name"), 40,
                 List.of(new MachineIngredient.ItemIngredient(tag, 1, components, 1F)), List.of());
@@ -662,8 +651,7 @@ class MachineRecipeDisplayTest {
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("empty_fluid_before_valid_fluid"), MMCR.id("test_machine_name"), 40,
                 List.of(
-                        new MachineIngredient.FluidIngredient(FluidIngredient.of(
-                                HolderSet.emptyNamed(BuiltInRegistries.FLUID, FluidTags.WATER)), 100),
+                        new MachineIngredient.FluidIngredient(FluidIngredient.empty(), 100),
                         new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 200)),
                 List.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
@@ -765,7 +753,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("blast_furnace"),
                 40,
                 List.of(new MachineIngredient.ItemIngredient(
-                        Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS)), 1)),
+                        Ingredient.of(), 1)),
                 List.of()
         );
 
@@ -784,7 +772,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("blast_furnace"),
                 40,
                 List.of(new MachineIngredient.ItemIngredient(
-                        Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.LOGS)), 1)),
+                        Ingredient.of(), 1)),
                 List.of()
         );
 
@@ -797,8 +785,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void displayKeepsEveryResolvedTagItemForJeiCarousel() {
-        Ingredient tag = Ingredient.of(HolderSet.direct(
-                Items.OAK_LOG.builtInRegistryHolder(), Items.BIRCH_LOG.builtInRegistryHolder()));
+        Ingredient tag = Ingredient.of(Items.OAK_LOG, Items.BIRCH_LOG);
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("resolved_tag_input_display"), MMCR.id("blast_furnace"), 40,
                 List.of(new MachineIngredient.ItemIngredient(tag, 1)), List.of());
@@ -845,8 +832,8 @@ class MachineRecipeDisplayTest {
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.GOLD_INGOT), 3)
                 ),
                 List.of(
-                        new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1),
-                        new ItemStack(Holder.direct(Items.GOLD_NUGGET, DataComponentMap.EMPTY), 2)
+                        new ItemStack(Holder.direct(Items.IRON_NUGGET), 1),
+                        new ItemStack(Holder.direct(Items.GOLD_NUGGET), 2)
                 ),
                 List.of(),
                 0,
@@ -879,7 +866,7 @@ class MachineRecipeDisplayTest {
 
     @Test
     void outputOverflowNameFallsBackToItemDescriptionWhenHoverNameIsEmpty() {
-        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 3);
+        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET), 3);
 
         assertThat(MachineRecipeCategory.outputStackName(stack).getString()).isNotEmpty();
     }
@@ -991,7 +978,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id(machine),
                 20,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)),
                 List.of(),
                 priority,
                 1
@@ -1031,7 +1018,7 @@ class MachineRecipeDisplayTest {
                                       int priority, Block block) {
         TestBootstrap.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
-                new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
+                new ItemStack(Holder.direct(block.asItem())), ModifierDefinition.EMPTY));
     }
 
     private static ItemStack namedSharpnessFourSword() {
@@ -1050,10 +1037,6 @@ class MachineRecipeDisplayTest {
     private static ResourceKey<Enchantment> sharpnessKey() {
         return ResourceKey.create(Registries.ENCHANTMENT,
                 ResourceLocation.parse("minecraft:sharpness"));
-    }
-
-    private static void bindItemComponents(Item... items) {
-        for (var item : items) item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     private static IGuiHelper guiHelper() {

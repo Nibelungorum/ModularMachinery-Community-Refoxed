@@ -85,7 +85,7 @@ class IOPortCapabilityCreationTest {
             @Override public CapabilityDirections directions() { return TestCapability.this.directions(); }
         }; }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return () -> CapabilityResult.successful();
         }
     }
 }

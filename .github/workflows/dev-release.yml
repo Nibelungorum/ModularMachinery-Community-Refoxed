@@ -90,11 +90,8 @@ jobs:
       - name: Compile
         run: gradle compileJava
 
-      - name: Run Client Data
-        run: gradle runClientData
-
-      - name: Run Server Data
-        run: gradle runServerData
+      - name: Run Data
+        run: gradle runData
 
       - name: Unit Test
         run: gradle test

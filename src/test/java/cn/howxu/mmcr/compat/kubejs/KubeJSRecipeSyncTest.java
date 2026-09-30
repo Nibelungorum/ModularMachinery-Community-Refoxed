@@ -8,8 +8,6 @@ import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.resources.ResourceLocation;
@@ -51,7 +49,7 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_uses_recipe_holder_id_for_kubejs_generated_machine_recipes() {
-        var holderId = ResourceKey.create(Registries.RECIPE, MMCR.id("from_recipe_event"));
+        var holderId = MMCR.id("from_recipe_event");
         var generated = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
 
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, generated)));
@@ -63,8 +61,8 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_replaces_previous_dynamic_recipe_snapshot() {
-        var firstId = ResourceKey.create(Registries.RECIPE, MMCR.id("first"));
-        var secondId = ResourceKey.create(Registries.RECIPE, MMCR.id("second"));
+        var firstId = MMCR.id("first");
+        var secondId = MMCR.id("second");
         var first = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
         var second = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
 
@@ -77,7 +75,7 @@ class KubeJSRecipeSyncTest {
 
     @Test
     void sync_survives_subsequent_datapack_reload() {
-        var id = ResourceKey.create(Registries.RECIPE, MMCR.id("surviving_recipe"));
+        var id = MMCR.id("surviving_recipe");
         var recipe = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
 
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(id, recipe)));
@@ -94,7 +92,7 @@ class KubeJSRecipeSyncTest {
         transaction.registerRecipe(recipe);
         KubeJSContentReloadTransaction.activate(transaction);
 
-        ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
+        ResourceLocation holderId = id;
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, recipe)));
 
         assertThat(RecipeRegistry.dataPackSnapshot()).doesNotContainKey(id);
@@ -107,7 +105,7 @@ class KubeJSRecipeSyncTest {
         MachineRecipe kubeJS = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 2, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(id, dynamic));
 
-        ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
+        ResourceLocation holderId = id;
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, kubeJS)));
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(id, dynamic);
@@ -123,7 +121,7 @@ class KubeJSRecipeSyncTest {
         MachineRecipe kubeJS = RecipeTestSupport.create(id, MMCR.id("controller_tick"), 2, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(id, dynamic));
 
-        ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
+        ResourceLocation holderId = id;
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, kubeJS)));
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(id, dynamic);
@@ -141,8 +139,7 @@ class KubeJSRecipeSyncTest {
 
         ResourceLocation generatedId = MMCR.id("generated_recipe");
         MachineRecipe generated = explicit.withId(generatedId);
-        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(ResourceKey.create(
-                Registries.RECIPE, generatedId), generated)));
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(generatedId, generated)));
 
         assertThat(RecipeRegistry.getRecipe(explicitId)).isNull();
         assertThat(RecipeRegistry.getRecipe(generatedId)).isNull();
@@ -156,8 +153,8 @@ class KubeJSRecipeSyncTest {
         var orphan = RecipeTestSupport.create(orphanId, MMCR.id("missing_recipe_pool"), 1, List.of(), List.of());
 
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(
-                new RecipeHolder<Recipe<?>>(ResourceKey.create(Registries.RECIPE, validId), valid),
-                new RecipeHolder<Recipe<?>>(ResourceKey.create(Registries.RECIPE, orphanId), orphan)));
+                new RecipeHolder<Recipe<?>>(validId, valid),
+                new RecipeHolder<Recipe<?>>(orphanId, orphan)));
 
         assertThat(RecipeRegistry.kubeJSSnapshot()).containsKey(validId).doesNotContainKey(orphanId);
     }

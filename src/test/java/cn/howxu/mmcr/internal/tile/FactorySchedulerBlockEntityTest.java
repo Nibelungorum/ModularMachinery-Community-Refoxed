@@ -14,11 +14,8 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -37,7 +34,6 @@ class FactorySchedulerBlockEntityTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bindItemComponents(Items.IRON_INGOT);
     }
 
     @Test
@@ -45,7 +41,7 @@ class FactorySchedulerBlockEntityTest {
         FactorySchedulerBlockEntity scheduler = createScheduler();
 
         assertThat(scheduler.threadCount()).isEqualTo(1);
-        assertThat(scheduler.itemStorage().size()).isEqualTo(1);
+        assertThat(scheduler.itemHandler().size()).isEqualTo(1);
     }
 
     @Test
@@ -55,19 +51,19 @@ class FactorySchedulerBlockEntityTest {
         ItemStack iron = Items.IRON_INGOT.getDefaultInstance();
         ItemStack disperser = new ItemStack(ModItems.THREAD_DISPERSER.get(), 8);
 
-        ItemStack rejected = scheduler.itemStorage().insertItem(0, iron, false);
-        ItemStack accepted = scheduler.itemStorage().insertItem(0, disperser, false);
+        ItemStack rejected = scheduler.itemHandler().insertItem(0, iron, false);
+        ItemStack accepted = scheduler.itemHandler().insertItem(0, disperser, false);
 
         assertThat(ItemStack.isSameItemSameComponents(rejected, iron)).isTrue();
         assertThat(rejected.getCount()).isEqualTo(iron.getCount());
-        assertThat(accepted).isEmpty();
+        assertThat(accepted).isSameAs(ItemStack.EMPTY);
         assertThat(scheduler.threadCount()).isEqualTo(9);
     }
 
     @Test
     void largeStoredStackSaturatesThreadCount() {
         FactorySchedulerBlockEntity scheduler = createScheduler();
-        scheduler.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get()), Integer.MAX_VALUE);
+        scheduler.itemHandler().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get()), Integer.MAX_VALUE);
 
         assertThat(scheduler.threadCount()).isEqualTo(Integer.MAX_VALUE);
     }
@@ -75,7 +71,7 @@ class FactorySchedulerBlockEntityTest {
     @Test
     void inventoryRoundTripsThroughNbt() {
         FactorySchedulerBlockEntity scheduler = createScheduler();
-        scheduler.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 7), 7L);
+        scheduler.itemHandler().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 7), 7L);
 
         HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.empty());
         CompoundTag output = new CompoundTag();
@@ -84,7 +80,7 @@ class FactorySchedulerBlockEntityTest {
         FactorySchedulerBlockEntity loaded = createScheduler();
         loaded.loadAdditional(output, lookup);
 
-        assertThat(loaded.itemStorage().amount(0)).isEqualTo(7L);
+        assertThat(loaded.itemHandler().amount(0)).isEqualTo(7L);
         assertThat(loaded.threadCount()).isEqualTo(8);
     }
 
@@ -93,8 +89,8 @@ class FactorySchedulerBlockEntityTest {
         MachineControllerBlockEntity controller = createController();
         FactorySchedulerBlockEntity first = createScheduler();
         FactorySchedulerBlockEntity second = createScheduler();
-        first.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2), 2L);
-        second.itemStorage().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 4), 4L);
+        first.itemHandler().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 2), 2L);
+        second.itemHandler().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 4), 4L);
         addFactoryComponent(controller, first);
         addFactoryComponent(controller, second);
 
@@ -110,8 +106,8 @@ class FactorySchedulerBlockEntityTest {
         addFactoryComponent(controller, scheduler);
         scheduler.bindOwner(controller);
 
-        scheduler.itemStorage().insertItem(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 3), false);
-        scheduler.itemStorage().extractItem(0, 1, false);
+        scheduler.itemHandler().insertItem(0, new ItemStack(ModItems.THREAD_DISPERSER.get(), 3), false);
+        scheduler.itemHandler().extractItem(0, 1, false);
 
         assertThat(invalidations).hasValue(2);
     }
@@ -143,7 +139,4 @@ class FactorySchedulerBlockEntityTest {
         RuntimeTestFixtures.publishStructure(controller, controller.structureSnapshot().configuredMachine(), true);
     }
 
-    private static void bindItemComponents(Item item) {
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
-    }
 }

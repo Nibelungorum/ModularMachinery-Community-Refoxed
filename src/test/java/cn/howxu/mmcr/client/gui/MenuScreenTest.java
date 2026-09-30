@@ -19,6 +19,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.locale.Language;
@@ -100,7 +101,7 @@ class MenuScreenTest {
 
     @Test
     void auto_io_page_hides_item_bus_port_slots() {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null));
         Slot portSlot = menu.getSlot(0);
         Slot playerSlot = menu.getSlot(menu.playerInventorySlotStart());
 
@@ -111,7 +112,7 @@ class MenuScreenTest {
 
     @Test
     void normal_item_bus_page_does_not_hide_slots_after_auto_io_mode() {
-        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null, null));
+        ItemBusMenu menu = new ItemBusMenu(1, new Inventory(null));
         Slot portSlot = menu.getSlot(0);
 
         assertThat(AbstractPortScreen.hidesSlotOnAutoIOPage(menu, false, portSlot, 0)).isFalse();
@@ -159,7 +160,7 @@ class MenuScreenTest {
         TestBootstrap.registerType(levelType);
         TestBootstrap.registerLevel(level);
 
-        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         ExecutionStatus failure = ExecutionStatus.blocked(MMCR.id("menu_test_failure"), MMCR.id("menu_test_source"),
                 FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, MMCR.id("menu_test_source"),
                         FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()));
@@ -239,6 +240,10 @@ class MenuScreenTest {
 
         private ResourceLocation resolve(List<ResourceLocation> capabilityIds) {
             return selectedCapabilityId(capabilityIds);
+        }
+
+        @Override
+        protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         }
 
         @Override protected BlockPos portPos() { return BlockPos.ZERO; }

@@ -63,7 +63,7 @@ class MachineControllerScreenTest {
 
     @Test
     void newer_cache_snapshot_replaces_external_machine_screen_lines() {
-        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS);
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null), CONTROLLER_POS);
 
         ControllerScreenTextCache.replace(CONTROLLER_POS, 1L, List.of(line("test:first", "first")));
         assertThat(MachineControllerScreen.controllerTextLines(menu))
@@ -86,7 +86,7 @@ class MachineControllerScreenTest {
 
     @Test
     void controller_status_is_first_scrollable_detail_line() {
-        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS);
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null), CONTROLLER_POS);
 
         assertThat(MachineControllerScreen.detailLines(menu).getFirst()).isEqualTo(
                 new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
@@ -158,7 +158,7 @@ class MachineControllerScreenTest {
 
     @Test
     void ordinary_controller_viewport_wraps_long_external_text() throws Exception {
-        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS);
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null), CONTROLLER_POS);
         ControllerScreenTextCache.replace(CONTROLLER_POS, 1L,
                 List.of(line("test:long", "x".repeat(161))));
         MachineControllerScreen screen = (MachineControllerScreen) unsafe().allocateInstance(MachineControllerScreen.class);
@@ -190,7 +190,7 @@ class MachineControllerScreenTest {
 
     private static MachineControllerMenu menuWithState(ResourceLocation machineId, boolean formed,
                                                        int matchedStage, int stageCount) {
-        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS,
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null), CONTROLLER_POS,
                 machineId, null, 0, true, 0);
         menu.applyClientSnapshot(new PktMachineStatePayload(
                 CONTROLLER_POS, "mmcr:recipe", formed, true, List.of(),

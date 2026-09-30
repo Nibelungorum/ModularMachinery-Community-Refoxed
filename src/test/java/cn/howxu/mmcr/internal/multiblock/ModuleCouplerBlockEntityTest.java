@@ -72,7 +72,7 @@ class ModuleCouplerBlockEntityTest {
         var first = save(coupler);
         var restored = coupler();
         invokeLoadAdditional(restored, first);
-        var second = save(restored).buildResult();
+        var second = save(restored);
 
         assertThat(second).isEqualTo(first);
     }

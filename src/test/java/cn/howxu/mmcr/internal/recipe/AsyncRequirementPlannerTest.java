@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -23,12 +22,12 @@ import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.SystemReport;
-import net.minecraft.server.permissions.LevelBasedPermissionSet;
-import net.minecraft.server.players.NameAndId;
 import net.minecraft.util.debugchart.SampleLogger;
 import java.util.List;
 import java.util.Optional;
@@ -97,7 +96,7 @@ class AsyncRequirementPlannerTest {
                 .facet(AsyncPlanningFacet.class)).isPresent();
         assertThat(new FluidHatchCapability(new LongFluidStorage(1_000L, null), IOType.INPUT)
                 .facet(AsyncPlanningFacet.class)).isPresent();
-        assertThat(new EnergyHatchCapability(new LongValueStorage(1_000L, 1_000L, null), IOType.INPUT)
+        assertThat(new EnergyHatchCapability(new LongEnergyStorage(1_000L, 1_000L, null), IOType.INPUT)
                 .facet(AsyncPlanningFacet.class)).isPresent();
     }
 
@@ -200,7 +199,7 @@ class AsyncRequirementPlannerTest {
 
     @Test
     void batch_limited_energy_groups_revalidate_and_roll_back_when_storage_changes() throws Exception {
-        LongValueStorage storage = new LongValueStorage(100L, 20L, null);
+        LongEnergyStorage storage = new LongEnergyStorage(100L, 20L, null);
         storage.setAmount(60L);
         EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.INPUT);
         AsyncCapabilityOperation operation = new AsyncCapabilityPlanner.Scalar(capability.type().id()).plan(
@@ -210,7 +209,7 @@ class AsyncRequirementPlannerTest {
 
         assertThat(commit(capability, operation).success()).isFalse();
 
-        assertThat(storage.amount()).isEqualTo(40L);
+        assertThat(storage.getAmountAsLong()).isEqualTo(40L);
     }
 
     private static AsyncRequirementPlanner.Requirement resourceRequirement(int index,
@@ -272,7 +271,7 @@ class AsyncRequirementPlannerTest {
         private Thread serverThread;
 
         private TestServer() {
-            super(null, null, null, null, Optional.empty(), Proxy.NO_PROXY, null, null, null, false);
+            super(null, null, null, null, Proxy.NO_PROXY, null, null, null);
         }
 
         @Override
@@ -286,13 +285,13 @@ class AsyncRequirementPlannerTest {
         }
 
         @Override
-        public LevelBasedPermissionSet operatorUserPermissions() {
-            return LevelBasedPermissionSet.ALL;
+        public int getOperatorUserPermissionLevel() {
+            return 4;
         }
 
         @Override
-        public LevelBasedPermissionSet getFunctionCompilationPermissions() {
-            return LevelBasedPermissionSet.OWNER;
+        public int getFunctionCompilationLevel() {
+            return 4;
         }
 
         @Override
@@ -311,7 +310,12 @@ class AsyncRequirementPlannerTest {
         }
 
         @Override
-        public boolean useNativeTransport() {
+        public boolean isEpollEnabled() {
+            return false;
+        }
+
+        @Override
+        public boolean isCommandBlockEnabled() {
             return false;
         }
 
@@ -326,7 +330,7 @@ class AsyncRequirementPlannerTest {
         }
 
         @Override
-        public boolean isSingleplayerOwner(NameAndId nameAndId) {
+        public boolean isSingleplayerOwner(GameProfile profile) {
             return false;
         }
 

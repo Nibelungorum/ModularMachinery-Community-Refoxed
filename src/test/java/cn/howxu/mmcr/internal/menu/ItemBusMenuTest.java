@@ -8,14 +8,11 @@ import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.network.FriendlyByteBuf;
@@ -105,7 +102,6 @@ class ItemBusMenuTest {
 
     @Test
     void input_slots_allow_inserting_and_pickup() {
-        bindItemComponents(Items.IRON_INGOT);
         LongItemStorage storage = itemStorage(1);
         storage.setContents(0, Items.IRON_INGOT.getDefaultInstance(), 1L);
         DirectionalItemSlot slot = new DirectionalItemSlot(storage, 0, 0, 0);
@@ -116,7 +112,6 @@ class ItemBusMenuTest {
 
     @Test
     void output_slots_allow_inserting_and_pickup() {
-        bindItemComponents(Items.IRON_INGOT);
         LongItemStorage storage = itemStorage(1);
         storage.setContents(0, Items.IRON_INGOT.getDefaultInstance(), 1L);
         DirectionalItemSlot slot = new DirectionalItemSlot(storage, 0, 0, 0);
@@ -127,7 +122,6 @@ class ItemBusMenuTest {
 
     @Test
     void output_slots_merge_player_insert_before_using_empty_slot() {
-        bindItemComponents(Items.IRON_INGOT);
         LongItemStorage storage = itemStorage(2);
         storage.setContents(0, Items.IRON_INGOT.getDefaultInstance(), 10L);
         DirectionalItemSlot first = new DirectionalItemSlot(storage, 0, 0, 0);
@@ -142,13 +136,11 @@ class ItemBusMenuTest {
         assertThat(stack.isEmpty()).as("remaining=%s slot0=%s slot1=%s", stack,
                 storage.resource(0), storage.resource(1)).isTrue();
         assertThat(storage.amount(0)).isEqualTo(15L);
-        assertThat(storage.resource(1)).isEmpty();
+        assertThat(storage.resource(1).isEmpty()).isTrue();
     }
 
     @Test
     void output_slots_reject_mismatched_insert_like_input_slots() {
-        bindItemComponents(Items.IRON_INGOT);
-        bindItemComponents(Items.GOLD_INGOT);
         LongItemStorage storage = new LongItemStorage(1, 64L, stack -> stack.is(Items.IRON_INGOT), null);
         DirectionalItemSlot inputSlot = new DirectionalItemSlot(storage, 0, 0, 0);
         DirectionalItemSlot outputSlot = new DirectionalItemSlot(storage, 0, 0, 0);
@@ -157,11 +149,11 @@ class ItemBusMenuTest {
         ItemStack outputRemaining = outputSlot.safeInsert(Items.GOLD_INGOT.getDefaultInstance());
 
         assertThat(outputRemaining.getCount()).isEqualTo(inputRemaining.getCount());
-        assertThat(storage.resource(0)).isEmpty();
+        assertThat(storage.resource(0).isEmpty()).isTrue();
     }
 
     private static Inventory emptyInventory() {
-        return new Inventory(null, null);
+        return new Inventory(null);
     }
 
     private static LongItemStorage itemStorage(int slots) {
@@ -185,10 +177,6 @@ class ItemBusMenuTest {
         assertThat(clientMenu.imageHeight()).isEqualTo(serverMenu.imageHeight());
         assertThat(clientMenu.texturePath()).isEqualTo(serverMenu.texturePath());
         assertThat(clientMenu.slots).hasSize(serverMenu.slots.size());
-    }
-
-    private static void bindItemComponents(Item item) {
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
     }
 
     private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {

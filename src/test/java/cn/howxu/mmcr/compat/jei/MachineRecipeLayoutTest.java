@@ -17,7 +17,6 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -43,9 +42,6 @@ class MachineRecipeLayoutTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        Items.COPPER_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     @Test
@@ -61,7 +57,7 @@ class MachineRecipeLayoutTest {
                         new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.LAVA), 250),
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.COPPER_INGOT), 1)
                 ),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)),
                 List.of(),
                 0,
                 1,
@@ -96,7 +92,7 @@ class MachineRecipeLayoutTest {
                 IntStream.range(0, 22)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)),
                 List.of(),
                 0,
                 1,
@@ -126,7 +122,7 @@ class MachineRecipeLayoutTest {
                 IntStream.range(0, 25)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)),
                 List.of(),
                 0,
                 1,
@@ -188,10 +184,10 @@ class MachineRecipeLayoutTest {
                 100,
                 List.of(),
                 List.of(
-                        new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1),
-                        new ItemStack(Holder.direct(Items.GOLD_NUGGET, DataComponentMap.EMPTY), 1),
-                        new ItemStack(Holder.direct(Items.COPPER_NUGGET, DataComponentMap.EMPTY), 1),
-                        new ItemStack(Holder.direct(Items.REDSTONE, DataComponentMap.EMPTY), 1)
+                        new ItemStack(Holder.direct(Items.IRON_NUGGET), 1),
+                        new ItemStack(Holder.direct(Items.GOLD_NUGGET), 1),
+                        new ItemStack(Holder.direct(Items.COPPER_INGOT), 1),
+                        new ItemStack(Holder.direct(Items.REDSTONE), 1)
                 ),
                 List.of(),
                 0,
@@ -249,10 +245,10 @@ class MachineRecipeLayoutTest {
         TestBootstrap.registerType(new LevelType(casingType, Component.literal("Casing")));
         TestBootstrap.registerLevel(new MachineLevel(coilLevel, coilType, 0,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
+                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem())), ModifierDefinition.EMPTY));
         TestBootstrap.registerLevel(new MachineLevel(casingLevel, casingType, 0,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
+                new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem())), ModifierDefinition.EMPTY));
 
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_level_slot_layout"), MMCR.id("layout_test_machine"), 100,
@@ -277,7 +273,7 @@ class MachineRecipeLayoutTest {
         TestBootstrap.registerType(new LevelType(levelType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, levelType, 0,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
+                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem())), ModifierDefinition.EMPTY));
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_stage_layout"), MMCR.id("stage_layout_machine"), 100,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
@@ -303,7 +299,7 @@ class MachineRecipeLayoutTest {
                 IntStream.range(0, 22)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
-                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET), 1)),
                 List.of(), 0, 1, false, List.of(), List.of(), false, List.of(), Set.of(MMCR.id("host_a")));
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);

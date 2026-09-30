@@ -435,7 +435,9 @@ class MachineRecipeJsonTest {
     private static JsonObject itemInput(String item, int count) {
         var input = new JsonObject();
         input.addProperty("type", "minecraft:item");
-        input.add("item", arrayValue(item));
+        var ingredient = new JsonObject();
+        ingredient.addProperty("item", item);
+        input.add("item", array(ingredient));
         input.addProperty("count", count);
         return input;
     }

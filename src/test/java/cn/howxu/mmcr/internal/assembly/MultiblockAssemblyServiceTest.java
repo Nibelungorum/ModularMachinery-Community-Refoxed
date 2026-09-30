@@ -12,7 +12,6 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -274,6 +273,6 @@ class MultiblockAssemblyServiceTest {
     }
 
     private static ItemStack itemStack(Item item, int count) {
-        return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
+        return new ItemStack(Holder.direct(item), count);
     }
 }
