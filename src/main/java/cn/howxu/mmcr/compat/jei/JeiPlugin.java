@@ -51,8 +51,9 @@ public final class JeiPlugin implements IModPlugin {
         event.freeze();
         RecipeInformationRegistry.replacePublic(event.entries());
         JeiIngredientAdapterRegistry.registerBuiltIns();
-        var guiHelper = registration.getJeiHelpers().getGuiHelper();
-        registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
+        var jeiHelpers = registration.getJeiHelpers();
+        var guiHelper = jeiHelpers.getGuiHelper();
+        registration.addRecipeCategories(new MachineStructureCategory(guiHelper, jeiHelpers.getIngredientManager()));
         Map<ResourceLocation, List<ResourceLocation>> machinesByPool = machineIdsByPool();
         JeiRuntimeReloader.markRegisteredRecipePoolCategories(machinesByPool.keySet());
         machinesByPool.forEach((poolId, machineIds) -> registration.addRecipeCategories(

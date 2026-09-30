@@ -85,7 +85,7 @@ public final class ModEventRegistration {
                 "modular-machinery-community-refoxed/common.toml");
         modContainer.registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC,
                 "modular-machinery-community-refoxed/server.toml");
-        registerListeners(registrar(modBus), registrar(NeoForge.EVENT_BUS), EventHandlers.production());
+        registerListeners(registrar(modBus), registrar(NeoForge.EVENT_BUS), EventHandlers.production(modBus));
         MMCR.CREATIVE_TABS.register(MMCR.MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))
                 .icon(() -> ModItems.ITEMS.get("basic_casing").get().getDefaultInstance())
@@ -179,8 +179,8 @@ public final class ModEventRegistration {
                          PktTerminalActionPayload::handle);
     }
 
-    private static void onDefaultDataComponentsBound(ModifyDefaultComponentsEvent event) {
-        StartupContentRegistration.completeProductionRecipesAfterComponentsBound();
+    private static void onDefaultDataComponentsBound(ModifyDefaultComponentsEvent event, IEventBus modBus) {
+        StartupContentRegistration.completeProductionRecipesAfterComponentsBound(modBus);
     }
 
     private static ListenerRegistrar registrar(IEventBus bus) {
@@ -219,6 +219,10 @@ public final class ModEventRegistration {
             Consumer<PlayerEvent.PlayerChangedDimensionEvent> playerChangedDimension,
             Consumer<RegisterCommandsEvent> commands) {
         static EventHandlers production() {
+            return production(NeoForge.EVENT_BUS);
+        }
+
+        static EventHandlers production(IEventBus modBus) {
             return new EventHandlers(
                     ModCapabilities::register,
                     event -> registerPayloads(event.registrar(PAYLOAD_PROTOCOL_VERSION)),
@@ -238,7 +242,7 @@ public final class ModEventRegistration {
                         NetworkServerState.discard(event.getServer());
                         RuntimeContentServerBridge.onServerStopped(event);
                     },
-                    ModEventRegistration::onDefaultDataComponentsBound,
+                    event -> onDefaultDataComponentsBound(event, modBus),
                     MachineRecipeDataReloadListener::register,
                     event -> syncPlayer(event.getEntity()),
                     event -> syncPlayer(event.getEntity()),

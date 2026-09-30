@@ -16,6 +16,7 @@ import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.RecipeType;
+import mezz.jei.api.runtime.IIngredientManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.component.DataComponents;
@@ -52,8 +53,11 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final int TRANSFER_BUTTON_Y_4X = 111;
 
     private final IDrawable icon;
-    public MachineStructureCategory(IGuiHelper guiHelper) {
+    private final IIngredientManager ingredientManager;
+
+    public MachineStructureCategory(IGuiHelper guiHelper, IIngredientManager ingredientManager) {
         icon = guiHelper.createDrawableItemLike(ModBlocks.BASIC_CASING.get());
+        this.ingredientManager = ingredientManager;
     }
 
     @Override public RecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
@@ -116,7 +120,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         builder.addInputHandler(preview);
         builder.addWidget(new StructureMaterialWidget(display.materials(),
                 builder.getRecipeSlots().getSlots(RecipeIngredientRole.RENDER_ONLY),
-                MATERIAL_X, materialY()));
+                MATERIAL_X, materialY(), ingredientManager));
     }
 
     @Override
@@ -125,7 +129,8 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         List<IRecipeSlotDrawable> materialSlots = recipeSlots.stream()
                 .filter(slot -> slot.getRole() == RecipeIngredientRole.RENDER_ONLY)
                 .toList();
-        StructureMaterialWidget.refreshPage(display.materials(), materialSlots, System.currentTimeMillis());
+        StructureMaterialWidget.refreshPage(display.materials(), materialSlots, System.currentTimeMillis(),
+                ingredientManager);
     }
 
     @Override

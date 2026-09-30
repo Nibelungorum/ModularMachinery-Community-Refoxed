@@ -4,12 +4,10 @@ import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
-import mezz.jei.api.ingredients.IIngredientType;
-import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.ITypedIngredient;
+import mezz.jei.api.runtime.IIngredientManager;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenPosition;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,21 +28,23 @@ public final class StructureMaterialWidget implements IRecipeWidget {
     private final int x;
     private final int y;
     private final LongSupplier clock;
+    private final IIngredientManager ingredientManager;
     private int displayedPage = -1;
 
     public StructureMaterialWidget(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots,
-            int x, int y) {
-        this(summary, slots, x, y, System::currentTimeMillis);
+            int x, int y, IIngredientManager ingredientManager) {
+        this(summary, slots, x, y, System::currentTimeMillis, ingredientManager);
     }
 
     StructureMaterialWidget(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots,
-            int x, int y, LongSupplier clock) {
+            int x, int y, LongSupplier clock, IIngredientManager ingredientManager) {
         if (slots.size() != SLOT_COUNT) throw new IllegalArgumentException("nine material slots required");
         this.summary = summary;
         this.slots = List.copyOf(slots);
         this.x = x;
         this.y = y;
         this.clock = clock;
+        this.ingredientManager = ingredientManager;
         applyPage(pageFor(clock.getAsLong(), summary.entries().size()));
     }
 
@@ -59,10 +59,11 @@ public final class StructureMaterialWidget implements IRecipeWidget {
         if (page != displayedPage) applyPage(page);
     }
 
-    static void refreshPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, long timeMillis) {
+    static void refreshPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, long timeMillis,
+            IIngredientManager ingredientManager) {
         if (slots.size() != SLOT_COUNT) throw new IllegalArgumentException("nine material slots required");
         int page = pageFor(timeMillis, summary.entries().size());
-        applyPage(summary, slots, page);
+        applyPage(summary, slots, page, ingredientManager);
     }
 
     @Override
@@ -86,37 +87,22 @@ public final class StructureMaterialWidget implements IRecipeWidget {
 
     private void applyPage(int page) {
         displayedPage = page;
-        applyPage(summary, slots, page);
+        applyPage(summary, slots, page, ingredientManager);
     }
 
-    private static void applyPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, int page) {
+    private static void applyPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, int page,
+            IIngredientManager ingredientManager) {
         int first = page * SLOT_COUNT;
         for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
             int entryIndex = first + slotIndex;
-            List<Optional<ITypedIngredient<?>>> values = List.of(entryIndex < summary.entries().size()
-                    ? Optional.of(new ItemStackIngredient(summary.entries().get(entryIndex).stack()))
-                    : Optional.empty());
+            Optional<ITypedIngredient<?>> value = entryIndex < summary.entries().size()
+                    ? ingredientManager.createTypedIngredient(VanillaTypes.ITEM_STACK,
+                            summary.entries().get(entryIndex).stack().copyWithCount(1), true)
+                            .map(ingredient -> ingredient)
+                    : Optional.empty();
             IRecipeSlotDrawable slot = slots.get(slotIndex);
             slot.clearDisplayOverrides();
-            slot.createDisplayOverrides().addOptionalTypedIngredients(values);
-        }
-    }
-
-    private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override
-        public IIngredientType<ItemStack> getType() {
-            return VanillaTypes.ITEM_STACK;
-        }
-
-        @Override
-        public ItemStack getIngredient() {
-            return stack.copyWithCount(1);
-        }
-
-        @Override
-        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
-            ItemStack normalized = ingredientHelper.normalizeIngredient(stack);
-            return normalized == stack ? this : new ItemStackIngredient(normalized);
+            slot.createDisplayOverrides().addOptionalTypedIngredients(List.of(value));
         }
     }
 }

@@ -36,6 +36,7 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
                     VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
                     consumed.put(mesh, Boolean.TRUE);
                     try {
+                        buffer.bind();
                         buffer.upload(mesh);
                         buffers.add(buffer);
                     } catch (RuntimeException exception) {
@@ -63,6 +64,8 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
                 }
             }
             throw exception;
+        } finally {
+            VertexBuffer.unbind();
         }
     }
 
@@ -91,8 +94,14 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
             if (buffers == null || buffers.size() != order.size(renderType)) {
                 throw new IllegalArgumentException("sorted layer count mismatch for " + renderType);
             }
-            for (int index = 0; index < buffers.size(); index++) {
-                buffers.get(index).uploadIndexBuffer(order.take(renderType, index));
+            try {
+                for (int index = 0; index < buffers.size(); index++) {
+                    VertexBuffer buffer = buffers.get(index);
+                    buffer.bind();
+                    buffer.uploadIndexBuffer(order.take(renderType, index));
+                }
+            } finally {
+                VertexBuffer.unbind();
             }
         }
     }
