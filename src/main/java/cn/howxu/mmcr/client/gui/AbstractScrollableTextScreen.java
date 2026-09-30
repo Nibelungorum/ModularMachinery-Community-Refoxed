@@ -5,6 +5,7 @@ import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -180,7 +181,7 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
             case ControllerTextLine.ItemIcon item -> {
                 graphics.pose().pushPose();
                 graphics.pose().translate(x, y, 0);
-                graphics.pose().scale(size / 16F, size / 16F);
+                graphics.pose().scale(size / 16F, size / 16F, 1F);
                 graphics.renderFakeItem(item.stack(), 0, 0);
                 graphics.pose().popPose();
             }
@@ -206,7 +207,7 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         if (containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) {
             if (!hasScrollableOverflow(lineCount, visibleLines)) return false;
             textScrollOffset = scrollOffsetAfter(textScrollOffset, lineCount, visibleLines, deltaY,
-                    minecraft != null && minecraft.hasShiftDown());
+                    minecraft != null && Screen.hasShiftDown());
             return true;
         }
         return handleAdditionalScroll(mouseX, mouseY, deltaX, deltaY)

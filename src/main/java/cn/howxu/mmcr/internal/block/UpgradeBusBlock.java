@@ -14,7 +14,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.BlockAndLightGetter;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -54,7 +54,7 @@ public final class UpgradeBusBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public BlockState getAppearance(BlockState state, BlockAndLightGetter level, BlockPos pos, Direction side,
+    public BlockState getAppearance(BlockState state, BlockAndTintGetter level, BlockPos pos, Direction side,
                                     @Nullable BlockState sourceState, @Nullable BlockPos sourcePos) {
         return AppearanceStateResolver.resolveLinked(state, level, pos);
     }
@@ -83,6 +83,15 @@ public final class UpgradeBusBlock extends Block implements EntityBlock {
     public void onBlockExploded(BlockState state, ServerLevel level, BlockPos pos, Explosion explosion) {
         if (level.getBlockEntity(pos) instanceof UpgradeBusBlockEntity bus) bus.dropContents();
         super.onBlockExploded(state, level, pos, explosion);
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
+        if (!moving && state.getBlock() != newState.getBlock()
+                && !level.isClientSide() && level.getBlockEntity(pos) instanceof UpgradeBusBlockEntity bus) {
+            bus.onBlockRemoved();
+        }
+        super.onRemove(state, level, pos, newState, moving);
     }
 
     @Override

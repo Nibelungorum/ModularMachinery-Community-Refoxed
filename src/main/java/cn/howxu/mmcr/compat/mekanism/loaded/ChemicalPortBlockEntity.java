@@ -75,12 +75,11 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
     }
 
     @Override
-    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+    public void onBlockRemoved() {
         if (level != null && !level.isClientSide() && IRadiationManager.INSTANCE.isRadiationEnabled()) {
-            IRadiationManager.INSTANCE.dumpRadiation(level, worldPosition,
-                    chemicalTank.getStack(), chemicalTank.getStored());
+            IRadiationManager.INSTANCE.dumpRadiation(level, worldPosition, chemicalTank.getStack());
         }
-        super.preRemoveSideEffects(pos, state);
+        super.onBlockRemoved();
     }
 
     private void markChemicalChanged() {

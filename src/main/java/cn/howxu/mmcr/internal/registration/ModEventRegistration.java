@@ -48,15 +48,14 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
-import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
-import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -98,10 +97,11 @@ public final class ModEventRegistration {
         modBus.add(RegisterCapabilitiesEvent.class, handlers.capabilities());
         modBus.add(RegisterPayloadHandlersEvent.class, handlers.payloads());
         modBus.add(RegisterGameTestsEvent.class, handlers.gameTests());
+        modBus.add(ModifyDefaultComponentsEvent.class, handlers.defaultDataComponentsBound());
         gameBus.add(BlockEvent.EntityPlaceEvent.class, handlers.blockPlaced());
         gameBus.add(BlockEvent.EntityMultiPlaceEvent.class, handlers.blocksPlaced());
         gameBus.add(BlockEvent.FluidPlaceBlockEvent.class, handlers.fluidPlaced());
-        gameBus.add(BreakBlockEvent.class, handlers.blockBroken());
+        gameBus.add(BlockEvent.BreakEvent.class, handlers.blockBroken());
         gameBus.add(EntityJoinLevelEvent.class, handlers.fallingBlockJoined());
         gameBus.add(ChunkEvent.Unload.class, handlers.chunkUnloaded());
         gameBus.add(ChunkEvent.Load.class, handlers.chunkLoaded());
@@ -110,8 +110,7 @@ public final class ModEventRegistration {
         gameBus.add(LevelEvent.Unload.class, handlers.levelUnload());
         gameBus.add(ServerAboutToStartEvent.class, handlers.serverAboutToStart());
         gameBus.add(ServerStoppedEvent.class, handlers.serverStopped());
-        gameBus.add(DefaultDataComponentsBoundEvent.class, handlers.defaultDataComponentsBound());
-        gameBus.add(AddServerReloadListenersEvent.class, handlers.reloadListeners());
+        gameBus.add(AddReloadListenerEvent.class, handlers.reloadListeners());
         gameBus.add(PlayerEvent.PlayerLoggedInEvent.class, handlers.playerLoggedIn());
         gameBus.add(PlayerEvent.PlayerChangedDimensionEvent.class, handlers.playerChangedDimension());
         gameBus.add(RegisterCommandsEvent.class, handlers.commands());
@@ -180,10 +179,8 @@ public final class ModEventRegistration {
                          PktTerminalActionPayload::handle);
     }
 
-    private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {
-        if (event.shouldUpdateStaticData()) {
-            StartupContentRegistration.completeProductionRecipesAfterComponentsBound();
-        }
+    private static void onDefaultDataComponentsBound(ModifyDefaultComponentsEvent event) {
+        StartupContentRegistration.completeProductionRecipesAfterComponentsBound();
     }
 
     private static ListenerRegistrar registrar(IEventBus bus) {
@@ -207,7 +204,7 @@ public final class ModEventRegistration {
             Consumer<BlockEvent.EntityPlaceEvent> blockPlaced,
             Consumer<BlockEvent.EntityMultiPlaceEvent> blocksPlaced,
             Consumer<BlockEvent.FluidPlaceBlockEvent> fluidPlaced,
-            Consumer<BreakBlockEvent> blockBroken,
+            Consumer<BlockEvent.BreakEvent> blockBroken,
             Consumer<EntityJoinLevelEvent> fallingBlockJoined,
             Consumer<ChunkEvent.Unload> chunkUnloaded,
             Consumer<ChunkEvent.Load> chunkLoaded,
@@ -216,8 +213,8 @@ public final class ModEventRegistration {
             Consumer<LevelEvent.Unload> levelUnload,
             Consumer<ServerAboutToStartEvent> serverAboutToStart,
             Consumer<ServerStoppedEvent> serverStopped,
-            Consumer<DefaultDataComponentsBoundEvent> defaultDataComponentsBound,
-            Consumer<AddServerReloadListenersEvent> reloadListeners,
+            Consumer<ModifyDefaultComponentsEvent> defaultDataComponentsBound,
+            Consumer<AddReloadListenerEvent> reloadListeners,
             Consumer<PlayerEvent.PlayerLoggedInEvent> playerLoggedIn,
             Consumer<PlayerEvent.PlayerChangedDimensionEvent> playerChangedDimension,
             Consumer<RegisterCommandsEvent> commands) {

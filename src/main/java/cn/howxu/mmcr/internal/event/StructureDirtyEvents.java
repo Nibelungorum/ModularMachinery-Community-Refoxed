@@ -13,7 +13,6 @@ import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.LevelAccessor;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
-import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /**
@@ -47,7 +46,7 @@ public final class StructureDirtyEvents {
         markAdjacentAutoIOPortsDirty(event.getLevel(), event.getPos());
     }
 
-    public static void onBlockBroken(BreakBlockEvent event) {
+    public static void onBlockBroken(BlockEvent.BreakEvent event) {
         MachineControllerBlockEntity.markStructureDirty(event.getLevel(), event.getPos());
         enqueueCoupler(event.getLevel(), event.getPos());
         markAdjacentAutoIOPortsDirty(event.getLevel(), event.getPos());

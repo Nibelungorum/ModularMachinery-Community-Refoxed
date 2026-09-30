@@ -120,7 +120,7 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
                 } catch (IllegalArgumentException e) {
                     return DataResult.error(() -> "Invalid data component type " + key.get());
                 }
-                DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(id);
+                DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
                 if (type == null) return DataResult.error(() -> "Unknown data component type " + id);
                 decoded.put(type, predicate.get());
             }

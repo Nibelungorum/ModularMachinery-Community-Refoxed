@@ -37,9 +37,9 @@ public final class ModBlockEntities {
     static {
         PortKinds.all().forEach(kind -> {
             String name = kind.id();
-            BES.put(name, register(name, () -> new BlockEntityType<>(
+            BES.put(name, register(name, () -> BlockEntityType.Builder.of(
                     (BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
-                    ModBlocks.BLOCKS.get(name).get())));
+                    ModBlocks.BLOCKS.get(name).get()).build(null)));
         });
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
         registerFactoryController();
@@ -59,8 +59,8 @@ public final class ModBlockEntities {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         if (BES.containsKey(name)) return;
         CONTROLLER_MACHINE_IDS.add(machineId);
-        BES.put(name, register(name, () -> new BlockEntityType<>(
-                MachineControllerBlockEntity::new, ModBlocks.controllerFor(machineId).get())));
+        BES.put(name, register(name, () -> BlockEntityType.Builder.of(
+                MachineControllerBlockEntity::new, ModBlocks.controllerFor(machineId).get()).build(null)));
     }
 
     public static void registerMachineControllers(Collection<ResourceLocation> machineIds) {
@@ -73,43 +73,43 @@ public final class ModBlockEntities {
 
     private static void registerParallelController(ParallelTier tier) {
         String name = tier.idSuffix();
-        BES.put(name, register(name, () -> new BlockEntityType<>(
+        BES.put(name, register(name, () -> BlockEntityType.Builder.of(
                 (pos, state) -> new ParallelControllerBlockEntity(tier, pos, state),
-                ModBlocks.BLOCKS.get(name).get())));
+                ModBlocks.BLOCKS.get(name).get()).build(null)));
     }
 
     private static void registerFactoryController() {
         String name = "factory_controller";
-        BES.put(name, register(name, () -> new BlockEntityType<>(
+        BES.put(name, register(name, () -> BlockEntityType.Builder.of(
                 FactorySchedulerBlockEntity::new,
-                ModBlocks.BLOCKS.get(name).get())));
+                ModBlocks.BLOCKS.get(name).get()).build(null)));
     }
 
     private static void registerSmartInterface() {
-        BES.put("smart_interface", register("smart_interface", () -> new BlockEntityType<>(
-                SmartInterfaceBlockEntity::new, ModBlocks.SMART_INTERFACE.get())));
+        BES.put("smart_interface", register("smart_interface", () -> BlockEntityType.Builder.of(
+                SmartInterfaceBlockEntity::new, ModBlocks.SMART_INTERFACE.get()).build(null)));
     }
 
     private static void registerDataStorage() {
-        BES.put("data_storage", register("data_storage", () -> new BlockEntityType<>(
-                DataStorageBlockEntity::new, ModBlocks.DATA_STORAGE.get())));
+        BES.put("data_storage", register("data_storage", () -> BlockEntityType.Builder.of(
+                DataStorageBlockEntity::new, ModBlocks.DATA_STORAGE.get()).build(null)));
     }
 
     private static void registerNetworkInterface() {
-        BES.put("network_interface", register("network_interface", () -> new BlockEntityType<>(
-                NetworkInterfaceBlockEntity::new, ModBlocks.NETWORK_INTERFACE.get())));
+        BES.put("network_interface", register("network_interface", () -> BlockEntityType.Builder.of(
+                NetworkInterfaceBlockEntity::new, ModBlocks.NETWORK_INTERFACE.get()).build(null)));
     }
 
     private static void registerModuleCoupler() {
-        BES.put("module_bridge", register("module_bridge", () -> new BlockEntityType<>(
-                ModuleCouplerBlockEntity::new, ModBlocks.MODULE_BRIDGE.get())));
+        BES.put("module_bridge", register("module_bridge", () -> BlockEntityType.Builder.of(
+                ModuleCouplerBlockEntity::new, ModBlocks.MODULE_BRIDGE.get()).build(null)));
     }
 
     private static void registerUpgradeBus(UpgradeBusSize size) {
         String name = "upgrade_bus_" + size.id();
-        BES.put(name, register(name, () -> new BlockEntityType<>(
+        BES.put(name, register(name, () -> BlockEntityType.Builder.of(
                 (pos, state) -> new UpgradeBusBlockEntity(size, pos, state),
-                ModBlocks.BLOCKS.get(name).get())));
+                ModBlocks.BLOCKS.get(name).get()).build(null)));
     }
 
     public static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> controllerFor(ResourceLocation machineId) {

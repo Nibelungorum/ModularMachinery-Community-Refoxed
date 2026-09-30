@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-import net.minecraft.core.HolderSet;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -115,14 +114,14 @@ public final class RecipeCandidateIndex {
             hasItemInput = true;
             Ingredient ingredient = item.item();
             if (ingredient.isCustom()) return null;
-            HolderSet<Item> matchingItems;
+            Ingredient.Value[] matchingValues;
             try {
-                matchingItems = ingredient.getValues();
+                matchingValues = ingredient.getValues();
             } catch (IllegalStateException | UnsupportedOperationException ignored) {
                 return null;
             }
-            if (!matchingItems.isBound() || matchingItems.unwrapKey().isPresent() || matchingItems.size() != 1) return null;
-            requiredItems.add(matchingItems.get(0).value());
+            if (matchingValues.length != 1 || !(matchingValues[0] instanceof Ingredient.ItemValue itemValue)) return null;
+            requiredItems.add(itemValue.item().getItem());
         }
         return hasItemInput ? requiredItems : null;
     }

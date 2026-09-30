@@ -2129,9 +2129,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
-    @Override
-    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
-        super.preRemoveSideEffects(pos, state);
+    public void onBlockRemoved() {
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
         if (level != null && !level.isClientSide()) notifyPreviewReceiversCleared();
     }

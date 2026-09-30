@@ -5,10 +5,9 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.level.block.Block;
 
-import java.util.function.Consumer;
+import java.util.List;
 
 /**
  * Block item tooltip support for MMCR controllers and IO interfaces.
@@ -22,9 +21,8 @@ public class InterfaceBlockItem extends BlockItem {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
-            Consumer<Component> builder, TooltipFlag tooltipFlag) {
-        super.appendHoverText(stack, context, display, builder, tooltipFlag);
-        for (Component line : InterfaceTooltips.tooltipLines(getBlock())) builder.accept(line);
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> builder, TooltipFlag tooltipFlag) {
+        super.appendHoverText(stack, context, builder, tooltipFlag);
+        builder.addAll(InterfaceTooltips.tooltipLines(getBlock()));
     }
 }

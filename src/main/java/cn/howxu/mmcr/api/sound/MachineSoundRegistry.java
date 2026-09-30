@@ -14,6 +14,6 @@ public final class MachineSoundRegistry {
     }
 
     public static @Nullable SoundEvent get(@Nullable ResourceLocation id) {
-        return id == null ? null : BuiltInRegistries.SOUND_EVENT.getValue(id);
+        return id == null ? null : BuiltInRegistries.SOUND_EVENT.get(id);
     }
 }

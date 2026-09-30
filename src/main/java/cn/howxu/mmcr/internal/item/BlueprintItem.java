@@ -23,7 +23,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 
@@ -32,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 /**
  * Stores the material requirements for a selected machine structure.
@@ -79,17 +77,16 @@ public class BlueprintItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
-            Consumer<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         ResourceLocation machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
         if (machineId == null) return;
         Machine machine = MachineRegistry.getMachine(machineId);
         if (machine == null) return;
         boolean showRequirements = flag.hasShiftDown() || flag.shouldDisplayAllInformation();
-        tooltip.accept(Component.translatable(showRequirements
+        tooltip.add(Component.translatable(showRequirements
                 ? "tooltip.mmcr.blueprint.recipe_list"
                 : "tooltip.mmcr.blueprint.recipe_list_collapsed").withStyle(ChatFormatting.AQUA));
-        if (showRequirements) requirementText(machine).forEach(tooltip);
+        if (showRequirements) tooltip.addAll(requirementText(machine));
     }
 
     private static List<Component> requirementText(Machine machine) {

@@ -185,7 +185,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<ItemStor
 
     private static boolean ownsMenu(ServerPlayer player, IOPortBlockEntity port) {
         return player.containerMenu instanceof ExtendedItemMenu menu && menu.owner() == port
-                || player.containerMenu instanceof ExtendedFluidMenu menu && menu.owner() == port
+                || player.containerMenu instanceof ExtendedFluidMenu fluidMenu && fluidMenu.owner() == port
                 || player.containerMenu instanceof CombinedPortMenu menu && menu.owner() == port
                 || player.containerMenu instanceof ExtendedCombinedMenu menu && menu.owner() == port;
     }

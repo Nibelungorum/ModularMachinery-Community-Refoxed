@@ -146,7 +146,7 @@ public sealed interface BlockPredicate {
 
     record OfBlockState(BlockState state) implements BlockPredicate {
         @Override public boolean matches(BlockState s) {
-            return state.getBlock() == s.getBlock() && state.getValues().toList().equals(s.getValues().toList());
+            return state.getBlock() == s.getBlock() && state.getValues().equals(s.getValues());
         }
     }
 

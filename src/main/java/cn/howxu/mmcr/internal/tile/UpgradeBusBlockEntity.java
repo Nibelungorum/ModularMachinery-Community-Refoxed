@@ -70,8 +70,8 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     @Override
-    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
-        super.preRemoveSideEffects(pos, state);
+    public void onBlockRemoved() {
+        super.onBlockRemoved();
         dropContents();
     }
 

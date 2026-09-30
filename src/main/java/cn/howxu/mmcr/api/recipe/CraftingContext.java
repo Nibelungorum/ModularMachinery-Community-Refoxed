@@ -317,7 +317,8 @@ public final class CraftingContext {
                     } catch (IllegalArgumentException exception) {
                         continue;
                     }
-                    if (item.item().test(resource.toStack(1)) && item.components().matches(resource.toStack(1))) {
+                    ItemStack stack = resource.copyWithCount(1);
+                    if (item.item().test(stack) && item.components().matches(stack)) {
                         requests.add(resourceRequest(item.type().id(), parallelism, value, amount, false));
                     }
                 }
@@ -342,7 +343,7 @@ public final class CraftingContext {
                     } catch (IllegalArgumentException exception) {
                         continue;
                     }
-                    if (fluid.fluid().test(resource.toStack(1))) {
+                    if (fluid.fluid().test(resource.copyWithAmount(1))) {
                         requests.add(resourceRequest(fluid.type().id(), parallelism, value, amount, false));
                     }
                 }

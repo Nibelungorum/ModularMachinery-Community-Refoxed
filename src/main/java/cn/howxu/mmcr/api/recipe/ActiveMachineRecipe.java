@@ -13,7 +13,10 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import com.mojang.serialization.Codec;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ByteArrayTag;
+import net.minecraft.nbt.IntArrayTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.LongArrayTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NumericTag;
 import net.minecraft.nbt.Tag;
@@ -80,8 +83,10 @@ public final class ActiveMachineRecipe {
         }
 
         public static InputConsumptionPlan deserialize(CompoundTag tag) {
-            return new InputConsumptionPlan(Arrays.stream(tag.getIntArray("consumedInputBatches")
-                    .orElseThrow(() -> new IllegalArgumentException("Missing input consumption batches"))).boxed().toList());
+            if (!tag.contains("consumedInputBatches", Tag.TAG_INT_ARRAY)) {
+                throw new IllegalArgumentException("Missing input consumption batches");
+            }
+            return new InputConsumptionPlan(Arrays.stream(tag.getIntArray("consumedInputBatches")).boxed().toList());
         }
 
         public boolean isValidFor(MachineRecipe recipe) {
@@ -539,26 +544,26 @@ public final class ActiveMachineRecipe {
     private static void updateTag(MessageDigest digest, Tag tag) {
         digest.update(tag.getId());
         switch (tag.getId()) {
-            case Tag.TAG_BYTE -> digest.update(((NumericTag) tag).byteValue());
-            case Tag.TAG_SHORT -> updateShort(digest, ((NumericTag) tag).shortValue());
+            case Tag.TAG_BYTE -> digest.update(((NumericTag) tag).getAsByte());
+            case Tag.TAG_SHORT -> updateShort(digest, ((NumericTag) tag).getAsShort());
             case Tag.TAG_INT -> updateInt(digest, ((NumericTag) tag).getAsInt());
             case Tag.TAG_LONG -> updateLong(digest, ((NumericTag) tag).getAsLong());
-            case Tag.TAG_FLOAT -> updateInt(digest, Float.floatToIntBits(((NumericTag) tag).floatValue()));
-            case Tag.TAG_DOUBLE -> updateLong(digest, Double.doubleToLongBits(((NumericTag) tag).doubleValue()));
+            case Tag.TAG_FLOAT -> updateInt(digest, Float.floatToIntBits(((NumericTag) tag).getAsFloat()));
+            case Tag.TAG_DOUBLE -> updateLong(digest, Double.doubleToLongBits(((NumericTag) tag).getAsDouble()));
             case Tag.TAG_BYTE_ARRAY -> {
-                byte[] values = tag.asByteArray().orElseThrow();
+                byte[] values = ((ByteArrayTag) tag).getAsByteArray();
                 updateInt(digest, values.length);
                 digest.update(values);
             }
-            case Tag.TAG_STRING -> updateString(digest, tag.asString().orElseThrow());
+            case Tag.TAG_STRING -> updateString(digest, tag.getAsString());
             case Tag.TAG_LIST -> {
-                ListTag list = tag.asList().orElseThrow();
+                ListTag list = (ListTag) tag;
                 updateInt(digest, list.size());
                 for (Tag element : list) updateTag(digest, element);
             }
             case Tag.TAG_COMPOUND -> {
-                CompoundTag compound = tag.asCompound().orElseThrow();
-                List<String> keys = new ArrayList<>(compound.keySet());
+                CompoundTag compound = (CompoundTag) tag;
+                List<String> keys = new ArrayList<>(compound.getAllKeys());
                 keys.sort(String::compareTo);
                 updateInt(digest, keys.size());
                 for (String key : keys) {
@@ -567,12 +572,12 @@ public final class ActiveMachineRecipe {
                 }
             }
             case Tag.TAG_INT_ARRAY -> {
-                int[] values = tag.asIntArray().orElseThrow();
+                int[] values = ((IntArrayTag) tag).getAsIntArray();
                 updateInt(digest, values.length);
                 for (int value : values) updateInt(digest, value);
             }
             case Tag.TAG_LONG_ARRAY -> {
-                long[] values = tag.asLongArray().orElseThrow();
+                long[] values = ((LongArrayTag) tag).getAsLongArray();
                 updateInt(digest, values.length);
                 for (long value : values) updateLong(digest, value);
             }

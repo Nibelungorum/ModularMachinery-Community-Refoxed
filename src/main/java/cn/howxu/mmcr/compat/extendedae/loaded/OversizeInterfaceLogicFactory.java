@@ -1,13 +1,19 @@
 package cn.howxu.mmcr.compat.extendedae.loaded;
 
 import appeng.api.networking.IManagedGridNode;
+import appeng.api.storage.AEKeySlotFilter;
+import appeng.api.stacks.AEKey;
+import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.helpers.InterfaceLogic;
 import appeng.helpers.InterfaceLogicHost;
 import appeng.helpers.externalstorage.GenericStackInv;
-import com.glodblock.github.extendedae.common.inventory.OversizeConfigInv;
+import appeng.util.ConfigInventory;
+import com.glodblock.github.extendedae.config.EAEConfig;
 import com.glodblock.github.extendedae.util.Ae2Reflect;
 import net.minecraft.world.item.Item;
+
+import java.util.Set;
 
 /** Creates the EAE oversize 36-slot interface inventory profile.
  *
@@ -26,5 +32,21 @@ public final class OversizeInterfaceLogicFactory {
         logic.getConfig().useRegisteredCapacities();
         logic.getStorage().useRegisteredCapacities();
         return logic;
+    }
+
+    private static final class OversizeConfigInv extends ConfigInventory {
+        private OversizeConfigInv(Set<AEKeyType> keyTypes, AEKeySlotFilter filter,
+                                  GenericStackInv.Mode mode, int size, Runnable listener, boolean allowOverstacking) {
+            super(keyTypes, filter, mode, size, listener, allowOverstacking);
+        }
+
+        @Override
+        public long getMaxAmount(AEKey key) {
+            try {
+                return Math.multiplyExact(super.getMaxAmount(key), EAEConfig.getOversizeMultiplier(key));
+            } catch (Exception exception) {
+                return Long.MAX_VALUE;
+            }
+        }
     }
 }

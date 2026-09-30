@@ -183,7 +183,7 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
 
     private static Component itemLine(ItemStorageEntry entry) {
         return Component.literal(ReadableNumber.format(entry.amount()) + " ")
-                .append(entry.resource().getStyledHoverName());
+                .append(entry.resource().getHoverName());
     }
 
     private static Component fluidLine(FluidStorageEntry entry) {

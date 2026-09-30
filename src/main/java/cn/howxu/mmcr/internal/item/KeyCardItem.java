@@ -23,12 +23,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-import java.util.function.Consumer;
+import java.util.List;
 import java.util.Locale;
 
 /** Binds a formed network interface as the source for later connections.
@@ -73,16 +72,15 @@ public class KeyCardItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
-                                Consumer<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         KeyCardBinding binding = stack.get(ModDataComponents.KEY_CARD_BINDING.get());
         if (binding == null) {
-            tooltip.accept(Component.translatable("tooltip.mmcr.key_card.not_selected").withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.add(Component.translatable("tooltip.mmcr.key_card.not_selected").withStyle(ChatFormatting.DARK_GRAY));
             return;
         }
         Machine machine = MachineRegistry.getMachine(binding.machine().type());
         Component machineName = machine != null ? machine.displayName() : Component.literal(binding.machine().type().toString());
-        tooltip.accept(Component.translatable("tooltip.mmcr.key_card.selected",
+        tooltip.add(Component.translatable("tooltip.mmcr.key_card.selected",
                 binding.interfacePos().pos().toShortString(), machineName)
                 .withStyle(ChatFormatting.GRAY));
     }

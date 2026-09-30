@@ -120,10 +120,10 @@ public final class PreviewLevel extends Level {
     }
 
     boolean isPreviewChunk(int x, int z) {
-        int minX = ChunkPos.containing(schema.min()).x() - 1;
-        int maxX = ChunkPos.containing(schema.max()).x() + 1;
-        int minZ = ChunkPos.containing(schema.min()).z() - 1;
-        int maxZ = ChunkPos.containing(schema.max()).z() + 1;
+        int minX = new ChunkPos(schema.min()).x - 1;
+        int maxX = new ChunkPos(schema.max()).x + 1;
+        int minZ = new ChunkPos(schema.min()).z - 1;
+        int maxZ = new ChunkPos(schema.max()).z + 1;
         return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
     }
 
@@ -158,7 +158,7 @@ public final class PreviewLevel extends Level {
         }, clipContext -> {
             Vec3 delta = clipContext.getFrom().subtract(clipContext.getTo());
             return BlockHitResult.miss(clipContext.getTo(),
-                    Direction.getApproximateNearest(delta.x, delta.y, delta.z), BlockPos.containing(clipContext.getTo()));
+                    Direction.getNearest(delta.x, delta.y, delta.z), BlockPos.containing(clipContext.getTo()));
         });
     }
 
@@ -241,6 +241,8 @@ public final class PreviewLevel extends Level {
     @Override public List<? extends Player> players() { return List.of(); }
     @Override public LevelTickAccess<Block> getBlockTicks() { return BlackholeTickAccess.emptyLevelList(); }
     @Override public LevelTickAccess<Fluid> getFluidTicks() { return BlackholeTickAccess.emptyLevelList(); }
+    @Override public int getHeight() { return dimensionType().height(); }
+    @Override public int getMinBuildHeight() { return dimensionType().minY(); }
     @Override public int getHeight(Heightmap.Types type, int x, int z) { return schema.max().getY() + 1; }
     @Override public int getSkyDarken() { return 0; }
 

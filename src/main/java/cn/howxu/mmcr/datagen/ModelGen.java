@@ -9,34 +9,29 @@ import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
-import net.minecraft.client.data.models.BlockModelGenerators;
-import net.minecraft.client.data.models.ItemModelGenerators;
-import net.minecraft.client.data.models.ModelProvider;
-import net.minecraft.client.data.models.model.ModelTemplates;
-import net.minecraft.client.data.models.model.TexturedModel;
-import net.minecraft.client.data.models.model.TextureSlot;
-import net.minecraft.client.resources.model.sprite.Material;
-import net.minecraft.core.Holder;
 import net.minecraft.data.PackOutput;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.neoforged.neoforge.client.model.generators.BlockStateProvider;
+import net.neoforged.neoforge.common.data.ExistingFileHelper;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 import java.util.function.Supplier;
 
-public final class ModelGen extends ModelProvider {
+public final class ModelGen extends BlockStateProvider {
 
-    public ModelGen(PackOutput output) {
-        super(output, MMCR.MODID);
+    public ModelGen(PackOutput output, ExistingFileHelper existingFileHelper) {
+        super(output, MMCR.MODID, existingFileHelper);
     }
 
     @Override
-    protected void registerModels(BlockModelGenerators blockModels, ItemModelGenerators itemModels) {
-        registerModels((block, name) -> blockModels.createTrivialBlock(block.get(), TexturedModel.CUBE.updateTexture(
-                        m -> m.put(TextureSlot.ALL, textureFor(name)))),
-                (item, name) -> itemModels.generateFlatItem(item.get(), ModelTemplates.FLAT_ITEM));
+    protected void registerStatesAndModels() {
+        registerModels((block, name) -> {
+                    var model = models().cubeAll(name, textureFor(name));
+                    simpleBlockWithItem(block.get(), model);
+                }, (item, name) -> itemModels().basicItem(item.get()));
     }
 
     static List<GeneratedModel> collectRegisteredModels() {
@@ -82,10 +77,10 @@ public final class ModelGen extends ModelProvider {
         return PortKinds.all().stream().anyMatch(kind -> kind.id().equals(blockName));
     }
 
-    /** 用 block 注册名生成纹理 Material:modid:block/<name>。每个 block 自带独立贴图。 */
-    private static Material textureFor(String blockName) {
+    /** Uses the block registry name as its mod-local block texture. */
+    private static ResourceLocation textureFor(String blockName) {
         String textureName = "smart_interface".equals(blockName) ? "overlay_smartinterface_number" : blockName;
-        return new Material(MMCR.id("block/" + textureName));
+        return MMCR.id("block/" + textureName);
     }
 
     private static boolean shouldGenerateBlockModels(String name, Supplier<? extends Block> block) {
@@ -121,17 +116,4 @@ public final class ModelGen extends ModelProvider {
         return false;
     }
 
-    @Override
-    protected Stream<? extends Holder<Block>> getKnownBlocks() {
-        return collectKnownBlockNames().stream()
-                .map(ModBlocks.BLOCKS::get)
-                .map(h -> h.get().builtInRegistryHolder());
-    }
-
-    @Override
-    protected Stream<? extends Holder<Item>> getKnownItems() {
-        return collectKnownItemNames().stream()
-                .map(ModItems.ITEMS::get)
-                .map(h -> h.get().builtInRegistryHolder());
-    }
 }

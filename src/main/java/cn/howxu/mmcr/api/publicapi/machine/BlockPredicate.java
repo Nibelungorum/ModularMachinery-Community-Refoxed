@@ -50,7 +50,7 @@ public final class BlockPredicate {
 
     public static BlockPredicate block(ResourceLocation id) {
         Objects.requireNonNull(id, "id");
-        return deferredBlock(() -> BuiltInRegistries.BLOCK.getValue(id));
+        return deferredBlock(() -> BuiltInRegistries.BLOCK.get(id));
     }
 
     public static BlockPredicate state(String id) {
@@ -61,7 +61,7 @@ public final class BlockPredicate {
         String blockId = id.substring(0, propertiesStart);
         String properties = id.substring(propertiesStart + 1, id.length() - 1);
         if (properties.isEmpty()) throw new IllegalArgumentException("Invalid block state: " + id);
-        BlockState state = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId)).defaultBlockState();
+        BlockState state = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId)).defaultBlockState();
         for (String assignment : properties.split(",", -1)) {
             String[] pair = assignment.split("=", -1);
             if (pair.length != 2 || pair[0].isEmpty() || pair[1].isEmpty()) {
@@ -76,7 +76,7 @@ public final class BlockPredicate {
 
     public static BlockPredicate state(ResourceLocation id) {
         Objects.requireNonNull(id, "id");
-        return blockState(BuiltInRegistries.BLOCK.getValue(id).defaultBlockState());
+        return blockState(BuiltInRegistries.BLOCK.get(id).defaultBlockState());
     }
 
     private static <T extends Comparable<T>> BlockState setProperty(

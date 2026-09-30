@@ -18,11 +18,10 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.RecordBuilder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Pair;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeBookCategory;
 import net.minecraft.world.item.crafting.RecipeInput;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -490,9 +489,19 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     @Override
-    public ItemStack assemble(RecipeInput input) {
+    public ItemStack assemble(RecipeInput input, HolderLookup.Provider registries) {
         List<ItemStack> outputs = OutputRegistry.itemStacks(machineOutputs());
         return outputs.isEmpty() ? ItemStack.EMPTY : outputs.getFirst().copy();
+    }
+
+    @Override
+    public boolean canCraftInDimensions(int width, int height) {
+        return false;
+    }
+
+    @Override
+    public ItemStack getResultItem(HolderLookup.Provider registries) {
+        return assemble(null, registries);
     }
 
     @Override
@@ -501,7 +510,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     @Override
-    public String group() {
+    public String getGroup() {
         return "";
     }
 
@@ -516,18 +525,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     @Override
-    public PlacementInfo placementInfo() {
-        return PlacementInfo.NOT_PLACEABLE;
-    }
-
-    @Override
     public boolean isSpecial() {
         return true;
-    }
-
-    @Override
-    public RecipeBookCategory recipeBookCategory() {
-        return new RecipeBookCategory();
     }
 
     @Override

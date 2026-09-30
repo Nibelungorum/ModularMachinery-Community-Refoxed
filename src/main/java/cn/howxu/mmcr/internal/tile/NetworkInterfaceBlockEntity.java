@@ -138,10 +138,8 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         }
     }
 
-    @Override
-    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+    public void onBlockRemoved() {
         removeFromLoadedPeers();
-        super.preRemoveSideEffects(pos, state);
     }
 
     @Override
@@ -170,9 +168,9 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
         owner = readGlobalPos(input.getCompound(OWNER_KEY));
         connections.clear();
         connectionSnapshot = null;
-        ListTag connections = input.getList(CONNECTIONS_KEY, Tag.TAG_COMPOUND);
-        for (int index = 0; index < connections.size(); index++) {
-            CompoundTag serialized = connections.getCompound(index);
+        ListTag connectionTags = input.getList(CONNECTIONS_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < connectionTags.size(); index++) {
+            CompoundTag serialized = connectionTags.getCompound(index);
             try {
                 GlobalPos endpoint = readGlobalPos(serialized.getCompound(ENDPOINT_KEY));
                 String machine = serialized.getString(MACHINE_KEY);
@@ -214,7 +212,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     private static void writeGlobalPos(CompoundTag output, @Nullable GlobalPos pos) {
         if (pos == null) return;
-        output.putString(DIMENSION_KEY, pos.dimension().identifier().toString());
+        output.putString(DIMENSION_KEY, pos.dimension().location().toString());
         output.putInt(X_KEY, pos.pos().getX());
         output.putInt(Y_KEY, pos.pos().getY());
         output.putInt(Z_KEY, pos.pos().getZ());

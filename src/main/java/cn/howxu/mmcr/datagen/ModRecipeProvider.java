@@ -21,6 +21,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
+import net.minecraft.data.PackOutput;
 import net.minecraft.data.recipes.ShapedRecipeBuilder;
 import net.minecraft.data.recipes.ShapelessRecipeBuilder;
 import net.minecraft.resources.ResourceLocation;
@@ -35,17 +36,20 @@ import net.neoforged.neoforge.common.conditions.ModLoadedCondition;
 import net.neoforged.neoforge.common.Tags;
 
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 
 public final class ModRecipeProvider extends RecipeProvider {
-    private final HolderGetter<Item> items;
+    private HolderGetter<Item> items;
+    private RecipeOutput output;
 
-    public ModRecipeProvider(HolderLookup.Provider registries, RecipeOutput output) {
-        super(registries, output);
-        items = registries.lookupOrThrow(Registries.ITEM);
+    public ModRecipeProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> registries) {
+        super(output, registries);
     }
 
     @Override
-    protected void buildRecipes() {
+    protected void buildRecipes(RecipeOutput output, HolderLookup.Provider registries) {
+        this.output = output;
+        items = registries.lookupOrThrow(Registries.ITEM);
         shaped(ModItems.MODULARIUM.get(), 5)
                 .pattern("XAX")
                 .pattern("ABA")

@@ -19,6 +19,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -201,7 +202,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         ejectButton = addRenderableWidget(new EjectButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
                 Component.translatable("mmcr.auto_io.eject_contents"), button -> {
             PacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId(),
-                    Minecraft.getInstance().hasShiftDown()));
+                    Screen.hasShiftDown()));
                 button.setFocused(false);
         }, topPos + autoIOSideButtonY(1)));
 
@@ -214,7 +215,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                         clicked -> {
                             clicked.setFocused(false);
                             IOPortBlockEntity port = portEntity();
-                            if (shiftAllSidesCell && Minecraft.getInstance().hasShiftDown()) {
+                            if (shiftAllSidesCell && Screen.hasShiftDown()) {
                                 PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
                                         AutoIOAction.SET_ALL_SIDES, null, false));
                                 return;
@@ -463,7 +464,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             drawBackground(graphics);
             Font font = Minecraft.getInstance().font;
             graphics.pose().pushPose();
-            graphics.pose().scale(AUTO_IO_TOGGLE_TEXT_SCALE, AUTO_IO_TOGGLE_TEXT_SCALE);
+            graphics.pose().scale(AUTO_IO_TOGGLE_TEXT_SCALE, AUTO_IO_TOGGLE_TEXT_SCALE, 1F);
             renderCenteredLine(graphics, font, typeLine, getY() + 2);
             renderCenteredLine(graphics, font, stateLine, getY() + 11);
             graphics.pose().popPose();

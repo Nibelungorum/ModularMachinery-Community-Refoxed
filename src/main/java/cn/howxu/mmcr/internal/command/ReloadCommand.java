@@ -7,7 +7,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
-import net.minecraft.server.permissions.Permissions;
 
 public final class ReloadCommand {
 
@@ -17,7 +16,7 @@ public final class ReloadCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("mmcr")
                 .then(Commands.literal("reload")
-                        .requires(src -> src.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(src -> src.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .executes(ctx -> {
                             var commit = DynamicContentReloadService.reloadCurrentWithSnapshot();
                             var result = commit.result();

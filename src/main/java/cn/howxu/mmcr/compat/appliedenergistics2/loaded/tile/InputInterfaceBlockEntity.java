@@ -111,7 +111,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public Component memoryCardSettingsSource() {
-        return getMainMenuIcon().getItemName();
+        return getMainMenuIcon().getHoverName();
     }
 
     @Override
@@ -207,7 +207,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         super.saveAdditional(output, registries);
-        mainNode.serialize(output);
+        mainNode.saveToNBT(output);
         logic.writeToNBT(output, registries);
         ListTag provenance = new ListTag();
         for (int slot = 0; slot < networkOwned.length; slot++) {
@@ -227,7 +227,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         beginLoadingAdditional();
         try {
             super.loadAdditional(input, registries);
-            mainNode.deserialize(input);
+            mainNode.loadFromNBT(input);
             readNetworkOwned(input, registries);
             logic.readFromNBT(input, registries);
             reconcileNetworkOwned();
@@ -271,9 +271,9 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     private void readNetworkOwned(CompoundTag input, HolderLookup.Provider registries) {
         Arrays.fill(networkOwned, null);
-        ListTag networkOwned = input.getList(NETWORK_OWNED_KEY, Tag.TAG_COMPOUND);
-        for (int index = 0; index < networkOwned.size(); index++) {
-            CompoundTag entry = networkOwned.getCompound(index);
+        ListTag networkOwnedEntries = input.getList(NETWORK_OWNED_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < networkOwnedEntries.size(); index++) {
+            CompoundTag entry = networkOwnedEntries.getCompound(index);
             int slot = entry.getInt(NETWORK_OWNED_SLOT_KEY);
             GenericStack owned = GenericStack.readTag(registries, entry.getCompound("stack"));
             if (slot >= 0 && slot < networkOwned.length && owned != null && owned.amount() > 0L) {

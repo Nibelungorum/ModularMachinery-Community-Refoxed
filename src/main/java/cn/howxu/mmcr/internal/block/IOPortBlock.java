@@ -33,7 +33,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.BlockAndLightGetter;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -42,7 +42,6 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Explosion;
-import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
 
 import net.minecraft.world.entity.player.Inventory;
@@ -81,7 +80,7 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public BlockState getAppearance(BlockState state, BlockAndLightGetter level, BlockPos pos, Direction side,
+    public BlockState getAppearance(BlockState state, BlockAndTintGetter level, BlockPos pos, Direction side,
                                     @Nullable BlockState sourceState, @Nullable BlockPos sourcePos) {
         return AppearanceStateResolver.resolveLinked(state, level, pos);
     }
@@ -155,7 +154,7 @@ public class IOPortBlock extends Block implements EntityBlock {
 
     @Override
     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
-                                   @Nullable Orientation orientation, boolean movedByPiston) {
+                                   BlockPos neighborPos, boolean movedByPiston) {
         if (!level.isClientSide() && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             port.markAutoIOCacheDirty();
             AE2Bridge.get().onPortNeighborChanged(port);
@@ -168,6 +167,15 @@ public class IOPortBlock extends Block implements EntityBlock {
             port.dropContents();
         }
         super.onBlockExploded(state, level, pos, explosion);
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
+        if (!moving && state.getBlock() != newState.getBlock()
+                && !level.isClientSide() && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
+            port.onBlockRemoved();
+        }
+        super.onRemove(state, level, pos, newState, moving);
     }
 
     @Override

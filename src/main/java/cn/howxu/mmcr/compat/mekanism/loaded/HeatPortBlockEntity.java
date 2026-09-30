@@ -77,7 +77,7 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     }
 
     public IHeatHandler heatHandler() {
-        return heatCapacitor;
+        return externalHeatHandler;
     }
 
     public IHeatHandler externalHeatHandler() {

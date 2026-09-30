@@ -188,8 +188,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     private static boolean isEmptyNativeResource(Object resource) {
-        return resource instanceof ItemStack stack && stack.isEmpty()
-                || resource instanceof FluidStack stack && stack.isEmpty();
+        return resource instanceof ItemStack itemStack && itemStack.isEmpty()
+                || resource instanceof FluidStack fluidStack && fluidStack.isEmpty();
     }
 
     private void notifyControllers(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
@@ -210,9 +210,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public void dropContents() {
     }
 
-    @Override
-    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
-        super.preRemoveSideEffects(pos, state);
+    public void onBlockRemoved() {
         dropContents();
     }
 

@@ -14,7 +14,6 @@ import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.player.Player;
@@ -93,7 +92,7 @@ public class PURE_TICK_MACHINE {
                                 pos.getZ() + 2);
                         var players = level.getEntitiesOfClass(Player.class, area);
                         for (var player : players) {
-                            LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level, EntitySpawnReason.EVENT);
+                            LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level);
                             if (bolt != null) {
                                 bolt.setPos(player.getX(), player.getY(), player.getZ());
                                 bolt.setVisualOnly(false);

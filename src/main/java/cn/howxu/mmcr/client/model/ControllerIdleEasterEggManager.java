@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceLocation;
@@ -43,7 +43,7 @@ public final class ControllerIdleEasterEggManager {
     }
 
     static boolean canTrackRenderView(BlockAndTintGetter level, boolean currentLevelAvailable) {
-        return currentLevelAvailable && level != BlockAndTintGetter.EMPTY;
+        return currentLevelAvailable;
     }
 
     public static void clientTick(Minecraft minecraft) {

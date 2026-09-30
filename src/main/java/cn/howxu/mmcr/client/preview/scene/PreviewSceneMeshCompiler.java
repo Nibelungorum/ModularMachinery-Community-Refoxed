@@ -17,7 +17,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
@@ -46,7 +46,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
 
 /**
  * Tesselates immutable preview data into CPU-side mesh parts for render-thread assembly.
@@ -256,9 +256,9 @@ public final class PreviewSceneMeshCompiler {
             @Override public FluidState getFluidState(BlockPos position) { return getBlockState(position).getFluidState(); }
             @Override public BlockEntity getBlockEntity(BlockPos position) { return null; }
             @Override public int getHeight() { return level.getHeight(); }
-            @Override public int getMinY() { return level.getMinY(); }
+            @Override public int getMinBuildHeight() { return level.getMinBuildHeight(); }
             @Override public int getBrightness(LightLayer lightLayer, BlockPos position) { return 15; }
-            @Override public LevelLightEngine getLightEngine() { return LevelLightEngine.EMPTY; }
+            @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
             @Override public float getShade(net.minecraft.core.Direction direction, boolean shade) {
                 return level.getShade(direction, shade);
             }

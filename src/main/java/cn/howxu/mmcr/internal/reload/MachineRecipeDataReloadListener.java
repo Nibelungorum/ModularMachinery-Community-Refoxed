@@ -15,7 +15,9 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
+import net.minecraft.server.packs.resources.PreparableReloadListener.PreparationBarrier;
+import net.minecraft.util.profiling.ProfilerFiller;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.resource.ContextAwareReloadListener;
 
 import java.io.Reader;
@@ -35,8 +37,8 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
     private volatile Map<ResourceLocation, MachineRecipe> snapshot = Map.of();
     private volatile List<MachineRecipeJson.RecipeJsonException> errors = List.of();
 
-    public static void register(AddServerReloadListenersEvent event) {
-        event.addListener(MMCR.id("machine_recipes"), new MachineRecipeDataReloadListener());
+    public static void register(AddReloadListenerEvent event) {
+        event.addListener(new MachineRecipeDataReloadListener());
     }
 
     public Map<ResourceLocation, MachineRecipe> snapshot() {
@@ -48,9 +50,9 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
     }
 
     @Override
-    public CompletableFuture<Void> reload(SharedState sharedState, Executor prepareExecutor,
-                                          PreparationBarrier barrier, Executor applyExecutor) {
-        ResourceManager resourceManager = sharedState.resourceManager();
+    public CompletableFuture<Void> reload(PreparationBarrier barrier, ResourceManager resourceManager,
+                                          ProfilerFiller preparationsProfiler, ProfilerFiller reloadProfiler,
+                                          Executor prepareExecutor, Executor applyExecutor) {
         return CompletableFuture.supplyAsync(() -> loadCandidate(resourceManager, getRegistryLookup()), prepareExecutor)
                 .thenCompose(barrier::wait)
                 .thenAcceptAsync(candidate -> apply(candidate, resourceManager), applyExecutor);

@@ -8,9 +8,7 @@ import cn.howxu.mmcr.internal.item.BlueprintItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.TerminalItem;
 import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -37,8 +35,7 @@ public final class ModItems {
             REGISTER.register("key_card", KeyCardItem::new);
 
     public static final DeferredHolder<Item, Item> MODULARIUM =
-            REGISTER.register("modularium", id -> new Item(new Item.Properties().setId(
-                    ResourceKey.create(Registries.ITEM, id))));
+            REGISTER.register("modularium", id -> new Item(new Item.Properties()));
 
     public static final DeferredHolder<Item, Item> BLUEPRINT =
             REGISTER.register("blueprint", BlueprintItem::new);
@@ -50,9 +47,7 @@ public final class ModItems {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
                     {
-                        Item item = new InterfaceBlockItem(blockHolder.get(),
-                                new Item.Properties().setId(
-                                        ResourceKey.create(Registries.ITEM, MMCR.id(name))));
+                        Item item = new InterfaceBlockItem(blockHolder.get(), new Item.Properties());
                         ResourceLocation machineId = ModBlocks.machineIdForController(blockHolder.get());
                         if (machineId != null) {
                             Map<Item, ResourceLocation> ids = new LinkedHashMap<>(controllerMachineIds);
@@ -81,7 +76,7 @@ public final class ModItems {
             if (ITEMS.containsKey(name)) return;
             DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
                     new InterfaceBlockItem(ModBlocks.controllerFor(machineId).get(),
-                            new Item.Properties().setId(ResourceKey.create(Registries.ITEM, MMCR.id(name)))));
+                            new Item.Properties()));
             ITEMS.put(name, itemHolder);
         });
     }

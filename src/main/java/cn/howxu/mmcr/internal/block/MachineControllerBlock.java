@@ -21,7 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.BlockAndLightGetter;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -71,7 +71,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public BlockState getAppearance(BlockState state, BlockAndLightGetter level, BlockPos pos, Direction side,
+    public BlockState getAppearance(BlockState state, BlockAndTintGetter level, BlockPos pos, Direction side,
                                     @Nullable BlockState sourceState, @Nullable BlockPos sourcePos) {
         if (!state.getValue(FORMED)) return state;
         MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
@@ -230,6 +230,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (moving || state.getBlock() == newState.getBlock()) return;
         if (!level.isClientSide() && blockEntity instanceof MachineControllerBlockEntity controller) {
+            controller.onBlockRemoved();
             controller.onMachineDestroyed();
             controller.resetLinkedPortAppearances();
         }

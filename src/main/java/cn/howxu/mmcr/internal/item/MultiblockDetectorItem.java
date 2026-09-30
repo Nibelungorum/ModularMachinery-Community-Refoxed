@@ -16,12 +16,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
-import java.util.function.Consumer;
+import java.util.List;
 
 /**
  * Debug item for selecting a controller and export region in-world.
@@ -68,11 +67,11 @@ public class MultiblockDetectorItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display, Consumer<Component> builder, TooltipFlag tooltipFlag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> builder, TooltipFlag tooltipFlag) {
         MultiblockDetectorSelection selection = selection(stack);
-        builder.accept(controllerLine(context, selection.controllerPos(), selection.controllerFace()));
-        builder.accept(positionLine(context, "first", selection.firstPos()));
-        builder.accept(positionLine(context, "second", selection.secondPos()));
+        builder.add(controllerLine(context, selection.controllerPos(), selection.controllerFace()));
+        builder.add(positionLine(context, "first", selection.firstPos()));
+        builder.add(positionLine(context, "second", selection.secondPos()));
     }
 
     private Component controllerLine(Item.TooltipContext context, BlockPos pos, Direction face) {

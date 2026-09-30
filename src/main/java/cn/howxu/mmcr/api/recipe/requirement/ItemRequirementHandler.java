@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -49,7 +50,9 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                 || requirement.io() != RecipeModifier.IOType.INPUT || right.io() != RecipeModifier.IOType.INPUT
                 || requirement.item() == null || right.item() == null) return false;
         try {
-            return requirement.item().items().anyMatch(left -> right.item().items().anyMatch(left::equals));
+            return Arrays.stream(requirement.item().getItems()).map(ItemStack::getItem)
+                    .anyMatch(left -> Arrays.stream(right.item().getItems())
+                            .map(ItemStack::getItem).anyMatch(left::equals));
         } catch (UnsupportedOperationException ignored) {
             return true;
         }

@@ -137,7 +137,7 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
     @Override
     public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         super.saveAdditional(output, registries);
-        mainNode.serialize(output);
+        mainNode.saveToNBT(output);
         logic.writeToNBT(output, registries);
     }
 
@@ -146,7 +146,7 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
         beginLoadingAdditional();
         try {
             super.loadAdditional(input, registries);
-            mainNode.deserialize(input);
+            mainNode.loadFromNBT(input);
             logic.readFromNBT(input, registries);
         } finally {
             endLoadingAdditional();

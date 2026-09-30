@@ -15,7 +15,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Client input bridge for detector pick-block selection.
@@ -55,7 +55,7 @@ public final class MultiblockDetectorClientHandler {
 
         if (minecraft.hitResult.getType() != HitResult.Type.BLOCK) return;
         BlockHitResult hit = (BlockHitResult) minecraft.hitResult;
-        ClientPacketDistributor.sendToServer(new PktMultiblockDetectorPickPayload(hit.getBlockPos(), hit.getDirection()));
+        PacketDistributor.sendToServer(new PktMultiblockDetectorPickPayload(hit.getBlockPos(), hit.getDirection()));
         event.setSwingHand(false);
         event.setCanceled(true);
     }

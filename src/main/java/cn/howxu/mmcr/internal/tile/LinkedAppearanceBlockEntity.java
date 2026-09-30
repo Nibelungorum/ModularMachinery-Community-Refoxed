@@ -130,9 +130,9 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         super.loadAdditional(input, registries);
         linkedControllers.clear();
-        ListTag linkedControllers = input.getList(LINKED_CONTROLLERS_KEY, Tag.TAG_COMPOUND);
-        for (int index = 0; index < linkedControllers.size(); index++) {
-            CompoundTag controllerInput = linkedControllers.getCompound(index);
+        ListTag controllerTags = input.getList(LINKED_CONTROLLERS_KEY, Tag.TAG_COMPOUND);
+        for (int index = 0; index < controllerTags.size(); index++) {
+            CompoundTag controllerInput = controllerTags.getCompound(index);
             BlockPos controllerPos = new BlockPos(
                     controllerInput.getInt(LINKED_CONTROLLER_X_KEY), controllerInput.getInt(LINKED_CONTROLLER_Y_KEY),
                     controllerInput.getInt(LINKED_CONTROLLER_Z_KEY));
@@ -142,7 +142,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
                     sourceBlock.isBlank() ? DEFAULT_APPEARANCE_SOURCE.blockId() : ResourceLocation.parse(sourceBlock),
                     overrideTexture.isBlank() ? null : ResourceLocation.parse(overrideTexture)));
         }
-        appearanceSource = resolveLinkedAppearance(linkedControllers);
+        appearanceSource = resolveLinkedAppearance(this.linkedControllers);
     }
 
     @Override

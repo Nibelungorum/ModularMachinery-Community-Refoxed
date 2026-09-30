@@ -284,7 +284,7 @@ public final class TerminalScreen extends Screen {
 
     private int nextStage() {
         if (stages.isEmpty()) return data.stage();
-        int delta = Minecraft.getInstance().hasShiftDown() ? -1 : 1;
+        int delta = Screen.hasShiftDown() ? -1 : 1;
         int index = stages.indexOf(data.stage());
         return stages.get(Math.floorMod(index + delta, stages.size()));
     }
@@ -303,7 +303,7 @@ public final class TerminalScreen extends Screen {
                 .append(Component.translatable("gui.mmcr.terminal.machine").withStyle(ChatFormatting.DARK_PURPLE))
                 .append(machineName)
                 .append(" @ ")
-                .append(data.controller().dimension().identifier().toString())
+                .append(data.controller().dimension().location().toString())
                 .append(" @ ")
                 .append(data.controller().pos().toShortString());
     }
@@ -348,7 +348,7 @@ public final class TerminalScreen extends Screen {
         return level == null ? Component.translatable("gui.mmcr.terminal.level")
                 : level.statePredicate().preferredState()
                         .map(state -> (Component) state.getBlock().getName())
-                        .orElseGet(() -> view.slotStack().getStyledHoverName());
+                        .orElseGet(() -> view.slotStack().getHoverName());
     }
 
     private MutableComponent previewLabel() {

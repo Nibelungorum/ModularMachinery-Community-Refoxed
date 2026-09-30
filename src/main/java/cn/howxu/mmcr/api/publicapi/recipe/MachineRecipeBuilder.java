@@ -14,8 +14,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,8 +62,7 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder inputItem(Ingredient item, int count) { return requirement(ItemRequirement.input(new ItemInput(item, count))); }
     public MachineRecipeBuilder inputItem(TagKey<Item> tag, int count) {
         if (tag == null) throw new IllegalArgumentException("tag null");
-        return requirement(ItemRequirement.input(new ItemInput(Ingredient.of(BuiltInRegistries.ITEM.get(tag)
-                .orElseGet(() -> HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag))), count)));
+        return requirement(ItemRequirement.input(new ItemInput(Ingredient.of(tag), count)));
     }
     public MachineRecipeBuilder inputItemTag(TagKey<Item> tag, int count) { return inputItem(tag, count); }
     public MachineRecipeBuilder inputItem(Ingredient item, int count, DataComponentPredicateSet components, float consumeChance) {

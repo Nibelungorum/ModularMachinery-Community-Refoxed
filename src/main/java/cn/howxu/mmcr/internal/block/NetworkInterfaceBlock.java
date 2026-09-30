@@ -4,7 +4,7 @@ import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.BlockAndLightGetter;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -33,7 +33,7 @@ public class NetworkInterfaceBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public BlockState getAppearance(BlockState state, BlockAndLightGetter level, BlockPos pos, Direction side,
+    public BlockState getAppearance(BlockState state, BlockAndTintGetter level, BlockPos pos, Direction side,
                                     @Nullable BlockState sourceState, @Nullable BlockPos sourcePos) {
         return AppearanceStateResolver.resolveLinked(state, level, pos);
     }
@@ -45,5 +45,14 @@ public class NetworkInterfaceBlock extends Block implements EntityBlock {
         return (lvl, pos, blockState, entity) -> {
             if (entity instanceof NetworkInterfaceBlockEntity networkInterface) networkInterface.serverTick();
         };
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
+        if (!moving && state.getBlock() != newState.getBlock()
+                && !level.isClientSide() && level.getBlockEntity(pos) instanceof NetworkInterfaceBlockEntity network) {
+            network.onBlockRemoved();
+        }
+        super.onRemove(state, level, pos, newState, moving);
     }
 }

@@ -9,10 +9,8 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.FluidInstance;
 
 import java.util.List;
 import java.util.Objects;
@@ -24,13 +22,13 @@ import java.util.Objects;
  */
 public interface MachineOutput {
     Codec<ItemStack> RECIPE_ITEM_STACK_CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.create(instance -> instance.group(
-            Item.CODEC_WITH_BOUND_COMPONENTS.fieldOf("id").forGetter(ItemStack::typeHolder),
+            ItemStack.ITEM_NON_AIR_CODEC.fieldOf("id").forGetter(ItemStack::getItemHolder),
             Codec.LONG.optionalFieldOf("count", 1L).forGetter(stack -> (long) stack.getCount()),
             DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY)
                     .forGetter(ItemStack::getComponentsPatch)
     ).apply(instance, (holder, count, components) -> new ItemStack(holder, recipeStackAmount(count), components))));
     Codec<FluidStack> RECIPE_FLUID_STACK_CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.create(instance -> instance.group(
-            FluidInstance.FLUID_HOLDER_CODEC_WITH_BOUND_COMPONENTS.fieldOf("id").forGetter(FluidStack::typeHolder),
+            FluidStack.FLUID_NON_EMPTY_CODEC.fieldOf("id").forGetter(FluidStack::getFluidHolder),
             Codec.LONG.fieldOf("amount").forGetter(stack -> (long) stack.getAmount()),
             DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY)
                     .forGetter(FluidStack::getComponentsPatch)

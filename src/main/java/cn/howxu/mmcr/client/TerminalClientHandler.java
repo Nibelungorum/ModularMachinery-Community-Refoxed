@@ -17,7 +17,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
 
@@ -40,7 +40,7 @@ public final class TerminalClientHandler {
                 minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get()))) return;
         TerminalData data = TerminalData.from(minecraft.player.getMainHandItem());
         minecraft.setScreen(new TerminalScreen(data, false, false, List.of(), ""));
-        ClientPacketDistributor.sendToServer(initialStateRequest());
+        PacketDistributor.sendToServer(initialStateRequest());
         event.setSwingHand(false);
         event.setCanceled(true);
     }

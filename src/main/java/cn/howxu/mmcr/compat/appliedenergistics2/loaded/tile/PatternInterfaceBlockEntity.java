@@ -109,7 +109,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public Component memoryCardSettingsSource() {
-        return getMainMenuIcon().getItemName();
+        return getMainMenuIcon().getHoverName();
     }
 
     @Override
@@ -315,7 +315,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         super.saveAdditional(output, registries);
-        mainNode.serialize(output);
+        mainNode.saveToNBT(output);
         logic.writeToNBT(output, registries);
     }
 
@@ -324,7 +324,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         beginLoadingAdditional();
         try {
             super.loadAdditional(input, registries);
-            mainNode.deserialize(input);
+            mainNode.loadFromNBT(input);
             logic.readFromNBT(input, registries);
         } finally {
             endLoadingAdditional();

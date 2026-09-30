@@ -29,7 +29,7 @@ final class PreviewChunkSource extends ChunkSource {
     @Override
     public ChunkAccess getChunk(int x, int z, ChunkStatus status, boolean load) {
         if (!level.isPreviewChunk(x, z)) return null;
-        long key = ChunkPos.pack(x, z);
+        long key = ChunkPos.asLong(x, z);
         PreviewChunk cached = chunks.get(key);
         if (cached != null) return cached;
         level.assertRenderThread();

@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -99,8 +100,7 @@ public final class RecipeStartContext {
         for (RecipeRequirement requirement : requirements) {
             if (!replaced && requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement input
                     && input.io() == RecipeIo.INPUT && input.count() == expectedCount
-                    && input.ingredient() != null && input.ingredient().items().toList().size() == 1
-                    && input.ingredient().items().toList().getFirst().value() == item) {
+                    && input.ingredient() != null && hasExactItem(input.ingredient().getItems(), item)) {
                 next.add(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(input.io(), input.ingredient(),
                         replacementCount, input.stack(), input.chance(), input.components(), input.consumeChance()));
                 replaced = true;
@@ -110,6 +110,10 @@ public final class RecipeStartContext {
         }
         if (replaced) setRequirements(next);
         return replaced;
+    }
+
+    private static boolean hasExactItem(ItemStack[] matchingItems, Item item) {
+        return matchingItems.length == 1 && matchingItems[0].getItem() == item;
     }
 
     public List<RecipeRequirement> requirements() {

@@ -115,13 +115,13 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     }
 
     static List<Component> tooltipLines(ItemStorageEntry entry) {
-        return List.of(entry.resource().getStyledHoverName(), Component.literal(ReadableNumber.formatExact(entry.amount())
+        return List.of(entry.resource().getHoverName(), Component.literal(ReadableNumber.formatExact(entry.amount())
                 + " / " + ReadableNumber.formatExact(entry.capacity())));
     }
 
     private static Component displayLine(ItemStorageEntry entry) {
         return Component.literal(ReadableNumber.format(entry.amount()) + " ")
-                .append(entry.resource().getStyledHoverName());
+                .append(entry.resource().getHoverName());
     }
 
     private static ControllerTextLine renderLine(ItemStorageEntry entry) {

@@ -45,14 +45,21 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.HEAT);
 
     private final IHeatCapacitor heatCapacitor;
+    private final IHeatHandler heatHandler;
     private final IOType ioType;
     private final CapabilityView view;
     private final AsyncPlanningFacet asyncPlanning;
 
     public HeatPortCapability(IHeatCapacitor heatCapacitor, IOType ioType) {
+        this(heatCapacitor, createHeatHandler(heatCapacitor), ioType);
+    }
+
+    private HeatPortCapability(IHeatCapacitor heatCapacitor, IHeatHandler heatHandler, IOType ioType) {
         if (heatCapacitor == null) throw new IllegalArgumentException("heatCapacitor must not be null");
+        if (heatHandler == null) throw new IllegalArgumentException("heatHandler must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.heatCapacitor = heatCapacitor;
+        this.heatHandler = heatHandler;
         this.ioType = ioType;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
@@ -95,12 +102,12 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     }
 
     public HeatPortCapability(HeatPortBlockEntity port) {
-        this(port.heatCapacitor(), port.ioType());
+        this(port.heatCapacitor(), port.heatHandler(), port.ioType());
     }
 
     @Override
     public IHeatHandler heatHandler() {
-        return heatCapacitor;
+        return heatHandler;
     }
 
     @Override
@@ -195,6 +202,35 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
 
     private CapabilityResult failure(FailureReason reason) {
         return failure(reason, Map.of());
+    }
+
+    private static IHeatHandler createHeatHandler(IHeatCapacitor heatCapacitor) {
+        return new IHeatHandler() {
+            @Override
+            public int getHeatCapacitorCount() {
+                return 1;
+            }
+
+            @Override
+            public double getTemperature(int capacitor) {
+                return heatCapacitor.getTemperature();
+            }
+
+            @Override
+            public double getInverseConduction(int capacitor) {
+                return heatCapacitor.getInverseConduction();
+            }
+
+            @Override
+            public double getHeatCapacity(int capacitor) {
+                return heatCapacitor.getHeatCapacity();
+            }
+
+            @Override
+            public void handleHeat(int capacitor, double transfer) {
+                heatCapacitor.handleHeat(transfer);
+            }
+        };
     }
 
     private CapabilityResult failure(FailureReason reason, Map<String, String> details) {

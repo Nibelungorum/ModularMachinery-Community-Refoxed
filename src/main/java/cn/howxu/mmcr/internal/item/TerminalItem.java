@@ -21,14 +21,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.List;
 
 
 /**
@@ -87,12 +86,11 @@ public class TerminalItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
-                                Consumer<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         TerminalData data = TerminalData.from(stack);
 
         Component modeLabel = data.inventoryMode().component().copy().withStyle(ChatFormatting.GRAY);
-        tooltip.accept(
+        tooltip.add(
                 Component.empty()
                         .append(Component.translatable("tooltip.mmcr.terminal.mode").withStyle(ChatFormatting.GREEN))
                         .append(Component.literal(": "))
@@ -104,7 +102,7 @@ public class TerminalItem extends Item {
         appendAe2AccessPoint(data, context.level(), tooltip);
         appendLevels(data.selectedLevels(), tooltip);
 
-        tooltip.accept(
+        tooltip.add(
                 Component.empty()
                         .append(Component.translatable("tooltip.mmcr.terminal.stage").withStyle(ChatFormatting.GREEN))
                         .append(Component.literal(": "))
@@ -126,17 +124,17 @@ public class TerminalItem extends Item {
                         .append(Component.literal(" / "))
                         .append(layerLabel)
                 ;
-        tooltip.accept(previewState);
+        tooltip.add(previewState);
     }
 
-    private static void appendController(GlobalPos controller, Level level, Consumer<Component> tooltip) {
+    private static void appendController(GlobalPos controller, Level level, List<Component> tooltip) {
         if (controller == null) {
-            tooltip.accept(Component.translatable("tooltip.mmcr.terminal.unbound")
+            tooltip.add(Component.translatable("tooltip.mmcr.terminal.unbound")
                     .withStyle(ChatFormatting.RED));
             return;
         }
         Component value = resolveControllerValue(controller, level);
-        tooltip.accept(
+        tooltip.add(
                 Component.empty()
                         .append(Component.translatable("tooltip.mmcr.terminal.controller").withStyle(ChatFormatting.GREEN))
                         .append(Component.literal(": "))
@@ -163,11 +161,11 @@ public class TerminalItem extends Item {
         return machine == null ? null : machine.displayName();
     }
 
-    private static void appendContainer(TerminalData data, Level level, Consumer<Component> tooltip) {
+    private static void appendContainer(TerminalData data, Level level, List<Component> tooltip) {
         if (data.inventoryMode() != TerminalInventoryMode.CONTAINER || data.container() == null) return;
         GlobalPos container = data.container();
         Component value = resolveContainerValue(container, level);
-        tooltip.accept(
+        tooltip.add(
                 Component.empty()
                         .append(Component.translatable("tooltip.mmcr.terminal.container").withStyle(ChatFormatting.GREEN))
                         .append(Component.literal(": "))
@@ -177,10 +175,10 @@ public class TerminalItem extends Item {
         );
     }
 
-    private static void appendAe2AccessPoint(TerminalData data, Level level, Consumer<Component> tooltip) {
+    private static void appendAe2AccessPoint(TerminalData data, Level level, List<Component> tooltip) {
         if (data.inventoryMode() != TerminalInventoryMode.AE2 || data.ae2AccessPoint() == null) return;
         GlobalPos accessPoint = data.ae2AccessPoint();
-        tooltip.accept(
+        tooltip.add(
                 Component.empty()
                         .append(Component.translatable("tooltip.mmcr.terminal.ae2_access_point").withStyle(ChatFormatting.GREEN))
                         .append(Component.literal(": "))
@@ -200,7 +198,7 @@ public class TerminalItem extends Item {
         return Component.literal(name.getString() + " @ " + pos.toShortString());
     }
 
-    private static void appendLevels(Map<ResourceLocation, ResourceLocation> selectedLevels, Consumer<Component> tooltip) {
+    private static void appendLevels(Map<ResourceLocation, ResourceLocation> selectedLevels, List<Component> tooltip) {
         for (Map.Entry<ResourceLocation, ResourceLocation> entry : selectedLevels.entrySet()) {
             ResourceLocation typeId = entry.getKey();
             ResourceLocation levelId = entry.getValue();
@@ -211,7 +209,7 @@ public class TerminalItem extends Item {
             Component levelName = levelEntry.statePredicate().preferredState()
                     .map(state -> (Component) state.getBlock().getName())
                     .orElseGet(() -> levelEntry.representative().getHoverName());
-            tooltip.accept(
+            tooltip.add(
                     Component.empty()
                             .append(Component.translatable("tooltip.mmcr.terminal.level").withStyle(ChatFormatting.GREEN))
                             .append(Component.literal(": "))

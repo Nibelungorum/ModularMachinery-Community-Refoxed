@@ -20,13 +20,15 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.common.Tags;
-import net.neoforged.neoforge.common.data.ItemTagsProvider;
+import net.minecraft.data.tags.ItemTagsProvider;
+import net.minecraft.data.tags.TagsProvider;
 
 import java.util.concurrent.CompletableFuture;
 
 public final class ModItemTags extends ItemTagsProvider {
-    public ModItemTags(PackOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider) {
-        super(output, lookupProvider, MMCR.MODID);
+    public ModItemTags(PackOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider,
+                       CompletableFuture<TagsProvider.TagLookup<Block>> blockTags) {
+        super(output, lookupProvider, blockTags, MMCR.MODID, null);
     }
 
     @Override

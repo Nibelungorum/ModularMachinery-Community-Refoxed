@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -10,10 +11,17 @@ import net.minecraft.world.item.crafting.RecipeSerializer;
  */
 public final class MachineRecipeSerializer {
 
-    public static final RecipeSerializer<MachineRecipe> INSTANCE = new RecipeSerializer<>(
-            MachineRecipe.CODEC,
-            StreamCodec.of(MachineRecipeSerializer::write, MachineRecipeSerializer::read)
-    );
+    public static final RecipeSerializer<MachineRecipe> INSTANCE = new RecipeSerializer<>() {
+        @Override
+        public MapCodec<MachineRecipe> codec() {
+            return MachineRecipe.CODEC;
+        }
+
+        @Override
+        public StreamCodec<RegistryFriendlyByteBuf, MachineRecipe> streamCodec() {
+            return StreamCodec.of(MachineRecipeSerializer::write, MachineRecipeSerializer::read);
+        }
+    };
 
     private MachineRecipeSerializer() {
     }
@@ -23,6 +31,6 @@ public final class MachineRecipeSerializer {
     }
 
     private static MachineRecipe read(RegistryFriendlyByteBuf buf) {
-        return buf.readLenientJsonWithCodec(MachineRecipe.CODEC.codec());
+        return buf.readJsonWithCodec(MachineRecipe.CODEC.codec());
     }
 }

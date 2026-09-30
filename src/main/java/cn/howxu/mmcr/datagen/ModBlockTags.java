@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class ModBlockTags extends BlockTagsProvider {
     public ModBlockTags(PackOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider) {
-        super(output, lookupProvider, MMCR.MODID);
+        super(output, lookupProvider, MMCR.MODID, null);
     }
 
     @Override
