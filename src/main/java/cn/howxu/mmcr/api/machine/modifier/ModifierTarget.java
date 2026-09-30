@@ -8,6 +8,8 @@ import java.util.Locale;
 public enum ModifierTarget {
     DURATION("duration", "input", true, false),
     ENERGY("energy", "input", true, false),
+    CHEMICAL("chemical", "input", true, true),
+    HEAT("heat", "input", true, false),
     OUTPUT("output", "output", true, true),
     PARALLELISM("parallelism", "machine", true, false),
     FACTORY_THREADS("factory_threads", "machine", true, false),

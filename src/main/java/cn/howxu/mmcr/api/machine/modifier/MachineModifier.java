@@ -60,6 +60,14 @@ public sealed interface MachineModifier permits MachineModifier.Numeric, Machine
                     io = RecipeModifier.IOType.INPUT;
                     target = "energy";
                 }
+                case CHEMICAL -> {
+                    io = RecipeModifier.IOType.INPUT;
+                    target = "chemical";
+                }
+                case HEAT -> {
+                    io = RecipeModifier.IOType.INPUT;
+                    target = "heat";
+                }
                 case OUTPUT -> {
                     io = RecipeModifier.IOType.OUTPUT;
                     target = "";

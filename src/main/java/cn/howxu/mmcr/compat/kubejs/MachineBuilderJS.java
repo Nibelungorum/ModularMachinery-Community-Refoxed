@@ -617,6 +617,46 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
     }
 
+    public MachineBuilderJS chemicalInputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return chemicalByInterface(type, RecipeModifier.IOType.INPUT, false, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS chemicalOutputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return chemicalByInterface(type, RecipeModifier.IOType.OUTPUT, false, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS chemicalInputChanceByInterface(String type, float min, float max, float atMin,
+            float atMax) {
+        return chemicalInputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS chemicalInputChanceByInterface(String type, float min, float max, float atMin,
+            float atMax, RecipeModifier.Operation operation) {
+        return chemicalByInterface(type, RecipeModifier.IOType.INPUT, true, min, max, atMin, atMax, operation);
+    }
+
+    public MachineBuilderJS chemicalOutputChanceByInterface(String type, float min, float max, float atMin,
+            float atMax) {
+        return chemicalOutputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS chemicalOutputChanceByInterface(String type, float min, float max, float atMin,
+            float atMax, RecipeModifier.Operation operation) {
+        return chemicalByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
+    }
+
+    public MachineBuilderJS heatInputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return heatByInterface(type, RecipeModifier.IOType.INPUT, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
+    public MachineBuilderJS heatOutputByInterface(String type, float min, float max, float atMin, float atMax) {
+        return heatByInterface(type, RecipeModifier.IOType.OUTPUT, min, max, atMin, atMax,
+                RecipeModifier.Operation.MULTIPLY);
+    }
+
     private MachineBuilderJS itemByInterface(String type, RecipeModifier.IOType io, boolean chance, float min, float max,
             float atMin, float atMax, RecipeModifier.Operation operation) {
         smartInterfaceModifiers.add(SmartInterfaceModifier.item(type, io, chance, min, max, atMin, atMax, operation));
@@ -626,6 +666,18 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     private MachineBuilderJS fluidByInterface(String type, RecipeModifier.IOType io, boolean chance, float min,
             float max, float atMin, float atMax, RecipeModifier.Operation operation) {
         smartInterfaceModifiers.add(SmartInterfaceModifier.fluid(type, io, chance, min, max, atMin, atMax, operation));
+        return this;
+    }
+
+    private MachineBuilderJS chemicalByInterface(String type, RecipeModifier.IOType io, boolean chance, float min,
+            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.chemical(type, io, chance, min, max, atMin, atMax, operation));
+        return this;
+    }
+
+    private MachineBuilderJS heatByInterface(String type, RecipeModifier.IOType io, float min, float max, float atMin,
+            float atMax, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.heat(type, io, min, max, atMin, atMax, operation));
         return this;
     }
 

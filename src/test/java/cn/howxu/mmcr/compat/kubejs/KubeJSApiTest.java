@@ -246,6 +246,22 @@ class KubeJSApiTest {
     }
 
     @Test
+    void exposes_modifier_operations_to_kubejs_without_java_class_loading() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineBuilderJS("mmcr:operation_constant_test");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, """
+                builder.durationByInterface('temperature', 0, 100, 2, 0.5, api.modifierOperation().ADD)
+                """, "modifier-operation-test", 1, null);
+
+        assertThat(builder.createObject().smartInterfaceModifiers()).singleElement()
+                .satisfies(modifier -> assertThat(modifier.operation()).isEqualTo(RecipeModifier.Operation.ADD));
+    }
+
+    @Test
     void custom_recipe_io_factory_uses_registered_type_and_codec_validation() {
         var input = new EnergyRequirement(
                 RecipeModifier.IOType.INPUT, 12);

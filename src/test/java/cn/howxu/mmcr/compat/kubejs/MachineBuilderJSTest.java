@@ -502,6 +502,27 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void builder_declares_mekanism_interface_driven_modifiers() {
+        var registration = new MachineBuilderJS("mmcr:mekanism_interface_modifier_builder")
+                .chemicalInputByInterface("pressure", 0F, 100F, 1F, 2F)
+                .chemicalOutputChanceByInterface("pressure", 0F, 100F, 0.25F, 1F,
+                        RecipeModifier.Operation.ADD)
+                .heatInputByInterface("temperature", 0F, 100F, 1F, 3F)
+                .heatOutputByInterface("temperature", 0F, 100F, 1F, 4F)
+                .createObject();
+
+        assertThat(registration.smartInterfaceModifiers()).hasSize(4);
+        assertThat(registration.smartInterfaceModifiers().get(0).toModifier(100F)).isEqualTo(
+                MachineModifier.numeric("chemical", "input", 2D, "multiply", false));
+        assertThat(registration.smartInterfaceModifiers().get(1).toModifier(100F)).isEqualTo(
+                MachineModifier.numeric("output", "output", 1D, "add", true));
+        assertThat(registration.smartInterfaceModifiers().get(2).toModifier(100F)).isEqualTo(
+                MachineModifier.numeric("heat", "input", 3D, "multiply", false));
+        assertThat(registration.smartInterfaceModifiers().get(3).toModifier(100F)).isEqualTo(
+                MachineModifier.numeric("output", "output", 4D, "multiply", false));
+    }
+
+    @Test
     void builder_sets_machine_basic_block_for_all_base_textures() {
         var registration = new MachineBuilderJS("mmcr:electric_press")
                 // .localizedName("Electric Press")

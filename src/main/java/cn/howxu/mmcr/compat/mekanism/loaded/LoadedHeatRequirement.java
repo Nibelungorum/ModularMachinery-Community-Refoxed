@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -41,6 +42,12 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
         @Override
         public List<ResourceWakeup> resourceWakeups(LoadedHeatRequirement requirement) {
             return delegate.resourceWakeups(requirement);
+        }
+
+        @Override
+        public LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement,
+                                                     List<RecipeModifier> modifiers) {
+            return delegate.applyModifiers(requirement, modifiers);
         }
     };
 
@@ -83,6 +90,14 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
 
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
+    }
+
+    public static LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement,
+                                                        List<RecipeModifier> modifiers) {
+        double value = IntegrationTypeHelper.applyHeat(modifiers, requirement.heat().value(), requirement.io());
+        HeatRequirement heat = requirement.heat().kind() == HeatRequirement.Kind.OUTPUT_HEAT
+                ? HeatRequirement.outputHeat(value) : HeatRequirement.minimumTemperature(value);
+        return new LoadedHeatRequirement(requirement.io(), heat, requirement.tags());
     }
 
     private static RequirementType<LoadedHeatRequirement> type(ResourceLocation id, HeatRequirement.Kind kind) {

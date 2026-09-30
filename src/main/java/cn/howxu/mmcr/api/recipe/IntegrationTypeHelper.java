@@ -15,6 +15,7 @@ public final class IntegrationTypeHelper {
     public static final String TARGET_FLUID = "fluid";
     public static final String TARGET_ENERGY = "energy";
     public static final String TARGET_CHEMICAL = "chemical";
+    public static final String TARGET_HEAT = "heat";
 
     private IntegrationTypeHelper() {
     }
@@ -68,6 +69,28 @@ public final class IntegrationTypeHelper {
         if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
         return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, RecipeModifier.IOType.INPUT, chance, true));
     }
+
+    public static float applyChemicalOutputChance(List<RecipeModifier> modifiers, float chance) {
+        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
+        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL,
+                RecipeModifier.IOType.OUTPUT, chance, true));
+    }
+
+    public static long applyChemical(List<RecipeModifier> modifiers, long amount, RecipeModifier.IOType io) {
+        if (modifiers == null || modifiers.isEmpty()) return amount;
+        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, io, (double) amount, false);
+        if (Double.isNaN(adjusted) || adjusted <= 1D) return 1L;
+        if (adjusted >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        return Math.max(1L, (long) Math.floor(adjusted));
+    }
+
+    public static double applyHeat(List<RecipeModifier> modifiers, double heat, RecipeModifier.IOType io) {
+        if (modifiers == null || modifiers.isEmpty()) return heat;
+        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_HEAT, io, heat, false);
+        if (Double.isNaN(adjusted) || adjusted <= 0D) return 0D;
+        return Double.isInfinite(adjusted) ? Double.MAX_VALUE : adjusted;
+    }
+
     public static long applyEnergy(List<RecipeModifier> modifiers, long fePerTick) {
         if (modifiers == null || modifiers.isEmpty()) return fePerTick;
         double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_ENERGY,

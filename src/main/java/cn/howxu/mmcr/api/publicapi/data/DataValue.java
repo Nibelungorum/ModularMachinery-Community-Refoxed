@@ -2,7 +2,9 @@ package cn.howxu.mmcr.api.publicapi.data;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +44,42 @@ public final class DataValue {
             copy.put(key, Objects.requireNonNull(value, "map value"));
         });
         return new DataValue(Collections.unmodifiableMap(copy));
+    }
+
+    public static DataValue from(Object value) {
+        if (value == null) throw new IllegalArgumentException("value must not be null");
+        if (value instanceof DataValue dataValue) return dataValue;
+        if (value instanceof Map<?, ?> map) {
+            Map<String, DataValue> converted = new LinkedHashMap<>();
+            map.forEach((key, entry) -> {
+                if (!(key instanceof String stringKey) || stringKey.isBlank()) {
+                    throw new IllegalArgumentException("map key must be a non-blank string");
+                }
+                converted.put(stringKey, from(entry));
+            });
+            return map(converted);
+        }
+        if (value instanceof Collection<?> collection) {
+            return list(collection.stream().map(DataValue::from).toList());
+        }
+        if (value.getClass().isArray()) {
+            List<DataValue> converted = new ArrayList<>(Array.getLength(value));
+            for (int index = 0; index < Array.getLength(value); index++) {
+                converted.add(from(Array.get(value, index)));
+            }
+            return list(converted);
+        }
+        if (value instanceof Boolean booleanValue) return of(booleanValue);
+        if (value instanceof String stringValue) return of(stringValue);
+        if (value instanceof Byte byteValue) return of(byteValue);
+        if (value instanceof Short shortValue) return of(shortValue);
+        if (value instanceof Integer integerValue) return of(integerValue);
+        if (value instanceof Long longValue) return of(longValue);
+        if (value instanceof Float floatValue) return of(floatValue);
+        if (value instanceof Double doubleValue) return of(doubleValue);
+        if (value instanceof BigInteger bigInteger) return of(bigInteger);
+        if (value instanceof BigDecimal bigDecimal) return of(bigDecimal);
+        throw new IllegalArgumentException("Unsupported data value: " + value.getClass().getName());
     }
 
     public Object value() { return value; }

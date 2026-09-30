@@ -14,6 +14,8 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.data.DataStorage;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
@@ -257,6 +259,17 @@ class MachineIoPlanTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new MachineIoView.ResourceAmount<>(ItemStack.EMPTY, -1L))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void data_storage_accepts_plain_script_values_without_public_data_value_factories() {
+        DataStorage data = new DataStorage();
+        cn.howxu.mmcr.api.publicapi.data.DataStorage publicData =
+                cn.howxu.mmcr.api.publicapi.data.DataStorage.view(data);
+
+        publicData.set("energy", 42D);
+
+        assertThat(data.get("energy")).contains(DataValue.of(42D));
     }
 
     @Test

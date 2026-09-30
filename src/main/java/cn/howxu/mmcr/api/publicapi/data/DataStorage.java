@@ -35,6 +35,8 @@ public final class DataStorage {
 
     public void set(String key, DataValue value) { storage.set(key, DataValue.toInternal(value)); }
 
+    public void set(String key, Object value) { set(key, DataValue.from(value)); }
+
     public Optional<DataValue> remove(String key) { return storage.remove(key).map(DataValue::fromInternal); }
 
     /** Internal bridge value for MMCR adapters. */

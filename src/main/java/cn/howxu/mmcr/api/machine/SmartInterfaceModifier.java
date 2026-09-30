@@ -62,6 +62,18 @@ public record SmartInterfaceModifier(String interfaceType, String target, String
                 atMax, operation);
     }
 
+    public static SmartInterfaceModifier chemical(String type, RecipeModifier.IOType io, boolean chance, float min,
+            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_CHEMICAL, io, chance, min, max, atMin,
+                atMax, operation);
+    }
+
+    public static SmartInterfaceModifier heat(String type, RecipeModifier.IOType io, float min, float max,
+            float atMin, float atMax, RecipeModifier.Operation operation) {
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_HEAT, io, false, min, max, atMin,
+                atMax, operation);
+    }
+
     public MachineModifier.Numeric toModifier(float value) {
         return MachineModifier.numeric(target, scope, mappedValue(value), operation.name(), affectsChance);
     }
@@ -78,7 +90,8 @@ public record SmartInterfaceModifier(String interfaceType, String target, String
     }
 
     private static String normalizedTarget(String target, String scope) {
-        if ((IntegrationTypeHelper.TARGET_ITEM.equals(target) || IntegrationTypeHelper.TARGET_FLUID.equals(target))
+        if ((IntegrationTypeHelper.TARGET_ITEM.equals(target) || IntegrationTypeHelper.TARGET_FLUID.equals(target)
+                || IntegrationTypeHelper.TARGET_CHEMICAL.equals(target) || IntegrationTypeHelper.TARGET_HEAT.equals(target))
                 && "output".equalsIgnoreCase(scope)) return "output";
         return target;
     }

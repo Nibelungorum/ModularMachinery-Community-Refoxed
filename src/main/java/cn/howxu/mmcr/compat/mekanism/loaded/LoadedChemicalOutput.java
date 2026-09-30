@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -22,7 +23,10 @@ import java.util.Objects;
 public record LoadedChemicalOutput(ResourceLocation id, long amount, float chance) implements MachineOutput {
     public static final OutputType<LoadedChemicalOutput> TYPE = new OutputType.Definition<>(
             MekanismRecipeTypes.CHEMICAL, codec(), LoadedChemicalOutput::withChance,
-            (output, ignored) -> output, output -> output, OutputType.Presentation.defaults(MekanismRecipeTypes.CHEMICAL),
+            (output, modifiers) -> new LoadedChemicalOutput(output.id(),
+                    IntegrationTypeHelper.applyChemical(modifiers, output.amount(), RecipeModifier.IOType.OUTPUT),
+                    IntegrationTypeHelper.applyChemicalOutputChance(modifiers, output.chance())),
+            output -> output, OutputType.Presentation.defaults(MekanismRecipeTypes.CHEMICAL),
             MekanismRecipeTypes.CHEMICAL.toString(),
             (output, tags) -> LoadedChemicalRequirement.output(output.id(), output.amount(), output.chance()),
             requirement -> requirement instanceof LoadedChemicalRequirement chemical

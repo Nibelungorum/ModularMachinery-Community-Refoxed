@@ -723,6 +723,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     WakeupReason.OUTPUT_CAPACITY, heatType::equals));
         }
 
+        @Override
+        public LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement,
+                                                     List<RecipeModifier> modifiers) {
+            return LoadedHeatRequirement.applyModifiers(requirement, modifiers);
+        }
+
         private static RequirementPlan.OperationPlan heatPlan(LoadedHeatRequirement requirement,
                                                                List<HeatPort> ports, long parallelism) {
             double amount = saturatingHeatMultiply(requirement.heat().value(), parallelism);

@@ -44,6 +44,12 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
         public List<ResourceWakeup> resourceWakeups(LoadedChemicalRequirement requirement) {
             return delegate.resourceWakeups(requirement);
         }
+
+        @Override
+        public LoadedChemicalRequirement applyModifiers(LoadedChemicalRequirement requirement,
+                                                         List<RecipeModifier> modifiers) {
+            return delegate.applyModifiers(requirement, modifiers);
+        }
     };
 
     public static final MapCodec<LoadedChemicalRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -108,10 +114,16 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
 
     public static LoadedChemicalRequirement applyModifiers(LoadedChemicalRequirement requirement,
                                                            List<RecipeModifier> modifiers) {
-        if (requirement.io() != RecipeModifier.IOType.INPUT) return requirement;
-        float consumeChance = IntegrationTypeHelper.applyChemicalInputChance(modifiers, requirement.consumeChance());
-        return new LoadedChemicalRequirement(requirement.io(), requirement.ingredient(), requirement.chance(),
-                requirement.tags(), consumeChance);
+        long amount = IntegrationTypeHelper.applyChemical(modifiers, requirement.ingredient().amount(), requirement.io());
+        ChemicalIngredient ingredient = new ChemicalIngredient(requirement.ingredient().kind(),
+                requirement.ingredient().id(), amount);
+        float consumeChance = requirement.io() == RecipeModifier.IOType.INPUT
+                ? IntegrationTypeHelper.applyChemicalInputChance(modifiers, requirement.consumeChance())
+                : requirement.consumeChance();
+        float chance = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? IntegrationTypeHelper.applyChemicalOutputChance(modifiers, requirement.chance())
+                : requirement.chance();
+        return new LoadedChemicalRequirement(requirement.io(), ingredient, chance, requirement.tags(), consumeChance);
     }
     private static void validateSync(LoadedChemicalRequirement requirement) {
         if (requirement.tags().size() > 1024) throw new IllegalArgumentException("Invalid tag count");
