@@ -65,7 +65,7 @@ public final class ExportCommand {
 
     private static int export(ServerPlayer player, ExportFormat format, Consumer<Component> success,
                               Consumer<Component> failure, boolean mainHandOnly) {
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
 
         ItemStack detector = findSingleDetector(player, mainHandOnly);
         if (detector == null) {

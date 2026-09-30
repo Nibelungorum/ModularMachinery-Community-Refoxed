@@ -25,7 +25,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
-import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
+import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -36,7 +36,6 @@ import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
-import net.minecraft.core.HolderSet;
 import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
@@ -199,7 +198,7 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS tagInput(String tagId, long count) {
-        return addItemInput(Ingredient.of(tagItems(tagId)), count,
+        return addItemInput(Ingredient.of(itemTag(tagId)), count,
                 DataComponentPredicateSet.EMPTY, 1F);
     }
 
@@ -225,7 +224,7 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS tagInputWithComponents(String tagId, long count, JsonElement components, float consumeChance) {
-        return addItemInput(Ingredient.of(tagItems(tagId)), count, componentPredicates(components), consumeChance);
+        return addItemInput(Ingredient.of(itemTag(tagId)), count, componentPredicates(components), consumeChance);
     }
 
     public MachineRecipeBuilderJS tagInputWithComponents(String tagId, int count, JsonElement components,
@@ -288,7 +287,7 @@ public class MachineRecipeBuilderJS {
     }
 
     private Fluid fluid(String fluidId) {
-        return BuiltInRegistries.FLUID.getValue(ResourceLocation.parse(fluidId));
+        return BuiltInRegistries.FLUID.get(ResourceLocation.parse(fluidId));
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, long count) {
@@ -531,16 +530,15 @@ public class MachineRecipeBuilderJS {
     }
 
     private Item item(String itemId) {
-        return BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
+        return BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
     }
 
     private DataComponentPredicateSet componentPredicates(JsonElement components) {
         return DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow();
     }
 
-    private HolderSet.Named<Item> tagItems(String tagId) {
-        var tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(tagId));
-        return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
+    private TagKey<Item> itemTag(String tagId) {
+        return TagKey.create(Registries.ITEM, ResourceLocation.parse(tagId));
     }
 
     public MachineRecipe createObject() {
@@ -574,11 +572,7 @@ public class MachineRecipeBuilderJS {
         var recipeOutputChances = new ArrayList<>(outputChances);
 
         if (!componentOutputs.isEmpty()) {
-            if (!RecipesKubeEvent.INSTANCE.isBound()) {
-                throw new IllegalStateException("Component item outputs must be built during the KubeJS recipe event");
-            }
-
-            var ops = RecipesKubeEvent.INSTANCE.get().ops.json();
+            var ops = RegistryAccessContainer.current.json();
             for (int index = 0; index < componentOutputs.size(); index++) {
                 var output = componentOutputs.get(index);
                 recipeOutputs.add(output.index() + index, MachineOutput.RECIPE_ITEM_STACK_CODEC.parse(ops, output.stack()).getOrThrow());

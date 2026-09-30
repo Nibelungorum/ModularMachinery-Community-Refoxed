@@ -43,7 +43,7 @@ public final class BlueprintClientHandler {
         ResourceLocation machineId = stack.get(ModDataComponents.BLUEPRINT_MACHINE.get());
         Machine machine = machineId == null ? null : MachineRegistry.getMachine(machineId);
         if (machine == null) {
-            minecraft.gui.getChat().addClientSystemMessage(
+            minecraft.gui.getChat().addMessage(
                     Component.translatable("message.mmcr.blueprint.unbound"));
         } else {
             minecraft.setScreen(new BlueprintScreen(machine, stack));

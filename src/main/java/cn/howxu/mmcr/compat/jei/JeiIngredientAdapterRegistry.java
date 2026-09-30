@@ -15,17 +15,15 @@ import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
-import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +99,7 @@ public final class JeiIngredientAdapterRegistry {
             }
             if (entry.role() == RecipeIngredientRole.INPUT) {
                 List<ItemStack> stacks = safeItems(item.item())
-                        .map(holder -> new ItemStack(holder.value()))
+                        .map(stack -> new ItemStack(stack.getItem()))
                         .toList();
                 return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
                         stacks, boundedCount(entry.amount()), entry.chance(), null, true));
@@ -135,7 +133,7 @@ public final class JeiIngredientAdapterRegistry {
                 return Optional.empty();
             }
             FluidStack stack = entry.role() == RecipeIngredientRole.INPUT
-                    ? safeFluids(fluid.fluid()).findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
+                    ? safeFluids(fluid.fluid()).findFirst().map(fluidStack -> new FluidStack(fluidStack.getFluid(), 1)).orElse(FluidStack.EMPTY)
                     : fluid.stack().copyWithAmount(1);
             return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
                     stack, boundedCount(entry.amount()), entry.chance(), null, false));
@@ -174,17 +172,17 @@ public final class JeiIngredientAdapterRegistry {
         }
     }
 
-    private static Stream<Holder<Item>> safeItems(Ingredient ingredient) {
+    private static Stream<ItemStack> safeItems(Ingredient ingredient) {
         try {
-            return ingredient.items();
+            return Arrays.stream(ingredient.getItems());
         } catch (UnsupportedOperationException ignored) {
             return Stream.empty();
         }
     }
 
-    private static Stream<Holder<Fluid>> safeFluids(FluidIngredient ingredient) {
+    private static Stream<FluidStack> safeFluids(FluidIngredient ingredient) {
         try {
-            return ingredient.fluids().stream();
+            return Arrays.stream(ingredient.getStacks());
         } catch (UnsupportedOperationException ignored) {
             return Stream.empty();
         }
@@ -192,14 +190,15 @@ public final class JeiIngredientAdapterRegistry {
 
     private static List<ChemicalStack> chemicalStacks(ChemicalIngredient ingredient) {
         if (ingredient.kind() == ChemicalIngredient.Kind.CHEMICAL) {
-            return MekanismAPI.CHEMICAL_REGISTRY.get(ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id()))
-                    .map(holder -> List.of(new ChemicalStack(holder, (int) CHEMICAL_RENDER_AMOUNT)))
+            return MekanismAPI.CHEMICAL_REGISTRY.getHolder(
+                            ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id()))
+                    .map(holder -> List.of(new ChemicalStack(holder, CHEMICAL_RENDER_AMOUNT)))
                     .orElseGet(List::of);
         }
         TagKey<Chemical> tag = TagKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id());
-        return MekanismAPI.CHEMICAL_REGISTRY.get(tag).stream()
+        return MekanismAPI.CHEMICAL_REGISTRY.getTag(tag).stream()
                 .flatMap(holders -> holders.stream())
-                .map(holder -> new ChemicalStack(holder, (int) CHEMICAL_RENDER_AMOUNT))
+                .map(holder -> new ChemicalStack(holder, CHEMICAL_RENDER_AMOUNT))
                 .toList();
     }
 }

@@ -214,8 +214,8 @@ public final class PreviewLevel extends Level {
 
     @Override public ChunkSource getChunkSource() { return chunkSource; }
     @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) { }
-    @Override public void playSeededSound(Entity source, double x, double y, double z, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
-    @Override public void playSeededSound(Entity source, Entity entity, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
+    @Override public void playSeededSound(Player source, double x, double y, double z, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
+    @Override public void playSeededSound(Player source, Entity entity, Holder<SoundEvent> sound, SoundSource category, float volume, float pitch, long seed) { }
     @Override public String gatherChunkSourceStats() { return chunkSource.gatherStats(); }
     @Override public Entity getEntity(int id) { return null; }
     @Override public Collection<PartEntity<?>> getPartEntities() { return List.of(); }
@@ -232,7 +232,7 @@ public final class PreviewLevel extends Level {
     @Override public float getDayTimeFraction() { return dayTimeFraction; }
     @Override public float getDayTimePerTick() { return dayTimePerTick; }
     @Override public void setDayTimePerTick(float ticks) { dayTimePerTick = ticks; }
-    @Override public void levelEvent(Entity entity, int type, BlockPos pos, int data) { }
+    @Override public void levelEvent(Player entity, int type, BlockPos pos, int data) { }
     @Override public void gameEvent(Holder<GameEvent> event, Vec3 position, GameEvent.Context context) { }
     @Override public Holder<Biome> getUncachedNoiseBiome(int x, int y, int z) { return registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS); }
     @Override public int getSeaLevel() { return 63; }

@@ -5,6 +5,7 @@ import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import mezz.jei.api.ingredients.IIngredientType;
+import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenPosition;
@@ -110,6 +111,12 @@ public final class StructureMaterialWidget implements IRecipeWidget {
         @Override
         public ItemStack getIngredient() {
             return stack.copyWithCount(1);
+        }
+
+        @Override
+        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
+            ItemStack normalized = ingredientHelper.normalizeIngredient(stack);
+            return normalized == stack ? this : new ItemStackIngredient(normalized);
         }
     }
 }

@@ -156,6 +156,11 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
     }
 
     @Override
+    public void onContentsChanged() {
+        markHeatChanged();
+    }
+
+    @Override
     public abstract IOType ioType();
 
     @Override

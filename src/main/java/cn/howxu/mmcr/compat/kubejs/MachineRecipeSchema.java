@@ -34,8 +34,6 @@ import dev.latvian.mods.kubejs.recipe.schema.function.ResolvedRecipeSchemaFuncti
 import dev.latvian.mods.kubejs.util.IntBounds;
 import dev.latvian.mods.kubejs.util.JsonUtils;
 import dev.latvian.mods.rhino.type.TypeInfo;
-import net.minecraft.resources.ResourceKey;
-
 import net.minecraft.resources.ResourceLocation;
 
 import com.google.gson.JsonArray;
@@ -48,13 +46,15 @@ import java.util.List;
 import java.util.Optional;
 
 public final class MachineRecipeSchema {
-    public static final RecipeComponent<JsonElement> JSON_ELEMENT = new JsonElementComponent();
+    private static final RecipeComponentType<JsonElement> JSON_ELEMENT_TYPE =
+            RecipeComponentType.unit(MMCR.id("json"), JsonElementComponent::new);
+    public static final RecipeComponent<JsonElement> JSON_ELEMENT = JSON_ELEMENT_TYPE.instance();
 
     public static final RecipeKey<String> RECIPE_POOL =
-            new RecipeKey<>(StringComponent.ID, "recipe_pool", ComponentRole.OTHER).noFunctions();
+            new RecipeKey<>(StringComponent.ID.instance(), "recipe_pool", ComponentRole.OTHER).noFunctions();
 
     public static final RecipeKey<Integer> TICK_TIME =
-            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "tick_time", ComponentRole.OTHER);
+            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT.instance(), "tick_time", ComponentRole.OTHER);
 
     public static final RecipeKey<List<JsonElement>> OUTPUTS =
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "outputs", ComponentRole.OUTPUT)
@@ -68,16 +68,16 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "requirements", ComponentRole.OTHER);
 
     public static final RecipeKey<Integer> MAX_THREADS =
-            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "max_threads", ComponentRole.OTHER).optional(1);
+            new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT.instance(), "max_threads", ComponentRole.OTHER).optional(1);
 
     public static final RecipeKey<Boolean> PARALLELIZED =
-            new RecipeKey<>(BooleanComponent.BOOLEAN, "parallelized", ComponentRole.OTHER).optional(false);
+            new RecipeKey<>(BooleanComponent.BOOLEAN.instance(), "parallelized", ComponentRole.OTHER).optional(false);
 
     public static final RecipeKey<Boolean> CANCEL_IF_PER_TICK_FAILS =
-            new RecipeKey<>(BooleanComponent.BOOLEAN, "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
+            new RecipeKey<>(BooleanComponent.BOOLEAN.instance(), "cancelIfPerTickFails", ComponentRole.OTHER).optional(false);
 
     public static final RecipeKey<Boolean> ALLOW_PARTIAL_OUTPUTS =
-            new RecipeKey<>(BooleanComponent.BOOLEAN, "allow_partial_outputs", ComponentRole.OTHER).optional(false);
+            new RecipeKey<>(BooleanComponent.BOOLEAN.instance(), "allow_partial_outputs", ComponentRole.OTHER).optional(false);
 
     public static final RecipeSchema SCHEMA = new RecipeSchema(RECIPE_POOL, TICK_TIME, REQUIREMENTS, OUTPUTS, MODIFIERS,
             MAX_THREADS, PARALLELIZED,
@@ -96,11 +96,11 @@ public final class MachineRecipeSchema {
                             cx.recipe().save();
                         }
                     }))
-            .function(new RecipeFunctionInstance("smartInterfaceInput", List.of(StringComponent.ID, NumberComponent.FLOAT),
+            .function(new RecipeFunctionInstance("smartInterfaceInput", List.of(StringComponent.ID.instance(), NumberComponent.FLOAT),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.FLOAT);
+                            return List.of(StringComponent.ID.instance(), NumberComponent.FLOAT);
                         }
 
                         @Override
@@ -109,11 +109,11 @@ public final class MachineRecipeSchema {
                                     (String) args.get(0), ((Number) args.get(1)).floatValue()));
                         }
                     }))
-            .function(new RecipeFunctionInstance("smartInterfaceInputRange", List.of(StringComponent.ID,
+            .function(new RecipeFunctionInstance("smartInterfaceInputRange", List.of(StringComponent.ID.instance(),
                     NumberComponent.FLOAT, NumberComponent.FLOAT), new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.FLOAT, NumberComponent.FLOAT);
+                            return List.of(StringComponent.ID.instance(), NumberComponent.FLOAT, NumberComponent.FLOAT);
                         }
 
                         @Override
@@ -123,11 +123,11 @@ public final class MachineRecipeSchema {
                                     ((Number) args.get(2)).floatValue()));
                         }
                     }))
-            .function(new RecipeFunctionInstance("smartInterfaceOutput", List.of(StringComponent.ID, NumberComponent.FLOAT),
+            .function(new RecipeFunctionInstance("smartInterfaceOutput", List.of(StringComponent.ID.instance(), NumberComponent.FLOAT),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.FLOAT);
+                            return List.of(StringComponent.ID.instance(), NumberComponent.FLOAT);
                         }
 
                         @Override
@@ -136,11 +136,11 @@ public final class MachineRecipeSchema {
                                     (String) args.get(0), ((Number) args.get(1)).floatValue()));
                         }
                     }))
-            .function(new RecipeFunctionInstance("custom", List.of(StringComponent.ID, StringComponent.ID, JSON_ELEMENT),
+            .function(new RecipeFunctionInstance("custom", List.of(StringComponent.ID.instance(), StringComponent.ID.instance(), JSON_ELEMENT),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, StringComponent.ID, JSON_ELEMENT);
+                            return List.of(StringComponent.ID.instance(), StringComponent.ID.instance(), JSON_ELEMENT);
                         }
 
                         @Override
@@ -157,11 +157,11 @@ public final class MachineRecipeSchema {
                              } else appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
                         }
                     }))
-            .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID),
+            .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID.instance()),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID);
+                            return List.of(StringComponent.ID.instance());
                         }
 
                         @Override
@@ -176,11 +176,11 @@ public final class MachineRecipeSchema {
                             cx.recipe().save();
                         }
                     }))
-            .function(new RecipeFunctionInstance("requiresLevel", List.of(StringComponent.ID, StringComponent.ID),
+            .function(new RecipeFunctionInstance("requiresLevel", List.of(StringComponent.ID.instance(), StringComponent.ID.instance()),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, StringComponent.ID);
+                            return List.of(StringComponent.ID.instance(), StringComponent.ID.instance());
                         }
 
                         @Override
@@ -196,11 +196,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalInput",
-                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG),
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance()),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG);
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance());
                         }
 
                         @Override
@@ -212,11 +212,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalTagInput",
-                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG),
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance()),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG);
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance());
                         }
 
                         @Override
@@ -228,11 +228,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalInputChance",
-                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG,
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(),
                                     NumberComponent.doubleRange(0D, 1D));
                         }
 
@@ -246,11 +246,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalTagInputChance",
-                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG,
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(),
                                     NumberComponent.doubleRange(0D, 1D));
                         }
 
@@ -264,11 +264,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalOutput",
-                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG,
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(),
                                     NumberComponent.doubleRange(0D, 1D));
                         }
 
@@ -284,11 +284,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("heatTemperatureInput",
-                    List.of(NumberComponent.NON_NEGATIVE_DOUBLE),
+                    List.of(NumberComponent.NON_NEGATIVE_DOUBLE.instance()),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(NumberComponent.NON_NEGATIVE_DOUBLE);
+                            return List.of(NumberComponent.NON_NEGATIVE_DOUBLE.instance());
                         }
 
                         @Override
@@ -299,11 +299,11 @@ public final class MachineRecipeSchema {
                         }
                     }))
             .function(new RecipeFunctionInstance("heatOutput",
-                    List.of(NumberComponent.NON_NEGATIVE_DOUBLE),
+                    List.of(NumberComponent.NON_NEGATIVE_DOUBLE.instance()),
                     new ResolvedRecipeSchemaFunction() {
                         @Override
                         public List<RecipeComponent<?>> arguments() {
-                            return List.of(NumberComponent.NON_NEGATIVE_DOUBLE);
+                            return List.of(NumberComponent.NON_NEGATIVE_DOUBLE.instance());
                         }
 
                         @Override
@@ -380,12 +380,11 @@ public final class MachineRecipeSchema {
         }
     }
 
-    private record JsonElementComponent() implements RecipeComponent<JsonElement> {
-        private static final ResourceKey<RecipeComponentType<?>> TYPE = RecipeComponentType.key(MMCR.id("json"));
+    private record JsonElementComponent(RecipeComponentType<JsonElement> type) implements RecipeComponent<JsonElement> {
 
         @Override
-        public ResourceKey<RecipeComponentType<?>> type() {
-            return TYPE;
+        public RecipeComponentType<JsonElement> type() {
+            return type;
         }
 
         @Override

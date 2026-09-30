@@ -78,7 +78,7 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
     @Override
     protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         super.saveAdditional(output, registries);
-        mainNode.serialize(output);
+        mainNode.saveToNBT(output);
         CompoundTag cache = new CompoundTag();
         energyBuffer().save(cache);
         output.put(ENERGY_CACHE_KEY, cache);
@@ -89,7 +89,7 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
         beginLoadingAdditional();
         try {
             super.loadAdditional(input, registries);
-            mainNode.deserialize(input);
+            mainNode.loadFromNBT(input);
             if (input.contains(ENERGY_CACHE_KEY)) energyBuffer().load(input.getCompound(ENERGY_CACHE_KEY));
         } finally {
             endLoadingAdditional();

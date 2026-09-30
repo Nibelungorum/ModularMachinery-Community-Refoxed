@@ -70,9 +70,9 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
 
     static List<OutputPresentation> outputs(CompoundTag data) {
         List<OutputPresentation> outputs = new ArrayList<>();
-        ListTag outputs = data.getList(OUTPUTS, Tag.TAG_COMPOUND);
-        for (int index = 0; index < outputs.size(); index++) {
-            CompoundTag output = outputs.getCompound(index);
+        ListTag outputTags = data.getList(OUTPUTS, Tag.TAG_COMPOUND);
+        for (int index = 0; index < outputTags.size(); index++) {
+            CompoundTag output = outputTags.getCompound(index);
             String label = output.getString(LABEL);
             String value = output.getString(VALUE);
             String unit = output.getString(UNIT);

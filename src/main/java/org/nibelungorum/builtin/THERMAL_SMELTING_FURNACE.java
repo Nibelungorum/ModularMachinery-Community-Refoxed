@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -68,7 +67,7 @@ public class THERMAL_SMELTING_FURNACE {
                 THERMAL_SMELTING_COIL_TYPE,
                 1,
                 BlockPredicate.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                DisplayStack.of(new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY))),
+                DisplayStack.of(new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem()))),
                 ModifierDefinition.of("duration", "input", 0.9D, "multiply", false))
         );
 
@@ -77,7 +76,7 @@ public class THERMAL_SMELTING_FURNACE {
                 THERMAL_SMELTING_COIL_TYPE,
                 3,
                 BlockPredicate.blockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
-                DisplayStack.of(new ItemStack(Holder.direct(Blocks.DIAMOND_BLOCK.asItem(), DataComponentMap.EMPTY))),
+                DisplayStack.of(new ItemStack(Holder.direct(Blocks.DIAMOND_BLOCK.asItem()))),
                 ModifierDefinition.combine(
                         ModifierDefinition.of("duration", "input", 0.7D, "multiply", false),
                         ModifierDefinition.of("energy", "input", 0.8D, "multiply", false),
@@ -90,7 +89,7 @@ public class THERMAL_SMELTING_FURNACE {
                 THERMAL_SMELTING_COIL_TYPE,
                 2,
                 BlockPredicate.blockState(Blocks.GOLD_BLOCK.defaultBlockState()),
-                DisplayStack.of(new ItemStack(Holder.direct(Blocks.GOLD_BLOCK.asItem(), DataComponentMap.EMPTY))),
+                DisplayStack.of(new ItemStack(Holder.direct(Blocks.GOLD_BLOCK.asItem()))),
                 ModifierDefinition.combine(
                         ModifierDefinition.of("duration", "input", 0.6D, "multiply", false),
                         ModifierDefinition.of("energy", "input", 0.7D, "multiply", false),

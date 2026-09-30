@@ -136,7 +136,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     @Override
     public long outputCapacity(ResourceLocation chemicalId) {
         if (chemicalId == null) return 0L;
-        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId));
         if (holder.isEmpty()) return 0L;
         ChemicalStack stack = new ChemicalStack(holder.get(), 1L);

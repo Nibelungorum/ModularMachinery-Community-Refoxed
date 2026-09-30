@@ -79,7 +79,7 @@ public class FactorySchedulerMenu extends AbstractMachineMenu {
             });
             return;
         }
-        addSlot(new DirectionalItemSlot(owner.nativeItemHandler(), 0, SLOT_X, SLOT_Y));
+        addSlot(new DirectionalItemSlot(owner.itemHandler(), 0, SLOT_X, SLOT_Y));
     }
 
     private FactorySchedulerBlockEntity resolvedOwner() {

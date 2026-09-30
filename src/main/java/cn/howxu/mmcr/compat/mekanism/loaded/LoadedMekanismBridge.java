@@ -305,7 +305,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     @Override
     public ChemicalRenderData chemicalRenderData(ResourceLocation chemicalId) {
         if (chemicalId == null) return null;
-        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId));
         if (holder == null || holder.isEmpty()) return null;
         Chemical chemical = holder.get().value();
@@ -618,7 +618,16 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                                 : MekanismFailureReasons.CHEMICAL_INPUT_MISSING),
                         RequirementHandlerSupport.outputSimulation(requested, 0L));
             }
-            return RequirementHandlerSupport.resourceOperations(actions, direction, parallelism, materialize,
+            List<CapabilityOperation> operations = new ArrayList<>();
+            if (materialize) {
+                for (Map.Entry<MachineCapability, List<CapabilityRequests.ResourceAction<ChemicalStack>>> entry
+                        : actions.entrySet()) {
+                    MachineCapability capability = entry.getKey();
+                    operations.add(capability.prepare(new CapabilityRequests.ResourceRequest<>(
+                            capability.view().type(), direction, parallelism, entry.getValue())));
+                }
+            }
+            return new RequirementPlan.OperationPlan(operations, null,
                     RequirementHandlerSupport.outputSimulation(requested, amount - remaining));
         }
 
@@ -743,12 +752,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     private record ChemicalMatcher(Holder<Chemical> exactHolder, TagKey<Chemical> tag) {
         static ChemicalMatcher resolve(ChemicalIngredient ingredient) {
             if (ingredient.kind() == ChemicalIngredient.Kind.CHEMICAL) {
-                Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+                Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                         ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id()));
                 return holder.map(value -> new ChemicalMatcher(value, null)).orElse(null);
             }
             TagKey<Chemical> tag = TagKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id());
-            return MekanismAPI.CHEMICAL_REGISTRY.get(tag).isPresent()
+            return MekanismAPI.CHEMICAL_REGISTRY.getTag(tag).isPresent()
                     ? new ChemicalMatcher(null, tag) : null;
         }
 
@@ -782,17 +791,30 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return tank.extract(amount, action, AutomationType.INTERNAL).getAmount();
     }
 
-    private static long moveChemical(IChemicalHandler source, IChemicalHandler destination, long limit,
+    private static long moveChemical(IChemicalTank source, IChemicalHandler destination, long limit,
                                      boolean simulate) {
         if (limit <= 0L) return 0L;
-        ChemicalStack extracted = source.extractChemical(limit, Action.SIMULATE);
+        ChemicalStack extracted = source.extract(limit, Action.SIMULATE, AutomationType.INTERNAL);
         if (extracted.isEmpty()) return 0L;
         ChemicalStack remainder = destination.insertChemical(extracted, Action.SIMULATE);
         long moved = extracted.getAmount() - remainder.getAmount();
         if (moved <= 0L || simulate) return Math.max(0L, moved);
-        ChemicalStack committed = source.extractChemical(moved, Action.EXECUTE);
+        ChemicalStack committed = source.extract(moved, Action.EXECUTE, AutomationType.INTERNAL);
         if (committed.getAmount() != moved) return 0L;
         return moved - destination.insertChemical(committed, Action.EXECUTE).getAmount();
+    }
+
+    private static long moveChemical(IChemicalHandler source, IChemicalTank destination, long limit,
+                                     boolean simulate) {
+        if (limit <= 0L) return 0L;
+        ChemicalStack extracted = source.extractChemical(limit, Action.SIMULATE);
+        if (extracted.isEmpty()) return 0L;
+        ChemicalStack remainder = destination.insert(extracted, Action.SIMULATE, AutomationType.INTERNAL);
+        long moved = extracted.getAmount() - remainder.getAmount();
+        if (moved <= 0L || simulate) return Math.max(0L, moved);
+        ChemicalStack committed = source.extractChemical(moved, Action.EXECUTE);
+        if (committed.getAmount() != moved) return 0L;
+        return moved - destination.insert(committed, Action.EXECUTE, AutomationType.INTERNAL).getAmount();
     }
 
     private static long requestedHeat(double heat, long parallelism) {

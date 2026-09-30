@@ -1,17 +1,15 @@
 package cn.howxu.mmcr.internal.item;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,7 +28,7 @@ import java.util.List;
 public class MultiblockDetectorItem extends Item {
 
     public MultiblockDetectorItem() {
-        super(new Item.Properties().stacksTo(1).setId(ResourceKey.create(Registries.ITEM, MMCR.id("multiblock_detector"))));
+        super(new Item.Properties().stacksTo(1));
     }
 
     @Override
@@ -55,15 +53,15 @@ public class MultiblockDetectorItem extends Item {
     }
 
     @Override
-    public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResult.PASS;
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResultHolder.pass(stack);
 
         if (!level.isClientSide()) {
-            ItemStack stack = player.getItemInHand(hand);
             stack.remove(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get());
             player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.cleared"));
         }
-        return InteractionResult.SUCCESS;
+        return InteractionResultHolder.success(stack);
     }
 
     @Override

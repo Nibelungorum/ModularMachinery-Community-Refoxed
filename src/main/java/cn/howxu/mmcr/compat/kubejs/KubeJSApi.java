@@ -32,7 +32,6 @@ import cn.howxu.mmcr.api.network.RequestBody;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.ReadableNumber;
 import cn.howxu.mmcr.util.IOType;
-import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -247,9 +246,7 @@ public final class KubeJSApi {
 
     public MachineIngredient tagInput(String tagId, long count, float consumeChance) {
         var tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(tagId));
-        var items = RegistryAccessContainer.current.lookup(Registries.ITEM)
-                .orElseThrow(() -> new IllegalStateException("Item registry unavailable"));
-        return new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(tag)), MachineOutput.recipeStackAmount(count), null, consumeChance);
+        return new MachineIngredient.ItemIngredient(Ingredient.of(tag), MachineOutput.recipeStackAmount(count), null, consumeChance);
     }
 
     public MachineIngredient tagInput(String tagId, int count, float consumeChance) {
@@ -259,7 +256,7 @@ public final class KubeJSApi {
     public MachineIngredient fluidInput(String fluidId, long amount) {
         ResourceLocation identifier = ResourceLocation.parse(fluidId);
         if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
-        return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(identifier)), MachineOutput.recipeStackAmount(amount));
+        return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.get(identifier)), MachineOutput.recipeStackAmount(amount));
     }
 
     public MachineIngredient fluidInput(String fluidId, int amount) {
@@ -269,7 +266,7 @@ public final class KubeJSApi {
     public FluidStack fluidStack(String fluidId, long amount) {
         ResourceLocation identifier = ResourceLocation.parse(fluidId);
         if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
-        return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), MachineOutput.recipeStackAmount(amount));
+        return new FluidStack(BuiltInRegistries.FLUID.get(identifier), MachineOutput.recipeStackAmount(amount));
     }
 
     public FluidStack fluidStack(String fluidId, int amount) {
@@ -395,13 +392,13 @@ public final class KubeJSApi {
     private static Block requireBlock(String id) {
         ResourceLocation identifier = ResourceLocation.parse(id);
         if (!BuiltInRegistries.BLOCK.containsKey(identifier)) throw new IllegalArgumentException("Unknown block: " + id);
-        return BuiltInRegistries.BLOCK.getValue(identifier);
+        return BuiltInRegistries.BLOCK.get(identifier);
     }
 
     private static Item requireItem(String id) {
         ResourceLocation identifier = ResourceLocation.parse(id);
         if (!BuiltInRegistries.ITEM.containsKey(identifier)) throw new IllegalArgumentException("Unknown item: " + id);
-        return BuiltInRegistries.ITEM.getValue(identifier);
+        return BuiltInRegistries.ITEM.get(identifier);
     }
 
     private static RecipeModifier.IOType ioType(String io) {

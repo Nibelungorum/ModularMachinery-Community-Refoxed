@@ -122,7 +122,7 @@ public final class ModuleConnectionCoordinator {
     public static void enqueueCouplersInChunk(ServerLevel level, ChunkPos chunkPos) {
         if (level == null || chunkPos == null) return;
         for (BlockPos couplerPos : registeredCouplers(level)) {
-            if ((couplerPos.getX() >> 4) == chunkPos.x() && (couplerPos.getZ() >> 4) == chunkPos.z()) {
+            if ((couplerPos.getX() >> 4) == chunkPos.x && (couplerPos.getZ() >> 4) == chunkPos.z) {
                 ModuleConnectionRefreshQueue.enqueue(level, couplerPos);
             }
         }

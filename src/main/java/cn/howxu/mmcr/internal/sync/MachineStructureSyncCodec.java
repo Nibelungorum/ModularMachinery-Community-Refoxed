@@ -195,7 +195,7 @@ public final class MachineStructureSyncCodec {
             case MACHINE_COUPLER -> BlockPredicate.machineCoupler();
             case AIR -> new BlockPredicate.Air();
             case ANY -> new BlockPredicate.Any();
-            case BLOCK -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(ResourceLocation.STREAM_CODEC.decode(buf)));
+            case BLOCK -> new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.get(ResourceLocation.STREAM_CODEC.decode(buf)));
             case BLOCK_STATE -> new BlockPredicate.OfBlockState(readBlockState(buf));
             case TAG -> new BlockPredicate.OfTag(TagKey.create(Registries.BLOCK,
                     ResourceLocation.STREAM_CODEC.decode(buf)));
@@ -222,7 +222,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static BlockState readBlockState(RegistryFriendlyByteBuf buf) {
-        Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.STREAM_CODEC.decode(buf));
+        Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.STREAM_CODEC.decode(buf));
         BlockState state = block.defaultBlockState();
         int propertyCount = buf.readVarInt();
         checkSize(propertyCount, 64, "block state property");

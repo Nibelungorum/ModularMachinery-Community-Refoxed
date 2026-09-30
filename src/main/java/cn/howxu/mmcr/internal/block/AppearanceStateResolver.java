@@ -23,7 +23,7 @@ final class AppearanceStateResolver {
         if (source == null || source.overrideTexture() != null) {
             return self;
         }
-        Block block = BuiltInRegistries.BLOCK.getValue(source.blockId());
+        Block block = BuiltInRegistries.BLOCK.get(source.blockId());
         if (block == null) {
             return self;
         }

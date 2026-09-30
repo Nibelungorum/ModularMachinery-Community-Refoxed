@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.item;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.network.KeyCardBinding;
@@ -13,12 +12,11 @@ import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -37,8 +35,7 @@ public class KeyCardItem extends Item {
 
     public KeyCardItem() {
         super(new Item.Properties()
-                .stacksTo(1)
-                .setId(ResourceKey.create(Registries.ITEM, MMCR.id("key_card"))));
+                .stacksTo(1));
     }
 
     @Override
@@ -62,13 +59,14 @@ public class KeyCardItem extends Item {
     }
 
     @Override
-    public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResult.PASS;
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResultHolder.pass(stack);
         if (!level.isClientSide()) {
-            player.getItemInHand(hand).remove(ModDataComponents.KEY_CARD_BINDING.get());
+            stack.remove(ModDataComponents.KEY_CARD_BINDING.get());
             player.sendSystemMessage(Component.translatable("message.mmcr.key_card.cleared"));
         }
-        return InteractionResult.SUCCESS;
+        return InteractionResultHolder.success(stack);
     }
 
     @Override

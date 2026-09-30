@@ -85,10 +85,10 @@ public class PURE_TICK_MACHINE {
                         var pos = context.controllerPos();
                         var area = new AABB(
                                 pos.getX() - 1,
-                                level.getMinY(),
+                                level.getMinBuildHeight(),
                                 pos.getZ() - 1,
                                 pos.getX() + 2,
-                                level.getMaxY() + 1,
+                                level.getMaxBuildHeight() + 1,
                                 pos.getZ() + 2);
                         var players = level.getEntitiesOfClass(Player.class, area);
                         for (var player : players) {

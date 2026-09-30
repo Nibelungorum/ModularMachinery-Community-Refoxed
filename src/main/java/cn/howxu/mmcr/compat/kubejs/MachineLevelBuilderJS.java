@@ -43,7 +43,7 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
 
     public MachineLevelBuilderJS state(Object state) {
         this.state = switch (state) {
-            case String blockId -> BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId)).defaultBlockState();
+            case String blockId -> BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId)).defaultBlockState();
             case BlockState blockState -> blockState;
             default -> throw new IllegalArgumentException("Machine level state must be a block id or BlockState: " + state);
         };

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;

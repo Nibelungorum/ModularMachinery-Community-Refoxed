@@ -59,7 +59,7 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     }
 
     private static void write(RegistryFriendlyByteBuf buf, PktMultiblockPreviewPayload payload) {
-        ResourceLocation.STREAM_CODEC.encode(buf, payload.dimension.identifier());
+        ResourceLocation.STREAM_CODEC.encode(buf, payload.dimension.location());
         buf.writeBlockPos(payload.controllerPos);
         ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, maxEntries()).encode(buf, new ArrayList<>(payload.entries));
         ByteBufCodecs.VAR_INT.encode(buf, payload.durationTicks);
@@ -83,7 +83,7 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     }
 
     private static BlockState readBlockState(RegistryFriendlyByteBuf buf) {
-        BlockState state = BuiltInRegistries.BLOCK.getValue(ResourceLocation.STREAM_CODEC.decode(buf)).defaultBlockState();
+        BlockState state = BuiltInRegistries.BLOCK.get(ResourceLocation.STREAM_CODEC.decode(buf)).defaultBlockState();
         int propertyCount = buf.readVarInt();
         for (int i = 0; i < propertyCount; i++) {
             String propertyName = ByteBufCodecs.STRING_UTF8.decode(buf);

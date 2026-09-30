@@ -108,7 +108,7 @@ public final class JeiPlugin implements IModPlugin {
                     } else if (!BuiltInRegistries.ITEM.containsKey(poolItem.itemId())) {
                         MMCR.LOG.warn("Skipping unknown JEI workstation item {}", poolItem.itemId());
                     } else {
-                        ItemStack workstation = new ItemStack(BuiltInRegistries.ITEM.getValue(poolItem.itemId()));
+                        ItemStack workstation = new ItemStack(BuiltInRegistries.ITEM.get(poolItem.itemId()));
                         if (workstation.isEmpty()) {
                             MMCR.LOG.warn("Skipping empty JEI workstation item {} for recipe pool {}",
                                     poolItem.itemId(), poolItem.recipePoolId());

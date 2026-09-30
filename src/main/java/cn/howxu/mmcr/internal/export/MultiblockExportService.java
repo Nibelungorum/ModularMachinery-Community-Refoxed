@@ -124,7 +124,7 @@ public final class MultiblockExportService {
 
     private static BlockState normalizeState(ResourceLocation blockId, BlockState state) {
         return state != null && state.getProperties().isEmpty()
-                && state.equals(BuiltInRegistries.BLOCK.getValue(blockId).defaultBlockState()) ? null : state;
+                && state.equals(BuiltInRegistries.BLOCK.get(blockId).defaultBlockState()) ? null : state;
     }
 
     private static void appendLayers(StringBuilder out, PreparedExport prepared, String method, String indentation) {
@@ -249,7 +249,7 @@ public final class MultiblockExportService {
     }
 
     private static String predicateExpression(PredicateKey key) {
-        String block = "BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(\"" + escapeJava(key.blockId().toString()) + "\"))";
+        String block = "BuiltInRegistries.BLOCK.get(ResourceLocation.parse(\"" + escapeJava(key.blockId().toString()) + "\"))";
         if (key.state() == null) return "new BlockPredicate.OfBlock(" + block + ")";
         String expression = block + ".defaultBlockState()";
         for (Property<?> property : key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).toList()) {

@@ -314,7 +314,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         return switch (value) {
             case PatternEntry entry -> entry;
             case String blockId -> new PatternEntry(
-                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId))));
+                    new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId))));
             case Block block -> new PatternEntry(new BlockPredicate.OfBlock(block));
             case BlockState state -> new PatternEntry(new BlockPredicate.OfBlockState(state));
             case BlockPredicate predicate -> new PatternEntry(predicate);

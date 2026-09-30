@@ -36,7 +36,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -80,9 +79,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
 
         @Override
-        public void getTooltip(ITooltipBuilder tooltip, FluidStack ingredient, Item.TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
-            Minecraft minecraft = Minecraft.getInstance();
-            fluidTooltip(ingredient, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+        public List<Component> getTooltip(FluidStack ingredient, TooltipFlag tooltipFlag) {
+            return fluidTooltip(ingredient);
         }
     };
 
@@ -112,7 +110,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getWidth() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 168;
             case 2 -> 168;
             case 3 -> 168;
@@ -122,7 +120,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getHeight() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 300;
             case 2 -> 280;
             case 3 -> 220;
@@ -353,7 +351,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             slot.setCustomRenderer(VanillaTypes.ITEM_STACK, levelItemRenderer(requirement));
             List<ItemStack> candidates = levelCandidates(requirement);
             if (!candidates.isEmpty()) {
-                slot.add(candidates.getFirst());
+                slot.addItemStack(candidates.getFirst());
             }
             slot.addRichTooltipCallback((view, tooltip) -> {
                 if (isMinimumLevelCandidate(requirement)) {
@@ -381,13 +379,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             }
 
             @Override
-            public List<Component> getTooltip(ItemStack ingredient, Item.TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
+            public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
                 Minecraft minecraft = Minecraft.getInstance();
-                    ItemStack candidate = levelCandidate(requirement,
-                            minecraft.level == null ? 0L : minecraft.level.getGameTime());
-                    return candidate.isEmpty()
-                            ? List.of()
-                            : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+                ItemStack candidate = levelCandidate(requirement,
+                        minecraft.level == null ? 0L : minecraft.level.getGameTime());
+                return candidate.isEmpty()
+                        ? List.of()
+                        : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
             }
         };
     }
@@ -515,7 +513,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             slot.addIngredients((IIngredientType) entry.ingredientType(), ingredients);
             return;
         }
-        slot.add((IIngredientType) entry.ingredientType(), entry.ingredient());
+        slot.addIngredient((IIngredientType) entry.ingredientType(), entry.ingredient());
     }
 
     private static void drawTextEntries(MachineRecipeDisplay recipe, MachineRecipeLayout.RegionPlan region,
@@ -532,8 +530,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
             if (fluidDisplay.ingredient() == null) continue;
             int amount = fluidDisplay.amount();
-            fluidDisplay.ingredient().fluids()
-                    .forEach(fluid -> slot.add(fluid.value(), amount));
+            for (FluidStack fluid : fluidDisplay.ingredient().getStacks()) {
+                slot.addFluidStack(fluid.getFluid(), amount);
+            }
         }
         for (MachineRecipeDisplay.ItemInputDisplay item : recipe.itemInputs()) {
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
@@ -542,10 +541,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeDisplay.FluidOutputDisplay output : recipe.fluidOutputs()) {
             FluidStack fluid = output.stack();
             builder.addOutputSlot(-1000, -1000)
-                    .add(fluid.getFluid(), fluid.getAmount(), fluid.getComponentsPatch());
+                    .addFluidStack(fluid.getFluid(), fluid.getAmount(), fluid.getComponentsPatch());
         }
         for (MachineRecipeDisplay.ItemOutputDisplay output : recipe.itemOutputs()) {
-            builder.addOutputSlot(-1000, -1000).add(output.stack());
+            builder.addOutputSlot(-1000, -1000).addItemStack(output.stack());
         }
         for (JeiDisplayEntry entry : recipe.entries()) {
             if (entry.typeId().equals(ItemRequirement.TYPE.id())
@@ -565,7 +564,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 ? builder.addInputSlot(-1000, -1000)
                 : builder.addOutputSlot(-1000, -1000);
         for (ChemicalStack chemical : actualChemicalStacks(entry.ingredient())) {
-            slot.add(MekanismJEI.TYPE_CHEMICAL, chemical.copyWithAmount(entry.count()));
+            slot.addIngredient(MekanismJEI.TYPE_CHEMICAL, chemical.copyWithAmount(entry.count()));
         }
     }
 
@@ -585,7 +584,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static void addActualItem(IRecipeSlotBuilder slot, MachineRecipeDisplay.ItemInputDisplay item) {
         List<ItemStack> stacks = item.stacks();
         if (stacks.isEmpty() && item.ingredient() != null) {
-            slot.add(item.ingredient());
+            slot.addIngredients(item.ingredient());
         } else {
             slot.addItemStacks(stacks);
         }
@@ -600,7 +599,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
             List<ItemStack> stacks = item.stacks().stream().map(MachineRecipeCategory::jeiItemStack).toList();
             if (stacks.isEmpty() && item.ingredient() != null) {
-                jeiSlot.add(item.ingredient());
+                jeiSlot.addIngredients(item.ingredient());
             } else {
                 jeiSlot.addItemStacks(stacks);
             }
@@ -610,7 +609,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             String overlayText = outputOverlayText(output.chance());
             setItemOverlay(jeiSlot, overlayText, itemQuantityText(stack.getCount()));
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendOutputTooltip(tooltip, output));
-            jeiSlot.add(jeiItemStack(stack));
+            jeiSlot.addItemStack(jeiItemStack(stack));
         }
     }
 
@@ -641,7 +640,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             setItemOverlay(jeiSlot, inputOverlayText(fluidDisplay.consumeChance(), selectedLanguage()),
                     fluidQuantityText(fluidDisplay.amount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                    .add(fluid.getFluid(), FLUID_SLOT_CAPACITY, fluid.getComponentsPatch());
+                    .addFluidStack(fluid.getFluid(), FLUID_SLOT_CAPACITY, fluid.getComponentsPatch());
             jeiSlot.addRichTooltipCallback((view, tooltip) -> {
                 appendFluidQuantityTooltip(tooltip, fluidDisplay.amount());
                 appendConsumeChanceTooltip(tooltip, fluidDisplay.consumeChance(), true);
@@ -651,7 +650,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             var stack = output.stack();
             setItemOverlay(jeiSlot, outputOverlayText(output.chance()), fluidQuantityText(stack.getAmount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
-                    .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
+                    .addFluidStack(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
             jeiSlot.addRichTooltipCallback((view, tooltip) -> {
                 appendFluidQuantityTooltip(tooltip, stack.getAmount());
                 appendOutputChanceTooltip(tooltip, output.chance());
@@ -694,9 +693,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return ReadableNumber.formatForSlot(amount, 3, "B");
     }
 
-    static List<Component> fluidTooltip(FluidStack fluid, Item.TooltipContext context,
-            @Nullable Player player, TooltipFlag tooltipFlag) {
-        return fluid.getTooltipLines(context, player, tooltipFlag);
+    static List<Component> fluidTooltip(FluidStack fluid) {
+        return List.of(fluid.getHoverName());
     }
 
     static String itemTooltipQuantity(int count) {

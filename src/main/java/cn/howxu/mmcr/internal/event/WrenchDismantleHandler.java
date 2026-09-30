@@ -58,7 +58,7 @@ public final class WrenchDismantleHandler {
     }
 
     private static boolean dismantle(ServerPlayer player, BlockPos pos) {
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         BlockState state = level.getBlockState(pos);
         Block block = state.getBlock();
         GameType gameMode = player.gameMode.getGameModeForPlayer();

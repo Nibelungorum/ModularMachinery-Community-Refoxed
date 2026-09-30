@@ -14,7 +14,7 @@ public final class OptionalSourceRegistration {
     @SuppressWarnings("unchecked")
     public static <T> T invokeDevelopmentSource(String className, String methodName,
                                                  Class<?>[] parameterTypes, Object... arguments) {
-        if (FMLLoader.getCurrent().isProduction()) return null;
+        if (FMLLoader.isProduction()) return null;
         return invokeOptionalSource(className, methodName, parameterTypes, arguments);
     }
 

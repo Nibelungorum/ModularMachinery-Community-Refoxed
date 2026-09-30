@@ -69,9 +69,7 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
         ItemBusBlockEntity.dropItemResources(level, worldPosition, storage);
     }
 
-    @Override
     public void onBlockRemoved() {
-        super.onBlockRemoved();
         dropContents();
     }
 

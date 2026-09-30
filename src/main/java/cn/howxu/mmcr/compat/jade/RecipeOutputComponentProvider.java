@@ -74,7 +74,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         }
         if (output.output() instanceof LoadedChemicalOutput chemical) {
             if (output.amount() <= 0L) return false;
-            Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+            Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                     ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
             return holder != null && holder.isPresent();
         }
@@ -120,7 +120,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
     // for mekanism
     private static void renderChemical(ITooltip tooltip, LoadedChemicalOutput chemical, long amount) {
         if (amount <= 0L) return;
-        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
         if (holder == null || holder.isEmpty()) return;
         Chemical value = holder.get().value();

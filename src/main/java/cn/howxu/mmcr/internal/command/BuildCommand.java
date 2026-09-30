@@ -54,7 +54,7 @@ public final class BuildCommand {
 
     private static int run(CommandContext<CommandSourceStack> ctx, ResourceLocation requested) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         MachineSelector.Result selection = MachineSelector.select(requested, MachineRegistry.effectiveSnapshot());
         if (selection.machine() == null) {
             ctx.getSource().sendFailure(Component.translatable(

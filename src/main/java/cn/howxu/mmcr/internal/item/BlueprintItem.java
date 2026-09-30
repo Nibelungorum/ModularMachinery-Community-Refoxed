@@ -14,10 +14,8 @@ import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -41,7 +39,7 @@ public class BlueprintItem extends Item {
     private static final Map<ResourceLocation, CachedRequirements> REQUIREMENT_TEXT_CACHE = new ConcurrentHashMap<>();
 
     public BlueprintItem(ResourceLocation id) {
-        super(new Item.Properties().stacksTo(1).setId(ResourceKey.create(Registries.ITEM, id)));
+        super(new Item.Properties().stacksTo(1));
     }
 
     @Override
@@ -82,7 +80,7 @@ public class BlueprintItem extends Item {
         if (machineId == null) return;
         Machine machine = MachineRegistry.getMachine(machineId);
         if (machine == null) return;
-        boolean showRequirements = flag.hasShiftDown() || flag.shouldDisplayAllInformation();
+        boolean showRequirements = flag.hasShiftDown() || flag.isAdvanced();
         tooltip.add(Component.translatable(showRequirements
                 ? "tooltip.mmcr.blueprint.recipe_list"
                 : "tooltip.mmcr.blueprint.recipe_list_collapsed").withStyle(ChatFormatting.AQUA));

@@ -6,7 +6,6 @@ import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
@@ -80,7 +79,7 @@ public final class UpgradeBusBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public void onBlockExploded(BlockState state, ServerLevel level, BlockPos pos, Explosion explosion) {
+    public void onBlockExploded(BlockState state, Level level, BlockPos pos, Explosion explosion) {
         if (level.getBlockEntity(pos) instanceof UpgradeBusBlockEntity bus) bus.dropContents();
         super.onBlockExploded(state, level, pos, explosion);
     }

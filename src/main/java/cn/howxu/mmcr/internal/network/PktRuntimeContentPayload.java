@@ -40,17 +40,33 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
             PktRuntimeContentPayload::writeTooltip,
             PktRuntimeContentPayload::readTooltip);
 
-    private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> CONTROLLER_SPEC_CODEC = StreamCodec.composite(
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::id,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::frontTexture,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::sideTexture,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::topTexture,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::bottomTexture,
-            ByteBufCodecs.BOOL, MachineControllerSpec::allowVerticalFacing,
-            ByteBufCodecs.BOOL, MachineControllerSpec::fullyRotationallySymmetric,
-            ByteBufCodecs.BOOL, MachineControllerSpec::requireVerticalFacing,
-             TOOLTIP_CODEC, MachineControllerSpec::tooltip,
-            MachineControllerSpec::new);
+    private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> CONTROLLER_SPEC_CODEC = StreamCodec.of(
+            PktRuntimeContentPayload::writeControllerSpec, PktRuntimeContentPayload::readControllerSpec);
+
+    private static void writeControllerSpec(RegistryFriendlyByteBuf buffer, MachineControllerSpec spec) {
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.id());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.frontTexture());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.sideTexture());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.topTexture());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.bottomTexture());
+        ByteBufCodecs.BOOL.encode(buffer, spec.allowVerticalFacing());
+        ByteBufCodecs.BOOL.encode(buffer, spec.fullyRotationallySymmetric());
+        ByteBufCodecs.BOOL.encode(buffer, spec.requireVerticalFacing());
+        TOOLTIP_CODEC.encode(buffer, spec.tooltip());
+    }
+
+    private static MachineControllerSpec readControllerSpec(RegistryFriendlyByteBuf buffer) {
+        return new MachineControllerSpec(
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ByteBufCodecs.BOOL.decode(buffer),
+                ByteBufCodecs.BOOL.decode(buffer),
+                ByteBufCodecs.BOOL.decode(buffer),
+                TOOLTIP_CODEC.decode(buffer));
+    }
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineAppearanceSpec> APPEARANCE_SPEC_CODEC = StreamCodec.composite(
             ResourceLocation.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
             ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), spec -> Optional.ofNullable(spec.controllerBaseTexture()),

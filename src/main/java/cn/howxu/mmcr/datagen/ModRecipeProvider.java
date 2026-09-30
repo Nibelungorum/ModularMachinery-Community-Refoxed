@@ -14,9 +14,7 @@ import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import mekanism.common.Mekanism;
-import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.recipes.RecipeOutput;
@@ -39,7 +37,6 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
 public final class ModRecipeProvider extends RecipeProvider {
-    private HolderGetter<Item> items;
     private RecipeOutput output;
 
     public ModRecipeProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> registries) {
@@ -49,7 +46,6 @@ public final class ModRecipeProvider extends RecipeProvider {
     @Override
     protected void buildRecipes(RecipeOutput output, HolderLookup.Provider registries) {
         this.output = output;
-        items = registries.lookupOrThrow(Registries.ITEM);
         shaped(ModItems.MODULARIUM.get(), 5)
                 .pattern("XAX")
                 .pattern("ABA")
@@ -529,7 +525,7 @@ public final class ModRecipeProvider extends RecipeProvider {
             return;
         }
         for (MekanismPortSizes.ChemicalTier size : MekanismPortSizes.ChemicalTier.values()) {
-            ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank")).orElseThrow().value();
+            ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank"));
             ItemLike result = ModBlocks.BLOCKS.get("chemical_input_hatch_" + size.id()).get();
             shaped(result, 1)
                     .pattern(" A ")
@@ -542,7 +538,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         }
 
         for (MekanismPortSizes.ChemicalTier size : MekanismPortSizes.ChemicalTier.values()) {
-            ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank")).orElseThrow().value();
+            ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank"));
             ItemLike result = ModBlocks.BLOCKS.get("chemical_output_hatch_" + size.id()).get();
             shaped(result, 1)
                     .pattern("ABA")
@@ -555,7 +551,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         }
 
         ItemLike result = ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get();
-        ItemLike input = BuiltInRegistries.ITEM.get(Mekanism.rl("radioactive_waste_barrel")).orElseThrow().value();
+        ItemLike input = BuiltInRegistries.ITEM.get(Mekanism.rl("radioactive_waste_barrel"));
 
         shaped(result, 1)
                 .pattern(" A ")
@@ -578,7 +574,7 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .save(whenLoaded("mekanism"));
 
         result = ModBlocks.BLOCKS.get("heat_input_hatch").get();
-        input = BuiltInRegistries.ITEM.get(Mekanism.rl("superheating_element")).orElseThrow().value();
+        input = BuiltInRegistries.ITEM.get(Mekanism.rl("superheating_element"));
 
         shaped(result, 1)
                 .pattern(" A ")
@@ -649,7 +645,7 @@ public final class ModRecipeProvider extends RecipeProvider {
     }
 
     private ItemLike externalItem(String namespace, String path) {
-        return BuiltInRegistries.ITEM.getValue(ResourceLocation.fromNamespaceAndPath(namespace, path));
+        return BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath(namespace, path));
     }
 
     private static String itemInputBusId(ItemBusSize size) {
@@ -681,12 +677,12 @@ public final class ModRecipeProvider extends RecipeProvider {
     }
 
     private ShapedRecipeBuilder shaped(ItemLike result, int count) {
-        return ShapedRecipeBuilder.shaped(items, RecipeCategory.MISC, result, count)
+        return ShapedRecipeBuilder.shaped(RecipeCategory.MISC, result, count)
                 .unlockedBy(getHasName(result), has(result));
     }
 
     private ShapelessRecipeBuilder shapeless(ItemLike result, int count) {
-        return ShapelessRecipeBuilder.shapeless(items, RecipeCategory.MISC, result, count)
+        return ShapelessRecipeBuilder.shapeless(RecipeCategory.MISC, result, count)
                 .unlockedBy(getHasName(result), has(result));
     }
 }

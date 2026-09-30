@@ -86,15 +86,15 @@ public class RECIPE_TICKER {
                                 var controllerPos = machineContext.controllerPos();
                                 var area = new AABB(
                                         controllerPos.getX() - 2,
-                                        level.getMinY(),
+                                        level.getMinBuildHeight(),
                                         controllerPos.getZ() - 2,
                                         controllerPos.getX() + 3,
-                                        level.getMaxY() + 1,
+                                        level.getMaxBuildHeight() + 1,
                                         controllerPos.getZ() + 3);
 
                                 for (var entity : level.getEntitiesOfClass(LivingEntity.class, area)) {
                                     entity.addEffect(new MobEffectInstance(
-                                            MobEffects.STRENGTH, 10000, 1));
+                                            MobEffects.DAMAGE_BOOST, 10000, 1));
                                 }
 
                                 ctx.replaceExactItemInputCount(Items.GOLD_INGOT, 32, 1);
@@ -113,10 +113,10 @@ public class RECIPE_TICKER {
                                 var controllerPos = machineContext.controllerPos();
                                 var area = new AABB(
                                         controllerPos.getX() - 2,
-                                        level.getMinY(),
+                                        level.getMinBuildHeight(),
                                         controllerPos.getZ() - 2,
                                         controllerPos.getX() + 3,
-                                        level.getMaxY() + 1,
+                                        level.getMaxBuildHeight() + 1,
                                         controllerPos.getZ() + 3);
 
                                 for (var entity : level.getEntitiesOfClass(LivingEntity.class, area)) {

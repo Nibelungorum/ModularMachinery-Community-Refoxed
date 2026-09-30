@@ -26,17 +26,21 @@ final class PreviewChunk extends LevelChunk {
 
     @Override
     public BlockState getBlockState(BlockPos position) {
-        return this.position.contains(position) ? level.getBlockState(position) : Blocks.AIR.defaultBlockState();
+        return contains(position) ? level.getBlockState(position) : Blocks.AIR.defaultBlockState();
     }
 
     @Override
     public BlockEntity getBlockEntity(BlockPos position) {
-        return this.position.contains(position) ? level.getBlockEntity(position) : null;
+        return contains(position) ? level.getBlockEntity(position) : null;
     }
 
     @Override
     public FluidState getFluidState(BlockPos position) {
-        return this.position.contains(position) ? level.getFluidState(position) : Blocks.AIR.defaultBlockState().getFluidState();
+        return contains(position) ? level.getFluidState(position) : Blocks.AIR.defaultBlockState().getFluidState();
+    }
+
+    private boolean contains(BlockPos position) {
+        return this.position.toLong() == ChunkPos.asLong(position);
     }
 
     @Override

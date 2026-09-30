@@ -40,6 +40,9 @@ public record TerminalData(
     public static final TerminalData DEFAULT = new TerminalData(null, null, null, TerminalInventoryMode.INVENTORY,
             null, Map.of(), 1, false, Integer.MAX_VALUE);
 
+    private static final StreamCodec<RegistryFriendlyByteBuf, Map<ResourceLocation, ResourceLocation>> SELECTED_LEVELS_CODEC =
+            ByteBufCodecs.map(LinkedHashMap::new, ResourceLocation.STREAM_CODEC, ResourceLocation.STREAM_CODEC);
+
     public static final Codec<TerminalData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             GlobalPos.CODEC.optionalFieldOf("controller").forGetter(data -> Optional.ofNullable(data.controller)),
             GlobalPos.CODEC.optionalFieldOf("container").forGetter(data -> Optional.ofNullable(data.container)),
@@ -55,20 +58,34 @@ public record TerminalData(
             ae2AccessPoint.orElse(null), inventoryMode, selectedLevelType.orElse(null), selectedLevels, stage,
             previewEnabled, previewLayer)));
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, TerminalData> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.optional(GlobalPos.STREAM_CODEC), data -> Optional.ofNullable(data.controller),
-            ByteBufCodecs.optional(GlobalPos.STREAM_CODEC), data -> Optional.ofNullable(data.container),
-            ByteBufCodecs.optional(GlobalPos.STREAM_CODEC), data -> Optional.ofNullable(data.ae2AccessPoint),
-            TerminalInventoryMode.STREAM_CODEC, TerminalData::inventoryMode,
-            ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC), data -> Optional.ofNullable(data.selectedLevelType),
-            ByteBufCodecs.map(LinkedHashMap::new, ResourceLocation.STREAM_CODEC, ResourceLocation.STREAM_CODEC), TerminalData::selectedLevels,
-            ByteBufCodecs.VAR_INT, TerminalData::stage,
-            ByteBufCodecs.BOOL, TerminalData::previewEnabled,
-            ByteBufCodecs.VAR_INT, TerminalData::previewLayer,
-            (controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                    previewEnabled, previewLayer) -> new TerminalData(controller.orElse(null), container.orElse(null),
-                            ae2AccessPoint.orElse(null), inventoryMode, selectedLevelType.orElse(null), selectedLevels,
-                            stage, previewEnabled, previewLayer));
+    public static final StreamCodec<RegistryFriendlyByteBuf, TerminalData> STREAM_CODEC = StreamCodec.of(
+            TerminalData::write, TerminalData::read);
+
+    private static void write(RegistryFriendlyByteBuf buffer, TerminalData data) {
+        ByteBufCodecs.optional(GlobalPos.STREAM_CODEC).encode(buffer, Optional.ofNullable(data.controller));
+        ByteBufCodecs.optional(GlobalPos.STREAM_CODEC).encode(buffer, Optional.ofNullable(data.container));
+        ByteBufCodecs.optional(GlobalPos.STREAM_CODEC).encode(buffer, Optional.ofNullable(data.ae2AccessPoint));
+        TerminalInventoryMode.STREAM_CODEC.encode(buffer, data.inventoryMode);
+        ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC).encode(buffer, Optional.ofNullable(data.selectedLevelType));
+        SELECTED_LEVELS_CODEC.encode(buffer, data.selectedLevels);
+        ByteBufCodecs.VAR_INT.encode(buffer, data.stage);
+        ByteBufCodecs.BOOL.encode(buffer, data.previewEnabled);
+        ByteBufCodecs.VAR_INT.encode(buffer, data.previewLayer);
+    }
+
+    private static TerminalData read(RegistryFriendlyByteBuf buffer) {
+        Optional<GlobalPos> controller = ByteBufCodecs.optional(GlobalPos.STREAM_CODEC).decode(buffer);
+        Optional<GlobalPos> container = ByteBufCodecs.optional(GlobalPos.STREAM_CODEC).decode(buffer);
+        Optional<GlobalPos> ae2AccessPoint = ByteBufCodecs.optional(GlobalPos.STREAM_CODEC).decode(buffer);
+        TerminalInventoryMode inventoryMode = TerminalInventoryMode.STREAM_CODEC.decode(buffer);
+        Optional<ResourceLocation> selectedLevelType = ByteBufCodecs.optional(ResourceLocation.STREAM_CODEC).decode(buffer);
+        Map<ResourceLocation, ResourceLocation> selectedLevels = SELECTED_LEVELS_CODEC.decode(buffer);
+        int stage = ByteBufCodecs.VAR_INT.decode(buffer);
+        boolean previewEnabled = ByteBufCodecs.BOOL.decode(buffer);
+        int previewLayer = ByteBufCodecs.VAR_INT.decode(buffer);
+        return new TerminalData(controller.orElse(null), container.orElse(null), ae2AccessPoint.orElse(null), inventoryMode,
+                selectedLevelType.orElse(null), selectedLevels, stage, previewEnabled, previewLayer);
+    }
 
     public TerminalData {
         inventoryMode = Objects.requireNonNull(inventoryMode, "inventoryMode");

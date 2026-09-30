@@ -9,6 +9,7 @@ import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.Minecraft;
@@ -139,7 +140,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     private static ScreenPosition guiOrigin(GuiGraphics graphics) {
         var pose = graphics.pose().last().pose();
-        return new ScreenPosition(Math.round(pose.m30()), Math.round(pose.m31()));
+        return new ScreenPosition((int) Math.round(pose.m30()), (int) Math.round(pose.m31()));
     }
 
     @Override
@@ -236,7 +237,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private static int maxVisibleCandidates() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 12;
             case 2 -> 10;
             case 3 -> 8;
@@ -335,6 +336,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
         @Override public IIngredientType<ItemStack> getType() { return VanillaTypes.ITEM_STACK; }
         @Override public ItemStack getIngredient() { return stack; }
+
+        @Override
+        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
+            ItemStack normalized = ingredientHelper.normalizeIngredient(stack);
+            return normalized == stack ? this : new ItemStackIngredient(normalized);
+        }
     }
 
     interface Preview {

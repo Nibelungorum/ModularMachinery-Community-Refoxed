@@ -214,7 +214,7 @@ public class Plugin implements KubeJSPlugin {
 
     @Override
     public void registerRecipeComponents(RecipeComponentTypeRegistry registry) {
-        registry.unit(MachineRecipeSchema.JSON_ELEMENT);
+        registry.register(MachineRecipeSchema.JSON_ELEMENT.type());
     }
 
     @Override

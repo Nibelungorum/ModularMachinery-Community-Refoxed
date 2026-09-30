@@ -47,7 +47,6 @@ public final class FluxEnergyInputInterfaceBlockEntity extends FluxInterfaceBloc
         return capabilitySnapshot;
     }
 
-    @Override
     public LongValueStorage getEnergyStorage() {
         return buffer.storage();
     }

@@ -162,7 +162,7 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
         return switch (value) {
             case MachineStructureBuilderJS.PatternEntry entry -> entry;
             case String blockId -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(
-                    BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId))));
+                    BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId))));
             case Block block -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlock(block));
             case BlockState state -> new MachineStructureBuilderJS.PatternEntry(new BlockPredicate.OfBlockState(state));
             case BlockPredicate predicate -> new MachineStructureBuilderJS.PatternEntry(predicate);

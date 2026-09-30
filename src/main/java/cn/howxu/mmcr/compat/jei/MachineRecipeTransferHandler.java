@@ -5,11 +5,12 @@ import cn.howxu.mmcr.registry.ModUIs;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
+import mezz.jei.api.ingredients.IIngredientHelper;
+import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.recipe.transfer.IRecipeTransferError;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
 import mezz.jei.api.recipe.RecipeType;
-import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.client.gui.GuiGraphics;
@@ -187,6 +188,12 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
         @Override
         public ItemStack getIngredient() {
             return stack;
+        }
+
+        @Override
+        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
+            ItemStack normalized = ingredientHelper.normalizeIngredient(stack);
+            return normalized == stack ? this : new ActualItemIngredient(normalized);
         }
     }
 }

@@ -8,6 +8,7 @@ import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
 import mekanism.api.IContentsListener;
 import mekanism.api.chemical.BasicChemicalTank;
+import mekanism.api.chemical.IChemicalHandler;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import mekanism.api.radiation.IRadiationManager;
@@ -52,8 +53,8 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
         return chemicalTank;
     }
 
-    public IChemicalTank chemicalHandler(Direction side) {
-        return chemicalTank;
+    public IChemicalHandler chemicalHandler(Direction side) {
+        return (IChemicalHandler) chemicalTank;
     }
 
     @Override
@@ -77,9 +78,8 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
     @Override
     public void onBlockRemoved() {
         if (level != null && !level.isClientSide() && IRadiationManager.INSTANCE.isRadiationEnabled()) {
-            IRadiationManager.INSTANCE.dumpRadiation(level, worldPosition, chemicalTank.getStack());
+            IRadiationManager.INSTANCE.dumpRadiation(level, worldPosition, chemicalHandler(null), true);
         }
-        super.onBlockRemoved();
     }
 
     private void markChemicalChanged() {

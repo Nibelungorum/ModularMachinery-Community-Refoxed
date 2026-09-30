@@ -29,7 +29,7 @@ public final class NativeAsyncResourceValues {
     }
 
     public static ItemStack item(AsyncResourceValue value) {
-        var item = BuiltInRegistries.ITEM.getValue(value.resourceId());
+        var item = BuiltInRegistries.ITEM.get(value.resourceId());
         if (item == null) throw new IllegalArgumentException("Unknown item resource: " + value.resourceId());
         ItemStack stack = new ItemStack(item);
         stack.applyComponents(patch(value.data()));
@@ -42,7 +42,7 @@ public final class NativeAsyncResourceValues {
     }
 
     public static FluidStack fluid(AsyncResourceValue value) {
-        var fluid = BuiltInRegistries.FLUID.getValue(value.resourceId());
+        var fluid = BuiltInRegistries.FLUID.get(value.resourceId());
         if (fluid == null) throw new IllegalArgumentException("Unknown fluid resource: " + value.resourceId());
         FluidStack stack = new FluidStack(fluid, 1);
         stack.applyComponents(patch(value.data()));
@@ -55,7 +55,7 @@ public final class NativeAsyncResourceValues {
     }
 
     public static ChemicalStack chemical(AsyncResourceValue value) {
-        Holder.Reference<Chemical> chemical = MekanismAPI.CHEMICAL_REGISTRY.get(
+        Holder.Reference<Chemical> chemical = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, value.resourceId()))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown chemical resource: " + value.resourceId()));
         return new ChemicalStack(chemical, 1L);

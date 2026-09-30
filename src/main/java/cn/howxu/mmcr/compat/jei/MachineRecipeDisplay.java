@@ -23,10 +23,8 @@ import com.mojang.serialization.DynamicOps;
 
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -96,7 +94,7 @@ public record MachineRecipeDisplay(
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
                 DataComponentPredicateSet components = item.components();
                 List<ItemStack> baseStacks = safeItems(item.item())
-                        .map(holder -> new ItemStack(holder.value(), item.count()))
+                        .map(stack -> new ItemStack(stack.getItem(), item.count()))
                         .toList();
                 itemInputs.add(new ItemInputDisplay(item.item(), baseStacks, item.count(), item.consumeChance(), components, componentOps));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
@@ -157,9 +155,9 @@ public record MachineRecipeDisplay(
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), Collections::unmodifiableSet));
     }
 
-    private static Stream<Holder<Item>> safeItems(Ingredient ingredient) {
+    private static Stream<ItemStack> safeItems(Ingredient ingredient) {
         try {
-            return ingredient.items();
+            return Stream.of(ingredient.getItems());
         } catch (UnsupportedOperationException ignored) {
             return Stream.empty();
         }

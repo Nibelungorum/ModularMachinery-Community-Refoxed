@@ -40,7 +40,7 @@ public final class KubeJSRecipeSync {
         Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
-                ResourceLocation id = holder.id().identifier();
+                ResourceLocation id = holder.id();
                 if (!KubeJSContentReloadTransaction.ownsRecipe(id)
                         && !KubeJSContentReloadTransaction.ownsRecipe(machineRecipe)) {
                     recipes.put(id, machineRecipe.withId(id));

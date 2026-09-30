@@ -38,7 +38,7 @@ public record MachineRecipeLayout(
     static final int TEXT_LINE_SPACING = 10;
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
-        return forDisplay(display, Minecraft.getInstance().getWindow().getGuiScale());
+        return forDisplay(display, (int) Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display, int guiScale) {

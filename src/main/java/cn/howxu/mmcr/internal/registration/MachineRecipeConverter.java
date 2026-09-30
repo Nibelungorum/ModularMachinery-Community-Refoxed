@@ -201,7 +201,7 @@ public final class MachineRecipeConverter {
         if (components.values().isEmpty()) return cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY;
         Map<DataComponentType<?>, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values = new HashMap<>();
         components.values().forEach((id, predicate) -> {
-            var type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(id);
+            var type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
             if (type == null) throw new IllegalArgumentException("Unknown data component type " + id);
             values.put(type, toInternalPredicate(predicate));
         });

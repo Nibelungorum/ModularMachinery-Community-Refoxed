@@ -1,9 +1,6 @@
 package cn.howxu.mmcr.internal.item;
 
-import cn.howxu.mmcr.MMCR;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.ChatFormatting;
 import net.minecraft.world.item.ItemStack;
@@ -19,8 +16,7 @@ import java.util.List;
 public class ThreadDisperserItem extends Item {
 
     public ThreadDisperserItem() {
-        super(new Item.Properties()
-                .setId(ResourceKey.create(Registries.ITEM, MMCR.id("thread_disperser"))));
+        super(new Item.Properties());
     }
 
     @Override

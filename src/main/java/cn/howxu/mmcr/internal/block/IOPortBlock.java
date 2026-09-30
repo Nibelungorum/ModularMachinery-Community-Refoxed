@@ -26,11 +26,11 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.BlockAndTintGetter;
@@ -93,18 +93,18 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected @NonNull InteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
-                                                   BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected @NonNull ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
+                                                       BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (AE2Bridge.get().useMemoryCard(stack, level, pos, player)) {
-            return InteractionResult.SUCCESS;
+            return ItemInteractionResult.SUCCESS;
         }
         if (!ItemSpecialOperationUtil.isSpecialOperated(player) && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
-            if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
+            if (level.isClientSide()) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
             if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection())) {
-                return InteractionResult.SUCCESS;
+                return ItemInteractionResult.SUCCESS;
             }
         }
-        return InteractionResult.TRY_WITH_EMPTY_HAND;
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
     }
 
     @Override
@@ -162,7 +162,7 @@ public class IOPortBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public void onBlockExploded(BlockState state, ServerLevel level, BlockPos pos, Explosion explosion) {
+    public void onBlockExploded(BlockState state, Level level, BlockPos pos, Explosion explosion) {
         if (level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             port.dropContents();
         }

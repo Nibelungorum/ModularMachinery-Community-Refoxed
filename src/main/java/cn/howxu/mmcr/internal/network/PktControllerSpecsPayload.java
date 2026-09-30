@@ -20,17 +20,34 @@ import java.util.Map;
  */
 public record PktControllerSpecsPayload(Map<ResourceLocation, MachineControllerSpec> specs) implements CustomPacketPayload {
     private static final int MAX_SPECS = 4096;
-    private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> SPEC_CODEC = StreamCodec.composite(
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::id,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::frontTexture,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::sideTexture,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::topTexture,
-            ResourceLocation.STREAM_CODEC, MachineControllerSpec::bottomTexture,
-            ByteBufCodecs.BOOL, MachineControllerSpec::allowVerticalFacing,
-            ByteBufCodecs.BOOL, MachineControllerSpec::fullyRotationallySymmetric,
-            ByteBufCodecs.BOOL, MachineControllerSpec::requireVerticalFacing,
-            ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8), MachineControllerSpec::tooltip,
-            MachineControllerSpec::new);
+    private static final StreamCodec<RegistryFriendlyByteBuf, MachineControllerSpec> SPEC_CODEC = StreamCodec.of(
+            PktControllerSpecsPayload::writeSpec, PktControllerSpecsPayload::readSpec);
+
+    private static void writeSpec(RegistryFriendlyByteBuf buffer, MachineControllerSpec spec) {
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.id());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.frontTexture());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.sideTexture());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.topTexture());
+        ResourceLocation.STREAM_CODEC.encode(buffer, spec.bottomTexture());
+        ByteBufCodecs.BOOL.encode(buffer, spec.allowVerticalFacing());
+        ByteBufCodecs.BOOL.encode(buffer, spec.fullyRotationallySymmetric());
+        ByteBufCodecs.BOOL.encode(buffer, spec.requireVerticalFacing());
+        ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8)
+                .encode(buffer, new ArrayList<>(spec.tooltip()));
+    }
+
+    private static MachineControllerSpec readSpec(RegistryFriendlyByteBuf buffer) {
+        return new MachineControllerSpec(
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ResourceLocation.STREAM_CODEC.decode(buffer),
+                ByteBufCodecs.BOOL.decode(buffer),
+                ByteBufCodecs.BOOL.decode(buffer),
+                ByteBufCodecs.BOOL.decode(buffer),
+                ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.STRING_UTF8).decode(buffer));
+    }
 
     public static final Type<PktControllerSpecsPayload> TYPE = new Type<>(MMCR.id("controller_specs"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktControllerSpecsPayload> STREAM_CODEC =

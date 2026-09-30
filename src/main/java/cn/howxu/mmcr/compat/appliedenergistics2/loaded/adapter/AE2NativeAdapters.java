@@ -185,26 +185,26 @@ public final class AE2NativeAdapters {
 
         @Override public ItemStack getStackInSlot(int slot) {
             AEKey key = inventory.getKey(slot);
-            return key instanceof AEItemKey item ? item.toStack(amount(inventory.getAmount(slot))) : ItemStack.EMPTY;
+            return key instanceof AEItemKey item ? item.toStack(AE2NativeAdapters.amount(inventory.getAmount(slot))) : ItemStack.EMPTY;
         }
 
         @Override public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
             if (stack.isEmpty()) return ItemStack.EMPTY;
             AEItemKey key = AEItemKey.of(stack);
             long inserted = inventory.insert(slot, key, stack.getCount(), mode(simulate));
-            return inserted == stack.getCount() ? ItemStack.EMPTY : stack.copyWithCount((int) (stack.getCount() - inserted));
+            return inserted == stack.getCount() ? ItemStack.EMPTY : stack.copyWithCount(AE2NativeAdapters.amount(stack.getCount() - inserted));
         }
 
         @Override public ItemStack extractItem(int slot, int requested, boolean simulate) {
             AEKey key = inventory.getKey(slot);
             if (!(key instanceof AEItemKey item) || requested <= 0) return ItemStack.EMPTY;
             long extracted = inventory.extract(slot, item, requested, mode(simulate));
-            return item.toStack(amount(extracted));
+            return item.toStack(AE2NativeAdapters.amount(extracted));
         }
 
         @Override public int getSlotLimit(int slot) {
             AEKey key = inventory.getKey(slot);
-            return amount(key == null ? inventory.getCapacity(AEKeyType.items()) : inventory.getMaxAmount(key));
+            return AE2NativeAdapters.amount(key == null ? inventory.getCapacity(AEKeyType.items()) : inventory.getMaxAmount(key));
         }
 
         @Override public boolean isItemValid(int slot, ItemStack stack) {
@@ -235,12 +235,12 @@ public final class AE2NativeAdapters {
 
         @Override public FluidStack getFluidInTank(int tank) {
             AEKey key = inventory.getKey(tank);
-            return key instanceof AEFluidKey fluid ? fluid.toStack(amount(inventory.getAmount(tank))) : FluidStack.EMPTY;
+            return key instanceof AEFluidKey fluid ? fluid.toStack(AE2NativeAdapters.amount(inventory.getAmount(tank))) : FluidStack.EMPTY;
         }
 
         @Override public int getTankCapacity(int tank) {
             AEKey key = inventory.getKey(tank);
-            return amount(key == null ? inventory.getCapacity(AEKeyType.fluids()) : inventory.getMaxAmount(key));
+            return AE2NativeAdapters.amount(key == null ? inventory.getCapacity(AEKeyType.fluids()) : inventory.getMaxAmount(key));
         }
 
         @Override public boolean isFluidValid(int tank, FluidStack stack) {
@@ -255,7 +255,7 @@ public final class AE2NativeAdapters {
             for (int tank = 0; tank < getTanks() && inserted < stack.getAmount(); tank++) {
                 inserted += inventory.insert(tank, key, stack.getAmount() - inserted, mode(action.simulate()));
             }
-            return amount(inserted);
+            return AE2NativeAdapters.amount(inserted);
         }
 
         @Override public FluidStack drain(FluidStack stack, FluidAction action) {
@@ -265,7 +265,7 @@ public final class AE2NativeAdapters {
             for (int tank = 0; tank < getTanks() && extracted < stack.getAmount(); tank++) {
                 extracted += inventory.extract(tank, key, stack.getAmount() - extracted, mode(action.simulate()));
             }
-            return key.toStack(amount(extracted));
+            return key.toStack(AE2NativeAdapters.amount(extracted));
         }
 
         @Override public FluidStack drain(int maxDrain, FluidAction action) {
@@ -307,7 +307,7 @@ public final class AE2NativeAdapters {
         @Override public ItemStack getStackInSlot(int slot) {
             AEKey key = key(slot);
             if (!(key instanceof AEItemKey item)) return ItemStack.EMPTY;
-            return item.toStack(amount(syncedAmounts.getOrDefault(item,
+            return item.toStack(AE2NativeAdapters.amount(syncedAmounts.getOrDefault(item,
                     storage.get().extract(item, Integer.MAX_VALUE, Actionable.SIMULATE, source))));
         }
 
@@ -318,7 +318,7 @@ public final class AE2NativeAdapters {
         @Override public ItemStack extractItem(int slot, int requested, boolean simulate) {
             AEKey key = key(slot);
             if (!(key instanceof AEItemKey item) || requested <= 0) return ItemStack.EMPTY;
-            return item.toStack(amount(storage.get().extract(item, requested, mode(simulate), source)));
+            return item.toStack(AE2NativeAdapters.amount(storage.get().extract(item, requested, mode(simulate), source)));
         }
 
         @Override public int getSlotLimit(int slot) { return Integer.MAX_VALUE; }
@@ -363,7 +363,7 @@ public final class AE2NativeAdapters {
         @Override public FluidStack getFluidInTank(int tank) {
             AEKey key = key(tank);
             if (!(key instanceof AEFluidKey fluid)) return FluidStack.EMPTY;
-            return fluid.toStack(amount(syncedAmounts.getOrDefault(fluid,
+            return fluid.toStack(AE2NativeAdapters.amount(syncedAmounts.getOrDefault(fluid,
                     storage.get().extract(fluid, Integer.MAX_VALUE, Actionable.SIMULATE, source))));
         }
 
@@ -381,7 +381,7 @@ public final class AE2NativeAdapters {
         @Override public FluidStack drain(FluidStack stack, FluidAction action) {
             AEFluidKey key = AEFluidKey.of(stack);
             if (key == null || !keys().contains(key)) return FluidStack.EMPTY;
-            return key.toStack(amount(storage.get().extract(key, stack.getAmount(), mode(action.simulate()), source)));
+            return key.toStack(AE2NativeAdapters.amount(storage.get().extract(key, stack.getAmount(), mode(action.simulate()), source)));
         }
 
         @Override public FluidStack drain(int maxDrain, FluidAction action) {
@@ -449,7 +449,7 @@ public final class AE2NativeAdapters {
             }
             inserted = Math.min(stack.getCount(), Math.max(0L, inserted));
             ItemStack remaining = inserted == stack.getCount() ? ItemStack.EMPTY
-                    : local.insertItem(slot, stack.copyWithCount((int) (stack.getCount() - inserted)), simulate);
+                    : local.insertItem(slot, stack.copyWithCount(AE2NativeAdapters.amount(stack.getCount() - inserted)), simulate);
             if (!simulate && remaining.getCount() != stack.getCount()) changed.run();
             return remaining;
         }
@@ -491,8 +491,8 @@ public final class AE2NativeAdapters {
                         Math.min(requested, Math.max(0L, simulated)), Actionable.MODULATE, source);
             }
             inserted = Math.min(stack.getAmount(), Math.max(0L, inserted));
-            int localInserted = local.fill(stack.copyWithAmount((int) (stack.getAmount() - inserted)), action);
-            int total = amount(inserted + localInserted);
+            int localInserted = local.fill(stack.copyWithAmount(AE2NativeAdapters.amount(stack.getAmount() - inserted)), action);
+            int total = AE2NativeAdapters.amount(inserted + localInserted);
             if (!action.simulate() && total > 0) changed.run();
             return total;
         }

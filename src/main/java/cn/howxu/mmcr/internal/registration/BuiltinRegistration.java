@@ -34,6 +34,6 @@ public final class BuiltinRegistration {
 
     public static Supplier<? extends Block> block(ResourceLocation id) {
         if (MOD_ID.equals(id.getNamespace())) return block(id.getPath());
-        return () -> BuiltInRegistries.BLOCK.getValue(id);
+        return () -> BuiltInRegistries.BLOCK.get(id);
     }
 }

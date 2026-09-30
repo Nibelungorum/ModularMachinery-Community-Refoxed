@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.item;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -10,13 +9,12 @@ import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -39,20 +37,19 @@ public class TerminalItem extends Item {
 
     public TerminalItem() {
         super(new Item.Properties()
-                .stacksTo(1)
-                .setId(ResourceKey.create(Registries.ITEM, MMCR.id("terminal"))));
+                .stacksTo(1));
     }
 
     @Override
-    public InteractionResult use(Level level, Player player, InteractionHand hand) {
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResult.PASS;
-        if (level.isClientSide()) return InteractionResult.SUCCESS;
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResultHolder.pass(stack);
+        if (level.isClientSide()) return InteractionResultHolder.success(stack);
         if (player instanceof ServerPlayer serverPlayer) {
             TerminalService.Result result = TerminalService.clear(serverPlayer, stack);
             if (result.accepted()) serverPlayer.sendSystemMessage(Component.translatable(result.messageKey()));
         }
-        return InteractionResult.SUCCESS;
+        return InteractionResultHolder.success(stack);
     }
 
     @Override
@@ -140,7 +137,7 @@ public class TerminalItem extends Item {
                         .append(Component.literal(": "))
                         .append(value)
                         .append(" @ ")
-                        .append(Component.literal(controller.dimension().identifier().toString()))
+                        .append(Component.literal(controller.dimension().location().toString()))
         );
 
     }
@@ -171,7 +168,7 @@ public class TerminalItem extends Item {
                         .append(Component.literal(": "))
                         .append(value)
                         .append(" @ ")
-                        .append(Component.literal(container.dimension().identifier().toString()))
+                        .append(Component.literal(container.dimension().location().toString()))
         );
     }
 
@@ -184,7 +181,7 @@ public class TerminalItem extends Item {
                         .append(Component.literal(": "))
                         .append(resolveContainerValue(accessPoint, level))
                         .append(" @ ")
-                        .append(Component.literal(accessPoint.dimension().identifier().toString()))
+                        .append(Component.literal(accessPoint.dimension().location().toString()))
         );
     }
 

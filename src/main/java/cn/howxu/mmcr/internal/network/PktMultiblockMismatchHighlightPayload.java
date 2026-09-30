@@ -23,7 +23,7 @@ public record PktMultiblockMismatchHighlightPayload(ResourceKey<Level> dimension
             StreamCodec.of(PktMultiblockMismatchHighlightPayload::write, PktMultiblockMismatchHighlightPayload::read);
 
     private static void write(RegistryFriendlyByteBuf buf, PktMultiblockMismatchHighlightPayload payload) {
-        ResourceLocation.STREAM_CODEC.encode(buf, payload.dimension.identifier());
+        ResourceLocation.STREAM_CODEC.encode(buf, payload.dimension.location());
         buf.writeBlockPos(payload.pos);
     }
 

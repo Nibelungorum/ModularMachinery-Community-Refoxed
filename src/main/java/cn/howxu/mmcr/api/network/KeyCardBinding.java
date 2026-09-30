@@ -24,7 +24,7 @@ public record KeyCardBinding(GlobalPos interfacePos, MachineReference machine) {
     public static final StreamCodec<FriendlyByteBuf, KeyCardBinding> STREAM_CODEC =
             StreamCodec.composite(GlobalPos.STREAM_CODEC, KeyCardBinding::interfacePos,
                     ResourceLocation.STREAM_CODEC, binding -> binding.machine().type(),
-                    ByteBufCodecs.LONG, binding -> binding.machine().hash(),
+                    ByteBufCodecs.VAR_LONG, binding -> binding.machine().hash(),
                     (interfacePos, machineType, machineHash) ->
                             new KeyCardBinding(interfacePos, new MachineReference(machineType, machineHash)));
 
