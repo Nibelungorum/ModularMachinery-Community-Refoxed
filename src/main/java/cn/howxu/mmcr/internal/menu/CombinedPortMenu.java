@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
@@ -16,7 +17,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.SlotItemHandler;
 
 import java.util.List;
 
@@ -56,8 +56,8 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         addItemSlots(owner);
         addPlayerSlots(playerInv);
         if (owner == null) {
-            this.itemEntries = List.of();
-            this.fluidEntries = List.of();
+            this.itemEntries = emptyItemEntries(itemSlotCount);
+            this.fluidEntries = emptyFluidEntries(fluidTankCount);
         } else {
             this.itemEntries = PktPortStorageSyncPayload.itemEntries(owner.nativeItemHandler());
             this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
@@ -80,8 +80,8 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         this.fluidTankLayouts = layouts(fluidTankCount);
         addItemSlots(null);
         addPlayerSlots(playerInv);
-        this.itemEntries = List.of();
-        this.fluidEntries = List.of();
+        this.itemEntries = emptyItemEntries(itemSlotCount);
+        this.fluidEntries = emptyFluidEntries(fluidTankCount);
         this.displayEntries = List.of();
     }
 
@@ -149,8 +149,9 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         for (FluidStorageEntry entry : nextFluids) {
             if (entry.slot() >= fluidTankCount) throw new IllegalArgumentException("Fluid snapshot slot out of bounds");
         }
-        itemEntries = nextItems;
-        fluidEntries = nextFluids;
+        itemEntries = mergeItemEntries(nextItems);
+        fluidEntries = mergeFluidEntries(nextFluids);
+        if (owner == null) displayEntries = snapshotDisplays(itemEntries, fluidEntries);
     }
 
     private void addItemSlots(CombinedPortBlockEntity owner) {
@@ -163,8 +164,46 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
             int x = layout.startX() + col * SLOT_SIZE;
             int y = layout.startY() + row * SLOT_SIZE;
             if (owner == null) addSlot(new Slot(clientContainer, index, x, y));
-        else addSlot(new SlotItemHandler(owner.nativeItemHandler(), index, x, y));
+        else addSlot(new DirectionalItemSlot(owner.nativeItemHandler(), index, x, y));
         }
+    }
+
+    private List<ItemStorageEntry> mergeItemEntries(List<ItemStorageEntry> entries) {
+        List<ItemStorageEntry> merged = new java.util.ArrayList<>(emptyItemEntries(itemSlotCount));
+        entries.forEach(entry -> merged.set(entry.slot(), entry));
+        return List.copyOf(merged);
+    }
+
+    private List<FluidStorageEntry> mergeFluidEntries(List<FluidStorageEntry> entries) {
+        List<FluidStorageEntry> merged = new java.util.ArrayList<>(emptyFluidEntries(fluidTankCount));
+        entries.forEach(entry -> merged.set(entry.slot(), entry));
+        return List.copyOf(merged);
+    }
+
+    private static List<ItemStorageEntry> emptyItemEntries(int count) {
+        List<ItemStorageEntry> entries = new java.util.ArrayList<>(count);
+        for (int slot = 0; slot < count; slot++) {
+            entries.add(new ItemStorageEntry(slot, ItemStack.EMPTY, 0L, 0L));
+        }
+        return List.copyOf(entries);
+    }
+
+    private static List<FluidStorageEntry> emptyFluidEntries(int count) {
+        List<FluidStorageEntry> entries = new java.util.ArrayList<>(count);
+        for (int slot = 0; slot < count; slot++) {
+            entries.add(new FluidStorageEntry(slot, net.neoforged.neoforge.fluids.FluidStack.EMPTY, 0L, 0L));
+        }
+        return List.copyOf(entries);
+    }
+
+    private static List<CapabilityDisplay> snapshotDisplays(List<ItemStorageEntry> items,
+                                                             List<FluidStorageEntry> fluids) {
+        List<CapabilityDisplay> displays = new java.util.ArrayList<>(items.size() + fluids.size());
+        items.forEach(entry -> displays.add(new CapabilityDisplay("item", Long.toString(entry.amount()), "item",
+                DisplayStack.optional(entry.resource()))));
+        fluids.forEach(entry -> displays.add(new CapabilityDisplay("fluid", Long.toString(entry.amount()), "mB",
+                java.util.Optional.empty())));
+        return List.copyOf(displays);
     }
 
     private static ItemBusMenu.SlotLayout slotLayout(int itemSlots) {

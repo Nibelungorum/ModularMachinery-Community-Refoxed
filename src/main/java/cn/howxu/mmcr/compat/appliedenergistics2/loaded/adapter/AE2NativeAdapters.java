@@ -211,11 +211,14 @@ public final class AE2NativeAdapters {
             return !stack.isEmpty() && inventory.isAllowedIn(slot, AEItemKey.of(stack));
         }
 
-        @Override public long amount(int slot) { return inventory.getAmount(slot); }
+        @Override public long amount(int slot) {
+            return inventory.getKey(slot) instanceof AEItemKey ? inventory.getAmount(slot) : 0L;
+        }
 
         @Override public long capacity(int slot) {
             AEKey key = inventory.getKey(slot);
-            return key == null ? inventory.getCapacity(AEKeyType.items()) : inventory.getMaxAmount(key);
+            return key == null ? inventory.getCapacity(AEKeyType.items())
+                    : key instanceof AEItemKey ? inventory.getMaxAmount(key) : 0L;
         }
 
         @Override public void setContents(int slot, ItemStack stack, long amount) {
@@ -277,11 +280,14 @@ public final class AE2NativeAdapters {
             return FluidStack.EMPTY;
         }
 
-        @Override public long amount(int tank) { return inventory.getAmount(tank); }
+        @Override public long amount(int tank) {
+            return inventory.getKey(tank) instanceof AEFluidKey ? inventory.getAmount(tank) : 0L;
+        }
 
         @Override public long capacity(int tank) {
             AEKey key = inventory.getKey(tank);
-            return key == null ? inventory.getCapacity(AEKeyType.fluids()) : inventory.getMaxAmount(key);
+            return key == null ? inventory.getCapacity(AEKeyType.fluids())
+                    : key instanceof AEFluidKey ? inventory.getMaxAmount(key) : 0L;
         }
 
         @Override public void setContents(int tank, FluidStack stack, long amount) {

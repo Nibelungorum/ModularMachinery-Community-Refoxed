@@ -1254,8 +1254,18 @@ public final class CraftingRuntime {
     private @Nullable ExecutionStatus consumePrefetchedEnergy() {
         long remaining = Math.min(prefetchedEnergyPerTick, prefetchedEnergyRemaining);
         if (remaining <= 0L) return null;
-        // Prefetch facets still use the compatibility transaction boundary until Task 7/8.
-        return missingInputStatus();
+        List<ActivePrefetch> updated = new ArrayList<>(activePrefetches.size());
+        for (ActivePrefetch prefetch : activePrefetches) {
+            long consumed = Math.min(remaining, prefetch.remaining());
+            updated.add(new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
+                    prefetch.remaining() - consumed));
+            remaining -= consumed;
+        }
+        if (remaining > 0L) return missingInputStatus();
+        activePrefetches = List.copyOf(updated);
+        prefetchedEnergyRemaining = activePrefetches.stream()
+                .mapToLong(ActivePrefetch::remaining).reduce(0L, SaturatingLong::add);
+        return null;
     }
 
     private void releaseActivePrefetches() {

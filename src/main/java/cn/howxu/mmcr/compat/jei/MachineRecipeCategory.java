@@ -676,7 +676,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static String selectedLanguage() {
         Minecraft minecraft = Minecraft.getInstance();
-        return minecraft.getLanguageManager().getSelected();
+        return minecraft == null || minecraft.getLanguageManager() == null
+                ? "en_us" : minecraft.getLanguageManager().getSelected();
     }
 
     private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {

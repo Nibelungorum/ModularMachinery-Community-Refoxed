@@ -225,6 +225,16 @@ class MachineRecipeCategoryTransferTest {
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("addItemStacks")) {
                         capture.itemStacks.addAll((List<ItemStack>) arguments[0]);
+                    } else if (method.getName().equals("addItemStack")) {
+                        capture.itemAdds.add((ItemStack) arguments[0]);
+                    } else if (method.getName().equals("addFluidStack")) {
+                        DataComponentPatch patch = arguments.length >= 3
+                                ? (DataComponentPatch) arguments[2] : DataComponentPatch.EMPTY;
+                        capture.fluidAdds.add(new CapturedFluid((Fluid) arguments[0],
+                                ((Number) arguments[1]).longValue(), patch));
+                    } else if (method.getName().equals("addIngredient")
+                            && arguments[1] instanceof ChemicalStack stack) {
+                        capture.chemicalAdds.add(new CapturedChemical((IIngredientType<?>) arguments[0], stack));
                     } else if (method.getName().equals("setStandardSlotBackground")) {
                         capture.standardBackground = true;
                     } else if (method.getName().equals("addRichTooltipCallback")) {
@@ -305,14 +315,17 @@ class MachineRecipeCategoryTransferTest {
     private record CapturedFluid(Fluid fluid, long amount, DataComponentPatch componentsPatch) {
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "removal"})
     private static void registerChemical(String path) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.parse("mekanism:" + path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         if (registry.getHolder(key).isPresent()) return;
         registry.unfreeze();
-        Registry.register(registry, key.location(), new Chemical(ChemicalBuilder.builder()) {
+        if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+            Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+        }
+        Registry.registerForHolder(registry, key, new Chemical(ChemicalBuilder.builder()) {
             @Override
             public boolean isRadioactive() {
                 return false;

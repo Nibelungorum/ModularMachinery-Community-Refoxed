@@ -36,23 +36,35 @@ public final class AE2ResourceFamilies {
     }
 
     public static CapabilityBinding itemBinding(CapabilityDirections directions,
-                                                Function<IOPortBlockEntity, IItemHandler> factory) {
+                                                 Function<IOPortBlockEntity, IItemHandler> factory) {
+        return itemBinding(directions, factory, true);
+    }
+
+    public static CapabilityBinding itemBinding(CapabilityDirections directions,
+                                                 Function<IOPortBlockEntity, IItemHandler> factory,
+                                                 boolean nativeTransferExposure) {
         return new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE, directions, context -> {
             IOPortBlockEntity host = (IOPortBlockEntity) context.host();
             IOType direction = directions.supports(IOType.INPUT) && directions.supports(IOType.OUTPUT)
                     ? IOType.OUTPUT : context.ioType();
             return new ItemBusCapability(host, factory.apply(host), direction);
-        }, (binding, tier) -> true);
+        }, (binding, tier) -> true, nativeTransferExposure);
     }
 
     public static CapabilityBinding fluidBinding(CapabilityDirections directions,
-                                                 Function<IOPortBlockEntity, IFluidHandler> factory) {
+                                                  Function<IOPortBlockEntity, IFluidHandler> factory) {
+        return fluidBinding(directions, factory, true);
+    }
+
+    public static CapabilityBinding fluidBinding(CapabilityDirections directions,
+                                                  Function<IOPortBlockEntity, IFluidHandler> factory,
+                                                  boolean nativeTransferExposure) {
         return new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, directions, context -> {
             IOPortBlockEntity host = (IOPortBlockEntity) context.host();
             IOType direction = directions.supports(IOType.INPUT) && directions.supports(IOType.OUTPUT)
                     ? IOType.OUTPUT : context.ioType();
             return new FluidHatchCapability(host, factory.apply(host), direction);
-        }, (binding, tier) -> true);
+        }, (binding, tier) -> true, nativeTransferExposure);
     }
 
     public static List<PortFamilyDescriptor> inputFamilies() {

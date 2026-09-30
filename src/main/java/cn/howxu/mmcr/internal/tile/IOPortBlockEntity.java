@@ -177,7 +177,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                             ? slots.get(slot) : new SlotAvailability(null, 0L);
                     if (previousSlot.amount() <= 0L || previousSlot.resource() == null) continue;
                     boolean amountReleased = currentSlot.amount() < previousSlot.amount();
-                    boolean resourceReleased = !Objects.equals(previousSlot.resource(), currentSlot.resource());
+                    boolean resourceReleased = !sameNativeResource(previousSlot.resource(), currentSlot.resource());
                     if ((amountReleased || resourceReleased) && notified.add(previousSlot.resource())) {
                         notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY,
                                 previousSlot.resource());
@@ -190,6 +190,16 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private static boolean isEmptyNativeResource(Object resource) {
         return resource instanceof ItemStack itemStack && itemStack.isEmpty()
                 || resource instanceof FluidStack fluidStack && fluidStack.isEmpty();
+    }
+
+    private static boolean sameNativeResource(Object first, Object second) {
+        if (first instanceof ItemStack firstItem && second instanceof ItemStack secondItem) {
+            return ItemStack.isSameItemSameComponents(firstItem, secondItem);
+        }
+        if (first instanceof FluidStack firstFluid && second instanceof FluidStack secondFluid) {
+            return FluidStack.isSameFluidSameComponents(firstFluid, secondFluid);
+        }
+        return Objects.equals(first, second);
     }
 
     private void notifyControllers(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {

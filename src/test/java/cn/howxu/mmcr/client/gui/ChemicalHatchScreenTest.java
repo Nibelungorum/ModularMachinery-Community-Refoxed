@@ -109,14 +109,18 @@ class ChemicalHatchScreenTest {
                 ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
     }
 
+    @SuppressWarnings("removal")
     private static Holder.Reference<Chemical> registerChemical(String path) {
         ResourceKey<Chemical> key = ResourceKey.create(
                 MekanismAPI.CHEMICAL_REGISTRY_NAME, ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.getHolder(key).orElseGet(() -> {
             registry.unfreeze();
+            if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+                Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+            }
             Chemical value = new Chemical(ChemicalBuilder.builder().tint(EXPECTED_TINT));
-            Registry.register(registry, key.location(), value);
+            Registry.registerForHolder(registry, key, value);
             registry.freeze();
             return registry.getHolder(key).orElseThrow();
         });

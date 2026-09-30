@@ -25,6 +25,8 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.MMCR;
@@ -515,8 +517,8 @@ public final class ComponentRuntime {
         long capacity = 0L;
         for (int slot = 0; slot < handler.getSlots(); slot++) {
             var stack = handler.getStackInSlot(slot);
-            long slotAmount = stack.getCount();
-            long slotCapacity = handler.getSlotLimit(slot);
+            long slotAmount = handler instanceof LongItemStorage storage ? storage.amount(slot) : stack.getCount();
+            long slotCapacity = handler instanceof LongItemStorage storage ? storage.capacity(slot) : handler.getSlotLimit(slot);
             slots.add(new ControllerRuntimeSnapshot.StorageSlot(stack.isEmpty() ? "" : String.valueOf(stack.getItem()),
                     slotAmount, slotCapacity));
             amount = saturatedAdd(amount, slotAmount);
@@ -533,8 +535,8 @@ public final class ComponentRuntime {
         long capacity = 0L;
         for (int tank = 0; tank < handler.getTanks(); tank++) {
             var stack = handler.getFluidInTank(tank);
-            long tankAmount = stack.getAmount();
-            long tankCapacity = handler.getTankCapacity(tank);
+            long tankAmount = handler instanceof LongFluidStorage storage ? storage.amount(tank) : stack.getAmount();
+            long tankCapacity = handler instanceof LongFluidStorage storage ? storage.capacity(tank) : handler.getTankCapacity(tank);
             slots.add(new ControllerRuntimeSnapshot.StorageSlot(stack.isEmpty() ? "" : String.valueOf(stack.getFluid()),
                     tankAmount, tankCapacity));
             amount = saturatedAdd(amount, tankAmount);
@@ -555,12 +557,9 @@ public final class ComponentRuntime {
         private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability, IOType direction) {
             CapabilityStorage storage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);
             return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), direction,
-                    List.copyOf(capability.view().tags()), storage == null ? "" : storage.getClass().getName(),
-                    storageIdentity(storage));
-        }
-
-        private static Object storageIdentity(CapabilityStorage storage) {
-            return storage;
+                    List.copyOf(capability.view().tags()), storage == null
+                            ? capability.getClass().getName() : storage.getClass().getName(),
+                    storage == null ? capability : storage);
         }
     }
 }

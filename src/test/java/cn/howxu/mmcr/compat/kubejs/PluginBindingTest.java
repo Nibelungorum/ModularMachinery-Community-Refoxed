@@ -797,8 +797,7 @@ class PluginBindingTest {
                 .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         {
-                          'minecraft:custom_name': { text: 'Better钻石剑' },
-                          'minecraft:enchantments': { 'minecraft:sharpness': 4 }
+                          'minecraft:custom_name': 'Better钻石剑'
                         }
                         """));
 
@@ -817,7 +816,7 @@ class PluginBindingTest {
                 .recipePool("mmcr:test_machine_name")
                 .itemOutput("minecraft:iron_ingot", 1)
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
-                        { 'minecraft:custom_name': { text: 'Discarded' } }
+                        { 'minecraft:custom_name': 'Discarded' }
                         """))
                 .outputs(List.of(new ItemStack(Items.DIAMOND)));
 
@@ -852,7 +851,7 @@ class PluginBindingTest {
                 .recipePool("mmcr:test_machine_name")
                 .outputs(List.of(new ItemStack(Items.DIAMOND)))
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
-                        { 'minecraft:custom_name': { text: 'Kept' } }
+                        { 'minecraft:custom_name': 'Kept' }
                         """));
 
         MachineRecipe recipe = createInRecipeEvent(builder);

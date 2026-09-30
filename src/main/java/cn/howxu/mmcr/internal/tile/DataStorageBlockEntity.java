@@ -201,24 +201,26 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private static @Nullable DataValue readValue(CompoundTag input, DataValueType type) {
         try {
             return switch (type) {
-            case BOOLEAN -> input.contains(VALUE_KEY) ? DataValue.of(input.getBoolean(VALUE_KEY)) : null;
-            case STRING -> input.contains(VALUE_KEY) ? DataValue.of(input.getString(VALUE_KEY)) : null;
+            case BOOLEAN -> input.contains(VALUE_KEY, Tag.TAG_BYTE) ? DataValue.of(input.getBoolean(VALUE_KEY)) : null;
+            case STRING -> input.contains(VALUE_KEY, Tag.TAG_STRING) ? DataValue.of(input.getString(VALUE_KEY)) : null;
             case BYTE -> {
-                int value = input.contains(VALUE_KEY) ? input.getInt(VALUE_KEY) : Integer.MIN_VALUE;
+                int value = input.contains(VALUE_KEY, Tag.TAG_BYTE) ? input.getByte(VALUE_KEY) : Integer.MIN_VALUE;
                 yield value < Byte.MIN_VALUE || value > Byte.MAX_VALUE ? null : DataValue.of((byte) value);
             }
             case SHORT -> {
-                int value = input.contains(VALUE_KEY) ? input.getInt(VALUE_KEY) : Integer.MIN_VALUE;
+                int value = input.contains(VALUE_KEY, Tag.TAG_SHORT) ? input.getShort(VALUE_KEY) : Integer.MIN_VALUE;
                 yield value < Short.MIN_VALUE || value > Short.MAX_VALUE ? null : DataValue.of((short) value);
             }
-            case INT -> input.contains(VALUE_KEY) ? DataValue.of(input.getInt(VALUE_KEY)) : null;
-            case LONG -> input.contains(VALUE_KEY) ? DataValue.of(input.getLong(VALUE_KEY)) : null;
-            case FLOAT -> input.contains(VALUE_KEY) ? DataValue.of(input.getFloat(VALUE_KEY)) : null;
-            case DOUBLE -> input.contains(VALUE_KEY) ? DataValue.of(input.getDouble(VALUE_KEY)) : null;
-            case BIG_INTEGER -> DataValue.of(new BigInteger(input.getString(VALUE_KEY)));
-            case BIG_DECIMAL -> DataValue.of(new BigDecimal(input.getString(VALUE_KEY)));
+            case INT -> input.contains(VALUE_KEY, Tag.TAG_INT) ? DataValue.of(input.getInt(VALUE_KEY)) : null;
+            case LONG -> input.contains(VALUE_KEY, Tag.TAG_LONG) ? DataValue.of(input.getLong(VALUE_KEY)) : null;
+            case FLOAT -> input.contains(VALUE_KEY, Tag.TAG_FLOAT) ? DataValue.of(input.getFloat(VALUE_KEY)) : null;
+            case DOUBLE -> input.contains(VALUE_KEY, Tag.TAG_DOUBLE) ? DataValue.of(input.getDouble(VALUE_KEY)) : null;
+            case BIG_INTEGER -> input.contains(VALUE_KEY, Tag.TAG_STRING)
+                    ? DataValue.of(new BigInteger(input.getString(VALUE_KEY))) : null;
+            case BIG_DECIMAL -> input.contains(VALUE_KEY, Tag.TAG_STRING)
+                    ? DataValue.of(new BigDecimal(input.getString(VALUE_KEY))) : null;
             case LIST -> {
-                if (!input.contains(LIST_VALUES_KEY)) yield null;
+                if (!input.contains(LIST_VALUES_KEY, Tag.TAG_LIST)) yield null;
                 ListTag entries = input.getList(LIST_VALUES_KEY, Tag.TAG_COMPOUND);
                 var values = new ArrayList<DataValue>();
                 for (int index = 0; index < entries.size(); index++) {
@@ -234,7 +236,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
                 yield DataValue.list(values);
             }
             case MAP -> {
-                if (!input.contains(MAP_ENTRIES_KEY)) yield null;
+                if (!input.contains(MAP_ENTRIES_KEY, Tag.TAG_LIST)) yield null;
                 ListTag entries = input.getList(MAP_ENTRIES_KEY, Tag.TAG_COMPOUND);
                 var values = new LinkedHashMap<String, DataValue>();
                 for (int index = 0; index < entries.size(); index++) {

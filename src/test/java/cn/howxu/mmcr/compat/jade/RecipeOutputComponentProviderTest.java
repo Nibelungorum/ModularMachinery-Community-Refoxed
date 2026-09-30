@@ -151,12 +151,16 @@ class RecipeOutputComponentProviderTest {
 
     private record TooltipCall(String method, Object value) {}
 
+    @SuppressWarnings("removal")
     private static Holder.Reference<Chemical> registerChemical(String name) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", name));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.getHolder(key).orElseGet(() -> {
             registry.unfreeze();
+            if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+                Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+            }
             Chemical value = new Chemical(ChemicalBuilder.builder()) {
                 @Override
                 public boolean isRadioactive() {

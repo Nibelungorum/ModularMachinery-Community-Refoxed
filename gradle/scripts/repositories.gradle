@@ -1,7 +1,7 @@
 repositories {
 
-    maven { 
-        url 'https://modmaven.dev/' 
+    maven {
+        url = uri("https://modmaven.dev/")
     }
     
     maven {

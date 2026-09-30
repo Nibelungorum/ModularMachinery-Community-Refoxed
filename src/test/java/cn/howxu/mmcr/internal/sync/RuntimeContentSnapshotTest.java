@@ -226,7 +226,7 @@ class RuntimeContentSnapshotTest {
                 assertThat(primitive.getAsString()).isEqualTo("#minecraft:planks"));
         var ops = RegistryOps.create(JsonOps.INSTANCE, registries);
         var encodedTag = Ingredient.CODEC.encodeStart(ops, Ingredient.of(ItemTags.LOGS)).getOrThrow();
-        assertThat(encodedTag.getAsString()).isEqualTo("#minecraft:logs");
+        assertThat(encodedTag.getAsJsonObject().get("tag").getAsString()).isEqualTo("minecraft:logs");
     }
 
     @Test

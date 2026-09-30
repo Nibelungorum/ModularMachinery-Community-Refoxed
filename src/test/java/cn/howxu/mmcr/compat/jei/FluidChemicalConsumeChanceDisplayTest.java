@@ -45,14 +45,17 @@ class FluidChemicalConsumeChanceDisplayTest {
         registerOxygen();
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "removal"})
     private static void registerOxygen() {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.parse("mekanism:oxygen"));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         if (registry.getHolder(key).isPresent()) return;
         registry.unfreeze();
-        Registry.register(registry, key.location(),
+        if (registry.get(MekanismAPI.EMPTY_CHEMICAL_KEY) == null) {
+            Registry.registerForHolder(registry, MekanismAPI.EMPTY_CHEMICAL_KEY, MekanismAPI.EMPTY_CHEMICAL);
+        }
+        Registry.registerForHolder(registry, key,
                 new Chemical(ChemicalBuilder.builder()) {
                     @Override
                     public boolean isRadioactive() {

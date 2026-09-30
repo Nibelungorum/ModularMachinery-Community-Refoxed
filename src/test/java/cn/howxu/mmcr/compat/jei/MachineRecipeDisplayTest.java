@@ -1086,7 +1086,8 @@ class MachineRecipeDisplayTest {
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("addItemStacks")) {
                         capture.itemStacks.add((List<ItemStack>) arguments[0]);
-                    } else if (method.getName().equals("add")) {
+                    } else if (method.getName().equals("add") || method.getName().equals("addIngredient")
+                            || method.getName().equals("addFluidStack")) {
                         capture.added.add(arguments.clone());
                     } else if (method.getName().equals("addRichTooltipCallback")) {
                         capture.tooltips.add((IRecipeSlotRichTooltipCallback) arguments[0]);

@@ -281,21 +281,25 @@ public final class CapabilityTransferPolicies {
         for (int slot = 0; slot < from.getSlots() && moved < limit; slot++) {
             ItemStack present = from.getStackInSlot(slot).copy();
             if (present.isEmpty() || !filter.test(present)) continue;
-            int requested = (int) Math.min(Math.min(limit - moved, itemAmount(from, slot)), Integer.MAX_VALUE);
-            if (requested <= 0) continue;
-            ItemStack extracted = from.extractItem(slot, requested, true);
-            int accepted = acceptedItems(to, extracted, true);
-            if (accepted <= 0) continue;
-            if (simulate) {
-                moved += accepted;
-                continue;
+            long available = Math.min(itemAmount(from, slot), limit - moved);
+            while (available > 0L) {
+                int requested = (int) Math.min(available, Integer.MAX_VALUE);
+                ItemStack extracted = from.extractItem(slot, requested, true);
+                int accepted = acceptedItems(to, extracted, true);
+                if (accepted <= 0) break;
+                if (simulate) {
+                    moved += accepted;
+                    available -= accepted;
+                    continue;
+                }
+                ItemStack committed = from.extractItem(slot, accepted, false);
+                ItemStack remainder = insertItems(to, committed, false);
+                int inserted = committed.getCount() - remainder.getCount();
+                if (!remainder.isEmpty()) from.insertItem(slot, remainder, false);
+                moved += inserted;
+                available -= inserted;
+                if (inserted < accepted) break;
             }
-            ItemStack committed = from.extractItem(slot, accepted, false);
-            ItemStack remainder = insertItems(to, committed, false);
-            int inserted = committed.getCount() - remainder.getCount();
-            if (!remainder.isEmpty()) from.insertItem(slot, remainder, false);
-            moved += inserted;
-            if (inserted < accepted) break;
         }
         return moved;
     }

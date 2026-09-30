@@ -239,8 +239,10 @@ final class NativeRequirementPlanning {
         Map<String, String> details = Map.of("required", Long.toString(requested),
                 "available", Long.toString(available));
         if (insert) {
-            return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
-                    BuiltinFailureReasons.MISSING_OUTPUT, requested, details);
+            return RequirementPlan.withOutputSimulation(context.requirementIndex(), 0L, List.of(),
+                    RequirementHandlerSupport.blocked(requirement, context, BuiltinFailureReasons.MISSING_OUTPUT,
+                            details), RequirementHandlerSupport.outputSimulation(requested,
+                            Math.min(requested, Math.max(0L, available))));
         }
         return RequirementHandlerSupport.blockedPlan(requirement, context,
                 requirement instanceof EnergyRequirement ? BuiltinFailureReasons.MISSING_ENERGY
@@ -268,7 +270,7 @@ final class NativeRequirementPlanning {
     private static long maximum(long requested, long perBatch, long available, boolean insert, boolean partial) {
         long maximum = Math.min(requested, available / perBatch);
         if (insert && partial && available > 0L) return requested;
-        return insert && maximum == 0L && available > 0L ? 1L : maximum;
+        return maximum;
     }
 
     private static long fluidAvailable(IFluidHandler handler, FluidRequirement requirement, FluidStack output, boolean insert) {

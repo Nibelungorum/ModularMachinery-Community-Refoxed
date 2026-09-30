@@ -97,6 +97,13 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
         if (contributor.available() && contributor.openMenu(player, level, pos)) return true;
+        if (player == null && (level.getBlockEntity(pos) instanceof InputInterfaceBlockEntity
+                || level.getBlockEntity(pos) instanceof StockingInterfaceBlockEntity
+                || level.getBlockEntity(pos) instanceof OutputInterfaceBlockEntity
+                || level.getBlockEntity(pos) instanceof AsyncOutputInterfaceBlockEntity
+                || level.getBlockEntity(pos) instanceof PatternInterfaceBlockEntity)) {
+            throw new IllegalArgumentException("Menus must be opened on the server.");
+        }
         if (level.getBlockEntity(pos) instanceof InputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }

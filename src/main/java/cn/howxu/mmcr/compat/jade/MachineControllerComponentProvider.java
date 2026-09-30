@@ -62,7 +62,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     elements.progressStyle().color(0xFF4CBB17),
                     BoxStyle.getNestedBox(),
                     false));
-        } catch (NullPointerException | IllegalAccessError ignored) {
+        } catch (NullPointerException | IllegalAccessError | ExceptionInInitializerError ignored) {
             // graceful degradation; bar is unobservable in this environment
         }
     }

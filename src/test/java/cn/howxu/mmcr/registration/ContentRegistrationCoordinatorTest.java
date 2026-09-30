@@ -29,11 +29,11 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.List;
 import java.util.Map;
 import net.neoforged.neoforge.common.NeoForge;
-import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
@@ -298,18 +298,17 @@ class ContentRegistrationCoordinatorTest {
 
     @Test
     void binds_item_components_before_structure_subscribers_run() throws Exception {
-        Holder.Reference<?> holder = Items.DIAMOND_BLOCK.builtInRegistryHolder();
-        Field components = Holder.Reference.class.getDeclaredField("components");
+        Field components = Item.class.getDeclaredField("components");
         components.setAccessible(true);
-        Object previous = components.get(holder);
-        components.set(holder, null);
+        Object previous = components.get(Items.DIAMOND_BLOCK);
+        components.set(Items.DIAMOND_BLOCK, null);
         try {
             assertThatCode(() -> StartupContentRegistration.registerForTesting(
                     definitions -> { },
                     structures -> new ItemStack(Items.DIAMOND_BLOCK),
                     recipes -> { })).doesNotThrowAnyException();
         } finally {
-            components.set(holder, previous == null ? DataComponentMap.EMPTY : previous);
+            components.set(Items.DIAMOND_BLOCK, previous == null ? DataComponentMap.EMPTY : previous);
         }
     }
 

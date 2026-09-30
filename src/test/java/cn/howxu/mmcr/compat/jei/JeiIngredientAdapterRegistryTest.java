@@ -94,7 +94,7 @@ class JeiIngredientAdapterRegistryTest {
         AtomicReference<Object[]> renderer = new AtomicReference<>();
         IRecipeSlotBuilder slot = (IRecipeSlotBuilder) Proxy.newProxyInstance(getClass().getClassLoader(),
                 new Class<?>[]{IRecipeSlotBuilder.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("add")) added.set(arguments);
+                    if (method.getName().equals("add") || method.getName().equals("addIngredient")) added.set(arguments);
                     if (method.getName().equals("setCustomRenderer")) renderer.set(arguments);
                     return method.getReturnType().isAssignableFrom(IRecipeSlotBuilder.class) ? proxy : null;
                 });

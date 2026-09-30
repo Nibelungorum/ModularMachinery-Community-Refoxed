@@ -105,11 +105,13 @@ class KeyCardItemTest {
         TestPlayer player = player();
         player.hold(stack);
 
-        assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND)).isEqualTo(InteractionResult.PASS);
+        assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND).getResult())
+                .isEqualTo(InteractionResult.PASS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNotNull();
 
         player.setCrouching(true);
-        assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND)).isEqualTo(InteractionResult.SUCCESS);
+        assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND).getResult())
+                .isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNull();
         assertThat(player.messages).contains(Component.translatable("message.mmcr.key_card.cleared"));
     }
@@ -203,7 +205,8 @@ class KeyCardItemTest {
 
         assertThat(useOn(fixture, player, stack, fixture.sourceEndpoint)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNull();
-        assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND)).isEqualTo(InteractionResult.SUCCESS);
+        assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND).getResult())
+                .isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNull();
     }
 

@@ -108,13 +108,14 @@ class ModEventRegistrationTest {
         ModEventRegistration.registerListeners(modBus, gameBus, handlers(invoked));
 
         assertThat(modBus.types()).containsExactly(
-                RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class, RegisterGameTestsEvent.class);
+                RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class, RegisterGameTestsEvent.class,
+                ModifyDefaultComponentsEvent.class);
         assertThat(gameBus.types()).containsExactly(
                 BlockEvent.EntityPlaceEvent.class, BlockEvent.EntityMultiPlaceEvent.class,
                 BlockEvent.FluidPlaceBlockEvent.class, BlockEvent.BreakEvent.class, EntityJoinLevelEvent.class,
                 ChunkEvent.Unload.class,
                 ChunkEvent.Load.class, LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
-                ServerAboutToStartEvent.class, ServerStoppedEvent.class, ModifyDefaultComponentsEvent.class,
+                ServerAboutToStartEvent.class, ServerStoppedEvent.class,
                 AddReloadListenerEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                 PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class);
 
@@ -122,11 +123,12 @@ class ModEventRegistrationTest {
         gameBus.fireAll();
         assertThat(invoked).containsExactlyElementsOf(
                 List.of(RegisterCapabilitiesEvent.class, RegisterPayloadHandlersEvent.class,
-                        RegisterGameTestsEvent.class, BlockEvent.EntityPlaceEvent.class,
+                        RegisterGameTestsEvent.class, ModifyDefaultComponentsEvent.class,
+                        BlockEvent.EntityPlaceEvent.class,
                         BlockEvent.EntityMultiPlaceEvent.class, BlockEvent.FluidPlaceBlockEvent.class,
                         BlockEvent.BreakEvent.class, EntityJoinLevelEvent.class, ChunkEvent.Unload.class, ChunkEvent.Load.class,
                         LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
-                        ServerStoppedEvent.class, ModifyDefaultComponentsEvent.class,
+                        ServerStoppedEvent.class,
                         AddReloadListenerEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                         PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class));
     }

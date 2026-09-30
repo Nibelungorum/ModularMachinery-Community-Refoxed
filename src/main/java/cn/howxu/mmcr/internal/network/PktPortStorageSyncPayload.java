@@ -79,8 +79,10 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<ItemStor
 
     public static PktPortStorageSyncPayload from(IOPortBlockEntity port) {
         if (port == null) throw new IllegalArgumentException("Port must not be null");
+        IOPortKindView kind = requireKind(port.kind().id());
         return new PktPortStorageSyncPayload(port.getBlockPos(), port.kind().id(),
-                itemEntries(port.nativeItemHandler()), fluidEntries(port.nativeFluidHandler()));
+                kind.itemSlotCount() == 0 ? List.of() : itemEntries(port.nativeItemHandler()),
+                kind.fluidTankCount() == 0 ? List.of() : fluidEntries(port.nativeFluidHandler()));
     }
 
     public static void sendTo(ServerPlayer player, IOPortBlockEntity port) {
@@ -164,6 +166,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<ItemStor
         List<ItemStorageEntry> entries = new ArrayList<>(storage.getSlots());
         for (int slot = 0; slot < storage.getSlots(); slot++) {
             ItemStack resource = storage.getStackInSlot(slot);
+            if (resource.isEmpty()) continue;
             long amount = storage instanceof LongItemStorage longStorage ? longStorage.amount(slot) : resource.getCount();
             long capacity = storage instanceof LongItemStorage longStorage ? longStorage.capacity(slot) : storage.getSlotLimit(slot);
             entries.add(new ItemStorageEntry(slot, resource, amount, capacity));
@@ -176,6 +179,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<ItemStor
         List<FluidStorageEntry> entries = new ArrayList<>(storage.getTanks());
         for (int slot = 0; slot < storage.getTanks(); slot++) {
             FluidStack resource = storage.getFluidInTank(slot);
+            if (resource.isEmpty()) continue;
             long amount = storage instanceof LongFluidStorage longStorage ? longStorage.amount(slot) : resource.getAmount();
             long capacity = storage instanceof LongFluidStorage longStorage ? longStorage.capacity(slot) : storage.getTankCapacity(slot);
             entries.add(new FluidStorageEntry(slot, resource, amount, capacity));
