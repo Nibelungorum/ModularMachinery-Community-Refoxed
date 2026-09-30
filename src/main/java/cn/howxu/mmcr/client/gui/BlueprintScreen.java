@@ -89,6 +89,7 @@ public final class BlueprintScreen extends Screen {
     private int candidateScrollOffset;
     private boolean draggingMaterialScrollbar;
     private boolean draggingCandidateScrollbar;
+    private int previewGestureButton = -1;
     private int materialScrollbarDragOffsetY;
     private int candidateScrollbarDragOffsetY;
     private boolean closed;
@@ -214,7 +215,9 @@ public final class BlueprintScreen extends Screen {
         }
         if (currentLayout != null && gridContains(currentLayout, mouseX, mouseY)) return true;
         if (currentLayout != null && currentLayout.preview().contains(mouseX, mouseY)) {
-            return panel.mouseClicked(previewX(mouseX), previewY(mouseY), button);
+            boolean handled = panel.mouseClicked(previewX(mouseX), previewY(mouseY), button);
+            if (handled) previewGestureButton = button;
+            return handled;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -222,6 +225,12 @@ public final class BlueprintScreen extends Screen {
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         BlueprintLayout currentLayout = layout;
+        if (previewGestureButton == button) {
+            previewGestureButton = -1;
+            if (currentLayout == null) return panel.mouseReleased(-1.0D, -1.0D, button);
+            panel.mouseReleased(previewX(mouseX), previewY(mouseY), button);
+            return true;
+        }
         if (button == 0 && (draggingMaterialScrollbar || draggingCandidateScrollbar)) {
             draggingMaterialScrollbar = false;
             draggingCandidateScrollbar = false;
@@ -239,6 +248,11 @@ public final class BlueprintScreen extends Screen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         BlueprintLayout currentLayout = layout;
+        if (previewGestureButton == button) {
+            if (currentLayout == null) return false;
+            panel.mouseDragged(previewX(mouseX), previewY(mouseY), button, dragX, dragY);
+            return true;
+        }
         if (currentLayout != null && draggingMaterialScrollbar) {
             materialScrollOffset = materialScrollOffsetFrom(mouseY, currentLayout);
             return true;
@@ -249,8 +263,7 @@ public final class BlueprintScreen extends Screen {
         }
         if (currentLayout != null && gridContains(currentLayout, mouseX, mouseY)) return true;
         if (currentLayout != null && currentLayout.preview().contains(mouseX, mouseY)) {
-            float scale = currentLayout.scale();
-            return panel.mouseDragged(previewX(mouseX), previewY(mouseY), button, dragX / scale, dragY / scale);
+            return panel.mouseDragged(previewX(mouseX), previewY(mouseY), button, dragX, dragY);
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }

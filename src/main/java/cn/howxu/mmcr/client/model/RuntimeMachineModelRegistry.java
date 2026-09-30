@@ -53,7 +53,7 @@ public final class RuntimeMachineModelRegistry {
         return definitions().map(RuntimeBlockModelDefinition::block);
     }
 
-    static boolean isDynamicBlock(Block block) {
+    public static boolean isDynamicBlock(Block block) {
         return definition(block) != null;
     }
 

@@ -9,6 +9,7 @@ import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 
 /**
  * Host-neutral interaction state for a structure preview renderer.
@@ -17,8 +18,10 @@ import java.util.Objects;
  */
 public final class StructurePreviewWidget implements AutoCloseable {
     private static final double DRAG_THRESHOLD_SQUARED = 9.0D;
+    private static final long DOUBLE_CLICK_INTERVAL_MILLIS = 250L;
 
     private final PreviewRenderer renderer;
+    private final LongSupplier clock;
     private final PreviewCamera camera = new PreviewCamera();
     private PreviewViewport viewport = new PreviewViewport(0, 0, 0, 0);
     private double pressX;
@@ -29,9 +32,18 @@ public final class StructurePreviewWidget implements AutoCloseable {
     private long interactiveUntilNanos;
     private int selectedLayer = -1;
     private Object selectedHit;
+    private long previousClickTime = Long.MIN_VALUE;
+    private double previousClickX;
+    private double previousClickY;
+    private Object previousClickHit;
 
     public StructurePreviewWidget(PreviewRenderer renderer) {
+        this(renderer, System::currentTimeMillis);
+    }
+
+    StructurePreviewWidget(PreviewRenderer renderer, LongSupplier clock) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");
+        this.clock = Objects.requireNonNull(clock, "clock");
         resetCamera();
     }
 
@@ -97,21 +109,14 @@ public final class StructurePreviewWidget implements AutoCloseable {
         dragged = false;
         interactiveUntilNanos = 0L;
         renderer.setInteractive(false);
-        if (click) {
-            Object hitResult = renderer.hitResult();
-            if (hitResult != null) {
-                selectedHit = hitResult;
-                renderer.selectHit(hitResult);
-            }
-        }
+        if (click) handleClick(mouseX, mouseY, renderer.hitResult());
+        else clearPreviousClick();
         return handled;
     }
 
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (closed || pressButton != button || !viewport.contains(mouseX, mouseY)) return false;
-        double movementX = mouseX - pressX;
-        double movementY = mouseY - pressY;
-        dragged |= movementX * movementX + movementY * movementY > DRAG_THRESHOLD_SQUARED;
+        dragged = true;
         if (button == 0) {
             camera.orbit((float) -dragX * 0.01F, (float) dragY * 0.01F);
         } else if (button == 2) {
@@ -158,6 +163,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
 
     public void reset() {
         showAllLayers();
+        clearPreviousClick();
         selectedHit = null;
         renderer.selectHit(null);
         resetCamera();
@@ -168,6 +174,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
+        clearPreviousClick();
         renderer.close();
     }
 
@@ -190,5 +197,41 @@ public final class StructurePreviewWidget implements AutoCloseable {
         float depth = schema.max().getZ() - schema.min().getZ() + 1.0F;
         camera.reset(new Vector3f(schema.center().get(0), schema.center().get(1), schema.center().get(2)),
                 Math.max(width, Math.max(height, depth)) * 1.5F);
+    }
+
+    private void handleClick(double mouseX, double mouseY, Object hit) {
+        if (hit == null) {
+            clearPreviousClick();
+            return;
+        }
+        long now = clock.getAsLong();
+        long elapsed = now - previousClickTime;
+        double movementX = mouseX - previousClickX;
+        double movementY = mouseY - previousClickY;
+        boolean doubleClick = elapsed >= 0L && elapsed <= DOUBLE_CLICK_INTERVAL_MILLIS
+                && movementX * movementX + movementY * movementY <= DRAG_THRESHOLD_SQUARED
+                && sameHit(previousClickHit, hit);
+        if (doubleClick) {
+            selectedHit = hit;
+            renderer.selectHit(hit);
+            clearPreviousClick();
+        } else {
+            previousClickTime = now;
+            previousClickX = mouseX;
+            previousClickY = mouseY;
+            previousClickHit = hit;
+        }
+    }
+
+    private static boolean sameHit(Object first, Object second) {
+        if (first instanceof BlockHitResult firstBlock && second instanceof BlockHitResult secondBlock) {
+            return firstBlock.getBlockPos().equals(secondBlock.getBlockPos());
+        }
+        return Objects.equals(first, second);
+    }
+
+    private void clearPreviousClick() {
+        previousClickTime = Long.MIN_VALUE;
+        previousClickHit = null;
     }
 }

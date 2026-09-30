@@ -15,10 +15,12 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * Owns the published mesh generation and its separately replaceable translucent ordering.
@@ -27,7 +29,7 @@ import java.util.Set;
  */
 public final class PreviewSceneMeshCache implements AutoCloseable {
     private FullCache current;
-    private final Map<AutoCloseable, Boolean> closedResults = new IdentityHashMap<>();
+    private final Set<AutoCloseable> closedResults = Collections.newSetFromMap(new WeakHashMap<>());
 
     PreviewSceneMeshCache(FullCache current) {
         this.current = current;
@@ -65,7 +67,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
     }
 
     private void closeOnce(AutoCloseable owner) {
-        if (closedResults.put(owner, Boolean.TRUE) != null) return;
+        if (!closedResults.add(owner)) return;
         try {
             owner.close();
         } catch (Exception exception) {
@@ -82,11 +84,13 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         @Override void close();
     }
 
+    record MeshLayer(RenderType renderType, boolean interactiveOnly) { }
+
     static final class Meshes implements FullCache {
         private final List<MeshPart> parts;
-        private final Map<RenderType, List<MeshData>> layers;
+        private final Map<MeshLayer, List<MeshData>> layers;
         private final Set<BlockPos> blockEntities;
-        private final Map<RenderType, List<MeshPart>> sortedParts;
+        private final Map<MeshLayer, List<MeshPart>> sortedParts;
         private final PreviewSceneGpuMesh gpuMesh;
         private SortedOrder sortedOrder;
         private boolean closed;
@@ -99,35 +103,37 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
             this.gpuMesh = PreviewSceneGpuMesh.upload(layers);
         }
 
-        Map<RenderType, List<MeshData>> layers() { return layers; }
+        Map<MeshLayer, List<MeshData>> layers() { return layers; }
         Set<BlockPos> blockEntities() { return blockEntities; }
-        List<RenderType> renderTypes() { return layers.keySet().stream()
-                .sorted(java.util.Comparator.comparing(RenderType::sortOnUpload))
+        List<MeshLayer> renderLayers() { return layers.keySet().stream()
+                .sorted(java.util.Comparator
+                        .comparing((MeshLayer layer) -> layer.renderType().sortOnUpload())
+                        .thenComparing(MeshLayer::interactiveOnly))
                 .toList(); }
-        Map<RenderType, List<MeshPart>> sortedParts() { return sortedParts; }
+        Map<MeshLayer, List<MeshPart>> sortedParts() { return sortedParts; }
         SortedOrder sortedOrder() { return sortedOrder; }
 
-        private static Map<RenderType, List<MeshData>> transferLayers(List<MeshPart> parts) {
-            Map<RenderType, List<MeshData>> flattened = new IdentityHashMap<>();
+        private static Map<MeshLayer, List<MeshData>> transferLayers(List<MeshPart> parts) {
+            Map<MeshLayer, List<MeshData>> flattened = new LinkedHashMap<>();
             for (MeshPart part : parts) {
                 part.transferMeshes().forEach((layer, mesh) ->
                         flattened.computeIfAbsent(layer, ignored -> new ArrayList<>()).add(mesh));
             }
             flattened.replaceAll((layer, meshes) -> List.copyOf(meshes));
-            return Map.copyOf(flattened);
+            return Collections.unmodifiableMap(flattened);
         }
 
-        private static Map<RenderType, List<MeshPart>> collectSortedParts(List<MeshPart> parts) {
-            Map<RenderType, List<MeshPart>> sorted = new IdentityHashMap<>();
+        private static Map<MeshLayer, List<MeshPart>> collectSortedParts(List<MeshPart> parts) {
+            Map<MeshLayer, List<MeshPart>> sorted = new LinkedHashMap<>();
             for (MeshPart part : parts) {
                 part.sortStates().keySet().forEach(renderType ->
                         sorted.computeIfAbsent(renderType, ignored -> new ArrayList<>()).add(part));
             }
             sorted.replaceAll((renderType, meshes) -> List.copyOf(meshes));
-            return Map.copyOf(sorted);
+            return Collections.unmodifiableMap(sorted);
         }
 
-        void draw(RenderType layer, int framebufferId) { gpuMesh.draw(layer, framebufferId); }
+        void draw(MeshLayer layer, int framebufferId) { gpuMesh.draw(layer, framebufferId); }
 
         @Override
         public TranslucentCache replaceTranslucent(TranslucentCache result) {
@@ -173,26 +179,26 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
     }
 
     static final class MeshPart implements AutoCloseable {
-        private final Map<RenderType, ByteBufferBuilder> builders;
-        private final Map<RenderType, MeshData> meshes;
-        private final Map<RenderType, MeshData.SortState> sortStates;
+        private final Map<MeshLayer, ByteBufferBuilder> builders;
+        private final Map<MeshLayer, MeshData> meshes;
+        private final Map<MeshLayer, MeshData.SortState> sortStates;
         private boolean meshesTransferred;
         private boolean closed;
 
-        MeshPart(Map<RenderType, ByteBufferBuilder> builders, Map<RenderType, MeshData> meshes,
-                  Map<RenderType, MeshData.SortState> sortStates) {
-            this.builders = Map.copyOf(builders);
-            this.meshes = Map.copyOf(meshes);
-            this.sortStates = Map.copyOf(sortStates);
+        MeshPart(Map<MeshLayer, ByteBufferBuilder> builders, Map<MeshLayer, MeshData> meshes,
+                  Map<MeshLayer, MeshData.SortState> sortStates) {
+            this.builders = Collections.unmodifiableMap(new LinkedHashMap<>(builders));
+            this.meshes = Collections.unmodifiableMap(new LinkedHashMap<>(meshes));
+            this.sortStates = Collections.unmodifiableMap(new LinkedHashMap<>(sortStates));
         }
 
-        ByteBufferBuilder builder(RenderType renderType) { return builders.get(renderType); }
-        Map<RenderType, MeshData> meshes() { return meshes; }
-        Map<RenderType, MeshData> transferMeshes() {
+        ByteBufferBuilder builder(MeshLayer layer) { return builders.get(layer); }
+        Map<MeshLayer, MeshData> meshes() { return meshes; }
+        Map<MeshLayer, MeshData> transferMeshes() {
             meshesTransferred = true;
             return meshes;
         }
-        Map<RenderType, MeshData.SortState> sortStates() { return sortStates; }
+        Map<MeshLayer, MeshData.SortState> sortStates() { return sortStates; }
 
         @Override
         public void close() {
@@ -224,26 +230,26 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
     }
 
     static final class SortedOrder implements TranslucentCache {
-            private final Map<RenderType, List<ByteBufferBuilder.Result>> indexBuffers;
-            private final Map<RenderType, List<VertexFormat.IndexType>> indexTypes;
+            private final Map<MeshLayer, List<ByteBufferBuilder.Result>> indexBuffers;
+            private final Map<MeshLayer, List<VertexFormat.IndexType>> indexTypes;
 
-            SortedOrder(Map<RenderType, List<ByteBufferBuilder.Result>> indexBuffers,
-                        Map<RenderType, List<VertexFormat.IndexType>> indexTypes) {
-                for (RenderType renderType : indexBuffers.keySet()) {
-                    if (indexBuffers.get(renderType).size() != indexTypes.getOrDefault(renderType, List.of()).size()) {
-                        throw new IllegalArgumentException("sorted index metadata size mismatch for " + renderType);
+            SortedOrder(Map<MeshLayer, List<ByteBufferBuilder.Result>> indexBuffers,
+                        Map<MeshLayer, List<VertexFormat.IndexType>> indexTypes) {
+                for (MeshLayer layer : indexBuffers.keySet()) {
+                    if (indexBuffers.get(layer).size() != indexTypes.getOrDefault(layer, List.of()).size()) {
+                        throw new IllegalArgumentException("sorted index metadata size mismatch for " + layer);
                     }
                 }
-                Map<RenderType, List<ByteBufferBuilder.Result>> mutable = new IdentityHashMap<>();
-                indexBuffers.forEach((renderType, buffers) -> mutable.put(renderType, new ArrayList<>(buffers)));
+                Map<MeshLayer, List<ByteBufferBuilder.Result>> mutable = new LinkedHashMap<>();
+                indexBuffers.forEach((layer, buffers) -> mutable.put(layer, new ArrayList<>(buffers)));
                 this.indexBuffers = mutable;
                 this.indexTypes = Map.copyOf(indexTypes);
             }
 
-            Set<RenderType> renderTypes() { return indexBuffers.keySet(); }
-            int size(RenderType renderType) { return indexBuffers.get(renderType).size(); }
-            ByteBufferBuilder.Result take(RenderType renderType, int index) {
-                List<ByteBufferBuilder.Result> buffers = indexBuffers.get(renderType);
+            Set<MeshLayer> renderLayers() { return indexBuffers.keySet(); }
+            int size(MeshLayer layer) { return indexBuffers.get(layer).size(); }
+            ByteBufferBuilder.Result take(MeshLayer layer, int index) {
+                List<ByteBufferBuilder.Result> buffers = indexBuffers.get(layer);
                 ByteBufferBuilder.Result result = buffers.get(index);
                 if (result == null) throw new IllegalStateException("sorted index buffer already transferred");
                 buffers.set(index, null);

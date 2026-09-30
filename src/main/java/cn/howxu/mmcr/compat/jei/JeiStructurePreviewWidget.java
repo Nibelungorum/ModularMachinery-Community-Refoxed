@@ -9,15 +9,13 @@ import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import mezz.jei.api.constants.VanillaTypes;
-import mezz.jei.api.ingredients.IIngredientHelper;
-import mezz.jei.api.ingredients.IIngredientType;
-import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import mezz.jei.api.runtime.IIngredientManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -39,23 +37,30 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int CANDIDATE_SIZE = 16;
     private static final int CANDIDATE_STEP = 18;
     private static final int LAYOUT_WIDTH = 168;
+    private static final int PREVIEW_INPUT_TARGET = 1;
+    private static final int CONTROL_INPUT_TARGET_BASE = 100;
+    private static final int CANDIDATE_INPUT_TARGET_BASE = 200;
     private final @Nullable StructurePreviewPanel panel;
     private final @Nullable Preview testingPreview;
     private final int x;
     private final int y;
     private final int width;
     private final int height;
+    private final @Nullable IIngredientManager ingredientManager;
     private final LongSupplier clock = System::currentTimeMillis;
     private boolean previewDragActive;
+    private int pressedInputTarget = -1;
     private boolean closed;
 
-    public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height) {
+    public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height,
+            IIngredientManager ingredientManager) {
         this.panel = new StructurePreviewPanel(machine);
         this.testingPreview = null;
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
+        this.ingredientManager = ingredientManager;
     }
 
     private JeiStructurePreviewWidget(Preview preview, int x, int y, int width, int height) {
@@ -65,6 +70,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         this.y = y;
         this.width = width;
         this.height = height;
+        this.ingredientManager = null;
     }
 
     static JeiStructurePreviewWidget forTesting(Preview preview, int x, int y, int width, int height) {
@@ -156,18 +162,30 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     public boolean handleInput(double mouseX, double mouseY, IJeiUserInput input) {
         boolean simulate = input.isSimulate();
         if (input.getKey().getType() != InputConstants.Type.MOUSE) {
-            if (!simulate) cancelPreviewDrag();
+            if (!simulate) {
+                pressedInputTarget = -1;
+                cancelPreviewDrag();
+            }
             return false;
         }
         int button = input.getKey().getValue();
         if (button != 0 || !isReady()) {
-            if (!simulate) cancelPreviewDrag();
+            if (!simulate) {
+                pressedInputTarget = -1;
+                cancelPreviewDrag();
+            }
             return false;
         }
+        int inputTarget = inputTarget(mouseX, mouseY);
         if (simulate) {
-            return controlAt(mouseX, mouseY) >= 0
-                    || candidateAt(mouseX, mouseY) >= 0
-                    || insidePreview(mouseX, mouseY);
+            pressedInputTarget = inputTarget;
+            return inputTarget >= 0;
+        }
+        int pressedTarget = pressedInputTarget;
+        pressedInputTarget = -1;
+        if (pressedTarget != inputTarget) {
+            cancelPreviewDrag();
+            return false;
         }
         if (previewDragActive) {
             previewDragActive = false;
@@ -223,6 +241,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private void cancelPreviewDrag() {
+        pressedInputTarget = -1;
         if (!previewDragActive) return;
         previewDragActive = false;
         mouseReleased(-1.0D, -1.0D, 0);
@@ -234,6 +253,14 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (mouseX < 0 || mouseX >= CANDIDATE_SIZE || mouseY < 0) return -1;
         int index = (int) Math.floor(mouseY / CANDIDATE_STEP);
         return index < count && mouseY < index * CANDIDATE_STEP + CANDIDATE_SIZE ? index : -1;
+    }
+
+    private int inputTarget(double mouseX, double mouseY) {
+        int control = controlAt(mouseX, mouseY);
+        if (control >= 0) return CONTROL_INPUT_TARGET_BASE + control;
+        int candidate = candidateAt(mouseX, mouseY);
+        if (candidate >= 0) return CANDIDATE_INPUT_TARGET_BASE + candidate;
+        return insidePreview(mouseX, mouseY) ? PREVIEW_INPUT_TARGET : -1;
     }
 
     private static int maxVisibleCandidates() {
@@ -277,7 +304,8 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             ItemStack stack = candidate.stack();
             tooltip.add(stack.getHoverName());
             if (candidate.modifier()) tooltip.add(Component.translatable("jei.mmcr.structure_preview.modifier"));
-            tooltip.setIngredient(new ItemStackIngredient(stack));
+            ingredientManager.createTypedIngredient(VanillaTypes.ITEM_STACK, stack, false)
+                    .ifPresent(tooltip::setIngredient);
         }
     }
 
@@ -331,17 +359,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     private void selectNextStage() {
         if (panel != null) panel.selectNextStage();
-    }
-
-    private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override public IIngredientType<ItemStack> getType() { return VanillaTypes.ITEM_STACK; }
-        @Override public ItemStack getIngredient() { return stack; }
-
-        @Override
-        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
-            ItemStack normalized = ingredientHelper.normalizeIngredient(stack);
-            return normalized == stack ? this : new ItemStackIngredient(normalized);
-        }
     }
 
     interface Preview {

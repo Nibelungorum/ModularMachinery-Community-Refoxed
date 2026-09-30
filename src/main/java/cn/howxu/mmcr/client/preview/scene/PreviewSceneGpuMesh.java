@@ -4,10 +4,11 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
-import net.minecraft.client.renderer.RenderType;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -17,16 +18,16 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 final class PreviewSceneGpuMesh implements AutoCloseable {
-    private final Map<RenderType, List<VertexBuffer>> layers;
+    private final Map<PreviewSceneMeshCache.MeshLayer, List<VertexBuffer>> layers;
     private boolean closed;
 
-    private PreviewSceneGpuMesh(Map<RenderType, List<VertexBuffer>> layers) {
-        this.layers = Map.copyOf(layers);
+    private PreviewSceneGpuMesh(Map<PreviewSceneMeshCache.MeshLayer, List<VertexBuffer>> layers) {
+        this.layers = Collections.unmodifiableMap(new LinkedHashMap<>(layers));
     }
 
-    static PreviewSceneGpuMesh upload(Map<RenderType, List<MeshData>> source) {
+    static PreviewSceneGpuMesh upload(Map<PreviewSceneMeshCache.MeshLayer, List<MeshData>> source) {
         RenderSystem.assertOnRenderThread();
-        Map<RenderType, List<VertexBuffer>> uploaded = new IdentityHashMap<>();
+        Map<PreviewSceneMeshCache.MeshLayer, List<VertexBuffer>> uploaded = new LinkedHashMap<>();
         Map<MeshData, Boolean> consumed = new IdentityHashMap<>();
         try {
             source.forEach((renderType, meshes) -> {
@@ -69,10 +70,11 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
         }
     }
 
-    void draw(RenderType renderType, int framebufferId) {
+    void draw(PreviewSceneMeshCache.MeshLayer layer, int framebufferId) {
         RenderSystem.assertOnRenderThread();
-        List<VertexBuffer> buffers = layers.get(renderType);
+        List<VertexBuffer> buffers = layers.get(layer);
         if (buffers == null) return;
+        var renderType = layer.renderType();
         renderType.setupRenderState();
         try {
             GlStateManager._glBindFramebuffer(36160, framebufferId);
@@ -89,16 +91,16 @@ final class PreviewSceneGpuMesh implements AutoCloseable {
 
     void replaceSorted(PreviewSceneMeshCache.SortedOrder order) {
         RenderSystem.assertOnRenderThread();
-        for (RenderType renderType : order.renderTypes()) {
-            List<VertexBuffer> buffers = layers.get(renderType);
-            if (buffers == null || buffers.size() != order.size(renderType)) {
-                throw new IllegalArgumentException("sorted layer count mismatch for " + renderType);
+        for (PreviewSceneMeshCache.MeshLayer layer : order.renderLayers()) {
+            List<VertexBuffer> buffers = layers.get(layer);
+            if (buffers == null || buffers.size() != order.size(layer)) {
+                throw new IllegalArgumentException("sorted layer count mismatch for " + layer);
             }
             try {
                 for (int index = 0; index < buffers.size(); index++) {
                     VertexBuffer buffer = buffers.get(index);
                     buffer.bind();
-                    buffer.uploadIndexBuffer(order.take(renderType, index));
+                    buffer.uploadIndexBuffer(order.take(layer, index));
                 }
             } finally {
                 VertexBuffer.unbind();

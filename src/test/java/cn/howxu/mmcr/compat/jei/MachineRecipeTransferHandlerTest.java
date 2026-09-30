@@ -56,7 +56,7 @@ class MachineRecipeTransferHandlerTest {
         IRecipeSlotsView source = () -> List.of(placeholder);
 
         List<IRecipeSlotView> transformed = MachineRecipeTransferHandler
-                .withActualInputCounts(source, display);
+                .withActualInputCounts(source, display, TypedItem::new);
 
         assertThat(transformed).singleElement().satisfies(slot ->
                 assertThat(slot.getItemStacks().map(ItemStack::getCount).toList())
@@ -78,7 +78,7 @@ class MachineRecipeTransferHandlerTest {
         IRecipeSlotsView source = () -> List.of(fluidSlot, itemSlot);
 
         List<IRecipeSlotView> transformed = MachineRecipeTransferHandler
-                .withActualInputCounts(source, display);
+                .withActualInputCounts(source, display, TypedItem::new);
 
         assertThat(transformed.get(0).getIngredients(NeoForgeTypes.FLUID_STACK)
                 .map(FluidStack::getAmount).toList())

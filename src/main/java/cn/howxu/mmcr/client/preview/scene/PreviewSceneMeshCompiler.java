@@ -10,6 +10,7 @@ import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
+import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -37,7 +38,6 @@ import net.minecraft.util.RandomSource;
 import net.neoforged.neoforge.client.model.data.ModelData;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,10 +92,16 @@ public final class PreviewSceneMeshCompiler {
     static CompletableFuture<CompiledScene> compileAsync(CompilationInput input, PreviewSceneCamera camera,
                                                           AtomicBoolean cancelled, Executor executor) {
         int workerCount = workerCount(input.entries().size());
-        List<CompletableFuture<WorkerResult>> futures = new ArrayList<>(workerCount);
+        List<CompletableFuture<WorkerResult>> futures = new ArrayList<>(workerCount == 1 ? 1 : workerCount + 1);
+        LayerSelection partitionSelection = workerCount == 1 ? LayerSelection.ALL : LayerSelection.UNSORTED;
         for (Partition partition : partitions(input.entries().size(), workerCount)) {
             futures.add(CompletableFuture.supplyAsync(() -> compilePartition(input,
-                    partition.startInclusive(), partition.endExclusive(), camera, cancelled), executor));
+                    partition.startInclusive(), partition.endExclusive(), camera, cancelled,
+                    partitionSelection), executor));
+        }
+        if (workerCount > 1) {
+            futures.add(CompletableFuture.supplyAsync(() -> compilePartition(input,
+                    0, input.entries().size(), camera, cancelled, LayerSelection.SORTED), executor));
         }
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
                 .whenComplete((ignored, failure) -> {
@@ -122,10 +128,10 @@ public final class PreviewSceneMeshCompiler {
     }
 
     private static WorkerResult compilePartition(CompilationInput input, int startInclusive, int endExclusive,
-                                                  PreviewSceneCamera camera, AtomicBoolean cancelled) {
-        Map<RenderType, ByteBufferBuilder> builders = new IdentityHashMap<>();
-        Map<RenderType, BufferBuilder> started = new IdentityHashMap<>();
-        Map<RenderType, MeshData> meshes = new IdentityHashMap<>();
+            PreviewSceneCamera camera, AtomicBoolean cancelled, LayerSelection selection) {
+        Map<PreviewSceneMeshCache.MeshLayer, ByteBufferBuilder> builders = new java.util.LinkedHashMap<>();
+        Map<PreviewSceneMeshCache.MeshLayer, BufferBuilder> started = new java.util.LinkedHashMap<>();
+        Map<PreviewSceneMeshCache.MeshLayer, MeshData> meshes = new java.util.LinkedHashMap<>();
         Set<BlockPos> blockEntities = new HashSet<>();
         ModelBlockRenderer.enableCaching();
         try {
@@ -138,35 +144,59 @@ public final class PreviewSceneMeshCompiler {
                 BlockPos pos = entry.getKey();
                 BlockState state = entry.getValue();
                 if (!input.visibility().isVisible(pos, state) || state.isAir()) continue;
-                if (state.hasBlockEntity()) blockEntities.add(pos);
-                FluidState fluidState = state.getFluidState();
-                if (!fluidState.isEmpty()) {
-                    RenderType layer = ItemBlockRenderTypes.getRenderLayer(fluidState);
-                    blockRenderer.renderLiquid(pos, input.region(), new SectionOriginConsumer(
-                            builderFor(started, builders, layer), pos.getX() & ~15, pos.getY() & ~15,
-                            pos.getZ() & ~15), state, fluidState);
-                }
-                if (state.getRenderShape() == RenderShape.MODEL) {
-                    var model = blockRenderer.getBlockModel(state);
-                    ModelData modelData = model.getModelData(input.region(), pos, state, ModelData.EMPTY);
+                if (selection != LayerSelection.SORTED && state.hasBlockEntity()) blockEntities.add(pos);
+                var model = state.getRenderShape() == RenderShape.MODEL
+                        ? blockRenderer.getBlockModel(state) : null;
+                ModelData modelData = model == null ? ModelData.EMPTY
+                        : model.getModelData(input.region(), pos, state, ModelData.EMPTY);
+                List<RenderType> modelLayers;
+                if (model == null) {
+                    modelLayers = List.of();
+                } else {
                     random.setSeed(state.getSeed(pos));
-                    for (RenderType layer : model.getRenderTypes(state, random, modelData)) {
-                        poseStack.pushPose();
-                        poseStack.translate(pos.getX(), pos.getY(), pos.getZ());
-                        blockRenderer.renderBatched(state, pos, input.region(), poseStack,
-                                builderFor(started, builders, layer), true, random, modelData, layer);
-                        poseStack.popPose();
+                    modelLayers = model.getRenderTypes(state, random, modelData).asList();
+                }
+                FluidState fluidState = state.getFluidState();
+                RenderType fluidLayer = fluidState.isEmpty() ? null : ItemBlockRenderTypes.getRenderLayer(fluidState);
+                boolean translucentOnly = fluidLayer != null || !modelLayers.isEmpty();
+                if (fluidLayer != null && !fluidLayer.sortOnUpload()) translucentOnly = false;
+                if (modelLayers.stream().anyMatch(layer -> !layer.sortOnUpload())) translucentOnly = false;
+                if (RuntimeMachineModelRegistry.isDynamicBlock(state.getBlock())) translucentOnly = false;
+                if (!fluidState.isEmpty() && selection.accepts(fluidLayer)) {
+                    blockRenderer.renderLiquid(pos, input.region(), new SectionOriginConsumer(
+                            builderFor(started, builders,
+                                    new PreviewSceneMeshCache.MeshLayer(fluidLayer, false)),
+                            pos.getX() & ~15, pos.getY() & ~15,
+                            pos.getZ() & ~15), state, fluidState);
+                    if (fluidLayer.sortOnUpload() && !translucentOnly) {
+                        blockRenderer.renderLiquid(pos, input.region(), new SectionOriginConsumer(
+                                builderFor(started, builders,
+                                        new PreviewSceneMeshCache.MeshLayer(fluidLayer, true)),
+                                pos.getX() & ~15, pos.getY() & ~15, pos.getZ() & ~15), state, fluidState);
+                    }
+                }
+                if (model != null) {
+                    for (RenderType renderType : modelLayers) {
+                        if (!selection.accepts(renderType)) continue;
+                        renderModelLayer(blockRenderer, input, state, pos, poseStack, random, modelData,
+                                renderType, builderFor(started, builders,
+                                        new PreviewSceneMeshCache.MeshLayer(renderType, false)));
+                        if (renderType.sortOnUpload() && !translucentOnly) {
+                            renderModelLayer(blockRenderer, input, state, pos, poseStack, random, modelData,
+                                    renderType, builderFor(started, builders,
+                                            new PreviewSceneMeshCache.MeshLayer(renderType, true)));
+                        }
                     }
                 }
             }
             if (cancelled.get()) throw new CancelledCompilation();
             VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
-            Map<RenderType, MeshData.SortState> sortStates = new IdentityHashMap<>();
-            for (Map.Entry<RenderType, BufferBuilder> entry : started.entrySet()) {
+            Map<PreviewSceneMeshCache.MeshLayer, MeshData.SortState> sortStates = new java.util.LinkedHashMap<>();
+            for (Map.Entry<PreviewSceneMeshCache.MeshLayer, BufferBuilder> entry : started.entrySet()) {
                 MeshData mesh = entry.getValue().build();
                 if (mesh == null) continue;
                 meshes.put(entry.getKey(), mesh);
-                if (entry.getKey().sortOnUpload()) {
+                if (entry.getKey().renderType().sortOnUpload()) {
                     MeshData.SortState sortState = mesh.sortQuads(builders.get(entry.getKey()), sorting);
                     if (sortState != null) sortStates.put(entry.getKey(), sortState);
                 }
@@ -197,8 +227,8 @@ public final class PreviewSceneMeshCompiler {
         }
     }
 
-    private static void closeWorkerResources(Map<RenderType, MeshData> meshes,
-                                             Map<RenderType, ByteBufferBuilder> builders, Throwable failure) {
+    private static void closeWorkerResources(Map<PreviewSceneMeshCache.MeshLayer, MeshData> meshes,
+            Map<PreviewSceneMeshCache.MeshLayer, ByteBufferBuilder> builders, Throwable failure) {
         meshes.values().forEach(mesh -> {
             try {
                 mesh.close();
@@ -221,11 +251,26 @@ public final class PreviewSceneMeshCompiler {
         throw new IllegalStateException("preview mesh compilation failed", failure);
     }
 
-    private static BufferBuilder builderFor(Map<RenderType, BufferBuilder> started,
-                                             Map<RenderType, ByteBufferBuilder> builders, RenderType layer) {
+    private static BufferBuilder builderFor(Map<PreviewSceneMeshCache.MeshLayer, BufferBuilder> started,
+            Map<PreviewSceneMeshCache.MeshLayer, ByteBufferBuilder> builders,
+            PreviewSceneMeshCache.MeshLayer layer) {
         return started.computeIfAbsent(layer, key -> new BufferBuilder(
-                builders.computeIfAbsent(key, ignored -> new ByteBufferBuilder(key.bufferSize())),
-                key.mode(), key.format()));
+                builders.computeIfAbsent(key, ignored -> new ByteBufferBuilder(key.renderType().bufferSize())),
+                key.renderType().mode(), key.renderType().format()));
+    }
+
+    private static void renderModelLayer(BlockRenderDispatcher blockRenderer, CompilationInput input,
+            BlockState state, BlockPos pos, PoseStack poseStack, RandomSource random, ModelData modelData,
+            RenderType renderType, VertexConsumer vertices) {
+        poseStack.pushPose();
+        try {
+            poseStack.translate(pos.getX(), pos.getY(), pos.getZ());
+            random.setSeed(state.getSeed(pos));
+            blockRenderer.renderBatched(state, pos, input.region(), poseStack,
+                    vertices, true, random, modelData, renderType);
+        } finally {
+            poseStack.popPose();
+        }
     }
 
     private record SectionOriginConsumer(VertexConsumer delegate, float x, float y, float z)
@@ -269,6 +314,16 @@ public final class PreviewSceneMeshCompiler {
     }
 
     private static final class CancelledCompilation extends RuntimeException { }
+
+    private enum LayerSelection {
+        ALL,
+        UNSORTED,
+        SORTED;
+
+        boolean accepts(RenderType renderType) {
+            return this == ALL || renderType.sortOnUpload() == (this == SORTED);
+        }
+    }
 
     record Partition(int startInclusive, int endExclusive) { }
 

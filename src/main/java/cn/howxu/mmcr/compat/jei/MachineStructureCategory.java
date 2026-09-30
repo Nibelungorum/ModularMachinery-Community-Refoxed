@@ -114,7 +114,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
         JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), PREVIEW_X, PREVIEW_Y,
-                previewWidth(), previewHeight());
+                previewWidth(), previewHeight(), ingredientManager);
         JeiPreviewLifecycle.registerActive(preview);
         builder.addWidget(preview);
         builder.addInputHandler(preview);

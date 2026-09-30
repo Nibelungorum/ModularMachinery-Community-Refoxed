@@ -68,15 +68,21 @@ public final class StructureMaterialWidget implements IRecipeWidget {
 
     @Override
     public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
-        int first = displayedPage * SLOT_COUNT;
-        for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
-            int entryIndex = first + slotIndex;
-            if (entryIndex >= summary.entries().size()) continue;
-            String quantity = MachineRecipeCategory.itemQuantityText(summary.entries().get(entryIndex).count());
-            if (!quantity.isEmpty()) {
-                new JeiSlotOverlayDrawable("", quantity).draw(graphics,
-                        slotIndex * SLOT_STEP, 0);
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, 200.0F);
+        try {
+            int first = displayedPage * SLOT_COUNT;
+            for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
+                int entryIndex = first + slotIndex;
+                if (entryIndex >= summary.entries().size()) continue;
+                String quantity = MachineRecipeCategory.itemQuantityText(summary.entries().get(entryIndex).count());
+                if (!quantity.isEmpty()) {
+                    new JeiSlotOverlayDrawable("", quantity).draw(graphics,
+                            slotIndex * SLOT_STEP, 0);
+                }
             }
+        } finally {
+            graphics.pose().popPose();
         }
     }
 

@@ -16,7 +16,6 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.platform.GlStateManager;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -41,7 +40,6 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -100,11 +98,14 @@ public final class PreviewSceneRenderer {
         }
         PreviewSceneMeshCache.FullCache owner = meshes.current();
         if (owner instanceof PreviewSceneMeshCache.Meshes cache) {
-            if (renderTranslucent && compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
+            if (compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
                 compileSortedLayers(cache, sceneCamera);
             }
-            for (RenderType renderType : cache.renderTypes()) {
-                if (!renderType.sortOnUpload() || renderTranslucent) draw(cache, renderType, context.framebufferId());
+            for (PreviewSceneMeshCache.MeshLayer layer : cache.renderLayers()) {
+                if (!layer.renderType().sortOnUpload()
+                        || layer.interactiveOnly() == !renderTranslucent) {
+                    draw(cache, layer, context.framebufferId());
+                }
             }
             if (renderBlockEntities) submitBlockEntities(cache, context, sceneCamera);
             drawOutlines(context, hoverHit, selectedHit);
@@ -199,17 +200,21 @@ public final class PreviewSceneRenderer {
     }
 
     private void compileSortedLayers(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {
-        Map<RenderType, List<PreviewSceneMeshCache.MeshPart>> sortedParts = cache.sortedParts();
+        Map<PreviewSceneMeshCache.MeshLayer, List<PreviewSceneMeshCache.MeshPart>> sortedParts =
+                cache.sortedParts();
         if (sortedParts.isEmpty()) {
             return;
         }
         long generation = requestedGeneration;
         PreviewSceneMeshCache.SortedOrder result = null;
-        Map<RenderType, List<ByteBufferBuilder.Result>> indexBuffers = new IdentityHashMap<>();
+        Map<PreviewSceneMeshCache.MeshLayer, List<ByteBufferBuilder.Result>> indexBuffers =
+                new java.util.LinkedHashMap<>();
         try {
             VertexSorting sorting = VertexSorting.byDistance(camera.eye().x, camera.eye().y, camera.eye().z);
-            Map<RenderType, List<VertexFormat.IndexType>> indexTypes = new IdentityHashMap<>();
-            for (Map.Entry<RenderType, List<PreviewSceneMeshCache.MeshPart>> entry : sortedParts.entrySet()) {
+            Map<PreviewSceneMeshCache.MeshLayer, List<VertexFormat.IndexType>> indexTypes =
+                    new java.util.LinkedHashMap<>();
+            for (Map.Entry<PreviewSceneMeshCache.MeshLayer,
+                    List<PreviewSceneMeshCache.MeshPart>> entry : sortedParts.entrySet()) {
                 List<ByteBufferBuilder.Result> layerBuffers = new ArrayList<>(entry.getValue().size());
                 List<VertexFormat.IndexType> layerTypes = new ArrayList<>(entry.getValue().size());
                 indexBuffers.put(entry.getKey(), layerBuffers);
@@ -240,7 +245,8 @@ public final class PreviewSceneRenderer {
         }
     }
 
-    private static void closeIndexBuffers(Map<RenderType, List<ByteBufferBuilder.Result>> indexBuffers,
+    private static void closeIndexBuffers(
+            Map<PreviewSceneMeshCache.MeshLayer, List<ByteBufferBuilder.Result>> indexBuffers,
             RuntimeException failure) {
         for (List<ByteBufferBuilder.Result> buffers : indexBuffers.values()) {
             for (ByteBufferBuilder.Result buffer : buffers) {
@@ -253,7 +259,8 @@ public final class PreviewSceneRenderer {
         }
     }
 
-    private static void draw(PreviewSceneMeshCache.Meshes cache, RenderType layer, int framebufferId) {
+    private static void draw(PreviewSceneMeshCache.Meshes cache,
+            PreviewSceneMeshCache.MeshLayer layer, int framebufferId) {
         cache.draw(layer, framebufferId);
     }
 
@@ -272,7 +279,6 @@ public final class PreviewSceneRenderer {
                         schema.machineId(), position, blockEntity.getBlockState(), exception);
             }
         }
-        GlStateManager._glBindFramebuffer(36160, context.framebufferId());
         context.bufferSource().endBatch();
     }
 
@@ -300,15 +306,15 @@ public final class PreviewSceneRenderer {
     private static void drawHighlight(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
         PoseStack.Pose pose = new PoseStack().last();
-        VertexConsumer fill = context.bufferSource().getBuffer(RenderType.debugFilledBox());
+        RenderType fillType = RenderType.debugQuads();
+        VertexConsumer fill = context.bufferSource().getBuffer(fillType);
         drawFilledBox(fill, pose, box, (color & 0x00FFFFFF) | 0x44000000);
-        GlStateManager._glBindFramebuffer(36160, context.framebufferId());
-        context.bufferSource().endBatch(RenderType.debugFilledBox());
+        context.bufferSource().endBatch(fillType);
 
-        VertexConsumer lines = context.bufferSource().getBuffer(RenderType.lines());
+        RenderType lineType = RenderType.lines();
+        VertexConsumer lines = context.bufferSource().getBuffer(lineType);
         drawOutline(lines, pose, box, color);
-        GlStateManager._glBindFramebuffer(36160, context.framebufferId());
-        context.bufferSource().endBatch(RenderType.lines());
+        context.bufferSource().endBatch(lineType);
     }
 
     private static void drawFilledBox(VertexConsumer vertices, PoseStack.Pose pose, AABB box, int color) {

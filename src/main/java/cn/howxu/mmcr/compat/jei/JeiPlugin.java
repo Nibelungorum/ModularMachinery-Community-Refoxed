@@ -147,9 +147,10 @@ public final class JeiPlugin implements IModPlugin {
     @Override
     public void registerRecipeTransferHandlers(IRecipeTransferRegistration registration) {
         var helper = registration.getTransferHelper();
+        var ingredientManager = registration.getJeiHelpers().getIngredientManager();
         machineIdsByPool().keySet().forEach(poolId -> {
             var type = JeiMachineRecipeTypes.forPool(poolId);
-            registration.addRecipeTransferHandler(new MachineRecipeTransferHandler(helper, type), type);
+            registration.addRecipeTransferHandler(new MachineRecipeTransferHandler(helper, type, ingredientManager), type);
         });
     }
 

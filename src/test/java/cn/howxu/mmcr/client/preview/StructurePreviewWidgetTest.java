@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import net.minecraft.world.level.block.state.BlockState;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,10 +47,14 @@ class StructurePreviewWidgetTest {
     void widget_exposes_its_selected_layer_and_current_hits_to_hosts() {
         RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(2, 5));
         renderer.hitResult = new Object();
-        StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
+        AtomicLong clock = new AtomicLong(1_000L);
+        StructurePreviewWidget widget = new StructurePreviewWidget(renderer, clock::get);
         widget.setViewport(new PreviewViewport(10, 20, 30, 40));
 
         widget.selectNextLayer();
+        widget.mouseClicked(20, 30, 0);
+        widget.mouseReleased(20, 30, 0);
+        clock.addAndGet(100L);
         widget.mouseClicked(20, 30, 0);
         widget.mouseReleased(20, 30, 0);
 
@@ -129,7 +134,7 @@ class StructurePreviewWidgetTest {
     }
 
     @Test
-    void widget_selects_a_hit_for_left_release_at_the_drag_threshold() {
+    void widget_does_not_select_a_hit_after_a_drag_callback_at_the_drag_threshold() {
         RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
         renderer.hitResult = new Object();
         StructurePreviewWidget widget = new StructurePreviewWidget(renderer);
@@ -139,7 +144,7 @@ class StructurePreviewWidgetTest {
         widget.mouseDragged(23, 30, 0, 3, 0);
         assertThat(widget.mouseReleased(23, 30, 0)).isTrue();
 
-        assertThat(renderer.selectedHit).isSameAs(renderer.hitResult);
+        assertThat(renderer.selectedHit).isNull();
     }
 
     @Test
