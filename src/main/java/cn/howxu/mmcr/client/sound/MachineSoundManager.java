@@ -97,7 +97,7 @@ public class MachineSoundManager {
         ChunkPos center = Minecraft.getInstance().player == null ? new ChunkPos(0, 0)
                 : Minecraft.getInstance().player.chunkPosition();
         return ChunkPos.rangeClosed(center, viewDistance)
-                .map(chunkPos -> level.getChunkSource().getChunkNow(chunkPos.x(), chunkPos.z()))
+                .map(chunkPos -> level.getChunkSource().getChunkNow(chunkPos.x, chunkPos.z))
                 .filter(chunk -> chunk instanceof LevelChunk)
                 .map(levelChunk -> levelChunk)
                 .flatMap(chunk -> chunk.getBlockEntities().values().stream())

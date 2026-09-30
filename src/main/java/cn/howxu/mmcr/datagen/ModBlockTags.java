@@ -19,7 +19,7 @@ import net.neoforged.neoforge.common.data.BlockTagsProvider;
 
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.registries.DeferredHolder;
-import org.jspecify.annotations.NonNull;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.concurrent.CompletableFuture;
 

@@ -32,6 +32,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -301,7 +302,7 @@ public record MachineRecipeDisplay(
      * remain representable; the JEI renderer skips slots whose ingredient is null or empty.
      */
     public record FluidInputDisplay(
-            @org.jspecify.annotations.Nullable FluidIngredient ingredient,
+            @Nullable FluidIngredient ingredient,
             int amount,
             float consumeChance
     ) {

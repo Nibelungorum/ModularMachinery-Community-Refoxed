@@ -17,8 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.world.item.ItemStack;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;

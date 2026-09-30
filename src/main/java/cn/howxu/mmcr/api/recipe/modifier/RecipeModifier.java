@@ -187,7 +187,7 @@ public final class RecipeModifier {
         String target = tag.getString("target");
         IOType io = IOType.byKey(tag.contains("ioTarget") ? tag.getString("ioTarget") : IO_INPUT);
         Operation op = Operation.byId(tag.getInt("operation"));
-        float value = tag.getFloatOr("value", 0F);
+        float value = tag.getFloat("value");
         boolean chance = tag.getBoolean("chance");
         return new RecipeModifier(target, io, value, op, chance);
     }

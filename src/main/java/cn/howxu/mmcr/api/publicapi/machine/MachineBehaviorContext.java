@@ -155,7 +155,7 @@ public class MachineBehaviorContext {
             throw new IllegalArgumentException("Invalid block id: " + blockId, exception);
         }
         if (!BuiltInRegistries.BLOCK.containsKey(id)) throw new IllegalArgumentException("Unknown block: " + blockId);
-        return countStructureBlocks(BuiltInRegistries.BLOCK.getValue(id));
+        return countStructureBlocks(BuiltInRegistries.BLOCK.get(id));
     }
 
     static MachineBehaviorContext empty() {

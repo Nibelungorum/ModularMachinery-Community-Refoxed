@@ -37,12 +37,12 @@ import dev.latvian.mods.rhino.type.TypeInfo;
 import net.minecraft.resources.ResourceKey;
 
 import net.minecraft.resources.ResourceLocation;
-import org.jspecify.annotations.Nullable;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;

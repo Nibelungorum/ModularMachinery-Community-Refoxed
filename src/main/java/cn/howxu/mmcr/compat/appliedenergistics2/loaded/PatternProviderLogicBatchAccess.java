@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceHost;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Exposes only MMCR-backed pattern-provider hosts to the CPU batch dispatcher.

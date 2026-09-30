@@ -4,7 +4,7 @@ import cn.howxu.mmcr.config.ClientConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.List;

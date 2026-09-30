@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record SmartInterfaceUpdateEventJS(BlockPos interfacePos, ResourceLocation machineId, String type,
-        @Nullable Float oldValue, @Nullable Float newValue, List<BlockPos> controllerPositions) implements KubeEvent {
+                                          @Nullable Float oldValue, @Nullable Float newValue, List<BlockPos> controllerPositions) implements KubeEvent {
     public SmartInterfaceUpdateEventJS {
         interfacePos = interfacePos.immutable();
         controllerPositions = controllerPositions == null ? List.of()

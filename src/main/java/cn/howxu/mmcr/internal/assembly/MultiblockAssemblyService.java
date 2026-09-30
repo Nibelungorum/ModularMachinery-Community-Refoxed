@@ -326,7 +326,7 @@ public final class MultiblockAssemblyService {
         try {
             return state.getBlock().asItem().getDefaultInstance();
         } catch (NullPointerException ignored) {
-            return new ItemStack(Holder.direct(state.getBlock().asItem(), DataComponentMap.EMPTY));
+            return new ItemStack(Holder.direct(state.getBlock().asItem()));
         }
     }
 

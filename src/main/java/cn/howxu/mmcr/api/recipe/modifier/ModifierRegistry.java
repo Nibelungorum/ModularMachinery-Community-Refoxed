@@ -1,11 +1,10 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.HashMap;

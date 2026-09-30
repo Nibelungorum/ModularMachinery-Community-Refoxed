@@ -41,7 +41,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.fluids.FluidStack;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -80,9 +80,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
 
         @Override
-        public List<Component> getTooltip(FluidStack fluid, TooltipFlag tooltipFlag) {
+        public void getTooltip(ITooltipBuilder tooltip, FluidStack ingredient, Item.TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
             Minecraft minecraft = Minecraft.getInstance();
-            return fluidTooltip(fluid, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+            fluidTooltip(ingredient, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
         }
     };
 
@@ -381,13 +381,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             }
 
             @Override
-            public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
+            public List<Component> getTooltip(ItemStack ingredient, Item.TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
                 Minecraft minecraft = Minecraft.getInstance();
-                ItemStack candidate = levelCandidate(requirement,
-                        minecraft.level == null ? 0L : minecraft.level.getGameTime());
-                return candidate.isEmpty()
-                        ? List.of()
-                        : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+                    ItemStack candidate = levelCandidate(requirement,
+                            minecraft.level == null ? 0L : minecraft.level.getGameTime());
+                    return candidate.isEmpty()
+                            ? List.of()
+                            : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
             }
         };
     }

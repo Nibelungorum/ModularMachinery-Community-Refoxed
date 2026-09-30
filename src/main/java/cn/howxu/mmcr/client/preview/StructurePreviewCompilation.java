@@ -1,7 +1,8 @@
 package cn.howxu.mmcr.client.preview;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Thread-safe state of one lazy structure preview compilation.
