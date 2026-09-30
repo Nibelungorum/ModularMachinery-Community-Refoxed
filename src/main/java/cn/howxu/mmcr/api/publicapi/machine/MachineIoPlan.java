@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.jetbrains.annotations.Nullable;
 
@@ -113,18 +114,32 @@ public final class MachineIoPlan {
     }
 
     public CommitResult commit() {
+        return commit(ignored -> { });
+    }
+
+    public CommitResult commit(Consumer<cn.howxu.mmcr.api.data.DataStorage.Transaction> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (consumed) return new CommitResult(false, null);
         consumed = true;
         if (simulation == null || !simulation.successful() || simulation.plan() == null) {
             return new CommitResult(false, simulation == null ? null : simulation.failure());
         }
         try {
+            cn.howxu.mmcr.api.data.DataStorage.Transaction transaction =
+                    cn.howxu.mmcr.api.data.DataStorage.Transaction.create();
+            transactionWrites.accept(transaction);
             CraftingPlan plan = simulation.plan();
             boolean successful = plan.commit();
+            if (successful) transaction.commit();
             return new CommitResult(successful, successful ? null : plan.failure());
         } finally {
             consumed = true;
         }
+    }
+
+    public CommitResult commitData(Consumer<DataStorage.Transaction> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        return commit(transaction -> transactionWrites.accept(DataStorage.Transaction.view(transaction)));
     }
 
     public List<OutputSimulation> outputSimulations() {

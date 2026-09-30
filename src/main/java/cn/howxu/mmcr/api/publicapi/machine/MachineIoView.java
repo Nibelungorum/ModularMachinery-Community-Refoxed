@@ -95,41 +95,41 @@ public final class MachineIoView {
     }
 
     public List<ResourceAmount<ItemStack>> itemInputs() {
-        Map<ItemStack, Long> amounts = new LinkedHashMap<>();
+        List<ResourceAmount<ItemStack>> amounts = new ArrayList<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
             ItemHandlerFacet nativeFacet = capability.facet(ItemHandlerFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.itemHandler() != null) {
                 var handler = nativeFacet.itemHandler();
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
-                    ItemStack stack = handler.getStackInSlot(slot);
+                    ItemStack stack = itemResource(handler, slot);
                     long amount = itemAmount(handler, slot);
                     if (!stack.isEmpty() && amount > 0L) {
-                        amounts.merge(stack.copyWithCount(1), amount, MachineIoView::saturatedAdd);
+                        mergeItem(amounts, stack, amount);
                     }
                 }
                 continue;
             }
         }
-        return resourceAmounts(amounts);
+        return List.copyOf(amounts);
     }
 
     public List<ResourceAmount<FluidStack>> fluidInputs() {
-        Map<FluidStack, Long> amounts = new LinkedHashMap<>();
+        List<ResourceAmount<FluidStack>> amounts = new ArrayList<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
             FluidHandlerFacet nativeFacet = capability.facet(FluidHandlerFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.fluidHandler() != null) {
                 var handler = nativeFacet.fluidHandler();
                 for (int tank = 0; tank < handler.getTanks(); tank++) {
-                    FluidStack stack = handler.getFluidInTank(tank);
+                    FluidStack stack = fluidResource(handler, tank);
                     long amount = fluidAmount(handler, tank);
                     if (!stack.isEmpty() && amount > 0L) {
-                        amounts.merge(stack.copyWithAmount(1), amount, MachineIoView::saturatedAdd);
+                        mergeFluid(amounts, stack, amount);
                     }
                 }
                 continue;
             }
         }
-        return resourceAmounts(amounts);
+        return List.copyOf(amounts);
     }
 
     public List<ResourceAmount<ResourceLocation>> chemicalInputs() {
@@ -229,7 +229,7 @@ public final class MachineIoView {
             if (nativeFacet != null && nativeFacet.itemHandler() != null) {
                 var handler = nativeFacet.itemHandler();
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
-                    ItemStack current = handler.getStackInSlot(slot);
+                    ItemStack current = itemResource(handler, slot);
                     if (handler.isItemValid(slot, stack) && (current.isEmpty() || ItemStack.isSameItemSameComponents(current, stack))) {
                         long slotCapacity = itemCapacity(handler, slot);
                         if (!nativeFacet.supportsLargeStacks()) {
@@ -322,6 +322,30 @@ public final class MachineIoView {
         return List.copyOf(result);
     }
 
+    private static void mergeItem(List<ResourceAmount<ItemStack>> amounts, ItemStack stack, long amount) {
+        for (int index = 0; index < amounts.size(); index++) {
+            ResourceAmount<ItemStack> existing = amounts.get(index);
+            if (ItemStack.isSameItemSameComponents(existing.resource(), stack)) {
+                amounts.set(index, new ResourceAmount<>(existing.resource(),
+                        saturatedAdd(existing.amount(), amount)));
+                return;
+            }
+        }
+        amounts.add(new ResourceAmount<>(stack.copyWithCount(1), amount));
+    }
+
+    private static void mergeFluid(List<ResourceAmount<FluidStack>> amounts, FluidStack stack, long amount) {
+        for (int index = 0; index < amounts.size(); index++) {
+            ResourceAmount<FluidStack> existing = amounts.get(index);
+            if (FluidStack.isSameFluidSameComponents(existing.resource(), stack)) {
+                amounts.set(index, new ResourceAmount<>(existing.resource(),
+                        saturatedAdd(existing.amount(), amount)));
+                return;
+            }
+        }
+        amounts.add(new ResourceAmount<>(stack.copyWithAmount(1), amount));
+    }
+
     private List<HeatState> heatStates(IOType ioType) {
         List<HeatState> states = new ArrayList<>();
         for (MachineCapability capability : capabilities(ioType)) {
@@ -341,6 +365,11 @@ public final class MachineIoView {
                 : handler.getStackInSlot(slot).getCount();
     }
 
+    private static ItemStack itemResource(net.neoforged.neoforge.items.IItemHandler handler, int slot) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
+                ? storage.resource(slot) : handler.getStackInSlot(slot);
+    }
+
     private static long itemCapacity(net.neoforged.neoforge.items.IItemHandler handler, int slot) {
         return handler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage
                 ? storage.capacity(slot) : handler instanceof NativeStackSync.Item sync ? sync.capacity(slot)
@@ -351,6 +380,11 @@ public final class MachineIoView {
         return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
                 ? storage.amount(tank) : handler instanceof NativeStackSync.Fluid sync ? sync.amount(tank)
                 : handler.getFluidInTank(tank).getAmount();
+    }
+
+    private static FluidStack fluidResource(net.neoforged.neoforge.fluids.capability.IFluidHandler handler, int tank) {
+        return handler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage
+                ? storage.resource(tank) : handler.getFluidInTank(tank);
     }
 
     private static long fluidCapacity(net.neoforged.neoforge.fluids.capability.IFluidHandler handler, int tank) {

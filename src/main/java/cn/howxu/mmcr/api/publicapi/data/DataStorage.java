@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.data;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /** Public view of a machine's typed data storage.
@@ -37,9 +38,34 @@ public final class DataStorage {
 
     public void set(String key, Object value) { set(key, DataValue.from(value)); }
 
+    public boolean set(String key, DataValue value, Transaction transaction) {
+        Objects.requireNonNull(transaction, "transaction");
+        return storage.set(key, DataValue.toInternal(value), transaction.transaction);
+    }
+
+    public boolean set(String key, Object value, Transaction transaction) {
+        return set(key, DataValue.from(value), transaction);
+    }
+
     public Optional<DataValue> remove(String key) { return storage.remove(key).map(DataValue::fromInternal); }
 
     /** Internal bridge value for MMCR adapters. */
     public Object bridgeValue() { return storage; }
+
+    /** Public view of a data transaction shared with a machine I/O commit. */
+    public static final class Transaction {
+        private final cn.howxu.mmcr.api.data.DataStorage.Transaction transaction;
+
+        private Transaction(cn.howxu.mmcr.api.data.DataStorage.Transaction transaction) {
+            this.transaction = transaction;
+        }
+
+        public static Transaction view(Object transaction) {
+            if (!(transaction instanceof cn.howxu.mmcr.api.data.DataStorage.Transaction dataTransaction)) {
+                throw new IllegalArgumentException("transaction must be a data transaction");
+            }
+            return new Transaction(dataTransaction);
+        }
+    }
 
 }

@@ -58,6 +58,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.world.level.material.Fluids;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
@@ -410,6 +411,22 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount()).isEqualTo(6);
+    }
+
+    @Test
+    void native_energy_commit_applies_one_transfer_limit_per_parallel_batch() {
+        LongEnergyStorage storage = new LongEnergyStorage(100L, 20L, null);
+        storage.setAmount(60L);
+        EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.INPUT);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 20L)),
+                List.of(capability), new PlanningContext(3L, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(3L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.getAmountAsLong()).isZero();
     }
 
     @Test

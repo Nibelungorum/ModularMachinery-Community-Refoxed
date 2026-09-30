@@ -52,6 +52,13 @@ public final class DataStorage {
         changeListener.accept(values());
     }
 
+    public boolean set(String key, DataValue value, Transaction transaction) {
+        requireValidKey(key);
+        Objects.requireNonNull(value, "value");
+        Objects.requireNonNull(transaction, "transaction");
+        return transaction.set(this, key, value);
+    }
+
     public Optional<DataValue> remove(String key) {
         requireValidKey(key);
         DataValue previous = values.remove(key);
@@ -70,7 +77,40 @@ public final class DataStorage {
         immutableValuesCache = null;
     }
 
+    private void apply(Map<String, DataValue> replacement) {
+        if (values.equals(replacement)) return;
+        values.clear();
+        values.putAll(replacement);
+        invalidateValuesCache();
+        changeListener.accept(values());
+    }
+
     private static void requireValidKey(String key) {
         if (key == null || key.isBlank()) throw new IllegalArgumentException("key must not be null or blank");
+    }
+
+    /** Delays data writes until the associated machine I/O plan commits successfully. */
+    public static final class Transaction {
+        private final Map<DataStorage, Map<String, DataValue>> staged = new LinkedHashMap<>();
+        private boolean closed;
+
+        public static Transaction create() {
+            return new Transaction();
+        }
+
+        private boolean set(DataStorage storage, String key, DataValue value) {
+            if (closed) throw new IllegalStateException("Data transaction is closed");
+            Map<String, DataValue> values = staged.computeIfAbsent(storage,
+                    ignored -> new LinkedHashMap<>(storage.values));
+            if (value.equals(values.get(key))) return false;
+            values.put(key, value);
+            return true;
+        }
+
+        public void commit() {
+            if (closed) throw new IllegalStateException("Data transaction is closed");
+            closed = true;
+            staged.forEach(DataStorage::apply);
+        }
     }
 }

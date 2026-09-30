@@ -593,10 +593,14 @@ class MachineBehaviorRuntimeTest {
                             });
                     assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(0L));
                     if (failFirstCommit.getAndSet(false)) {
-                        throw new IllegalStateException("expected tick callback failure");
+                        plan.commit(transaction -> {
+                            dataStorage.storage().set("ticks", DataValue.of(1L), transaction);
+                            throw new IllegalStateException("expected tick transaction failure");
+                        });
                     } else {
-                        assertThat(plan.commit().successful()).isTrue();
-                        dataStorage.storage().set("ticks", DataValue.of(1L));
+                        assertThat(plan.commit(transaction ->
+                                dataStorage.storage().set("ticks", DataValue.of(1L), transaction)).successful())
+                                .isTrue();
                     }
                 }).build());
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(TEST_MACHINE_ID, BlockPos.ZERO);

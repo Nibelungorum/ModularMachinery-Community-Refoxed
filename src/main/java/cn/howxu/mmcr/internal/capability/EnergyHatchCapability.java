@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -118,15 +119,22 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
     private CapabilityResult commitNative(CapabilityRequests.ValueRequest request) {
         long remaining = request.amount();
-        while (remaining > 0L) {
-            int chunk = (int) Math.min(remaining, Integer.MAX_VALUE);
+        long transferLimit = transferLimit();
+        long available = request.insert() ? capacity() - amount() : amount();
+        if (remaining > available || transferLimit <= 0L
+                || remaining > RequirementHandlerSupport.scaled(transferLimit, request.parallelism())) {
+            return failure(request.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+        }
+        for (long batch = 0L; batch < request.parallelism() && remaining > 0L; batch++) {
+            long chunk = Math.min(remaining, transferLimit);
             if (moveEnergy(chunk, request.insert(), true) != chunk) return failure(request.insert()
                     ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
             if (moveEnergy(chunk, request.insert(), false) != chunk) return failure(request.insert()
                     ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
             remaining -= chunk;
         }
-        return CapabilityResult.successful();
+        return remaining == 0L ? CapabilityResult.successful()
+                : failure(request.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
     }
 
     private long moveEnergy(long amount, boolean insert, boolean simulate) {
@@ -141,11 +149,20 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation) {
         if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
+            long amount = 0L;
+            Boolean insert = null;
             for (AsyncCapabilityOperation child : operations) {
-                CapabilityResult result = commitAsync(child);
-                if (!result.success()) return result;
+                if (!(child instanceof AsyncCapabilityOperation.Scalar(
+                        net.minecraft.resources.ResourceLocation capabilityId, long childAmount, boolean childInsert))
+                        || !type().id().equals(capabilityId) || insert != null && insert != childInsert) {
+                    return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+                }
+                insert = childInsert;
+                amount = RequirementHandlerSupport.saturatingAdd(amount, childAmount);
             }
-            return CapabilityResult.successful();
+            if (insert == null) return CapabilityResult.successful();
+            return commitNative(new CapabilityRequests.ValueRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT,
+                    operations.size(), amount, insert));
         }
         if (!(operation instanceof AsyncCapabilityOperation.Scalar(
                 net.minecraft.resources.ResourceLocation capabilityId, long amount, boolean insert))

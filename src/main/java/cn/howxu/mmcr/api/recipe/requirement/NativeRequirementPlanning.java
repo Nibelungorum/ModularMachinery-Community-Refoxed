@@ -36,9 +36,6 @@ final class NativeRequirementPlanning {
         if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
-        if (!insert && requirement.consumeChance() <= 0F) {
-            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
-        }
         ItemStack requested = insert ? requirement.stack(null) : ItemStack.EMPTY;
         long perBatch = insert ? requested.getCount() : requirement.count();
         if (perBatch <= 0L || insert && requested.isEmpty()) {
@@ -61,18 +58,16 @@ final class NativeRequirementPlanning {
                 : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism());
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> itemOperations(requirement, ordered, context, parallelism, requested,
-                        insert, partial, consumed, reservations),
+                        insert, partial, consumed, reservations, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> itemOperations(
-                        requirement, ordered, context, parallelism, requested, insert, partial, consumed, reservations)));
+                        requirement, ordered, context, parallelism, requested, insert, partial, consumed, reservations,
+                        false)));
     }
 
     static RequirementPlan fluid(FluidRequirement requirement, List<MachineCapability> capabilities,
                                  PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
-            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
-        }
-        if (!insert && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
         FluidStack requested = insert ? requirement.stack() : FluidStack.EMPTY;
@@ -97,9 +92,10 @@ final class NativeRequirementPlanning {
                 : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism());
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> fluidOperations(requirement, ordered, context, parallelism, requested,
-                        insert, partial, consumed, reservations),
+                        insert, partial, consumed, reservations, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> fluidOperations(
-                        requirement, ordered, context, parallelism, requested, insert, partial, consumed, reservations)));
+                        requirement, ordered, context, parallelism, requested, insert, partial, consumed, reservations,
+                        false)));
     }
 
     static RequirementPlan energy(EnergyRequirement requirement, List<MachineCapability> capabilities,
@@ -123,16 +119,17 @@ final class NativeRequirementPlanning {
                 RequirementHandlerSupport.scaled(perBatch, context.requestedParallelism()), available);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> energyOperations(requirement, ordered, context, parallelism, insert,
-                        partial, reservations),
+                        partial, reservations, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> energyOperations(
-                        requirement, ordered, context, parallelism, insert, partial, reservations)));
+                        requirement, ordered, context, parallelism, insert, partial, reservations, false)));
     }
 
     private static RequirementPlan.OperationPlan itemOperations(ItemRequirement requirement, List<MachineCapability> capabilities,
                                                                    PlanningContext context, long parallelism, ItemStack output,
-                                                                   boolean insert, boolean partial,
-                                                                   RequirementHandlerSupport.ConsumeProfile consumed,
-                                                                   PlanningReservations reservations) {
+                                                                    boolean insert, boolean partial,
+                                                                    RequirementHandlerSupport.ConsumeProfile consumed,
+                                                                    PlanningReservations reservations,
+                                                                    boolean materialize) {
         long batches = insert ? parallelism : consumed.consumedBatches(parallelism);
         long remaining = RequirementHandlerSupport.scaled(insert ? output.getCount() : requirement.count(), batches);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
@@ -157,7 +154,7 @@ final class NativeRequirementPlanning {
                 actions.add(new CapabilityRequests.ItemAction(slot, insert ? output : current, moved, insert));
                 remaining -= moved;
             }
-            if (!actions.isEmpty()) operations.add(capability.prepare(new CapabilityRequests.ItemRequest(
+            if (materialize && !actions.isEmpty()) operations.add(capability.prepare(new CapabilityRequests.ItemRequest(
                     capability.type(), IOType.valueOf(requirement.io().name()), parallelism, actions)));
         }
         return operationResult(requirement, context, operations, remaining, insert, partial,
@@ -166,9 +163,10 @@ final class NativeRequirementPlanning {
 
     private static RequirementPlan.OperationPlan fluidOperations(FluidRequirement requirement, List<MachineCapability> capabilities,
                                                                    PlanningContext context, long parallelism, FluidStack output,
-                                                                   boolean insert, boolean partial,
-                                                                   RequirementHandlerSupport.ConsumeProfile consumed,
-                                                                   PlanningReservations reservations) {
+                                                                    boolean insert, boolean partial,
+                                                                    RequirementHandlerSupport.ConsumeProfile consumed,
+                                                                    PlanningReservations reservations,
+                                                                    boolean materialize) {
         long batches = insert ? parallelism : consumed.consumedBatches(parallelism);
         long remaining = RequirementHandlerSupport.scaled(insert ? output.getAmount() : requirement.amount(), batches);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
@@ -190,7 +188,7 @@ final class NativeRequirementPlanning {
                 actions.add(new CapabilityRequests.FluidAction(tank, insert ? output : current, moved, insert));
                 remaining -= moved;
             }
-            if (!actions.isEmpty()) operations.add(capability.prepare(new CapabilityRequests.FluidRequest(
+            if (materialize && !actions.isEmpty()) operations.add(capability.prepare(new CapabilityRequests.FluidRequest(
                     capability.type(), IOType.valueOf(requirement.io().name()), parallelism, actions)));
         }
         return operationResult(requirement, context, operations, remaining, insert, partial,
@@ -199,8 +197,9 @@ final class NativeRequirementPlanning {
 
     private static RequirementPlan.OperationPlan energyOperations(EnergyRequirement requirement, List<MachineCapability> capabilities,
                                                                      PlanningContext context, long parallelism,
-                                                                     boolean insert, boolean partial,
-                                                                     PlanningReservations reservations) {
+                                                                      boolean insert, boolean partial,
+                                                                      PlanningReservations reservations,
+                                                                      boolean materialize) {
         long remaining = RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
@@ -212,8 +211,10 @@ final class NativeRequirementPlanning {
             if (moved <= 0L) continue;
             if (facet.energyStorage() instanceof LongEnergyHandler storage
                     && !reservations.reserveValueTotal(storage, moved, insert)) continue;
-            operations.add(capability.prepare(new CapabilityRequests.ValueRequest(capability.type(),
-                    IOType.valueOf(requirement.io().name()), parallelism, moved, insert)));
+            if (materialize) {
+                operations.add(capability.prepare(new CapabilityRequests.ValueRequest(capability.type(),
+                        IOType.valueOf(requirement.io().name()), parallelism, moved, insert)));
+            }
             remaining -= moved;
         }
         return operationResult(requirement, context, operations, remaining, insert, partial,
@@ -224,7 +225,7 @@ final class NativeRequirementPlanning {
                                                                    List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations,
                                                                    long remaining, boolean insert, boolean partial, long outputRequested) {
         long accepted = Math.max(0L, outputRequested - remaining);
-        if (remaining > 0L && (!insert || !partial)) return new RequirementPlan.OperationPlan(List.of(),
+        if (remaining > 0L && (!insert || !partial || accepted == 0L)) return new RequirementPlan.OperationPlan(List.of(),
                 RequirementHandlerSupport.blocked(requirement, context, insert ? BuiltinFailureReasons.MISSING_OUTPUT
                         : requirement instanceof EnergyRequirement ? BuiltinFailureReasons.MISSING_ENERGY
                         : BuiltinFailureReasons.MISSING_INPUT, Map.of("shortfall", Long.toString(remaining))),
