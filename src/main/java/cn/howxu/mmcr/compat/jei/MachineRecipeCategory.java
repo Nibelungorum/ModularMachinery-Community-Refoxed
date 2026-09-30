@@ -36,10 +36,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.fluids.FluidStack;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -79,6 +81,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
 
         @Override
+        @Deprecated(forRemoval = true)
         public List<Component> getTooltip(FluidStack ingredient, TooltipFlag tooltipFlag) {
             return fluidTooltip(ingredient);
         }
@@ -379,6 +382,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             }
 
             @Override
+            @Deprecated(forRemoval = true)
             public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
                 Minecraft minecraft = Minecraft.getInstance();
                 ItemStack candidate = levelCandidate(requirement,
@@ -386,6 +390,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 return candidate.isEmpty()
                         ? List.of()
                         : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+
             }
         };
     }
