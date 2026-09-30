@@ -126,7 +126,7 @@ public final class ModCapabilities {
         event.registerBlockEntity(ITEM_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
             if (!(be instanceof IOPortBlockEntity port)) return null;
             IItemHandler handler = itemHandler(port, bindings, side);
-            return handler == null ? null : new DirectionalItemHandler(handler, canInsert, true);
+            return handler == null ? null : new DirectionalItemHandler(handler, canInsert, !canInsert);
         });
         event.registerBlockEntity(FLUID_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
             if (!(be instanceof IOPortBlockEntity port)) return null;

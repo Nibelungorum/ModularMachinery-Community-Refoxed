@@ -64,7 +64,7 @@ public class SharedMultiblockIoGameTest {
             helper.destroyBlock(first.getBlockPos());
         });
         helper.runAtTickTime(8, () -> {
-            IOPortBlockEntity port = helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class);
+            IOPortBlockEntity port = helper.getBlockEntity(sharedEnergy);
             helper.assertTrue(second.structureSnapshot().formed(), "second controller remains formed after first teardown");
             helper.assertTrue(port.linkedControllerPositions().contains(second.getBlockPos()), "shared port retains second owner");
             helper.succeed();
@@ -80,9 +80,9 @@ public class SharedMultiblockIoGameTest {
         helper.runAtTickTime(4, () -> {
             first.serverTick();
             second.serverTick();
-            ItemInputBusBlockEntity input = helper.getBlockEntity(sharedInput, ItemInputBusBlockEntity.class);
+            ItemInputBusBlockEntity input = helper.getBlockEntity(sharedInput);
             for (int slot = 0; slot < 10; slot++) {
-                input.itemStorage().setContents(slot, new ItemStack(Items.IRON_INGOT), 1L);
+                input.nativeItemHandler().setContents(slot, new ItemStack(Items.IRON_INGOT), 1L);
             }
             MachineRecipe recipe = itemRecipe("shared_input_start");
             StructureClaimRegistry.ResourceDomain domain = first.resourceDomain();
@@ -94,7 +94,7 @@ public class SharedMultiblockIoGameTest {
             coordinator.resolve(domain);
 
             helper.assertTrue(totalParallelism.get() == 10, "two requests for eight must receive total parallelism ten");
-            helper.assertTrue(input.itemStorage().amount(0) == 0L,
+            helper.assertTrue(input.nativeItemHandler().amount(0) == 0L,
                     "shared input is fully committed");
             helper.succeed();
         });
@@ -115,7 +115,7 @@ public class SharedMultiblockIoGameTest {
         helper.runAtTickTime(4, () -> {
             first.serverTick();
             second.serverTick();
-            energy.set(helper.getBlockEntity(sharedEnergy, EnergyInputHatchBlockEntity.class));
+            energy.set(helper.getBlockEntity(sharedEnergy));
             domain.set(first.resourceDomain());
             energy.get().energyStorage().forceInsert(15, false);
             enqueueTick(coordinator, domain.get(), first, recipe, firstTicks);
@@ -199,7 +199,7 @@ public class SharedMultiblockIoGameTest {
         DynamicMachine machine = new DynamicMachine(MMCR.id(path), path,
                 new BlockArray(Map.of(sharedPort.subtract(controllerPos), new BlockPredicate.AnyOf(sharedChoices))),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none());
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         return controller;
     }

@@ -45,11 +45,9 @@ public class AE2TerminalGameTest {
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
         helper.runAtTickTime(2, () -> {
-            WirelessAccessPointBlockEntity accessPoint = helper.getBlockEntity(accessPointPos,
-                    WirelessAccessPointBlockEntity.class);
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
-            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
-                    CreativeEnergyCellBlockEntity.class);
+            WirelessAccessPointBlockEntity accessPoint = helper.getBlockEntity(accessPointPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
             chest.setCell(AEItems.ITEM_CELL_1K.stack());
             helper.assertTrue(accessPoint.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
                             && energy.getMainNode().getNode() != null,
@@ -59,7 +57,7 @@ public class AE2TerminalGameTest {
         });
 
         helper.runAtTickTime(4, () -> {
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
             chest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE,
                     IActionSource.empty());
             ServerPlayer player = player(helper);

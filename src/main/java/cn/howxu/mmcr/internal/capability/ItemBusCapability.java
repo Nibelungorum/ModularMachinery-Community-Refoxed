@@ -53,10 +53,15 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
     private final AsyncPlanningFacet asyncPlanning;
 
     public ItemBusCapability(IItemHandler itemHandler, IOType ioType) {
-        this(null, itemHandler, ioType);
+        this(null, itemHandler, ioType, true);
     }
 
     public ItemBusCapability(IOPortBlockEntity port, IItemHandler itemHandler, IOType ioType) {
+        this(port, itemHandler, ioType, true);
+    }
+
+    public ItemBusCapability(IOPortBlockEntity port, IItemHandler itemHandler, IOType ioType,
+                             boolean exposeTransferFacet) {
         if (itemHandler == null) throw new IllegalArgumentException("itemHandler must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.port = port;
@@ -84,8 +89,11 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
                 return commitNativeAsync(operation);
             }
         };
-        this.view = CapabilityFactories.view(type(), directions(), Set.of(ItemHandlerFacet.class, TransferFacet.class,
-                OperationFacet.class, PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
+        this.view = CapabilityFactories.view(type(), directions(), exposeTransferFacet
+                ? Set.of(ItemHandlerFacet.class, TransferFacet.class, OperationFacet.class,
+                        PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class)
+                : Set.of(ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class,
+                        SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     @Override public IItemHandler itemHandler() { return itemHandler; }

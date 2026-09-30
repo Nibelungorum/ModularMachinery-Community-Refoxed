@@ -24,18 +24,14 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import com.mojang.authlib.GameProfile;
-import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInstance;
-import net.minecraft.gametest.framework.TestData;
-import net.minecraft.gametest.framework.TestEnvironmentDefinition;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -46,13 +42,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,6 +84,12 @@ public final class NetworkInterfaceGameTests {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
+        event.register(NetworkInterfaceGameTests.class);
+    }
+
+    @GameTestGenerator
+    public static Collection<TestFunction> generateTests() {
+        List<TestFunction> event = new ArrayList<>();
         register(event, "network_interface_formed_max_count", 100,
                 NetworkInterfaceGameTests::formedStructureClaimsSortedInterfacesAndCleansExcludedInterfaces);
         register(event, "network_interface_key_card_duplicate", 120,
@@ -104,6 +106,7 @@ public final class NetworkInterfaceGameTests {
                 NetworkInterfaceGameTests::requestCallbackReceivesNullStorages);
         register(event, "network_interface_same_type_hashes", 160,
                 NetworkInterfaceGameTests::sameTypeTargetsUseDistinctMachineHashes);
+        return event;
     }
 
     private static void formedStructureClaimsSortedInterfacesAndCleansExcludedInterfaces(GameTestHelper helper) {
@@ -357,7 +360,7 @@ public final class NetworkInterfaceGameTests {
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         Machine machine = machine(id, new BlockArray(pattern), network, processors, failures);
         if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.setStructureCheckIntervalForTesting(1);
         helper.runAtTickTime(5, () -> {
@@ -369,9 +372,9 @@ public final class NetworkInterfaceGameTests {
         for (BlockPos offset : interfaceOffsets) forceChunk(helper.getLevel(), helper.absolutePos(controllerPos.offset(offset)));
         if (storage) forceChunk(helper.getLevel(), helper.absolutePos(controllerPos.offset(storageOffset)));
         List<NetworkInterfaceBlockEntity> interfaces = new ArrayList<>(interfaceOffsets.stream()
-                .map(offset -> helper.getBlockEntity(controllerPos.offset(offset), NetworkInterfaceBlockEntity.class)).toList());
+                .map(offset -> helper.<NetworkInterfaceBlockEntity>getBlockEntity(controllerPos.offset(offset))).toList());
         DataStorageBlockEntity dataStorage = storage
-                ? helper.getBlockEntity(controllerPos.offset(storageOffset), DataStorageBlockEntity.class)
+                ? helper.getBlockEntity(controllerPos.offset(storageOffset))
                 : null;
         return new MachineFixture(controller, interfaces, dataStorage, machine);
     }
@@ -418,55 +421,16 @@ public final class NetworkInterfaceGameTests {
         return GlobalPos.of(Level.OVERWORLD, position);
     }
 
-    private static void register(RegisterGameTestsEvent event, String name, int maxTicks,
+    private static void register(Collection<TestFunction> tests, String name, int maxTicks,
                                   Consumer<GameTestHelper> test) {
-        Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
-        TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment,
-                ResourceLocation.fromNamespaceAndPath("minecraft", "empty"), maxTicks, 0, true,
-                Rotation.NONE, false, 1, 1, false, 128);
-        registerTest(event, MMCR.id(name), new SimpleGameTest(data, name, test));
-    }
-
-    private static void registerTest(RegisterGameTestsEvent event, ResourceLocation id, GameTestInstance instance) {
-        try {
-            event.getClass().getMethod("registerTest", ResourceLocation.class, GameTestInstance.class).invoke(event, id, instance);
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Unable to register GameTest " + id, exception);
-        }
+        tests.add(new TestFunction(MMCR.MODID, MMCR.id(name).toString(), "mmcr:empty",
+                maxTicks, 0, true, test));
     }
 
     private record MachineFixture(MachineControllerBlockEntity controller,
                                   List<NetworkInterfaceBlockEntity> interfaces,
                                   DataStorageBlockEntity storage,
                                   Machine machine) {
-    }
-
-    private static final class SimpleGameTest extends GameTestInstance {
-        private final String name;
-        private final Consumer<GameTestHelper> test;
-
-        private SimpleGameTest(TestData<Holder<TestEnvironmentDefinition<?>>> data, String name,
-                               Consumer<GameTestHelper> test) {
-            super(data);
-            this.name = name;
-            this.test = test;
-        }
-
-        @Override
-        public void run(GameTestHelper helper) {
-            test.accept(helper);
-        }
-
-        @Override
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        public MapCodec<? extends GameTestInstance> codec() {
-            return MapCodec.unit(this);
-        }
-
-        @Override
-        protected MutableComponent typeDescription() {
-            return Component.literal("MMCR " + name);
-        }
     }
 
     private static final class TestPlayer extends ServerPlayer {

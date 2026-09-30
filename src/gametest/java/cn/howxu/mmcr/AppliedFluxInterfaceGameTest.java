@@ -14,6 +14,7 @@ import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.appliedflux.loaded.tile.FluxEnergyInputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedflux.loaded.tile.FluxEnergyOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -52,8 +53,8 @@ public class AppliedFluxInterfaceGameTest {
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
                         .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
 
-        BlockEntity inputEntity = helper.getBlockEntity(inputPos, BlockEntity.class);
-        BlockEntity outputEntity = helper.getBlockEntity(outputPos, BlockEntity.class);
+        BlockEntity inputEntity = helper.getBlockEntity(inputPos);
+        BlockEntity outputEntity = helper.getBlockEntity(outputPos);
 
         helper.assertTrue(inputEntity instanceof FluxEnergyInputInterfaceBlockEntity,
                 "AppFlux input block resolves to FluxEnergyInputInterfaceBlockEntity");
@@ -87,8 +88,8 @@ public class AppliedFluxInterfaceGameTest {
 
             BlockState inputState = helper.getLevel().getBlockState(helper.absolutePos(inputPos));
             BlockState outputState = helper.getLevel().getBlockState(helper.absolutePos(outputPos));
-            BlockEntity inputEntity = helper.getBlockEntity(inputPos, BlockEntity.class);
-            BlockEntity outputEntity = helper.getBlockEntity(outputPos, BlockEntity.class);
+            BlockEntity inputEntity = helper.getBlockEntity(inputPos);
+            BlockEntity outputEntity = helper.getBlockEntity(outputPos);
             helper.assertTrue(Capabilities.EnergyStorage.BLOCK.getCapability(
                             helper.getLevel(), helper.absolutePos(inputPos), inputState,
                             inputEntity, Direction.NORTH) == null,
@@ -112,8 +113,8 @@ public class AppliedFluxInterfaceGameTest {
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get(OUTPUT_PORT_ID.getPath()).get().defaultBlockState());
 
         helper.runAtTickTime(1, () -> {
-            BlockEntity inputEntity = helper.getBlockEntity(inputPos, BlockEntity.class);
-            BlockEntity outputEntity = helper.getBlockEntity(outputPos, BlockEntity.class);
+            BlockEntity inputEntity = helper.getBlockEntity(inputPos);
+            BlockEntity outputEntity = helper.getBlockEntity(outputPos);
 
             assertHasNoTransferFacet(inputEntity);
             assertHasNoTransferFacet(outputEntity);
@@ -147,8 +148,7 @@ public class AppliedFluxInterfaceGameTest {
             MachineRegistry.register(machine);
         }
 
-        var controller = helper.getBlockEntity(controllerPos,
-                cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.setStructureCheckIntervalForTesting(1);
         helper.runAtTickTime(1, () -> {

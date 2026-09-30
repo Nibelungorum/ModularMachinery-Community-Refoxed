@@ -31,9 +31,8 @@ public final class Task2AE2OutputGameTest {
         OutputInterfaceBlockEntity output = placeOutput(helper, outputPos);
         helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
-        MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
-        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
-                CreativeEnergyCellBlockEntity.class);
+        MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
         chest.setCell(AEItems.ITEM_CELL_1K.stack());
 
         helper.runAtTickTime(2, () -> {

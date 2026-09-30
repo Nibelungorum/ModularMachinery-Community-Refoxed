@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -29,8 +30,8 @@ public class AutoIOGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         helper.setBlock(chestPos, Blocks.CHEST.defaultBlockState());
 
-        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
-        ChestBlockEntity chest = helper.getBlockEntity(chestPos, ChestBlockEntity.class);
+        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos);
+        ChestBlockEntity chest = helper.getBlockEntity(chestPos);
         chest.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
 
         inputBus.toggleAutoIOEnabled();
@@ -52,19 +53,19 @@ public class AutoIOGameTest {
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
         helper.setBlock(receiverPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
 
-        FluidHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, FluidHatchBlockEntity.class);
-        FluidHatchBlockEntity receiver = helper.getBlockEntity(receiverPos, FluidHatchBlockEntity.class);
-        outputHatch.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1000), false);
+        FluidHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos);
+        FluidHatchBlockEntity receiver = helper.getBlockEntity(receiverPos);
+        outputHatch.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 1000), false);
 
         outputHatch.toggleAutoIOEnabled();
         outputHatch.setAllAutoIOSides(false);
         outputHatch.setAutoIOSide(Direction.EAST, true);
         helper.runAtTickTime(60, outputHatch::serverTick);
         helper.runAtTickTime(80, () -> {
-            FluidStack exported = receiver.fluidStorage().getFluidStack();
+            FluidStack exported = receiver.nativeFluidHandler().getFluidStack();
             helper.assertTrue(exported.getFluid() == Fluids.WATER, "Fluid output hatch exports water east");
             helper.assertTrue(exported.getAmount() > 0, "Fluid output hatch moves water into east receiver");
-            helper.assertTrue(outputHatch.fluidStorage().getAmountAsLong() < 1000, "Fluid output hatch loses water to auto output");
+            helper.assertTrue(outputHatch.nativeFluidHandler().getAmountAsLong() < 1000, "Fluid output hatch loses water to auto output");
             helper.succeed();
         });
     }
@@ -75,8 +76,8 @@ public class AutoIOGameTest {
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState());
         helper.setBlock(receiverPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
 
-        EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, EnergyHatchBlockEntity.class);
-        EnergyHatchBlockEntity receiver = helper.getBlockEntity(receiverPos, EnergyHatchBlockEntity.class);
+        EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos);
+        EnergyHatchBlockEntity receiver = helper.getBlockEntity(receiverPos);
         var outputStorage = outputHatch.energyStorage();
         outputStorage.forceInsert(700, false);
 
@@ -99,11 +100,11 @@ public class AutoIOGameTest {
         helper.setBlock(itemSourcePos, Blocks.CHEST.defaultBlockState());
         helper.setBlock(fluidSourcePos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
 
-        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos, CombinedPortBlockEntity.class);
-        ChestBlockEntity itemSource = helper.getBlockEntity(itemSourcePos, ChestBlockEntity.class);
-        FluidHatchBlockEntity fluidSource = helper.getBlockEntity(fluidSourcePos, FluidHatchBlockEntity.class);
+        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos);
+        ChestBlockEntity itemSource = helper.getBlockEntity(itemSourcePos);
+        FluidHatchBlockEntity fluidSource = helper.getBlockEntity(fluidSourcePos);
         itemSource.setItem(0, new ItemStack(Items.IRON_INGOT, 3));
-        fluidSource.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
+        fluidSource.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
         CapabilityType itemType = capabilityType(input, BuiltinCapabilityDefinitions.ITEM_TYPE);
         CapabilityType fluidType = capabilityType(input, BuiltinCapabilityDefinitions.FLUID_TYPE);
@@ -112,19 +113,19 @@ public class AutoIOGameTest {
 
         final long[] fluidBeforeDisable = {0L};
         helper.runAtTickTime(30, () -> {
-            helper.assertTrue(input.itemStorage().amount(0) > 0L, "Combined input imports items");
-            helper.assertTrue(input.fluidStorage().getAmountAsLong() > 0L, "Combined input imports fluids");
+            helper.assertTrue(input.nativeItemHandler().amount(0) > 0L, "Combined input imports items");
+            helper.assertTrue(input.nativeFluidHandler().getAmountAsLong() > 0L, "Combined input imports fluids");
 
-            fluidBeforeDisable[0] = input.fluidStorage().getAmountAsLong();
+            fluidBeforeDisable[0] = input.nativeFluidHandler().getAmountAsLong();
             input.setAutoIOSide(itemType, Direction.EAST, false);
             itemSource.setItem(0, new ItemStack(Items.GOLD_INGOT, 2));
-            fluidSource.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
+            fluidSource.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
         });
         helper.runAtTickTime(80, () -> {
             helper.assertTrue(itemSource.getItem(0).is(Items.GOLD_INGOT)
                             && itemSource.getItem(0).getCount() == 2,
                     "Disabling only the item profile stops item input");
-            helper.assertTrue(input.fluidStorage().getAmountAsLong() > fluidBeforeDisable[0],
+            helper.assertTrue(input.nativeFluidHandler().getAmountAsLong() > fluidBeforeDisable[0],
                     "Disabling only the item profile keeps fluid input active");
             helper.succeed();
         });
@@ -138,11 +139,11 @@ public class AutoIOGameTest {
         helper.setBlock(itemTargetPos, Blocks.CHEST.defaultBlockState());
         helper.setBlock(fluidTargetPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
 
-        CombinedPortBlockEntity output = helper.getBlockEntity(outputPos, CombinedPortBlockEntity.class);
-        ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos, ChestBlockEntity.class);
-        FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos, FluidHatchBlockEntity.class);
+        CombinedPortBlockEntity output = helper.getBlockEntity(outputPos);
+        ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos);
+        FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos);
         setItem(output, 0, new ItemStack(Items.IRON_INGOT, 3));
-        output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
+        output.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
         CapabilityType itemType = capabilityType(output, BuiltinCapabilityDefinitions.ITEM_TYPE);
         CapabilityType fluidType = capabilityType(output, BuiltinCapabilityDefinitions.FLUID_TYPE);
@@ -152,18 +153,18 @@ public class AutoIOGameTest {
         final long[] fluidBeforeDisable = {0L};
         helper.runAtTickTime(30, () -> {
             helper.assertTrue(itemTarget.getItem(0).is(Items.IRON_INGOT), "Combined output exports items");
-            helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > 0L, "Combined output exports fluids");
+            helper.assertTrue(fluidTarget.nativeFluidHandler().getAmountAsLong() > 0L, "Combined output exports fluids");
 
-            fluidBeforeDisable[0] = fluidTarget.fluidStorage().getAmountAsLong();
+            fluidBeforeDisable[0] = fluidTarget.nativeFluidHandler().getAmountAsLong();
             output.setAutoIOSide(itemType, Direction.EAST, false);
             setItem(output, 1, new ItemStack(Items.GOLD_INGOT, 2));
-            output.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
+            output.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 1_000), false);
         });
         helper.runAtTickTime(120, () -> {
             helper.assertTrue(itemTarget.getItem(1).isEmpty()
-                            && output.itemStorage().amount(1) == 2L,
+                            && output.nativeItemHandler().amount(1) == 2L,
                     "Disabling only the item profile stops item output");
-            helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > fluidBeforeDisable[0],
+            helper.assertTrue(fluidTarget.nativeFluidHandler().getAmountAsLong() > fluidBeforeDisable[0],
                     "Disabling only the item profile keeps fluid output active");
             helper.succeed();
         });
@@ -177,29 +178,29 @@ public class AutoIOGameTest {
         helper.setBlock(itemTargetPos, Blocks.CHEST.defaultBlockState());
         helper.setBlock(fluidTargetPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
 
-        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos, CombinedPortBlockEntity.class);
-        ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos, ChestBlockEntity.class);
-        FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos, FluidHatchBlockEntity.class);
+        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos);
+        ChestBlockEntity itemTarget = helper.getBlockEntity(itemTargetPos);
+        FluidHatchBlockEntity fluidTarget = helper.getBlockEntity(fluidTargetPos);
         setItem(input, 0, new ItemStack(Items.COBBLESTONE, 3));
-        input.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
+        input.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 2_000), false);
 
         CapabilityType itemType = capabilityType(input, BuiltinCapabilityDefinitions.ITEM_TYPE);
         CapabilityType fluidType = capabilityType(input, BuiltinCapabilityDefinitions.FLUID_TYPE);
         helper.assertTrue(input.ejectContents(itemType, true), "Item-specific Shift ejection moves item contents");
         helper.assertTrue(itemTarget.getItem(0).is(Items.COBBLESTONE), "Item ejection reaches the item handler");
-        helper.assertTrue(input.fluidStorage().getAmountAsLong() == 2_000,
+        helper.assertTrue(input.nativeFluidHandler().getAmountAsLong() == 2_000,
                 "Item-specific ejection leaves fluid contents untouched");
-        helper.assertTrue(fluidTarget.fluidStorage().isEmpty(), "Item-specific ejection does not fill fluid handlers");
+        helper.assertTrue(fluidTarget.nativeFluidHandler().isEmpty(), "Item-specific ejection does not fill fluid handlers");
 
         int itemTargetBeforeFluidEjection = itemTarget.getItem(0).getCount();
         setItem(input, 0, new ItemStack(Items.COBBLESTONE, 3));
-        long fluidBeforeFluidEjection = input.fluidStorage().getAmountAsLong();
+        long fluidBeforeFluidEjection = input.nativeFluidHandler().getAmountAsLong();
         helper.assertTrue(input.ejectContents(fluidType), "Fluid-specific ejection moves fluid contents");
-        helper.assertTrue(fluidTarget.fluidStorage().getAmountAsLong() > 0L,
+        helper.assertTrue(fluidTarget.nativeFluidHandler().getAmountAsLong() > 0L,
                 "Fluid ejection reaches the fluid handler");
-        helper.assertTrue(input.fluidStorage().getAmountAsLong() < fluidBeforeFluidEjection,
+        helper.assertTrue(input.nativeFluidHandler().getAmountAsLong() < fluidBeforeFluidEjection,
                 "Fluid-specific ejection drains fluid contents");
-        helper.assertTrue(input.itemStorage().amount(0) == 3L,
+        helper.assertTrue(input.nativeItemHandler().amount(0) == 3L,
                 "Fluid-specific ejection leaves item source contents untouched");
         helper.assertTrue(itemTarget.getItem(0).getCount() == itemTargetBeforeFluidEjection,
                 "Fluid-specific ejection leaves item target contents untouched");
@@ -218,7 +219,7 @@ public class AutoIOGameTest {
             int secondCount = secondTarget.getItem(0).getCount();
             helper.assertTrue((firstCount == 2 && secondCount == 0) || (firstCount == 0 && secondCount == 2),
                     "Exactly one adjacent item target receives all contents");
-            helper.assertTrue(source.itemStorage().amount(0) == 0L, "Item input bus is empty after a complete first transfer");
+            helper.assertTrue(source.nativeItemHandler().amount(0) == 0L, "Item input bus is empty after a complete first transfer");
             helper.succeed();
         });
     }
@@ -237,7 +238,7 @@ public class AutoIOGameTest {
                     "First item target receives its remaining capacity: " + firstTarget.getItem(0).getCount());
             helper.assertTrue(secondTarget.getItem(0).getCount() == 64,
                     "Second item target receives the remaining item: " + secondTarget.getItem(0).getCount());
-            helper.assertTrue(source.itemStorage().amount(0) == 0L, "Item input bus is empty after both partial transfers");
+            helper.assertTrue(source.nativeItemHandler().amount(0) == 0L, "Item input bus is empty after both partial transfers");
             helper.succeed();
         });
     }
@@ -256,7 +257,7 @@ public class AutoIOGameTest {
                     "First item target is filled: " + firstTarget.getItem(0).getCount());
             helper.assertTrue(secondTarget.getItem(0).getCount() == 64,
                     "Second item target is filled: " + secondTarget.getItem(0).getCount());
-            helper.assertTrue(source.itemStorage().amount(0) == 1L, "Item input bus preserves the remaining item");
+            helper.assertTrue(source.nativeItemHandler().amount(0) == 1L, "Item input bus preserves the remaining item");
             helper.succeed();
         });
     }
@@ -265,15 +266,15 @@ public class AutoIOGameTest {
         FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
         FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
         FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
-        source.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
+        source.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 2), false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects its contents");
-            long firstAmount = firstTarget.fluidStorage().getAmountAsLong();
-            long secondAmount = secondTarget.fluidStorage().getAmountAsLong();
+            long firstAmount = firstTarget.nativeFluidHandler().getAmountAsLong();
+            long secondAmount = secondTarget.nativeFluidHandler().getAmountAsLong();
             helper.assertTrue((firstAmount == 2 && secondAmount == 0) || (firstAmount == 0 && secondAmount == 2),
                     "Exactly one adjacent fluid target receives all contents");
-            helper.assertTrue(source.fluidStorage().isEmpty(), "Fluid input hatch is empty after a complete first transfer");
+            helper.assertTrue(source.nativeFluidHandler().isEmpty(), "Fluid input hatch is empty after a complete first transfer");
             helper.succeed();
         });
     }
@@ -282,15 +283,15 @@ public class AutoIOGameTest {
         FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
         FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
         FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
-        source.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2), false);
-        firstTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
-        secondTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        source.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 2), false);
+        firstTarget.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        secondTarget.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects to partially available targets");
-            helper.assertTrue(firstTarget.fluidStorage().getAmountAsLong() == 8000, "First fluid target receives its remaining capacity");
-            helper.assertTrue(secondTarget.fluidStorage().getAmountAsLong() == 8000, "Second fluid target receives the remaining fluid");
-            helper.assertTrue(source.fluidStorage().isEmpty(), "Fluid input hatch is empty after both partial transfers");
+            helper.assertTrue(firstTarget.nativeFluidHandler().getAmountAsLong() == 8000, "First fluid target receives its remaining capacity");
+            helper.assertTrue(secondTarget.nativeFluidHandler().getAmountAsLong() == 8000, "Second fluid target receives the remaining fluid");
+            helper.assertTrue(source.nativeFluidHandler().isEmpty(), "Fluid input hatch is empty after both partial transfers");
             helper.succeed();
         });
     }
@@ -299,15 +300,15 @@ public class AutoIOGameTest {
         FluidHatchBlockEntity source = placeFluidInputPort(helper, new BlockPos(0, 1, 0));
         FluidHatchBlockEntity firstTarget = placeFluidInputPort(helper, new BlockPos(1, 1, 0));
         FluidHatchBlockEntity secondTarget = placeFluidInputPort(helper, new BlockPos(-1, 1, 0));
-        source.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 3), false);
-        firstTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
-        secondTarget.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        source.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 3), false);
+        firstTarget.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
+        secondTarget.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 7999), false);
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(source.ejectContents(), "Fluid input hatch ejects until adjacent capacity is exhausted");
-            helper.assertTrue(firstTarget.fluidStorage().getAmountAsLong() == 8000, "First fluid target is filled");
-            helper.assertTrue(secondTarget.fluidStorage().getAmountAsLong() == 8000, "Second fluid target is filled");
-            helper.assertTrue(source.fluidStorage().getAmountAsLong() == 1, "Fluid input hatch preserves the remaining fluid");
+            helper.assertTrue(firstTarget.nativeFluidHandler().getAmountAsLong() == 8000, "First fluid target is filled");
+            helper.assertTrue(secondTarget.nativeFluidHandler().getAmountAsLong() == 8000, "Second fluid target is filled");
+            helper.assertTrue(source.nativeFluidHandler().getAmountAsLong() == 1, "Fluid input hatch preserves the remaining fluid");
             helper.succeed();
         });
     }
@@ -365,22 +366,22 @@ public class AutoIOGameTest {
 
     private ItemBusBlockEntity placeItemInputPort(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        return helper.getBlockEntity(pos, ItemBusBlockEntity.class);
+        return helper.getBlockEntity(pos);
     }
 
     private FluidHatchBlockEntity placeFluidInputPort(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
-        return helper.getBlockEntity(pos, FluidHatchBlockEntity.class);
+        return helper.getBlockEntity(pos);
     }
 
     private EnergyHatchBlockEntity placeEnergyInputPort(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        return helper.getBlockEntity(pos, EnergyHatchBlockEntity.class);
+        return helper.getBlockEntity(pos);
     }
 
     private ChestBlockEntity placeChest(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, Blocks.CHEST.defaultBlockState());
-        return helper.getBlockEntity(pos, ChestBlockEntity.class);
+        return helper.getBlockEntity(pos);
     }
 
     private void fillChestExceptOne(ChestBlockEntity chest) {
@@ -405,12 +406,13 @@ public class AutoIOGameTest {
     }
 
     private static void setItem(IOPortBlockEntity port, int slot, ItemStack stack) {
-        port.itemStorage().setContents(slot, stack, stack.getCount());
+        ((LongItemStorage) port.nativeItemHandler()).setContents(slot, stack, stack.getCount());
     }
 
     private static ItemStack item(IOPortBlockEntity port, int slot) {
-        ItemStack resource = port.itemStorage().resource(slot);
+        LongItemStorage storage = (LongItemStorage) port.nativeItemHandler();
+        ItemStack resource = storage.resource(slot);
         return resource.isEmpty() ? ItemStack.EMPTY
-                : resource.copyWithCount((int) Math.min(port.itemStorage().amount(slot), resource.getMaxStackSize()));
+                : resource.copyWithCount((int) Math.min(storage.amount(slot), resource.getMaxStackSize()));
     }
 }

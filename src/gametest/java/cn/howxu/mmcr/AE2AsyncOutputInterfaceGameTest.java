@@ -61,12 +61,10 @@ public class AE2AsyncOutputInterfaceGameTest {
         helper.setBlock(fluidChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
-        AsyncOutputInterfaceBlockEntity port = helper.getBlockEntity(portPos,
-                AsyncOutputInterfaceBlockEntity.class);
-        MEChestBlockEntity itemChest = helper.getBlockEntity(itemChestPos, MEChestBlockEntity.class);
-        MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos, MEChestBlockEntity.class);
-        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
-                CreativeEnergyCellBlockEntity.class);
+        AsyncOutputInterfaceBlockEntity port = helper.getBlockEntity(portPos);
+        MEChestBlockEntity itemChest = helper.getBlockEntity(itemChestPos);
+        MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos);
+        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
         itemChest.setCell(AEItems.ITEM_CELL_1K.stack());
         fluidChest.setCell(AEItems.FLUID_CELL_1K.stack());
 

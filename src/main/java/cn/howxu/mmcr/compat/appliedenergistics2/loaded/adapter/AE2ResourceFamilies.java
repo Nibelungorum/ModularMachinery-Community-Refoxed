@@ -47,7 +47,7 @@ public final class AE2ResourceFamilies {
             IOPortBlockEntity host = (IOPortBlockEntity) context.host();
             IOType direction = directions.supports(IOType.INPUT) && directions.supports(IOType.OUTPUT)
                     ? IOType.OUTPUT : context.ioType();
-            return new ItemBusCapability(host, factory.apply(host), direction);
+            return new ItemBusCapability(host, factory.apply(host), direction, nativeTransferExposure);
         }, (binding, tier) -> true, nativeTransferExposure);
     }
 
@@ -63,7 +63,7 @@ public final class AE2ResourceFamilies {
             IOPortBlockEntity host = (IOPortBlockEntity) context.host();
             IOType direction = directions.supports(IOType.INPUT) && directions.supports(IOType.OUTPUT)
                     ? IOType.OUTPUT : context.ioType();
-            return new FluidHatchCapability(host, factory.apply(host), direction);
+            return new FluidHatchCapability(host, factory.apply(host), direction, nativeTransferExposure);
         }, (binding, tier) -> true, nativeTransferExposure);
     }
 

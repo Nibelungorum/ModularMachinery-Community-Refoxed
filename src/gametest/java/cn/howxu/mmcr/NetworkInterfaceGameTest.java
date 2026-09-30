@@ -42,8 +42,8 @@ public class NetworkInterfaceGameTest {
                                                                           BlockPos secondPos) {
         helper.setBlock(firstPos, ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());
         helper.setBlock(secondPos, ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());
-        NetworkInterfaceBlockEntity first = helper.getBlockEntity(firstPos, NetworkInterfaceBlockEntity.class);
-        NetworkInterfaceBlockEntity second = helper.getBlockEntity(secondPos, NetworkInterfaceBlockEntity.class);
+        NetworkInterfaceBlockEntity first = helper.getBlockEntity(firstPos);
+        NetworkInterfaceBlockEntity second = helper.getBlockEntity(secondPos);
         GlobalPos firstEndpoint = GlobalPos.of(helper.getLevel().dimension(), first.getBlockPos());
         GlobalPos secondEndpoint = GlobalPos.of(helper.getLevel().dimension(), second.getBlockPos());
         MachineReference machine = new MachineReference(MMCR.id("network_interface_lifecycle"), 1L);

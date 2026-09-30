@@ -41,8 +41,8 @@ public class SmartInterfaceGameTest {
         DynamicMachine machine = new DynamicMachine(MMCR.id("smart_interface_test"), "Smart Interface Test",
                 new BlockArray(Map.of(interfacePos.subtract(controllerPos),
                         new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get()))));
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
-        SmartInterfaceBlockEntity smartInterface = helper.getBlockEntity(interfacePos, SmartInterfaceBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
+        SmartInterfaceBlockEntity smartInterface = helper.getBlockEntity(interfacePos);
         BlockPos controllerWorldPos = controller.getBlockPos();
         controller.setMachine(machine);
 

@@ -28,10 +28,9 @@ public class TagComponentIngredientGameTest {
 
     public void tagIngredientMatchesComponentPredicate(GameTestHelper helper) {
         var registryAccess = helper.getLevel().registryAccess();
-        var items = registryAccess.lookupOrThrow(Registries.ITEM);
-        var ingredient = new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(ItemTags.LOGS)), 2,
+        var ingredient = new MachineIngredient.ItemIngredient(Ingredient.of(ItemTags.LOGS), 2,
                 DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString("""
-                        { 'minecraft:custom_name': { text: 'Validated' } }
+                        { 'minecraft:custom_name': 'Validated' }
                         """)).getOrThrow(), 1F);
         var recipe = MachineRecipe.fromCanonical(ResourceLocation.parse("mmcr:tag_component_input"),
                 MMCR.id("iron_compressor"), 20, List.of(MachineRequirement.fromInput(ingredient)), List.of(),

@@ -32,6 +32,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
@@ -60,7 +61,7 @@ public class MultiFactoryControllerGameTest {
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH));
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
 
         BlockPos firstPos = controllerPos.offset(1, 0, 0);
@@ -86,10 +87,10 @@ public class MultiFactoryControllerGameTest {
         helper.assertTrue(factoryComponentCount(controller) == 2, "reformed structure should reacquire both capacities");
 
         ServerPlayer ordinary = observer(helper, "mmcr-multi-factory-ordinary");
-        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         ordinary.containerMenu = ordinaryMenu;
         ServerPlayer factory = observer(helper, "mmcr-multi-factory-factory");
-        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller, factory);
+        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller, factory);
         factory.containerMenu = factoryMenu;
         helper.getLevel().players().addAll(List.of(ordinary, factory));
         helper.assertTrue(ordinary.containerMenu == ordinaryMenu && factory.containerMenu == factoryMenu,
@@ -142,7 +143,7 @@ public class MultiFactoryControllerGameTest {
 
     private static void placeFactory(GameTestHelper helper, BlockPos pos) {
         helper.setBlock(pos, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        helper.getBlockEntity(pos, FactorySchedulerBlockEntity.class);
+        helper.getBlockEntity(pos);
     }
 
     private static ControllerScreenTextSnapshot screenTextSnapshot(MachineControllerBlockEntity controller) {

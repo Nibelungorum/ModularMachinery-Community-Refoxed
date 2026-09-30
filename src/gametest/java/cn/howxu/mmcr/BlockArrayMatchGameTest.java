@@ -19,7 +19,7 @@ public class BlockArrayMatchGameTest {
 
         var machine = MachineRegistry.getMachine(MMCR.id("test_cube"));
 
-        var be = helper.getBlockEntity(ctrlPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity be = helper.getBlockEntity(ctrlPos);
         be.setMachine(machine);
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(be.structureSnapshot().formed(), "Structure formed after bounded scan");

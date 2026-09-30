@@ -10,6 +10,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 
 public class PortMenuDirectionGameTest {
 
@@ -19,16 +20,16 @@ public class PortMenuDirectionGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
 
-        Player player = null;
-        Inventory inventory = new Inventory(null, null);
-        ItemBusMenu inputMenu = new ItemBusMenu(1, inventory, helper.getBlockEntity(inputPos, ItemBusBlockEntity.class));
-        ItemBusMenu outputMenu = new ItemBusMenu(2, inventory, helper.getBlockEntity(outputPos, ItemBusBlockEntity.class));
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        Inventory inventory = new Inventory(player);
+        ItemBusMenu inputMenu = new ItemBusMenu(1, inventory, helper.getBlockEntity(inputPos));
+        ItemBusMenu outputMenu = new ItemBusMenu(2, inventory, helper.getBlockEntity(outputPos));
 
         Slot inputSlot = inputMenu.getSlot(0);
         helper.assertTrue(inputSlot.mayPlace(new ItemStack(Items.IRON_INGOT)), "Input slot accepts placement");
 
-        helper.getBlockEntity(outputPos, ItemBusBlockEntity.class).itemStorage()
-                .setContents(0, new ItemStack(Items.GOLD_INGOT), 1L);
+        ItemBusBlockEntity outputBus = helper.getBlockEntity(outputPos);
+        outputBus.nativeItemHandler().setContents(0, new ItemStack(Items.GOLD_INGOT), 1L);
         Slot outputSlot = outputMenu.getSlot(0);
         helper.assertTrue(outputSlot.mayPlace(new ItemStack(Items.GOLD_INGOT)), "Output slot accepts placement");
         helper.assertTrue(outputSlot.mayPickup(player), "Output slot accepts pickup");

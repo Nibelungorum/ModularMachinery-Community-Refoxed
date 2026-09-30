@@ -50,8 +50,8 @@ public class WrenchDismantleGameTest {
     public void wrenchDismantlesItemBusAndDropsItsContents(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
-        bus.itemStorage().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
+        ItemBusBlockEntity bus = helper.getBlockEntity(pos);
+        bus.nativeItemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
 
         ServerPlayer player = player(helper);
         player.setPose(Pose.CROUCHING);

@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
@@ -48,24 +49,24 @@ public class CombinedPortGameTest {
         BlockPos outputPos = new BlockPos(2, 1, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState());
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("combined_output_basic").get().defaultBlockState());
-        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos, CombinedPortBlockEntity.class);
-        CombinedPortBlockEntity output = helper.getBlockEntity(outputPos, CombinedPortBlockEntity.class);
+        CombinedPortBlockEntity input = helper.getBlockEntity(inputPos);
+        CombinedPortBlockEntity output = helper.getBlockEntity(outputPos);
         ServerPlayer player = player(helper);
 
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET, 2));
         InteractionResult emptied = use(helper, input, player);
         helper.assertTrue(emptied.consumesAction(), "Combined input accepts a filled fluid container");
-        helper.assertTrue(input.fluidStorage().getAmountAsLong() == 1_000L,
+        helper.assertTrue(input.nativeFluidHandler().getAmountAsLong() == 1_000L,
                 "Combined input receives one bucket of fluid");
         helper.assertTrue(player.getInventory().contains(new ItemStack(Items.BUCKET)),
                 "Combined input returns an empty bucket");
 
-        output.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+        output.nativeFluidHandler().setFluid(new FluidStack(Fluids.WATER, 1_000));
         player.getInventory().clearContent();
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
         InteractionResult filled = use(helper, output, player);
         helper.assertTrue(filled.consumesAction(), "Combined output fills an empty fluid container");
-        helper.assertTrue(output.fluidStorage().isEmpty(), "Combined output drains one bucket");
+        helper.assertTrue(output.nativeFluidHandler().isEmpty(), "Combined output drains one bucket");
         helper.assertTrue(player.getInventory().contains(new ItemStack(Items.WATER_BUCKET)),
                 "Combined output returns a filled bucket");
 
@@ -79,25 +80,27 @@ public class CombinedPortGameTest {
                         extended, Direction.UP) != null,
                 "Extended combined fluid capability is available");
 
-        IOPortBlockEntity extendedInput = helper.getBlockEntity(extendedPos, IOPortBlockEntity.class);
+        IOPortBlockEntity extendedInput = helper.getBlockEntity(extendedPos);
+        LongFluidStorage extendedInputStorage = (LongFluidStorage) extendedInput.nativeFluidHandler();
         player.getInventory().clearContent();
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET, 2));
         InteractionResult extendedEmptied = use(helper, extendedInput, player);
         helper.assertTrue(extendedEmptied.consumesAction()
-                        && extendedInput.fluidStorage().amount(0) == 1_000L
+                        && extendedInputStorage.amount(0) == 1_000L
                         && player.getInventory().contains(new ItemStack(Items.BUCKET)),
                 "Extended combined input accepts a filled fluid container");
 
         BlockPos extendedOutputPos = new BlockPos(4, 1, 3);
         helper.setBlock(extendedOutputPos,
                 ModBlocks.BLOCKS.get("extended_combined_output_advanced").get().defaultBlockState());
-        IOPortBlockEntity extendedOutput = helper.getBlockEntity(extendedOutputPos, IOPortBlockEntity.class);
-        extendedOutput.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1_000), 1_000L);
+        IOPortBlockEntity extendedOutput = helper.getBlockEntity(extendedOutputPos);
+        LongFluidStorage extendedOutputStorage = (LongFluidStorage) extendedOutput.nativeFluidHandler();
+        extendedOutputStorage.setContents(0, new FluidStack(Fluids.WATER, 1_000), 1_000L);
         player.getInventory().clearContent();
         player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
         InteractionResult extendedFilled = use(helper, extendedOutput, player);
         helper.assertTrue(extendedFilled.consumesAction()
-                        && extendedOutput.fluidStorage().amount(0) == 0L
+                        && extendedOutputStorage.amount(0) == 0L
                         && player.getInventory().contains(new ItemStack(Items.WATER_BUCKET)),
                 "Extended combined output fills an empty fluid container");
         helper.succeed();
@@ -111,8 +114,8 @@ public class CombinedPortGameTest {
         helper.setBlock(controllerPos, controllerBlock.defaultBlockState().setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         helper.setBlock(portPos, portBlock.defaultBlockState());
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
-        CombinedPortBlockEntity port = helper.getBlockEntity(portPos, CombinedPortBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
+        CombinedPortBlockEntity port = helper.getBlockEntity(portPos);
         ResourceLocation texture = MMCR.id("block/combined_test_casing");
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("combined_appearance_test"),
@@ -138,7 +141,7 @@ public class CombinedPortGameTest {
         BlockPos position = port.getBlockPos();
         return helper.getLevel().getBlockState(position).useItemOn(
                 player.getMainHandItem(), helper.getLevel(), player, InteractionHand.MAIN_HAND,
-                new BlockHitResult(Vec3.atCenterOf(position), Direction.UP, position, false));
+                new BlockHitResult(Vec3.atCenterOf(position), Direction.UP, position, false)).result();
     }
 
     private static ServerPlayer player(GameTestHelper helper) {

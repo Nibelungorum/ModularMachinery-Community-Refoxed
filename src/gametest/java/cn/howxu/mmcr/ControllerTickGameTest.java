@@ -52,6 +52,7 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -100,14 +101,14 @@ public class ControllerTickGameTest {
 
         BlockPos controllerBlockPos = new BlockPos(1, 1, 1);
         helper.setBlock(controllerBlockPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
-        var controller = helper.getBlockEntity(controllerBlockPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerBlockPos);
         BlockPos controllerPos = controller.getBlockPos();
         ControllerScreenTextCache.clear(controllerPos);
         controller.setMachine(tickMachine);
         controller.serverTick();
         helper.assertTrue(controller.boundMachine().isPresent(), "Controller binds the startup machine");
         ServerPlayer observer = observer(helper);
-        observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        observer.containerMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         helper.getLevel().players().add(observer);
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
@@ -195,16 +196,15 @@ public class ControllerTickGameTest {
         BlockPos controllerBlockPos = new BlockPos(controllerX, 1, 1);
         ServerLevel level = helper.getLevel();
         helper.setBlock(controllerBlockPos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerBlockPos,
-                MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerBlockPos);
         BlockPos controllerPos = controller.getBlockPos();
         ChunkPos crossChunk = new ChunkPos((controllerPos.getX() + 1) >> 4, controllerPos.getZ() >> 4);
-        level.setChunkForced(crossChunk.x(), crossChunk.z(), true);
+        level.setChunkForced(crossChunk.x, crossChunk.z, true);
         controller.setMachine(recipeMachine);
         controller.setStructureCheckIntervalForTesting(1);
         controller.setStructureScanBatchesForTesting(1);
         ServerPlayer observer = observer(helper);
-        observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        observer.containerMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         level.players().add(observer);
         ControllerScreenTextCache.clear(controllerPos);
 
@@ -257,8 +257,7 @@ public class ControllerTickGameTest {
                 helper.assertTrue(!controller.isRedstonePaused(), "removing redstone resumes the recipe machine");
 
                 level.players().remove(observer);
-                level.setChunkForced(crossChunk.x(), crossChunk.z(), false);
-                level.getChunkSource().removeTicketWithRadius(TicketType.UNKNOWN, crossChunk, 0);
+                level.setChunkForced(crossChunk.x, crossChunk.z, false);
                 MachineControllerBlockEntity.markStructureChunkUnloaded(level, crossChunk);
                 helper.assertTrue(!controller.structureSnapshot().structureAreaLoaded(),
                         "unload notification updates the published structure state");
@@ -270,11 +269,11 @@ public class ControllerTickGameTest {
                             "unloaded recipe machine does not invoke machine-level hooks");
                     invokeHooks.set(false);
 
-                    level.setChunkForced(crossChunk.x(), crossChunk.z(), true);
+                    level.setChunkForced(crossChunk.x, crossChunk.z, true);
                     level.players().add(observer);
                     helper.runAfterDelay(2, () -> {
                         MachineControllerBlockEntity.markStructureChunkDirty(level, crossChunk);
-                        helper.assertTrue(level.hasChunk(crossChunk.x(), crossChunk.z())
+                        helper.assertTrue(level.hasChunk(crossChunk.x, crossChunk.z)
                                         && controller.structureSnapshot().formed()
                                         && controller.structureSnapshot().structureAreaLoaded(),
                                 "formed recipe machine recovers after its critical area is loaded");
@@ -301,7 +300,7 @@ public class ControllerTickGameTest {
         BlockPos inputPos = controllerPos.offset(1, 0, 0);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("controller_tick")).get().defaultBlockState());
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        insert(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class).itemStorage(), 0,
+        insert(helper.<ItemInputBusBlockEntity>getBlockEntity(inputPos).nativeItemHandler(), 0,
                 new ItemStack(Items.IRON_INGOT));
         ResourceLocation recipeId = MMCR.id("controller_tick_redstone_pause");
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("controller_tick"), 20,
@@ -309,7 +308,7 @@ public class ControllerTickGameTest {
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))), List.of(),
                 List.of(), 0, 1, false, false, false, Set.of()));
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("controller_tick")));
         controller.serverTick();
         controller.serverTick();
@@ -350,15 +349,15 @@ public class ControllerTickGameTest {
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
         helper.setBlock(storagePos, ModBlocks.DATA_STORAGE.get().defaultBlockState());
 
-        ItemInputBusBlockEntity firstInput = helper.getBlockEntity(firstInputPos, ItemInputBusBlockEntity.class);
-        ItemInputBusBlockEntity secondInput = helper.getBlockEntity(secondInputPos, ItemInputBusBlockEntity.class);
-        ItemOutputBusBlockEntity firstOutput = helper.getBlockEntity(firstOutputPos, ItemOutputBusBlockEntity.class);
-        ItemOutputBusBlockEntity secondOutput = helper.getBlockEntity(secondOutputPos, ItemOutputBusBlockEntity.class);
-        EnergyInputHatchBlockEntity energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class);
-        DataStorageBlockEntity storage = helper.getBlockEntity(storagePos, DataStorageBlockEntity.class);
-        insert(firstInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
-        insert(secondInput.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
-        insert(firstOutput.itemStorage(), 0, new ItemStack(Items.GOLD_NUGGET, 63));
+        ItemInputBusBlockEntity firstInput = helper.getBlockEntity(firstInputPos);
+        ItemInputBusBlockEntity secondInput = helper.getBlockEntity(secondInputPos);
+        ItemOutputBusBlockEntity firstOutput = helper.getBlockEntity(firstOutputPos);
+        ItemOutputBusBlockEntity secondOutput = helper.getBlockEntity(secondOutputPos);
+        EnergyInputHatchBlockEntity energy = helper.getBlockEntity(energyPos);
+        DataStorageBlockEntity storage = helper.getBlockEntity(storagePos);
+        insert(firstInput.nativeItemHandler(), 0, new ItemStack(Items.IRON_INGOT));
+        insert(secondInput.nativeItemHandler(), 0, new ItemStack(Items.IRON_INGOT));
+        insert(firstOutput.nativeItemHandler(), 0, new ItemStack(Items.GOLD_NUGGET, 63));
         fillOutput(firstOutput, 0);
         fillOutput(secondOutput, -1);
         energy.energyStorage().setAmount(5L);
@@ -399,10 +398,10 @@ public class ControllerTickGameTest {
                                     new ItemStack(Items.GOLD_NUGGET, 3), 1F,
                                     DataComponentPredicateSet.EMPTY, 1F),
                                     OutputPolicy.ALLOW_PARTIAL);
-                    List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.itemStorage());
-                    List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.itemStorage());
-                    List<ItemStack> firstOutputBeforeSimulation = snapshot(firstOutput.itemStorage());
-                    List<ItemStack> secondOutputBeforeSimulation = snapshot(secondOutput.itemStorage());
+                    List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.nativeItemHandler());
+                    List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.nativeItemHandler());
+                    List<ItemStack> firstOutputBeforeSimulation = snapshot(firstOutput.nativeItemHandler());
+                    List<ItemStack> secondOutputBeforeSimulation = snapshot(secondOutput.nativeItemHandler());
                     long energyBeforeSimulation = energy.energyStorage().getAmountAsLong();
                     Map<String, DataValue> dataBeforeSimulation = storage.storage().values();
                     MachineIoPlan.Simulation simulation = plan.simulate();
@@ -413,10 +412,10 @@ public class ControllerTickGameTest {
                                     && simulation.outputs().getFirst().accepted() == 1L
                                     && simulation.outputs().getFirst().fit() == OutputFit.PARTIAL,
                             "Tick simulation reports the one-item partial output fit");
-                    helper.assertTrue(sameStacks(firstInputBeforeSimulation, snapshot(firstInput.itemStorage()))
-                                    && sameStacks(secondInputBeforeSimulation, snapshot(secondInput.itemStorage()))
-                                    && sameStacks(firstOutputBeforeSimulation, snapshot(firstOutput.itemStorage()))
-                                    && sameStacks(secondOutputBeforeSimulation, snapshot(secondOutput.itemStorage()))
+                    helper.assertTrue(sameStacks(firstInputBeforeSimulation, snapshot(firstInput.nativeItemHandler()))
+                                    && sameStacks(secondInputBeforeSimulation, snapshot(secondInput.nativeItemHandler()))
+                                    && sameStacks(firstOutputBeforeSimulation, snapshot(firstOutput.nativeItemHandler()))
+                                    && sameStacks(secondOutputBeforeSimulation, snapshot(secondOutput.nativeItemHandler()))
                                     && energy.energyStorage().getAmountAsLong() == energyBeforeSimulation
                                     && dataBeforeSimulation.equals(storage.storage().values()),
                             "Tick simulation leaves input, energy, output, and DataStorage state unchanged");
@@ -425,19 +424,19 @@ public class ControllerTickGameTest {
                     helper.assertTrue(commit.successful(), "Tick commit succeeds with the shared transaction");
                 }).build());
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(tickMachine);
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Real Tick machine forms with all I/O parts");
             helper.assertTrue(executed.get(), "Formed Tick machine invokes its server callback");
-            helper.assertTrue(count(firstInput.itemStorage(), Items.IRON_INGOT)
-                            + count(secondInput.itemStorage(), Items.IRON_INGOT) == 0L,
+            helper.assertTrue(count(firstInput.nativeItemHandler(), Items.IRON_INGOT)
+                            + count(secondInput.nativeItemHandler(), Items.IRON_INGOT) == 0L,
                     "Tick commit consumes both input buses according to the complete plan");
             helper.assertTrue(energy.energyStorage().getAmountAsLong() == 0L,
                     "Tick commit consumes the complete energy plan");
-            helper.assertTrue(firstOutput.itemStorage().amount(0) == 64L
-                            && count(firstOutput.itemStorage(), Items.GOLD_NUGGET) - 63L == 1L
-                            && count(secondOutput.itemStorage(), Items.GOLD_NUGGET) == 0L,
+            helper.assertTrue(firstOutput.nativeItemHandler().amount(0) == 64L
+                            && count(firstOutput.nativeItemHandler(), Items.GOLD_NUGGET) - 63L == 1L
+                            && count(secondOutput.nativeItemHandler(), Items.GOLD_NUGGET) == 0L,
                     "Partial output commit writes only the accepted item");
             helper.assertTrue(storage.storage().get("ticks").map(DataValue.of(1L)::equals).orElse(false),
                     "DataStorage writes commit with the Tick I/O transaction");
@@ -446,7 +445,7 @@ public class ControllerTickGameTest {
     }
 
     private static void fillOutput(ItemOutputBusBlockEntity output, int retainedGoldSlot) {
-        LongItemStorage itemStorage = output.itemStorage();
+        LongItemStorage itemStorage = output.nativeItemHandler();
         for (int slot = 0; slot < itemStorage.size(); slot++) {
                 if (slot != retainedGoldSlot) {
                 itemStorage.setContents(slot, new ItemStack(Items.COBBLESTONE), 64L);

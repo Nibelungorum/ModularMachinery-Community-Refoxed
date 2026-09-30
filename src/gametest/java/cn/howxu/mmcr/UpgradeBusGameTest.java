@@ -73,7 +73,7 @@ public class UpgradeBusGameTest {
                             observedUpgradeItems.set(context.machineContext().upgradeItems());
                             observedRequirements.set(context.requirements());
                         }).build());
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.serverTick();
 
@@ -85,10 +85,10 @@ public class UpgradeBusGameTest {
 
             helper.setBlock(firstBusPos, ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
             helper.setBlock(secondBusPos, ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
-            UpgradeBusBlockEntity firstBus = helper.getBlockEntity(firstBusPos, UpgradeBusBlockEntity.class);
-            UpgradeBusBlockEntity secondBus = helper.getBlockEntity(secondBusPos, UpgradeBusBlockEntity.class);
-            firstBus.itemStorage().setContents(0, new ItemStack(Items.NETHER_STAR), 1L);
-            secondBus.itemStorage().setContents(0, new ItemStack(Items.NETHER_STAR), 1L);
+            UpgradeBusBlockEntity firstBus = helper.getBlockEntity(firstBusPos);
+            UpgradeBusBlockEntity secondBus = helper.getBlockEntity(secondBusPos);
+            firstBus.itemHandler().setContents(0, new ItemStack(Items.NETHER_STAR), 1L);
+            secondBus.itemHandler().setContents(0, new ItemStack(Items.NETHER_STAR), 1L);
             controller.onStructureBlockChanged(helper.absolutePos(firstBusPos));
             controller.onStructureBlockChanged(helper.absolutePos(secondBusPos));
             controller.serverTick();
@@ -111,9 +111,9 @@ public class UpgradeBusGameTest {
                                                 && numeric.value() == 2D),
                                 "Upgrade Bus items rebuild the aggregated duration modifier");
 
-                        ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
-                        ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-                        input.itemStorage().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
+                        ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos);
+                        ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos);
+                        input.nativeItemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
                         ResourceLocation recipeId = MMCR.id("upgrade_bus_invalidation_recipe");
                         ItemStack goldNugget = new ItemStack(Items.GOLD_NUGGET);
                         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 20,
@@ -138,16 +138,16 @@ public class UpgradeBusGameTest {
                         helper.assertTrue(controller.runtimeSnapshot().crafting().totalTick() == 23,
                                 "Recipe starts with the Upgrade Bus effective duration");
 
-                        firstBus.itemStorage().setContents(0, new ItemStack(Items.DIAMOND), 1L);
+                        firstBus.itemHandler().setContents(0, new ItemStack(Items.DIAMOND), 1L);
                         controller.serverTick();
 
                         helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
                                 "Bus content mutation keeps the active effective recipe snapshot");
                         helper.assertTrue(controller.runtimeSnapshot().crafting().failure() == null,
                                 "Bus content mutation does not fail the active recipe");
-                        helper.assertTrue(input.itemStorage().amount(0) == 2L,
+                        helper.assertTrue(input.nativeItemHandler().amount(0) == 2L,
                                 "Only the unmodified recipe input is consumed");
-                        helper.assertTrue(output.itemStorage().amount(0) == 0L,
+                        helper.assertTrue(output.nativeItemHandler().amount(0) == 0L,
                                 "Invalidation does not emit recipe output");
                         helper.succeed();
                     });

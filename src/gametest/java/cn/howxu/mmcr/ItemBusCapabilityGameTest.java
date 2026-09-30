@@ -30,8 +30,8 @@ public class ItemBusCapabilityGameTest {
         BlockEntity inputBe = helper.getLevel().getBlockEntity(inputWorldPos);
         BlockEntity outputBe = helper.getLevel().getBlockEntity(outputWorldPos);
 
-        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
-        ItemBusBlockEntity outputBus = helper.getBlockEntity(outputPos, ItemBusBlockEntity.class);
+        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos);
+        ItemBusBlockEntity outputBus = helper.getBlockEntity(outputPos);
 
         var inputCapability = inputBus.capabilitySnapshot().capabilities().getFirst();
         var outputCapability = outputBus.capabilitySnapshot().capabilities().getFirst();
@@ -55,7 +55,7 @@ public class ItemBusCapabilityGameTest {
         helper.assertTrue(extracted.isEmpty(), "Input capability rejects extraction");
 
         for (int slot = 0; slot < 4; slot++) {
-            outputBus.itemStorage().setContents(slot, new ItemStack(Items.IRON_INGOT), 1L);
+            outputBus.nativeItemHandler().setContents(slot, new ItemStack(Items.IRON_INGOT), 1L);
         }
 
         ItemStack insertionRemainder = output.insertItem(0, new ItemStack(Items.IRON_INGOT), false);
@@ -72,14 +72,14 @@ public class ItemBusCapabilityGameTest {
     public static void itemBusDoesNotStackNonStackableItems(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
+        ItemBusBlockEntity bus = helper.getBlockEntity(pos);
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         sword.set(DataComponents.CUSTOM_NAME, Component.literal("Sharpness II"));
 
-        ItemStack remainder = bus.itemStorage().insertItem(0, sword.copyWithCount(2), false);
+        ItemStack remainder = bus.nativeItemHandler().insertItem(0, sword.copyWithCount(2), false);
         helper.assertTrue(remainder.getCount() == 1, "Non-stackable items are limited to one item per UI slot");
 
-        helper.assertTrue(bus.itemStorage().amount(0) == 1L,
+        helper.assertTrue(bus.nativeItemHandler().amount(0) == 1L,
                 "Non-stackable item storage does not exceed the item stack limit");
         helper.succeed();
     }
@@ -89,7 +89,7 @@ public class ItemBusCapabilityGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
 
         BlockPos inputWorldPos = helper.absolutePos(inputPos);
-        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
+        ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos);
         BlockCapabilityCache<IItemHandler, Direction> cache = BlockCapabilityCache.create(
                 Capabilities.ItemHandler.BLOCK, helper.getLevel(), inputWorldPos, Direction.UP);
 
@@ -105,8 +105,8 @@ public class ItemBusCapabilityGameTest {
     public static void itemBusDropsStoredItemsWhenRemoved(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        ItemBusBlockEntity bus = helper.getBlockEntity(pos, ItemBusBlockEntity.class);
-        bus.itemStorage().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
+        ItemBusBlockEntity bus = helper.getBlockEntity(pos);
+        bus.nativeItemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 3L);
 
         helper.destroyBlock(pos);
         helper.runAfterDelay(1, () -> {

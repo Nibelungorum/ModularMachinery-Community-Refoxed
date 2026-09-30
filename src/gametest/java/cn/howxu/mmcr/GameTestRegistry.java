@@ -13,26 +13,26 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
+import cn.howxu.mmcr.api.publicapi.machine.LevelType;
+import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
-import com.mojang.serialization.MapCodec;
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInstance;
-import net.minecraft.gametest.framework.TestData;
-import net.minecraft.gametest.framework.TestEnvironmentDefinition;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.function.Consumer;
 
 import java.util.List;
@@ -42,10 +42,15 @@ public final class GameTestRegistry {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
+        event.register(GameTestRegistry.class);
+    }
+
+    @GameTestGenerator
+    public static Collection<TestFunction> generateTests() {
+        List<TestFunction> event = new ArrayList<>();
         register(event, "registry_reflection_helper", 20, helper -> {
-            boolean registered = helper.getLevel().registryAccess()
-                    .lookupOrThrow(Registries.TEST_INSTANCE)
-                    .get(MMCR.id("registry_reflection_helper"))
+            boolean registered = net.minecraft.gametest.framework.GameTestRegistry
+                    .findTestFunction(MMCR.id("registry_reflection_helper").toString())
                     .isPresent();
             helper.assertTrue(registered, "GameTestRegistry reflection helper registers the canonical test ID");
             helper.succeed();
@@ -140,7 +145,7 @@ public final class GameTestRegistry {
         register(event, "terminal_storage_resolver", 100,
                 helper -> new TerminalAssemblyGameTest().storageResolverRejectsUnavailableContainerTargets(helper));
         register(event, "terminal_block_storage", 100,
-                helper -> new TerminalAssemblyGameTest().blockStorageAcceptsCompleteStacksAndRollsBackPartialInsertions(helper));
+                helper -> new TerminalAssemblyGameTest().blockStorageAcceptsCompleteStacksAndRejectsPartialInsertions(helper));
         register(event, "ae2_terminal_access_point", 100,
                 helper -> new AE2TerminalGameTest().boundAccessPointTransfersBuildAndDemolishMaterials(helper));
         register(event, "terminal_expandable_demolish_stage_two", 100, helper -> new TerminalAssemblyGameTest().demolishExpandableFormedStageTwoRemovesCompleteSnapshot(helper));
@@ -253,6 +258,7 @@ public final class GameTestRegistry {
                 helper -> new AppliedFluxInterfaceGameTest().fluxCapabilitiesBelongToEnergyFamilyWithoutTransferFacet(helper));
         register(event, "appflux_me_flux_output_interface", 100,
                 helper -> new AppliedFluxInterfaceGameTest().controllerFormsWithFluxPortsAndResolvesEnergyFamily(helper));
+        return event;
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
@@ -299,6 +305,12 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
+        ResourceLocation terminalLevelType = MMCR.id("terminal_test_level_type");
+        event.registerLevelType(new LevelType(terminalLevelType, Component.literal("Terminal Test Level")));
+        event.registerLevel(new MachineLevel(MMCR.id("terminal_test_level"), terminalLevelType, 0,
+                BlockPredicate.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                DisplayStack.of(new ItemStack(Items.IRON_BLOCK)),
+                ModifierDefinition.of("duration", "input", 1.0F, "add", false)));
         ResourceLocation upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
@@ -443,55 +455,9 @@ public final class GameTestRegistry {
                 .duration(20).inputItem(Items.COAL, 1).outputFluid(Fluids.WATER, 1).build());
     }
 
-    private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {
-        Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
-        TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(
-                environment,
-                ResourceLocation.fromNamespaceAndPath("minecraft", "empty"),
-                maxTicks,
-                0,
-                true,
-                Rotation.NONE,
-                false,
-                1,
-                1,
-                false,
-                0);
-        registerTest(event, MMCR.id(name), new SimpleGameTest(data, name, test));
-    }
-
-    private static void registerTest(RegisterGameTestsEvent event, ResourceLocation id, GameTestInstance instance) {
-        try {
-            event.getClass().getMethod("registerTest", ResourceLocation.class, GameTestInstance.class).invoke(event, id, instance);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to register GameTest " + id, e);
-        }
-    }
-
-    private static final class SimpleGameTest extends GameTestInstance {
-        private final String name;
-        private final Consumer<GameTestHelper> test;
-
-        private SimpleGameTest(TestData<Holder<TestEnvironmentDefinition<?>>> data, String name, Consumer<GameTestHelper> test) {
-            super(data);
-            this.name = name;
-            this.test = test;
-        }
-
-        @Override
-        public void run(GameTestHelper helper) {
-            test.accept(helper);
-        }
-
-        @Override
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        public MapCodec<? extends GameTestInstance> codec() {
-            return MapCodec.unit(this);
-        }
-
-        @Override
-        protected MutableComponent typeDescription() {
-            return Component.literal("MMCR " + name);
-        }
+    private static void register(Collection<TestFunction> tests, String name, int maxTicks,
+                                 Consumer<GameTestHelper> test) {
+        tests.add(new TestFunction(MMCR.MODID, MMCR.id(name).toString(), "mmcr:empty",
+                maxTicks, 0, true, test));
     }
 }

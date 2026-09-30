@@ -1,7 +1,7 @@
 package cn.howxu.mmcr;
 
 import com.mojang.authlib.GameProfile;
-import io.netty.channel.ChannelFutureListener;
+import net.minecraft.network.PacketSendListener;
 import appeng.api.config.Actionable;
 import appeng.api.config.LockCraftingMode;
 import appeng.api.config.Settings;
@@ -65,7 +65,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -127,20 +126,20 @@ public class AE2PatternInterfaceGameTest {
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
                 List.of(), 0, 1, false, false, false, Set.of()));
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.setStructureCheckIntervalForTesting(1);
-        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos, MEChestBlockEntity.class);
+        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos);
         meChest.setCell(AEItems.ITEM_CELL_1K.stack());
         helper.runAtTickTime(2, () -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
-            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
             helper.assertTrue(patternPort.getMainNode().getNode() != null && meChest.getMainNode().getNode() != null
                             && energy.getMainNode().getNode() != null,
                     "Pattern interface and ME network nodes initialize before pattern submission");
             GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
             GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
-            ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos, ItemBusBlockEntity.class);
+            ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos);
             helper.assertTrue(ordinaryInput.nativeItemHandler().insertItem(
                             0, new ItemStack(Items.COAL), false).isEmpty(),
                     "Ordinary input bus accepts the remaining coal ingredient");
@@ -148,7 +147,7 @@ public class AE2PatternInterfaceGameTest {
         });
 
         helper.runAtTickTime(30, () -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             helper.assertTrue(controller.structureSnapshot().formed(), "Controller with pattern and ordinary input ports forms");
             var encodedPattern = PatternDetailsHelper.encodeProcessingPattern(
                     List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
@@ -164,7 +163,7 @@ public class AE2PatternInterfaceGameTest {
         });
 
         helper.runAtTickTime(50, () -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
                             Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 1L,
                     "Pattern-started MMCR recipe sends its output to ME storage");
@@ -208,15 +207,15 @@ public class AE2PatternInterfaceGameTest {
                     List.of(), 0, 1, false, false, false, Set.of()));
         }
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
         controller.setMachine(machine);
         controller.setStructureCheckIntervalForTesting(1);
-        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos, MEChestBlockEntity.class);
+        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos);
         meChest.setCell(AEItems.ITEM_CELL_1K.stack());
 
         helper.runAtTickTime(20, () -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
-            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
             helper.assertTrue(patternPort.getMainNode().getNode() != null && meChest.getMainNode().getNode() != null
                             && energy.getMainNode().getNode() != null,
                     "Pattern interface, ME storage and energy cell initialize before submitting the job");
@@ -226,7 +225,7 @@ public class AE2PatternInterfaceGameTest {
         });
 
         helper.succeedWhen(() -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             IGridNode node = patternPort.getMainNode().getNode();
             if (node == null) {
                 helper.assertTrue(false, "Pattern interface grid node still initializing");
@@ -309,23 +308,23 @@ public class AE2PatternInterfaceGameTest {
                     List.of(), 0, 1, false, false, false, Set.of()));
         }
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.setStructureCheckIntervalForTesting(1);
-        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos, MEChestBlockEntity.class);
+        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos);
         meChest.setCell(AEItems.ITEM_CELL_1K.stack());
         helper.runAtTickTime(2, () -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
-            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
             GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
             GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
-            ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos, ItemBusBlockEntity.class);
+            ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos);
             ordinaryInput.nativeItemHandler().insertItem(0, new ItemStack(Items.COAL), false);
             controller.requestImmediateStructureCheck();
         });
 
         helper.runAtTickTime(30, () -> {
-            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             helper.assertTrue(controller.structureSnapshot().formed(), "Extended pattern machine forms");
             ItemStack encodedPattern = PatternDetailsHelper.encodeProcessingPattern(
                     List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
@@ -355,8 +354,8 @@ public class AE2PatternInterfaceGameTest {
         helper.setBlock(targetPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
 
         helper.runAtTickTime(2, () -> {
-            PatternInterfaceBlockEntity source = helper.getBlockEntity(sourcePos, PatternInterfaceBlockEntity.class);
-            PatternInterfaceBlockEntity target = helper.getBlockEntity(targetPos, PatternInterfaceBlockEntity.class);
+            PatternInterfaceBlockEntity source = helper.getBlockEntity(sourcePos);
+            PatternInterfaceBlockEntity target = helper.getBlockEntity(targetPos);
             ServerPlayer player = makePlayerWithConnection(helper);
             player.getAbilities().instabuild = true;
             ItemStack card = AEItems.MEMORY_CARD.stack();
@@ -466,8 +465,8 @@ public class AE2PatternInterfaceGameTest {
         helper.runAtTickTime(10, () -> connectNetwork(helper));
 
         helper.runAtTickTime(120, () -> {
-            MEChestBlockEntity meChest = helper.getBlockEntity(ME_CHEST_POS, MEChestBlockEntity.class);
-            ChestBlockEntity chest = helper.getBlockEntity(TARGET_CHEST_POS, ChestBlockEntity.class);
+            MEChestBlockEntity meChest = helper.getBlockEntity(ME_CHEST_POS);
+            ChestBlockEntity chest = helper.getBlockEntity(TARGET_CHEST_POS);
             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 2L,
                             Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 2L,
                     "Reconnect wakes return inventory injection without a custom ticker");
@@ -483,8 +482,8 @@ public class AE2PatternInterfaceGameTest {
 
     private static void connectNetwork(GameTestHelper helper) {
         PatternInterfaceBlockEntity host = host(helper);
-        MEChestBlockEntity meChest = helper.getBlockEntity(ME_CHEST_POS, MEChestBlockEntity.class);
-        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(ENERGY_POS, CreativeEnergyCellBlockEntity.class);
+        MEChestBlockEntity meChest = helper.getBlockEntity(ME_CHEST_POS);
+        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(ENERGY_POS);
         meChest.setCell(AEItems.ITEM_CELL_1K.stack());
         helper.assertTrue(host.getMainNode().getNode() != null, "Pattern interface grid node is initialized");
         helper.assertTrue(meChest.getMainNode().getNode() != null, "ME chest grid node is initialized");
@@ -494,7 +493,7 @@ public class AE2PatternInterfaceGameTest {
     }
 
     private static PatternInterfaceBlockEntity host(GameTestHelper helper) {
-        PatternInterfaceBlockEntity host = helper.getBlockEntity(PORT_POS, PatternInterfaceBlockEntity.class);
+        PatternInterfaceBlockEntity host = helper.getBlockEntity(PORT_POS);
         if (host == null) throw new AssertionError("Pattern interface block entity was not created");
         return host;
     }
@@ -509,7 +508,7 @@ public class AE2PatternInterfaceGameTest {
     }
 
     private static MachineControllerBlockEntity controller(GameTestHelper helper) {
-        MachineControllerBlockEntity controller = helper.getBlockEntity(CONTROLLER_POS, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(CONTROLLER_POS);
         if (controller == null) throw new AssertionError("Controller block entity was not created");
         return controller;
     }
@@ -596,11 +595,11 @@ public class AE2PatternInterfaceGameTest {
         }
 
         @Override
-        public void send(@NonNull Packet<?> packet) {
+        public void send(Packet<?> packet) {
         }
 
         @Override
-        public void send(Packet<?> packet, ChannelFutureListener listener) {
+        public void send(Packet<?> packet, PacketSendListener listener) {
         }
     }
 }

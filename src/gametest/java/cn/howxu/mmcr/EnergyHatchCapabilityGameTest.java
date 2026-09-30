@@ -23,8 +23,8 @@ public class EnergyHatchCapabilityGameTest {
         BlockEntity inputBe = helper.getLevel().getBlockEntity(inputWorldPos);
         BlockEntity outputBe = helper.getLevel().getBlockEntity(outputWorldPos);
 
-        EnergyHatchBlockEntity inputHatch = helper.getBlockEntity(inputPos, EnergyHatchBlockEntity.class);
-        EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, EnergyHatchBlockEntity.class);
+        EnergyHatchBlockEntity inputHatch = helper.getBlockEntity(inputPos);
+        EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos);
 
         var inputCapability = inputHatch.capabilitySnapshot().capabilities().getFirst();
         var outputCapability = outputHatch.capabilitySnapshot().capabilities().getFirst();

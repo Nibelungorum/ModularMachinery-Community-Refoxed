@@ -113,9 +113,9 @@ public class ModuleConnectionGameTest {
         }
 
         MachineControllerBlockEntity host = placeHost
-                ? helper.getBlockEntity(hostPos, MachineControllerBlockEntity.class) : null;
+                ? helper.getBlockEntity(hostPos) : null;
         MachineControllerBlockEntity module = placeModule
-                ? helper.getBlockEntity(modulePos, MachineControllerBlockEntity.class) : null;
+                ? helper.getBlockEntity(modulePos) : null;
         if (host != null) host.setMachine(hostMachine);
         if (module != null) module.setMachine(moduleMachine);
         return new Fixture(host, module, helper.absolutePos(coupler), hostInterface);

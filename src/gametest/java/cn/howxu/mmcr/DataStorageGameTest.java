@@ -47,6 +47,7 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.level.GameType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -70,14 +71,14 @@ public final class DataStorageGameTest {
         helper.setBlock(controllerBlockPos, ModBlocks.controllerFor(MACHINE_ID).get().defaultBlockState());
         helper.setBlock(storageBlockPos, ModBlocks.DATA_STORAGE.get().defaultBlockState());
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerBlockPos, MachineControllerBlockEntity.class);
-        DataStorageBlockEntity storage = helper.getBlockEntity(storageBlockPos, DataStorageBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerBlockPos);
+        DataStorageBlockEntity storage = helper.getBlockEntity(storageBlockPos);
         BlockPos controllerPos = controller.getBlockPos();
         storage.storage().set("ticks", DataValue.of(0L));
         controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
         ControllerScreenTextCache.clear(controllerPos);
         ServerPlayer observer = observer(helper);
-        observer.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        observer.containerMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         helper.getLevel().players().add(observer);
 
         helper.runAtTickTime(80, () -> {
@@ -94,7 +95,7 @@ public final class DataStorageGameTest {
                     "Pure-tick callback text is sent in the server payload");
             ControllerScreenTextCache.replace(textPayload.controllerPos(), textPayload.revision(), textPayload.lines());
             ControllerScreenTextCache.clear(controllerPos);
-            MachineControllerMenu reopenedMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+            MachineControllerMenu reopenedMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
             observer.containerMenu = reopenedMenu;
             controller.sendControllerScreenText(observer);
             PktControllerScreenTextPayload reopenedTextPayload = lastScreenTextPacket(observer);
@@ -114,9 +115,9 @@ public final class DataStorageGameTest {
                     "Pure-tick controller block remains active");
             PktMachineStatePayload payload = PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot());
             helper.assertTrue(payload.active(), "Pure-tick state packet remains active");
-            MachineControllerMenu reopened = new MachineControllerMenu(1, new Inventory(null, null), controller);
+            MachineControllerMenu reopened = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
             helper.assertTrue(reopened.hasActiveRecipe(), "Reopened controller menu reads active state");
-            MachineControllerMenu clientMenu = new MachineControllerMenu(1, new Inventory(null, null));
+            MachineControllerMenu clientMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)));
             clientMenu.applyClientSnapshot(payload);
             helper.assertTrue(clientMenu.hasActiveRecipe(), "Client controller menu keeps active state");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
@@ -139,10 +140,10 @@ public final class DataStorageGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
 
-        ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
-        ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
-        input.itemStorage().setContents(0, new ItemStack(Items.DIAMOND), 1L);
-        input.itemStorage().setContents(1, new ItemStack(Items.IRON_INGOT), 2L);
+        ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos);
+        ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos);
+        input.nativeItemHandler().setContents(0, new ItemStack(Items.DIAMOND), 1L);
+        input.nativeItemHandler().setContents(1, new ItemStack(Items.IRON_INGOT), 2L);
 
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         AtomicInteger starts = new AtomicInteger();
@@ -197,7 +198,7 @@ public final class DataStorageGameTest {
                 List.of(MachineRequirement.fromInput(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1))), List.of(), List.of(),
                 0, 1, false, false, false, Set.of());
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(recipeMachine);
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Recipe snapshot machine forms with real I/O buses");
@@ -215,7 +216,7 @@ public final class DataStorageGameTest {
                             && controller.runtimeSnapshot().crafting().totalTick() == 2
                             && starts.get() == 1,
                     "Controller load restores the effective recipe without rerunning Start");
-            input.itemStorage().extractItem(0, 1, false);
+            input.nativeItemHandler().extractItem(0, 1, false);
 
             controller.serverTick();
             controller.serverTick();
@@ -225,8 +226,8 @@ public final class DataStorageGameTest {
             helper.assertTrue(ticks.get() == 2 && finishes.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
-                            && output.itemStorage().resource(0).is(Items.GOLD_NUGGET)
-                            && output.itemStorage().amount(0) == 2L,
+                            && output.nativeItemHandler().resource(0).is(Items.GOLD_NUGGET)
+                            && output.nativeItemHandler().amount(0) == 2L,
                     "Loaded effective output finishes through the real output bus");
             helper.succeed();
                     });

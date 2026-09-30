@@ -38,8 +38,8 @@ public class FluidHatchCapabilityGameTest {
         BlockEntity inputBe = helper.getLevel().getBlockEntity(inputWorldPos);
         BlockEntity outputBe = helper.getLevel().getBlockEntity(outputWorldPos);
 
-        FluidHatchBlockEntity inputHatch = helper.getBlockEntity(inputPos, FluidHatchBlockEntity.class);
-        FluidHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, FluidHatchBlockEntity.class);
+        FluidHatchBlockEntity inputHatch = helper.getBlockEntity(inputPos);
+        FluidHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos);
 
         var inputCapability = inputHatch.capabilitySnapshot().capabilities().getFirst();
         var outputCapability = outputHatch.capabilitySnapshot().capabilities().getFirst();
@@ -59,7 +59,7 @@ public class FluidHatchCapabilityGameTest {
         helper.assertTrue(inserted == 1_000, "Input fluid capability fills");
         helper.assertTrue(extracted.isEmpty(), "Input fluid capability rejects extraction");
 
-        outputHatch.fluidStorage().forceInsert(new FluidStack(Fluids.WATER, 2000), false);
+        outputHatch.nativeFluidHandler().forceInsert(new FluidStack(Fluids.WATER, 2000), false);
 
         int rejectedFill = output.fill(new FluidStack(Fluids.WATER, 500), IFluidHandler.FluidAction.EXECUTE);
         FluidStack drained = output.drain(1_000, IFluidHandler.FluidAction.EXECUTE);
@@ -72,12 +72,12 @@ public class FluidHatchCapabilityGameTest {
     public void positionOnlyFluidHatchMenuResolvesStoredFluid(GameTestHelper helper) {
         BlockPos inputPos = new BlockPos(0, 1, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
-        FluidHatchBlockEntity hatch = helper.getBlockEntity(inputPos, FluidHatchBlockEntity.class);
-        hatch.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+        FluidHatchBlockEntity hatch = helper.getBlockEntity(inputPos);
+        hatch.nativeFluidHandler().setFluid(new FluidStack(Fluids.WATER, 1_000));
 
         FluidHatchMenu menu = new FluidHatchMenu(0, servicePlayer(helper, false).getInventory(), hatch.getBlockPos());
 
-        helper.assertTrue(menu.storage() != null && !menu.storage().getResource(0).isEmpty(),
+        helper.assertTrue(menu.storage() != null && !menu.storage().getFluidInTank(0).isEmpty(),
                 "A position-only fluid hatch menu resolves the fluid stored in its level block entity");
         helper.succeed();
     }
@@ -88,52 +88,52 @@ public class FluidHatchCapabilityGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
 
-        FluidHatchBlockEntity input = helper.getBlockEntity(inputPos, FluidHatchBlockEntity.class);
-        FluidHatchBlockEntity output = helper.getBlockEntity(outputPos, FluidHatchBlockEntity.class);
-        output.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+        FluidHatchBlockEntity input = helper.getBlockEntity(inputPos);
+        FluidHatchBlockEntity output = helper.getBlockEntity(outputPos);
+        output.nativeFluidHandler().setFluid(new FluidStack(Fluids.WATER, 1_000));
 
         ServerPlayer survival = servicePlayer(helper, false);
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
         InteractionResult filled = helper.getLevel().getBlockState(output.getBlockPos()).useItemOn(
-                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(output));
+                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(output)).result();
         helper.assertTrue(filled.consumesAction() && survival.getMainHandItem().is(Items.BUCKET) && survival.getMainHandItem().getCount() == 1,
                 "Output hatch consumes one bucket from an empty bucket stack");
         helper.assertTrue(survival.getInventory().contains(new ItemStack(Items.WATER_BUCKET)),
                 "Output hatch stows the filled bucket in inventory");
-        helper.assertTrue(output.fluidStorage().isEmpty(), "Output hatch transfers exactly one bucket");
+        helper.assertTrue(output.nativeFluidHandler().isEmpty(), "Output hatch transfers exactly one bucket");
 
         survival.getInventory().clearContent();
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
         InteractionResult emptied = helper.getLevel().getBlockState(input.getBlockPos()).useItemOn(
-                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(input));
+                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(input)).result();
         helper.assertTrue(emptied.consumesAction() && survival.getMainHandItem().is(Items.BUCKET),
                 "Input hatch empties a filled bucket");
-        helper.assertTrue(FluidStack.isSameFluidSameComponents(input.fluidStorage().getFluidStack(), new FluidStack(Fluids.WATER, 1_000))
-                        && input.fluidStorage().getAmountAsLong() == 1_000,
+        helper.assertTrue(FluidStack.isSameFluidSameComponents(input.nativeFluidHandler().getFluidStack(), new FluidStack(Fluids.WATER, 1_000))
+                        && input.nativeFluidHandler().getAmountAsLong() == 1_000,
                 "Input hatch receives exactly one bucket");
 
-        input.fluidStorage().setFluid(new FluidStack(Fluids.LAVA, 1_000));
+        input.nativeFluidHandler().setFluid(new FluidStack(Fluids.LAVA, 1_000));
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
         InteractionResult rejectedInput = helper.getLevel().getBlockState(input.getBlockPos()).useItemOn(
-                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(input));
+                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(input)).result();
         helper.assertTrue(!rejectedInput.consumesAction() && survival.getMainHandItem().is(Items.WATER_BUCKET),
                 "Input hatch rejects a different fluid");
 
-        output.fluidStorage().setFluid(new FluidStack(Fluids.WATER, 1_000));
+        output.nativeFluidHandler().setFluid(new FluidStack(Fluids.WATER, 1_000));
         survival.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.LAVA_BUCKET));
         InteractionResult rejectedOutput = helper.getLevel().getBlockState(output.getBlockPos()).useItemOn(
-                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(output));
+                survival.getMainHandItem(), helper.getLevel(), survival, InteractionHand.MAIN_HAND, hit(output)).result();
         helper.assertTrue(!rejectedOutput.consumesAction() && survival.getMainHandItem().is(Items.LAVA_BUCKET),
                 "Output hatch does not fill an already-filled bucket");
 
-        input.fluidStorage().setFluid(FluidStack.EMPTY);
+        input.nativeFluidHandler().setFluid(FluidStack.EMPTY);
         ServerPlayer creative = servicePlayer(helper, true);
         creative.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
         InteractionResult creativeEmpty = helper.getLevel().getBlockState(input.getBlockPos()).useItemOn(
-                creative.getMainHandItem(), helper.getLevel(), creative, InteractionHand.MAIN_HAND, hit(input));
+                creative.getMainHandItem(), helper.getLevel(), creative, InteractionHand.MAIN_HAND, hit(input)).result();
         helper.assertTrue(creativeEmpty.consumesAction() && creative.getMainHandItem().is(Items.WATER_BUCKET),
                 "Creative input hatch keeps the filled bucket");
-        helper.assertTrue(input.fluidStorage().getAmountAsLong() == 1_000,
+        helper.assertTrue(input.nativeFluidHandler().getAmountAsLong() == 1_000,
                 "Creative input hatch still receives one bucket");
         helper.succeed();
     }

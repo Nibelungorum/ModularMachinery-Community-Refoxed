@@ -67,7 +67,7 @@ public class MekanismPortGameTest {
     public void normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
-        ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity port = helper.getBlockEntity(pos);
 
         ChemicalStack radioactive = registerRadioactiveChemical("radioactive_blocked");
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_accepted");
@@ -82,7 +82,7 @@ public class MekanismPortGameTest {
     public void radioactiveChemicalPortRejectsNonRadioactiveAndAcceptsRadioactive(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
-        ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity port = helper.getBlockEntity(pos);
 
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_rejected_by_radio");
         ChemicalStack radioactive = registerRadioactiveChemical("radioactive_accepted_by_radio");
@@ -97,7 +97,7 @@ public class MekanismPortGameTest {
     public void wrenchPreservesNonEmptyRadioactiveChemicalPort(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
-        ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity port = helper.getBlockEntity(pos);
         insert(port, registerRadioactiveChemical("wrench_protection"), 1_000L);
 
         ServerPlayer player = wrenchPlayer(helper);
@@ -132,7 +132,7 @@ public class MekanismPortGameTest {
         for (TierExpectation tier : tiers) {
             BlockPos pos = new BlockPos(0, 1, 0);
             helper.setBlock(pos, ModBlocks.BLOCKS.get(tier.port()).get().defaultBlockState());
-            ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+            ChemicalPortBlockEntity port = helper.getBlockEntity(pos);
             helper.assertValueEqual(tier.expected(), capacityForResource(port, oxygen),
                     tier.port() + " reports the expected tier capacity for non-radioactive chemicals");
             helper.setBlock(pos, Blocks.AIR.defaultBlockState());
@@ -143,7 +143,7 @@ public class MekanismPortGameTest {
     public void radioactiveChemicalCapacityIsFixedTier(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
-        ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity port = helper.getBlockEntity(pos);
         ChemicalStack radioactive = registerRadioactiveChemical("radioactive_capacity_probe");
         helper.assertValueEqual(MekanismPortSizes.RADIOACTIVE_CHEMICAL_CAPACITY,
                 capacityForResource(port, radioactive),
@@ -154,7 +154,7 @@ public class MekanismPortGameTest {
     public void heatTemperatureRequirementReadsWithoutConsumingHeat(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
 
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double capacity = port.heatCapacitor().getHeatCapacity();
@@ -174,10 +174,10 @@ public class MekanismPortGameTest {
                 "Heat input port holds more heat than its ambient baseline before the recipe check");
 
         IHeatHandler handler = port.heatHandler();
-        helper.assertValueEqual(before, handler.getTemperature() * handler.getHeatCapacity(),
+        helper.assertValueEqual(before, handler.getTemperature(0) * handler.getHeatCapacity(0),
                 "Heat input port's IHeatHandler reports the same stored heat as its capacitor");
 
-        helper.assertTrue(handler.getTemperature() >= 450D,
+        helper.assertTrue(handler.getTemperature(0) >= 450D,
                 "Setting heat to 5x the ambient baseline exceeds the 450K minimum temperature requirement");
 
         helper.assertValueEqual(before, port.heatCapacitor().getHeat(),
@@ -188,7 +188,7 @@ public class MekanismPortGameTest {
     public void heatOutputHandleHeatIncreasesStoredHeat(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
 
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double baseline = ambient * port.heatCapacitor().getHeatCapacity();
@@ -196,6 +196,7 @@ public class MekanismPortGameTest {
 
         double delta = 0.25D;
         port.heatCapacitor().handleHeat(delta);
+        port.heatCapacitor().update();
 
         helper.assertValueEqual(before + delta, port.heatCapacitor().getHeat(),
                 "Heat output port stores the heat delta delivered through handleHeat");
@@ -207,7 +208,7 @@ public class MekanismPortGameTest {
     public void heatOutputCapabilityRejectsExternalHeatInput(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
         IHeatHandler capability = helper.getLevel().getCapability(Capabilities.HEAT,
                 helper.absolutePos(heatPos),
                 helper.getLevel().getBlockState(helper.absolutePos(heatPos)), port, Direction.EAST);
@@ -220,6 +221,7 @@ public class MekanismPortGameTest {
         double before = port.heatCapacitor().getHeat();
         capability.handleHeat(10D);
         capability.handleHeat(-4D);
+        port.heatCapacitor().update();
         helper.assertValueEqual(before - 4D, port.heatCapacitor().getHeat(),
                 "The exposed heat output handler rejects external heat input and permits external extraction");
         helper.succeed();
@@ -228,7 +230,7 @@ public class MekanismPortGameTest {
     public void heatPortLosesHeatToItsEnvironment(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
 
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double capacity = port.heatCapacitor().getHeatCapacity();
@@ -247,7 +249,7 @@ public class MekanismPortGameTest {
     public void heatOutputPortLosesHeatToItsEnvironment(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
 
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double capacity = port.heatCapacitor().getHeatCapacity();
@@ -264,7 +266,7 @@ public class MekanismPortGameTest {
     public void heatOutputPortDoesNotAbsorbAmbientHeat(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
 
         // Set the port noticeably below ambient so the default simulateEnvironment would push heat in.
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
@@ -283,7 +285,7 @@ public class MekanismPortGameTest {
     public void heatInputPortDoesNotAbsorbAmbientHeat(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos);
 
         // Set the port noticeably below ambient so a default environment simulation would push heat in.
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
@@ -304,8 +306,8 @@ public class MekanismPortGameTest {
         BlockPos sinkPos = sourcePos.relative(Direction.EAST);
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
-        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos);
         source.setAutoIOEnabled(false);
         sink.setAutoIOEnabled(false);
 
@@ -317,6 +319,7 @@ public class MekanismPortGameTest {
         double sinkBefore = sink.heatCapacitor().getHeat();
 
         source.serverTick();
+        sink.heatCapacitor().update();
 
         helper.assertTrue(source.heatCapacitor().getHeat() < sourceBefore,
                 "The hotter port gives up heat during adjacent exchange");
@@ -332,8 +335,8 @@ public class MekanismPortGameTest {
         BlockPos sinkPos = sourcePos.relative(Direction.EAST);
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
-        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos);
         source.setAutoIOEnabled(false);
         sink.setAutoIOEnabled(false);
         double sinkBefore = sink.heatCapacitor().getHeat();
@@ -352,9 +355,9 @@ public class MekanismPortGameTest {
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
         helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(referencePos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
-        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
-        HeatPortBlockEntity reference = helper.getBlockEntity(referencePos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos);
+        HeatPortBlockEntity reference = helper.getBlockEntity(referencePos);
         source.setAutoIOEnabled(false);
         sink.setAutoIOEnabled(false);
         reference.setAutoIOEnabled(false);
@@ -382,9 +385,9 @@ public class MekanismPortGameTest {
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(referencePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
-        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
-        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
-        HeatPortBlockEntity reference = helper.getBlockEntity(referencePos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos);
+        HeatPortBlockEntity reference = helper.getBlockEntity(referencePos);
         source.setAutoIOEnabled(false);
         sink.setAutoIOEnabled(false);
         reference.setAutoIOEnabled(false);
@@ -410,9 +413,8 @@ public class MekanismPortGameTest {
         BlockPos conductorPos = outputPos.relative(Direction.EAST);
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(conductorPos, MekanismBlocks.BASIC_THERMODYNAMIC_CONDUCTOR.get().defaultBlockState());
-        HeatPortBlockEntity output = helper.getBlockEntity(outputPos, HeatPortBlockEntity.class);
-        TileEntityThermodynamicConductor conductor = helper.getBlockEntity(conductorPos,
-                TileEntityThermodynamicConductor.class);
+        HeatPortBlockEntity output = helper.getBlockEntity(outputPos);
+        TileEntityThermodynamicConductor conductor = helper.getBlockEntity(conductorPos);
         output.setAutoIOEnabled(false);
         double ambient = HeatAPI.getAmbientTemp(output.getLevel(), output.getBlockPos());
         setHeat(output, ambient * output.heatCapacitor().getHeatCapacity()
@@ -422,6 +424,7 @@ public class MekanismPortGameTest {
             double outputBefore = output.heatCapacitor().getHeat();
             double conductorBefore = conductor.getTransmitter().buffer.getHeat();
             output.serverTick();
+            conductor.getTransmitter().buffer.update();
 
             helper.assertTrue(output.heatCapacitor().getHeat() < outputBefore,
                     "A heat output port transfers heat to a connected thermodynamic conductor");
@@ -436,16 +439,15 @@ public class MekanismPortGameTest {
         BlockPos conductorPos = outputPos.relative(Direction.EAST);
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         helper.setBlock(conductorPos, MekanismBlocks.BASIC_THERMODYNAMIC_CONDUCTOR.get().defaultBlockState());
-        HeatPortBlockEntity output = helper.getBlockEntity(outputPos, HeatPortBlockEntity.class);
-        TileEntityThermodynamicConductor conductor = helper.getBlockEntity(conductorPos,
-                TileEntityThermodynamicConductor.class);
+        HeatPortBlockEntity output = helper.getBlockEntity(outputPos);
+        TileEntityThermodynamicConductor conductor = helper.getBlockEntity(conductorPos);
 
         helper.runAtTickTime(20, () -> {
             IHeatHandler outputHandler = helper.getLevel().getCapability(Capabilities.HEAT,
                     helper.absolutePos(outputPos), helper.getLevel().getBlockState(helper.absolutePos(outputPos)), output,
                     Direction.EAST);
             helper.assertTrue(outputHandler != null, "Heat output port exposes its heat handler");
-            helper.assertTrue(outputHandler.getInverseConduction() > 1E300,
+            helper.assertTrue(outputHandler.getInverseConduction(0) > 1E300,
                     "Heat output presents an effectively insulated inbound boundary to a conductor");
             double before = output.heatCapacitor().getHeat();
             conductor.getTransmitter().buffer.handleHeat(30_000D);
@@ -461,8 +463,8 @@ public class MekanismPortGameTest {
         BlockPos sourcePos = inputPos.relative(Direction.EAST);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("chemical_output_hatch_basic").get().defaultBlockState());
-        ChemicalPortBlockEntity input = helper.getBlockEntity(inputPos, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity input = helper.getBlockEntity(inputPos);
+        ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos);
 
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_auto_import");
         source.chemicalTank().setStack(oxygen.copyWithAmount(5_000L));
@@ -488,9 +490,9 @@ public class MekanismPortGameTest {
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(northReceiver, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(southReceiver, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
-        ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity north = helper.getBlockEntity(northReceiver, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity south = helper.getBlockEntity(southReceiver, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos);
+        ChemicalPortBlockEntity north = helper.getBlockEntity(northReceiver);
+        ChemicalPortBlockEntity south = helper.getBlockEntity(southReceiver);
 
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_eject");
         insert(source, oxygen, 2_000L);
@@ -513,8 +515,8 @@ public class MekanismPortGameTest {
         BlockPos receiverPos = sourcePos.relative(Direction.NORTH);
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(receiverPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
-        ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity receiver = helper.getBlockEntity(receiverPos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos);
+        ChemicalPortBlockEntity receiver = helper.getBlockEntity(receiverPos);
 
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_eject_remainder");
         long partialCapacity = MekanismPortSizes.CHEMICAL_BASIC_CAPACITY - 2_000L;
@@ -540,8 +542,8 @@ public class MekanismPortGameTest {
         BlockPos heatPos = new BlockPos(0, 2, 0);
         helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        ChemicalPortBlockEntity chemical = helper.getBlockEntity(chemicalPos, ChemicalPortBlockEntity.class);
-        HeatPortBlockEntity heat = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        ChemicalPortBlockEntity chemical = helper.getBlockEntity(chemicalPos);
+        HeatPortBlockEntity heat = helper.getBlockEntity(heatPos);
 
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_persist");
         chemical.chemicalTank().setStack(oxygen.copyWithAmount(12_345L));
@@ -631,12 +633,12 @@ public class MekanismPortGameTest {
     public void heatInputCapabilityAcceptsOnlyExternalHeatInput(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        HeatPortBlockEntity heat = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity heat = helper.getBlockEntity(heatPos);
 
         IHeatHandler capability = helper.getLevel().getCapability(Capabilities.HEAT,
                 helper.absolutePos(heatPos),
                 helper.getLevel().getBlockState(helper.absolutePos(heatPos)),
-                helper.getBlockEntity(heatPos, HeatPortBlockEntity.class),
+                helper.getBlockEntity(heatPos),
                 Direction.EAST);
         helper.assertTrue(capability != null,
                 "Heat capability is exposed on the EAST side of a heat input port");
@@ -644,6 +646,7 @@ public class MekanismPortGameTest {
         double before = heat.heatCapacitor().getHeat();
         capability.handleHeat(10.25D);
         capability.handleHeat(-0.25D);
+        heat.heatCapacitor().update();
         helper.assertValueEqual(before + 10.25D, heat.heatCapacitor().getHeat(),
                 "The exposed Mekanism heat input handler accepts heat but rejects external extraction");
         helper.succeed();
@@ -654,7 +657,7 @@ public class MekanismPortGameTest {
         var portBlock = ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get();
         helper.setBlock(portPos, portBlock.defaultBlockState());
 
-        ChemicalPortBlockEntity port = helper.getBlockEntity(portPos, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity port = helper.getBlockEntity(portPos);
 
         ResourceLocation updatedTexture = MMCR.id("block/chemical_basic_casing_updated");
         ResourceLocation initialAppearance = port.appearanceBaseTexture();
@@ -727,17 +730,17 @@ public class MekanismPortGameTest {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
                 ResourceLocation.fromNamespaceAndPath("mmcr_test", path));
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
-        return registry.get(key).orElseGet(() -> {
-            registry.unfreeze(true);
+        return registry.getHolder(key).orElseGet(() -> {
+            registry.unfreeze();
             Chemical value = new Chemical(ChemicalBuilder.builder()) {
                 @Override
                 public boolean isRadioactive() {
                     return radioactive;
                 }
             };
-            Registry.register(registry, key.identifier(), value);
+            Registry.register(registry, key.location(), value);
             registry.freeze();
-            return registry.get(key).orElseThrow();
+            return registry.getHolder(key).orElseThrow();
         });
     }
 }

@@ -48,14 +48,15 @@ public class E2ERecipeRunGameTest {
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         BlockPos inputPos = new BlockPos(1, 2, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        ItemInputBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
+        ItemInputBusBlockEntity inputBus = helper.getBlockEntity(inputPos);
         insertItem(inputBus, 0, new ItemStack(Items.IRON_INGOT));
         insertItem(inputBus, 1, new ItemStack(Items.IRON_INGOT));
         BlockPos outputPos = new BlockPos(1, 2, 2);
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
         BlockPos energyPos = new BlockPos(2, 2, 1);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
+        EnergyInputHatchBlockEntity energyHatch = helper.getBlockEntity(energyPos);
+        var energyInput = energyHatch.energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
         ResourceLocation machineId = MMCR.id("iron_compressor");
@@ -69,13 +70,13 @@ public class E2ERecipeRunGameTest {
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), -100, 1,
                 false, false, false, Set.of()));
 
-        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         helper.runAtTickTime(120, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
-            ItemStack input = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0);
-            ItemStack input1 = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 1);
-            ItemStack output = item(helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class), 0);
+            ItemStack input = item(helper.getBlockEntity(inputPos), 0);
+            ItemStack input1 = item(helper.getBlockEntity(inputPos), 1);
+            ItemStack output = item(helper.getBlockEntity(outputPos), 0);
             helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed input0=" + input + " input1=" + input1
                     + " crafting=" + controller.runtimeSnapshot().crafting()
                     + " failure=" + controller.runtimeSnapshot().crafting().failure());
@@ -90,7 +91,7 @@ public class E2ERecipeRunGameTest {
 
         BlockPos inputPos = controllerPos.offset(2, 0, 0);
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        insertItem(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0,
+        insertItem(helper.getBlockEntity(inputPos), 0,
                 new ItemStack(Items.IRON_INGOT));
 
         BlockPos outputPos = controllerPos.offset(0, 0, 2);
@@ -98,7 +99,8 @@ public class E2ERecipeRunGameTest {
 
         BlockPos energyPos = controllerPos.offset(-2, 0, 0);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
+        EnergyInputHatchBlockEntity energyHatch = helper.getBlockEntity(energyPos);
+        var energyInput = energyHatch.energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
         Map<BlockPos, BlockPredicate> pattern = new HashMap<>();
@@ -118,14 +120,14 @@ public class E2ERecipeRunGameTest {
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), 0, 1,
                 false, false, false, Set.of()));
 
-        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.serverTick();
         helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
         for (int tick = 0; tick < 20; tick++) controller.serverTick();
 
-        ItemStack input = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0);
-        ItemStack output = item(helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class), 0);
+        ItemStack input = item(helper.getBlockEntity(inputPos), 0);
+        ItemStack output = item(helper.getBlockEntity(outputPos), 0);
         helper.assertTrue(input.isEmpty(), "Pattern input bus consumed ingot outside legacy scan");
         helper.assertTrue(output.is(Items.IRON_NUGGET), "Pattern output bus received nugget outside legacy scan");
         helper.succeed();
@@ -142,7 +144,8 @@ public class E2ERecipeRunGameTest {
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         BlockPos energyPos = controllerPos.offset(1, 0, 0);
         helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
-        var energyInput = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class).energyStorage();
+        EnergyInputHatchBlockEntity energyHatch = helper.getBlockEntity(energyPos);
+        var energyInput = energyHatch.energyStorage();
         while (energyInput.forceInsert(10000, false) > 0) {}
 
         BlockPos firstOutputPos = controllerPos.offset(0, 0, 1);
@@ -150,7 +153,7 @@ public class E2ERecipeRunGameTest {
         BlockPos thirdOutputPos = controllerPos.offset(0, 1, 0);
         helper.setBlock(firstOutputPos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
 
-        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Distillation tower forms before recipe starts");
@@ -181,14 +184,14 @@ public class E2ERecipeRunGameTest {
     }
 
     private static void insertCoal(GameTestHelper helper, BlockPos inputPos) {
-        insertItem(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0,
+        insertItem(helper.getBlockEntity(inputPos), 0,
                 new ItemStack(Items.COAL));
     }
 
     private static void assertDistillationBatchComplete(GameTestHelper helper,
                                                          MachineControllerBlockEntity controller, BlockPos inputPos) {
         helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null, "Distillation recipe completed");
-        ItemStack input = item(helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class), 0);
+        ItemStack input = item(helper.getBlockEntity(inputPos), 0);
         helper.assertTrue(input.isEmpty(), "Distillation recipe consumed input");
     }
 
@@ -200,12 +203,12 @@ public class E2ERecipeRunGameTest {
     }
 
     private static void insertItem(ItemBusBlockEntity bus, int slot, ItemStack stack) {
-        bus.itemStorage().setContents(slot, stack, stack.getCount());
+        bus.nativeItemHandler().setContents(slot, stack, stack.getCount());
     }
 
     private static ItemStack item(ItemBusBlockEntity bus, int slot) {
-        ItemStack resource = bus.itemStorage().resource(slot);
+        ItemStack resource = bus.nativeItemHandler().resource(slot);
         return resource.isEmpty() ? ItemStack.EMPTY
-                : resource.copyWithCount((int) Math.min(bus.itemStorage().amount(slot), resource.getMaxStackSize()));
+                : resource.copyWithCount((int) Math.min(bus.nativeItemHandler().amount(slot), resource.getMaxStackSize()));
     }
 }

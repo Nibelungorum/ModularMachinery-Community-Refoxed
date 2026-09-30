@@ -51,9 +51,16 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
     private final CapabilityView view;
     private final AsyncPlanningFacet asyncPlanning;
 
-    public FluidHatchCapability(IFluidHandler fluidHandler, IOType ioType) { this(null, fluidHandler, ioType); }
+    public FluidHatchCapability(IFluidHandler fluidHandler, IOType ioType) {
+        this(null, fluidHandler, ioType, true);
+    }
 
     public FluidHatchCapability(IOPortBlockEntity port, IFluidHandler fluidHandler, IOType ioType) {
+        this(port, fluidHandler, ioType, true);
+    }
+
+    public FluidHatchCapability(IOPortBlockEntity port, IFluidHandler fluidHandler, IOType ioType,
+                                boolean exposeTransferFacet) {
         if (fluidHandler == null) throw new IllegalArgumentException("fluidHandler must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.port = port;
@@ -81,8 +88,11 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
                 return commitNativeAsync(operation);
             }
         };
-        this.view = CapabilityFactories.view(type(), directions(), Set.of(FluidHandlerFacet.class, TransferFacet.class,
-                OperationFacet.class, PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
+        this.view = CapabilityFactories.view(type(), directions(), exposeTransferFacet
+                ? Set.of(FluidHandlerFacet.class, TransferFacet.class, OperationFacet.class,
+                        PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class)
+                : Set.of(FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class,
+                        SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     @Override public IFluidHandler fluidHandler() { return fluidHandler; }

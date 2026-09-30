@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -46,8 +47,9 @@ public class ExtendedPortGameTest {
         for (int index = 0; index < positions.size(); index++) {
             BlockPos position = positions.get(index);
             helper.setBlock(position, ModBlocks.BLOCKS.get(ids.get(index)).get().defaultBlockState());
-            IOPortBlockEntity port = helper.getBlockEntity(position, IOPortBlockEntity.class);
-            port.itemStorage().setContents(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT), 3L);
+            IOPortBlockEntity port = helper.getBlockEntity(position);
+            ((LongItemStorage) port.nativeItemHandler()).setContents(
+                    0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT), 3L);
         }
 
         positions.forEach(helper::destroyBlock);
@@ -64,10 +66,11 @@ public class ExtendedPortGameTest {
     public void largeItemPortDropsUseLegalBoundedStacks(GameTestHelper helper) {
         BlockPos position = new BlockPos(0, 1, 0);
         helper.setBlock(position, ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
-        IOPortBlockEntity port = helper.getBlockEntity(position, IOPortBlockEntity.class);
-        port.itemStorage().setContents(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT),
+        IOPortBlockEntity port = helper.getBlockEntity(position);
+        LongItemStorage storage = (LongItemStorage) port.nativeItemHandler();
+        storage.setContents(0, new net.minecraft.world.item.ItemStack(Items.IRON_INGOT),
                 (long) Integer.MAX_VALUE + 1L);
-        port.itemStorage().setContents(1, new net.minecraft.world.item.ItemStack(Items.GOLD_INGOT), Long.MAX_VALUE);
+        storage.setContents(1, new net.minecraft.world.item.ItemStack(Items.GOLD_INGOT), Long.MAX_VALUE);
 
         helper.destroyBlock(position);
         helper.runAtTickTime(1, () -> {
@@ -80,8 +83,8 @@ public class ExtendedPortGameTest {
             helper.assertTrue(drops.stream().allMatch(entity ->
                             entity.getItem().getCount() <= entity.getItem().getMaxStackSize()),
                     "Large item drops never exceed the item stack limit");
-            helper.assertTrue(port.itemStorage().amount(0) == 0L && port.itemStorage().resource(0) == null
-                            && port.itemStorage().amount(1) == 0L && port.itemStorage().resource(1) == null,
+            helper.assertTrue(storage.amount(0) == 0L && storage.resource(0).isEmpty()
+                            && storage.amount(1) == 0L && storage.resource(1).isEmpty(),
                     "Large item storage is cleared after removal");
             helper.succeed();
         });
@@ -116,7 +119,7 @@ public class ExtendedPortGameTest {
     public void extendedCombinedPortTransfersBeyondIntegerRange(GameTestHelper helper) {
         BlockPos portPos = new BlockPos(0, 1, 0);
         helper.setBlock(portPos, ModBlocks.BLOCKS.get("extended_combined_input_advanced").get().defaultBlockState());
-        ExtendedCombinedPortBlockEntity port = helper.getBlockEntity(portPos, ExtendedCombinedPortBlockEntity.class);
+        ExtendedCombinedPortBlockEntity port = helper.getBlockEntity(portPos);
         BlockPos worldPos = helper.absolutePos(portPos);
         BlockEntity blockEntity = helper.getLevel().getBlockEntity(worldPos);
 
@@ -132,9 +135,9 @@ public class ExtendedPortGameTest {
         fluidHandler.fill(new FluidStack(Fluids.WATER, Integer.MAX_VALUE), IFluidHandler.FluidAction.EXECUTE);
         fluidHandler.fill(new FluidStack(Fluids.WATER, Integer.MAX_VALUE), IFluidHandler.FluidAction.EXECUTE);
 
-        helper.assertTrue(port.itemStorage().amount(0) > Integer.MAX_VALUE,
+        helper.assertTrue(port.nativeItemHandler().amount(0) > Integer.MAX_VALUE,
                 "Extended item storage preserves cumulative amounts above int range");
-        helper.assertTrue(port.fluidStorage().amount(0) > Integer.MAX_VALUE,
+        helper.assertTrue(port.nativeFluidHandler().amount(0) > Integer.MAX_VALUE,
                 "Extended fluid storage preserves cumulative amounts above int range");
         helper.succeed();
     }
@@ -163,9 +166,9 @@ public class ExtendedPortGameTest {
         helper.setBlock(controllerPos, controllerBlock.defaultBlockState().setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         helper.setBlock(portPos, portBlock.defaultBlockState());
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
-        ExtendedCombinedPortBlockEntity port = helper.getBlockEntity(portPos, ExtendedCombinedPortBlockEntity.class);
-        port.fluidStorage().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
+        ExtendedCombinedPortBlockEntity port = helper.getBlockEntity(portPos);
+        port.nativeFluidHandler().setContents(0, new FluidStack(Fluids.WATER, 1), 1L);
         ResourceLocation texture = MMCR.id("block/extended_combined_test_casing");
         DynamicMachine machine = new DynamicMachine(
                 MMCR.id("extended_combined_appearance_test"),

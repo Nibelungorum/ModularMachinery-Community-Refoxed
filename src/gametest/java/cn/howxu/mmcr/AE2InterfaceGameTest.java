@@ -39,7 +39,7 @@ import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
-import io.netty.channel.ChannelFutureListener;
+import net.minecraft.network.PacketSendListener;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -71,7 +71,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -132,8 +131,7 @@ public class AE2InterfaceGameTest {
                 List.of(), 0, 1,
                 false, false, false, Set.of()));
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos,
-                MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
         controller.setStructureCheckIntervalForTesting(1);
         helper.runAtTickTime(1, () -> {
@@ -142,8 +140,7 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(2, () -> {
-            InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
-                    InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos);
             helper.assertTrue(entity != null,
                     "AE2 input interface resolves to AE2InputInterfaceBlockEntity");
 
@@ -242,8 +239,7 @@ public class AE2InterfaceGameTest {
                 while (!controller.structureSnapshot().formed() && polls++ < 100) {
                     controller.serverTick();
                 }
-                InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
-                        InputInterfaceBlockEntity.class);
+                InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos);
                 helper.assertTrue(controller.structureSnapshot().formed(),
                         "MMCR multiblock containing AE2 input interface forms");
                 helper.assertTrue(entity.nativeItemHandler().getStackInSlot(0).getCount() <= INITIAL_ITEM_COUNT - 1L,
@@ -344,11 +340,9 @@ public class AE2InterfaceGameTest {
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
         helper.runAtTickTime(2, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
-                    InputInterfaceBlockEntity.class);
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
-            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
-                    CreativeEnergyCellBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
             helper.assertTrue(input != null && chest != null,
                     "Input interface and ME chest are available");
             chest.setCell(AEItems.ITEM_CELL_1K.stack());
@@ -360,9 +354,8 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(4, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
-                    InputInterfaceBlockEntity.class);
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
             MEStorage network = chest.getInventory();
             helper.assertTrue(network.insert(AEItemKey.of(Items.IRON_INGOT), NETWORK_ITEM_AMOUNT,
                             Actionable.MODULATE, IActionSource.empty()) == NETWORK_ITEM_AMOUNT,
@@ -372,8 +365,7 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(20, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
-                    InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
             GenericStackInv storage = input.getInterfaceLogic().getStorage();
             helper.assertTrue(storage.getAmount(0) == CONFIGURED_ITEM_AMOUNT,
                     "Configured items are pulled into the input cache");
@@ -383,8 +375,7 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(30, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
-                    InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
             helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(0) == MANUAL_ITEM_AMOUNT,
                     "Manually inserted items remain in the input cache after config cancellation, actual="
                             + input.getInterfaceLogic().getStorage().getAmount(0));
@@ -403,9 +394,9 @@ public class AE2InterfaceGameTest {
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
         helper.runAtTickTime(2, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
-            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
             chest.setCell(AEItems.ITEM_CELL_1K.stack());
             helper.assertTrue(input != null && chest != null && energy != null
                             && input.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
@@ -416,8 +407,8 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(4, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
             helper.assertTrue(chest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), NETWORK_ITEM_AMOUNT,
                             Actionable.MODULATE, IActionSource.empty()) == NETWORK_ITEM_AMOUNT,
                     "ME network accepts the ExtendedAE input source items");
@@ -426,7 +417,7 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(20, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
             helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(35) == CONFIGURED_ITEM_AMOUNT,
                     "ExtendedAE slot 35 stocks the configured AE-owned resources");
             helper.assertTrue(input.nativeItemHandler().extractItem(35, 1, false).getCount() == 1,
@@ -437,8 +428,8 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(30, () -> {
-            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
-            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
             helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(35) == MANUAL_ITEM_AMOUNT,
                     "Config cancellation returns only the remaining AE-owned resources, preserving manual cache items");
             helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), NETWORK_ITEM_AMOUNT - 1L,
@@ -457,8 +448,8 @@ public class AE2InterfaceGameTest {
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("ae2_me_output_interface").get().defaultBlockState());
 
         helper.runAtTickTime(2, () -> {
-            InputInterfaceBlockEntity source = helper.getBlockEntity(sourcePos, InputInterfaceBlockEntity.class);
-            InputInterfaceBlockEntity target = helper.getBlockEntity(targetPos, InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity source = helper.getBlockEntity(sourcePos);
+            InputInterfaceBlockEntity target = helper.getBlockEntity(targetPos);
             ServerPlayer player = makePlayerWithConnection(helper);
             player.getAbilities().instabuild = true;
             ItemStack card = AEItems.MEMORY_CARD.stack();
@@ -487,7 +478,7 @@ public class AE2InterfaceGameTest {
                     "Memory-card restore copies installed input upgrades");
 
             ItemStack outputCard = AEItems.MEMORY_CARD.stack();
-            helper.assertTrue(useMemoryCard(helper, outputPos, player, outputCard) == InteractionResult.TRY_WITH_EMPTY_HAND,
+            helper.assertTrue(useMemoryCard(helper, outputPos, player, outputCard) == InteractionResult.PASS,
                     "Output interfaces do not claim memory-card interactions");
             helper.assertTrue(outputCard.get(AEComponents.EXPORTED_SETTINGS_SOURCE) == null,
                     "Output interfaces do not write memory-card data");
@@ -501,7 +492,7 @@ public class AE2InterfaceGameTest {
         player.setItemInHand(InteractionHand.MAIN_HAND, card);
         return helper.getLevel().getBlockState(worldPos).useItemOn(card, helper.getLevel(), player,
                 InteractionHand.MAIN_HAND,
-                new BlockHitResult(Vec3.atCenterOf(worldPos), Direction.UP, worldPos, false));
+                new BlockHitResult(Vec3.atCenterOf(worldPos), Direction.UP, worldPos, false)).result();
     }
 
     private static ServerPlayer makePlayer(GameTestHelper helper) {
@@ -556,12 +547,12 @@ public class AE2InterfaceGameTest {
         }
 
         @Override
-        public void send(@NonNull Packet<?> packet) {
+        public void send(Packet<?> packet) {
             packets.add(packet);
         }
 
         @Override
-        public void send(Packet<?> packet, ChannelFutureListener listener) {
+        public void send(Packet<?> packet, PacketSendListener listener) {
             packets.add(packet);
         }
     }
