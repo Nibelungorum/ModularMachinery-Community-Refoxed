@@ -76,6 +76,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
+        if (previewDragActive && !Minecraft.getInstance().mouseHandler.isLeftPressed()) cancelPreviewDrag();
         if (panel == null) return;
         ScreenPosition origin = guiOrigin(graphics);
         panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(),
@@ -145,18 +146,29 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     public void close() {
         if (closed) return;
         closed = true;
+        cancelPreviewDrag();
         if (panel != null) panel.close();
         if (testingPreview != null) testingPreview.close();
     }
 
     @Override
     public boolean handleInput(double mouseX, double mouseY, IJeiUserInput input) {
-        if (input.getKey().getType() != InputConstants.Type.MOUSE) return false;
+        boolean simulate = input.isSimulate();
+        if (input.getKey().getType() != InputConstants.Type.MOUSE) {
+            if (!simulate) cancelPreviewDrag();
+            return false;
+        }
         int button = input.getKey().getValue();
-        if (button != 0) return false;
-        if (!isReady()) return false;
-        if (input.isSimulate()) previewDragActive = false;
-        if (!input.isSimulate() && previewDragActive) {
+        if (button != 0 || !isReady()) {
+            if (!simulate) cancelPreviewDrag();
+            return false;
+        }
+        if (simulate) {
+            return controlAt(mouseX, mouseY) >= 0
+                    || candidateAt(mouseX, mouseY) >= 0
+                    || insidePreview(mouseX, mouseY);
+        }
+        if (previewDragActive) {
             previewDragActive = false;
             boolean inside = insidePreview(mouseX, mouseY);
             boolean handled = mouseReleased(previewMouseX(mouseX), previewMouseY(mouseY), button);
@@ -164,7 +176,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
-            if (input.isSimulate()) return true;
             switch (control) {
                 case 0 -> selectPreviousLayer();
                 case 1 -> selectNextLayer();
@@ -177,33 +188,43 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return true;
         }
         if (candidateAt(mouseX, mouseY) >= 0) {
-            previewDragActive = false;
             return true;
         }
-        if (input.isSimulate()) {
-            if (!insidePreview(mouseX, mouseY)) return false;
-            boolean handled = mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
-            previewDragActive = handled;
-            return handled;
-        }
         if (!insidePreview(mouseX, mouseY)) return false;
-        boolean handled = mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
-        previewDragActive = handled;
-        return handled;
+        if (!mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button)) return false;
+        return mouseReleased(previewMouseX(mouseX), previewMouseY(mouseY), button);
     }
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return previewDragActive && controlAt(mouseX, mouseY) < 0 && candidateAt(mouseX, mouseY) < 0
-                && insidePreview(mouseX, mouseY)
-                && mouseKey.getType() == InputConstants.Type.MOUSE
-                && mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
+        if (mouseKey.getType() != InputConstants.Type.MOUSE || mouseKey.getValue() != 0 || !isReady()
+                || controlAt(mouseX, mouseY) >= 0 || candidateAt(mouseX, mouseY) >= 0
+                || !insidePreview(mouseX, mouseY)) {
+            cancelPreviewDrag();
+            return false;
+        }
+        if (!previewDragActive) {
+            double pressX = previewMouseX(mouseX - dragX);
+            double pressY = previewMouseY(mouseY - dragY);
+            previewDragActive = mouseClicked(pressX, pressY, mouseKey.getValue());
+            if (!previewDragActive) return false;
+        }
+        boolean handled = mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
+        if (!handled) cancelPreviewDrag();
+        return handled;
     }
 
     @Override
     public boolean handleMouseScrolled(double mouseX, double mouseY, double scrollDeltaX, double scrollDeltaY) {
+        cancelPreviewDrag();
         return controlAt(mouseX, mouseY) < 0 && candidateAt(mouseX, mouseY) < 0 && insidePreview(mouseX, mouseY)
                 && mouseScrolled(previewMouseX(mouseX), previewMouseY(mouseY), scrollDeltaY);
+    }
+
+    private void cancelPreviewDrag() {
+        if (!previewDragActive) return;
+        previewDragActive = false;
+        mouseReleased(-1.0D, -1.0D, 0);
     }
 
     private int candidateAt(double mouseX, double mouseY) {
