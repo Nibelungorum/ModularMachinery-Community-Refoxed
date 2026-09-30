@@ -4117,10 +4117,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private long currentCatalogVersion() {
-        ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return RecipeRegistry.catalogForMachine(machine).version();
+        return RecipeRegistry.catalogForPool(currentRecipePoolId()).version();
     }
 
     public List<ResourceLocation> supportedRecipePoolIds() {
@@ -4217,7 +4214,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ResourceLocation machineId = machine == null ? null : machine.registryName();
         ResourceLocation recipePoolId = currentRecipePoolId();
         if (machineId == null || recipePoolId == null) return List.of();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForPool(recipePoolId);
         if (machineId.equals(cachedCandidatesMachineId)
                 && recipePoolId.equals(cachedCandidatesRecipePoolId)
                 && cachedCandidatesCatalogVersion == catalog.version()) {
@@ -4226,8 +4223,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedCandidatesMachineId = machineId;
         cachedCandidatesRecipePoolId = recipePoolId;
         cachedCandidatesCatalogVersion = catalog.version();
-        cachedCandidates = catalog.recipes().stream()
-                .filter(recipe -> recipePoolId.equals(recipe.recipePoolId())).toList();
+        cachedCandidates = catalog.recipes();
         return cachedCandidates;
     }
 

@@ -453,9 +453,7 @@ public abstract class RecipeThread {
     }
 
     private long currentCatalogVersion() {
-        var structure = controller.currentStructureSnapshot();
-        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
-        return RecipeRegistry.catalogForMachine(machine).version();
+        return RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
     }
 
     private void invalidatePendingStart(long token, MachineRecipe recipe) {

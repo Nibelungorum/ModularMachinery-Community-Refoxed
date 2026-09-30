@@ -432,10 +432,7 @@ public final class FactoryRuntime {
     }
 
     private long currentCatalogVersion() {
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return RecipeRegistry.catalogForMachine(machine).version();
+        return RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
     }
 
     private WorkerSearchRequest captureWorkerSearch(FactorySearchContext context,
@@ -502,7 +499,7 @@ public final class FactoryRuntime {
                                  List<MachineRecipe> candidates) {
         long initialEpoch = factoryStateEpoch;
         ensureBaseLane(controller);
-        long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
+        long catalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
         ResourceLocation recipePoolId = controller.currentRecipePoolId();
         Map<ResourceLocation, MachineRecipe> byId = new LinkedHashMap<>();
         for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
@@ -565,7 +562,7 @@ public final class FactoryRuntime {
 
     public boolean syncCoreLanesIfNeeded(MachineControllerBlockEntity controller, Machine machine,
                                          List<MachineRecipe> candidates) {
-        long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
+        long catalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
         if (lanes.isEmpty() || syncedCoreMachine != machine || coreCatalogVersion != catalogVersion
                 || !Objects.equals(syncedCoreRecipePoolId, controller.currentRecipePoolId())) {
             return syncCoreLanes(controller, machine, candidates);
@@ -861,7 +858,7 @@ public final class FactoryRuntime {
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         Machine machine = current.structure().machine() == null
                 ? current.structure().configuredMachine() : current.structure().machine();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
         Map<String, List<MachineRecipe>> coreCandidates = new LinkedHashMap<>();
         if (machine != null) {
             for (FactoryThreadSpec spec : machine.factoryThreads()) {
@@ -916,9 +913,7 @@ public final class FactoryRuntime {
     public FactorySearchContext createSearchContext(ControllerRuntimeSnapshot snapshot,
                                                     List<MachineRecipe> candidates,
                                                      long maxParallelism, long gameTime) {
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
         ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (!Objects.equals(cachedCandidateRecipePoolId, recipePoolId)) {
             clearCandidateCaches();
@@ -1030,10 +1025,9 @@ public final class FactoryRuntime {
 
     private RecipeSearchContextKey currentSearchContextKey(ControllerRuntimeSnapshot snapshot,
                                                             FactoryRecipeThread lane) {
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
-                snapshot.modifierVersion(), snapshot.stateVersion(), RecipeRegistry.catalogForMachine(machine).version(),
+                snapshot.modifierVersion(), snapshot.stateVersion(),
+                RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version(),
                 lane.searchResourceEpoch(controller.resourceAvailabilityEpoch()),
                 lane.coreRecipeSetVersion());
     }

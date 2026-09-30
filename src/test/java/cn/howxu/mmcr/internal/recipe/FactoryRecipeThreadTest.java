@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -162,11 +163,18 @@ class FactoryRecipeThreadTest {
                 20, List.of(), List.of());
         MachineRecipe second = RecipeTestSupport.create(MMCR.id("factory_selected_pool_second_recipe"), secondPool,
                 20, List.of(), List.of());
-        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+        Map<Identifier, MachineRecipe> previous = RecipeRegistry.dynamicSnapshot();
+        try {
+            RecipeRegistry.replaceDynamic(Map.of(first.id(), first, second.id(), second), ignored -> true);
+            FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
-        assertThat(thread.searchAndStartRecipe(List.of(first, second), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
-        assertThat(thread.runtime().recipe()).isEqualTo(second);
+            assertThat(thread.candidatesFor(null)).containsExactly(second);
+            assertThat(thread.searchAndStartRecipe(null, 1,
+                    controller.runtimeSnapshot().structure().version())).isTrue();
+            assertThat(thread.runtime().recipe()).isEqualTo(second);
+        } finally {
+            RecipeRegistry.replaceDynamic(previous, ignored -> true);
+        }
     }
 
     private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io)

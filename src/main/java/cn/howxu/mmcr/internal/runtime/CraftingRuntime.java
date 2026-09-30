@@ -166,7 +166,8 @@ public final class CraftingRuntime {
         if (!result.successful() || plan == null) return null;
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return null;
-        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, catalogVersion(runtime), effective, plan,
+        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime,
+                catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan,
                 prefetches);
         return pendingPatternStart;
     }
@@ -238,13 +239,11 @@ public final class CraftingRuntime {
                 && prepared.runtime().capabilityVersion() == current.capabilityVersion()
                 && prepared.runtime().modifierVersion() == current.modifierVersion()
                 && prepared.runtime().stateVersion() == current.stateVersion()
-                && prepared.catalogVersion() == catalogVersion(current);
+                && prepared.catalogVersion() == catalogVersion(prepared.recipe().source().recipePoolId());
     }
 
-    private static long catalogVersion(ControllerRuntimeSnapshot runtime) {
-        Machine machine = runtime.structure().machine() == null
-                ? runtime.structure().configuredMachine() : runtime.structure().machine();
-        return RecipeRegistry.catalogForMachine(machine).version();
+    private static long catalogVersion(ResourceLocation recipePoolId) {
+        return RecipeRegistry.catalogForPool(recipePoolId).version();
     }
 
     void activatePatternStart(PreparedStart prepared) {
@@ -275,7 +274,8 @@ public final class CraftingRuntime {
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime,
                              RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
                              List<PreparedPrefetch> prefetches) {
-            this(recipe, runtime, CraftingRuntime.catalogVersion(runtime), effective, plan, prefetches);
+            this(recipe, runtime, CraftingRuntime.catalogVersion(recipe.source().recipePoolId()), effective, plan,
+                    prefetches);
         }
     }
 
@@ -359,8 +359,8 @@ public final class CraftingRuntime {
         }
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return fail(missingInputStatus());
-        PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion(runtime), effective, plan,
-                prefetches);
+        PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime,
+                catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches);
         boolean committed = false;
         try {
             ExecutionStatus commitFailure = commitPreparedStart(prepared);

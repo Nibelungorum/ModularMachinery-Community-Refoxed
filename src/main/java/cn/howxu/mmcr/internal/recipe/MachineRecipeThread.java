@@ -61,7 +61,7 @@ public final class MachineRecipeThread extends RecipeThread {
         if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
             clearLastRecipe();
         } else if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
-            MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(currentMachine());
+            MachineRecipeCatalog catalog = currentRecipeCatalog();
             MachineRecipe current = catalog.recipes().stream()
                     .filter(candidate -> lastRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
@@ -78,7 +78,7 @@ public final class MachineRecipeThread extends RecipeThread {
     @Override
     protected void onRecipeFinished() {
         markRecipeFinished();
-        MachineRecipe restartRecipe = consumeRestartRecipe(RecipeRegistry.catalogForMachine(currentMachine()).recipes(),
+        MachineRecipe restartRecipe = consumeRestartRecipe(currentRecipeCatalog().recipes(),
                 controller.getMaxParallelism(), controller.currentRuntimeSnapshot().structure().version());
         if (restartRecipe == null || !canRestartNow(restartRecipe)) return;
         if (controller.activeWorkMode() == MachineWorkMode.ASYNC) {
@@ -123,7 +123,7 @@ public final class MachineRecipeThread extends RecipeThread {
         lastRecipeCapabilityVersion = snapshot.capabilityVersion();
         lastRecipeModifierVersion = snapshot.modifierVersion();
         lastRecipeComponentStateVersion = snapshot.stateVersion();
-        lastRecipeCatalogVersion = RecipeRegistry.catalogForMachine(currentMachine()).version();
+        lastRecipeCatalogVersion = currentRecipeCatalog().version();
     }
 
     public void markRecipeFinished() {
@@ -146,7 +146,7 @@ public final class MachineRecipeThread extends RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = currentMachine();
         if (machine == null || availableParallelism <= 0L) return false;
-        long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
+        long catalogVersion = currentRecipeCatalog().version();
         AsyncRequirementPlanner.RecipeSearchRequest request;
         try {
             request = AsyncRequirementPlanner.captureRecipeSearch(snapshot, candidatesForMachine(candidates), availableParallelism,
@@ -229,7 +229,7 @@ public final class MachineRecipeThread extends RecipeThread {
                 && current.stateVersion() == captured.stateVersion()
                 && currentMachine != null && capturedMachine != null
                 && currentMachine.registryName().equals(capturedMachine.registryName())
-                && RecipeRegistry.catalogForMachine(currentMachine).version() == pending.catalogVersion();
+                && currentRecipeCatalog().version() == pending.catalogVersion();
     }
 
     private void clearPendingAsyncSearch(@Nullable PendingAsyncSearch pending, boolean cancelTask) {
@@ -255,6 +255,10 @@ public final class MachineRecipeThread extends RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         return snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+    }
+
+    private MachineRecipeCatalog currentRecipeCatalog() {
+        return RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
     }
 
     private @Nullable net.minecraft.core.HolderLookup.Provider registryAccess() {
