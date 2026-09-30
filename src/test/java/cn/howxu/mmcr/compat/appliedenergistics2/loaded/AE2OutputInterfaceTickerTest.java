@@ -78,7 +78,7 @@ class AE2OutputInterfaceTickerTest {
     private static IGridNode node(boolean active) {
         return (IGridNode) Proxy.newProxyInstance(IGridNode.class.getClassLoader(),
                 new Class<?>[]{IGridNode.class},
-                (_, method, _) -> method.getName().equals("isActive")
+                (proxy, method, args) -> method.getName().equals("isActive")
                         ? active : defaultValue(method.getReturnType()));
     }
 

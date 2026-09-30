@@ -47,9 +47,9 @@ class ModCapabilitiesTest {
 
     @Test
     void selects_external_exposures_from_generic_port_bindings() {
-        CapabilityBinding binding = new CapabilityBinding(new CapabilityType(MMCR.id("external_test")),CapabilityDirections.input(),_ -> null, PortTierPolicy.always(),
+        CapabilityBinding binding = new CapabilityBinding(new CapabilityType(MMCR.id("external_test")),CapabilityDirections.input(),context -> null, PortTierPolicy.always(),
                 new CapabilityBinding.ExternalExposure<>(MMCR.id("external_test_native"), String.class,
-                        (_, _, _) -> "exposed"));
+                        (blockEntity, side, context) -> "exposed"));
         PortDefinition definition = PortDefinition.of(MMCR.id("external_test_port"), binding);
         IOPortKind kind = new IOPortKind() {
             @Override
@@ -64,7 +64,7 @@ class ModCapabilitiesTest {
 
             @Override
             public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-                return (_, _) -> null;
+                return (position, state) -> null;
             }
 
             @Override
@@ -79,14 +79,14 @@ class ModCapabilitiesTest {
     @Test
     void internal_only_binding_is_not_selected_for_native_transfer_registration() {
         CapabilityBinding binding = CapabilityBinding.internalOnly(
-                new CapabilityType(MMCR.id("internal_only_test")), CapabilityDirections.input(), _ -> null,
+                new CapabilityType(MMCR.id("internal_only_test")), CapabilityDirections.input(), context -> null,
                 PortTierPolicy.always());
         PortDefinition definition = PortDefinition.of(MMCR.id("internal_only_test_port"), binding);
         IOPortKind kind = new IOPortKind() {
             @Override public String id() { return "internal_only_test_port"; }
             @Override public IOType ioType() { return IOType.INPUT; }
             @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-                return (_, _) -> null;
+                return (position, state) -> null;
             }
             @Override public PortDefinition definition() { return definition; }
         };
@@ -98,7 +98,7 @@ class ModCapabilitiesTest {
     void native_provider_exposes_typed_handler_without_transfer_facet() {
         ResourceOnlyCapability capability = new ResourceOnlyCapability();
         CapabilityBinding binding = new CapabilityBinding(capability.type(), CapabilityDirections.input(),
-                _ -> capability, PortTierPolicy.always());
+                context -> capability, PortTierPolicy.always());
         ResourceOnlyPort port = new ResourceOnlyPort(binding, capability);
         Level level = LevelStub.createWithBlockEntities(List.of(port));
         port.setLevel(level);
@@ -153,7 +153,7 @@ class ModCapabilitiesTest {
             };
         }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {
-            return _ -> CapabilityResult.successful();
+            return context -> CapabilityResult.successful();
         }
     }
 }

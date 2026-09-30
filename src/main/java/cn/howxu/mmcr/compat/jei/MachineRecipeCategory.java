@@ -83,7 +83,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         @Override
         @Deprecated(forRemoval = true)
         public List<Component> getTooltip(FluidStack ingredient, TooltipFlag tooltipFlag) {
-            return fluidTooltip(ingredient);
+            return List.of();
+        }
+
+        @Override
+        public void getTooltip(@NotNull ITooltipBuilder tooltip, @NotNull FluidStack ingredient, Item.@NotNull TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
+            IIngredientRenderer.super.getTooltip(tooltip, ingredient, tooltipContext, player, tooltipFlag);
+            tooltip.addAll(fluidTooltip(ingredient));
         }
     };
 
@@ -102,12 +108,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     @Override
-    public RecipeType<MachineRecipeDisplay> getRecipeType() {
+    public @NotNull RecipeType<MachineRecipeDisplay> getRecipeType() {
         return recipeType;
     }
 
     @Override
-    public Component getTitle() {
+    public @NotNull Component getTitle() {
         return title;
     }
 
@@ -381,16 +387,21 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 }
             }
 
+
             @Override
             @Deprecated(forRemoval = true)
-            public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
+            public List<Component> getTooltip(@NotNull ItemStack ingredient, @NotNull TooltipFlag tooltipFlag) {
+                return List.of();
+            }
+
+            @Override
+            public @NotNull List<Component> getTooltip(@NotNull ItemStack ingredient, Item.@NotNull TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
                 Minecraft minecraft = Minecraft.getInstance();
                 ItemStack candidate = levelCandidate(requirement,
                         minecraft.level == null ? 0L : minecraft.level.getGameTime());
                 return candidate.isEmpty()
                         ? List.of()
                         : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
-
             }
         };
     }
@@ -665,7 +676,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static String selectedLanguage() {
         Minecraft minecraft = Minecraft.getInstance();
-        return minecraft == null ? "" : minecraft.getLanguageManager().getSelected();
+        return minecraft.getLanguageManager().getSelected();
     }
 
     private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {

@@ -34,11 +34,8 @@ public final class JadePlugin implements IWailaPlugin {
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
-        registration.addConfig(MachineControllerComponentProvider.UID, true);
         registration.registerBlockComponent(MachineControllerComponentProvider.INSTANCE, MachineControllerBlock.class);
-        registration.addConfig(RecipeOutputComponentProvider.UID, true);
         registration.registerBlockComponent(RecipeOutputComponentProvider.INSTANCE, MachineControllerBlock.class);
-        registration.addConfig(ParallelControllerComponentProvider.UID, true);
         registration.registerBlockComponent(ParallelControllerComponentProvider.INSTANCE, ParallelControllerBlock.class);
         if (AE2Bridge.get().available()) register(AE2_REGISTRATION, "registerClient",
                 IWailaClientRegistration.class, registration);

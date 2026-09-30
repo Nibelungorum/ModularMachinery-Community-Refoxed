@@ -46,7 +46,7 @@ class PortTagSetTest {
                                 List<String> modDependencies) implements IOPortKind {
         @Override
         public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-            return (_, _) -> null;
+            return (position, state) -> null;
         }
 
         @Override

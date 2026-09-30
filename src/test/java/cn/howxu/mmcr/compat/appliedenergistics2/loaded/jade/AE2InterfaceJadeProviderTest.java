@@ -245,7 +245,7 @@ class AE2InterfaceJadeProviderTest {
         return (IWailaCommonRegistration) Proxy.newProxyInstance(
                 IWailaCommonRegistration.class.getClassLoader(),
                 new Class<?>[]{IWailaCommonRegistration.class},
-                (_, method, args) -> {
+                (proxy, method, args) -> {
                     if (method.getName().equals("registerBlockDataProvider")) {
                         registrations.add(new Registration(args[0], (Class<?>) args[1]));
                         return null;
@@ -258,7 +258,7 @@ class AE2InterfaceJadeProviderTest {
         return (IWailaClientRegistration) Proxy.newProxyInstance(
                 IWailaClientRegistration.class.getClassLoader(),
                 new Class<?>[]{IWailaClientRegistration.class},
-                (_, method, args) -> {
+                (proxy, method, args) -> {
                     if (method.getName().equals("registerBlockComponent")) {
                         registrations.add(new Registration(args[0], (Class<?>) args[1]));
                         return null;
@@ -271,14 +271,14 @@ class AE2InterfaceJadeProviderTest {
         IGridNode node = (IGridNode) Proxy.newProxyInstance(
                 IGridNode.class.getClassLoader(),
                 new Class<?>[]{IGridNode.class},
-                (_, method, _) -> switch (method.getName()) {
+                (proxy, method, args) -> switch (method.getName()) {
                     case "isPowered", "hasGridBooted", "meetsChannelRequirements" -> true;
                     default -> defaultValue(method.getReturnType());
                 });
         return (IGridConnectedBlockEntity) Proxy.newProxyInstance(
                 IGridConnectedBlockEntity.class.getClassLoader(),
                 new Class<?>[]{IGridConnectedBlockEntity.class},
-                (_, method, _) -> method.getName().equals("getActionableNode")
+                (proxy, method, args) -> method.getName().equals("getActionableNode")
                         ? node : defaultValue(method.getReturnType()));
     }
 
@@ -286,14 +286,14 @@ class AE2InterfaceJadeProviderTest {
         IGridNode node = (IGridNode) Proxy.newProxyInstance(
                 IGridNode.class.getClassLoader(),
                 new Class<?>[]{IGridNode.class},
-                (_, method, _) -> switch (method.getName()) {
+                (proxy, method, args) -> switch (method.getName()) {
                     case "isPowered", "hasGridBooted", "meetsChannelRequirements" -> true;
                     default -> defaultValue(method.getReturnType());
                 });
         return Proxy.newProxyInstance(
                 IGridConnectedBlockEntity.class.getClassLoader(),
                 new Class<?>[]{IGridConnectedBlockEntity.class, CapabilityHost.class},
-                (_, method, _) -> switch (method.getName()) {
+                (proxy, method, args) -> switch (method.getName()) {
                     case "getActionableNode" -> node;
                     case "capabilitySnapshot" -> new CapabilitySnapshot(capabilities.get());
                     case "capabilities" -> capabilities.get();
@@ -305,7 +305,7 @@ class AE2InterfaceJadeProviderTest {
         return (BlockAccessor) Proxy.newProxyInstance(
                 BlockAccessor.class.getClassLoader(),
                 new Class<?>[]{BlockAccessor.class},
-                (_, method, _) -> switch (method.getName()) {
+                (proxy, method, args) -> switch (method.getName()) {
                     case "getTarget" -> target;
                     case "getServerData" -> serverData;
                     default -> throw new UnsupportedOperationException(method.getName());
@@ -316,7 +316,7 @@ class AE2InterfaceJadeProviderTest {
         return (ITooltip) Proxy.newProxyInstance(
                 ITooltip.class.getClassLoader(),
                 new Class<?>[]{ITooltip.class},
-                (_, method, args) -> {
+                (proxy, method, args) -> {
                     if (method.getName().equals("add") && args != null && args.length == 1
                             && args[0] instanceof Component component) {
                         added.add(component);

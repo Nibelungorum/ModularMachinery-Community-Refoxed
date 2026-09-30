@@ -1,7 +1,6 @@
 {
   "pack": {
-    "min_format": 84,
-    "max_format": 84,
+    "pack_format": 34,
     "description": "AE2 interfaces with arrow signs (32x)"
   }
 }

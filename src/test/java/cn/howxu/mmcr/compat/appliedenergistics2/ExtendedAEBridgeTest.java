@@ -176,7 +176,7 @@ class ExtendedAEBridgeTest {
         return (IWailaCommonRegistration) Proxy.newProxyInstance(
                 IWailaCommonRegistration.class.getClassLoader(),
                 new Class<?>[]{IWailaCommonRegistration.class},
-                (_, method, args) -> {
+                (proxy, method, args) -> {
                     if (method.getName().equals("registerBlockDataProvider")) {
                         registrations.add(new Registration(args[0], (Class<?>) args[1]));
                         return null;

@@ -124,14 +124,14 @@ class RecipeOutputComponentProviderTest {
     private static List<TooltipCall> collectCalls(CompoundTag data) {
         BlockAccessor accessor = (BlockAccessor) Proxy.newProxyInstance(
                 BlockAccessor.class.getClassLoader(), new Class<?>[]{BlockAccessor.class},
-                (_, method, _) -> {
+                (proxy, method, args) -> {
                     if ("getServerData".equals(method.getName())) return data;
                     throw new UnsupportedOperationException(method.getName());
                 });
         List<TooltipCall> calls = new ArrayList<>();
         ITooltip tooltip = (ITooltip) Proxy.newProxyInstance(
                 ITooltip.class.getClassLoader(), new Class<?>[]{ITooltip.class},
-                (_, method, args) -> {
+                (proxy, method, args) -> {
                     if (args == null || args.length != 1) return null;
                     if (args[0] instanceof Component || args[0] instanceof LayoutElement) {
                         calls.add(new TooltipCall(method.getName(), args[0]));

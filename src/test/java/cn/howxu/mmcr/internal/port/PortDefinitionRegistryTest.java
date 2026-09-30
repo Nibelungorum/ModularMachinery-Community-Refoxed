@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PortDefinitionRegistryTest {
-    private static final CapabilityFactory FACTORY = _ -> null;
+    private static final CapabilityFactory FACTORY = context -> null;
 
     @BeforeEach
     void openRegistry() {
@@ -96,12 +96,12 @@ class PortDefinitionRegistryTest {
     @Test
     void retains_a_custom_binding_factory_and_typed_external_exposure() {
         AtomicBoolean factoryCalled = new AtomicBoolean();
-        CapabilityFactory factory = _ -> {
+        CapabilityFactory factory = context -> {
             factoryCalled.set(true);
             return null;
         };
         ExternalExposure<String> exposure = new ExternalExposure<>(id("native"), String.class,
-                (_, _, _) -> "exposed");
+                (blockEntity, side, context) -> "exposed");
         CapabilityBinding binding = new CapabilityBinding(
                 new CapabilityType(MMCR.id("custom")), CapabilityDirections.input(), factory, PortTierPolicy.always(), exposure);
         PortDefinitionRegistry.register(PortDefinition.of(id("custom"), binding));
@@ -196,7 +196,7 @@ class PortDefinitionRegistryTest {
     }
 
     private static PortTierPolicy tierAtLeast(int minimum) {
-        return (_, tier) -> tier >= minimum;
+        return (kind, tier) -> tier >= minimum;
     }
 
     private static ResourceLocation id(String path) {
