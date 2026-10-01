@@ -8,24 +8,203 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.common.collect.ImmutableList;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.model.ItemOverrides;
+import net.minecraft.client.renderer.block.model.ItemTransforms;
+import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.metadata.animation.FrameSize;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.WeightedBakedModel;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceMetadata;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.client.model.data.ModelProperty;
+import net.neoforged.neoforge.client.ChunkRenderTypeSet;
+import net.neoforged.neoforge.client.NeoForgeRenderTypes;
+import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 class DynamicOverlayModelLoaderTest {
     private static final BlockPos POS = BlockPos.ZERO;
+    private final Map<ResourceLocation, TextureAtlasSprite> sprites = new HashMap<>();
+
+    @AfterEach
+    void closeSprites() {
+        sprites.values().forEach(sprite -> sprite.contents().close());
+        MachineAppearanceCache.replaceSnapshot(Map.of());
+        ControllerSpecCache.replaceSnapshot(Map.of());
+    }
+
+    private BakedModel bake(DynamicOverlayBakedModel.Kind kind, ResourceLocation itemBlockId) {
+        IGeometryBakingContext context = (IGeometryBakingContext) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{IGeometryBakingContext.class},
+                (proxy, method, args) -> method.getName().equals("getTransforms") ? ItemTransforms.NO_TRANSFORMS : null);
+        return new DynamicOverlayModelLoader.Unbaked(kind, itemBlockId).bake(context, null,
+                material -> sprites.computeIfAbsent(material.texture(), TestSprite::new), null, ItemOverrides.EMPTY);
+    }
+
+    @Test
+    void port_base_is_solid_and_only_overlays_are_translucent() {
+        BakedModel model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var base = MMCR.id("block/formed_base");
+        ModelData data = ModelData.of(MachineModelDataKeys.PORT_TEXTURE_SOURCE,
+                new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), base));
+        RandomSource random = RandomSource.create(0L);
+
+        assertThat(model.getRenderTypes(state, random, data).asList())
+                .containsExactly(RenderType.solid(), RenderType.translucent());
+        for (var direction : Direction.values()) {
+            assertThat(model.getQuads(state, direction, random, data, RenderType.solid()))
+                    .extracting(quad -> quad.getSprite().contents().name()).containsExactly(base);
+            assertThat(model.getQuads(state, direction, random, data, RenderType.translucent())).isEmpty();
+        }
+        assertThat(model.getQuads(state, null, random, data, RenderType.solid())).isEmpty();
+        assertThat(model.getQuads(state, null, random, data, RenderType.translucent()))
+                .hasSize(6).allSatisfy(quad -> assertThat(quad.getSprite().contents().name())
+                        .isEqualTo(DynamicOverlayBakedModel.defaultPortOverlayTexture()));
+        assertThat(model.getQuads(state, null, random, data, RenderType.cutout())).isEmpty();
+        assertThat(model.getQuads(state, Direction.NORTH, random, data, null)).hasSize(1);
+    }
+
+    @Test
+    void controller_base_and_front_state_overlays_use_separate_layers() {
+        var machineId = MMCR.id("test_cube");
+        var base = MMCR.id("block/controller_base");
+        MachineAppearanceCache.replaceSnapshot(Map.of(machineId,
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), base, null)));
+        MachineControllerBlock block = (MachineControllerBlock) ModBlocks.controllerFor(machineId).get();
+        var state = block.defaultBlockState().setValue(MachineControllerBlock.FACING, Direction.EAST)
+                .setValue(MachineControllerBlock.FORMED, true).setValue(MachineControllerBlock.ACTIVE, true);
+        BakedModel model = bake(DynamicOverlayBakedModel.Kind.CONTROLLER, null);
+        var random = RandomSource.create(0L);
+
+        assertThat(model.getQuads(state, Direction.NORTH, random, ModelData.EMPTY, RenderType.solid()))
+                .extracting(quad -> quad.getSprite().contents().name()).containsExactly(base);
+        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.translucent()))
+                .allSatisfy(quad -> assertThat(quad.getDirection()).isEqualTo(Direction.EAST))
+                .extracting(quad -> quad.getSprite().contents().name()).containsExactly(
+                        ControllerSpecCache.specFor(machineId).frontTexture(), MMCR.id("block/overlay_basic_active"));
+    }
+
+    @Test
+    void item_passes_separate_cube_base_from_overlays_and_keep_uv_inside_sprites() {
+        var machineId = MMCR.id("test_cube");
+        var blockId = BuiltInRegistries.BLOCK.getKey(ModBlocks.controllerFor(machineId).get());
+        var model = bake(DynamicOverlayBakedModel.Kind.CONTROLLER, blockId);
+        var passes = model.getRenderPasses(ItemStack.EMPTY, false);
+        var random = RandomSource.create(0L);
+
+        assertThat(passes).hasSize(2);
+        assertThat(passes.get(0).getRenderTypes(ItemStack.EMPTY, false))
+                .containsExactly(NeoForgeRenderTypes.ITEM_LAYERED_SOLID.get());
+        assertThat(passes.get(1).getRenderTypes(ItemStack.EMPTY, false))
+                .containsExactly(NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get());
+        assertThat(passes.get(0).getQuads(null, null, random)).hasSize(6)
+                .allSatisfy(quad -> assertThat(quad.getSprite().contents().name()).isEqualTo(MMCR.id("block/basic_casing")));
+        assertThat(passes.get(1).getQuads(null, null, random)).hasSize(2)
+                .allSatisfy(DynamicOverlayModelLoaderTest::assertUvInsideSprite);
+    }
+
+    @Test
+    void ctm_proxy_keeps_weighted_base_selection_and_filters_other_layers() throws Exception {
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        BakedModel model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
+        BakedQuad first = model.getQuads(state, Direction.NORTH, RandomSource.create(0L),
+                ModelData.of(MachineModelDataKeys.PORT_TEXTURE_SOURCE,
+                        new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), MMCR.id("block/first"))),
+                RenderType.solid()).getFirst();
+        BakedQuad second = model.getQuads(state, Direction.NORTH, RandomSource.create(0L),
+                ModelData.of(MachineModelDataKeys.PORT_TEXTURE_SOURCE,
+                        new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), MMCR.id("block/second"))),
+                RenderType.solid()).getFirst();
+        BakedModel source = new WeightedBakedModel.Builder()
+                .add(sourceModel(first, RenderType.solid()), 1)
+                .add(sourceModel(second, RenderType.cutout()), 1).build();
+
+        for (long seed = 0; seed < 32; seed++) {
+            var sourceLayers = source.getRenderTypes(state, RandomSource.create(seed), ModelData.EMPTY);
+            ModelData data = ctmData(source, state, sourceLayers);
+            assertThat(model.getRenderTypes(state, RandomSource.create(seed), data).asList())
+                    .containsExactlyElementsOf(ChunkRenderTypeSet.union(sourceLayers,
+                            ChunkRenderTypeSet.of(RenderType.translucent())).asList());
+            for (RenderType layer : List.of(RenderType.solid(), RenderType.cutout(), RenderType.translucent())) {
+                var actual = model.getQuads(state, Direction.NORTH, RandomSource.create(seed), data, layer);
+                if (sourceLayers.contains(layer)) {
+                    assertThat(actual).containsExactlyElementsOf(source.getQuads(state, Direction.NORTH,
+                            RandomSource.create(seed), ModelData.EMPTY, layer));
+                } else {
+                    assertThat(actual).isEmpty();
+                }
+            }
+            assertThat(model.getQuads(state, Direction.NORTH, RandomSource.create(seed), data, null))
+                    .containsExactlyElementsOf(source.getQuads(state, Direction.NORTH,
+                            RandomSource.create(seed), ModelData.EMPTY, null));
+        }
+    }
+
+    private BakedModel sourceModel(BakedQuad quad, RenderType layer) {
+        return (BakedModel) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{BakedModel.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getRenderTypes" -> ChunkRenderTypeSet.of(layer);
+                    case "getQuads" -> args[1] == Direction.NORTH ? List.of(quad) : List.of();
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ModelData ctmData(BakedModel source, BlockState state, ChunkRenderTypeSet layers) throws Exception {
+        var property = DynamicOverlayModelLoader.class.getDeclaredField("CTM_CONTEXT");
+        property.setAccessible(true);
+        var type = Class.forName(DynamicOverlayModelLoader.class.getName() + "$CtmContext");
+        var constructor = type.getDeclaredConstructor(BakedModel.class, BlockState.class, ModelData.class,
+                ChunkRenderTypeSet.class);
+        constructor.setAccessible(true);
+        return ModelData.of((ModelProperty<Object>) property.get(null),
+                constructor.newInstance(source, state, ModelData.EMPTY, layers));
+    }
+
+    private static void assertUvInsideSprite(BakedQuad quad) {
+        int[] vertices = quad.getVertices();
+        int stride = vertices.length / 4;
+        for (int index = 0; index < 4; index++) {
+            assertThat(Float.intBitsToFloat(vertices[index * stride + 4]))
+                    .isBetween(quad.getSprite().getU0(), quad.getSprite().getU1());
+            assertThat(Float.intBitsToFloat(vertices[index * stride + 5]))
+                    .isBetween(quad.getSprite().getV0(), quad.getSprite().getV1());
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class TestSprite extends TextureAtlasSprite {
+        private TestSprite(ResourceLocation texture) {
+            super(TextureAtlas.LOCATION_BLOCKS, new SpriteContents(texture, new FrameSize(16, 16),
+                    new NativeImage(16, 16, false), ResourceMetadata.EMPTY), 256, 256, 16, 16);
+        }
+    }
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {

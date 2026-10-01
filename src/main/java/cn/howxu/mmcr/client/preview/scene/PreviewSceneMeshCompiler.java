@@ -10,7 +10,6 @@ import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
-import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -161,7 +160,6 @@ public final class PreviewSceneMeshCompiler {
                 boolean translucentOnly = fluidLayer != null || !modelLayers.isEmpty();
                 if (fluidLayer != null && !fluidLayer.sortOnUpload()) translucentOnly = false;
                 if (modelLayers.stream().anyMatch(layer -> !layer.sortOnUpload())) translucentOnly = false;
-                if (RuntimeMachineModelRegistry.isDynamicBlock(state.getBlock())) translucentOnly = false;
                 if (!fluidState.isEmpty() && selection.accepts(fluidLayer)) {
                     blockRenderer.renderLiquid(pos, input.region(), new SectionOriginConsumer(
                             builderFor(started, builders,

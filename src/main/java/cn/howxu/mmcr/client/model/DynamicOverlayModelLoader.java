@@ -26,6 +26,7 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
@@ -33,6 +34,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
 import net.neoforged.neoforge.client.NeoForgeRenderTypes;
 import net.neoforged.neoforge.client.model.IDynamicBakedModel;
+import net.neoforged.neoforge.client.model.BakedModelWrapper;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.client.model.data.ModelProperty;
 import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
@@ -189,7 +191,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         }
     }
 
-    private record CtmContext(BakedModel model, BlockState state, ModelData data) {
+    private record CtmContext(BakedModel model, BlockState state, ModelData data, ChunkRenderTypeSet renderTypes) {
     }
 
     private static final class DynamicModel implements IDynamicBakedModel {
@@ -199,6 +201,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         private final ItemTransforms transforms;
         private final ItemOverrides overrides;
         private final TextureAtlasSprite particle;
+        private final List<BakedModel> itemPasses;
 
         private DynamicModel(DynamicOverlayBakedModel.Kind kind,
                              @Nullable DynamicOverlayItemModel.Description itemDescription,
@@ -210,6 +213,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             this.transforms = transforms;
             this.overrides = overrides;
             this.particle = sprite(FALLBACK_TEXTURE);
+            this.itemPasses = List.of(new ItemPass(this, false), new ItemPass(this, true));
         }
 
         @Override
@@ -233,31 +237,34 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             if (sourceData == null) {
                 sourceData = sourceModel.getModelData(level, pos, appearance, modelData);
             }
-            return derived.with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData)).build();
+            ChunkRenderTypeSet sourceLayers = sourceModel.getRenderTypes(appearance,
+                    RandomSource.create(state.getSeed(pos)), sourceData);
+            return derived.with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData, sourceLayers)).build();
         }
 
         @Override
         public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random,
                                         ModelData modelData, @Nullable RenderType renderType) {
             if (state == null) {
-                return itemQuads(side);
+                return itemQuads(side, renderType);
             }
 
             List<BakedQuad> quads = new ArrayList<>();
             CtmContext ctm = modelData.get(CTM_CONTEXT);
-            if (ctm != null) {
-                quads.addAll(ctm.model().getQuads(ctm.state(), side, random, ctm.data(), null));
-            } else if (side != null) {
+            if (ctm != null && (renderType == null
+                    || ctm.renderTypes().contains(renderType))) {
+                quads.addAll(ctm.model().getQuads(ctm.state(), side, random, ctm.data(), renderType));
+            } else if (ctm == null && side != null && (renderType == null || renderType == RenderType.solid())) {
                 DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
                 quads.add(face(side, Direction.NORTH, baseSprite(textures.base().forFace(side)), 0.0f));
             }
-            if (side == null) {
+            if (side == null && (renderType == null || renderType == RenderType.translucent())) {
                 addBlockOverlays(quads, state, modelData);
             }
             return quads;
         }
 
-        private List<BakedQuad> itemQuads(@Nullable Direction side) {
+        private List<BakedQuad> itemQuads(@Nullable Direction side, @Nullable RenderType renderType) {
             if (side != null || itemDescription == null || itemDescription.kind() == null) {
                 return List.of();
             }
@@ -267,13 +274,17 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             DynamicOverlayBakedModel.FaceTextures base = DynamicOverlayBakedModel.resolveBase(
                     description.baseTextureSource());
             List<BakedQuad> quads = new ArrayList<>();
-            for (Direction direction : Direction.values()) {
-                quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
+            if (renderType == null || renderType == RenderType.solid()) {
+                for (Direction direction : Direction.values()) {
+                    quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
+                }
             }
-            for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
-                    description.stateOverlayTexture())) {
-                for (Direction direction : description.overlayFaces()) {
-                    quads.add(face(direction, Direction.NORTH, sprite(layer.texture()), layer.grow()));
+            if (renderType == null || renderType == RenderType.translucent()) {
+                for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
+                        description.stateOverlayTexture())) {
+                    for (Direction direction : description.overlayFaces()) {
+                        quads.add(face(direction, Direction.NORTH, sprite(layer.texture()), layer.grow()));
+                    }
                 }
             }
             return quads;
@@ -333,11 +344,15 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             builder.setHasAmbientOcclusion(true);
             Vec3i normal = direction.getNormal();
             for (Vector3f vertex : vertices(direction, grow)) {
-                float[] uv = uv(direction, rollFacing, vertex);
+                // Growing geometry must not sample outside its atlas sprite.
+                float[] uv = uv(direction, rollFacing, new Vector3f(
+                        Mth.clamp(vertex.x(), 0.0f, 1.0f), Mth.clamp(vertex.y(), 0.0f, 1.0f),
+                        Mth.clamp(vertex.z(), 0.0f, 1.0f)));
                 builder.addVertex(vertex.x(), vertex.y(), vertex.z());
                 builder.setColor(255, 255, 255, 255);
                 builder.setNormal(normal.getX(), normal.getY(), normal.getZ());
-                builder.setUv(sprite.getU(uv[0]), sprite.getV(uv[1]));
+                builder.setUv(sprite.getU(Mth.lerp(sprite.uvShrinkRatio(), uv[0], 0.5f)),
+                        sprite.getV(Mth.lerp(sprite.uvShrinkRatio(), uv[1], 0.5f)));
             }
             return builder.bakeQuad();
         }
@@ -379,12 +394,46 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         @Override
         public ChunkRenderTypeSet getRenderTypes(BlockState state, RandomSource random, ModelData data) {
-            return ChunkRenderTypeSet.of(RenderType.translucent());
+            CtmContext ctm = data.get(CTM_CONTEXT);
+            ChunkRenderTypeSet base = ctm == null ? ChunkRenderTypeSet.of(RenderType.solid())
+                    : ctm.renderTypes();
+            return ChunkRenderTypeSet.union(base, ChunkRenderTypeSet.of(RenderType.translucent()));
+        }
+
+        @Override
+        public List<BakedModel> getRenderPasses(ItemStack stack, boolean fabulous) {
+            return itemPasses;
+        }
+    }
+
+    /**
+     * Separate item passes retain the base material's opacity in the item renderer.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ItemPass extends BakedModelWrapper<DynamicModel> {
+        private final boolean overlay;
+
+        private ItemPass(DynamicModel model, boolean overlay) {
+            super(model);
+            this.overlay = overlay;
+        }
+
+        @Override
+        public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random) {
+            return originalModel.itemQuads(side, overlay ? RenderType.translucent() : RenderType.solid());
+        }
+
+        @Override
+        public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random,
+                                        ModelData data, @Nullable RenderType renderType) {
+            return getQuads(state, side, random);
         }
 
         @Override
         public List<RenderType> getRenderTypes(ItemStack stack, boolean fabulous) {
-            return List.of(NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get());
+            return List.of(overlay ? NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get()
+                    : NeoForgeRenderTypes.ITEM_LAYERED_SOLID.get());
         }
     }
 }
