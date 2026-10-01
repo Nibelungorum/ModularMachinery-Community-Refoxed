@@ -8,13 +8,13 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:coal',
+                item: { item: 'minecraft:coal' },
                 count: 10000
             },
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:diamond',
+                item: { item: 'minecraft:diamond' },
                 count: 8
             },
             {
@@ -42,13 +42,13 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:diamond',
+                item: { item: 'minecraft:diamond' },
                 count: 114514
             },
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:iron_ingot',
+                item: { item: 'minecraft:iron_ingot' },
                 count: 8
             },
             {
@@ -76,13 +76,13 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:gold_ingot',
+                item: { item: 'minecraft:gold_ingot' },
                 count: 32
             },
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:stick',
+                item: { item: 'minecraft:stick' },
                 count: 8
             },
             {

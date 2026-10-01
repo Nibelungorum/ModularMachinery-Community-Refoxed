@@ -7,13 +7,13 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:apple',
+                item: { item: 'minecraft:apple' },
                 count: 3
             },
             {
                 type: 'minecraft:fluid',
                 io: 'input',
-                fluid: 'minecraft:water',
+                fluid: { fluid: 'minecraft:water' },
                 amount: 1
             },
             {
@@ -50,13 +50,13 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:golden_apple',
+                item: { item: 'minecraft:golden_apple' },
                 count: 2
             },
             {
                 type: 'minecraft:fluid',
                 io: 'input',
-                fluid: 'minecraft:water',
+                fluid: { fluid: 'minecraft:water' },
                 amount: 800
             },
             {

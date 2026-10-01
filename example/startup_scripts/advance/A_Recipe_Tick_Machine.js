@@ -5,11 +5,6 @@ MMCREvents.startup(event => {
     const LivingEntity = Java.loadClass("net.minecraft.world.entity.LivingEntity")
     const MobEffects = Java.loadClass("net.minecraft.world.effect.MobEffects")
 
-    // Some Class
-    const ItemRequirement = Java.loadClass("cn.howxu.mmcr.api.recipe.requirement.ItemRequirement")
-    const ArrayList = Java.loadClass("java.util.ArrayList")
-    const BuiltInRegistries = Java.loadClass("net.minecraft.core.registries.BuiltInRegistries")
-
     const machine = event
         .createMachine("mmcr_kubejs:kubejs_recipe_ticker")
         .displayNameKey("machine.mmcr_kubejs.kubejs_recipe_ticker")
@@ -57,10 +52,10 @@ MMCREvents.startup(event => {
                 const maxZ = controllerPos.getZ() + 3
                 const area = AABB.of(
                     minX,
-                    level.getMinY(),
+                    level.getMinBuildHeight(),
                     minZ,
                     maxX,
-                    level.getMaxY() + 1,
+                    level.getMaxBuildHeight(),
                     maxZ
                 )
 
@@ -71,50 +66,8 @@ MMCREvents.startup(event => {
                 // declare if there are 32 gold ingots, if true set the actual input to 1
                 // Here is one example you can reproduce with just kubejs
                 // I suggest to use Java API if you want more complex tick
-                const nextRequirements = new ArrayList()
-                let changed = false
-
-                ctx.requirements().forEach(requirement => {
-                    // loop the requirements and find ItemInputRequirement
-                    if (!(requirement instanceof ItemRequirement)
-                        || String(requirement.io().getKey()) !== "input") {
-                        nextRequirements.add(requirement)
-                        return
-                    }
-
-                    // Maybe complex, tag or item or s stack of item
-                    const possibleItems = requirement.item().getStackArray()
-                    const isExactlyGold =
-                        requirement.count() === 32 // count
-                        && possibleItems.length === 1 // one time input
-                        && BuiltInRegistries.ITEM
-                            .getKey(possibleItems[0].getItem())
-                            .toString() === "minecraft:gold_ingot" // register key compare
-
-                    if (isExactlyGold) {
-                        // change the requirement
-                        nextRequirements.add(new ItemRequirement(
-                            requirement.io(),
-                            requirement.item(),
-                            1,
-                            requirement.stack(),
-                            requirement.chance(),
-                            requirement.tags(),
-                            requirement.components(),
-                            requirement.consumeChance()
-                        ))
-                        changed = true
-                    } else {
-                        // or be default cosume
-                        nextRequirements.add(requirement)
-                    }
-                })
-
-                if (changed) {
-                    // then change the input requirement
-                    // actual cosumation will be changed in the actual process
-                    ctx.setRequirements(nextRequirements)
-                }
+                // The context helper preserves component predicates and consume chance.
+                ctx.replaceExactItemInputCount(Item.of("minecraft:gold_ingot").getItem(), 32, 1)
             })
             .recipeTick(ctx => {
                 // When recipe is running, append some infomation to the machine controller
@@ -143,10 +96,10 @@ MMCREvents.startup(event => {
                 const maxZ = controllerPos.getZ() + 3
                 const area = AABB.of(
                     minX,
-                    level.getMinY(),
+                    level.getMinBuildHeight(),
                     minZ,
                     maxX,
-                    level.getMaxY() + 1,
+                    level.getMaxBuildHeight(),
                     maxZ
                 )
 

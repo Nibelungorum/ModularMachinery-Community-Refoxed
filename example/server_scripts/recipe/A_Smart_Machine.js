@@ -8,7 +8,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:stick',
+                item: { item: 'minecraft:stick' },
                 count: 4
             },
             {
@@ -43,7 +43,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:stick',
+                item: { item: 'minecraft:stick' },
                 count: 4
             },
             {
@@ -78,7 +78,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:stick',
+                item: { item: 'minecraft:stick' },
                 count: 4
             },
             {
@@ -88,11 +88,9 @@ ServerEvents.recipes( event => {
                     id: 'minecraft:gold_ingot',
                     count: 10,
                     components: {
-                        'minecraft:custom_name': {
-                            text: 'Too low Conversation!'
-                        },
+                        'minecraft:custom_name': JSON.stringify({ text: 'Too low Conversation!' }),
                         'minecraft:enchantments': {
-                            'minecraft:sharpness': 2
+                            levels: { 'minecraft:sharpness': 2 }
                         }
                     }
                 }

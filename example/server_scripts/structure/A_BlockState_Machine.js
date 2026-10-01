@@ -40,7 +40,7 @@ MMCREvents.server(event => {
         .set('Q', api.state('minecraft:polished_deepslate_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]'))
         .set('R', api.block('minecraft:deepslate_brick_slab'))
         .set('S', api.block('minecraft:deepslate_tiles'))
-        .set('T', api.block('minecraft:oxidized_lightning_rod'))
+        .set('T', api.block('minecraft:lightning_rod'))
         .set('U', api.state('minecraft:deepslate_brick_stairs[facing=east,half=bottom,shape=outer_left,waterlogged=false]'))
         .set('V', api.state('minecraft:deepslate_brick_stairs[facing=north,half=bottom,shape=inner_right,waterlogged=false]'))
         .set('W', api.state('minecraft:deepslate_brick_stairs[facing=north,half=bottom,shape=inner_left,waterlogged=false]'))

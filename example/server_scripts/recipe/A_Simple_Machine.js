@@ -13,7 +13,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item', // Requirement type; fluid is also supported.
                 io: 'input', // Input or output direction.
-                item: 'minecraft:iron_ingot', // An item identifier or ingredient can be used.
+                item: { item: 'minecraft:iron_ingot' }, // 1.21.1 ingredients use { item: id } or { tag: id }.
                 count: 1
             },
             {
@@ -40,7 +40,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:gold_ingot',
+                item: { item: 'minecraft:gold_ingot' },
                 count: 1
             },
             {

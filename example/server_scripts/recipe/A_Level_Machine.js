@@ -14,13 +14,13 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:coal',
+                item: { item: 'minecraft:coal' },
                 count: 10000
             },
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:raw_iron',
+                item: { item: 'minecraft:raw_iron' },
                 count: 8
             },
             {
@@ -54,13 +54,13 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:coal',
+                item: { item: 'minecraft:coal' },
                 count: 1
             },
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:raw_gold',
+                item: { item: 'minecraft:raw_gold' },
                 count: 8
             },
             {
@@ -95,13 +95,13 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:coal',
+                item: { item: 'minecraft:coal' },
                 count: 1
             },
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:raw_copper',
+                item: { item: 'minecraft:raw_copper' },
                 count: 8
             },
             {

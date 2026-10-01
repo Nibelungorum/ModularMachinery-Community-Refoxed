@@ -61,8 +61,8 @@ MMCREvents.startup(event => {
                         var next = stored.add(BigInteger.valueOf(low))
                         var inputSimulation = inputPlan.simulate()
 
-                        if (inputSimulation.energySatisfied() && inputPlan.commit(transaction => {
-                            // update the data storage value
+                        if (inputSimulation.energySatisfied() && inputPlan.commitData(transaction => {
+                            // Stage the data write; it is published only if the I/O commit succeeds.
                             storage.set("energy", api.dataValue(next), transaction)
                         }).successful()) {
                             stored = next
@@ -103,8 +103,8 @@ MMCREvents.startup(event => {
                                         BigInteger.valueOf(accepted)
                                     )
 
-                                    // use js promise to update storage
-                                    if (outputPlan.commit(transaction => {
+                                    // Commit the accepted output and the stored energy update together.
+                                    if (outputPlan.commitData(transaction => {
                                         storage.set("energy", api.dataValue(next), transaction)
                                     }).successful()) {
                                         stored = next

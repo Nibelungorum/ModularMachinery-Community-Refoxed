@@ -11,7 +11,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:potion',
+                item: { item: 'minecraft:potion' },
                 components: {
                     'minecraft:potion_contents': {
                         potion: 'minecraft:water'
@@ -53,7 +53,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:apple',
+                item: { item: 'minecraft:apple' },
                 count: 1
             },
             {
@@ -85,7 +85,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:apple',
+                item: { item: 'minecraft:apple' },
                 count: 1
             },
             {
@@ -116,7 +116,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:iron_ingot',
+                item: { item: 'minecraft:iron_ingot' },
                 count: 1
             },
             {

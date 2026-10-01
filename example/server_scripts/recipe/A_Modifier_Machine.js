@@ -9,10 +9,10 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: '#minecraft:swords', // Tags can be used as ingredients.
+                item: { tag: 'minecraft:swords' }, // Tags can be used as ingredients.
                 components: { // Item data components can also be matched.
                     'minecraft:enchantments': {
-                        'minecraft:sharpness': 2
+                        levels: { 'minecraft:sharpness': 2 }
                     }
                 },
                 count: 1,
@@ -25,11 +25,9 @@ ServerEvents.recipes( event => {
                     id: 'minecraft:iron_ingot',
                     count: 2,
                     components: { // Output data components are also supported.
-                        'minecraft:custom_name': {
-                            text: 'What an amazing design!'
-                        },
+                        'minecraft:custom_name': JSON.stringify({ text: 'What an amazing design!' }),
                         'minecraft:enchantments': {
-                            'minecraft:sharpness': 3
+                            levels: { 'minecraft:sharpness': 3 }
                         }
                     }
                 },

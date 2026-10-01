@@ -8,7 +8,7 @@ ServerEvents.recipes( event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: '#minecraft:logs',
+                item: { tag: 'minecraft:logs' },
                 count: 1
             },
             // This recipe has three outputs. Without a three-level distillation tower,

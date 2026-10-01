@@ -61,6 +61,10 @@ public final class GameTestRegistry {
         });
         register(event, "recipe_amount_codec_limits", 20,
                 helper -> new RecipeAmountCodecGameTest().long_recipe_output_amounts_are_capped_at_native_stack_limits(helper));
+        register(event, "example_native_recipe_codecs", 20,
+                helper -> new ExampleScriptGameTest().nativeRecipeRequirementsDecode(helper));
+        register(event, "example_structure_block_states", 20,
+                helper -> new ExampleScriptGameTest().structureBlocksResolve(helper));
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "upgrade_bus_invalidation", 100,

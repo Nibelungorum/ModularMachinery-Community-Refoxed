@@ -7,7 +7,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:rotten_flesh',
+                item: { item: 'minecraft:rotten_flesh' },
                 count: 100
             },
             {

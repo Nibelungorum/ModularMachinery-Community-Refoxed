@@ -9,7 +9,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:iron_ingot',
+                item: { item: 'minecraft:iron_ingot' },
                 count: 1
             },
             {

@@ -7,7 +7,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'minecraft:item',
                 io: 'input',
-                item: 'minecraft:apple',
+                item: { item: 'minecraft:apple' },
                 count: 1,
                 consume_chance: 0 // no cosume
             },

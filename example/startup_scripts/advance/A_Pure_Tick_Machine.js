@@ -60,10 +60,10 @@ MMCREvents.startup(event => {
                 const pos = ctx.controllerPos()
                 const area = AABB.of(
                     pos.getX() - 1,
-                    level.getMinY(),
+                    level.getMinBuildHeight(),
                     pos.getZ() - 1,
                     pos.getX() + 2,
-                    level.getMaxY() + 1,
+                    level.getMaxBuildHeight(),
                     pos.getZ() + 2
                 )
                 const players = level.getEntitiesOfClass(Player, area)
