@@ -569,13 +569,13 @@ public final class BlueprintScreen extends Screen {
 
     private void drawGridBackgrounds(GuiGraphics graphics, BlueprintLayout currentLayout) {
         BlueprintRect materials = currentLayout.materials();
-        graphics.blit(MATERIAL_LIST, materials.x(), materials.y(), 0, 0,
-                materials.width(), materials.height(), MATERIAL_LIST_TEXTURE_WIDTH, MATERIAL_LIST_TEXTURE_HEIGHT,
+        graphics.blit(MATERIAL_LIST, materials.x(), materials.y(), materials.width(), materials.height(),
+                0, 0, MATERIAL_LIST_TEXTURE_WIDTH, MATERIAL_LIST_TEXTURE_HEIGHT,
                 MATERIAL_LIST_TEXTURE_WIDTH, MATERIAL_LIST_TEXTURE_HEIGHT);
         if (panel.selectedPosition() != null) {
             BlueprintRect candidates = currentLayout.candidates();
-            graphics.blit(SELECTED_LIST, candidates.x(), candidates.y(), 0, 0,
-                    candidates.width(), candidates.height(), SELECTED_LIST_TEXTURE_WIDTH, SELECTED_LIST_TEXTURE_HEIGHT,
+            graphics.blit(SELECTED_LIST, candidates.x(), candidates.y(), candidates.width(), candidates.height(),
+                    0, 0, SELECTED_LIST_TEXTURE_WIDTH, SELECTED_LIST_TEXTURE_HEIGHT,
                     SELECTED_LIST_TEXTURE_WIDTH, SELECTED_LIST_TEXTURE_HEIGHT);
         }
     }

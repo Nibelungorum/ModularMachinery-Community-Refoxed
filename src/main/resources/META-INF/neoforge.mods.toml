@@ -51,7 +51,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="jei"
 type="optional"
-versionRange="[19.51.0.418,)"
+versionRange="[19.57.0.446,)"
 ordering="AFTER"
 side="BOTH"
 
@@ -72,7 +72,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="ae2"
 type="optional"
-versionRange="[19.2.12,)"
+versionRange="[19.2.15,)"
 ordering="AFTER"
 side="BOTH"
 
