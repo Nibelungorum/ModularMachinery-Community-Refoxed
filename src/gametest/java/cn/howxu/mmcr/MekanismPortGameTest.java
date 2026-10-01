@@ -3,9 +3,15 @@ package cn.howxu.mmcr;
 import appeng.core.definitions.AEItems;
 import com.mojang.authlib.GameProfile;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import com.mojang.serialization.JsonOps;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
@@ -582,25 +588,22 @@ public class MekanismPortGameTest {
                             ResourceLocation.fromNamespaceAndPath("mmcr_test", "unavailable_chemical_e2e"))
                     .recipePool(ResourceLocation.fromNamespaceAndPath("mmcr_test", "test_cube"))
                     .duration(20)
-                    .inputChemical(ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L)
+                    .inputChemical(ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L, 0.25F)
                     .outputChemical(ResourceLocation.fromNamespaceAndPath("mekanism", "hydrogen"), 200L, 0.5F)
                     .inputHeatTemperature(450D)
                     .outputHeat(120D);
-            List<CustomRecipeIo> customRequirements =
-                    builder.build().requirements().stream()
-                            .filter(CustomRecipeIo.class::isInstance)
-                            .map(CustomRecipeIo.class::cast)
-                            .toList();
-            List<CustomRecipeIo> customOutputs = builder.build().customOutputs();
+            var declaration = builder.build();
+            List<MachineRequirement> customRequirements = declaration.requirements();
+            List<CustomRecipeIo> customOutputs = declaration.customOutputs();
             helper.assertValueEqual(2, customRequirements.size(),
-                    "Both chemical input and temperature input are kept as CustomRequirement entries when Mekanism is unavailable");
+                    "Both chemical input and temperature input are kept as canonical requirements with an unavailable bridge");
             helper.assertValueEqual(2, customOutputs.size(),
                     "Both chemical output and heat output are kept as CustomRecipeIo output entries when Mekanism is unavailable");
-            CustomRecipeIo chemicalInput = customRequirements.stream()
-                    .filter(io -> io.typeId().equals(MekanismRecipeTypes.CHEMICAL))
+            MachineRequirement chemicalInput = customRequirements.stream()
+                    .filter(io -> io.type().id().equals(MekanismRecipeTypes.CHEMICAL))
                     .findFirst().orElseThrow();
-            CustomRecipeIo temperatureInput = customRequirements.stream()
-                    .filter(io -> io.typeId().equals(MekanismRecipeTypes.HEAT_TEMPERATURE))
+            MachineRequirement temperatureInput = customRequirements.stream()
+                    .filter(io -> io.type().id().equals(MekanismRecipeTypes.HEAT_TEMPERATURE))
                     .findFirst().orElseThrow();
             CustomRecipeIo chemicalOutput = customOutputs.stream()
                     .filter(io -> io.typeId().equals(MekanismRecipeTypes.CHEMICAL))
@@ -608,22 +611,52 @@ public class MekanismPortGameTest {
             CustomRecipeIo heatOutput = customOutputs.stream()
                     .filter(io -> io.typeId().equals(MekanismRecipeTypes.HEAT))
                     .findFirst().orElseThrow();
-            helper.assertValueEqual(MekanismRecipeTypes.CHEMICAL, chemicalInput.typeId(),
-                    "Chemical input still resolves through the public CustomRecipeIo path");
-            helper.assertValueEqual(RecipeIo.INPUT, chemicalInput.ioType(),
+            helper.assertValueEqual(MekanismRecipeTypes.CHEMICAL, chemicalInput.type().id(),
+                    "Chemical input resolves to the canonical type");
+            helper.assertValueEqual(IOType.INPUT, chemicalInput.io(),
                     "Chemical input direction stays INPUT even when Mekanism is unavailable");
-            helper.assertValueEqual(MekanismRecipeTypes.HEAT_TEMPERATURE, temperatureInput.typeId(),
-                    "Temperature input still resolves through the public CustomRecipeIo path");
-            helper.assertValueEqual(RecipeIo.INPUT, temperatureInput.ioType(),
+            helper.assertValueEqual(MekanismRecipeTypes.HEAT_TEMPERATURE, temperatureInput.type().id(),
+                    "Temperature input resolves to the canonical type");
+            helper.assertValueEqual(IOType.INPUT, temperatureInput.io(),
                     "Temperature input direction stays INPUT even when Mekanism is unavailable");
             helper.assertValueEqual(MekanismRecipeTypes.CHEMICAL, chemicalOutput.typeId(),
                     "Chemical output still resolves through the public CustomRecipeIo path");
-            helper.assertValueEqual(RecipeIo.OUTPUT, chemicalOutput.ioType(),
+            helper.assertValueEqual(IOType.OUTPUT, chemicalOutput.ioType(),
                     "Chemical output direction stays OUTPUT even when Mekanism is unavailable");
             helper.assertValueEqual(MekanismRecipeTypes.HEAT, heatOutput.typeId(),
                     "Heat output still resolves through the public CustomRecipeIo path");
-            helper.assertValueEqual(RecipeIo.OUTPUT, heatOutput.ioType(),
+            helper.assertValueEqual(IOType.OUTPUT, heatOutput.ioType(),
                     "Heat output direction stays OUTPUT even when Mekanism is unavailable");
+            var chemicalPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, chemicalInput).getOrThrow().getAsJsonObject();
+            helper.assertValueEqual("mekanism:oxygen", chemicalPayload.get("id").getAsString(), "Chemical input id survives canonical encoding");
+            helper.assertFalse(chemicalPayload.has("kind"), "Default chemical kind is omitted by the canonical codec");
+            var expectedChemical = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                    MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(
+                            ResourceLocation.parse("mekanism:oxygen"), 1000), 0.25F)).getOrThrow();
+            helper.assertValueEqual(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, expectedChemical).getOrThrow(),
+                    chemicalPayload, "Chemical input retains its full chemical-kind semantics");
+            helper.assertValueEqual(1_000L, chemicalPayload.get("amount").getAsLong(), "Chemical input amount survives canonical encoding");
+            helper.assertValueEqual(0.25F, chemicalPayload.get("consume_chance").getAsFloat(), "Chemical consume chance survives canonical encoding");
+            var chemicalRoundTrip = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, chemicalPayload).getOrThrow();
+            helper.assertValueEqual(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, chemicalRoundTrip).getOrThrow(),
+                    chemicalPayload, "Chemical input payload round-trips");
+            var temperaturePayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, temperatureInput).getOrThrow().getAsJsonObject();
+            helper.assertValueEqual(450D, temperaturePayload.get("value").getAsDouble(), "Temperature value survives canonical encoding");
+            helper.assertValueEqual(temperaturePayload, MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE,
+                    MachineRequirement.CODEC.parse(JsonOps.INSTANCE, temperaturePayload).getOrThrow()).getOrThrow(), "Temperature payload round-trips");
+            helper.assertValueEqual("mekanism:hydrogen", chemicalOutput.payload().getAsJsonObject().get("id").getAsString(), "Chemical output id survives");
+            helper.assertValueEqual(200L, chemicalOutput.payload().getAsJsonObject().get("amount").getAsLong(), "Chemical output amount survives");
+            helper.assertValueEqual(0.5F, chemicalOutput.payload().getAsJsonObject().get("chance").getAsFloat(), "Chemical output chance survives");
+            helper.assertValueEqual(120D, heatOutput.payload().getAsJsonObject().get("value").getAsDouble(), "Heat output value survives");
+            var recipe = MachineRecipeConverter.toRecipe(declaration,
+                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+            helper.assertValueEqual(2, recipe.machineOutputs().size(), "Converter retains both custom outputs");
+            for (int index = 0; index < customOutputs.size(); index++) {
+                var converted = recipe.machineOutputs().get(index);
+                var expected = MachineRecipeConverter.toOutput(customOutputs.get(index));
+                helper.assertValueEqual(MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, expected).getOrThrow(),
+                        MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, converted).getOrThrow(), "Converter retains custom output payload");
+            }
             helper.succeed();
         } finally {
             MekanismBridgeBootstrap.resetForTesting();

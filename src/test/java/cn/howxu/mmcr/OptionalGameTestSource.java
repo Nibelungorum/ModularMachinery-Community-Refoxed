@@ -1,8 +1,8 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -19,7 +19,7 @@ public final class OptionalGameTestSource {
     private OptionalGameTestSource() {
     }
 
-    public static void accept(MMCRMachineDefinationsEvent event) {
+    public static void accept(MachineDefinitionRegistration event) {
         invoked = true;
     }
 
@@ -27,23 +27,23 @@ public final class OptionalGameTestSource {
         return invoked;
     }
 
-    public static void acceptStructures(MMCRMachineStructuresEvent event) {
+    public static void acceptStructures(StructureRegistration event) {
         structuresInvoked = true;
     }
 
-    public static void acceptRecipes(MMCRMachineRecipesEvent event) {
+    public static void acceptRecipes(MachineRecipeRegistration event) {
         recipesInvoked = true;
     }
 
-    public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
         accept(event);
     }
 
-    public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
+    public static void registerMachineStructures(StructureRegistration event) {
         acceptStructures(event);
     }
 
-    public static void registerRecipes(MMCRMachineRecipesEvent event) {
+    public static void registerRecipes(MachineRecipeRegistration event) {
         acceptRecipes(event);
     }
 

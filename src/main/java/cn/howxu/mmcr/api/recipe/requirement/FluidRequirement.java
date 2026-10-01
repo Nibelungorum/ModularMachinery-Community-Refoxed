@@ -1,7 +1,11 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
+import cn.howxu.mmcr.api.recipe.FluidInput;
+import cn.howxu.mmcr.api.recipe.FluidOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -54,6 +58,37 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
         chance = MachineOutput.clampChance(chance);
         consumeChance = MachineOutput.clampChance(consumeChance);
         tags = tags == null ? List.of() : List.copyOf(tags);
+    }
+
+    public FluidRequirement(RecipeModifier.IOType io, FluidIngredient fluid, int amount, FluidStack stack,
+                            float chance, float consumeChance) {
+        this(io, fluid, amount, stack, chance, List.of(), consumeChance);
+        if (io == null) throw new IllegalArgumentException("io null");
+        if (io.isInput() && (fluid == null || amount < 1)) throw new IllegalArgumentException("Invalid fluid input");
+        if (!io.isInput() && this.stack.isEmpty()) throw new IllegalArgumentException("Fluid output must not be empty");
+        if (!Float.isFinite(chance) || chance < 0F || chance > 1F
+                || !Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+            throw new IllegalArgumentException("chance must be in [0, 1]");
+        }
+    }
+
+    public static FluidRequirement input(FluidInput input) {
+        return new FluidRequirement(RecipeModifier.IOType.INPUT, input.ingredient(), input.amount(), FluidStack.EMPTY,
+                1F, input.consumeChance());
+    }
+
+    public static FluidRequirement output(FluidOutput output) {
+        return new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output.stack(), output.chance(), 1F);
+    }
+
+    @Override
+    public FluidStack stack() {
+        return stack.copy();
+    }
+
+    /** Script-compatible name for the input ingredient. */
+    public FluidIngredient ingredient() {
+        return fluid;
     }
 
     private static FluidRequirement copy(FluidRequirement requirement) {

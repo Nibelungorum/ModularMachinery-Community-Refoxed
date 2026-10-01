@@ -9,7 +9,7 @@ import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
 import dev.latvian.mods.kubejs.plugin.KubeJSPlugin;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;

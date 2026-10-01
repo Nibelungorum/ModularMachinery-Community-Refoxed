@@ -1,8 +1,8 @@
 package org.nibelungorum.client;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRendersEvent;
-import cn.howxu.mmcr.api.publicapi.render.ControllerRenderContext;
-import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerRenderersEvent;
+import cn.howxu.mmcr.publicapi.client.render.ControllerRenderContext;
+import cn.howxu.mmcr.publicapi.client.render.ControllerRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -34,7 +34,7 @@ public final class ArtificialStarRenderer implements ControllerRenderer {
     }
 
     @SubscribeEvent
-    public static void registerRenderer(MMCRMachineRendersEvent event) {
+    public static void registerRenderer(RegisterControllerRenderersEvent event) {
         event.register(ARTIFICIAL_STAR.ARTIFICIAL_STAR, INSTANCE);
     }
 

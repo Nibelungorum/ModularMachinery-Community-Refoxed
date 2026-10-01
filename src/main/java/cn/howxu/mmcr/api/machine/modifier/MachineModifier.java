@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine.modifier;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 import java.util.Locale;

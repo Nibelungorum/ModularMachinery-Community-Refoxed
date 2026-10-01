@@ -11,9 +11,9 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
-import cn.howxu.mmcr.api.publicapi.RecipeApi;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
@@ -145,15 +145,15 @@ public final class MachineRecipeSchema {
 
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
-                            RecipeIo io = switch ((String) args.get(1)) {
-                                case "input" -> RecipeIo.INPUT;
-                                case "output" -> RecipeIo.OUTPUT;
+                            IOType io = switch ((String) args.get(1)) {
+                                case "input" -> IOType.INPUT;
+                                case "output" -> IOType.OUTPUT;
                                 default -> throw new IllegalArgumentException("Unknown recipe IO: " + args.get(1));
                             };
-                            var custom = RecipeApi.custom(ResourceLocation.parse((String) args.get(0)), io,
+                            var custom = RecipeIoValidation.custom(ResourceLocation.parse((String) args.get(0)), io,
                                     (JsonElement) args.get(2));
                             if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
-                                 appendRequirement(cx.recipe(), MachineRecipeConverter.toRequirement(custom));
+                                 appendRequirement(cx.recipe(), RecipeIoValidation.decodeRequirement(custom));
                              } else appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
                         }
                     }))
@@ -295,7 +295,7 @@ public final class MachineRecipeSchema {
                         public void execute(RecipeScriptContext cx, List<Object> args) {
                             double temperature = ((Number) args.get(0)).doubleValue();
                             appendHeatRequirement(cx.recipe(), MekanismPortFamilies.HEAT_TEMPERATURE,
-                                    RecipeIo.INPUT, HeatRequirement.minimumTemperature(temperature));
+                                    IOType.INPUT, HeatRequirement.minimumTemperature(temperature));
                         }
                     }))
             .function(new RecipeFunctionInstance("heatOutput",
@@ -309,7 +309,7 @@ public final class MachineRecipeSchema {
                         @Override
                         public void execute(RecipeScriptContext cx, List<Object> args) {
                             double heat = ((Number) args.get(0)).doubleValue();
-                            appendHeatRequirement(cx.recipe(), MekanismPortFamilies.HEAT, RecipeIo.OUTPUT,
+                            appendHeatRequirement(cx.recipe(), MekanismPortFamilies.HEAT, IOType.OUTPUT,
                                     HeatRequirement.outputHeat(heat));
                         }
                     }));
@@ -346,24 +346,24 @@ public final class MachineRecipeSchema {
     }
 
     private static void appendChemicalInput(KubeRecipe recipe, ChemicalIngredient ingredient, float consumeChance) {
-        var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
+        var custom = RecipeIoValidation.custom(MekanismPortFamilies.CHEMICAL, IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ingredient, consumeChance));
-        appendRequirement(recipe, MachineRecipeConverter.toRequirement(custom));
+        appendRequirement(recipe, RecipeIoValidation.decodeRequirement(custom));
     }
 
     private static void appendChemicalOutput(KubeRecipe recipe, ResourceLocation id, long amount, double chance) {
         var output = ChemicalOutput.of(id, amount, (float) chance);
-        var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
+        var custom = RecipeIoValidation.custom(MekanismPortFamilies.CHEMICAL, IOType.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(output));
         appendOutput(recipe, MachineRecipeConverter.toOutput(custom));
     }
 
-    private static void appendHeatRequirement(KubeRecipe recipe, ResourceLocation typeId, RecipeIo io,
+    private static void appendHeatRequirement(KubeRecipe recipe, ResourceLocation typeId, IOType io,
                                               HeatRequirement requirement) {
-        var custom = RecipeApi.custom(typeId, io,
+        var custom = RecipeIoValidation.custom(typeId, io,
                 MachineRecipeBuilder.heatPayload(requirement, typeId, io));
         if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
-            appendRequirement(recipe, MachineRecipeConverter.toRequirement(custom));
+            appendRequirement(recipe, RecipeIoValidation.decodeRequirement(custom));
         } else {
             appendOutput(recipe, MachineRecipeConverter.toOutput(custom));
         }

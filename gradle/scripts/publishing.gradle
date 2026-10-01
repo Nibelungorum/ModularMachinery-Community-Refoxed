@@ -1,8 +1,54 @@
+import org.gradle.process.CommandLineArgumentProvider
+
+// Managed inputs avoid capturing Project/SourceSet in test execution callbacks.
+abstract class PublicApiTestArguments implements CommandLineArgumentProvider {
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getApiArchive()
+
+    @Classpath
+    abstract ConfigurableFileCollection getExternalClasspath()
+
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getUsageClasses()
+
+    @Override
+    Iterable<String> asArguments() {
+        ["-Dmmcr.apiJar=${apiArchive.get().asFile.absolutePath}",
+         "-Dmmcr.apiExternalClasspath=${externalClasspath.asPath}",
+         "-Dmmcr.apiUsageClasses=${usageClasses.get().asFile.absolutePath}"]
+    }
+}
+
 tasks.register('apiJar', Jar) {
     archiveClassifier = 'api'
     from sourceSets.main.output
-    from sourceSets.main.allJava
-    include 'cn/howxu/mmcr/api/publicapi/**'
+    include 'cn/howxu/mmcr/publicapi/**/*.class'
+}
+
+tasks.register('compileApiUsage', JavaCompile) {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(java_version as int)
+    }
+    source = fileTree('src/apiUsage/java')
+    source fileTree('src/main/java') {
+        include 'org/nibelungorum/builtin/**/*.java'
+        include 'org/nibelungorum/provider/**/*.java'
+        include 'org/nibelungorum/client/**/*.java'
+    }
+    classpath = sourceSets.main.compileClasspath + files(tasks.named('apiJar'))
+    options.compilerArgs += ['-proc:none', '-implicit:none']
+    destinationDirectory = layout.buildDirectory.dir('classes/java/apiUsage')
+}
+
+tasks.named('test') {
+    dependsOn tasks.named('compileApiUsage')
+    def apiArguments = objects.newInstance(PublicApiTestArguments)
+    apiArguments.apiArchive.set(tasks.named('apiJar', Jar).flatMap { it.archiveFile })
+    apiArguments.externalClasspath.from(sourceSets.main.compileClasspath)
+    apiArguments.usageClasses.set(tasks.named('compileApiUsage', JavaCompile).flatMap { it.destinationDirectory })
+    jvmArgumentProviders.add(apiArguments)
 }
 
 publishing {

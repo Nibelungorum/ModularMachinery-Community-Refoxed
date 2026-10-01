@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.config.CommonConfig;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;

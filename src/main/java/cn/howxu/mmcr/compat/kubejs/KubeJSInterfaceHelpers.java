@@ -4,8 +4,8 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.InterfaceTiers;
+import cn.howxu.mmcr.api.machine.definition.InterfacePredicates;
+import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
 import net.minecraft.resources.ResourceLocation;
 
 /** Script-safe interface predicates and requirement factories.
@@ -63,7 +63,7 @@ public final class KubeJSInterfaceHelpers {
         return convert(InterfacePredicates.anyOfPort(ids));
     }
 
-    public static BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
+    public static BlockPredicate anyOfPort(cn.howxu.mmcr.api.machine.definition.BlockPredicate... predicates) {
         if (predicates == null || predicates.length == 0) throw new IllegalArgumentException("At least one port is required");
         return convert(InterfacePredicates.anyOfPort(predicates));
     }
@@ -126,7 +126,7 @@ public final class KubeJSInterfaceHelpers {
         return PortTierRequirementSpec.from(InterfaceTiers.energyOutput(id));
     }
 
-    private static BlockPredicate convert(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+    private static BlockPredicate convert(cn.howxu.mmcr.api.machine.definition.BlockPredicate predicate) {
         if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();
         if (predicate.blockState().isPresent()) return new BlockPredicate.OfBlockState(predicate.blockState().get());
         if (predicate.block().isPresent()) return new BlockPredicate.OfBlock(predicate.block().get());

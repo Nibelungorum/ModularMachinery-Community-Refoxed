@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
-import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.menu.LongDataSlot;
 import cn.howxu.mmcr.internal.menu.MenuSupport;

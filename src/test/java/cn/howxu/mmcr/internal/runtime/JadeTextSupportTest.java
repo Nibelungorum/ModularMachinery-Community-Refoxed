@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
-import cn.howxu.mmcr.api.publicapi.controller.JadeText;
+import cn.howxu.mmcr.api.controller.JadeText;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

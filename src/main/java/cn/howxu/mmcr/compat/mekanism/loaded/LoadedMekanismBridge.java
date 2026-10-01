@@ -37,7 +37,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.WakeupReason;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
-import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.MenuRegistrar;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;

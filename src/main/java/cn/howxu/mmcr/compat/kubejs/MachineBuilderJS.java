@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
+import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -10,19 +12,17 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
+import cn.howxu.mmcr.api.network.view.RequestFailed;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
-import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.api.network.view.RequestProcess;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
-import java.util.Map;
-import java.util.stream.Collectors;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
@@ -124,7 +124,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS requestProcess(String requestId, RequestProcess process) {
-        callbackBuilder.requestProcessInternal(ResourceLocation.parse(requestId), process);
+        callbackBuilder.requestProcess(ResourceLocation.parse(requestId), process);
         return this;
     }
 
@@ -529,7 +529,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
-    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
+    public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.machine.definition.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
@@ -711,7 +711,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .factory(factory -> factory
                         .hasFactory(factoryThreadLimit > 1)
                         .threadLimit(factoryThreadLimit))
-                .role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.valueOf(registration.role().name()))
+                .role(registration.role())
                 .networkInterface(registration.networkInterface().maxCount(), registration.networkInterface().maxConnections())
                 .maxParallelism(registration.maxParallelAmount())
                 .parallelizable(registration.allowParallelism())
@@ -731,17 +731,14 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         registration.acceptedModuleIds().forEach(builder::acceptedModule);
         registration.networkInterface().allowedMachineIds().forEach(builder::allowNetworkMachine);
         if (registration.role() == MachineRole.MODULE) {
-            builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);
+            builder.role(MachineRole.MODULE);
         }
         MachineDefinition base = builder.build();
         MachineDefinition definition = new MachineDefinition(base.id(), base.recipePoolIds(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.networkInterface(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
                 registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
-                registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey,
-                                entry -> toPublicSmartInterfaceType(entry.getValue()))),
-                registration.shareSmartInterfaces(), registration.smartInterfaceModifiers().stream()
-                        .map(MachineBuilderJS::toPublicSmartInterfaceModifier).toList(),
+                registration.expandableStructure(), registration.smartInterfaceTypes(),
+                registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),
                 registration.runningSoundId(), registration.finishSoundId(), registration.pattern(), registration.behavior(),
                 registration.requestProcessors(), MachineDefinitionConverter.fromInternalRequestFailures(registration.requestFailures()));
         Plugin.registerStartupMachine(definition);
@@ -774,22 +771,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 formedPortBaseTexture,
                 controllerIdleOverlayTexture,
                 controllerActiveOverlayTexture);
-    }
-
-    private static cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType toPublicSmartInterfaceType(
-            SmartInterfaceType type) {
-        return new cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType(type.type(), type.defaultValue(),
-                type.minValue(), type.maxValue(), type.priority(),
-                cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType.ValueType.valueOf(type.valueType().name()));
-    }
-
-    private static cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier toPublicSmartInterfaceModifier(
-            SmartInterfaceModifier modifier) {
-        return new cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier(modifier.interfaceType(),
-                modifier.target(),
-                modifier.scope(),
-                modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
-                cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier.Operation.valueOf(modifier.operation().name()));
     }
 
     public static final class SmartInterfaceTypeBuilderJS {

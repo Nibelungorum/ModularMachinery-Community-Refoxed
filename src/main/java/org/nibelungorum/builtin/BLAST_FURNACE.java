@@ -1,12 +1,17 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRJeiWorkstationsEvent;
-import cn.howxu.mmcr.api.publicapi.machine.*;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.registry.ModBlocks; // I love casings
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterJeiWorkstationsEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.PortTierLimits;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -14,9 +19,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
 
 /**
  * @description: TODO
@@ -33,9 +38,9 @@ public class BLAST_FURNACE {
     // so you must use a provider
     // see resources/META-INF/services how to use provider to register machine defination
     // see org/nibelungorum/provider/BuiltInProvider.java
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(BLAST_FURNACE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(BLAST_FURNACE)
                     .recipePool(BLAST_FURNACE)
                     .displayNameKey("machine.mmcr.blast_furnace")
@@ -49,30 +54,30 @@ public class BLAST_FURNACE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
             if (!event.structures().containsKey(BLAST_FURNACE)) {
-                var structure = MachineStructureBuilder
+                StructureSpec structure = Structures
                         .structure()
                         .fullStructure(s -> s
                                 .pattern(p -> p
                                         .layer("AXA", "XIX", "XXX")
                                         .layer("XXX", "I I", "XBX")
                                         .layer("AXA", "XCX", "XXX")
-                                        .where('X', block(ModBlocks.CASING.get()))
+                                        .where('X', block("mmcr:casing"))
                                         .where('A', any(
                                                 block(Blocks.IRON_BLOCK),
-                                                InterfacePredicates.parallelControllers()
+                                                BlockConditions.parallelControllers()
                                         ))
                                         .where('B', block(Blocks.FURNACE))
                                         .where('I', any(
-                                                InterfacePredicates.anyItemInput(),
-                                                InterfacePredicates.anyItemOutput(),
-                                                InterfacePredicates.anyEnergyInput()
+                                                BlockConditions.itemInput(),
+                                                BlockConditions.itemOutput(),
+                                                BlockConditions.energyInput()
                                         ))
                                         .controller('C'))
                                 .portTiers(t -> t
-                                        .minEnergyInput(PortTiers.EnergyTier.NORMAL)
-                                        .minItemInput(PortTiers.ItemTier.NORMAL)
+                                        .minEnergyInput(PortTierLimits.EnergyTier.NORMAL)
+                                        .minItemInput(PortTierLimits.ItemTier.NORMAL)
                                         .anyItemOutput())
                         )
                         .build(BLAST_FURNACE);
@@ -82,8 +87,8 @@ public class BLAST_FURNACE {
 
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(BLAST_FURNACE.withSuffix("_recipe_1"))
                 .recipePool(BLAST_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),9)
@@ -93,7 +98,7 @@ public class BLAST_FURNACE {
                 .build();
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(BLAST_FURNACE.withSuffix("_recipe_2"))
                 .recipePool(BLAST_FURNACE)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT),9)
@@ -106,7 +111,7 @@ public class BLAST_FURNACE {
     }
 
     @SubscribeEvent
-    public static void registerWorkstations(MMCRJeiWorkstationsEvent event) {
+    public static void registerWorkstations(RegisterJeiWorkstationsEvent event) {
         // 普通方块/物品 -> MMCR recipe pool 页
         event.addRecipePoolWorkstation(
                 BLAST_FURNACE,

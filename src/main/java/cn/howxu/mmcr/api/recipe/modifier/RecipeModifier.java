@@ -25,6 +25,10 @@ public final class RecipeModifier {
             return key;
         }
 
+        public boolean isInput() {
+            return this == INPUT;
+        }
+
         public static IOType byKey(String key) {
             for (IOType t : values()) {
                 if (t.key.equals(key)) return t;

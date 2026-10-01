@@ -30,15 +30,14 @@ import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehaviorContext;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -49,12 +48,12 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
-import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.test.RecipeTestSupport;
-import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -230,14 +229,14 @@ class MachineBehaviorRuntimeTest {
                     starts.incrementAndGet();
                     assertThat(input.itemHandler().amount(0)).isEqualTo(2L);
                     context.setDuration(2);
-                    context.setRequirements(MachineRecipeConverter
-                            .toPublicRequirements(List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
+                    context.setRequirements(MachineRequirement
+                            .copyList(List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
                                     Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY), output(Items.GOLD_NUGGET))));
                 })
                 .recipeTick(context -> {
                     ticks.incrementAndGet();
                     assertThat(context.totalTick()).isEqualTo(2);
-                    assertThat(((cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement)
+                    assertThat(((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement)
                             context.requirements().getFirst()).count()).isEqualTo(2);
                     ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(64);
                 }).build()));
@@ -572,17 +571,17 @@ class MachineBehaviorRuntimeTest {
                     assertThat(context).isInstanceOf(TickBehaviorContext.class);
                     assertThat(context.ioView().itemAmount(Ingredient.of(Items.IRON_INGOT))).isEqualTo(2L);
                     assertThat(context.dataStorage().get("ticks"))
-                            .contains(cn.howxu.mmcr.api.publicapi.data.DataValue.of(0L));
+                            .contains(cn.howxu.mmcr.api.data.view.DataValue.of(0L));
                     assertThat(dataStorage.storage().get("ticks")).contains(DataValue.of(0L));
                     ItemStack outputStack = new ItemStack(Items.GOLD_NUGGET, 3);
                     outputStack.set(DataComponents.MAX_STACK_SIZE, 64);
                     MachineIoPlan plan = context.ioPlan()
-                            .addInput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                    RecipeIo.INPUT,
+                            .addInput(new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(
+                                    RecipeModifier.IOType.INPUT,
                                     Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
                                     DataComponentPredicateSet.EMPTY, 1F))
-                            .addOutput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                    RecipeIo.OUTPUT, null, 0, outputStack, 1F,
+                            .addOutput(new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(
+                                    RecipeModifier.IOType.OUTPUT, null, 0, outputStack, 1F,
                                     DataComponentPredicateSet.EMPTY, 1F),
                                     OutputPolicy.REQUIRE_FULL);
                     assertThat(plan.simulate().inputsSatisfied()).isTrue();

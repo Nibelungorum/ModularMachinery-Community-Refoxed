@@ -3,9 +3,10 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.publicapi.event.MMCRJeiRecipeInformationEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRJeiWorkstationsEvent;
-import cn.howxu.mmcr.api.publicapi.jei.JeiWorkstationRegistration;
+import cn.howxu.mmcr.publicapi.event.RegisterJeiRecipeInformationEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterJeiWorkstationsEvent;
+import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
+import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
 import cn.howxu.mmcr.client.gui.BlueprintScreen;
 import cn.howxu.mmcr.internal.client.JeiWorkstationRegistry;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
@@ -46,10 +47,10 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        MMCRJeiRecipeInformationEvent event = new MMCRJeiRecipeInformationEvent();
+        RegisterJeiRecipeInformationEvent event = new RegisterJeiRecipeInformationEvent();
         NeoForge.EVENT_BUS.post(event);
-        event.freeze();
-        RecipeInformationRegistry.replacePublic(event.entries());
+        ClientRegistrationAdapters.freeze(event);
+        RecipeInformationRegistry.replacePublic(ClientRegistrationAdapters.coreEntries(event));
         JeiIngredientAdapterRegistry.registerBuiltIns();
         var jeiHelpers = registration.getJeiHelpers();
         var guiHelper = jeiHelpers.getGuiHelper();
@@ -94,10 +95,10 @@ public final class JeiPlugin implements IModPlugin {
         machinesByPool.forEach((poolId, machineIds) -> machineIds.forEach(machineId ->
                 addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolId), controllerFor(machineId))));
 
-        MMCRJeiWorkstationsEvent event = new MMCRJeiWorkstationsEvent();
+        RegisterJeiWorkstationsEvent event = new RegisterJeiWorkstationsEvent();
         NeoForge.EVENT_BUS.post(event);
-        event.freeze();
-        List<JeiWorkstationRegistration> manualEntries = new ArrayList<>(event.entries());
+        ClientRegistrationAdapters.freeze(event);
+        List<JeiWorkstationRegistration> manualEntries = new ArrayList<>(ClientRegistrationAdapters.coreEntries(event));
         manualEntries.addAll(JeiWorkstationRegistry.kubeJSEntries());
 
         manualEntries.forEach(entry -> {

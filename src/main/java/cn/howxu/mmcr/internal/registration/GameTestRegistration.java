@@ -1,8 +1,11 @@
 package cn.howxu.mmcr.internal.registration;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
 /** Owns optional GameTest source-set loading and registration.
@@ -15,28 +18,40 @@ public final class GameTestRegistration {
     private GameTestRegistration() {
     }
 
+    /** Forwards the production contracts to the optional GameTest source set. */
+    public static void registerStartupSources(RegisterMachineDefinitionsEvent definitions,
+                                             RegisterMachineStructuresEvent structures,
+                                             RegisterMachineRecipesEvent recipes) {
+        if (definitions != null) invokeOptionalSource(GAME_TEST_REGISTRY, "registerMachineDefinitions",
+                new Class<?>[]{RegisterMachineDefinitionsEvent.class}, definitions);
+        if (structures != null) invokeOptionalSource(GAME_TEST_REGISTRY, "registerMachineStructures",
+                new Class<?>[]{RegisterMachineStructuresEvent.class}, structures);
+        if (recipes != null) invokeOptionalSource(GAME_TEST_REGISTRY, "registerRecipes",
+                new Class<?>[]{RegisterMachineRecipesEvent.class}, recipes);
+    }
+
     /** Forwards the three startup declarations to the optional GameTest source set. */
-    public static void registerStartupSources(MMCRMachineDefinationsEvent definitions,
-                                              MMCRMachineStructuresEvent structures,
-                                              MMCRMachineRecipesEvent recipes) {
+    public static void registerStartupSources(MachineDefinitionRegistration definitions,
+                                              StructureRegistration structures,
+                                              MachineRecipeRegistration recipes) {
         registerStartupSources(GAME_TEST_REGISTRY, definitions, structures, recipes);
     }
 
     static void registerStartupSources(String sourceClass,
-                                       MMCRMachineDefinationsEvent definitions,
-                                       MMCRMachineStructuresEvent structures,
-                                       MMCRMachineRecipesEvent recipes) {
+                                       MachineDefinitionRegistration definitions,
+                                       StructureRegistration structures,
+                                       MachineRecipeRegistration recipes) {
         if (definitions != null) {
             invokeOptionalSource(sourceClass, "registerMachineDefinitions",
-                    new Class<?>[]{MMCRMachineDefinationsEvent.class}, definitions);
+                    new Class<?>[]{MachineDefinitionRegistration.class}, definitions);
         }
         if (structures != null) {
             invokeOptionalSource(sourceClass, "registerMachineStructures",
-                    new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+                    new Class<?>[]{StructureRegistration.class}, structures);
         }
         if (recipes != null) {
             invokeOptionalSource(sourceClass, "registerRecipes",
-                    new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
+                    new Class<?>[]{MachineRecipeRegistration.class}, recipes);
         }
     }
 

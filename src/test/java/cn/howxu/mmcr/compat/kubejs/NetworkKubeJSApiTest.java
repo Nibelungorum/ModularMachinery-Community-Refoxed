@@ -1,10 +1,10 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.data.DataValue;
-import cn.howxu.mmcr.api.network.MachineReference;
-import cn.howxu.mmcr.api.network.NetworkInterfaceReference;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
+import cn.howxu.mmcr.api.data.view.DataValue;
+import cn.howxu.mmcr.api.network.view.MachineReference;
+import cn.howxu.mmcr.api.network.view.NetworkInterfaceReference;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.MinecraftServer;

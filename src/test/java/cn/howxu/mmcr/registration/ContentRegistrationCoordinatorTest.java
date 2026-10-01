@@ -1,23 +1,25 @@
 package cn.howxu.mmcr.registration;
 
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
@@ -28,6 +30,8 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
@@ -71,10 +75,10 @@ class ContentRegistrationCoordinatorTest {
     void commitsMachineStructureAndRecipeAsOneStartupModel() {
         ResourceLocation machineId = id("coordinated_machine");
         MachineDefinition machine = MachineBuilder.machine(machineId).build();
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        MachineDefinitionRegistration definitions = new MachineDefinitionRegistration();
         definitions.registerMachine(machine);
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        StructureRegistration structures = new StructureRegistration(List.of(machineId));
         ResourceLocation typeId = id("coordinated_type");
         ResourceLocation levelId = id("coordinated_level");
         ResourceLocation modifierId = id("coordinated_modifier");
@@ -89,7 +93,7 @@ class ContentRegistrationCoordinatorTest {
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                 .requirements(requirements -> requirements.levelSlot('F', typeId).modifier('F', modifierId))));
         structures.freeze();
-        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
+        MachineRecipeRegistration recipes = new MachineRecipeRegistration();
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("coordinated_recipe")).recipePool(machineId)
                 .duration(1).build();
         recipes.registerRecipe(recipe);
@@ -112,7 +116,7 @@ class ContentRegistrationCoordinatorTest {
     @Test
     void rejectsStructureWithoutMachine() {
         ResourceLocation machineId = id("missing_machine");
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        StructureRegistration structures = new StructureRegistration(List.of(machineId));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         structures.freeze();
@@ -132,12 +136,12 @@ class ContentRegistrationCoordinatorTest {
         ResourceLocation machineId = id("missing_recipe_machine");
         ResourceLocation validRecipeId = id("valid_startup_recipe");
         ResourceLocation orphanRecipeId = id("orphan_startup_recipe");
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        MachineDefinitionRegistration definitions = new MachineDefinitionRegistration();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        StructureRegistration structures = new StructureRegistration(List.of(machineId));
         structures.freeze();
-        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
+        MachineRecipeRegistration recipes = new MachineRecipeRegistration();
         MachineRecipeDefinition validRecipe = MachineRecipeBuilder.recipe(validRecipeId).recipePool(machineId)
                 .duration(1).build();
         MachineRecipeDefinition orphanRecipe = MachineRecipeBuilder.recipe(orphanRecipeId).recipePool(id("missing_recipe_pool"))
@@ -159,7 +163,7 @@ class ContentRegistrationCoordinatorTest {
     @Test
     void commitIsIdempotentAfterSuccess() {
         ResourceLocation machineId = id("idempotent_machine");
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        MachineDefinitionRegistration definitions = new MachineDefinitionRegistration();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
 
@@ -176,10 +180,10 @@ class ContentRegistrationCoordinatorTest {
     @Test
     void commits_complete_startup_structure_snapshot() {
         ResourceLocation machineId = id("complete_startup_machine");
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        MachineDefinitionRegistration definitions = new MachineDefinitionRegistration();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        StructureRegistration structures = new StructureRegistration(List.of(machineId));
         structures.registerStructure(machineId, builder -> {
             builder.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
                     .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')));
@@ -201,10 +205,10 @@ class ContentRegistrationCoordinatorTest {
     @Test
     void invalid_level_snapshot_does_not_install_machine_levels_or_modifiers() {
         ResourceLocation machineId = id("invalid_snapshot_machine");
-        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        MachineDefinitionRegistration definitions = new MachineDefinitionRegistration();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        StructureRegistration structures = new StructureRegistration(List.of(machineId));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                 .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         structures.registerLevelType(new LevelType(
@@ -239,15 +243,15 @@ class ContentRegistrationCoordinatorTest {
                 existingMachine, null));
         RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(
                 MachineRecipeBuilder.recipe(existingRecipeId).recipePool(existingMachineId).duration(1).build(),
-                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(),
+                new StructureRegistration.Snapshot(Map.of(), Map.of(),
                         Map.of(), Map.of())));
         ContentRegistrationCoordinator.beginStartup();
 
         ResourceLocation newMachineId = id("atomic_new_machine");
-        MMCRMachineDefinationsEvent newDefinitions = new MMCRMachineDefinationsEvent();
+        MachineDefinitionRegistration newDefinitions = new MachineDefinitionRegistration();
         newDefinitions.registerMachine(MachineBuilder.machine(newMachineId).build());
         newDefinitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(newMachineId));
+        StructureRegistration structures = new StructureRegistration(List.of(newMachineId));
         structures.registerStructure(newMachineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         structures.freeze();
@@ -262,8 +266,8 @@ class ContentRegistrationCoordinatorTest {
         assertThat(RecipeRegistry.getRecipe(existingRecipeId).recipePoolId()).isEqualTo(existingMachineId);
     }
 
-    private static MMCRMachineRecipesEvent recipeEvent(MachineRecipeDefinition recipe) {
-        MMCRMachineRecipesEvent event = new MMCRMachineRecipesEvent();
+    private static MachineRecipeRegistration recipeEvent(MachineRecipeDefinition recipe) {
+        MachineRecipeRegistration event = new MachineRecipeRegistration();
         event.registerRecipe(recipe);
         event.freeze();
         return event;
@@ -329,6 +333,39 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
+    void public_startup_contracts_keep_phase_order_freeze_and_core_commit() {
+        ResourceLocation machine = id("public_startup_machine");
+        ResourceLocation recipe = id("public_startup_recipe");
+        var phases = new ArrayList<String>();
+        var definitions = new AtomicReference<RegisterMachineDefinitionsEvent>();
+        var structures = new AtomicReference<RegisterMachineStructuresEvent>();
+        StartupContentRegistration.registerPublicForTesting(
+                event -> {
+                    phases.add("definitions");
+                    event.registerMachine(machine, draft -> { });
+                    definitions.set(event);
+                }, event -> {
+                    phases.add("structures");
+                    assertThatThrownBy(() -> definitions.get().registerMachine(id("public_late_machine"), draft -> { }))
+                            .isInstanceOf(IllegalStateException.class);
+                    assertThat(ModBlocks.BLOCKS.containsKey(machine.getPath() + "_controller")).isTrue();
+                    event.registerStructure(machine, draft -> draft.fullStructure(stage -> stage.pattern(pattern -> pattern
+                            .layer("F").where('F', BlockConditions.block(Blocks.FURNACE)).controller('F'))));
+                    structures.set(event);
+                }, event -> {
+                    phases.add("recipes");
+                    assertThatThrownBy(() -> structures.get().registerStructure(machine, draft -> { }))
+                            .isInstanceOf(IllegalStateException.class);
+                    event.registerRecipe(recipe, draft -> draft.recipePool(machine).duration(1));
+                });
+        assertThat(phases).containsExactly("definitions", "structures", "recipes");
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MachineDefinitions.getRegistration(machine)).isNotNull();
+        assertThat(MachineStructureRegistry.startupSnapshot()).containsKey(machine);
+        assertThat(RecipeRegistry.getRecipe(recipe)).isNotNull();
+    }
+
+    @Test
     void coordinator_reset_also_resets_startup_registration_phase() {
         StartupContentRegistration.registerForTesting(event -> { }, event -> { }, event -> { });
 
@@ -362,9 +399,9 @@ class ContentRegistrationCoordinatorTest {
         ResourceLocation typeId = id("kubejs_deferred_type");
         ResourceLocation levelId = id("kubejs_deferred_level");
         StartupContentRegistration.registerProductionForModStartup();
-        MMCRMachineStructuresEvent.current().registerLevelType(new LevelType(typeId,
+        StructureRegistration.current().registerLevelType(new LevelType(typeId,
                 Component.literal("KubeJS Coil")));
-        MMCRMachineStructuresEvent.current().registerLevel(new MachineLevel(levelId, typeId, 1,
+        StructureRegistration.current().registerLevel(new MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
                 ItemStack.EMPTY,
                 ModifierDefinition.EMPTY));

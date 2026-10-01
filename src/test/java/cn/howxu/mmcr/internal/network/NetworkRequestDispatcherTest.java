@@ -16,7 +16,7 @@ import cn.howxu.mmcr.api.network.RequestBody;
 import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
 import cn.howxu.mmcr.api.network.NetworkApi;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;

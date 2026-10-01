@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.type;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.publicapi.ApiRuntime;
+import cn.howxu.mmcr.api.registration.ApiRuntime;
 
 import java.util.List;
 

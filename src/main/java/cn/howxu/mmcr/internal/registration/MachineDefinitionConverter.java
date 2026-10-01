@@ -14,26 +14,24 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
-import cn.howxu.mmcr.api.publicapi.machine.AppearanceSpec;
-import cn.howxu.mmcr.api.publicapi.machine.ControllerSpec;
-import cn.howxu.mmcr.api.publicapi.machine.FactorySpec;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.PatternDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.PortRequirements;
-import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
-import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
-import cn.howxu.mmcr.api.publicapi.machine.LevelType;
-import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
-import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
-import cn.howxu.mmcr.api.publicapi.data.DataStorage;
-import cn.howxu.mmcr.api.publicapi.network.MachineReference;
-import cn.howxu.mmcr.api.publicapi.network.RequestBody;
-import cn.howxu.mmcr.api.publicapi.network.RequestFailureReason;
-import cn.howxu.mmcr.api.publicapi.network.RequestInfo;
-import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.machine.definition.AppearanceSpec;
+import cn.howxu.mmcr.api.machine.definition.ControllerSpec;
+import cn.howxu.mmcr.api.machine.definition.FactorySpec;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
+import cn.howxu.mmcr.api.machine.definition.PatternDefinition;
+import cn.howxu.mmcr.api.machine.definition.PortRequirements;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.api.machine.definition.StructureRequirements;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.StructureStage;
+import cn.howxu.mmcr.api.machine.definition.MachineLevel;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.data.view.DataStorage;
+import cn.howxu.mmcr.api.network.view.MachineReference;
+import cn.howxu.mmcr.api.network.view.RequestBody;
+import cn.howxu.mmcr.api.network.view.RequestFailureReason;
+import cn.howxu.mmcr.api.network.view.RequestInfo;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -49,10 +47,6 @@ import java.util.Map;
  */
 public final class MachineDefinitionConverter {
     private MachineDefinitionConverter() {
-    }
-
-    public static cn.howxu.mmcr.api.machine.level.LevelType toLevelType(LevelType type) {
-        return new cn.howxu.mmcr.api.machine.level.LevelType(type.id(), type.displayName());
     }
 
     public static cn.howxu.mmcr.api.machine.level.MachineLevel toMachineLevel(MachineLevel level) {
@@ -99,7 +93,7 @@ public final class MachineDefinitionConverter {
         return new BlockArray(entries, Map.of(), symbolsByPosition);
     }
 
-    public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+    public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {
         validateDefinitionStructureIds(definition, structure);
         return new DynamicMachine(
                 definition.id(),
@@ -116,7 +110,7 @@ public final class MachineDefinitionConverter {
                 definition.factory().hasFactory(),
                 definition.factory().threadLimit(),
                 toFactoryThreads(definition.factory()),
-                toInternalRole(definition.role()),
+                definition.role(),
                 definition.acceptedModuleIds(),
                 definition.networkInterface(),
                 toStructureStages(structure),
@@ -134,7 +128,7 @@ public final class MachineDefinitionConverter {
     }
 
     public static MachineRegistration toStartupRegistration(MachineDefinition definition,
-            cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+            cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {
         if (structure != null) validateDefinitionStructureIds(definition, structure);
         MachineRegistration.Builder builder = MachineRegistration.builder(definition.id())
                 .recipePoolIds(definition.recipePoolIds())
@@ -151,10 +145,8 @@ public final class MachineDefinitionConverter {
                 .behavior(definition.behavior());
         definition.requestProcessors().forEach(builder::requestProcess);
         definition.requestFailures().forEach((id, failure) -> builder.requestFailed(id, toInternalRequestFailed(failure)));
-        definition.smartInterfaceTypes().values().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceType)
-                .forEach(builder::smartInterfaceType);
-        definition.smartInterfaceModifiers().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceModifier)
-                .forEach(builder::smartInterfaceModifier);
+        definition.smartInterfaceTypes().values().forEach(builder::smartInterfaceType);
+        definition.smartInterfaceModifiers().forEach(builder::smartInterfaceModifier);
         builder.runningSound(definition.runningSoundId()).finishSound(definition.finishSoundId());
         if (structure != null) {
             builder.pattern(toBlockArray(structure.stages().getFirst().pattern()));
@@ -163,19 +155,19 @@ public final class MachineDefinitionConverter {
             builder.pattern(definition.pattern());
             if (definition.expandableStructure()) builder.expandableStructure();
         }
-        if (definition.role() == cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE) builder.module();
-        if (definition.role() == cn.howxu.mmcr.api.publicapi.machine.MachineRole.HOST) {
+        if (definition.role() == MachineRole.MODULE) builder.module();
+        if (definition.role() == MachineRole.HOST) {
             definition.acceptedModuleIds().forEach(builder::host);
         }
         return builder.build();
     }
 
-    public static MachineStructureDefinition toStructureDefinition(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+    public static MachineStructureDefinition toStructureDefinition(cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {
         return toStructureDefinition(structure, Map.of());
     }
 
     public static MachineStructureDefinition toStructureDefinition(
-            cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure,
+            cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure,
             Map<ResourceLocation, ModifierDefinition> ignoredModifiers) {
         return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
                 .map(stage -> toDeclaration(stage, structure.stateSensitive())).toList());
@@ -269,17 +261,13 @@ public final class MachineDefinitionConverter {
                 .toList();
     }
 
-    private static MachineRole toInternalRole(cn.howxu.mmcr.api.publicapi.machine.MachineRole role) {
-        return MachineRole.valueOf(role.name());
-    }
-
     private static Map<ResourceLocation, cn.howxu.mmcr.api.network.RequestFailed> toInternalRequestFailures(
-            Map<ResourceLocation, cn.howxu.mmcr.api.publicapi.network.RequestFailed> failures) {
+            Map<ResourceLocation, cn.howxu.mmcr.api.network.view.RequestFailed> failures) {
         return failures.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
                 entry -> toInternalRequestFailed(entry.getValue()), (first, ignored) -> first, LinkedHashMap::new));
     }
 
-    public static Map<ResourceLocation, cn.howxu.mmcr.api.publicapi.network.RequestFailed> fromInternalRequestFailures(
+    public static Map<ResourceLocation, cn.howxu.mmcr.api.network.view.RequestFailed> fromInternalRequestFailures(
             Map<ResourceLocation, cn.howxu.mmcr.api.network.RequestFailed> failures) {
         return failures.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
                 entry -> (body, request, senderStorage, reason) -> entry.getValue().fail(
@@ -292,28 +280,14 @@ public final class MachineDefinitionConverter {
     }
 
     private static cn.howxu.mmcr.api.network.RequestFailed toInternalRequestFailed(
-            cn.howxu.mmcr.api.publicapi.network.RequestFailed failure) {
+            cn.howxu.mmcr.api.network.view.RequestFailed failure) {
         return (body, request, senderStorage, reason) -> failure.fail(RequestBody.fromInternal(body),
                 new RequestInfo(request.requestId(), MachineReference.fromInternal(request.peer())),
                 senderStorage == null ? null : DataStorage.view(senderStorage),
                 RequestFailureReason.valueOf(reason.name()));
     }
 
-    private static cn.howxu.mmcr.api.machine.SmartInterfaceType toInternalSmartInterfaceType(
-            cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType type) {
-        return new cn.howxu.mmcr.api.machine.SmartInterfaceType(type.type(), type.defaultValue(), type.minValue(),
-                type.maxValue(), type.priority(), cn.howxu.mmcr.api.machine.SmartInterfaceType.ValueType.valueOf(type.valueType().name()));
-    }
-
-    private static cn.howxu.mmcr.api.machine.SmartInterfaceModifier toInternalSmartInterfaceModifier(
-            cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier modifier) {
-        return new cn.howxu.mmcr.api.machine.SmartInterfaceModifier(modifier.interfaceType(), modifier.target(),
-                modifier.scope(),
-                modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
-                RecipeModifier.Operation.valueOf(modifier.operation().name()));
-    }
-
-    private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+    private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {
         return MachineStructureFamily.of(toStructureDefinition(structure)).stages();
     }
 
@@ -335,7 +309,7 @@ public final class MachineDefinitionConverter {
     }
 
     private static void validateDefinitionStructureIds(MachineDefinition definition,
-            cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
+            cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {
         if (!definition.id().equals(structure.machineId())) {
             throw new ApiRegistrationException("Machine definition id " + definition.id()
                     + " does not match structure machine id " + structure.machineId());

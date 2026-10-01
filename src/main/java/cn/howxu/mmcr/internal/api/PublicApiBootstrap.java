@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.api;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
-import cn.howxu.mmcr.api.publicapi.ApiRuntime;
+import cn.howxu.mmcr.api.registration.ApiRuntime;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;

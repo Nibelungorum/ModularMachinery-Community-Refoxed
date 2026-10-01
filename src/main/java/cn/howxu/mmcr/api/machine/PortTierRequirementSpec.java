@@ -6,7 +6,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
-import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 

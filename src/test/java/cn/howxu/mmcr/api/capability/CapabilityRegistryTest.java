@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityFactory;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
-import cn.howxu.mmcr.api.publicapi.ApiRuntime;
+import cn.howxu.mmcr.api.registration.ApiRuntime;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.AfterEach;

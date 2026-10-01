@@ -11,12 +11,12 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.CustomOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -25,7 +25,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
-import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -341,8 +340,8 @@ class MachineRecipeSchemaTest {
         MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(schemaRecipe),
                 List.of(output.outputType().id().toString(), "output", outputPayload));
         var builder = new MachineRecipeBuilderJS(MMCR.id("generic_builder"))
-                .custom(input.type().id().toString(), RecipeIo.INPUT, inputPayload)
-                .custom(output.outputType().id().toString(), RecipeIo.OUTPUT, outputPayload);
+                .custom(input.type().id().toString(), IOType.INPUT, inputPayload)
+                .custom(output.outputType().id().toString(), IOType.OUTPUT, outputPayload);
 
         assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 schemaRecipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(input);
@@ -354,7 +353,7 @@ class MachineRecipeSchemaTest {
         assertThat(builder.requirements).containsExactly(input);
         assertThat(builder.customOutputs).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
                 parsed -> assertThat(ItemStack.isSameItemSameComponents(parsed.stack(), output.stack())).isTrue());
-        assertThatIllegalArgumentException().isThrownBy(() -> builder.custom("mmcr:missing", RecipeIo.INPUT, inputPayload));
+        assertThatIllegalArgumentException().isThrownBy(() -> builder.custom("mmcr:missing", IOType.INPUT, inputPayload));
     }
 
     @Test
@@ -375,8 +374,8 @@ class MachineRecipeSchemaTest {
             MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(recipe),
                     List.of(TestOutput.TYPE.id().toString(), "output", outputPayload));
             var builder = new MachineRecipeBuilderJS(MMCR.id("generic_extension"))
-                    .custom(TestRequirement.TYPE.id().toString(), RecipeIo.INPUT, requirementPayload)
-                    .custom(TestOutput.TYPE.id().toString(), RecipeIo.OUTPUT, outputPayload);
+                    .custom(TestRequirement.TYPE.id().toString(), IOType.INPUT, requirementPayload)
+                    .custom(TestOutput.TYPE.id().toString(), IOType.OUTPUT, outputPayload);
 
             assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                     recipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(requirement);

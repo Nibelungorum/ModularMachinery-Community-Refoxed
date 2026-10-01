@@ -1,12 +1,18 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.*;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
-import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.machine.MachineKind;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
+import cn.howxu.mmcr.publicapi.recipe.component.ComponentConditions;
+import cn.howxu.mmcr.publicapi.recipe.component.ComponentConstraints;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -17,8 +23,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Map;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.*;
 
 /**
  * @description: TODO
@@ -34,9 +40,9 @@ public class SPACE {
     private static final ResourceLocation SPACE_POOL_2 = id("space_2");
     private static final ResourceLocation SPACE_POOL_3 = id("space_3");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(SPACE_ELEVATOR) && !event.definitions().containsKey(SPACE_REASSEMBLER)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(SPACE_ELEVATOR)
                     .recipePool(SPACE_ELEVATOR)
                     .displayNameKey("machine.mmcr.space_elevator")
@@ -45,28 +51,28 @@ public class SPACE {
                             .controllerBaseTexture(ResourceLocation.parse("block/quartz_block_bottom"))
                             .formedPortBaseTexture(ResourceLocation.parse("block/quartz_block_bottom"))
                     )
-                    .role(MachineRole.HOST)
+                    .role(MachineKind.HOST)
                     .acceptedModule(SPACE_REASSEMBLER)
                     .build();
             event.registerMachine(machine);
 
-            machine = MachineBuilder
+            machine = Machines
                     .machine(SPACE_REASSEMBLER)
                     .recipePool(SPACE_REASSEMBLER, SPACE_MINER, SPACE_POOL_1, SPACE_POOL_2, SPACE_POOL_3)
                     .displayNameKey("machine.mmcr.space_reassembler")
                     .appearance(a -> a.machineBasicBlock("quartz_pillar"))
                     .allowMultithreading()
-                    .role(MachineRole.MODULE)
+                    .role(MachineKind.MODULE)
                     .build();
             event.registerMachine(machine);
         }
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
 
         if (!event.structures().containsKey(SPACE_ELEVATOR) && !event.structures().containsKey(SPACE_REASSEMBLER)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -92,10 +98,10 @@ public class SPACE {
                                     .where('B', coupler())
                                     .where('D', any(
                                             block("minecraft:smooth_quartz"),
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
-                                            InterfacePredicates.factoryController()
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
+                                            BlockConditions.factoryController()
                                     ))
                                     .controller('E')
                             )
@@ -103,7 +109,7 @@ public class SPACE {
                     .build(SPACE_ELEVATOR);
             event.registerStructure(structure);
 
-            structure = MachineStructureBuilder
+            structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -114,9 +120,9 @@ public class SPACE {
                                     .where('A', block("minecraft:amethyst_block"))
                                     .where('B', any(
                                             block("minecraft:smooth_quartz"),
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput()
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput()
                                     ))
                                     .where('D', block("minecraft:glass"))
                                     .where('E', coupler())
@@ -129,19 +135,19 @@ public class SPACE {
         }
     }
 
-    private static DataComponentPredicateSet potion(String potionId) {
+    private static ComponentConstraints potion(String potionId) {
         JsonObject contents = new JsonObject();
         contents.addProperty("potion", potionId);
 
-        return new DataComponentPredicateSet(Map.of(
+        return ComponentConstraints.ofIds(Map.of(
                 ResourceLocation.parse("minecraft:potion_contents"),
-                ComponentPredicate.exact(contents)));
+                ComponentConditions.exact(contents)));
     }
 
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(SPACE_REASSEMBLER.withSuffix("_space_reassembler_1"))
                 .recipePool(SPACE_REASSEMBLER)
                 .inputItem(Ingredient.of(Items.POTION), 1, potion("minecraft:water"), 1F)
@@ -154,7 +160,7 @@ public class SPACE {
 
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(SPACE_REASSEMBLER.withSuffix("_space_miner_1"))
                 .recipePool(SPACE_MINER)
                 .inputItem(Items.APPLE, 1)
@@ -166,7 +172,7 @@ public class SPACE {
 
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(SPACE_ELEVATOR.withSuffix("_recipe_1"))
                 .recipePool(SPACE_ELEVATOR)
                 .inputItem(Items.APPLE, 1)

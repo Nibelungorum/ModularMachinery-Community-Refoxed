@@ -1,12 +1,21 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.*;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
-import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.structure.level.Levels;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
+import cn.howxu.mmcr.publicapi.recipe.modifier.Modifiers;
+import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierScope;
+import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierOperation;
+import cn.howxu.mmcr.publicapi.recipe.component.ComponentConditions;
+import cn.howxu.mmcr.publicapi.recipe.component.ComponentConstraints;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
@@ -20,9 +29,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Map;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
 
 /**
  * @description: TODO
@@ -38,9 +47,9 @@ public class THERMAL_SMELTING_FURNACE {
     public static final ResourceLocation GOLD_COIL = id("thermal_smelting_coil_gold");
     public static final ResourceLocation DIAMOND_COIL = id("thermal_smelting_coil_diamond");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(THERMAL_SMELTING_FURNACE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(THERMAL_SMELTING_FURNACE)
                     .recipePool(THERMAL_SMELTING_FURNACE)
                     .displayNameKey("machine.mmcr.thermal_smelting_furnace")
@@ -56,50 +65,50 @@ public class THERMAL_SMELTING_FURNACE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
 
         // do not forget register level first
 
-        event.registerLevelType(new LevelType(THERMAL_SMELTING_COIL_TYPE, Component.translatable("level.mmcr.thermal_smelting_coil")));
+        event.registerLevelType(Levels.type(THERMAL_SMELTING_COIL_TYPE, Component.translatable("level.mmcr.thermal_smelting_coil")));
 
-        event.registerLevel(new MachineLevel(
+        event.registerLevel(Levels.level(
                 IRON_COIL,
                 THERMAL_SMELTING_COIL_TYPE,
                 1,
-                BlockPredicate.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                DisplayStack.of(new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem()))),
-                ModifierDefinition.of("duration", "input", 0.9D, "multiply", false))
+                BlockConditions.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                new ItemStack(Blocks.IRON_BLOCK),
+                Modifiers.bundle(Modifiers.numeric("duration", ModifierScope.INPUT, 0.9D, ModifierOperation.MULTIPLY, false)))
         );
 
-        event.registerLevel(new MachineLevel(
+        event.registerLevel(Levels.level(
                 DIAMOND_COIL,
                 THERMAL_SMELTING_COIL_TYPE,
                 3,
-                BlockPredicate.blockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
-                DisplayStack.of(new ItemStack(Holder.direct(Blocks.DIAMOND_BLOCK.asItem()))),
-                ModifierDefinition.combine(
-                        ModifierDefinition.of("duration", "input", 0.7D, "multiply", false),
-                        ModifierDefinition.of("energy", "input", 0.8D, "multiply", false),
-                        ModifierDefinition.of("parallelism", "machine", 4D, "add", false),
-                        ModifierDefinition.of("factory_threads", "machine", 1D, "add", false)))
+                BlockConditions.blockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
+                new ItemStack(Blocks.DIAMOND_BLOCK),
+                Modifiers.bundle(
+                        Modifiers.numeric("duration", ModifierScope.INPUT, 0.7D, ModifierOperation.MULTIPLY, false),
+                        Modifiers.numeric("energy", ModifierScope.INPUT, 0.8D, ModifierOperation.MULTIPLY, false),
+                        Modifiers.numeric("parallelism", ModifierScope.MACHINE, 4D, ModifierOperation.ADD, false),
+                        Modifiers.numeric("factory_threads", ModifierScope.MACHINE, 1D, ModifierOperation.ADD, false)))
         );
 
-        event.registerLevel(new MachineLevel(
+        event.registerLevel(Levels.level(
                 GOLD_COIL,
                 THERMAL_SMELTING_COIL_TYPE,
                 2,
-                BlockPredicate.blockState(Blocks.GOLD_BLOCK.defaultBlockState()),
-                DisplayStack.of(new ItemStack(Holder.direct(Blocks.GOLD_BLOCK.asItem()))),
-                ModifierDefinition.combine(
-                        ModifierDefinition.of("duration", "input", 0.6D, "multiply", false),
-                        ModifierDefinition.of("energy", "input", 0.7D, "multiply", false),
-                        ModifierDefinition.of("output", "output", 2D, "multiply", false),
-                        ModifierDefinition.of("parallelism", "machine", 6D, "add", false),
-                        ModifierDefinition.of("factory_threads", "machine", 2D, "add", false)))
+                BlockConditions.blockState(Blocks.GOLD_BLOCK.defaultBlockState()),
+                new ItemStack(Blocks.GOLD_BLOCK),
+                Modifiers.bundle(
+                        Modifiers.numeric("duration", ModifierScope.INPUT, 0.6D, ModifierOperation.MULTIPLY, false),
+                        Modifiers.numeric("energy", ModifierScope.INPUT, 0.7D, ModifierOperation.MULTIPLY, false),
+                        Modifiers.numeric("output", ModifierScope.OUTPUT, 2D, ModifierOperation.MULTIPLY, false),
+                        Modifiers.numeric("parallelism", ModifierScope.MACHINE, 6D, ModifierOperation.ADD, false),
+                        Modifiers.numeric("factory_threads", ModifierScope.MACHINE, 2D, ModifierOperation.ADD, false)))
         );
 
         if (!event.structures().containsKey(THERMAL_SMELTING_FURNACE)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -113,7 +122,7 @@ public class THERMAL_SMELTING_FURNACE {
                                     ))
                                     .where('A', any(
                                             block(Blocks.SMOOTH_BASALT),
-                                            InterfacePredicates.ports()
+                                            BlockConditions.ports()
                                     ))
                                     .where('D', block(Blocks.REINFORCED_DEEPSLATE))
                                     .controller('B')
@@ -133,8 +142,8 @@ public class THERMAL_SMELTING_FURNACE {
     }
 
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_1"))
                 .recipePool(THERMAL_SMELTING_FURNACE)
                 .inputItem(Items.RAW_IRON,8)
@@ -148,7 +157,7 @@ public class THERMAL_SMELTING_FURNACE {
 
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_2"))
                 .recipePool(THERMAL_SMELTING_FURNACE)
                 .inputItem(Items.RAW_GOLD,8)
@@ -168,9 +177,9 @@ public class THERMAL_SMELTING_FURNACE {
         // some build register data, like enchantment, must use JSON
         JsonObject enchantments_data = new JsonObject();
         enchantments_data.addProperty("minecraft:sharpness", 4);
-        DataComponentPredicateSet data_extra = new DataComponentPredicateSet(Map.of(ResourceLocation.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments_data)));
+        ComponentConstraints data_extra = ComponentConstraints.ofIds(Map.of(ResourceLocation.parse("minecraft:enchantments"), ComponentConditions.exact(enchantments_data)));
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_3"))
                 .recipePool(THERMAL_SMELTING_FURNACE)
                 .inputItem(Items.GOLD_INGOT,8)

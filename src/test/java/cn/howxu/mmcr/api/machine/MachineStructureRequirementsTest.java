@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
-import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;

@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.RecipeIoDeclaration;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
@@ -18,7 +21,7 @@ import java.util.Objects;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public interface MachineRequirement {
+public interface MachineRequirement extends RecipeIoDeclaration {
 
     Codec<List<String>> TAGS_CODEC = Codec.STRING.listOf();
     Codec<MachineRequirement> CODEC = Codec.of(MachineRequirement::encode, MachineRequirement::decode);

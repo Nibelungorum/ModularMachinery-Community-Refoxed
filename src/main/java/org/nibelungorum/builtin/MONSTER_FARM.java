@@ -1,16 +1,19 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.*;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.*;
 
 /**
  * @description: TODO
@@ -21,9 +24,9 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
 public class MONSTER_FARM {
     private static final ResourceLocation MONSTER_FARM = id("monster_farm");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(MONSTER_FARM)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(MONSTER_FARM)
                     .recipePool(MONSTER_FARM)
                     .displayNameKey("machine.mmcr.monster_farm")
@@ -39,9 +42,9 @@ public class MONSTER_FARM {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(MONSTER_FARM)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p

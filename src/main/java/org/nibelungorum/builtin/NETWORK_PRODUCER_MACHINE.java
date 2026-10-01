@@ -1,18 +1,23 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.data.DataStorage;
-import cn.howxu.mmcr.api.publicapi.data.DataValue;
-import cn.howxu.mmcr.api.publicapi.network.NetworkApi;
-import cn.howxu.mmcr.api.publicapi.network.RequestBody;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.data.DataKey;
+import cn.howxu.mmcr.publicapi.data.DataStore;
+import cn.howxu.mmcr.publicapi.network.Networks;
+import cn.howxu.mmcr.publicapi.network.NetworkPortView;
+import cn.howxu.mmcr.publicapi.network.NodeView;
+import cn.howxu.mmcr.publicapi.network.RequestPayload;
+import cn.howxu.mmcr.publicapi.presentation.TextScope;
+import cn.howxu.mmcr.publicapi.behavior.TickContext;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.IoDirection;
+import cn.howxu.mmcr.publicapi.recipe.requirement.Requirements;
+import cn.howxu.mmcr.publicapi.runtime.IoTransaction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
@@ -25,9 +30,9 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import java.util.Map;
 
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -43,29 +48,29 @@ public class NETWORK_PRODUCER_MACHINE {
     public static final ResourceLocation PRODUCER_WATER = id("producer_water");
     public static final ResourceLocation PRODUCER_FE = id("producer_fe");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(NETWORK_PRODUCER_MACHINE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(NETWORK_PRODUCER_MACHINE)
                     .recipePool(NETWORK_PRODUCER_MACHINE)
                     .displayNameKey("machine.mmcr.network_producer_machine")
                     .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:white_wool")))
                     .networkInterface(1, 1)
                     .allowNetworkMachine(NETWORK_CENTER_MACHINE)
-                    .tickBehavior(behavior -> behavior.serverTick(context -> {
-                        DataStorage storage = context.dataStorage();
+                    .tickBehavior(behavior -> behavior.serverTick((TickContext context) -> {
+                        DataStore storage = context.dataStorage();
                         if (storage == null) return;
 
                         double power = storage.get("power")
-                                .flatMap(DataValue::asDouble)
+                                .flatMap(value -> value.asDouble())
                                 .orElse(0.0);
                         double drySec = storage.get("dry_sec")
-                                .flatMap(DataValue::asDouble)
+                                .flatMap(value -> value.asDouble())
                                 .orElse(0.0);
                         boolean feOk = true;
 
-                        var energyPlan = context.ioPlan();
-                        energyPlan.addInput(new EnergyRequirement(RecipeIo.INPUT, 100));
+                        IoTransaction energyPlan = context.ioPlan();
+                        energyPlan.addInput(Requirements.energy(IoDirection.INPUT, 100));
                         var energySim = energyPlan.simulate();
                         if (!energySim.energySatisfied() || !energyPlan.commit().successful()) {
                             feOk = false;
@@ -76,9 +81,9 @@ public class NETWORK_PRODUCER_MACHINE {
                         boolean shouldReport = false;
 
                         if (context.isDue(20)) {
-                            var waterPlan = context.ioPlan();
-                            waterPlan.addInput(new FluidRequirement(
-                                    RecipeIo.INPUT,
+                            IoTransaction waterPlan = context.ioPlan();
+                            waterPlan.addInput(Requirements.fluid(
+                                    IoDirection.INPUT,
                                     FluidIngredient.of(Fluids.WATER),
                                     100,
                                     FluidStack.EMPTY,
@@ -98,9 +103,9 @@ public class NETWORK_PRODUCER_MACHINE {
                                 }
                             }
 
-                            storage.set("has_water", DataValue.of(hasWater));
-                            storage.set("power", DataValue.of(power));
-                            storage.set("dry_sec", DataValue.of(drySec));
+                            storage.set("has_water", DataKey.of(hasWater));
+                            storage.set("power", DataKey.of(power));
+                            storage.set("dry_sec", DataKey.of(drySec));
                             powerPublished = power;
                             dryPublished = drySec;
 
@@ -122,29 +127,29 @@ public class NETWORK_PRODUCER_MACHINE {
                         }
 
                         if (shouldReport) {
-                            var interfaces = NetworkApi.interfaces(context);
-                            var iface = interfaces != null && !interfaces.isEmpty() ? interfaces.get(0) : null;
+                            var interfaces = Networks.interfaces(context);
+                            NetworkPortView iface = interfaces != null && !interfaces.isEmpty() ? interfaces.get(0) : null;
                             if (iface != null) {
                                 var connections = iface.connections();
-                                var target = connections != null && !connections.isEmpty() ? connections.get(0) : null;
+                                NodeView target = connections != null && !connections.isEmpty() ? connections.get(0) : null;
                                 if (target != null) {
-                                    NetworkApi.sendRequest(iface, target, REPORT_POWER,
-                                            RequestBody.of(Map.of("power", DataValue.of(powerPublished))));
+                                    Networks.sendRequest(iface, target, REPORT_POWER,
+                                            RequestPayload.of(Map.of("power", DataKey.of(powerPublished))));
                                 }
                             }
                         }
 
                         boolean hasWater = storage.get("has_water")
-                                .flatMap(DataValue::asBoolean)
+                                .flatMap(value -> value.asBoolean())
                                 .orElse(false);
 
-                        context.screenText().append(ControllerScreenTextScope.OPERATION, PRODUCER_POWER,
+                        context.screenText().append(TextScope.OPERATION, PRODUCER_POWER,
                                 Component.literal("Computing Power: " + powerPublished + " tfps"));
-                        context.screenText().append(ControllerScreenTextScope.OPERATION, PRODUCER_WATER,
+                        context.screenText().append(TextScope.OPERATION, PRODUCER_WATER,
                                 Component.literal(hasWater
                                         ? "Water: OK"
                                         : "Water: DRY (overflow in " + Math.max(0, 30 - dryPublished) + " sec)"));
-                        context.screenText().append(ControllerScreenTextScope.OPERATION, PRODUCER_FE,
+                        context.screenText().append(TextScope.OPERATION, PRODUCER_FE,
                                 Component.literal(feOk ? "Energy: OK" : "Energy: LOW"));
 
                         context.jadeText().append(PRODUCER_POWER,
@@ -158,9 +163,9 @@ public class NETWORK_PRODUCER_MACHINE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(NETWORK_PRODUCER_MACHINE)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -170,10 +175,10 @@ public class NETWORK_PRODUCER_MACHINE {
                                     .layer("XXXX", "XCAX", "XXXX")
                                     .where('X', block(Blocks.WHITE_WOOL))
                                     .where('A', any(
-                                            InterfacePredicates.anyOfFluidInput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
-                                            InterfacePredicates.networkInterface(),
-                                            InterfacePredicates.dataStorage(),
+                                            BlockConditions.fluidInput(),
+                                            BlockConditions.energyInput(),
+                                            BlockConditions.networkInterface(),
+                                            BlockConditions.dataStorage(),
                                             block(Blocks.RED_TERRACOTTA)
                                     ))
                                     .controller('C')

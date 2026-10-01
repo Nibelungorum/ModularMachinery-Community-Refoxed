@@ -7,14 +7,26 @@ import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeDeclarations;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.ScriptableObject;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
@@ -22,6 +34,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -49,6 +62,129 @@ class MekanismKubeJSApiTest {
         MekanismBridgeBootstrap.resetForTesting();
         MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(false));
         MekanismRecipeTypes.register();
+    }
+
+    @Test
+    void raw_rhino_accepts_canonical_and_custom_io_without_record_coercion() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var outputs = OutputRegistry.openTestScope()) {
+            MekanismRecipeDeclarations.registerUnavailable();
+            var canonical = new EnergyRequirement(4, List.of("raw"));
+            var custom = new CustomRecipeIo(MekanismRecipeTypes.CHEMICAL, IOType.INPUT,
+                    MachineRecipeBuilder.chemicalInputPayload(
+                            ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 500), 0.25F));
+            var builder = new MachineRecipeBuilderJS("mmcr:raw_rhino_io");
+            var context = new ContextFactory().enter();
+            var scope = context.initStandardObjects();
+            ScriptableObject.putProperty(scope, "builder", builder, context);
+            ScriptableObject.putProperty(scope, "canonical", canonical, context);
+            ScriptableObject.putProperty(scope, "custom", custom, context);
+            context.evaluateString(scope, """
+                    builder.addRequirement(canonical);
+                    builder.addRequirement(custom);
+                    """, "raw-rhino-io", 1, null);
+            assertThat(builder.requirements.getFirst()).isSameAs(canonical);
+            assertThat(builder.requirements).hasSize(2);
+            assertThat(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, builder.requirements.get(1)).getOrThrow())
+                    .isEqualTo(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE,
+                            MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow()).getOrThrow());
+            var canonicalOutput = new EnergyRequirement(IOType.OUTPUT, 8, List.of("raw_output"));
+            var customOutput = new CustomRecipeIo(MekanismRecipeTypes.CHEMICAL, IOType.OUTPUT,
+                    MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(ResourceLocation.parse("mekanism:hydrogen"), 200, 0.5F)));
+            var plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
+            ScriptableObject.putProperty(scope, "plan", plan, context);
+            ScriptableObject.putProperty(scope, "canonicalOutput", canonicalOutput, context);
+            ScriptableObject.putProperty(scope, "customOutput", customOutput, context);
+            ScriptableObject.putProperty(scope, "policy", OutputPolicy.REQUIRE_FULL, context);
+            context.evaluateString(scope, """
+                    plan.addInput(canonical);
+                    plan.add(custom);
+                    plan.addOutput(canonicalOutput);
+                    plan.addOutput(customOutput, policy);
+                    """, "raw-rhino-tick-io", 1, null);
+            var expectedOutputPayload = customOutput.payload().getAsJsonObject();
+            expectedOutputPayload.addProperty("io", "output");
+            assertThat(plan.requirements()).extracting(value -> MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow())
+                    .containsExactlyElementsOf(List.of(canonical,
+                            MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow(), canonicalOutput,
+                            MachineRequirement.CODEC.parse(JsonOps.INSTANCE, expectedOutputPayload).getOrThrow())
+                            .stream().map(value -> MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow()).toList());
+        }
+    }
+
+    @Test
+    void rhino_helpers_route_inputs_and_outputs_through_the_core_custom_builder() {
+        for (boolean loaded : new boolean[]{false, true}) {
+            try (var requirements = RequirementHandlerRegistry.openTestScope();
+                 var outputs = OutputRegistry.openTestScope()) {
+                MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(loaded));
+                if (loaded) MekanismRecipeTypes.register();
+                else MekanismRecipeDeclarations.registerUnavailable();
+                var builder = new MachineRecipeBuilderJS("mmcr:rhino_custom_helpers").recipePool(MACHINE.toString());
+                var context = new ContextFactory().enter();
+                var scope = context.initStandardObjects();
+                ScriptableObject.putProperty(scope, "api", new KubeJSApi(), context);
+                ScriptableObject.putProperty(scope, "builder", builder, context);
+                ScriptableObject.putProperty(scope, "input", IOType.INPUT, context);
+                JsonObject payload = MachineRecipeBuilder.chemicalInputPayload(
+                        ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 17), 0.75F);
+                var tags = new JsonArray();
+                tags.add("helper");
+                payload.add("tags", tags);
+                ScriptableObject.putProperty(scope, "payload", payload, context);
+                context.evaluateString(scope, """
+                        builder.addRequirement(api.chemicalInput('mekanism:oxygen', 1000, 0.25));
+                        builder.addRequirement(api.chemicalTagInput('mekanism:fuels', 10, 0.5));
+                        builder.addRequirement(api.heatTemperatureInput(450));
+                        builder.addRequirement(api.customRecipeIo('mekanism:chemical', input, payload));
+                        builder.addRequirement(api.fluidInputRequirement('minecraft:water', 100));
+                        builder.addRequirement(api.chemicalOutput('mekanism:hydrogen', 200, 0.5));
+                        builder.addRequirement(api.heatOutput(120));
+                        """, "custom-helper-routing", 1, null);
+                var recipe = builder.createObject();
+                assertThat(recipe.requirements()).hasSize(7);
+                assertThat(recipe.requirements().subList(0, 5)).extracting(MachineRequirement::io)
+                        .containsExactly(IOType.INPUT, IOType.INPUT, IOType.INPUT, IOType.INPUT, IOType.INPUT);
+                var exact = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, recipe.requirements().get(0)).getOrThrow().getAsJsonObject();
+                assertThat(exact.get("id").getAsString()).isEqualTo("mekanism:oxygen");
+                assertThat(exact.has("kind")).isFalse();
+                assertThat(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE,
+                        MachineRequirement.CODEC.parse(JsonOps.INSTANCE, MachineRecipeBuilder.chemicalInputPayload(
+                                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1000), 0.25F)).getOrThrow()).getOrThrow())
+                        .isEqualTo(exact);
+                assertThat(recipe.requirements().getFirst().type().id()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+                assertThat(exact.get("amount").getAsLong()).isEqualTo(1000);
+                assertThat(exact.get("consume_chance").getAsFloat()).isEqualTo(0.25F);
+                var tag = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, recipe.requirements().get(1)).getOrThrow().getAsJsonObject();
+                assertThat(tag.get("kind").getAsString()).isEqualTo("tag");
+                assertThat(tag.get("id").getAsString()).isEqualTo("mekanism:fuels");
+                assertThat(tag.get("amount").getAsLong()).isEqualTo(10);
+                assertThat(tag.get("consume_chance").getAsFloat()).isEqualTo(0.5F);
+                assertThat(recipe.requirements().get(2).type().id()).isEqualTo(MekanismRecipeTypes.HEAT_TEMPERATURE);
+                assertThat(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, recipe.requirements().get(2)).getOrThrow()
+                        .getAsJsonObject().get("value").getAsDouble()).isEqualTo(450D);
+                assertThat(recipe.requirements().get(3).tags()).containsExactly("helper");
+                assertThat(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, recipe.requirements().get(4)).getOrThrow())
+                        .isEqualTo(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE,
+                                new KubeJSApi().fluidInputRequirement("minecraft:water", 100)).getOrThrow());
+                assertThat(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, recipe.requirements().get(3)).getOrThrow())
+                        .isEqualTo(MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE,
+                                MachineRequirement.CODEC.parse(JsonOps.INSTANCE, payload).getOrThrow()).getOrThrow());
+                assertThat(recipe.machineOutputs()).extracting(output -> MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow())
+                        .containsExactly(MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE,
+                                        MachineOutput.CODEC.parse(JsonOps.INSTANCE, MachineRecipeBuilder.chemicalOutputPayload(
+                                                ChemicalOutput.of(ResourceLocation.parse("mekanism:hydrogen"), 200, 0.5F))).getOrThrow()).getOrThrow(),
+                                MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE,
+                                        MachineOutput.CODEC.parse(JsonOps.INSTANCE, MachineRecipeBuilder.heatOutputPayload(120)).getOrThrow()).getOrThrow());
+                assertThatThrownBy(() -> context.evaluateString(scope,
+                        "builder.addRequirement(api.customRecipeIo('mmcr:missing', input, payload))", "unknown-helper", 1, null))
+                        .hasMessageContaining("Unknown requirement type");
+                payload.addProperty("io", "output");
+                assertThatThrownBy(() -> context.evaluateString(scope,
+                        "builder.addRequirement(api.customRecipeIo('mekanism:chemical', input, payload))", "wrong-direction", 1, null))
+                        .hasMessageContaining("does not match");
+            }
+        }
     }
 
     @Test
@@ -136,9 +272,9 @@ class MekanismKubeJSApiTest {
         kubeBuilder.recipePool(MACHINE.toString())
                 .chemicalInput("mekanism:oxygen", 1_000L);
 
-        CustomRecipeIo publicIo = (CustomRecipeIo) publicDef.requirements().get(0);
+        MachineRequirement publicIo = publicDef.requirements().getFirst();
         assertThat(kubeBuilder.createObject().requirements()).singleElement()
-                .satisfies(req -> assertThat(req.type().id()).isEqualTo(publicIo.typeId()));
+                .satisfies(req -> assertThat(req.type().id()).isEqualTo(publicIo.type().id()));
     }
 
     @Test
@@ -164,10 +300,9 @@ class MekanismKubeJSApiTest {
         kubeBuilder.recipePool(MACHINE.toString())
                 .heatTemperatureInput(450D);
 
-        CustomRecipeIo publicIo = (CustomRecipeIo) publicDef.requirements().stream()
-                .filter(req -> req instanceof CustomRecipeIo).findFirst().orElseThrow();
+        MachineRequirement publicIo = publicDef.requirements().getFirst();
         assertThat(kubeBuilder.createObject().requirements()).singleElement()
-                .satisfies(req -> assertThat(req.type().id()).isEqualTo(publicIo.typeId()));
+                .satisfies(req -> assertThat(req.type().id()).isEqualTo(publicIo.type().id()));
     }
 
     @Test

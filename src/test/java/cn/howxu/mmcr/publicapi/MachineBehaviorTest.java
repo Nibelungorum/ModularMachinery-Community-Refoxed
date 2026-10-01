@@ -1,0 +1,403 @@
+package cn.howxu.mmcr.publicapi;
+
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.controller.JadeText;
+import cn.howxu.mmcr.api.recipe.ItemOutput;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.internal.runtime.JadeTextState;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
+import cn.howxu.mmcr.api.machine.definition.RecipeFinishContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RecipeTestSupport;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
+
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/** Verifies the public machine behavior contracts.
+ * @author howxu <dev@howxu.cn>
+ */
+class MachineBehaviorTest {
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
+    private static final ControllerScreenText SCREEN_TEXT = new ControllerScreenText() {
+        @Override
+        public void append(ControllerScreenTextScope scope,
+                           ResourceLocation lineId, Component text) {
+        }
+
+        @Override
+        public void appendAfter(ControllerScreenTextScope scope,
+                                ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
+        }
+
+        @Override
+        public void remove(ControllerScreenTextScope scope,
+                           ResourceLocation lineId) {
+        }
+
+        @Override
+        public void clear(ControllerScreenTextScope scope) {
+        }
+    };
+
+    @Test
+    void recipe_behavior_retains_all_callbacks_and_context_values() {
+        AtomicInteger idleStart = new AtomicInteger();
+        AtomicInteger idleEnd = new AtomicInteger();
+        AtomicInteger beforeStart = new AtomicInteger();
+        AtomicInteger recipeTick = new AtomicInteger();
+        AtomicInteger beforeFinish = new AtomicInteger();
+        MachineRecipe recipe = recipe();
+        MachineBehaviorContext machineContext = new MachineBehaviorContext(null, null,
+                new BlockPos(1, 2, 3), MMCR.id("behavior_machine"), 40L, SCREEN_TEXT);
+        RecipeStartContext startContext = new RecipeStartContext(recipe, 4, 3);
+        RecipeTickContext tickContext = new RecipeTickContext(recipe, 2, 20, 3);
+        RecipeFinishContext finishContext = new RecipeFinishContext(recipe, 4, 3,
+                List.of(new MachineOutput.ItemOutput(ItemStack.EMPTY, 1F)));
+
+        RecipeBehavior behavior = RecipeBehavior.builder()
+                .idleStart(context -> idleStart.incrementAndGet())
+                .idleEnd(context -> idleEnd.incrementAndGet())
+                .beforeStart(context -> beforeStart.incrementAndGet())
+                .recipeTick(context -> recipeTick.incrementAndGet())
+                .beforeFinish(context -> beforeFinish.incrementAndGet())
+                .build();
+
+        behavior.idleStart().accept(machineContext);
+        behavior.idleEnd().accept(machineContext);
+        behavior.beforeStart().accept(startContext);
+        behavior.recipeTick().accept(tickContext);
+        behavior.beforeFinish().accept(finishContext);
+
+        assertThat(behavior.kind()).isEqualTo(MachineBehavior.Kind.RECIPE);
+        assertThat(idleStart).hasValue(1);
+        assertThat(idleEnd).hasValue(1);
+        assertThat(beforeStart).hasValue(1);
+        assertThat(recipeTick).hasValue(1);
+        assertThat(beforeFinish).hasValue(1);
+        assertThat(machineContext.controllerPos()).isEqualTo(new BlockPos(1, 2, 3));
+        assertThat(machineContext.machineId()).isEqualTo(MMCR.id("behavior_machine"));
+        assertThat(machineContext.gameTime()).isEqualTo(40L);
+        assertThat(machineContext.screenText()).isSameAs(SCREEN_TEXT);
+        assertThat(startContext.recipe()).isSameAs(recipe);
+        assertThat(startContext.recipeId()).isEqualTo(recipe.id());
+        assertThat(startContext.requestedParallelism()).isEqualTo(4);
+        assertThat(startContext.effectiveParallelism()).isEqualTo(3);
+        assertThat(startContext.machineContext()).isNotNull();
+        assertThat(startContext.machineContext().ioView()).isNotNull();
+        startContext.setDuration(40);
+        startContext.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
+        assertThat(startContext.snapshot().duration()).isEqualTo(40);
+        assertThat(startContext.snapshot().outputs()).extracting(output ->
+                MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow())
+                .containsExactlyElementsOf(startContext.outputs().stream().map(output ->
+                        MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow()).toList());
+        assertThat(((MachineOutput.ItemOutput) startContext.snapshot().outputs().getFirst()).stack())
+                .isNotSameAs(((MachineOutput.ItemOutput) startContext.outputs().getFirst()).stack());
+        assertThat(startContext.snapshot().outputs().getFirst()).isNotSameAs(startContext.outputs().getFirst());
+        assertThat(tickContext.recipe()).isSameAs(recipe);
+        assertThat(tickContext.currentTick()).isEqualTo(2);
+        assertThat(tickContext.totalTick()).isEqualTo(20);
+        assertThat(tickContext.parallelism()).isEqualTo(3);
+        assertThat(tickContext.machineContext()).isNotNull();
+        assertThat(tickContext.requirements()).isUnmodifiable();
+        assertThat(tickContext.outputs()).isUnmodifiable();
+        assertThat(RecipeTickContext.class.getMethods()).extracting(Method::getName)
+                .doesNotContain("ioPlan");
+        assertThat(finishContext.outputs()).hasSize(1);
+        finishContext.cancel();
+        assertThat(finishContext.cancelled()).isTrue();
+        finishContext.discardOutputs();
+        assertThat(finishContext.outputsDiscarded()).isTrue();
+    }
+
+    @Test
+    void convenience_contexts_do_not_claim_the_recipe_pool_as_machine_identity() {
+        MachineRecipe recipe = recipe();
+
+        assertThat(new RecipeStartContext(recipe, 1, 1).machineContext().machineId()).isNull();
+        assertThat(new RecipeTickContext(recipe, 0, 20, 1).machineContext().machineId()).isNull();
+        assertThat(new RecipeFinishContext(recipe, 1, 1, List.of()).machineContext().machineId()).isNull();
+    }
+
+    @Test
+    void recipe_behavior_retains_machine_tick_callbacks() {
+        AtomicInteger preCalls = new AtomicInteger();
+        AtomicInteger postCalls = new AtomicInteger();
+        MachineBehavior.MachineCallback pre = context -> preCalls.incrementAndGet();
+        MachineBehavior.MachineCallback post = context -> postCalls.incrementAndGet();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("hook_machine"), 20L, SCREEN_TEXT);
+
+        RecipeBehavior behavior = RecipeBehavior.builder()
+                .preServerTick(pre)
+                .postServerTick(post)
+                .build();
+
+        behavior.preServerTick().accept(context);
+        behavior.postServerTick().accept(context);
+
+        assertThat(behavior.preServerTick()).isSameAs(pre);
+        assertThat(behavior.postServerTick()).isSameAs(post);
+        assertThat(preCalls).hasValue(1);
+        assertThat(postCalls).hasValue(1);
+    }
+
+    @Test
+    void recipe_behavior_distinguishes_defaults_from_explicit_callbacks() {
+        RecipeBehavior defaults = RecipeBehavior.defaults();
+        RecipeBehavior explicit = RecipeBehavior.builder()
+                .idleStart(context -> { })
+                .idleEnd(context -> { })
+                .beforeStart(context -> { })
+                .recipeTick(context -> { })
+                .beforeFinish(context -> { })
+                .preServerTick(context -> { })
+                .postServerTick(context -> { })
+                .build();
+
+        assertThat(defaults.hasIdleStart()).isFalse();
+        assertThat(defaults.hasIdleEnd()).isFalse();
+        assertThat(defaults.hasBeforeStart()).isFalse();
+        assertThat(defaults.hasRecipeTick()).isFalse();
+        assertThat(defaults.hasBeforeFinish()).isFalse();
+        assertThat(defaults.hasPreServerTick()).isFalse();
+        assertThat(defaults.hasPostServerTick()).isFalse();
+        assertThat(explicit.hasIdleStart()).isTrue();
+        assertThat(explicit.hasIdleEnd()).isTrue();
+        assertThat(explicit.hasBeforeStart()).isTrue();
+        assertThat(explicit.hasRecipeTick()).isTrue();
+        assertThat(explicit.hasBeforeFinish()).isTrue();
+        assertThat(explicit.hasPreServerTick()).isTrue();
+        assertThat(explicit.hasPostServerTick()).isTrue();
+    }
+
+    @Test
+    void tick_behavior_distinguishes_default_from_explicit_server_tick() {
+        assertThat(TickBehavior.defaults().hasServerTick()).isFalse();
+        assertThat(TickBehavior.builder().serverTick(context -> { }).build().hasServerTick()).isTrue();
+    }
+
+    @Test
+    void tick_behavior_has_tick_kind_and_retains_callback() {
+        AtomicInteger calls = new AtomicInteger();
+        TickBehavior behavior = TickBehavior.builder()
+                .serverTick(context -> calls.incrementAndGet())
+                .build();
+
+        behavior.serverTick().accept(null);
+
+        assertThat(behavior.kind()).isEqualTo(MachineBehavior.Kind.TICK);
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void tick_callback_receives_tick_context_with_a_fresh_io_plan() {
+        AtomicInteger calls = new AtomicInteger();
+        MachineBehavior.TickCallback callback = context -> {
+            assertThat(context).isInstanceOf(TickBehaviorContext.class);
+            assertThat(context.ioPlan()).isNotNull();
+            calls.incrementAndGet();
+        };
+        TickBehavior behavior = TickBehavior.builder().serverTick(callback).build();
+        MachineBehaviorContext base = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("tick_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())));
+        TickBehaviorContext tickContext = new TickBehaviorContext(base, new CapabilitySnapshot(List.of()));
+
+        behavior.serverTick().accept(tickContext);
+
+        assertThat(behavior.serverTick()).isSameAs(callback);
+        assertThat(calls).hasValue(1);
+        assertThat(tickContext.ioView()).isSameAs(base.ioView());
+    }
+
+    @Test
+    void tick_io_plan_simulates_without_committing_physical_io() {
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
+
+        assertThat(plan.simulate().failure()).isNull();
+        assertThat(plan.simulate().inputsSatisfied()).isTrue();
+        assertThat(plan.simulate().energySatisfied()).isTrue();
+        assertThat(plan.commit().successful()).isTrue();
+    }
+
+    @Test
+    void recipe_start_snapshot_replaces_item_and_fluid_outputs_with_defensive_copies() {
+        MachineRecipe recipe = recipe();
+        RecipeStartContext context = new RecipeStartContext(recipe, 1, 1);
+        List<MachineRequirement> requirements = List.of(new ItemRequirement(IOType.INPUT,
+                Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F, List.of("snapshot_input"),
+                DataComponentPredicateSet.EMPTY, 0.25F));
+        ItemStack source = new ItemStack(Items.GOLD_NUGGET, 3);
+        source.set(DataComponents.CUSTOM_NAME, Component.literal("snapshot output"));
+        FluidStack fluid = new FluidStack(Fluids.WATER, 250);
+        List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(source, 0.5F),
+                new MachineOutput.FluidOutput(fluid, 0.25F));
+
+        context.setRequirements(List.of(ItemRequirement.output(
+                new ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F,
+                        DataComponentPredicateSet.EMPTY))));
+        assertThat(context.outputs()).hasSize(1);
+        context.setRequirements(requirements);
+        context.setOutputs(outputs);
+
+        assertThat(context.requirements()).isUnmodifiable();
+        assertThat(context.outputs()).isUnmodifiable();
+        var snapshot = context.snapshot();
+        assertThat(snapshot.requirements()).extracting(value ->
+                MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow())
+                .containsExactlyElementsOf(context.requirements().stream().map(value ->
+                        MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow()).toList());
+        assertThat(snapshot.outputs()).extracting(value ->
+                MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow())
+                .containsExactlyElementsOf(outputs.stream().map(value ->
+                        MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow()).toList());
+        source.setCount(1);
+        source.remove(DataComponents.CUSTOM_NAME);
+        fluid.setAmount(1);
+        ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(1);
+        ((MachineOutput.FluidOutput) context.outputs().get(1)).stack().setAmount(1);
+        ((ItemRequirement) context.requirements().get(1)).stack().setCount(1);
+        assertThat(((MachineOutput.ItemOutput) snapshot.outputs().getFirst()).stack().getCount()).isEqualTo(3);
+        assertThat(((MachineOutput.ItemOutput) snapshot.outputs().getFirst()).stack().get(DataComponents.CUSTOM_NAME))
+                .isEqualTo(Component.literal("snapshot output"));
+        assertThat(((MachineOutput.FluidOutput) snapshot.outputs().get(1)).stack().getAmount()).isEqualTo(250);
+        assertThat(((ItemRequirement) context.snapshot().requirements().get(1)).stack().getCount()).isEqualTo(3);
+        assertThat(context.snapshot().requirements().getFirst().tags()).containsExactly("snapshot_input");
+        assertThat(((ItemRequirement) context.snapshot().requirements().getFirst()).consumeChance()).isEqualTo(0.25F);
+        assertThatThrownBy(() -> context.setDuration(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void recipe_contexts_expose_public_requirements_only() {
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("public_requirements"), MMCR.id("behavior_machine"), 20,
+                List.of(new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(32)), List.of());
+
+        MachineRequirement startRequirement = new RecipeStartContext(recipe, 1, 1).requirements().getFirst();
+        MachineRequirement tickRequirement = new RecipeTickContext(recipe, 0, 20, 1).requirements().getFirst();
+
+        assertThat(startRequirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.class);
+        assertThat(tickRequirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.class);
+        assertThat(((cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement) startRequirement).io())
+                .isEqualTo(IOType.INPUT);
+    }
+
+    @Test
+    void compatibility_start_constructor_applies_recipe_duration_modifier() {
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("compatibility_duration"), MMCR.id("compatibility_machine"), 20,
+                List.of(), List.of(), List.of(new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION,
+                        RecipeModifier.IOType.INPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)), 0, 1);
+
+        RecipeStartContext context = new RecipeStartContext(recipe, 1, 1);
+
+        assertThat(context.duration()).isEqualTo(40);
+    }
+
+    @Test
+    void machine_behavior_context_is_due_only_on_period_modulus() {
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("due_machine"), 40L, SCREEN_TEXT);
+
+        assertThat(context.isDue(20)).isTrue();
+        assertThat(new MachineBehaviorContext(null, null, BlockPos.ZERO, MMCR.id("due_machine"),
+                41L, SCREEN_TEXT).isDue(20)).isFalse();
+        assertThatThrownBy(() -> context.isDue(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void machine_behavior_context_returns_null_without_bound_storage() {
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("empty_storage_machine"), 0L, SCREEN_TEXT);
+
+        assertThat(context.dataStorage()).isNull();
+    }
+
+    @Test
+    void machine_behavior_context_exposes_an_immutable_copied_upgrade_snapshot() {
+        ItemStack source = new ItemStack(Items.IRON_INGOT, 3);
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("upgrade_context_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(source));
+
+        source.setCount(1);
+        assertThat(context.upgradeItems()).singleElement().satisfies(stack -> {
+            assertThat(stack).isNotSameAs(source);
+            assertThat(stack.getCount()).isEqualTo(3);
+        });
+        assertThatThrownBy(() -> context.upgradeItems().clear()).isInstanceOf(UnsupportedOperationException.class);
+        context.upgradeItems().getFirst().setCount(1);
+        assertThat(context.upgradeItems()).singleElement().extracting(ItemStack::getCount).isEqualTo(3);
+    }
+
+    @Test
+    void machine_behavior_context_preserves_the_jade_text_handle() {
+        JadeText jadeText = new JadeTextState();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("jade_context_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(), jadeText);
+
+        assertThat(context.jadeText()).isSameAs(jadeText);
+    }
+
+    @Test
+    void tick_behavior_context_preserves_the_base_jade_text_handle() {
+        JadeText jadeText = new JadeTextState();
+        MachineBehaviorContext base = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("jade_tick_context_machine"), 0L, SCREEN_TEXT, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(), jadeText);
+
+        TickBehaviorContext tickContext = new TickBehaviorContext(base, new CapabilitySnapshot(List.of()));
+
+        assertThat(tickContext.jadeText()).isSameAs(jadeText);
+    }
+
+    @Test
+    void default_behavior_is_recipe() {
+        assertThat(RecipeBehavior.defaults().kind()).isEqualTo(MachineBehavior.Kind.RECIPE);
+        assertThat(TickBehavior.defaults().kind()).isEqualTo(MachineBehavior.Kind.TICK);
+    }
+
+    private static MachineRecipe recipe() {
+        return RecipeTestSupport.create(MMCR.id("behavior_recipe"), MMCR.id("behavior_machine"), 20,
+                List.of(), List.of());
+    }
+}

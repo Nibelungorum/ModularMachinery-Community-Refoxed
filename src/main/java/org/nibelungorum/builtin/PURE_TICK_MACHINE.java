@@ -1,17 +1,20 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
-import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
-import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.presentation.ControllerTexts;
+import cn.howxu.mmcr.publicapi.presentation.ControllerTextContext;
+import cn.howxu.mmcr.publicapi.presentation.TextScope;
+import cn.howxu.mmcr.publicapi.behavior.TickContext;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.IoValues;
+import cn.howxu.mmcr.publicapi.recipe.IoDirection;
+import cn.howxu.mmcr.publicapi.recipe.requirement.Requirements;
+import cn.howxu.mmcr.publicapi.runtime.IoTransaction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
@@ -25,9 +28,9 @@ import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -39,31 +42,31 @@ public class PURE_TICK_MACHINE {
     private static final ResourceLocation FE_STATUS = id("fe_status");
     private static final ResourceLocation PURE_TICK_STATUS = id("pure_tick_status");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
-        ControllerScreenTextRegistry.register(PURE_TICK_MACHINE, context -> {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
+        ControllerTexts.register(PURE_TICK_MACHINE, (ControllerTextContext context) -> {
             context.screenText().append(
-                    ControllerScreenTextScope.CONTROLLER,
+                    TextScope.CONTROLLER,
                     FE_STATUS,
                     Component.literal("FE is needed!"));
             context.screenText().append(
-                    ControllerScreenTextScope.CONTROLLER,
+                    TextScope.CONTROLLER,
                     PURE_TICK_STATUS,
                     Component.literal("No Ingot input"));
         });
 
         if (!event.definitions().containsKey(PURE_TICK_MACHINE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(PURE_TICK_MACHINE)
                     .recipePool(PURE_TICK_MACHINE)
                     .displayNameKey("machine.mmcr.pure_tick_machine")
                     .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:green_terracotta")))
                     .allowMultithreading()
                     .maxParallelism(Integer.MAX_VALUE)
-                    .tickBehavior(behavior -> behavior.serverTick(context -> {
+                    .tickBehavior(behavior -> behavior.serverTick((TickContext context) -> {
                         if (!context.isDue(40)) return;
 
-                        var planFe = context.ioPlan();
-                        planFe.addInput(new EnergyRequirement(RecipeIo.INPUT, 10));
+                        IoTransaction planFe = context.ioPlan();
+                        planFe.addInput(Requirements.energy(IoDirection.INPUT, 10));
                         var feSimulation = planFe.simulate();
 
                         if (!feSimulation.energySatisfied()) {
@@ -100,9 +103,9 @@ public class PURE_TICK_MACHINE {
                             }
                         }
 
-                        var plan = context.ioPlan();
-                        plan.addInput(ItemRequirement.input(new ItemInput(Ingredient.of(Items.IRON_INGOT), 1)));
-                        plan.add(ItemRequirement.output(new ItemOutput(
+                        IoTransaction plan = context.ioPlan();
+                        plan.addInput(Requirements.itemInput(IoValues.itemInput(Ingredient.of(Items.IRON_INGOT), 1)));
+                        plan.add(Requirements.itemOutput(IoValues.itemOutput(
                                 new ItemStack(Items.GOLD_NUGGET, 1))));
 
                         var simulation = plan.simulate();
@@ -130,9 +133,9 @@ public class PURE_TICK_MACHINE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(PURE_TICK_MACHINE)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -141,11 +144,11 @@ public class PURE_TICK_MACHINE {
                                     .layer("XXX", "ACA", "XXX")
                                     .where('X', block(Blocks.GREEN_TERRACOTTA))
                                     .where('A', any(
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
-                                            InterfacePredicates.parallelControllers(),
-                                            InterfacePredicates.factoryController(),
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
+                                            BlockConditions.parallelControllers(),
+                                            BlockConditions.factoryController(),
                                             block(Blocks.GREEN_WOOL)
                                     ))
                                     .controller('C')

@@ -2,21 +2,21 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
-import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
-import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -389,12 +389,12 @@ public class ControllerTickGameTest {
                             "Tick callback resolves the formed DataStorage");
                     MachineIoPlan plan = context.ioPlan()
                             .addInput(new ItemRequirement(
-                                    RecipeIo.INPUT,
+                                    IOType.INPUT,
                                     Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
                                     DataComponentPredicateSet.EMPTY, 1F))
                             .addInput(new EnergyRequirement(5))
                             .addOutput(new ItemRequirement(
-                                    RecipeIo.OUTPUT, null, 0,
+                                    IOType.OUTPUT, null, 0,
                                     new ItemStack(Items.GOLD_NUGGET, 3), 1F,
                                     DataComponentPredicateSet.EMPTY, 1F),
                                     OutputPolicy.ALLOW_PARTIAL);

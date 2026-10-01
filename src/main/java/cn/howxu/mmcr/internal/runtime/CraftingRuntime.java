@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -32,14 +34,13 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeFinishContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
+import cn.howxu.mmcr.api.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
@@ -68,6 +69,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 
 /**
@@ -90,7 +92,7 @@ public final class CraftingRuntime {
     private @Nullable List<ActivePrefetch> cachedPerTickPrefetches;
     private List<MachineRequirement> cachedPerTickRequirements = List.of();
     private @Nullable List<MachineRequirement> cachedPublicRequirementSource;
-    private List<RecipeRequirement> cachedPublicRequirements = List.of();
+    private List<MachineRequirement> cachedPublicRequirements = List.of();
     private Set<Integer> consumedAtStart = Set.of();
     private Set<Integer> retainedInputs = Set.of();
     private @Nullable ExecutionStatus failure;
@@ -145,7 +147,7 @@ public final class CraftingRuntime {
             MachineBehaviorContext machineContext = behaviorContext();
             RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                     effectiveParallelism, effectiveRecipe.duration(),
-                    MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
+                    MachineRequirement.copyList(recipeRequirements), outputs);
             try {
                 behavior.beforeStart().accept(startContext);
             } catch (RuntimeException exception) {
@@ -158,10 +160,10 @@ public final class CraftingRuntime {
             effective = startContext.snapshot();
         } else {
             effective = new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
-                    MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
+                    MachineRequirement.copyList(recipeRequirements), outputs);
         }
         List<MachineRequirement> requirements = effective.requirements().stream()
-                .map(MachineRecipeConverter::toRequirement).toList();
+                .map(MachineRequirement::copyOf).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
         PlanningResult result = context(runtime, requestCapabilities).planInputs(startRequirements(requirements, facets), effectiveParallelism,
                 Set.of(), Set.of());
@@ -260,7 +262,7 @@ public final class CraftingRuntime {
         startPlan = prepared.plan();
         finishPlan = null;
         effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements().stream()
-                .map(MachineRecipeConverter::toRequirement).toList());
+                .map(MachineRequirement::copyOf).toList());
         effectiveOutputs = MachineOutput.copyList(prepared.effective().outputs());
         activatePrefetches(prepared.prefetches(), effectiveRequirements, activeRecipe.getParallelism());
         captureInputState(effectiveRequirements, prepared.plan(), !prepared.prefetches().isEmpty());
@@ -325,12 +327,12 @@ public final class CraftingRuntime {
         List<MachineRequirement> requirements = effectiveRecipe.requirements();
         if (!behavior.hasBeforeStart()) {
             return new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
-                    MachineRecipeConverter.toPublicRequirements(requirements), effectiveRecipe.outputs());
+                    MachineRequirement.copyList(requirements), effectiveRecipe.outputs());
         }
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, effectiveRecipe.duration(),
-                MachineRecipeConverter.toPublicRequirements(requirements), effectiveRecipe.outputs());
+                MachineRequirement.copyList(requirements), effectiveRecipe.outputs());
         try {
             behavior.beforeStart().accept(startContext);
         } catch (RuntimeException exception) {
@@ -372,7 +374,7 @@ public final class CraftingRuntime {
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
                 effectiveRecipe.parallelismLimit()));
         List<MachineRequirement> requirements = effective.requirements().stream()
-                .map(MachineRecipeConverter::toRequirement).toList();
+                .map(MachineRequirement::copyOf).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(List.of());
         CraftingContext context = context(runtime);
         PlanningResult result = context.planInputs(startRequirements(requirements, facets), effectiveParallelism,
@@ -399,7 +401,7 @@ public final class CraftingRuntime {
         startPlan = plan;
         finishPlan = null;
         effectiveRequirements = MachineRequirement.copyList(effective.requirements().stream()
-                .map(MachineRecipeConverter::toRequirement).toList());
+                .map(MachineRequirement::copyOf).toList());
         effectiveOutputs = MachineOutput.copyList(effective.outputs());
         activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
         captureInputState(effectiveRequirements, plan, !prefetches.isEmpty());
@@ -422,8 +424,7 @@ public final class CraftingRuntime {
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeTickContext recipeTickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
-                MachineRecipeConverter
-                        .toPublicRequirements(effectiveRequirements()), activeOutputs(),
+                MachineRequirement.copyList(effectiveRequirements()), activeOutputs(),
                 new CapabilitySnapshot(components.capabilities()));
         if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, recipeTickContext)) return status;
         if (behavior.hasRecipeTick()) {
@@ -490,7 +491,7 @@ public final class CraftingRuntime {
         MachineBehaviorContext machineContext = behaviorContext(capabilitySnapshot);
         if (cachedPublicRequirementSource != effectiveRequirements) {
             cachedPublicRequirementSource = effectiveRequirements;
-            cachedPublicRequirements = MachineRecipeConverter.toPublicRequirements(effectiveRequirements);
+            cachedPublicRequirements = MachineRequirement.copyList(effectiveRequirements);
         }
         RecipeTickContext tickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
@@ -896,7 +897,7 @@ public final class CraftingRuntime {
         if (!restored.hasEffectiveExecutionSnapshot()) {
             restored.setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(
                     duration(restored.getRecipe(), runtime),
-                    MachineRecipeConverter.toPublicRequirements(requirements), outputs));
+                    MachineRequirement.copyList(requirements), outputs));
             if (restored.getTotalTick() < 1 || restored.getTick() < 0
                     || restored.getTick() > restored.getTotalTick()
                     || (restored.isFinishPending() && restored.getTick() != restored.getTotalTick() - 1)) {

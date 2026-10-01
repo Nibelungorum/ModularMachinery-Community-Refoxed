@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 

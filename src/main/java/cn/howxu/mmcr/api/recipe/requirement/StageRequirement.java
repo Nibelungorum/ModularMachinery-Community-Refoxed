@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
@@ -31,6 +33,10 @@ public record StageRequirement(RecipeModifier.IOType io, int minStage) implement
 
     public static StageRequirement input(int minStage) {
         return new StageRequirement(RecipeModifier.IOType.INPUT, minStage);
+    }
+
+    public StageRequirement(int minStage) {
+        this(RecipeModifier.IOType.INPUT, minStage);
     }
 
     private static StageRequirement copy(StageRequirement requirement) {

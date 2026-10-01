@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRendersEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerRenderersEvent;
+import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
@@ -161,11 +162,11 @@ public class Client {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void registerMachineRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        MMCRMachineRendersEvent registrations = new MMCRMachineRendersEvent(
+        RegisterControllerRenderersEvent registrations = new RegisterControllerRenderersEvent(
                 ModBlockEntities.controllerMachineIds());
         NeoForge.EVENT_BUS.post(registrations);
-        registrations.freeze();
-        registrations.renderers().forEach((machineId, renderer) -> {
+        ClientRegistrationAdapters.freeze(registrations);
+        ClientRegistrationAdapters.coreRenderers(registrations).forEach((machineId, renderer) -> {
             BlockEntityRendererProvider provider =
                     context -> new MachineControllerRendererDispatcher(machineId, renderer);
             event.registerBlockEntityRenderer(

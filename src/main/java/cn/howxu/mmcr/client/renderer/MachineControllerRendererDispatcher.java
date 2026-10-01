@@ -2,8 +2,8 @@ package cn.howxu.mmcr.client.renderer;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.api.publicapi.render.ControllerRenderContext;
-import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
+import cn.howxu.mmcr.api.render.ControllerRenderContext;
+import cn.howxu.mmcr.api.render.ControllerRenderer;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import com.mojang.blaze3d.vertex.PoseStack;

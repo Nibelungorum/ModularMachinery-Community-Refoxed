@@ -1,7 +1,8 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;

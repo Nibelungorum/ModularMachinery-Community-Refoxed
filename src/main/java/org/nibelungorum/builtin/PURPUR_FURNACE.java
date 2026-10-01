@@ -1,20 +1,27 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.*;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.machine.SmartInterfaces;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
+import cn.howxu.mmcr.publicapi.recipe.modifier.Modifiers;
+import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierOperation;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement.input;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.*;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.recipe.requirement.Requirements.smartInput;
 
 /**
  * @description: TODO
@@ -26,20 +33,20 @@ public class PURPUR_FURNACE {
 
     private static final ResourceLocation PURPUR_FURNACE = id("purpur_furnace");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(PURPUR_FURNACE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(PURPUR_FURNACE)
                     .recipePool(PURPUR_FURNACE)
                     .displayNameKey("machine.mmcr.purpur_furnace")
                     .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("end_stone_bricks")))
                     .maxParallelism(32).parallelizable(true)
-                    .smartInterface(new SmartInterfaceType("mode", 1F, 3F, 1, SmartInterfaceType.ValueType.INTEGER))
-                    .smartInterface(new SmartInterfaceType("conversation", 0F, 1F, 0))
-                    .smartInterfaceModifier(SmartInterfaceModifier.energy("mode", 1F, 2F, 1F, 2F, RecipeModifier.Operation.MULTIPLY))
-                    .smartInterfaceModifier(SmartInterfaceModifier.energy("mode", 2F, 3F, 2F, 4F, RecipeModifier.Operation.MULTIPLY))
-                    .smartInterfaceModifier(SmartInterfaceModifier.duration("conversation", 0F, .5F, 1F, 1.5F, RecipeModifier.Operation.MULTIPLY))
-                    .smartInterfaceModifier(SmartInterfaceModifier.duration("conversation", .5F, 1F, 1.5F, 2.5F, RecipeModifier.Operation.MULTIPLY))
+                    .smartInterface(SmartInterfaces.type("mode", 1F, 3F, 1, SmartInterfaces.ValueType.INTEGER))
+                    .smartInterface(SmartInterfaces.type("conversation", 0F, 1F, 0))
+                    .smartInterfaceModifier(Modifiers.smartEnergy("mode", 1F, 2F, 1F, 2F, ModifierOperation.MULTIPLY))
+                    .smartInterfaceModifier(Modifiers.smartEnergy("mode", 2F, 3F, 2F, 4F, ModifierOperation.MULTIPLY))
+                    .smartInterfaceModifier(Modifiers.smartDuration("conversation", 0F, .5F, 1F, 1.5F, ModifierOperation.MULTIPLY))
+                    .smartInterfaceModifier(Modifiers.smartDuration("conversation", .5F, 1F, 1.5F, 2.5F, ModifierOperation.MULTIPLY))
                     .runningSound(ResourceLocation.parse("minecraft:block.furnace.fire_crackle"))
                     .finishSound(ResourceLocation.parse("minecraft:entity.ender_dragon.growl"))
                     .build();
@@ -48,9 +55,9 @@ public class PURPUR_FURNACE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(PURPUR_FURNACE)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -70,11 +77,11 @@ public class PURPUR_FURNACE {
                                     .where('G', state("minecraft:end_stone_brick_stairs[facing=south,half=bottom,shape=inner_right,waterlogged=false]"))
                                     .where('H', any(
                                             block("minecraft:purpur_pillar"),
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
-                                            InterfacePredicates.parallelControllers(),
-                                            InterfacePredicates.smartInterface() // Allow a smart interface at this position.
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
+                                            BlockConditions.parallelControllers(),
+                                            BlockConditions.smartInterface() // Allow a smart interface at this position.
                                     ))
                                     .where('I', block("minecraft:purple_terracotta"))
                                     .where('J', block("minecraft:purpur_block"))
@@ -105,37 +112,37 @@ public class PURPUR_FURNACE {
 
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(PURPUR_FURNACE.withSuffix("_recipe_1"))
                 .recipePool(PURPUR_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),1)
                 .outputItem(Items.IRON_NUGGET,10)
                 .inputEnergy(20)
-                .smartInterface(input("mode",1))
+                .smartInterface(smartInput("mode",1))
                 .duration(200)
                 .build();
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(PURPUR_FURNACE.withSuffix("_recipe_2"))
                 .recipePool(PURPUR_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),1)
                 .outputItem(Items.GOLD_NUGGET,10)
                 .inputEnergy(20)
-                .smartInterface(input("mode",2))
+                .smartInterface(smartInput("mode",2))
                 .duration(200)
                 .build();
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(PURPUR_FURNACE.withSuffix("_recipe_3"))
                 .recipePool(PURPUR_FURNACE)
                 .inputItem(Ingredient.of(Items.APPLE),1)
                 .outputItem(Items.DIAMOND,2)
                 .inputEnergy(40)
-                .smartInterface(input("mode",3))
-                .smartInterface(input("conversation",0f,0.31f))
+                .smartInterface(smartInput("mode",3))
+                .smartInterface(smartInput("conversation",0f,0.31f))
                 .duration(200)
                 .build();
         event.registerRecipe(recipe);

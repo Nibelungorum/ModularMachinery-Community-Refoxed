@@ -8,10 +8,10 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -166,19 +166,19 @@ public final class DataStorageGameTest {
                             starts.incrementAndGet();
                             context.setDuration(2);
                             context.setRequirements(List.of(
-                                    new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                            RecipeIo.INPUT,
+                                    new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(
+                                            IOType.INPUT,
                                             Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
                                             DataComponentPredicateSet.EMPTY, 1F),
-                                    new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                            RecipeIo.OUTPUT, null, 0,
+                                    new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(
+                                            IOType.OUTPUT, null, 0,
                                             new ItemStack(Items.GOLD_NUGGET, 2), 1F,
                                             DataComponentPredicateSet.EMPTY, 1F)));
                         })
                         .recipeTick(context -> {
                             ticks.incrementAndGet();
                             if (context.totalTick() != 2
-                                    || ((cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement)
+                                    || ((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement)
                                     context.requirements().getFirst()).count() != 2
                                     || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
                                 callbackFailure.compareAndSet(null,

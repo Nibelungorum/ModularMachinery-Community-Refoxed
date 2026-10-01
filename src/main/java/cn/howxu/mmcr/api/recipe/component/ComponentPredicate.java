@@ -1,11 +1,13 @@
 package cn.howxu.mmcr.api.recipe.component;
 
+import cn.howxu.mmcr.api.presentation.ComponentSnapshots;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
+import com.google.gson.JsonElement;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 
@@ -27,6 +29,14 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
 
     static <T> ComponentPredicate exact(Dynamic<T> value) {
         return new Exact(value);
+    }
+
+    static ComponentPredicate exact(JsonElement value) {
+        return exact(new Dynamic<>(JsonOps.INSTANCE, value.deepCopy()));
+    }
+
+    default boolean isExact() {
+        return this instanceof Exact;
     }
 
     static ComponentPredicate map(Map<String, ComponentPredicate> values) {
@@ -128,6 +138,20 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
     }
 
     record Exact(Dynamic<?> value) implements ComponentPredicate {
+        public Exact {
+            value = copy(value);
+        }
+
+        @Override
+        public Dynamic<?> value() {
+            return copy(value);
+        }
+
+        private static <T> Dynamic<T> copy(Dynamic<T> value) {
+            return new Dynamic<>(JsonOps.INSTANCE, value.convert(JsonOps.INSTANCE).getValue().deepCopy())
+                    .convert(value.getOps());
+        }
+
         @Override
         public boolean matches(Dynamic<?> candidate) {
             return candidate.convert(JsonOps.INSTANCE).getValue().equals(value.convert(JsonOps.INSTANCE).getValue());
@@ -179,6 +203,15 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
     }
 
     record TextValue(Component value, TextMode mode) implements ComponentPredicate {
+        public TextValue {
+            value = ComponentSnapshots.copy(value);
+        }
+
+        @Override
+        public Component value() {
+            return ComponentSnapshots.copy(value);
+        }
+
         @Override
         public boolean matches(Dynamic<?> candidate) {
             var component = ComponentSerialization.CODEC.parse(candidate).result();

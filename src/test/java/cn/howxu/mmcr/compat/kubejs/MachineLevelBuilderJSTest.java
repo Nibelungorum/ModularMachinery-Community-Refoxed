@@ -2,8 +2,8 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Set;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -27,8 +27,8 @@ class MachineLevelBuilderJSTest {
 
     @BeforeEach
     void beginRegistration() {
-        MMCRMachineStructuresEvent.resetCollector();
-        MMCRMachineStructuresEvent.prepare(Set.of());
+        StructureRegistration.resetCollector();
+        StructureRegistration.prepare(Set.of());
     }
 
     @Test
@@ -44,7 +44,7 @@ class MachineLevelBuilderJSTest {
                         MachineModifier.numeric("parallelism", "machine", 2D, "add", false))))
                 .registerObject();
 
-        var event = MMCRMachineStructuresEvent.current();
+        var event = StructureRegistration.current();
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
         var level = MachineLevelRegistry.getLevel(ResourceLocation.parse("test:copper_coil"));
         assertThat(level.typeId()).isEqualTo(ResourceLocation.parse("test:coil"));
@@ -61,7 +61,7 @@ class MachineLevelBuilderJSTest {
                 .displayNameKey("level.test.coil")
                 .registerObject();
 
-        var displayName = MMCRMachineStructuresEvent.current().levelTypes()
+        var displayName = StructureRegistration.current().levelTypes()
                 .get(ResourceLocation.parse("test:coil"))
                 .displayName();
 

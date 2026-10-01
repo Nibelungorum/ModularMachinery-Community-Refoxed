@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;

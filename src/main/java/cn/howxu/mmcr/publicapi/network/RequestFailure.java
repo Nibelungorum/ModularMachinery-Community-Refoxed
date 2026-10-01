@@ -1,0 +1,8 @@
+package cn.howxu.mmcr.publicapi.network;
+
+/** Delivery failure classifications. @author howxu <dev@howxu.cn> */
+public enum RequestFailure {
+    SOURCE_INTERFACE_MISSING, TARGET_INTERFACE_MISSING, TARGET_CHUNK_UNLOADED, CONNECTION_MISSING,
+    SOURCE_STRUCTURE_INVALID, TARGET_STRUCTURE_INVALID, HASH_MISMATCH, ALLOWLIST_REJECTED,
+    TARGET_HANDLER_MISSING, UNREACHABLE
+}

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.helper.CraftCheck;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;

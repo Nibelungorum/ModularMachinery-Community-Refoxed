@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
+import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
@@ -274,7 +274,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
-    public BlockPredicate anyOfPort(cn.howxu.mmcr.api.publicapi.machine.BlockPredicate... predicates) {
+    public BlockPredicate anyOfPort(cn.howxu.mmcr.api.machine.definition.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);
     }
     public BlockPredicate factoryController() { return anyOfPort("factory_controller"); }
@@ -324,7 +324,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     }
 
     static BlockPredicate toInternalBlockPredicate(
-            cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+            cn.howxu.mmcr.api.machine.definition.BlockPredicate predicate) {
         Objects.requireNonNull(predicate, "replacement");
         if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();
         if (predicate.blockState().isPresent()) {

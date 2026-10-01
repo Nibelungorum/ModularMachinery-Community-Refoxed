@@ -56,11 +56,18 @@ public final class MultiblockExportService {
     public static String renderJava(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
         PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
         String lineSeparator = System.lineSeparator();
-        StringBuilder out = new StringBuilder("public class ExportedStructure {").append(lineSeparator)
+        StringBuilder out = new StringBuilder("import cn.howxu.mmcr.publicapi.Structures;").append(lineSeparator)
+                .append("import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;").append(lineSeparator)
+                .append("import cn.howxu.mmcr.publicapi.structure.BlockConditions;").append(lineSeparator)
+                .append("import net.minecraft.core.registries.BuiltInRegistries;").append(lineSeparator)
+                .append("import net.minecraft.resources.ResourceLocation;").append(lineSeparator)
+                .append("import net.minecraft.world.level.block.state.properties.Property;").append(lineSeparator)
                 .append(lineSeparator)
-                .append("    public static void register(MMCRMachineStructuresEvent event) {").append(lineSeparator)
+                .append("public class ExportedStructure {").append(lineSeparator)
+                .append(lineSeparator)
+                .append("    public static void register(RegisterMachineStructuresEvent event) {").append(lineSeparator)
                 .append("        var id = ResourceLocation.parse(\"mmcr:exported_structure\");").append(lineSeparator)
-                .append("        var structure = MachineStructureBuilder").append(lineSeparator)
+                .append("        var structure = Structures").append(lineSeparator)
                 .append("                .structure()").append(lineSeparator)
                 .append("                .fullStructure(s -> s").append(lineSeparator)
                 .append("                        .pattern(p -> p").append(lineSeparator);
@@ -74,7 +81,7 @@ public final class MultiblockExportService {
                 .append("                        )").append(lineSeparator)
                 .append("                )").append(lineSeparator)
                 .append("                .build(id);").append(lineSeparator)
-                .append("        event.registerStructure(structure);").append(lineSeparator)
+                .append("        event.registrar().registerStructure(structure);").append(lineSeparator)
                 .append("    }").append(lineSeparator)
                 .append("}").append(lineSeparator)
                 .toString();
@@ -250,7 +257,7 @@ public final class MultiblockExportService {
 
     private static String predicateExpression(PredicateKey key) {
         String block = "BuiltInRegistries.BLOCK.get(ResourceLocation.parse(\"" + escapeJava(key.blockId().toString()) + "\"))";
-        if (key.state() == null) return "new BlockPredicate.OfBlock(" + block + ")";
+        if (key.state() == null) return "BlockConditions.block(" + block + ")";
         String expression = block + ".defaultBlockState()";
         for (Property<?> property : key.state().getProperties().stream().sorted(Comparator.comparing(Property::getName)).toList()) {
             String propertyExpression = javaPropertyExpression(block, property);
@@ -258,7 +265,7 @@ public final class MultiblockExportService {
                     + propertyExpression + ".getValue(\""
                     + escapeJava(propertyValueName(property, key.state().getValue(property))) + "\").orElseThrow())";
         }
-        return "new BlockPredicate.OfBlockState(" + expression + ")";
+        return "BlockConditions.blockState(" + expression + ")";
     }
 
     private static String javaPropertyExpression(String block, Property<?> property) {

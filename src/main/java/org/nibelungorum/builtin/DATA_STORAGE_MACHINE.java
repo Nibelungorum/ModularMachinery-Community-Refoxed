@@ -1,18 +1,21 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.data.DataStorage;
-import cn.howxu.mmcr.api.publicapi.data.DataValue;
-import cn.howxu.mmcr.api.publicapi.ReadableNumber;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.data.DataKey;
+import cn.howxu.mmcr.publicapi.data.DataStore;
+import cn.howxu.mmcr.publicapi.ReadableNumber;
+import cn.howxu.mmcr.publicapi.presentation.TextScope;
+import cn.howxu.mmcr.publicapi.behavior.TickContext;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.runtime.OutputMode;
+import cn.howxu.mmcr.publicapi.runtime.IoTransaction;
+import cn.howxu.mmcr.publicapi.recipe.IoDirection;
+import cn.howxu.mmcr.publicapi.recipe.requirement.Requirements;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
@@ -21,9 +24,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.math.BigInteger;
 
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -34,15 +37,15 @@ public class DATA_STORAGE_MACHINE {
     private static final ResourceLocation DATA_STORAGE_MACHINE = id("data_storage_machine");
     private static final ResourceLocation FE_STATUS = id("fe_storage_status");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(DATA_STORAGE_MACHINE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(DATA_STORAGE_MACHINE)
                     .recipePool(DATA_STORAGE_MACHINE)
                     .displayNameKey("machine.mmcr.data_storage_machine")
                     .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:crying_obsidian")))
-                    .tickBehavior(behavior -> behavior.serverTick(context -> {
-                        DataStorage storage = context.dataStorage();
+                    .tickBehavior(behavior -> behavior.serverTick((TickContext context) -> {
+                        DataStore storage = context.dataStorage();
                         if (storage == null) return;
 
                         BigInteger stored = BigInteger.ZERO;
@@ -59,8 +62,8 @@ public class DATA_STORAGE_MACHINE {
                             while (low < high) {
                                 int candidate = low + (int) Math.ceil((high - low) / 2.0);
 
-                                var probe = context.ioPlan();
-                                probe.addInput(new EnergyRequirement(RecipeIo.INPUT, candidate));
+                                IoTransaction probe = context.ioPlan();
+                                probe.addInput(Requirements.energy(IoDirection.INPUT, candidate));
 
                                 if (probe.simulate().energySatisfied()) {
                                     low = candidate;
@@ -70,14 +73,14 @@ public class DATA_STORAGE_MACHINE {
                             }
 
                             if (low > 0) {
-                                var inputPlan = context.ioPlan();
-                                inputPlan.addInput(new EnergyRequirement(RecipeIo.INPUT, low));
+                                IoTransaction inputPlan = context.ioPlan();
+                                inputPlan.addInput(Requirements.energy(IoDirection.INPUT, low));
 
                                 BigInteger next = stored.add(BigInteger.valueOf(low));
                                 var inputSimulation = inputPlan.simulate();
 
-                                if (inputSimulation.energySatisfied() && inputPlan.commit().successful()) {
-                                    storage.set("energy", DataValue.of(next));
+                                if (inputSimulation.energySatisfied() && inputPlan.commitData(transaction ->
+                                        storage.set("energy", DataKey.of(next), transaction)).successful()) {
                                     stored = next;
                                 }
                             }
@@ -92,10 +95,10 @@ public class DATA_STORAGE_MACHINE {
                                 int requested = requestedBig.intValue();
 
                                 if (requested > 0) {
-                                    var outputPlan = context.ioPlan();
+                                    IoTransaction outputPlan = context.ioPlan();
                                     outputPlan.addOutput(
-                                            new EnergyRequirement(RecipeIo.OUTPUT, requested),
-                                            OutputPolicy.ALLOW_PARTIAL);
+                                            Requirements.energy(IoDirection.OUTPUT, requested),
+                                            OutputMode.ALLOW_PARTIAL);
 
                                     var simulation = outputPlan.simulate();
                                     var outputs = simulation.outputs();
@@ -106,9 +109,9 @@ public class DATA_STORAGE_MACHINE {
                                         if (accepted > 0) {
                                             BigInteger finalStored = stored.subtract(BigInteger.valueOf(accepted));
 
-                                        if (outputPlan.commit().successful()) {
-                                            storage.set("energy", DataValue.of(finalStored));
-                                            stored = finalStored;
+                                        if (outputPlan.commitData(transaction ->
+                                                storage.set("energy", DataKey.of(finalStored), transaction)).successful()) {
+                                                stored = finalStored;
                                             }
                                         }
                                     }
@@ -118,13 +121,13 @@ public class DATA_STORAGE_MACHINE {
 
                         if (stored.signum() == 0) {
                             context.screenText().append(
-                                    ControllerScreenTextScope.OPERATION,
+                                    TextScope.OPERATION,
                                     FE_STATUS,
                                     Component.literal("No FE stored."));
                             return;
                         }
                         context.screenText().append(
-                                ControllerScreenTextScope.OPERATION,
+                                TextScope.OPERATION,
                                 FE_STATUS,
                                 Component.literal("FE stored: " + ReadableNumber.formatCompact(stored)));
                     }))
@@ -134,9 +137,9 @@ public class DATA_STORAGE_MACHINE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(DATA_STORAGE_MACHINE)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -152,10 +155,10 @@ public class DATA_STORAGE_MACHINE {
                                     .where('X', block(Blocks.REDSTONE_BLOCK))
                                     .where('A', block(Blocks.CRYING_OBSIDIAN))
                                     .where('B', any(
-                                            InterfacePredicates.anyOfEnergyInput(),
-                                            InterfacePredicates.anyOfEnergyOutput()
+                                            BlockConditions.energyInput(),
+                                            BlockConditions.energyOutput()
                                     ))
-                                    .where('D', InterfacePredicates.dataStorage())
+                                    .where('D', BlockConditions.dataStorage())
                                     .controller('C')
                             )
                     )

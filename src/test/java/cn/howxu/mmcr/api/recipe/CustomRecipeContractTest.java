@@ -1,14 +1,16 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
-import cn.howxu.mmcr.api.publicapi.RecipeApi;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
+import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
@@ -17,6 +19,10 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
+import cn.howxu.mmcr.compat.kubejs.MachineRecipeBuilderJS;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.ScriptableObject;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
@@ -33,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Contract tests for requirement and output registry dispatch used by custom recipes.
@@ -64,7 +71,7 @@ class CustomRecipeContractTest {
 
         assertThat(RequirementHandlerRegistry.handlerFor(input.type())).isNotNull();
         assertThat(input.io()).isEqualTo(RecipeModifier.IOType.INPUT);
-        assertThat(RecipeIo.INPUT.isInput()).isTrue();
+        assertThat(IOType.INPUT.isInput()).isTrue();
     }
 
     @Test
@@ -79,8 +86,8 @@ class CustomRecipeContractTest {
             JsonElement inputPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
             JsonElement outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
 
-            CustomRecipeIo customInput = RecipeApi.custom(TEST_REQUIREMENT_TYPE.id(), RecipeIo.INPUT, inputPayload);
-            CustomRecipeIo customOutput = RecipeApi.custom(TEST_OUTPUT_TYPE.id(), RecipeIo.OUTPUT, outputPayload);
+            CustomRecipeIo customInput = RecipeIoValidation.custom(TEST_REQUIREMENT_TYPE.id(), IOType.INPUT, inputPayload);
+            CustomRecipeIo customOutput = RecipeIoValidation.custom(TEST_OUTPUT_TYPE.id(), IOType.OUTPUT, outputPayload);
             MachineRequirement decodedInput = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                     customInput.payload()).getOrThrow();
             MachineOutput decodedOutput = MachineOutput.CODEC.parse(JsonOps.INSTANCE,
@@ -97,10 +104,36 @@ class CustomRecipeContractTest {
                     .custom(customOutput)
                     .build();
             var recipe = MachineRecipeConverter.toRecipe(definition,
-                    new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
 
             assertThat(recipe.requirements()).containsExactly(input);
             assertThat(recipe.machineOutputs()).containsExactly(output);
+
+            var builder = new MachineRecipeBuilderJS("mmcr:custom_contract_rhino");
+            builder.recipePoolId = id("machine");
+            var context = new ContextFactory().enter();
+            var scope = context.initStandardObjects();
+            ScriptableObject.putProperty(scope, "api", new KubeJSApi(), context);
+            ScriptableObject.putProperty(scope, "builder", builder, context);
+            ScriptableObject.putProperty(scope, "input", IOType.INPUT, context);
+            ScriptableObject.putProperty(scope, "output", IOType.OUTPUT, context);
+            ScriptableObject.putProperty(scope, "inputPayload", inputPayload, context);
+            ScriptableObject.putProperty(scope, "outputPayload", outputPayload, context);
+            context.evaluateString(scope, """
+                    builder.addRequirement(api.customRecipeIo('mmcr:custom_contract_requirement', input, inputPayload));
+                    builder.addRequirement(api.customRecipeIo('mmcr:custom_contract_output', output, outputPayload));
+                    """, "registered-custom-helper", 1, null);
+            assertThat(builder.createObject().requirements()).containsExactly(input);
+            assertThat(builder.createObject().machineOutputs()).containsExactly(output);
+            var plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
+            ScriptableObject.putProperty(scope, "plan", plan, context);
+            assertThatThrownBy(() -> context.evaluateString(scope,
+                    "plan.addOutput(api.customRecipeIo('mmcr:custom_contract_output', output, outputPayload))",
+                    "unsupported-tick-output", 1, null)).hasMessageContaining("does not support execution requirements");
+            assertThatThrownBy(() -> plan.add(customOutput))
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("does not support execution requirements");
+            assertThat(plan.requirements()).isEmpty();
+            assertThat(definition.customOutputs()).containsExactly(customOutput);
         }
     }
 

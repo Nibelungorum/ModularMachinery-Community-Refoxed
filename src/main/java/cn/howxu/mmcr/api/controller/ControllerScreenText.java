@@ -1,0 +1,37 @@
+package cn.howxu.mmcr.api.controller;
+
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+
+/**
+ * Public handle for updating controller screen text.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public interface ControllerScreenText {
+    void append(ControllerScreenTextScope scope, ResourceLocation lineId, Component text);
+
+    /**
+     * Replaces an existing line after the current append operations have completed.
+     *
+     * <p>The default implementation does nothing because a custom implementation may not
+     * have enough information to resolve a scope-free line ID.</p>
+     */
+    default void replace(ResourceLocation lineId, Component text) {
+    }
+
+    /**
+     * Appends or updates a line immediately after another line in the same scope.
+     * If the target line does not exist, the operation is ignored.
+     *
+     * <p>The default implementation appends normally for compatibility with existing custom implementations.
+     * Implementations that support relative ordering should override this method.</p>
+     */
+    default void appendAfter(ControllerScreenTextScope scope, ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
+        append(scope, lineId, text);
+    }
+
+    void remove(ControllerScreenTextScope scope, ResourceLocation lineId);
+
+    void clear(ControllerScreenTextScope scope);
+}

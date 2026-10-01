@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.config.ServerConfig;

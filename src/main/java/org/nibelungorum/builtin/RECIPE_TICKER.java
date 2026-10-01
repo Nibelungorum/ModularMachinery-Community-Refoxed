@@ -1,14 +1,22 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.presentation.ControllerTexts;
+import cn.howxu.mmcr.publicapi.presentation.ControllerTextContext;
+import cn.howxu.mmcr.publicapi.presentation.TextScope;
+import cn.howxu.mmcr.publicapi.behavior.MachineContext;
+import cn.howxu.mmcr.publicapi.behavior.RecipeStartContext;
+import cn.howxu.mmcr.publicapi.behavior.RecipeTickContext;
+import cn.howxu.mmcr.publicapi.behavior.RecipeFinishContext;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -21,9 +29,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -39,49 +47,49 @@ public class RECIPE_TICKER {
     private static final ResourceLocation DISPLAY_WHEN_IDLE_EMPTY_LINE = id("display_when_idle_empty_line");
     private static final ResourceLocation DISPLAY_WHEN_START_RECIPE = id("display_when_start_recipe");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
-        ControllerScreenTextRegistry.register(RECIPE_TICKER, context -> {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
+        ControllerTexts.register(RECIPE_TICKER, (ControllerTextContext context) -> {
             context.screenText().append(
-                    ControllerScreenTextScope.CONTROLLER,
+                    TextScope.CONTROLLER,
                     BEFORE_LINE,
                     Component.translatable("gui.mmcr.before_line"));
             context.screenText().appendAfter(
-                    ControllerScreenTextScope.CONTROLLER,
+                    TextScope.CONTROLLER,
                     IN_LINE,
                     id("sp_line_1"),
                     Component.translatable("gui.mmcr.in_line"));
             context.screenText().append(
-                    ControllerScreenTextScope.CONTROLLER,
+                    TextScope.CONTROLLER,
                     AFTER_LINE,
                     Component.translatable("gui.mmcr.after_line"));
         });
 
         if (!event.definitions().containsKey(RECIPE_TICKER)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(RECIPE_TICKER)
                     .recipePool(RECIPE_TICKER)
                     .displayNameKey("machine.mmcr.recipe_ticker")
                     .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:green_terracotta")))
                     .recipeBehavior(behavior -> behavior
-                            .idleStart(ctx -> {
+                            .idleStart((MachineContext ctx) -> {
                                 var screen = ctx.screenText();
                                 screen.append(
-                                        ControllerScreenTextScope.OPERATION,
+                                        TextScope.OPERATION,
                                         DISPLAY_WHEN_IDLE_EMPTY_LINE,
                                         Component.literal(" "));
                                 screen.append(
-                                        ControllerScreenTextScope.OPERATION,
+                                        TextScope.OPERATION,
                                         DISPLAY_WHEN_IDLE,
                                         Component.translatable("gui.mmcr.display_when_idle"));
                             })
                             .idleEnd(ctx -> {
                             })
-                            .beforeStart(ctx -> {
+                            .beforeStart((RecipeStartContext ctx) -> {
                                 var screen = ctx.machineContext().screenText();
-                                screen.remove(ControllerScreenTextScope.OPERATION, DISPLAY_WHEN_IDLE_EMPTY_LINE);
-                                screen.remove(ControllerScreenTextScope.OPERATION, DISPLAY_WHEN_IDLE);
+                                screen.remove(TextScope.OPERATION, DISPLAY_WHEN_IDLE_EMPTY_LINE);
+                                screen.remove(TextScope.OPERATION, DISPLAY_WHEN_IDLE);
 
-                                var machineContext = ctx.machineContext();
+                                MachineContext machineContext = ctx.machineContext();
                                 var level = machineContext.level();
                                 var controllerPos = machineContext.controllerPos();
                                 var area = new AABB(
@@ -99,16 +107,16 @@ public class RECIPE_TICKER {
 
                                 ctx.replaceExactItemInputCount(Items.GOLD_INGOT, 32, 1);
                             })
-                            .recipeTick(ctx -> {
+                            .recipeTick((RecipeTickContext ctx) -> {
                                 var screen = ctx.machineContext().screenText();
                                 screen.appendAfter(
-                                        ControllerScreenTextScope.OPERATION,
+                                        TextScope.OPERATION,
                                         DISPLAY_WHEN_START_RECIPE,
                                         id("in_line"),
                                         Component.literal("正在使用雷霆大猪咪暴力执行配方"));
                             })
-                            .beforeFinish(ctx -> {
-                                var machineContext = ctx.machineContext();
+                            .beforeFinish((RecipeFinishContext ctx) -> {
+                                MachineContext machineContext = ctx.machineContext();
                                 var level = machineContext.level();
                                 var controllerPos = machineContext.controllerPos();
                                 var area = new AABB(
@@ -131,9 +139,9 @@ public class RECIPE_TICKER {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(RECIPE_TICKER)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -142,10 +150,10 @@ public class RECIPE_TICKER {
                                     .layer("XXX", "ACA", "XXX")
                                     .where('X', block(Blocks.GREEN_TERRACOTTA))
                                     .where('A', any(
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
-                                            InterfacePredicates.parallelControllers(),
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
+                                            BlockConditions.parallelControllers(),
                                             block(Blocks.GREEN_WOOL)
                                     ))
                                     .controller('C')
@@ -157,8 +165,8 @@ public class RECIPE_TICKER {
     }
 
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(RECIPE_TICKER.withSuffix("_recipe_1"))
                 .recipePool(RECIPE_TICKER)
                 .inputItem(Items.COAL, 10000)
@@ -169,7 +177,7 @@ public class RECIPE_TICKER {
                 .build();
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(RECIPE_TICKER.withSuffix("_recipe_2"))
                 .recipePool(RECIPE_TICKER)
                 .inputItem(Items.DIAMOND, 114514)
@@ -180,7 +188,7 @@ public class RECIPE_TICKER {
                 .build();
         event.registerRecipe(recipe);
 
-        recipe = MachineRecipeBuilder
+        recipe = Recipes
                 .recipe(RECIPE_TICKER.withSuffix("_recipe_3"))
                 .recipePool(RECIPE_TICKER)
                 .inputItem(Items.GOLD_INGOT, 32)

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine;
 
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
+import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 
 import java.util.ArrayList;
@@ -268,7 +268,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         }
 
         private static BlockPredicate toBlockPredicate(
-                cn.howxu.mmcr.api.publicapi.machine.BlockPredicate predicate) {
+                cn.howxu.mmcr.api.machine.definition.BlockPredicate predicate) {
             if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();
             if (predicate.blockState().isPresent()) {
                 return new BlockPredicate.OfBlockState(predicate.blockState().get());

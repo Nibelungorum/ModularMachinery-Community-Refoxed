@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.client;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation;
+import cn.howxu.mmcr.api.recipe.RecipeInformation;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /**
@@ -18,6 +19,11 @@ import java.util.function.UnaryOperator;
  */
 public interface RequirementType<R extends MachineRequirement> {
     ResourceLocation id();
+
+    /** Capability families eligible for this type; direction and tags are matched by the core planner. */
+    default Set<ResourceLocation> capabilityIds() {
+        return Set.of(id());
+    }
 
     MapCodec<R> codec();
 

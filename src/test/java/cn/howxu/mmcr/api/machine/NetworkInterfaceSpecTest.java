@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
+import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

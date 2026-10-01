@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -162,12 +161,12 @@ public final class RequirementPlanner {
                 .toList();
     }
 
-    private static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
+    public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
                                                                   List<MachineCapability> capabilities) {
-        CapabilityType type = new CapabilityType(requirement.type().id());
+        var capabilityIds = requirement.type().capabilityIds();
         IOType direction = IOType.valueOf(requirement.io().name());
         return capabilities.stream()
-                .filter(capability -> type.equals(capability.view().type())
+                .filter(capability -> capabilityIds.contains(capability.view().type().id())
                         || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
                         && MekanismPortFamilies.HEAT.equals(capability.view().type().id()))
                 .filter(capability -> capability.view().directions().supports(direction))

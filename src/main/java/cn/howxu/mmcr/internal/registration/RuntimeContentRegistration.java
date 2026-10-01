@@ -1,9 +1,12 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 
 import java.util.function.Consumer;
 
@@ -30,15 +33,15 @@ public final class RuntimeContentRegistration {
 
     /** Pure test startup facade; production runtime callers should use {@link #registerBuiltins()}. */
     public static void registerTestStartupContent() {
-        StartupContentRegistration.registerForTesting(RuntimeContentRegistration::registerDefinitions,
+        StartupContentRegistration.registerPublicForTesting(RuntimeContentRegistration::registerDefinitions,
                 RuntimeContentRegistration::registerStructures, RuntimeContentRegistration::registerRecipesSource);
     }
 
     /** Pure test startup facade with explicit declaration sources. */
     public static void registerTestStartupContent(
-            Consumer<MMCRMachineDefinationsEvent> definitionsSource,
-            Consumer<MMCRMachineStructuresEvent> structuresSource,
-            Consumer<MMCRMachineRecipesEvent> recipesSource) {
+            Consumer<MachineDefinitionRegistration> definitionsSource,
+            Consumer<StructureRegistration> structuresSource,
+            Consumer<MachineRecipeRegistration> recipesSource) {
         StartupContentRegistration.registerForTesting(definitionsSource, structuresSource, recipesSource);
     }
 
@@ -49,15 +52,15 @@ public final class RuntimeContentRegistration {
         }
     }
 
-    private static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    private static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         GameTestRegistration.registerStartupSources(event, null, null);
     }
 
-    private static void registerStructures(MMCRMachineStructuresEvent event) {
+    private static void registerStructures(RegisterMachineStructuresEvent event) {
         GameTestRegistration.registerStartupSources(null, event, null);
     }
 
-    private static void registerRecipesSource(MMCRMachineRecipesEvent event) {
+    private static void registerRecipesSource(RegisterMachineRecipesEvent event) {
         GameTestRegistration.registerStartupSources(null, null, event);
     }
 }

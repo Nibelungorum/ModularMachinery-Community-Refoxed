@@ -1,13 +1,16 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.PortTierLimits;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -16,9 +19,9 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
 
 /**
  * @description: TODO
@@ -29,9 +32,9 @@ import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
 public class CRACKER {
     private static final ResourceLocation CRACKER = id("cracker");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(CRACKER)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(CRACKER)
                     .recipePool(CRACKER)
                     .displayNameKey("machine.mmcr.cracker")
@@ -46,9 +49,9 @@ public class CRACKER {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(CRACKER)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -59,10 +62,10 @@ public class CRACKER {
                                     .where('X', block(Blocks.POLISHED_DIORITE))
                                     .where('A', block(Blocks.POLISHED_ANDESITE))
                                     .where('B', any(
-                                            InterfacePredicates.anyItemInput(),
-                                            InterfacePredicates.anyItemOutput(),
-                                            InterfacePredicates.anyFluidOutput(),
-                                            InterfacePredicates.anyEnergyInput(),
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.fluidOutput(),
+                                            BlockConditions.energyInput(),
                                             block(Blocks.BONE_BLOCK)
                                     ))
                                     .where('D', block(Blocks.BLUE_ICE))
@@ -70,8 +73,8 @@ public class CRACKER {
                                     .controller('C')
                             )
                             .portTiers(t -> t
-                                    .minEnergyInput(PortTiers.EnergyTier.NORMAL)
-                                    .minItemInput(PortTiers.ItemTier.NORMAL)
+                                    .minEnergyInput(PortTierLimits.EnergyTier.NORMAL)
+                                    .minItemInput(PortTierLimits.ItemTier.NORMAL)
                                     .anyItemOutput()
                             )
                     )
@@ -82,8 +85,8 @@ public class CRACKER {
 
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(CRACKER.withSuffix("_recipe_1"))
                 .recipePool(CRACKER)
                 .inputItem(Ingredient.of(Items.LAPIS_LAZULI),8)

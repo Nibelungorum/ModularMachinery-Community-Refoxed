@@ -6,15 +6,14 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -60,7 +59,7 @@ public class UpgradeBusGameTest {
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         helper.assertTrue(registeredMachine != null, "Upgrade Bus test machine is registered");
         AtomicReference<List<ItemStack>> observedUpgradeItems = new AtomicReference<>();
-        AtomicReference<List<RecipeRequirement>> observedRequirements = new AtomicReference<>();
+        AtomicReference<List<MachineRequirement>> observedRequirements = new AtomicReference<>();
         Machine machine = new DynamicMachine(registeredMachine.registryName(), registeredMachine.displayNameKey(),
                 registeredMachine.pattern(), registeredMachine.controller(), registeredMachine.appearance(),
                 registeredMachine.portRequirements(), registeredMachine.portTierRequirements(),
@@ -131,7 +130,7 @@ public class UpgradeBusGameTest {
                                 "Recipe start callback receives both Upgrade Bus items");
                         helper.assertTrue(observedRequirements.get() != null
                                         && observedRequirements.get().stream()
-                                        .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item
+                                        .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement item
                                                 && item.count() == 1),
                                 "Duration modifiers do not alter recipe input quantities: "
                                         + observedRequirements.get());

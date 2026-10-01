@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelType;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -39,7 +39,7 @@ public class LevelTypeBuilderJS extends BuilderBase<LevelType> {
     }
 
     public void registerObject() {
-        MMCRMachineStructuresEvent.current().registerLevelType(createObject());
+        StructureRegistration.current().registerLevelType(createObject());
     }
 
     public LevelTypeBuilderJS register() {

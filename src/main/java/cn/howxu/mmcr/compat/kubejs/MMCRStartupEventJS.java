@@ -2,10 +2,10 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.jei.JeiWorkstationRegistration;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextRegistry;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -55,12 +55,12 @@ public final class MMCRStartupEventJS implements KubeEvent {
 
     public void registerModifier(String id, ModifierDefinition definition) {
         ResourceLocation modifierId = ControllerScreenTextEventJS.parseResourceLocation(id, "modifierId");
-        MMCRMachineStructuresEvent.current().registerModifier(modifierId, definition);
+        StructureRegistration.current().registerModifier(modifierId, definition);
     }
 
     public void registerModifierItem(ItemStack stack, String modifierId) {
         ResourceLocation parsedModifierId = ControllerScreenTextEventJS.parseResourceLocation(modifierId, "modifierId");
-        MMCRMachineStructuresEvent.current().registerModifierItem(stack, parsedModifierId);
+        StructureRegistration.current().registerModifierItem(stack, parsedModifierId);
     }
 
     public void addRecipePoolWorkstation(String recipePoolId, String itemId) {

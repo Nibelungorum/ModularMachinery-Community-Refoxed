@@ -1,11 +1,11 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import java.lang.reflect.Method;
@@ -48,7 +48,7 @@ class BlockPredicateTest {
 
     @AfterEach
     void clearMachineLevels() {
-        MMCRMachineStructuresEvent.resetCollector();
+        StructureRegistration.resetCollector();
         MachineLevelRegistry.installSnapshot(List.of(), List.of());
     }
 

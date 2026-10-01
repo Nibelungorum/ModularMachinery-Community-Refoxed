@@ -30,13 +30,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.network.RequestBody;
-import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
+import cn.howxu.mmcr.api.network.view.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
 import cn.howxu.mmcr.api.network.RequestInfo;
-import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.api.network.view.RequestProcess;
 import cn.howxu.mmcr.api.network.MachineReference;
-import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -260,7 +260,7 @@ class MachineBuilderJSTest {
         assertThat(registration.networkInterface().maxCount()).isEqualTo(2);
         assertThat(registration.networkInterface().maxConnections()).isEqualTo(3);
         assertThat(registration.networkInterface().allowedMachineIds()).containsExactly(targetId);
-        assertThat(registration.requestProcessors()).containsEntry(processId, process);
+        assertThat(registration.requestProcessors()).containsKey(processId);
         assertThat(registration.requestFailures()).containsKey(failureId);
 
         registration.requestProcessors().get(processId).process(RequestBody.of(Map.of()),

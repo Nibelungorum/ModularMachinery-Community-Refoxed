@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;

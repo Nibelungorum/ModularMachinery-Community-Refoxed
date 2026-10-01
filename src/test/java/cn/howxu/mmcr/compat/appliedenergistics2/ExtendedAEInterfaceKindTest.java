@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;

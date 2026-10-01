@@ -1,12 +1,15 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
@@ -14,9 +17,9 @@ import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
 
 /**
  * @description: TODO
@@ -28,9 +31,9 @@ public class DISTILLATION_TOWER {
 
     private static final ResourceLocation DISTILLATION_TOWER = id("distillation_tower");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(DISTILLATION_TOWER)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(DISTILLATION_TOWER)
                     .recipePool(DISTILLATION_TOWER)
                     .displayNameKey("machine.mmcr.distillation_tower")
@@ -43,9 +46,9 @@ public class DISTILLATION_TOWER {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
         if (!event.structures().containsKey(DISTILLATION_TOWER)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -57,9 +60,9 @@ public class DISTILLATION_TOWER {
                                     .layer(" XXXXX ", " B   B ", "  BBB  ", "       ")
                                     .layer("  XXX  ", "  BEB  ", "       ", "       ")
                                     .where('C', any(
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
                                             block("minecraft:deepslate_bricks")
                                     ))
                                     .where('X', block("minecraft:polished_blackstone"))
@@ -79,9 +82,9 @@ public class DISTILLATION_TOWER {
                                     .layer(" XXXXX ", " B   B ", "  BBB  ", "  BBB  ", "       ")
                                     .layer("  XXX  ", "  BEB  ", "       ", "       ", "       ")
                                     .where('C', any(
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
                                             block("minecraft:deepslate_bricks")
                                     ))
                                     .where('X', block("minecraft:polished_blackstone"))
@@ -101,9 +104,9 @@ public class DISTILLATION_TOWER {
                                     .layer(" XXXXX ", " B   B ", "  BBB  ", "  BBB  ", "  BBB  ", "       ")
                                     .layer("  XXX  ", "  BEB  ", "       ", "       ", "       ", "       ")
                                     .where('C', any(
-                                            InterfacePredicates.anyOfItemInput(),
-                                            InterfacePredicates.anyOfItemOutput(),
-                                            InterfacePredicates.anyOfEnergyInput(),
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput(),
                                             block("minecraft:deepslate_bricks")
                                     ))
                                     .where('X', block("minecraft:polished_blackstone"))
@@ -119,8 +122,8 @@ public class DISTILLATION_TOWER {
     }
 
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(DISTILLATION_TOWER.withSuffix("_recipe_1"))
                 .recipePool(DISTILLATION_TOWER)
                 .inputItem(ItemTags.LOGS, 1)

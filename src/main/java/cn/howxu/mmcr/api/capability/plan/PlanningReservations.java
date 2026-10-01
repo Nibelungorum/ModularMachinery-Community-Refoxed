@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
+import net.neoforged.neoforge.energy.IEnergyStorage;
+
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
@@ -109,8 +111,10 @@ public final class PlanningReservations {
         return valueAvailable(storage, storage.capacity(), storage.amount(), insert);
     }
 
-    public long valueAvailable(LongEnergyHandler storage, boolean insert) {
-        return valueAvailable(storage, storage.getCapacityAsLong(), storage.getAmountAsLong(), insert);
+    public long valueAvailable(IEnergyStorage storage, boolean insert) {
+        return storage instanceof LongEnergyHandler energy
+                ? valueAvailable(storage, energy.getCapacityAsLong(), energy.getAmountAsLong(), insert)
+                : valueAvailable(storage, storage.getMaxEnergyStored(), storage.getEnergyStored(), insert);
     }
 
     public boolean reserveValue(LongValueStorage storage, long amount, boolean insert) {
@@ -118,9 +122,10 @@ public final class PlanningReservations {
                 true);
     }
 
-    public boolean reserveValue(LongEnergyHandler storage, long amount, boolean insert) {
-        return reserveValue(storage, storage.getTransferLimit(), storage.getCapacityAsLong(),
-                storage.getAmountAsLong(), amount, insert, true);
+    public boolean reserveValue(IEnergyStorage storage, long amount, boolean insert) {
+        return storage instanceof LongEnergyHandler energy
+                ? reserveValue(storage, energy.getTransferLimit(), energy.getCapacityAsLong(), energy.getAmountAsLong(), amount, insert, true)
+                : reserveValue(storage, Integer.MAX_VALUE, storage.getMaxEnergyStored(), storage.getEnergyStored(), amount, insert, true);
     }
 
     public boolean reserveValueTotal(LongValueStorage storage, long amount, boolean insert) {
@@ -128,9 +133,10 @@ public final class PlanningReservations {
                 false);
     }
 
-    public boolean reserveValueTotal(LongEnergyHandler storage, long amount, boolean insert) {
-        return reserveValue(storage, storage.getTransferLimit(), storage.getCapacityAsLong(),
-                storage.getAmountAsLong(), amount, insert, false);
+    public boolean reserveValueTotal(IEnergyStorage storage, long amount, boolean insert) {
+        return storage instanceof LongEnergyHandler energy
+                ? reserveValue(storage, energy.getTransferLimit(), energy.getCapacityAsLong(), energy.getAmountAsLong(), amount, insert, false)
+                : reserveValue(storage, Integer.MAX_VALUE, storage.getMaxEnergyStored(), storage.getEnergyStored(), amount, insert, false);
     }
 
     private long valueAvailable(Object storage, long capacity, long amount, boolean insert) {

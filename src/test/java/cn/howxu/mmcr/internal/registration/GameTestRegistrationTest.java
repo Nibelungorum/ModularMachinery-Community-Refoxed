@@ -2,9 +2,9 @@ package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.OptionalGameTestSource;
 import cn.howxu.mmcr.test.TestBootstrap;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import java.util.Set;
 import java.util.LinkedHashSet;
 import java.lang.reflect.Method;
@@ -33,8 +33,8 @@ class GameTestRegistrationTest {
     @Test
     void forwards_all_canonical_startup_events_to_present_source() {
         GameTestRegistration.registerStartupSources("cn.howxu.mmcr.OptionalGameTestSource",
-                new MMCRMachineDefinationsEvent(),
-                new MMCRMachineStructuresEvent(Set.of()), new MMCRMachineRecipesEvent());
+                new MachineDefinitionRegistration(),
+                new StructureRegistration(Set.of()), new MachineRecipeRegistration());
 
         assertThat(OptionalGameTestSource.invoked()).isTrue();
         assertThat(OptionalGameTestSource.structuresInvoked()).isTrue();
@@ -44,8 +44,8 @@ class GameTestRegistrationTest {
     @Test
     void ignores_absent_startup_source() {
         assertThatCode(() -> GameTestRegistration.registerStartupSources(
-                "cn.howxu.mmcr.MissingGameTestRegistry", new MMCRMachineDefinationsEvent(),
-                new MMCRMachineStructuresEvent(Set.of()), new MMCRMachineRecipesEvent()))
+                "cn.howxu.mmcr.MissingGameTestRegistry", new MachineDefinitionRegistration(),
+                new StructureRegistration(Set.of()), new MachineRecipeRegistration()))
                 .doesNotThrowAnyException();
     }
 
@@ -71,7 +71,7 @@ class GameTestRegistrationTest {
     void invokes_present_development_source() {
         OptionalSourceRegistration.invokeDevelopmentSource(
                 "cn.howxu.mmcr.OptionalGameTestSource", "registerMachineDefinitions",
-                new Class<?>[]{MMCRMachineDefinationsEvent.class}, new MMCRMachineDefinationsEvent());
+                new Class<?>[]{MachineDefinitionRegistration.class}, new MachineDefinitionRegistration());
 
         assertThat(OptionalGameTestSource.invoked()).isTrue();
     }

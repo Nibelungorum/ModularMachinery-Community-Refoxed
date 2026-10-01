@@ -1,14 +1,18 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.Structures;
+import cn.howxu.mmcr.publicapi.Recipes;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
+import cn.howxu.mmcr.publicapi.structure.StructureSpec;
+import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
+import cn.howxu.mmcr.publicapi.recipe.modifier.Modifiers;
+import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierScope;
+import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierOperation;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
@@ -17,9 +21,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
-import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.any;
+import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
 
 /**
  * @description: TODO
@@ -31,9 +35,9 @@ public class ALLOY_FURNACE {
 
     private static final ResourceLocation ALLOY_FURNACE = id("alloy_furnace");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(ALLOY_FURNACE)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(ALLOY_FURNACE)
                     .recipePool(ALLOY_FURNACE)
                     .allowModifiers()
@@ -45,34 +49,34 @@ public class ALLOY_FURNACE {
     }
 
     @SubscribeEvent
-    public static void registerStructures(MMCRMachineStructuresEvent event) {
+    public static void registerStructures(RegisterMachineStructuresEvent event) {
 
         // register your modifier first
         event.registerModifier(
                 id("alloy_furnace_diamond_speedup"),
-                ModifierDefinition.of(
+                Modifiers.bundle(Modifiers.numeric(
                         "duration",
-                        "input",
+                        ModifierScope.INPUT,
                         0.5F,
-                        "multiply",
+                        ModifierOperation.MULTIPLY,
                         false
-                ));
+                )));
         event.registerModifierItem(new ItemStack(Items.DIAMOND_BLOCK), id("alloy_furnace_diamond_speedup"));
 
         event.registerModifier(
                 id("alloy_furnace_gold_doubling"),
-                ModifierDefinition.of(
+                Modifiers.bundle(Modifiers.numeric(
                         "output",
-                        "output",
+                        ModifierScope.OUTPUT,
                         2.0F,
-                        "multiply",
+                        ModifierOperation.MULTIPLY,
                         false
-                ));
+                )));
         event.registerModifierItem(new ItemStack(Items.GOLD_BLOCK), id("alloy_furnace_gold_doubling"));
 
 
         if (!event.structures().containsKey(ALLOY_FURNACE)) {
-            var structure = MachineStructureBuilder
+            StructureSpec structure = Structures
                     .structure()
                     .fullStructure(s -> s
                             .pattern(p -> p
@@ -81,17 +85,15 @@ public class ALLOY_FURNACE {
                                 .layer("XXX", "XCX", "XXX")
                                 .where('X', block(Blocks.BRICKS))
                                     .where('I', any(
-                                            InterfacePredicates.anyItemInput(),
-                                            InterfacePredicates.anyItemOutput(),
-                                            InterfacePredicates.anyEnergyInput()
+                                            BlockConditions.itemInput(),
+                                            BlockConditions.itemOutput(),
+                                            BlockConditions.energyInput()
                                     ))
                                     .where('M', block(Blocks.BLAST_FURNACE))
                                     .controller('C'))
                             .requirements(r -> r
-                                    .modifier('M', ModifierUse.of(
-                                            id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK)))
-                                    .modifier('M', ModifierUse.of(
-                                            id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK)))
+                                    .modifier('M', id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK))
+                                    .modifier('M', id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK))
                             ))
                     .build(ALLOY_FURNACE);
             event.registerStructure(structure);
@@ -100,8 +102,8 @@ public class ALLOY_FURNACE {
 
     // recipe has multiple id use, do not use event.recipes().containsKey(BLAST_FURNACE)
     @SubscribeEvent
-    public static void register(MMCRMachineRecipesEvent event) {
-        var recipe = MachineRecipeBuilder
+    public static void register(RegisterMachineRecipesEvent event) {
+        RecipeSpec recipe = Recipes
                 .recipe(ALLOY_FURNACE.withSuffix("_recipe_1"))
                 .recipePool(ALLOY_FURNACE)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT),1)

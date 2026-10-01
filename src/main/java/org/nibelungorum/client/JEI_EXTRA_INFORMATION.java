@@ -1,6 +1,6 @@
 package org.nibelungorum.client;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRJeiRecipeInformationEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterJeiRecipeInformationEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -13,7 +13,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 @EventBusSubscriber
 public class JEI_EXTRA_INFORMATION {
     @SubscribeEvent
-    public static void registerRecipeInformation(MMCRJeiRecipeInformationEvent event) {
+    public static void registerRecipeInformation(RegisterJeiRecipeInformationEvent event) {
         event.registerRecipePool(
                 ResourceLocation.parse("mmcr:blast_furnace"),
                 "jei.mmcr_test.blast_furnace.info_1"

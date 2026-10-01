@@ -1,9 +1,9 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextHandler;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.controller.ControllerRuntimeContext;
+import cn.howxu.mmcr.api.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextHandler;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;

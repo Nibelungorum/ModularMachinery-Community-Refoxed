@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.MMCR;

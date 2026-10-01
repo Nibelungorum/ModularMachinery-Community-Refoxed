@@ -89,9 +89,16 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
         if (!(request instanceof CapabilityRequests.SmartValueRequest smart)) {
             return () -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return () -> storage.setExisting(smart.interfaceType(), smart.value())
-                ? CapabilityResult.successful()
-                : failure(BuiltinFailureReasons.SMART_VALUE);
+        return new CapabilityOperation() {
+            public CapabilityResult commit() {
+                return storage.setExisting(smart.interfaceType(), smart.value())
+                        ? CapabilityResult.successful() : failure(BuiltinFailureReasons.SMART_VALUE);
+            }
+
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism > 0 ? this : null;
+            }
+        };
     }
 
     private CapabilityResult failure(FailureReason reason) {

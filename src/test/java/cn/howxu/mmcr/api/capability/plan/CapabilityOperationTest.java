@@ -24,10 +24,10 @@ class CapabilityOperationTest {
                     FailurePhase.CAPABILITY_COMMIT, null, null, Map.of()));
 
     @Test
-    void native_operation_default_parallelism_adaptation_is_reusable() {
+    void native_operation_requires_explicit_parallelism_adaptation() {
         CapabilityOperation operation = CapabilityResult::successful;
 
-        assertThat(operation.forParallelism(3L)).isSameAs(operation);
+        assertThat(operation.forParallelism(3L)).isNull();
         assertThatThrownBy(() -> operation.forParallelism(0L)).isInstanceOf(IllegalArgumentException.class);
     }
 

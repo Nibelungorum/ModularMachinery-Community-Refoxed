@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.network;
 
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
 import cn.howxu.mmcr.internal.network.PendingRequest;
 import net.minecraft.core.BlockPos;

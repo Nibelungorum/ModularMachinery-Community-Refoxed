@@ -12,10 +12,10 @@ public interface CapabilityOperation {
      * Adapts an operation whose request was prepared for a larger candidate parallelism.
      *
      * @param parallelism the final plan parallelism
-     * @return an operation safe for the final parallelism
+     * @return an operation safe for the final parallelism, or null when adaptation is unsupported
      */
     default CapabilityOperation forParallelism(long parallelism) {
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
-        return this;
+        return null;
     }
 }

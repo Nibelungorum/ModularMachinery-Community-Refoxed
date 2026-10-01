@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.sync;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;

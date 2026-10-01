@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope.CONTROLLER;
-import static cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope.OPERATION;
+import static cn.howxu.mmcr.api.controller.ControllerScreenTextScope.CONTROLLER;
+import static cn.howxu.mmcr.api.controller.ControllerScreenTextScope.OPERATION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,0 +1,259 @@
+package cn.howxu.mmcr.publicapi;
+
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.api.network.view.RequestFailed;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
+import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
+import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Set;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/** Verifies the internal adapter is the only public-to-runtime structure bridge.
+ * @author howxu <dev@howxu.cn>
+ */
+class PublicApiAdapterTest {
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
+
+    @Test
+    void public_modifier_definitions_can_be_combined_without_internal_types() {
+        ModifierDefinition combined = ModifierDefinition.combine(
+                ModifierDefinition.of("duration", "input", 0.7D, "multiply", false),
+                ModifierDefinition.of("energy", "input", 0.8D, "multiply", false));
+
+        assertThat(combined.modifiers()).hasSize(2);
+    }
+
+    @Test
+    void adapters_preserve_definition_structure_and_identifiers() {
+        var machineId = MMCR.id("adapter_machine");
+        var definition = MachineBuilder.machine(machineId).build();
+        MachineStructureDefinition structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .build(machineId);
+
+        assertThat(MachineDefinitionConverter.toRegistration(definition).id()).isEqualTo(machineId);
+        assertThat(MachineDefinitionConverter.toStructureDefinition(structure).machineId()).isEqualTo(machineId);
+        assertThat(MachineDefinitionConverter.toDynamicMachine(definition, structure).registryName()).isEqualTo(machineId);
+    }
+
+    @Test
+    void startup_registration_preserves_canonical_smart_interface_values_without_reconstruction() {
+        var type = new SmartInterfaceType("yield", 1F, 4F, 0, SmartInterfaceType.ValueType.INTEGER);
+        var modifier = SmartInterfaceModifier.item("yield", RecipeModifier.IOType.OUTPUT, false,
+                1F, 4F, 1F, 2F, RecipeModifier.Operation.MULTIPLY);
+        var definition = MachineBuilder.machine(MMCR.id("canonical_values"))
+                .role(MachineRole.MODULE)
+                .smartInterface(type)
+                .smartInterfaceModifier(modifier)
+                .build();
+
+        var registration = MachineDefinitionConverter.toStartupRegistration(definition);
+
+        assertThat(registration.role()).isSameAs(definition.role());
+        assertThat(registration.smartInterfaceTypes().get("yield")).isSameAs(type);
+        assertThat(registration.smartInterfaceModifiers().getFirst()).isSameAs(modifier);
+        assertThat(registration.smartInterfaceModifiers().getFirst().toModifier(4F))
+                .isEqualTo(MachineModifier.numeric(
+                        "output", "output", 2D, "multiply", false));
+    }
+
+    @Test
+    void deferred_block_predicate_resolves_only_when_runtime_structure_is_used() {
+        AtomicBoolean resolved = new AtomicBoolean();
+        var predicate = BlockPredicate.deferredBlock(() -> {
+            resolved.set(true);
+            return Blocks.FURNACE;
+        });
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', predicate).controller('F')))
+                .build(MMCR.id("deferred_predicate_machine"));
+
+        var converted = MachineDefinitionConverter.toStructureDefinition(structure);
+
+        assertThat(resolved).isFalse();
+        assertThat(converted.declarations().getFirst().pattern().get(BlockPos.ZERO)
+                .matches(Blocks.FURNACE.defaultBlockState())).isTrue();
+        assertThat(resolved).isTrue();
+    }
+
+    @Test
+    void adapter_preserves_complete_definition_and_structure_in_final_dynamic_machine() {
+        var machineId = MMCR.id("complete_machine");
+        var moduleId = MMCR.id("complete_module");
+        var definition = MachineBuilder.machine(machineId)
+                .controller(controller -> controller.textures(MMCR.id("block/front"), MMCR.id("block/side")))
+                .appearance(appearance -> appearance.machineBasicBlock(MMCR.id("steel_casing")))
+                .factory(factory -> factory.hasFactory(true).threadLimit(4)
+                        .thread("smelting", MMCR.id("arc_recipe")))
+                .role(MachineRole.HOST).acceptedModule(moduleId)
+                .maxParallelism(8).parallelizable(true)
+                .failureAction(RecipeFailureActions.RESET).build();
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage
+                        .pattern(pattern -> pattern.layer("CFC")
+                        .where('C', BlockPredicate.block(Blocks.STONE))
+                                .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
+                        .ports(ports -> ports.min("item_input_bus", 1))
+                        .portTiers(tiers -> tiers.minItemInput(PortTiers.ItemTier.NORMAL))
+                        .requirements(requirements -> requirements.levelSlot('C', MMCR.id("coil"))))
+                .build(machineId);
+
+        var converted = MachineDefinitionConverter.toDynamicMachine(definition, structure);
+        assertThat(converted.registryName()).isEqualTo(machineId);
+        assertThat(converted.controller().frontTexture()).isEqualTo(MMCR.id("block/front"));
+        assertThat(converted.appearance().machineBasicBlock()).isEqualTo(MMCR.id("steel_casing"));
+        assertThat(converted.portRequirements().requirements()).containsKey("item_input_bus");
+        assertThat(converted.portTierRequirements().requirements()).hasSize(1);
+        assertThat(converted.maxParallelism()).isEqualTo(8);
+        assertThat(converted.parallelizable()).isTrue();
+        assertThat(converted.hasFactory()).isTrue();
+        assertThat(converted.factoryThreadLimit()).isEqualTo(4);
+        assertThat(converted.factoryThreads()).hasSize(1);
+        assertThat(MachineDefinitionConverter.toStartupRegistration(definition, structure).maxParallelAmount()).isEqualTo(8);
+        assertThat(converted.role()).isEqualTo(cn.howxu.mmcr.api.machine.MachineRole.HOST);
+        assertThat(converted.acceptedModuleIds()).containsExactly(moduleId);
+        assertThat(converted.structureStages()).hasSize(1);
+        assertThat(converted.structureStages().getFirst().number()).isEqualTo(1);
+        assertThat(converted.structureStages().getFirst().levelSlots()).containsValue(MMCR.id("coil"));
+        assertThat(converted.failureAction()).isEqualTo(RecipeFailureActions.RESET);
+    }
+
+    @Test
+    void adapter_writes_public_structure_to_final_internal_registration() {
+        var machineId = MMCR.id("registered_machine");
+        var definition = MachineBuilder.machine(machineId).displayNameKey("machine.registered").build();
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .build(machineId);
+
+        var registration = MachineDefinitionConverter.toStartupRegistration(definition, structure);
+        assertThat(registration.id()).isEqualTo(machineId);
+        assertThat(registration.displayNameKey()).isEqualTo("machine.registered");
+        assertThat(registration.pattern().get(BlockPos.ZERO)).isNotNull();
+    }
+
+    @Test
+    void adapter_preserves_tick_behavior_in_registration_and_dynamic_machine() {
+        var machineId = MMCR.id("adapter_tick_machine");
+        var definition = MachineBuilder.machine(machineId)
+                .tickBehavior(builder -> builder.serverTick(context -> { }))
+                .build();
+        var structure = structureFor(machineId);
+
+        var registration = MachineDefinitionConverter.toStartupRegistration(definition, structure);
+        var machine = MachineDefinitionConverter.toDynamicMachine(definition, structure);
+
+        assertThat(registration.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
+        assertThat(machine.behavior().kind()).isEqualTo(MachineBehavior.Kind.TICK);
+    }
+
+    @Test
+    void adapter_and_role_projection_preserve_request_handlers() {
+        var machineId = MMCR.id("handler_machine");
+        var processId = MMCR.id("process");
+        var failureId = MMCR.id("failure");
+        RequestProcess process = (body, request, sender, receiver) -> { };
+        RequestFailed failure = (body, request, sender, reason) -> { };
+        var definition = MachineBuilder.machine(machineId)
+                .requestProcessInternal(processId, process)
+                .requestFailed(failureId, failure)
+                .build();
+
+        var converted = MachineDefinitionConverter.toDynamicMachine(definition, structureFor(machineId));
+
+        assertThat(converted.requestProcessors()).containsExactly(Map.entry(processId, process));
+        assertThat(converted.requestFailures()).containsOnlyKeys(failureId);
+        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, Set.of())
+                .requestProcessors()).containsExactly(Map.entry(processId, process));
+        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, Set.of())
+                .requestFailures()).containsOnlyKeys(failureId);
+        var startup = MachineDefinitionConverter.toStartupRegistration(definition);
+        assertThat(startup.requestProcessors()).containsExactly(Map.entry(processId, process));
+        assertThat(startup.requestFailures()).containsOnlyKeys(failureId);
+    }
+
+    @Test
+    void adapter_preserves_extension_stages() {
+        var machineId = MMCR.id("extension_machine");
+        var structure = MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .extension(stage -> stage.pattern(pattern -> pattern.layer("S")
+                        .where('S', BlockPredicate.block(Blocks.STONE)).controller('S')))
+                .build(machineId);
+
+        assertThat(MachineDefinitionConverter.toStructureDefinition(structure).declarations())
+                .extracting(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration::kind)
+                .containsExactly(cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.FULL,
+                        cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration.Kind.EXTENSION);
+    }
+
+    @Test
+    void dynamic_machine_adapter_rejects_structure_for_another_machine() {
+        var definition = MachineBuilder.machine(MMCR.id("adapter_definition")).build();
+        var structure = structureFor(MMCR.id("other_machine"));
+
+        assertThatThrownBy(() -> MachineDefinitionConverter.toDynamicMachine(definition, structure))
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("adapter_definition")
+                .hasMessageContaining("other_machine");
+    }
+
+    @Test
+    void startup_registration_adapter_rejects_structure_for_another_machine() {
+        var definition = MachineBuilder.machine(MMCR.id("registration_definition")).build();
+        var structure = structureFor(MMCR.id("other_machine"));
+
+        assertThatThrownBy(() -> MachineDefinitionConverter.toStartupRegistration(definition, structure))
+                .isInstanceOf(ApiRegistrationException.class)
+                .hasMessageContaining("registration_definition")
+                .hasMessageContaining("other_machine");
+    }
+
+    @Test
+    void legacy_registration_adapter_rejects_unrepresentable_factory_settings() {
+        var definition = MachineBuilder.machine(MMCR.id("factory_registration"))
+                .factory(factory -> factory.thread("core", MMCR.id("any_recipe")))
+                .build();
+
+        assertThatThrownBy(() -> MachineDefinitionConverter.toRegistration(definition))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("factory threads");
+    }
+
+    private static MachineStructureDefinition structureFor(ResourceLocation machineId) {
+        return MachineStructureBuilder.structure()
+                .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
+                        .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))
+                .build(machineId);
+    }
+}

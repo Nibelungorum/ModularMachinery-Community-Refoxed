@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.capability.presentation;
 
-import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
+import cn.howxu.mmcr.api.machine.definition.DisplayStack;
 
 import java.util.Objects;
 import java.util.Optional;

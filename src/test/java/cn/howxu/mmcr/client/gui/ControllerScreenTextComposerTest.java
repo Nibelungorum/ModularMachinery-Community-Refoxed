@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import net.minecraft.client.StringSplitter;
 import net.minecraft.client.gui.Font;

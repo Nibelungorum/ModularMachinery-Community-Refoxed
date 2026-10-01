@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -17,25 +17,25 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.StageRequirement;
-import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
-import cn.howxu.mmcr.api.publicapi.RecipeApi;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import cn.howxu.mmcr.api.data.DataValue;
-import cn.howxu.mmcr.api.network.MachineReference;
-import cn.howxu.mmcr.api.network.NetworkApi;
-import cn.howxu.mmcr.api.network.NetworkInterfaceReference;
-import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
+import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierUse;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.data.view.DataValue;
+import cn.howxu.mmcr.api.network.view.MachineReference;
+import cn.howxu.mmcr.api.network.view.NetworkApi;
+import cn.howxu.mmcr.api.network.view.NetworkInterfaceReference;
+import cn.howxu.mmcr.api.network.view.RequestBody;
 
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.publicapi.ReadableNumber;
-import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.api.presentation.ReadableNumber;
+import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -104,8 +104,8 @@ public final class KubeJSApi {
      * @author howxu <dev@howxu.cn>
      */
     public static final class RecipeIoValues {
-        public final RecipeIo INPUT = RecipeIo.INPUT;
-        public final RecipeIo OUTPUT = RecipeIo.OUTPUT;
+        public final IOType INPUT = IOType.INPUT;
+        public final IOType OUTPUT = IOType.OUTPUT;
     }
 
     /** KubeJS-visible machine output policy constants.
@@ -298,50 +298,49 @@ public final class KubeJSApi {
     }
 
     public CustomRecipeIo chemicalInput(String chemicalId, long amount) {
-        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
                         ChemicalIngredient.chemical(requireChemicalId(chemicalId, "chemicalId"), amount)));
     }
 
     public CustomRecipeIo chemicalInput(String chemicalId, long amount, double consumeChance) {
-        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
                         ChemicalIngredient.chemical(requireChemicalId(chemicalId, "chemicalId"), amount),
                         (float) consumeChance));
     }
 
     public CustomRecipeIo chemicalTagInput(String tagId, long amount) {
-        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
                         ChemicalIngredient.tag(requireChemicalId(tagId, "tagId"), amount)));
     }
 
     public CustomRecipeIo chemicalTagInput(String tagId, long amount, double consumeChance) {
-        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
                         ChemicalIngredient.tag(requireChemicalId(tagId, "tagId"), amount),
                         (float) consumeChance));
     }
 
     public CustomRecipeIo chemicalOutput(String chemicalId, long amount, double chance) {
-        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.OUTPUT,
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(
                         requireChemicalId(chemicalId, "chemicalId"), amount, (float) chance)));
     }
 
     public CustomRecipeIo heatTemperatureInput(double temperature) {
-        return customRecipeIo(MekanismPortFamilies.HEAT_TEMPERATURE.toString(), RecipeIo.INPUT,
+        return customRecipeIo(MekanismPortFamilies.HEAT_TEMPERATURE.toString(), IOType.INPUT,
                 MachineRecipeBuilder.heatInputPayload(temperature));
     }
 
     public CustomRecipeIo heatOutput(double heat) {
-        return customRecipeIo(MekanismPortFamilies.HEAT.toString(), RecipeIo.OUTPUT,
+        return customRecipeIo(MekanismPortFamilies.HEAT.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.heatOutputPayload(heat));
     }
 
-    public MachineRequirement energyRequirement(RecipeIo io, long fePerTick) {
-        return new EnergyRequirement(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT,
-                fePerTick);
+    public EnergyRequirement energyRequirement(IOType io, long fePerTick) {
+        return new EnergyRequirement(io, fePerTick);
     }
 
     /**
@@ -352,8 +351,8 @@ public final class KubeJSApi {
      * @param payload registered codec payload
      * @return validated custom recipe IO
      */
-    public CustomRecipeIo customRecipeIo(String typeId, RecipeIo io, JsonElement payload) {
-        return RecipeApi.custom(ResourceLocation.parse(typeId), io, payload);
+    public CustomRecipeIo customRecipeIo(String typeId, IOType io, JsonElement payload) {
+        return RecipeIoValidation.custom(ResourceLocation.parse(typeId), io, payload);
     }
 
     public MachineModifier.Numeric modifier(String target, String scope, double value, String operation, boolean chance) {
@@ -542,23 +541,23 @@ public final class KubeJSApi {
         };
     }
 
-    private static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate toPublicBlockPredicate(
+    private static cn.howxu.mmcr.api.machine.definition.BlockPredicate toPublicBlockPredicate(
             BlockPredicate predicate) {
         Objects.requireNonNull(predicate, "replacement");
         return switch (predicate) {
-            case BlockPredicate.Air ignored -> cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(Blocks.AIR);
+            case BlockPredicate.Air ignored -> cn.howxu.mmcr.api.machine.definition.BlockPredicate.block(Blocks.AIR);
             case BlockPredicate.Any ignored -> throw new IllegalArgumentException(
                     "Any is not supported as a modifier replacement predicate");
             case BlockPredicate.MachineCoupler ignored ->
-                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.machineCoupler();
+                    cn.howxu.mmcr.api.machine.definition.BlockPredicate.machineCoupler();
             case BlockPredicate.OfBlock ofBlock ->
-                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block(ofBlock.block());
+                    cn.howxu.mmcr.api.machine.definition.BlockPredicate.block(ofBlock.block());
             case BlockPredicate.DeferredBlock deferredBlock ->
-                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.deferredBlock(deferredBlock.supplier());
+                    cn.howxu.mmcr.api.machine.definition.BlockPredicate.deferredBlock(deferredBlock.supplier());
             case BlockPredicate.OfBlockState ofBlockState ->
-                    cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.blockState(ofBlockState.state());
-            case BlockPredicate.OfTag ofTag -> cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.tag(ofTag.tag());
-            case BlockPredicate.AnyOf anyOf -> cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.anyOf(
+                    cn.howxu.mmcr.api.machine.definition.BlockPredicate.blockState(ofBlockState.state());
+            case BlockPredicate.OfTag ofTag -> cn.howxu.mmcr.api.machine.definition.BlockPredicate.tag(ofTag.tag());
+            case BlockPredicate.AnyOf anyOf -> cn.howxu.mmcr.api.machine.definition.BlockPredicate.anyOf(
                     anyOf.children().stream().map(KubeJSApi::toPublicBlockPredicate).toList());
         };
     }
@@ -577,8 +576,8 @@ public final class KubeJSApi {
             default -> throw new IllegalArgumentException("Unknown port category: " + categoryName);
         };
         var io = switch (ioName) {
-            case "input" -> IOType.INPUT;
-            case "output" -> IOType.OUTPUT;
+            case "input" -> cn.howxu.mmcr.util.IOType.INPUT;
+            case "output" -> cn.howxu.mmcr.util.IOType.OUTPUT;
             default -> throw new IllegalArgumentException("Unknown port IO: " + ioName);
         };
         String expectedFamily = category == PortTierRequirementSpec.PortCategory.ITEM ? "bus" : "hatch";

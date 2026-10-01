@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import com.mojang.serialization.Codec;
@@ -37,10 +38,6 @@ public record EnergyRequirement(RecipeModifier.IOType io, long fePerTick, List<S
 
     public EnergyRequirement(RecipeModifier.IOType io, long fePerTick) {
         this(io, fePerTick, List.of());
-    }
-
-    public EnergyRequirement(RecipeIo io, long fePerTick) {
-        this(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT, fePerTick);
     }
 
     public EnergyRequirement {

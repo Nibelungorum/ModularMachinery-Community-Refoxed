@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;

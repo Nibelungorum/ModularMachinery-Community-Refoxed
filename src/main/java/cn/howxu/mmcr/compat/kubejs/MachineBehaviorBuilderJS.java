@@ -1,13 +1,13 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeFinishContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehaviorContext;
 
 import java.util.Objects;
 import java.util.function.Consumer;

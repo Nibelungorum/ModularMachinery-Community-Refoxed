@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;

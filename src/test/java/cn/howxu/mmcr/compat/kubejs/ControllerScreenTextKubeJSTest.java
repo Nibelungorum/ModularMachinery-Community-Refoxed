@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerRuntimeContext;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
+import cn.howxu.mmcr.api.controller.ControllerRuntimeContext;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -19,7 +19,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope.CONTROLLER;
+import static cn.howxu.mmcr.api.controller.ControllerScreenTextScope.CONTROLLER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

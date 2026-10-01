@@ -1,32 +1,41 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.data.view.DataValue;
+import cn.howxu.mmcr.api.data.view.DataStorage;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.network.MachineReference;
+import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.network.RequestInfo;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.machine.definition.ModifierUse;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import dev.latvian.mods.rhino.NativeJavaObject;
+import dev.latvian.mods.rhino.NativeJavaClass;
 import java.util.Arrays;
 import java.util.Set;
 import net.minecraft.network.chat.Component;
@@ -44,6 +53,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.math.BigInteger;
 
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -66,8 +76,8 @@ class KubeJSApiTest {
 
     @AfterEach
     void restoreMachineLevels() {
-        MMCRMachineStructuresEvent.resetCollector();
-        var event = MMCRMachineStructuresEvent.prepare(Set.of());
+        StructureRegistration.resetCollector();
+        var event = StructureRegistration.prepare(Set.of());
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("API Test")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY,
@@ -230,11 +240,11 @@ class KubeJSApiTest {
 
     @Test
     void exposes_recipe_io_and_output_policy_values_to_kubejs() {
-        assertThat(api.recipeIO().INPUT).isSameAs(RecipeIo.INPUT);
-        assertThat(api.recipeIO().OUTPUT).isSameAs(RecipeIo.OUTPUT);
+        assertThat(api.recipeIO().INPUT).isSameAs(IOType.INPUT);
+        assertThat(api.recipeIO().OUTPUT).isSameAs(IOType.OUTPUT);
         assertThat(api.outputPolicy().REQUIRE_FULL).isSameAs(OutputPolicy.REQUIRE_FULL);
         assertThat(api.outputPolicy().ALLOW_PARTIAL).isSameAs(OutputPolicy.ALLOW_PARTIAL);
-        assertThat(api.energyRequirement(RecipeIo.OUTPUT, 1).io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+        assertThat(api.energyRequirement(IOType.OUTPUT, 1).io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
 
         var context = new ContextFactory().enter();
         var scope = context.initStandardObjects();
@@ -267,10 +277,10 @@ class KubeJSApiTest {
                 RecipeModifier.IOType.INPUT, 12);
         var payload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
 
-        var custom = api.customRecipeIo(input.type().id().toString(), RecipeIo.INPUT, payload);
+        var custom = api.customRecipeIo(input.type().id().toString(), IOType.INPUT, payload);
 
         assertThat(custom.typeId()).isEqualTo(input.type().id());
-        assertThatThrownBy(() -> api.customRecipeIo("mmcr:missing", RecipeIo.INPUT, payload))
+        assertThatThrownBy(() -> api.customRecipeIo("mmcr:missing", IOType.INPUT, payload))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -387,6 +397,136 @@ class KubeJSApiTest {
             assertThat(values.get("answer").doubleValue()).isEqualTo(42D);
             assertThat(values.get("items").asList().orElseThrow()).hasSize(2);
         });
+    }
+
+    @Test
+    void rhino_requirement_factories_work_with_both_io_plans_and_recipe_builders() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
+        var builder = new MachineRecipeBuilderJS("mmcr:public_factory_test");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "plan", plan, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+        ScriptableObject.putProperty(scope, "components", JsonParser.parseString(
+                "{\"minecraft:custom_name\":{\"text\":\"script output\"}}"), context);
+
+        context.evaluateString(scope, """
+                const inputs = [
+                    api.itemInputRequirement('minecraft:iron_ingot', 1),
+                    api.fluidInputRequirement('minecraft:water', 100),
+                    api.energyRequirement(api.recipeIO().INPUT, 10),
+                    api.smartInterfaceInput('temperature', 1, 3)
+                ];
+                const outputs = [
+                    api.itemOutputRequirement('minecraft:gold_nugget', 1, 1),
+                    api.itemOutputRequirementWithComponents('minecraft:iron_ingot', 1, components, 1),
+                    api.fluidOutputRequirement('minecraft:water', 100, 1),
+                    api.energyRequirement(api.recipeIO().OUTPUT, 5),
+                    api.smartInterfaceOutput('mode', 2)
+                ];
+                inputs.forEach(requirement => {
+                    plan.addInput(requirement);
+                    builder.addRequirement(requirement);
+                });
+                outputs.forEach(requirement => {
+                    plan.addOutput(requirement, api.outputPolicy().ALLOW_PARTIAL);
+                    builder.addRequirement(requirement);
+                });
+                """, "public-requirement-factories", 1, null);
+
+        assertThat(builder.requirements.stream()
+                .map(requirement -> MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow()).toList())
+                .containsExactlyElementsOf(plan.requirements().stream()
+                        .map(requirement -> MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, requirement).getOrThrow()).toList());
+        assertThat(plan.simulate().inputsSatisfied()).isFalse();
+        assertThat(plan.commit().successful()).isFalse();
+    }
+
+    @Test
+    void rhino_commits_partial_energy_output_and_big_integer_data_without_class_loading() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        var energy = new LongEnergyStorage(100L, 4L, null);
+        var plan = new MachineIoPlan(new CapabilitySnapshot(List.of(new EnergyHatchCapability(energy, cn.howxu.mmcr.util.IOType.OUTPUT))));
+        var storage = DataStorage.view(new cn.howxu.mmcr.api.data.DataStorage());
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "plan", plan, context);
+        ScriptableObject.putProperty(scope, "storage", storage, context);
+        ScriptableObject.putProperty(scope, "stored", context.wrap(scope, new BigInteger("100000000000000000000")), context);
+        ScriptableObject.putProperty(scope, "BigInteger", new NativeJavaClass(context, scope, BigInteger.class), context);
+
+        assertThat(context.evaluateString(scope, """
+                storage.set('energy', api.dataValue(stored));
+                plan.addOutput(api.energyRequirement(api.recipeIO().OUTPUT, 10), api.outputPolicy().ALLOW_PARTIAL);
+                const simulation = plan.simulate();
+                const accepted = simulation.outputs().get(0).accepted();
+                const next = stored.subtract(BigInteger.valueOf(accepted));
+                plan.commitData(transaction => storage.set('energy', api.dataValue(next), transaction)).successful();
+                """, "public-data-transaction", 1, null)).isEqualTo(true);
+
+        assertThat(energy.getAmountAsLong()).isEqualTo(4L);
+        assertThat(storage.get("energy").orElseThrow().bigIntegerValue())
+                .isEqualTo(new BigInteger("99999999999999999996"));
+    }
+
+    @Test
+    void rhino_failed_io_commit_does_not_publish_staged_data() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        var energy = new LongEnergyStorage(100L, 100L, null);
+        energy.setAmount(10L);
+        var plan = new MachineIoPlan(new CapabilitySnapshot(List.of(new EnergyHatchCapability(energy, cn.howxu.mmcr.util.IOType.INPUT))));
+        var storage = DataStorage.view(new cn.howxu.mmcr.api.data.DataStorage());
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "plan", plan, context);
+        ScriptableObject.putProperty(scope, "storage", storage, context);
+        ScriptableObject.putProperty(scope, "energy", energy, context);
+
+        assertThat(context.evaluateString(scope, """
+                storage.set('state', api.dataValue({energy: 0, history: ['before']}));
+                plan.addInput(api.energyRequirement(api.recipeIO().INPUT, 10));
+                plan.simulate();
+                energy.setAmount(0);
+                plan.commitData(transaction => {
+                    storage.set('state', api.dataValue({energy: 10, history: ['after']}), transaction);
+                }).successful();
+                """, "failed-public-data-transaction", 1, null)).isEqualTo(false);
+
+        assertThat(storage.get("state").orElseThrow().asMap().orElseThrow()).containsEntry("energy", DataValue.of(0D));
+        assertThat(storage.get("state").orElseThrow().asMap().orElseThrow().get("history").asList().orElseThrow())
+                .containsExactly(DataValue.of("before"));
+        assertThat(energy.getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void rhino_network_callback_uses_the_same_data_values_as_tick_storage() throws Exception {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineBuilderJS("mmcr:public_network_callback");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, """
+                builder.requestProcess('mmcr:report', (body, request, sender, receiver) => {
+                    receiver.set('report', api.dataValue({
+                        power: body.get('power').get().doubleValue(),
+                        peer: request.peer().hash()
+                    }));
+                });
+                """, "public-network-callback", 1, null);
+
+        var receiver = new cn.howxu.mmcr.api.data.DataStorage();
+        var requestId = MMCR.id("report");
+        builder.createObject().requestProcessors().get(requestId).process(
+                RequestBody.of(Map.of("power", cn.howxu.mmcr.api.data.DataValue.of(20D))),
+                new RequestInfo(requestId, new MachineReference(MMCR.id("producer"), 7L)), null, receiver);
+
+        assertThat(DataStorage.view(receiver).get("report").orElseThrow().asMap().orElseThrow())
+                .containsEntry("power", DataValue.of(20D)).containsEntry("peer", DataValue.of(7L));
     }
 
     @Test

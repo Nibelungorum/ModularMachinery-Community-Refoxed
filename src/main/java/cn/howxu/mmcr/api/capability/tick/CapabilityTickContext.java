@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.api.capability.tick;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;

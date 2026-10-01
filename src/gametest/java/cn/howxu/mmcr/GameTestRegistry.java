@@ -1,21 +1,25 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.data.DataStorage;
-import cn.howxu.mmcr.api.publicapi.data.DataValue;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType;
-import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
-import cn.howxu.mmcr.api.publicapi.machine.LevelType;
-import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.data.view.DataStorage;
+import cn.howxu.mmcr.api.data.view.DataValue;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.DisplayStack;
+import cn.howxu.mmcr.api.machine.definition.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierUse;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -261,7 +265,11 @@ public final class GameTestRegistry {
         return event;
     }
 
-    public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerMachineDefinitions(RegisterMachineDefinitionsEvent event) {
+        registerMachineDefinitions(RegistrationAdapters.core(event));
+    }
+
+    public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             ResourceLocation id = MMCR.id(name);
@@ -304,7 +312,11 @@ public final class GameTestRegistry {
         }
     }
 
-    public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
+    public static void registerMachineStructures(RegisterMachineStructuresEvent event) {
+        registerMachineStructures(RegistrationAdapters.core(event));
+    }
+
+    public static void registerMachineStructures(StructureRegistration event) {
         ResourceLocation terminalLevelType = MMCR.id("terminal_test_level_type");
         event.registerLevelType(new LevelType(terminalLevelType, Component.literal("Terminal Test Level")));
         event.registerLevel(new MachineLevel(MMCR.id("terminal_test_level"), terminalLevelType, 0,
@@ -449,7 +461,11 @@ public final class GameTestRegistry {
         }
     }
 
-    public static void registerRecipes(MMCRMachineRecipesEvent event) {
+    public static void registerRecipes(RegisterMachineRecipesEvent event) {
+        registerRecipes(RegistrationAdapters.core(event));
+    }
+
+    public static void registerRecipes(MachineRecipeRegistration event) {
         event.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("distillation_test_recipe"))
                         .recipePool(MMCR.id("distillation_tower_test"))
                 .duration(20).inputItem(Items.COAL, 1).outputFluid(Fluids.WATER, 1).build());

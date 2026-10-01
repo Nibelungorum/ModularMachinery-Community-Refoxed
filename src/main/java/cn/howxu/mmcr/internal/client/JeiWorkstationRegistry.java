@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.client;
 
-import cn.howxu.mmcr.api.publicapi.jei.JeiWorkstationRegistration;
+import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
 
 import java.util.List;
 

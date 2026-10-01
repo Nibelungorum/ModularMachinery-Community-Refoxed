@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation.Target;
+import cn.howxu.mmcr.api.recipe.RecipeInformation;
+import cn.howxu.mmcr.api.recipe.RecipeInformation.Target;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;

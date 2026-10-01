@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
-import cn.howxu.mmcr.api.publicapi.controller.JadeText;
+import cn.howxu.mmcr.api.controller.JadeText;
 
 import java.util.Objects;
 

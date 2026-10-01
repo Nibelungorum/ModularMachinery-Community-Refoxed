@@ -1,8 +1,12 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
+import cn.howxu.mmcr.api.recipe.ItemInput;
+import cn.howxu.mmcr.api.recipe.ItemOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -63,6 +67,33 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
         consumeChance = MachineOutput.clampChance(consumeChance);
     }
 
+    public ItemRequirement(RecipeModifier.IOType io, Ingredient item, int count, ItemStack stack, float chance,
+                           DataComponentPredicateSet components, float consumeChance) {
+        this(io, item, count, stack, chance, List.of(), components, consumeChance);
+        if (io == null) throw new IllegalArgumentException("io null");
+        if (io.isInput() && (item == null || count < 1)) throw new IllegalArgumentException("Invalid item input");
+        if (!io.isInput() && this.stack.isEmpty()) throw new IllegalArgumentException("Item output must not be empty");
+        if (!Float.isFinite(chance) || chance < 0F || chance > 1F
+                || !Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+            throw new IllegalArgumentException("chance must be in [0, 1]");
+        }
+    }
+
+    public static ItemRequirement input(ItemInput input) {
+        return new ItemRequirement(RecipeModifier.IOType.INPUT, input.ingredient(), input.count(), ItemStack.EMPTY,
+                1F, input.components(), input.consumeChance());
+    }
+
+    public static ItemRequirement output(ItemOutput output) {
+        return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output.stack(), output.chance(),
+                output.components(), 1F);
+    }
+
+    @Override
+    public ItemStack stack() {
+        return stack.copy();
+    }
+
     @Override
     public RequirementType<ItemRequirement> type() {
         return TYPE;
@@ -79,6 +110,11 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
 
     public ItemStack resolvedStack() {
         return stack(null);
+    }
+
+    /** Script-compatible name for the input ingredient. */
+    public Ingredient ingredient() {
+        return item;
     }
 
     private static ItemRequirement copy(ItemRequirement requirement) {

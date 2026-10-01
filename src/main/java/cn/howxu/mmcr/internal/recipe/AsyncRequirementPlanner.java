@@ -56,8 +56,10 @@ public final class AsyncRequirementPlanner {
         Set<ResourceLocation> capabilityIds = new java.util.LinkedHashSet<>();
         for (MachineRecipe candidate : orderedCandidates) {
             for (MachineRequirement requirement : candidate.requirements()) {
-                capabilityIds.add(requirement instanceof cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement
-                        ? cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes.HEAT : requirement.type().id());
+                capabilityIds.addAll(requirement.type().capabilityIds());
+                if (requirement instanceof cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement) {
+                    capabilityIds.add(cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes.HEAT);
+                }
             }
             candidate.outputsWithoutDerivedRequirements().forEach(output -> capabilityIds.add(output.outputType().id()));
         }

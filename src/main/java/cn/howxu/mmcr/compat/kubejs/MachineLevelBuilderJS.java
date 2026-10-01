@@ -2,8 +2,8 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -63,7 +63,7 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     }
 
     public void registerObject() {
-        MMCRMachineStructuresEvent.current().registerLevel(createObject());
+        StructureRegistration.current().registerLevel(createObject());
     }
 
     public MachineLevelBuilderJS register() {

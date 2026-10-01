@@ -1,17 +1,17 @@
 package cn.howxu.mmcr.internal.registration;
 
+import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
-import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
+import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -32,10 +32,10 @@ import java.util.Set;
  */
 public final class ContentRegistrationCoordinator {
     private static final Map<ResourceLocation, MachineDefinition> MACHINES = new LinkedHashMap<>();
-    private static final Map<ResourceLocation, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition> STRUCTURES =
+    private static final Map<ResourceLocation, cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition> STRUCTURES =
             new LinkedHashMap<>();
     private static final Map<ResourceLocation, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
-    private static MMCRMachineStructuresEvent.Snapshot STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
+    private static StructureRegistration.Snapshot STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
     private static State state = State.BEFORE_BEGIN;
     private static int testCommitCount;
     private static StartupSnapshotForTesting lastStartupSnapshot = new StartupSnapshotForTesting(Set.of(), Set.of(), Set.of());
@@ -56,7 +56,7 @@ public final class ContentRegistrationCoordinator {
         return state == State.COMMITTED;
     }
 
-    public static synchronized void collectMachines(MMCRMachineDefinationsEvent event) {
+    public static synchronized void collectMachines(MachineDefinitionRegistration event) {
         requireCollecting();
         event.definitions().forEach((id, definition) -> putUnique(MACHINES, id, definition, "machine"));
     }
@@ -66,7 +66,7 @@ public final class ContentRegistrationCoordinator {
         putUnique(MACHINES, definition.id(), definition, "machine");
     }
 
-    public static synchronized void collectStructures(MMCRMachineStructuresEvent event) {
+    public static synchronized void collectStructures(StructureRegistration event) {
         requireCollecting();
         STRUCTURE_SNAPSHOT = event.freeze();
         event.structures().forEach((id, structure) -> putUnique(STRUCTURES, id, structure, "structure"));
@@ -76,7 +76,7 @@ public final class ContentRegistrationCoordinator {
                 STRUCTURE_SNAPSHOT.levels().values());
     }
 
-    public static synchronized void collectRecipes(MMCRMachineRecipesEvent event) {
+    public static synchronized void collectRecipes(MachineRecipeRegistration event) {
         requireCollecting();
         event.recipes().forEach((id, recipe) -> putUnique(RECIPES, id, recipe, "recipe"));
     }
@@ -167,7 +167,7 @@ public final class ContentRegistrationCoordinator {
     /** Resets the complete startup test seam, including public API lifecycle state. */
     public static synchronized void resetForTesting() {
         clearForTesting();
-        MMCRMachineStructuresEvent.resetCollector();
+        StructureRegistration.resetCollector();
         PublicApiBootstrap.resetStateForTesting();
         MachineDefinitions.clearForTesting();
         MachineRegistry.clearForTesting();
@@ -189,7 +189,7 @@ public final class ContentRegistrationCoordinator {
 
     private static Map<ResourceLocation, MachineStructureDefinition> validateAndConvertStructures(
             Map<ResourceLocation, MachineRegistration> registrations) {
-        MMCRMachineStructuresEvent.Snapshot snapshot = STRUCTURE_SNAPSHOT;
+        StructureRegistration.Snapshot snapshot = STRUCTURE_SNAPSHOT;
         Map<ResourceLocation, MachineStructureDefinition> structures = new LinkedHashMap<>();
         STRUCTURES.forEach((id, structure) -> {
             if (!registrations.containsKey(id) && MachineDefinitions.getRegistration(id) == null) {
@@ -205,7 +205,7 @@ public final class ContentRegistrationCoordinator {
     }
 
     private static Map<ResourceLocation, MachineRecipe> validateAndConvertRecipes() {
-        MMCRMachineStructuresEvent.Snapshot snapshot = STRUCTURE_SNAPSHOT;
+        StructureRegistration.Snapshot snapshot = STRUCTURE_SNAPSHOT;
         Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         RECIPES.forEach((id, definition) -> {
             recipes.put(id, MachineRecipeConverter.toRecipe(definition, snapshot));
@@ -231,8 +231,8 @@ public final class ContentRegistrationCoordinator {
         });
     }
 
-    private static MMCRMachineStructuresEvent.Snapshot emptyStructureSnapshot() {
-        return new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
+    private static StructureRegistration.Snapshot emptyStructureSnapshot() {
+        return new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
     }
 
     private static <V> void putUnique(Map<ResourceLocation, V> target, ResourceLocation id, V value, String kind) {

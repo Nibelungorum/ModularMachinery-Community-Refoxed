@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import net.minecraft.core.registries.BuiltInRegistries;

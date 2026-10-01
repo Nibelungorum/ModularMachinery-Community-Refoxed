@@ -1,10 +1,12 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.machine.MachineSpec;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
+import static cn.howxu.mmcr.publicapi.ApiIds.id;
 
 /**
  * @description: TODO
@@ -14,9 +16,9 @@ import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 public class ARTIFICIAL_STAR {
     public static final ResourceLocation ARTIFICIAL_STAR = id("artificial_star");
 
-    public static void registerDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(ARTIFICIAL_STAR)) {
-            var machine = MachineBuilder
+            MachineSpec machine = Machines
                     .machine(ARTIFICIAL_STAR)
                     .recipePool(ARTIFICIAL_STAR)
                     .displayNameKey("machine.mmcr.artificial_star")

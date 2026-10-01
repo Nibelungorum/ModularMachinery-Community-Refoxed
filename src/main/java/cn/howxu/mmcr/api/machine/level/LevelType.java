@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.machine.level;
 
+import cn.howxu.mmcr.api.presentation.ComponentSnapshots;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
@@ -13,6 +14,11 @@ import java.util.Objects;
 public record LevelType(ResourceLocation id, Component displayName) {
     public LevelType {
         Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(displayName, "displayName");
+        displayName = ComponentSnapshots.copy(Objects.requireNonNull(displayName, "displayName"));
+    }
+
+    @Override
+    public Component displayName() {
+        return ComponentSnapshots.copy(displayName);
     }
 }

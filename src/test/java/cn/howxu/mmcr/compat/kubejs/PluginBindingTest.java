@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -10,12 +12,12 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.MachineApi;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
-import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.publicapi.Machines;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
@@ -589,7 +591,7 @@ class PluginBindingTest {
     @Test
     void startup_event_registers_modifier_definition_and_item_binding() {
         var modifierId = MMCR.id("kubejs_startup_modifier");
-        MMCRMachineStructuresEvent.resetCollector();
+        StructureRegistration.resetCollector();
         try {
             var event = new MMCRStartupEventJS();
             var definition = new ModifierDefinition(List.of());
@@ -597,12 +599,12 @@ class PluginBindingTest {
             event.registerModifier(modifierId.toString(), definition);
             event.registerModifierItem(new ItemStack(Items.DIAMOND, 16), modifierId.toString());
 
-            var snapshot = MMCRMachineStructuresEvent.current().freeze();
+            var snapshot = StructureRegistration.current().freeze();
             assertThat(snapshot.modifiers()).containsEntry(modifierId, definition);
             assertThat(snapshot.modifierItems().get(modifierId)).singleElement()
                     .satisfies(stack -> assertThat(stack.getCount()).isEqualTo(1));
         } finally {
-            MMCRMachineStructuresEvent.resetCollector();
+            StructureRegistration.resetCollector();
         }
     }
 
@@ -750,7 +752,7 @@ class PluginBindingTest {
             Plugin.beginStartupRegistryPhaseForTesting();
 
             assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
-            assertThat(MachineApi.isRegistrationOpen()).isFalse();
+            assertThat(Machines.isRegistrationOpen()).isFalse();
         } finally {
             PublicApiBootstrap.clearForTesting();
             TestBootstrap.restoreMachineDefinitions();

@@ -1,7 +1,7 @@
 package org.nibelungorum.provider;
 
-import cn.howxu.mmcr.api.publicapi.MachineDefinitionProvider;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
+import cn.howxu.mmcr.publicapi.registration.MachineDefinitionProvider;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import org.nibelungorum.builtin.*;
 
 /** Provides built-in machine definitions before dynamic controller registration.
@@ -9,7 +9,7 @@ import org.nibelungorum.builtin.*;
  */
 public final class BuiltInProvider implements MachineDefinitionProvider {
     @Override
-    public void register(MMCRMachineDefinationsEvent event) {
+    public void register(RegisterMachineDefinitionsEvent event) {
         BLAST_FURNACE.registerDefinitions(event);
         ALLOY_FURNACE.registerDefinitions(event);
         CRACKER.registerDefinitions(event);

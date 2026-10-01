@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.client;
 
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeInformation.Target;
+import cn.howxu.mmcr.api.recipe.RecipeInformation;
+import cn.howxu.mmcr.api.recipe.RecipeInformation.Target;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 

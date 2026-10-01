@@ -8,14 +8,14 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
-import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
+import cn.howxu.mmcr.api.recipe.RecipeIoDeclaration;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-import cn.howxu.mmcr.api.publicapi.RecipeApi;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
@@ -132,14 +132,18 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    public MachineRecipeBuilderJS addRequirement(MachineRequirement requirement) {
-        requirements.add(requirement);
-        return this;
-    }
-
-    public MachineRecipeBuilderJS addRequirement(
-            cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement requirement) {
-        requirements.add(MachineRecipeConverter.toRequirement(requirement));
+    public MachineRecipeBuilderJS addRequirement(RecipeIoDeclaration source) {
+        if (source instanceof MachineRequirement requirement) {
+            requirements.add(requirement);
+            return this;
+        }
+        if (!(source instanceof CustomRecipeIo io)) {
+            throw new IllegalArgumentException("Unsupported recipe IO declaration");
+        }
+        var delegate = MachineRecipeBuilder.recipe(id).recipePool(id);
+        var declaration = delegate.custom(io).build();
+        requirements.addAll(declaration.requirements());
+        declaration.customOutputs().forEach(output -> customOutputs.add(MachineRecipeConverter.toOutput(output)));
         return this;
     }
 
@@ -151,12 +155,8 @@ public class MachineRecipeBuilderJS {
      * @param payload registered codec payload
      * @return this builder
      */
-    public MachineRecipeBuilderJS custom(String typeId, RecipeIo io, JsonElement payload) {
-        var custom = RecipeApi.custom(ResourceLocation.parse(typeId), io, payload);
-        if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
-            requirements.add(MachineRecipeConverter.toRequirement(custom));
-        } else customOutputs.add(MachineRecipeConverter.toOutput(custom));
-        return this;
+    public MachineRecipeBuilderJS custom(String typeId, IOType io, JsonElement payload) {
+        return addRequirement(new CustomRecipeIo(ResourceLocation.parse(typeId), io, payload));
     }
 
     public MachineRecipeBuilderJS priority(int priority) {
@@ -336,7 +336,7 @@ public class MachineRecipeBuilderJS {
      */
     public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount) {
         ResourceLocation id = requireChemicalId(chemicalId, "chemicalId");
-        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount)));
     }
 
@@ -351,7 +351,7 @@ public class MachineRecipeBuilderJS {
      */
     public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount, double consumeChance) {
         ResourceLocation id = requireChemicalId(chemicalId, "chemicalId");
-        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount), (float) consumeChance));
     }
 
@@ -365,7 +365,7 @@ public class MachineRecipeBuilderJS {
      */
     public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount) {
         ResourceLocation id = requireChemicalId(tagId, "tagId");
-        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount)));
     }
 
@@ -380,7 +380,7 @@ public class MachineRecipeBuilderJS {
      */
     public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount, double consumeChance) {
         ResourceLocation id = requireChemicalId(tagId, "tagId");
-        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount), (float) consumeChance));
     }
 
@@ -395,7 +395,7 @@ public class MachineRecipeBuilderJS {
      */
     public MachineRecipeBuilderJS chemicalOutput(String chemicalId, long amount, double chance) {
         ResourceLocation id = requireChemicalId(chemicalId, "chemicalId");
-        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.OUTPUT,
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(id, amount, (float) chance)));
     }
 
@@ -407,7 +407,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS heatTemperatureInput(double temperature) {
-        return custom(MekanismPortFamilies.HEAT_TEMPERATURE.toString(), RecipeIo.INPUT,
+        return custom(MekanismPortFamilies.HEAT_TEMPERATURE.toString(), IOType.INPUT,
                 MachineRecipeBuilder.heatInputPayload(temperature));
     }
 
@@ -419,7 +419,7 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS heatOutput(double heat) {
-        return custom(MekanismPortFamilies.HEAT.toString(), RecipeIo.OUTPUT,
+        return custom(MekanismPortFamilies.HEAT.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.heatOutputPayload(heat));
     }
 

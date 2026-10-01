@@ -30,6 +30,16 @@ public record DataComponentPredicateSet(Map<DataComponentType<?>, ComponentPredi
         values = Map.copyOf(values);
     }
 
+    public static DataComponentPredicateSet ofIds(Map<ResourceLocation, ComponentPredicate> predicates) {
+        Map<DataComponentType<?>, ComponentPredicate> values = new LinkedHashMap<>();
+        predicates.forEach((id, predicate) -> {
+            DataComponentType<?> type = BuiltInRegistries.DATA_COMPONENT_TYPE.get(id);
+            if (type == null) throw new IllegalArgumentException("Unknown data component type " + id);
+            values.put(type, predicate);
+        });
+        return new DataComponentPredicateSet(values);
+    }
+
     public boolean matches(ItemStack stack) {
         return matches(stack, JsonOps.INSTANCE);
     }
