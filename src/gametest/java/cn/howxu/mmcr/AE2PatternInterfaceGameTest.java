@@ -10,10 +10,12 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.crafting.CalculationStrategy;
 import appeng.api.networking.crafting.ICraftingPlan;
+import appeng.api.networking.energy.IEnergyService;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.crafting.PatternDetailsHelper;
+import appeng.api.crafting.IPatternDetails;
 import appeng.blockentity.crafting.CraftingBlockEntity;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
@@ -22,6 +24,9 @@ import appeng.core.definitions.AEItems;
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.me.cluster.implementations.CraftingCPUCluster;
 import appeng.me.helpers.BaseActionSource;
+import appeng.me.service.CraftingService;
+import appeng.crafting.execution.CraftingCpuLogic;
+import appeng.crafting.execution.CraftingCpuHelper;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -68,6 +73,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -181,7 +187,7 @@ public class AE2PatternInterfaceGameTest {
         BlockPos factoryPos2 = new BlockPos(2, 0, 0);
         BlockPos meChestPos = new BlockPos(4, 0, 0);
         BlockPos energyPos = new BlockPos(4, 0, 2);
-        AtomicBoolean batchPushed = new AtomicBoolean();
+        BlockPos cpuPos = new BlockPos(4, 0, 4);
 
         helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for CPU batch integration");
         helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
@@ -191,6 +197,7 @@ public class AE2PatternInterfaceGameTest {
         helper.setBlock(factoryPos2, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         helper.setBlock(meChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        helper.setBlock(cpuPos, AEBlocks.CRAFTING_STORAGE_64K.block().defaultBlockState());
 
         DynamicMachine machine = new DynamicMachine(machineId, "AE2 CPU Batch Factory Test", new BlockArray(Map.of(
                 new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()),
@@ -221,10 +228,12 @@ public class AE2PatternInterfaceGameTest {
                     "Pattern interface, ME storage and energy cell initialize before submitting the job");
             GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
             GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
+            CraftingBlockEntity cpuBlock = helper.getBlockEntity(cpuPos);
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), cpuBlock.getMainNode().getNode());
             controller.requestImmediateStructureCheck();
         });
 
-        helper.succeedWhen(() -> {
+        helper.startSequence().thenWaitUntil(() -> {
             PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             IGridNode node = patternPort.getMainNode().getNode();
             if (node == null) {
@@ -249,35 +258,91 @@ public class AE2PatternInterfaceGameTest {
                 helper.assertTrue(false, "Factory runtime must expose a positive parallelism");
                 return;
             }
-            if (batchPushed.compareAndSet(false, true)) {
+            CraftingCPUCluster cpuCluster = helper.<CraftingBlockEntity>getBlockEntity(cpuPos).getCluster();
+            if (cpuCluster == null || !cpuCluster.isActive()) {
+                helper.assertTrue(false, "Crafting CPU is not yet active");
+                return;
+            }
+        }).thenExecute(() -> {
+                PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
+                IGrid grid = patternPort.getMainNode().getNode().getGrid();
+                CraftingCPUCluster cpuCluster = helper.<CraftingBlockEntity>getBlockEntity(cpuPos).getCluster();
                 patternPort.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
                         List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
                         List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L))));
                 patternPort.getLogic().updatePatterns();
-                KeyCounter[] requests = new KeyCounter[]{
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter(),
-                        new KeyCounter()
-                };
-                requests[0].add(AEItemKey.of(Items.IRON_INGOT), 2L);
                 var pattern = patternPort.getLogic().getAvailablePatterns().getFirst();
-                helper.assertTrue(patternPort.craftingMachine().pushBatchPattern(pattern, requests, 2L, null),
-                        "Pattern interface MMCR crafting machine accepts a two-operation batch dispatch");
-                return;
-            }
+                KeyCounter usedItems = new KeyCounter();
+                usedItems.add(AEItemKey.of(Items.IRON_INGOT), 2L);
+                grid.getStorageService().getInventory().insert(AEItemKey.of(Items.IRON_INGOT), 2L,
+                        Actionable.MODULATE, new BaseActionSource());
+                ICraftingPlan plan = new ICraftingPlan() {
+                    @Override public GenericStack finalOutput() { return new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 2L); }
+                    @Override public long bytes() { return 1L; }
+                    @Override public boolean simulation() { return false; }
+                    @Override public boolean multiplePaths() { return false; }
+                    @Override public KeyCounter usedItems() { return usedItems; }
+                    @Override public KeyCounter emittedItems() { return new KeyCounter(); }
+                    @Override public KeyCounter missingItems() { return new KeyCounter(); }
+                    @Override public Map<IPatternDetails, Long> patternTimes() { return Map.of(pattern, 2L); }
+                };
+                CraftingCpuLogic cpu = cpuCluster.craftingLogic;
+                helper.assertTrue(cpu.trySubmitJob(grid, plan, new BaseActionSource(), null).successful(),
+                        "Crafting CPU accepts the two-operation processing job");
+                cpu.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE);
+                helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
+                                grid.getEnergyService(), helper.getLevel()) == 0,
+                        "An incomplete batch is not dispatched");
+                helper.assertTrue(cpu.getStored(AEItemKey.of(Items.IRON_INGOT)) == 1L
+                                && cpu.getWaitingFor(AEItemKey.of(Items.GOLD_INGOT)) == 0L
+                                && cpu.getPendingOutputs(AEItemKey.of(Items.GOLD_INGOT)) == 2L,
+                        "Failed batch extraction returns the first input and leaves task accounting unchanged");
+                cpu.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE);
+                KeyCounter singleInput = new KeyCounter();
+                singleInput.add(AEItemKey.of(Items.IRON_INGOT), 1L);
+                double singlePower = CraftingCpuHelper.calculatePatternPower(new KeyCounter[]{singleInput});
+                double[] availablePower = {singlePower};
+                double[] spentPower = {0D};
+                IEnergyService limitedEnergy = (IEnergyService) Proxy.newProxyInstance(
+                        IEnergyService.class.getClassLoader(), new Class<?>[]{IEnergyService.class}, (proxy, method, args) -> {
+                            if (!method.getName().equals("extractAEPower")) throw new UnsupportedOperationException(method.getName());
+                            double extracted = Math.min((double) args[0], availablePower[0]);
+                            if (args[1] == Actionable.MODULATE) {
+                                availablePower[0] -= extracted;
+                                spentPower[0] += extracted;
+                            }
+                            return extracted;
+                        });
+                helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
+                                limitedEnergy, helper.getLevel()) == 0,
+                        "Energy sufficient for one operation cannot dispatch the whole batch");
+                helper.assertTrue(cpu.getStored(AEItemKey.of(Items.IRON_INGOT)) == 2L
+                                && cpu.getWaitingFor(AEItemKey.of(Items.GOLD_INGOT)) == 0L
+                                && cpu.getPendingOutputs(AEItemKey.of(Items.GOLD_INGOT)) == 2L
+                                && spentPower[0] == 0D,
+                        "Insufficient batch energy returns all inputs without changing accounting or charging energy");
+                availablePower[0] = singlePower * 2D;
+                helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
+                                limitedEnergy, helper.getLevel()) == 1,
+                        "A batch consumes one CPU scheduling operation");
+                helper.assertTrue(Math.abs(spentPower[0] - singlePower * 2D) < 0.0001D,
+                        "CPU charges both operations exactly once");
+                helper.assertTrue(cpu.getStored(AEItemKey.of(Items.IRON_INGOT)) == 0L,
+                        "CPU removes inputs for both operations");
+                helper.assertTrue(cpu.getWaitingFor(AEItemKey.of(Items.GOLD_INGOT)) == 2L,
+                        "CPU registers both outputs through the original AE2 accounting path");
+                helper.assertTrue(cpu.getPendingOutputs(AEItemKey.of(Items.GOLD_INGOT)) == 0L,
+                        "CPU removes the completed batch task without an extra single-operation dispatch");
+        }).thenWaitUntil(() -> {
             helper.assertTrue(controller.runtimeSnapshot().factory().activeLaneCount() >= 2,
                     "Factory starts at least two lanes after a single CPU scheduling operation");
-            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
-                            Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 1L,
+        }).thenWaitUntil(() -> {
+            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 2L,
+                             Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 2L,
                     "The pushed pattern's output returns through the AE2 pattern interface into ME storage");
-            helper.succeed();
-        });
+            CraftingCpuLogic cpu = helper.<CraftingBlockEntity>getBlockEntity(cpuPos).getCluster().craftingLogic;
+            helper.assertTrue(!cpu.hasJob(), "CPU completes the job after receiving both batch outputs");
+        }).thenSucceed();
     }
 
     public void extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(GameTestHelper helper) {

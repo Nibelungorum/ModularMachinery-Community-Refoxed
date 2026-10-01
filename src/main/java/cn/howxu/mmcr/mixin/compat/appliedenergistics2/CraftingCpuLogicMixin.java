@@ -2,6 +2,7 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
 import appeng.api.config.Actionable;
 import appeng.api.config.PowerMultiplier;
+import appeng.api.crafting.IPatternDetails;
 import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.networking.crafting.ICraftingProvider;
 import appeng.api.networking.energy.IEnergyService;
@@ -12,17 +13,18 @@ import appeng.crafting.execution.ExecutingCraftingJob;
 import appeng.crafting.inv.ListCraftingInventory;
 import appeng.crafting.pattern.AEProcessingPattern;
 import appeng.helpers.patternprovider.PatternProviderLogic;
-import appeng.me.cluster.implementations.CraftingCPUCluster;
-import appeng.me.service.CraftingService;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternProviderLogicBatchAccess;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceHost;
-import java.util.Map;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * Batches only processing patterns selected for an MMCR pattern-provider host.
@@ -33,81 +35,51 @@ import org.spongepowered.asm.mixin.Shadow;
 public abstract class CraftingCpuLogicMixin {
     @Shadow private ExecutingCraftingJob job;
     @Shadow @Final private ListCraftingInventory inventory;
-    @Shadow @Final CraftingCPUCluster cluster;
+    @WrapOperation(method = "executeCrafting", at = @At(value = "INVOKE", target =
+            "Lappeng/api/networking/crafting/ICraftingProvider;pushPattern(Lappeng/api/crafting/IPatternDetails;[Lappeng/api/stacks/KeyCounter;)Z"))
+    private boolean mmcr$pushBatchPattern(ICraftingProvider provider, IPatternDetails details, KeyCounter[] inputs,
+                                          Operation<Boolean> original,
+                                          @Local(argsOnly = true) IEnergyService energyService,
+                                          @Local(argsOnly = true) Level level,
+                                          @Local(ordinal = 0) KeyCounter expectedOutputs,
+                                          @Local(ordinal = 1) KeyCounter expectedContainerItems) {
+        PatternInterfaceCraftingMachine batchMachine = mmcr$batchMachine(provider, details);
+        if (batchMachine == null) return original.call(provider, details, inputs);
+        ExecutingCraftingJobTaskProgressAccessor progress = (ExecutingCraftingJobTaskProgressAccessor)
+                ((ExecutingCraftingJobAccessor) job).mmcr$tasks().get(details);
+        long batchSize = Math.min(progress.mmcr$value(), batchMachine.maxBatchSize(details));
+        if (batchSize < 1L) return false;
+        if (batchSize == 1L) return original.call(provider, details, inputs);
 
-    /**
-     * @author howxu <dev@howxu.cn>
-     * @reason MMCR factory interfaces atomically admit multiple processing operations.
-     */
-    @Overwrite
-    public int executeCrafting(int maxPatterns, CraftingService craftingService, IEnergyService energyService,
-                               Level level) {
-        if (job == null) return 0;
-        ExecutingCraftingJobAccessor jobAccess = (ExecutingCraftingJobAccessor) job;
-        int pushedPatterns = 0;
-        var iterator = jobAccess.mmcr$tasks().entrySet().iterator();
-        taskLoop: while (iterator.hasNext()) {
-            Map.Entry<appeng.api.crafting.IPatternDetails, Object> task = iterator.next();
-            ExecutingCraftingJobTaskProgressAccessor progress =
-                    (ExecutingCraftingJobTaskProgressAccessor) task.getValue();
-            if (progress.mmcr$value() <= 0L) {
-                iterator.remove();
-                continue;
-            }
-
-            var details = task.getKey();
-            KeyCounter expectedOutputs = new KeyCounter();
-            KeyCounter expectedContainerItems = new KeyCounter();
-            KeyCounter[] craftingContainer = null;
-            long extractedOperations = 0L;
-            for (ICraftingProvider provider : craftingService.getProviders(details)) {
-                if (provider.isBusy()) continue;
-                PatternInterfaceCraftingMachine batchMachine = mmcr$batchMachine(provider, details);
-                long batchSize = batchMachine == null ? 1L : Math.min(progress.mmcr$value(), batchMachine.maxBatchSize(details));
-                if (batchSize < 1L) continue;
-
-                if (craftingContainer == null) {
-                    craftingContainer = mmcr$extractInputs(details, batchSize, level, expectedOutputs, expectedContainerItems);
-                    if (craftingContainer == null) break;
-                    extractedOperations = batchSize;
-                }
-                var patternPower = CraftingCpuHelper.calculatePatternPower(craftingContainer);
-                if (energyService.extractAEPower(patternPower, Actionable.SIMULATE, PowerMultiplier.CONFIG)
-                        < patternPower - 0.01) break;
-
-                boolean pushed = batchMachine != null && extractedOperations > 1L
-                        ? batchMachine.pushBatchPattern(details, craftingContainer, extractedOperations, null)
-                        : provider.pushPattern(details, craftingContainer);
-                if (!pushed) continue;
-
-                energyService.extractAEPower(patternPower, Actionable.MODULATE, PowerMultiplier.CONFIG);
-                pushedPatterns++;
-                for (var output : expectedOutputs) {
-                    jobAccess.mmcr$waitingFor().insert(output.getKey(), output.getLongValue(), Actionable.MODULATE);
-                }
-                for (var containerItem : expectedContainerItems) {
-                    jobAccess.mmcr$waitingFor().insert(containerItem.getKey(), containerItem.getLongValue(), Actionable.MODULATE);
-                    ((ElapsedTimeTrackerAccessor) jobAccess.mmcr$timeTracker())
-                            .mmcr$addMaxItems(containerItem.getLongValue(), containerItem.getKey().getType());
-                }
-                cluster.markDirty();
-                progress.mmcr$setValue(progress.mmcr$value() - extractedOperations);
-                if (progress.mmcr$value() <= 0L) {
-                    iterator.remove();
-                    continue taskLoop;
-                }
-                if (pushedPatterns == maxPatterns) break taskLoop;
-                expectedOutputs.reset();
-                expectedContainerItems.reset();
-                craftingContainer = null;
-            }
-            if (craftingContainer != null) CraftingCpuHelper.reinjectPatternInputs(inventory, craftingContainer);
+        KeyCounter extraOutputs = new KeyCounter();
+        KeyCounter extraContainerItems = new KeyCounter();
+        KeyCounter[] extraInputs = mmcr$extractInputs(details, batchSize - 1L, level, extraOutputs, extraContainerItems);
+        if (extraInputs == null) return false;
+        KeyCounter[] combined = new KeyCounter[inputs.length];
+        for (int index = 0; index < inputs.length; index++) {
+            combined[index] = new KeyCounter();
+            combined[index].addAll(inputs[index]);
+            combined[index].addAll(extraInputs[index]);
         }
-        return pushedPatterns;
+        double patternPower = CraftingCpuHelper.calculatePatternPower(combined);
+        if (energyService.extractAEPower(patternPower, Actionable.SIMULATE, PowerMultiplier.CONFIG) < patternPower - 0.01
+                || !batchMachine.pushBatchPattern(details, combined, batchSize, null)) {
+            CraftingCpuHelper.reinjectPatternInputs(inventory, extraInputs);
+            return false;
+        }
+
+        // AE2 accounts for the first operation after this call returns successfully.
+        energyService.extractAEPower(patternPower - CraftingCpuHelper.calculatePatternPower(inputs),
+                Actionable.MODULATE, PowerMultiplier.CONFIG);
+        expectedOutputs.addAll(extraOutputs);
+        expectedContainerItems.addAll(extraContainerItems);
+        progress.mmcr$setValue(progress.mmcr$value() - (batchSize - 1L));
+        return true;
     }
 
+    @Unique
     private PatternInterfaceCraftingMachine mmcr$batchMachine(ICraftingProvider provider,
-                                                              appeng.api.crafting.IPatternDetails details) {
+                                                              IPatternDetails details) {
         if (!(details instanceof AEProcessingPattern) || !(provider instanceof PatternProviderLogic logic)) {
             return null;
         }
@@ -117,7 +89,8 @@ public abstract class CraftingCpuLogicMixin {
         return machine instanceof PatternInterfaceCraftingMachine batchMachine ? batchMachine : null;
     }
 
-    private KeyCounter[] mmcr$extractInputs(appeng.api.crafting.IPatternDetails details, long operations, Level level,
+    @Unique
+    private KeyCounter[] mmcr$extractInputs(IPatternDetails details, long operations, Level level,
                                             KeyCounter expectedOutputs, KeyCounter expectedContainerItems) {
         KeyCounter[] combined = null;
         for (long operation = 0; operation < operations; operation++) {

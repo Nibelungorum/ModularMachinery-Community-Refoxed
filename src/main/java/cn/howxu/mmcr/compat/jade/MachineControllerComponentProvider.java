@@ -73,7 +73,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         List<String> keys = new ArrayList<>();
         keys.add("structure");
         keys.add("state");
-        if (snapshot.recipePoolId() != null) keys.add("recipe_pool");
+        if (snapshot.formed() && snapshot.recipePoolId() != null) keys.add("recipe_pool");
         if (!snapshot.hasFactoryController() && snapshot.hasProgress()) keys.add("progress");
         if (snapshot.shouldShowParallelSlots()) keys.add("parallel_slots");
         if (snapshot.shouldShowParallelism()) keys.add("parallelism");

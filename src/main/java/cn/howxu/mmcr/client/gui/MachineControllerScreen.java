@@ -131,7 +131,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         List<ControllerTextLine> lines = new ArrayList<>();
         lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
         ResourceLocation recipePoolId = displayedRecipePoolId(menu.currentRecipePoolId(), menu.recipePoolIds());
-        if (recipePoolId != null) {
+        if (menu.isFormed() && recipePoolId != null) {
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
                     RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
         }

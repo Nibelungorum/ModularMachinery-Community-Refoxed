@@ -212,7 +212,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                 controllerStatusColor(menu.isFormed(), selected.active())));
         ResourceLocation recipePoolId = MachineControllerScreen.displayedRecipePoolId(
                 menu.currentRecipePoolId(), menu.recipePoolIds());
-        if (recipePoolId != null) {
+        if (menu.isFormed() && recipePoolId != null) {
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
                     RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
         }
