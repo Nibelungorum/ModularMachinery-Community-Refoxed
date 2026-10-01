@@ -63,7 +63,7 @@ public class BLAST_FURNACE {
                                         .layer("AXA", "XIX", "XXX")
                                         .layer("XXX", "I I", "XBX")
                                         .layer("AXA", "XCX", "XXX")
-                                        .where('X', block("mmcr:casing"))
+                                        .where('X', block("mmcr:basic_casing"))
                                         .where('A', any(
                                                 block(Blocks.IRON_BLOCK),
                                                 BlockConditions.parallelControllers()
