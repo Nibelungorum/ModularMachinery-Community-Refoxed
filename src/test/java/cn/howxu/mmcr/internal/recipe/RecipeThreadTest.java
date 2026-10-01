@@ -2,32 +2,70 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.util.IOType;
+import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.dedicated.DedicatedServer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +76,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class RecipeThreadTest {
+    private MinecraftServer previousServer;
+    private boolean serverInstalled;
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
@@ -49,9 +90,14 @@ class RecipeThreadTest {
     }
 
     @AfterEach
-    void cleanup() {
+    void cleanup() throws Exception {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
+        if (serverInstalled) {
+            Field field = ServerLifecycleHooks.class.getDeclaredField("currentServer");
+            field.setAccessible(true);
+            field.set(null, previousServer);
+        }
     }
 
     @Test
@@ -82,6 +128,243 @@ class RecipeThreadTest {
         var plan = new AsyncRequirementPlanner.PreparedPlan(List.of(requirement), List.of(), List.of());
 
         assertThat(RecipeThread.requiresWorkerPlanning(plan)).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void energy_only_ticks_progress_without_dispatching_workers(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        EnergyOutputHatchBlockEntity output = RuntimeTestFixtures.energyOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithPorts(energy, output);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            throw new AssertionError("energy-only ticks must not dispatch a worker");
+        });
+        installCoordinator(level, coordinator);
+        try {
+            energy.nativeEnergyStorage().setAmount(1_000L);
+            MachineRecipeThread thread = new MachineRecipeThread(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("energy_tick_timing"), MMCR.id("test_cube"),
+                    20, List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 20L),
+                            new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 10L)), List.of());
+            assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
+            long energyAfterStart = energy.nativeEnergyStorage().getAmountAsLong();
+
+            for (int tick = 1; tick <= 4; tick++) {
+                thread.tick();
+                assertThat(thread.tickPendingForTesting()).isTrue();
+                SharedIoEvents.completeLevelTick(level);
+
+                assertThat(thread.tickPendingForTesting()).isFalse();
+                assertThat(thread.runtime().tickCount()).isEqualTo(tick);
+                assertThat(energy.nativeEnergyStorage().getAmountAsLong()).isEqualTo(energyAfterStart - tick * 20L);
+                assertThat(output.nativeEnergyStorage().getAmountAsLong()).isEqualTo(tick * 10L);
+                RuntimeTestFixtures.advanceGameTime(level);
+            }
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
+    void energy_tick_rechecks_supply_at_arbitration_and_recovers_without_duplicate_consumption() throws Exception {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithPorts(energy);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(command -> {
+            throw new AssertionError("energy-only ticks must not dispatch a worker");
+        }));
+        try {
+            energy.nativeEnergyStorage().setAmount(100L);
+            MachineRecipeThread thread = new MachineRecipeThread(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("energy_tick_live_supply"), MMCR.id("test_cube"),
+                    20, List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 20L)), List.of());
+            assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
+            thread.tick();
+            energy.nativeEnergyStorage().setAmount(0L);
+            SharedIoEvents.completeLevelTick(level);
+
+            assertThat(thread.runtime().tickCount()).isZero();
+            assertThat(thread.runtime().failure()).isNotNull();
+            assertThat(energy.nativeEnergyStorage().getAmountAsLong()).isZero();
+            assertThat(thread.tickPendingForTesting()).isFalse();
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            energy.nativeEnergyStorage().setAmount(100L);
+            thread.tick();
+            SharedIoEvents.completeLevelTick(level);
+
+            assertThat(thread.runtime().tickCount()).isEqualTo(1);
+            assertThat(thread.runtime().failure()).isNull();
+            assertThat(energy.nativeEnergyStorage().getAmountAsLong()).isEqualTo(80L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
+    void mixed_per_tick_fallback_does_not_dispatch_discarded_worker_planning() throws Exception {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity catalyst = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithPorts(energy, catalyst);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(command -> {
+            throw new AssertionError("known fallback must not dispatch discarded worker planning");
+        }));
+        try {
+            energy.nativeEnergyStorage().setAmount(100L);
+            catalyst.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+            MachineRecipeThread thread = new MachineRecipeThread(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("mixed_energy_tick"), MMCR.id("test_cube"),
+                    20, List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 20L),
+                            new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                                    ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)), List.of());
+            assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
+            long energyAfterStart = energy.nativeEnergyStorage().getAmountAsLong();
+            thread.tick();
+            catalyst.itemHandler().setContents(0, ItemStack.EMPTY, 0L);
+            SharedIoEvents.completeLevelTick(level);
+
+            assertThat(thread.runtime().tickCount()).isZero();
+            assertThat(thread.runtime().failure()).isNotNull();
+            assertThat(energy.nativeEnergyStorage().getAmountAsLong()).isEqualTo(energyAfterStart);
+            assertThat(thread.tickPendingForTesting()).isFalse();
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            catalyst.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+            thread.tick();
+            SharedIoEvents.completeLevelTick(level);
+            assertThat(thread.runtime().tickCount()).isEqualTo(1);
+            assertThat(catalyst.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(energy.nativeEnergyStorage().getAmountAsLong()).isEqualTo(energyAfterStart - 20L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void heat_temperature_and_energy_ticks_use_live_main_thread_arbitration(boolean includeEnergy) throws Exception {
+        try (var requirementScope = RequirementHandlerRegistry.openTestScope();
+             var outputScope = OutputRegistry.openTestScope()) {
+            var bridge = MekanismBridgeBootstrap.selectForTesting(true);
+            MekanismBridgeBootstrap.installForTesting(bridge);
+            bridge.registerRecipeTypes(MekanismRecipeTypes.CHEMICAL, MekanismRecipeTypes.HEAT_TEMPERATURE,
+                    MekanismRecipeTypes.HEAT);
+            HeatProbePort input = new HeatProbePort(new BlockPos(1, 0, 0), IOType.INPUT);
+            HeatProbePort output = new HeatProbePort(new BlockPos(2, 0, 0), IOType.OUTPUT);
+            EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(3, 0, 0));
+            MachineControllerBlockEntity controller = controllerWithPorts(input, output, energy);
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+            installCoordinator(level, MachineAsyncCoordinator.forTesting(command -> {
+                throw new AssertionError("scalar heat/energy ticks must not dispatch a worker");
+            }));
+            try {
+                input.capacitor.setHeat(6_000D);
+                energy.nativeEnergyStorage().setAmount(1_000L);
+                List<MachineRequirement> requirements = new ArrayList<>(List.of(
+                        LoadedHeatRequirement.minimumTemperature(10D), LoadedHeatRequirement.outputHeat(5D)));
+                if (includeEnergy) requirements.add(new EnergyRequirement(RecipeModifier.IOType.INPUT, 20L));
+                MachineRecipeThread thread = new MachineRecipeThread(controller);
+                MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("scalar_heat_tick"), controller.currentRecipePoolId(),
+                        20, requirements, List.of());
+                assertThat(thread.runtime().start(recipe, 1).isCrafting())
+                        .as("start failure: %s", thread.runtime().failure()).isTrue();
+                long energyAfterStart = energy.nativeEnergyStorage().getAmountAsLong();
+
+                thread.tick();
+                input.capacitor.setHeat(0D);
+                SharedIoEvents.completeLevelTick(level);
+                output.capacitor.update();
+                assertThat(thread.runtime().tickCount()).isZero();
+                assertThat(thread.runtime().failure().reason()).isEqualTo(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
+                assertThat(output.capacitor.getHeat()).isZero();
+                assertThat(energy.nativeEnergyStorage().getAmountAsLong()).isEqualTo(energyAfterStart);
+
+                input.capacitor.setHeat(6_000D);
+                for (int tick = 1; tick <= 3; tick++) {
+                    RuntimeTestFixtures.advanceGameTime(level);
+                    thread.tick();
+                    SharedIoEvents.completeLevelTick(level);
+                    output.capacitor.update();
+                    assertThat(thread.runtime().tickCount()).isEqualTo(tick);
+                    assertThat(thread.tickPendingForTesting()).isFalse();
+                    assertThat(output.capacitor.getHeat()).isEqualTo(tick * 5D);
+                    assertThat(energy.nativeEnergyStorage().getAmountAsLong())
+                            .isEqualTo(energyAfterStart - (includeEnergy ? tick * 20L : 0L));
+                }
+            } finally {
+                MachineAsyncCoordinator.discard(level);
+                SharedIoCoordinator.discard(level);
+                StructureClaimRegistry.discard(level);
+            }
+        } finally {
+            MekanismBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    /** Test port with a real Mekanism heat capability and a deterministic ambient temperature.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class HeatProbePort extends IOPortBlockEntity {
+        private final IOType direction;
+        private final BasicHeatCapacitor capacitor = BasicHeatCapacitor.create(300D, () -> 0D, () -> { });
+
+        private HeatProbePort(BlockPos pos, IOType direction) {
+            super(ModBlockEntities.BES.get(direction == IOType.INPUT ? "item_input_bus" : "item_output_bus").get(), pos,
+                    ModBlocks.BLOCKS.get(direction == IOType.INPUT ? "item_input_bus" : "item_output_bus").get().defaultBlockState());
+            this.direction = direction;
+        }
+
+        @Override
+        public IOType ioType() { return direction; }
+
+        @Override
+        public IOPortKind kind() { return direction == IOType.INPUT ? PortKinds.ITEM_INPUT : PortKinds.ITEM_OUTPUT; }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of(new HeatPortCapability(capacitor, direction)));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void installCoordinator(ServerLevel level, MachineAsyncCoordinator coordinator) throws Exception {
+        Field field = MachineAsyncCoordinator.class.getDeclaredField("COORDINATORS");
+        field.setAccessible(true);
+        ((Map<ServerLevel, MachineAsyncCoordinator>) field.get(null)).put(level, coordinator);
+        Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        MinecraftServer server = (MinecraftServer) ((sun.misc.Unsafe) unsafeField.get(null)).allocateInstance(DedicatedServer.class);
+        Field serverThread = MinecraftServer.class.getDeclaredField("serverThread");
+        serverThread.setAccessible(true);
+        serverThread.set(server, Thread.currentThread());
+        Field currentServer = ServerLifecycleHooks.class.getDeclaredField("currentServer");
+        currentServer.setAccessible(true);
+        previousServer = (MinecraftServer) currentServer.get(null);
+        serverInstalled = true;
+        currentServer.set(null, server);
+    }
+
+    private static MachineControllerBlockEntity controllerWithPorts(IOPortBlockEntity... ports) {
+        MachineControllerBlockEntity controller = normalController();
+        for (IOPortBlockEntity port : ports) RuntimeTestFixtures.replaceBlockEntity(controller, port);
+        controller.componentRuntime().replaceComponents(Arrays.stream(ports).map(port -> new ProcessingComponent(
+                new MachineComponent(port.kind(), port.ioType()), port,
+                port.getBlockPos(), port.getBlockPos(), (String) null)).toList());
+        RuntimeTestFixtures.republish(controller);
+        return controller;
     }
 
     @Test

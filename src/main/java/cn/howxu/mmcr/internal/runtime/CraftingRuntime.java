@@ -45,6 +45,7 @@ import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
@@ -67,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 /**
  * Owns one recipe lifecycle. Capability plans are the only mutable-resource boundary.
@@ -530,7 +532,17 @@ public final class CraftingRuntime {
         }
         List<MachineRequirement> requirements = perTickRequirements();
         if (requirements.isEmpty()) return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
-        return context(preparation.runtime()).planAsync(requirements, activeRecipe.getParallelism());
+        // Scalar-only ticks are cheaper to plan against live storage during shared-IO arbitration.
+        if (requirements.stream().allMatch(requirement -> requirement instanceof EnergyRequirement
+                || requirement instanceof LoadedHeatRequirement)) {
+            return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(),
+                    IntStream.range(0, requirements.size()).boxed().toList());
+        }
+        AsyncRequirementPlanner.PreparedPlan prepared = context(preparation.runtime())
+                .planAsync(requirements, activeRecipe.getParallelism());
+        // A known fallback replans the entire tick, so worker operations would be discarded.
+        return prepared.initialMainThreadRequirements().isEmpty() ? prepared
+                : new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), prepared.initialMainThreadRequirements());
     }
 
     /** Flushes recipe behavior screen text after its callback has run on the server thread. */
