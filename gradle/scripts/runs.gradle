@@ -1,3 +1,29 @@
+configurations {
+    clientMods {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    // spark
+    clientMods("curse.maven:${spark_id}:${spark_version}")
+    // sodium
+    clientMods("curse.maven:${sodium_id}:${sodium_version}")
+    // athena for ctm
+    // clientMods("curse.maven:${athena_id}:${athena_version}")
+    // lithium
+    clientMods("maven.modrinth:${lithium_id}:${lithium_version}")
+    // time in a bottle
+    clientMods("maven.modrinth:${tiab_id}:${tiab_version}")
+    // modern ui
+    // clientMods("maven.modrinth:${mui_id}:${mui_version}")
+    // JECharacters
+    clientMods("curse.maven:${jec_id}:${jec_version}")
+    // AE2 x JEI integration
+    clientMods("curse.maven:${ae2xjei_id}:${ae2xjei_version}")
+}
+
 runs {
     configureEach {
         systemProperty 'forge.logging.markers', 'REGISTRIES'
@@ -9,22 +35,11 @@ runs {
     client {
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         arguments.addAll('--username', "howxu")
-        dependencies {
-            // spark
-            runtime("curse.maven:${spark_id}:${spark_version}")
-            // sodium
-            runtime("curse.maven:${sodium_id}:${sodium_version}")
-            // athena for ctm
-            // runtime("curse.maven:${athena_id}:${athena_version}")
-            // lithium
-            runtime("maven.modrinth:${lithium_id}:${lithium_version}")
-            // time in a bottle
-            runtime("maven.modrinth:${tiab_id}:${tiab_version}")
-            // modern ui
-            // runtime("maven.modrinth:${mui_id}:${mui_version}")
-            // JECharacters
-            runtime("curse.maven:${jec_id}:${jec_version}")
+        runtimeClasspath.from(project.configurations.clientMods)
+        
+        dependencies{
             // CustomSkinLoader
+            // 题外话 我真的是有点讨厌cross platform的mod
             runtime("curse.maven:${csl_id}:${csl_version}")
         }
     }

@@ -44,7 +44,7 @@ dependencies {
     testImplementation 'org.assertj:assertj-core:3.25.0'
 
     // 1.21.1 only
-    implementation("de.mari_023:${ae2wtlib_id}:${ae2wtlib_version}")
+    localRuntime("de.mari_023:${ae2wtlib_id}:${ae2wtlib_version}")
 }
 
 dependencies {
