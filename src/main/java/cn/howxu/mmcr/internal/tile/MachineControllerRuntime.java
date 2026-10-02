@@ -24,6 +24,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -70,6 +71,8 @@ public final class MachineControllerRuntime {
     private CraftingStateSnapshot craftingState = CraftingStateSnapshot.empty(0L, 0L, 0L);
     private ControllerRuntimeSnapshot publishedSnapshot;
     private @Nullable ControllerRuntimeSnapshot workingSnapshot;
+    private @Nullable ResourceLocation workingMachineId;
+    private @Nullable ResourceLocation publishedMachineId;
     private long workingStructureEpoch = Long.MIN_VALUE;
     private long workingCapabilityVersion = Long.MIN_VALUE;
     private long workingCapabilityPresentationEpoch = Long.MIN_VALUE;
@@ -214,26 +217,36 @@ public final class MachineControllerRuntime {
         if (workingSnapshot != null && workingEpochsUnchanged()) return workingSnapshot;
         StructureSnapshot structureSnapshot = structure.snapshot();
         FactorySnapshot factorySnapshot = factoryRuntime.snapshot();
+        ControllerRecipePresentation recipePresentation = craftingRuntime.recipePresentation();
         Machine machine = structureSnapshot.machine() != null ? structureSnapshot.machine() : structureSnapshot.configuredMachine();
-        boolean recipeBehavior = machine != null && machine.behavior() instanceof RecipeBehavior;
-        boolean factorySupported = recipeBehavior && machine.hasFactory();
-        boolean factoryControllerPresent = factorySupported && components.components().stream()
-                .anyMatch(component -> component.getContainer() instanceof FactorySchedulerBlockEntity);
-        int parallelControllerCount = (int) components.components().stream()
-                .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
-                .count();
-        long maxParallelControllerCount = machine != null && machine.parallelizable()
-                ? Math.max(1L, machine.maxParallelism()) : 0L;
-        int controllerRole = machine == null ? 0 : machine.isHost() ? 1 : machine.isModule() ? 2 : 0;
-        workingSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.capabilityVersion(),
-                components.modifierVersion(), components.stateVersion(), components.foundModifiers(), components.foundLevels(),
-                components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
-                craftingState, factorySnapshot, components.componentPresentations(),
-                components.capabilityPresentations(), foundLevelIds(), machine == null ? "" : machine.registryName().toString(),
-                 machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
-                 parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),
-                 components.upgradeItems(), components.upgradeContentRevision(), currentDataStorageValues(),
-                 craftingRuntime().recipePresentation());
+        long maxParallelism = components.maxParallelism(machine);
+        if (workingSnapshot != null && workingStaticStateUnchanged()) {
+            workingSnapshot = workingSnapshot.withRuntimeState(craftingState, factorySnapshot,
+                    components.capabilityPresentations(), maxParallelism, recipePresentation);
+        } else {
+            boolean recipeBehavior = machine != null && machine.behavior() instanceof RecipeBehavior;
+            boolean factorySupported = recipeBehavior && machine.hasFactory();
+            boolean factoryControllerPresent = false;
+            int parallelControllerCount = 0;
+            for (ProcessingComponent component : components.components()) {
+                if (component.getContainer() instanceof FactorySchedulerBlockEntity) factoryControllerPresent = factorySupported;
+                if (component.getContainer() instanceof ParallelControllerBlockEntity) parallelControllerCount++;
+            }
+            long maxParallelControllerCount = machine != null && machine.parallelizable()
+                    ? Math.max(1L, machine.maxParallelism()) : 0L;
+            int controllerRole = machine == null ? 0 : machine.isHost() ? 1 : machine.isModule() ? 2 : 0;
+            ResourceLocation machineId = machine == null ? null : machine.registryName();
+            workingSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.capabilityVersion(),
+                    components.modifierVersion(), components.stateVersion(), components.foundModifiers(), components.foundLevels(),
+                    components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
+                    craftingState, factorySnapshot, components.componentPresentations(),
+                    components.capabilityPresentations(), foundLevelIds(), machine == null ? "" : machineId.toString(),
+                     machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
+                     parallelControllerCount, maxParallelControllerCount, maxParallelism,
+                     components.upgradeItems(), components.upgradeContentRevision(), currentDataStorageValues(),
+                     recipePresentation);
+            workingMachineId = machineId;
+        }
         workingStructureEpoch = structure.stateEpoch();
         workingCapabilityVersion = components.capabilityVersion();
         workingCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
@@ -297,6 +310,7 @@ public final class MachineControllerRuntime {
 
     private void flushSnapshot() {
         publishedSnapshot = currentSnapshot();
+        publishedMachineId = workingMachineId;
         publishedStructureEpoch = structure.stateEpoch();
         publishedCapabilityVersion = components.capabilityVersion();
         publishedCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
@@ -318,9 +332,36 @@ public final class MachineControllerRuntime {
                 && workingFactoryEpoch == factoryRuntime.stateEpoch()
                 && workingCraftingEpoch == craftingStateEpoch
                 && workingDataStorageStateEpoch == dataStorageStateEpoch
+                && workingSnapshot.capabilityPresentations() == components.capabilityPresentations()
+                && workingSnapshot.upgradeContentRevision() == components.upgradeContentRevision()
+                && machineStaticStateUnchanged(workingSnapshot, workingMachineId)
                 && workingSnapshot.recipePresentation() == craftingRuntime.recipePresentation()
                 && workingSnapshot.maxParallelism() == components.maxParallelism(workingSnapshot.structure().machine() != null
                         ? workingSnapshot.structure().machine() : workingSnapshot.structure().configuredMachine());
+    }
+
+    private boolean workingStaticStateUnchanged() {
+        return workingStructureEpoch == structure.stateEpoch()
+                && workingCapabilityVersion == components.capabilityVersion()
+                && workingModifierVersion == components.modifierVersion()
+                && workingComponentStateVersion == components.stateVersion()
+                && workingDataStorageStateEpoch == dataStorageStateEpoch
+                && workingSnapshot.upgradeContentRevision() == components.upgradeContentRevision()
+                && machineStaticStateUnchanged(workingSnapshot, workingMachineId);
+    }
+
+    private boolean machineStaticStateUnchanged(ControllerRuntimeSnapshot snapshot, @Nullable ResourceLocation machineId) {
+        StructureSnapshot current = structure.snapshot();
+        Machine machine = current.machine() != null ? current.machine() : current.configuredMachine();
+        Machine previous = snapshot.structure().machine() != null
+                ? snapshot.structure().machine() : snapshot.structure().configuredMachine();
+        return machine == previous
+                && Objects.equals(machineId, machine == null ? null : machine.registryName())
+                && Objects.equals(snapshot.machineName(), machine == null ? "" : machine.displayNameKey())
+                && snapshot.factorySupported() == (machine != null && machine.behavior() instanceof RecipeBehavior && machine.hasFactory())
+                && snapshot.controllerRole() == (machine == null ? 0 : machine.isHost() ? 1 : machine.isModule() ? 2 : 0)
+                && snapshot.maxParallelControllerCount() == (machine != null && machine.parallelizable()
+                        ? Math.max(1L, machine.maxParallelism()) : 0L);
     }
 
     private boolean epochsUnchanged() {
@@ -333,6 +374,9 @@ public final class MachineControllerRuntime {
                 && publishedCraftingEpoch == craftingStateEpoch
                 && publishedDataStorageStateEpoch == dataStorageStateEpoch
                 && publishedSnapshot != null
+                && publishedSnapshot.capabilityPresentations() == components.capabilityPresentations()
+                && publishedSnapshot.upgradeContentRevision() == components.upgradeContentRevision()
+                && machineStaticStateUnchanged(publishedSnapshot, publishedMachineId)
                 && publishedSnapshot.recipePresentation() == craftingRuntime.recipePresentation()
                 && publishedSnapshot.maxParallelism() == components.maxParallelism(publishedSnapshot.structure().machine() != null
                         ? publishedSnapshot.structure().machine() : publishedSnapshot.structure().configuredMachine());

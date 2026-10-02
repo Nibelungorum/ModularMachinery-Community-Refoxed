@@ -24,14 +24,30 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -48,6 +64,7 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -59,6 +76,8 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
@@ -98,6 +117,7 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.ChunkPos;
@@ -120,6 +140,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -198,6 +219,383 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void server_progress_reuses_owned_static_state_and_callbacks_read_batch_writes() throws Exception {
+        ResourceLocation machineId = MMCR.id("shared_progress_batch");
+        MachineControllerBlockEntity controller = factoryTextController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        controller.componentRuntime().replaceModifiers(Map.of("progress", List.of(MachineModifier.parallelized(true))));
+        MachineLevel level = snapshotLevel("shared_progress_level");
+        controller.componentRuntime().replaceLevels(Map.of(level.id(), level));
+        runtime.publishUpgradeBusState(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO,
+                List.of(new ItemStack(Items.DIAMOND, 2)))));
+        DataStorage storage = new DataStorage();
+        storage.set("mode", DataValue.of("before"));
+        runtime.publishDataStorages(Map.of(BlockPos.ZERO, storage));
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("shared_progress_recipe"), machineId,
+                20, List.of(), List.of());
+        assertThat(runtime.craftingRuntime().start(recipe, 1L).isCrafting()).isTrue();
+        runtime.refreshCraftingState();
+        var before = controller.runtimeSnapshot();
+        assertThat(before.factoryControllerPresent()).isTrue();
+        AtomicInteger callbacks = new AtomicInteger();
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
+            var live = controller.currentRuntimeSnapshot();
+            assertThat(live.crafting().tick()).isEqualTo(7);
+            assertThat(live.crafting().failure()).isSameAs(runtime.craftingRuntime().failure());
+            assertThat(live.dataStorageValues()).containsEntry("mode", DataValue.of("after"));
+            callbacks.incrementAndGet();
+        }));
+
+        runtime.beginUpdateBatch();
+        try {
+            runtime.craftingRuntime().activeRecipe().setTick(7);
+            runtime.refreshCraftingState();
+            var progressed = controller.currentRuntimeSnapshot();
+            assertSharedStaticState(progressed, before);
+            assertThat(ownedUpgradeItems(progressed)).isSameAs(ownedUpgradeItems(before));
+            assertThat(progressed.recipePresentation()).isSameAs(before.recipePresentation());
+            assertThat(controller.runtimeSnapshot()).isSameAs(before);
+            progressed.upgradeItems().getFirst().setCount(64);
+            assertThat(before.upgradeItems().getFirst().getCount()).isEqualTo(2);
+            assertThat(progressed.upgradeItems().getFirst().getCount()).isEqualTo(2);
+
+            storage.set("mode", DataValue.of("after"));
+            runtime.onDataStorageChanged(storage);
+            var changedData = controller.currentRuntimeSnapshot();
+            assertThat(changedData.dataStorageValues()).isNotSameAs(before.dataStorageValues());
+            assertThat(ownedUpgradeItems(changedData)).isNotSameAs(ownedUpgradeItems(before));
+            runtime.craftingRuntime().recordSearchFailure(null);
+            runtime.refreshCraftingState();
+            var failed = controller.currentRuntimeSnapshot();
+            assertSharedStaticState(failed, changedData);
+            assertThat(failed.crafting().failure()).isNotNull();
+            ControllerScreenTextRegistry.apply(runtime.runtimeContext());
+        } finally {
+            runtime.endUpdateBatch();
+        }
+
+        assertThat(callbacks).hasValue(1);
+        assertThat(controller.runtimeSnapshot()).isSameAs(controller.currentRuntimeSnapshot());
+        assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(7);
+        assertThat(before.crafting().tick()).isZero();
+        assertThat(before.crafting().failure()).isNull();
+        assertThat(before.dataStorageValues()).containsEntry("mode", DataValue.of("before"));
+    }
+
+    @Test
+    void reentrant_capability_reads_do_not_leave_current_or_published_snapshots_with_stale_alias_rows() throws Exception {
+        for (boolean publishDuringCallback : List.of(false, true)) {
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            MachineControllerRuntime runtime = runtimeOf(controller);
+            LongValueStorage original = new LongValueStorage(100, 100, () -> {});
+            LongValueStorage replacement = new LongValueStorage(100, 100, () -> {});
+            ReentrantValueCapability provider = new ReentrantValueCapability(original);
+            ReentrantValueCapability alias = new ReentrantValueCapability(original);
+            ReentrantValueCapability unrelated = new ReentrantValueCapability(new LongValueStorage(100, 100, () -> {}));
+            List<ProcessingComponent> components = new ArrayList<>();
+            for (ReentrantValueCapability capability : List.of(provider, alias, unrelated)) {
+                BlockPos pos = new BlockPos(101 + components.size(), 20, 30);
+                ItemInputBusBlockEntity host = new ItemInputBusBlockEntity(pos,
+                        ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState()) {
+                    @Override
+                    public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of(capability)); }
+                };
+                components.add(new ProcessingComponent(null, host, pos, pos.subtract(controller.getBlockPos()), List.of()));
+            }
+            controller.componentRuntime().replaceComponents(components);
+            runtime.publishSnapshot();
+            var before = controller.runtimeSnapshot();
+            long epoch = controller.componentRuntime().capabilityPresentationEpoch();
+            original.setAmount(19);
+            replacement.setAmount(55);
+            provider.storage = replacement;
+            List<ControllerRuntimeSnapshot> intermediate = new ArrayList<>();
+            provider.beforeFacetRead = () -> {
+                intermediate.add(controller.currentRuntimeSnapshot());
+                if (publishDuringCallback) runtime.publishSnapshot();
+            };
+
+            controller.notifyCapabilityPresentationChanged(components.getFirst().getPos());
+            assertThat(intermediate).singleElement().satisfies(snapshot ->
+                    assertThat(snapshot.capabilityPresentations())
+                            .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                            .containsExactly(55L, 0L, 0L));
+            // Recollecting the inner cache must not hide the invalidation from either outer cache.
+            var rows = controller.componentRuntime().capabilityPresentations();
+            assertThat(rows).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                    .containsExactly(55L, 19L, 0L);
+            var current = controller.currentRuntimeSnapshot();
+            assertThat(current.capabilityPresentations()).isSameAs(rows);
+            runtime.publishSnapshot();
+            assertThat(controller.runtimeSnapshot()).isSameAs(current);
+            assertThat(current.capabilityPresentations().get(2)).isSameAs(before.capabilityPresentations().get(2));
+            assertThat(before.capabilityPresentations()).allSatisfy(row -> assertThat(row.amount()).isZero());
+            assertThat(controller.componentRuntime().capabilityPresentationEpoch()).isEqualTo(epoch + 1);
+            assertThat(controller.currentRuntimeSnapshot()).isSameAs(current);
+        }
+    }
+
+    /** A value provider whose facet may reenter controller snapshot publication.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ReentrantValueCapability implements MachineCapability, ValueFacet<LongValueStorage> {
+        private LongValueStorage storage;
+        private Runnable beforeFacetRead;
+
+        private ReentrantValueCapability(LongValueStorage storage) { this.storage = storage; }
+
+        @Override
+        public LongValueStorage storage() { return storage; }
+
+        @Override
+        public CapabilityType type() { return BuiltinCapabilityDefinitions.ENERGY_TYPE; }
+
+        @Override
+        public CapabilityDirections directions() { return CapabilityDirections.input(); }
+
+        @Override
+        public CapabilityView view() { return CapabilityFactories.view(type(), directions(), Set.of(ValueFacet.class)); }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            Runnable action = beforeFacetRead;
+            beforeFacetRead = null;
+            if (action != null) action.run();
+            return MachineCapability.super.facet(facetType);
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) { return CapabilityResult::successful; }
+    }
+
+    @Test
+    void dynamic_factory_capability_and_output_revisions_keep_static_ownership() throws Exception {
+        ResourceLocation machineId = MMCR.id("shared_dynamic_revisions");
+        MachineControllerBlockEntity controller = factoryTextController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(new MachineComponent(energy.kind(), energy.ioType()), energy,
+                energy.getBlockPos(), BlockPos.ZERO, List.of()));
+        controller.componentRuntime().replaceComponents(components);
+        controller.componentRuntime().replaceModifiers(Map.of("revision", List.of(MachineModifier.parallelized(true))));
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("shared_revision_recipe"), machineId,
+                20, List.of(), List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 3), 1F)),
+                List.of(), 0, 1, false, false, false, Set.of());
+        assertThat(runtime.craftingRuntime().start(recipe, 1L).isCrafting()).isTrue();
+        runtime.craftingRuntime().activeRecipe().setMaxParallelism(2L);
+        runtime.craftingRuntime().activeRecipe().setParallelism(2L);
+        runtime.refreshCraftingState();
+        var before = controller.runtimeSnapshot();
+        assertThat(before.capabilityPresentations()).isNotEmpty();
+
+        energy.energyStorage().setAmount(17L);
+        controller.componentRuntime().markCapabilityPresentationChanged();
+        runtime.factoryRuntime().setLaneLimit(2);
+        runtime.publishSnapshot();
+        var dynamic = controller.runtimeSnapshot();
+        assertSharedStaticState(dynamic, before);
+        assertThat(dynamic.capabilityPresentations()).isNotSameAs(before.capabilityPresentations());
+        assertThat(dynamic.capabilityPresentations()).isEqualTo(controller.componentRuntime().capabilityPresentations());
+        assertThat(dynamic.factory()).isSameAs(runtime.factoryRuntime().snapshot()).isNotSameAs(before.factory());
+        assertThat(dynamic.factory().laneLimit()).isEqualTo(2);
+        assertThat(before.factory().laneLimit()).isEqualTo(1);
+
+        var active = runtime.craftingRuntime().activeRecipe();
+        active.setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(active.getTotalTick(), List.of(),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 5), 1F))));
+        var outputs = controller.currentRuntimeSnapshot();
+        assertSharedStaticState(outputs, dynamic);
+        assertThat(outputs.crafting()).isEqualTo(dynamic.crafting());
+        assertThat(outputs.recipePresentation()).isNotSameAs(dynamic.recipePresentation());
+        assertThat(outputs.recipePresentation().outputs()).extracting(MachineOutputAmount::amount).containsExactly(10L);
+        assertThat(before.recipePresentation().outputs()).extracting(MachineOutputAmount::amount).containsExactly(6L);
+        runtime.publishSnapshot();
+        assertThat(controller.runtimeSnapshot()).isSameAs(outputs);
+        active.setParallelism(1L);
+        active.setTotalTick(40);
+        runtime.refreshCraftingState();
+        var resized = controller.runtimeSnapshot();
+        assertSharedStaticState(resized, outputs);
+        assertThat(resized.crafting().parallelism()).isEqualTo(1L);
+        assertThat(resized.recipePresentation().durationTicks()).isEqualTo(40);
+        assertThat(resized.recipePresentation().outputs()).extracting(MachineOutputAmount::amount).containsExactly(5L);
+    }
+
+    @Test
+    void static_changes_rebuild_snapshot_and_preserve_previous_owned_values() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        ResourceLocation machineId = MMCR.id("static_snapshot_inputs");
+        Machine machine = new DynamicMachine(machineId, "Static Snapshot Inputs", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId));
+        runtime.publishFormationState(machine, machine.pattern(), null, Direction.SOUTH, Direction.SOUTH, 1);
+        var modifier = MachineModifier.parallelized(true);
+        controller.componentRuntime().replaceModifiers(Map.of("first", List.of(modifier)));
+        MachineLevel level = snapshotLevel("first_snapshot_level");
+        controller.componentRuntime().replaceLevels(Map.of(level.id(), level));
+        runtime.publishUpgradeBusState(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO,
+                List.of(new ItemStack(Items.DIAMOND, 2)))));
+        var first = controller.runtimeSnapshot();
+        Machine replacement = new DynamicMachine(machineId, "Static Snapshot Inputs", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId));
+        assertThat(replacement).isEqualTo(machine).isNotSameAs(machine);
+        runtime.publishFormationState(replacement, replacement.pattern(), null, Direction.SOUTH, Direction.SOUTH, 1);
+        var replacedMachine = controller.runtimeSnapshot();
+        assertThat(replacedMachine.structure().configuredMachine()).isSameAs(replacement);
+        assertThat(replacedMachine.structure().machine()).isSameAs(replacement);
+        assertThat(replacedMachine.structure().version()).isEqualTo(first.structure().version());
+        assertThat(replacedMachine.foundModifiers()).isNotSameAs(first.foundModifiers());
+        assertThat(ownedUpgradeItems(replacedMachine)).isNotSameAs(ownedUpgradeItems(first));
+        assertThat(first.structure().configuredMachine()).isSameAs(machine);
+
+        ProcessingComponent left = new ProcessingComponent(null, controller, BlockPos.ZERO, BlockPos.ZERO, List.of("left"));
+        ProcessingComponent right = new ProcessingComponent(null, controller, new BlockPos(1, 0, 0), BlockPos.ZERO, List.of("right"));
+        controller.componentRuntime().replaceComponents(List.of(left, right));
+        runtime.publishSnapshot();
+        var ordered = controller.runtimeSnapshot();
+        controller.componentRuntime().replaceComponents(List.of(right, left));
+        runtime.publishSnapshot();
+        var reordered = controller.runtimeSnapshot();
+        assertThat(reordered.componentPresentations()).extracting(ControllerRuntimeSnapshot.ComponentPresentation::position)
+                .containsExactly(right.getPos(), left.getPos());
+        assertThat(ordered.componentPresentations()).extracting(ControllerRuntimeSnapshot.ComponentPresentation::position)
+                .containsExactly(left.getPos(), right.getPos());
+        assertThat(reordered.foundModifiers()).isNotSameAs(ordered.foundModifiers());
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, controller,
+                left.getPos(), BlockPos.ZERO, List.of("replacement"))));
+        controller.componentRuntime().replaceModifiers(Map.of("second", List.of(MachineModifier.parallelized(false))));
+        MachineLevel nextLevel = snapshotLevel("second_snapshot_level");
+        controller.componentRuntime().replaceLevels(Map.of(nextLevel.id(), nextLevel));
+        runtime.publishSnapshot();
+        var changed = controller.runtimeSnapshot();
+        assertThat(changed.foundModifiers()).containsOnlyKeys("second");
+        assertThat(changed.foundLevels()).containsOnlyKeys(nextLevel.id());
+        assertThat(changed.foundLevelIds()).containsExactly(nextLevel.id().toString());
+        assertThat(changed.componentPresentations()).singleElement()
+                .satisfies(row -> assertThat(row.tags()).containsExactly("replacement"));
+        assertThat(first.foundModifiers()).containsOnlyKeys("first");
+        assertThat(first.foundLevels()).containsOnlyKeys(level.id());
+
+        runtime.refreshUpgradeBusState(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO,
+                List.of(new ItemStack(Items.EMERALD, 3)))));
+        var upgraded = controller.runtimeSnapshot();
+        assertThat(upgraded.upgradeContentRevision()).isGreaterThan(changed.upgradeContentRevision());
+        assertThat(ownedUpgradeItems(upgraded)).isNotSameAs(ownedUpgradeItems(changed));
+        assertThat(upgraded.upgradeItems().getFirst().getItem()).isEqualTo(Items.EMERALD);
+        assertThat(changed.upgradeItems().getFirst().getItem()).isEqualTo(Items.DIAMOND);
+        assertThat(first.upgradeItems().getFirst().getCount()).isEqualTo(2);
+    }
+
+    @Test
+    void cached_machine_ids_keep_working_and_published_baselines_separate() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        MutablePresentationMachine machine = new MutablePresentationMachine();
+        runtime.publishStructureState(true, false, machine, 0);
+        controller.componentRuntime().replaceModifiers(Map.of("id", List.of(MachineModifier.parallelized(true))));
+        runtime.publishSnapshot();
+        var first = controller.runtimeSnapshot();
+        ResourceLocation originalId = machine.id;
+        Field workingId = MachineControllerRuntime.class.getDeclaredField("workingMachineId");
+        Field publishedId = MachineControllerRuntime.class.getDeclaredField("publishedMachineId");
+        workingId.setAccessible(true);
+        publishedId.setAccessible(true);
+        assertThat(workingId.get(runtime)).isSameAs(originalId);
+        assertThat(publishedId.get(runtime)).isSameAs(originalId);
+
+        machine.id = ResourceLocation.parse("mmcr:mutable_snapshot_machine");
+        assertThat(machine.id).isEqualTo(originalId).isNotSameAs(originalId);
+        for (int i = 0; i < 3; i++) {
+            assertThat(controller.currentRuntimeSnapshot()).isSameAs(first);
+            runtime.publishSnapshot();
+            assertThat(controller.runtimeSnapshot()).isSameAs(first);
+        }
+        assertThat(workingId.get(runtime)).isSameAs(originalId);
+        assertThat(publishedId.get(runtime)).isSameAs(originalId);
+
+        runtime.beginUpdateBatch();
+        ControllerRuntimeSnapshot changed;
+        try {
+            machine.id = MMCR.id("batch_changed_machine_id");
+            changed = controller.currentRuntimeSnapshot();
+            assertThat(changed.machineId()).isEqualTo("mmcr:batch_changed_machine_id");
+            assertThat(changed.foundModifiers()).isNotSameAs(first.foundModifiers());
+            assertThat(workingId.get(runtime)).isSameAs(machine.id);
+            assertThat(publishedId.get(runtime)).isSameAs(originalId);
+            runtime.publishSnapshot();
+            assertThat(controller.runtimeSnapshot()).isSameAs(first);
+        } finally {
+            runtime.endUpdateBatch();
+        }
+        assertThat(controller.runtimeSnapshot()).isSameAs(changed);
+        assertThat(publishedId.get(runtime)).isSameAs(machine.id);
+        assertThat(controller.currentRuntimeSnapshot()).isSameAs(changed);
+
+        machine.id = MMCR.id("published_changed_machine_id");
+        runtime.publishSnapshot();
+        var published = controller.runtimeSnapshot();
+        assertThat(published.machineId()).isEqualTo("mmcr:published_changed_machine_id");
+        assertThat(published.foundModifiers()).isNotSameAs(changed.foundModifiers());
+        assertThat(controller.currentRuntimeSnapshot()).isSameAs(published);
+        assertThat(first.machineId()).isEqualTo("mmcr:mutable_snapshot_machine");
+        assertThat(changed.machineId()).isEqualTo("mmcr:batch_changed_machine_id");
+    }
+
+    @Test
+    void mutable_machine_presentation_invalidates_both_outer_caches_without_epoch_changes() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        MutablePresentationMachine machine = new MutablePresentationMachine();
+        runtime.publishStructureState(true, false, machine, 0);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.REINFORCED,
+                new BlockPos(2, 0, 0), ModBlocks.BLOCKS.get("parallel_controller_reinforced").get().defaultBlockState());
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of()),
+                new ProcessingComponent(null, parallel, parallel.getBlockPos(), BlockPos.ZERO, List.of())));
+        controller.componentRuntime().replaceModifiers(Map.of("mutable", List.of(MachineModifier.parallelized(true))));
+        runtime.publishSnapshot();
+        var first = controller.runtimeSnapshot();
+        long structureVersion = controller.structureSnapshot().version();
+        for (Runnable change : List.<Runnable>of(
+                () -> machine.name = "test.changed_name",
+                () -> machine.factory = true,
+                () -> machine.role = MachineRole.HOST,
+                () -> machine.maximum = 32L,
+                () -> machine.role = MachineRole.MODULE,
+                () -> machine.behavior = TickBehavior.defaults(),
+                () -> machine.parallel = false,
+                () -> machine.id = MMCR.id("changed_mutable_machine"))) {
+            var previous = controller.runtimeSnapshot();
+            change.run();
+            var current = controller.currentRuntimeSnapshot();
+            assertThat(current).isNotSameAs(previous);
+            assertThat(current.foundModifiers()).isNotSameAs(previous.foundModifiers());
+            assertThat(current.machineId()).isEqualTo(machine.registryName().toString());
+            assertThat(current.machineName()).isEqualTo(machine.displayNameKey());
+            assertThat(current.factorySupported()).isEqualTo(machine.hasFactory() && machine.behavior() instanceof RecipeBehavior);
+            assertThat(current.factoryControllerPresent()).isEqualTo(current.factorySupported());
+            assertThat(current.parallelControllerCount()).isEqualTo(1);
+            assertThat(current.controllerRole()).isEqualTo(machine.isHost() ? 1 : machine.isModule() ? 2 : 0);
+            assertThat(current.maxParallelControllerCount()).isEqualTo(machine.parallelizable() ? machine.maxParallelism() : 0L);
+            runtime.publishSnapshot();
+            assertThat(controller.runtimeSnapshot()).isSameAs(current);
+            assertThat(controller.structureSnapshot().version()).isEqualTo(structureVersion);
+        }
+        assertThat(first.machineId()).isEqualTo("mmcr:mutable_snapshot_machine");
+        assertThat(first.machineName()).isEqualTo("test.original_name");
+        assertThat(first.factorySupported()).isFalse();
+        assertThat(first.controllerRole()).isZero();
+        assertThat(first.maxParallelControllerCount()).isEqualTo(8L);
+        controller.componentRuntime().replaceComponents(List.of());
+        runtime.publishSnapshot();
+        assertThat(controller.runtimeSnapshot().parallelControllerCount()).isZero();
+        assertThat(first.parallelControllerCount()).isEqualTo(1);
+    }
+
+    @Test
     void live_parallel_configuration_updates_working_and_published_snapshots() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         Machine machine = new DynamicMachine(MMCR.id("live_parallel_snapshot"), "Live Parallel Snapshot",
@@ -224,6 +622,7 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.getMaxParallelism()).isEqualTo(19L);
         var increased = controller.currentRuntimeSnapshot();
         assertThat(increased).isNotSameAs(first);
+        assertSharedStaticState(increased, first);
         assertThat(increased.maxParallelism()).isEqualTo(19L);
         assertThat(controller.currentRuntimeSnapshot()).isSameAs(increased);
         runtime.publishSnapshot();
@@ -236,6 +635,7 @@ class MachineControllerBlockEntityTest {
 
         var decreased = controller.runtimeSnapshot();
         assertThat(decreased).isNotSameAs(increased);
+        assertSharedStaticState(decreased, increased);
         assertThat(decreased.maxParallelism()).isEqualTo(2L);
         assertThat(controller.currentRuntimeSnapshot()).isSameAs(decreased);
         assertThat(controller.getMaxParallelism()).isEqualTo(2L);
@@ -278,6 +678,7 @@ class MachineControllerBlockEntityTest {
 
             var loaded = controller.runtimeSnapshot();
             assertThat(loaded).isNotSameAs(previous);
+            assertSharedStaticState(loaded, previous);
             assertThat(loaded.maxParallelism()).isEqualTo(configured);
             assertThat(controller.currentRuntimeSnapshot()).isSameAs(loaded);
             assertThat(controller.getMaxParallelism()).isEqualTo(configured);
@@ -311,12 +712,15 @@ class MachineControllerBlockEntityTest {
         runtime.publishDataStorages(Map.of(BlockPos.ZERO, initial));
 
         assertThat(runtime.snapshot().dataStorageValues()).containsEntry("mode", DataValue.of("initial"));
+        var before = runtime.snapshot();
 
         DataStorage replacement = new DataStorage();
         replacement.set("mode", DataValue.of("replacement"));
         runtime.publishDataStorages(Map.of(BlockPos.ZERO, replacement));
 
         assertThat(runtime.snapshot().dataStorageValues()).containsEntry("mode", DataValue.of("replacement"));
+        assertThat(runtime.snapshot().dataStorageValues()).isNotSameAs(before.dataStorageValues());
+        assertThat(before.dataStorageValues()).containsEntry("mode", DataValue.of("initial"));
 
         runtime.publishDataStorages(Map.of());
 
@@ -2154,6 +2558,70 @@ class MachineControllerBlockEntityTest {
         Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
         field.setAccessible(true);
         return (MachineControllerRuntime) field.get(controller);
+    }
+
+    private static void assertSharedStaticState(ControllerRuntimeSnapshot after, ControllerRuntimeSnapshot before) {
+        assertThat(after.structure()).isSameAs(before.structure());
+        assertThat(after.foundModifiers()).isSameAs(before.foundModifiers());
+        assertThat(after.foundLevels()).isSameAs(before.foundLevels());
+        assertThat(after.dataStorageValues()).isSameAs(before.dataStorageValues());
+        assertThat(after.componentPresentations()).isSameAs(before.componentPresentations());
+        assertThat(after.foundLevelIds()).isSameAs(before.foundLevelIds());
+        assertThat(after.factoryControllerPresent()).isEqualTo(before.factoryControllerPresent());
+        assertThat(after.parallelControllerCount()).isEqualTo(before.parallelControllerCount());
+        assertThat(after.upgradeContentRevision()).isEqualTo(before.upgradeContentRevision());
+    }
+
+    private static Object ownedUpgradeItems(ControllerRuntimeSnapshot snapshot) throws Exception {
+        // The public accessor intentionally returns copies, so inspect only the private owner identity.
+        Field field = ControllerRuntimeSnapshot.class.getDeclaredField("upgradeItems");
+        field.setAccessible(true);
+        return field.get(snapshot);
+    }
+
+    private static MachineLevel snapshotLevel(String path) {
+        ResourceLocation id = MMCR.id(path);
+        return new MachineLevel(id, MMCR.id("snapshot_level_type"), 1, new BlockPredicate.Any(),
+                ItemStack.EMPTY, ModifierDefinition.EMPTY);
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class MutablePresentationMachine implements Machine {
+        private ResourceLocation id = MMCR.id("mutable_snapshot_machine");
+        private String name = "test.original_name";
+        private boolean factory;
+        private MachineRole role = MachineRole.NORMAL;
+        private long maximum = 8L;
+        private boolean parallel = true;
+        private MachineBehavior behavior = RecipeBehavior.defaults();
+        private final BlockArray pattern = new BlockArray(Map.of());
+
+        @Override
+        public ResourceLocation registryName() { return id; }
+
+        @Override
+        public String displayNameKey() { return name; }
+
+        @Override
+        public BlockArray pattern() { return pattern; }
+
+        @Override
+        public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
+
+        @Override
+        public boolean hasFactory() { return factory; }
+
+        @Override
+        public MachineRole role() { return role; }
+
+        @Override
+        public boolean parallelizable() { return parallel; }
+
+        @Override
+        public long maxParallelism() { return maximum; }
+
+        @Override
+        public MachineBehavior behavior() { return behavior; }
     }
 
     private static boolean runtimeStateBroadcastPending(MachineControllerBlockEntity controller) throws Exception {

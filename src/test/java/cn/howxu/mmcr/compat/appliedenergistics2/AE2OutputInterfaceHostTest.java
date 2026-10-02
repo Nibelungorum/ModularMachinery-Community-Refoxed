@@ -132,8 +132,9 @@ class AE2OutputInterfaceHostTest {
 
     @Test
     void serverTickNotifiesLinkedOutputCapacitySearchesAfterNativeReturnInventoryDrain() {
-        PatternInterfaceBlockEntity host = patternHost();
-        RecordingController controller = new RecordingController(new BlockPos(1, 0, 0),
+        PatternInterfaceBlockEntity host = PatternInterfaceKind.INSTANCE.entityFactory()
+                .create(new BlockPos(41, 20, 30), Blocks.IRON_BLOCK.defaultBlockState());
+        RecordingController controller = new RecordingController(host.getBlockPos().offset(1, 0, 0),
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         var level = LevelStub.create(Map.of(
                 host.getBlockPos(), host.getBlockState().getBlock(),
@@ -147,6 +148,7 @@ class AE2OutputInterfaceHostTest {
         host.serverTick();
         host.linkControllerAppearance(controller.getBlockPos(), null);
         controller.notifiedOutputResources.clear();
+        controller.notifiedOutputSources.clear();
 
         assertThat(host.getLogic().getReturnInv().injectIntoNetwork(new MEStorage() {
             @Override
@@ -164,6 +166,20 @@ class AE2OutputInterfaceHostTest {
 
         assertThat(controller.notifiedOutputResources).singleElement().satisfies(resource ->
                 assertThat(AEItemKey.of((ItemStack) resource)).isEqualTo(gold));
+        assertThat(controller.notifiedOutputSources).containsExactly(host.getBlockPos());
+        assertThat(host.getBlockPos()).isNotEqualTo(host.getBlockPos().subtract(controller.getBlockPos()));
+    }
+
+    @Test
+    void legacy_availability_entry_records_once_with_unknown_source() {
+        RecordingController controller = new RecordingController(BlockPos.ZERO,
+                ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        ItemStack gold = new ItemStack(Items.GOLD_INGOT);
+
+        controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, gold);
+
+        assertThat(controller.notifiedOutputResources).containsExactly(gold);
+        assertThat(controller.notifiedOutputSources).containsExactly((BlockPos) null);
     }
 
     @Test
@@ -223,6 +239,7 @@ class AE2OutputInterfaceHostTest {
      */
     private static final class RecordingController extends MachineControllerBlockEntity {
         private final List<Object> notifiedOutputResources = new ArrayList<>();
+        private final List<BlockPos> notifiedOutputSources = new ArrayList<>();
 
         private RecordingController(BlockPos pos, BlockState state) {
             super(pos, state);
@@ -230,9 +247,17 @@ class AE2OutputInterfaceHostTest {
 
         @Override
         public void notifyResourceAvailability(ResourceAvailabilityNotifier.Reason reason, Object resource) {
+            super.notifyResourceAvailability(reason, resource);
+        }
+
+        @Override
+        public void notifyResourceAvailability(ResourceAvailabilityNotifier.Reason reason, Object resource,
+                                               BlockPos sourcePos) {
             if (reason == ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY) {
                 notifiedOutputResources.add(resource);
+                notifiedOutputSources.add(sourcePos);
             }
+            super.notifyResourceAvailability(reason, resource, sourcePos);
         }
     }
 }

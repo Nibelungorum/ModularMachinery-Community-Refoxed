@@ -7,7 +7,12 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.network.PktMachineProgressPayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -18,6 +23,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
@@ -109,12 +115,32 @@ class ControllerStateSyncTest {
         controller.applyClientState("mmcr:recipe", false, false, List.of(), null, 2, 3, true,
                 MMCR.id("host"), CraftingStatus.failure("test.failure"), failure, true, 1, 20,
                 Long.MAX_VALUE, Long.MAX_VALUE, Map.of("mode", DataValue.of("running")));
+        controller.componentRuntime().replaceModifiers(Map.of("progress", List.of(MachineModifier.parallelized(true))));
+        var levelId = MMCR.id("progress_level");
+        controller.componentRuntime().replaceLevels(Map.of(levelId, new MachineLevel(levelId,
+                MMCR.id("progress_level_type"), 1, new BlockPredicate.Any(), ItemStack.EMPTY,
+                ModifierDefinition.EMPTY)));
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, controller,
+                BlockPos.ZERO, BlockPos.ZERO, List.of("progress"))));
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        ((MachineControllerRuntime) runtimeField.get(controller)).publishSnapshot();
         var before = controller.runtimeSnapshot();
+        assertThat(before.foundModifiers()).isNotEmpty();
+        assertThat(before.foundLevels()).isNotEmpty();
+        assertThat(before.componentPresentations()).isNotEmpty();
         controller.applyClientProgress("mmcr:other_recipe", 7, 20);
         controller.applyClientProgress("mmcr:recipe", 7, 21);
         assertThat(controller.runtimeSnapshot()).isSameAs(before);
         controller.applyClientProgress("mmcr:recipe", 7, 20);
         var after = controller.runtimeSnapshot();
+        assertThat(after.foundModifiers()).isSameAs(before.foundModifiers());
+        assertThat(after.foundLevels()).isSameAs(before.foundLevels());
+        assertThat(after.dataStorageValues()).isSameAs(before.dataStorageValues());
+        assertThat(after.componentPresentations()).isSameAs(before.componentPresentations());
+        assertThat(after.capabilityPresentations()).isSameAs(before.capabilityPresentations());
+        assertThat(after.structure()).isSameAs(before.structure());
+        assertThat(before.crafting().tick()).isEqualTo(1);
         assertThat(after.crafting().tick()).isEqualTo(7);
         assertThat(after.crafting().totalTick()).isEqualTo(20);
         assertThat(after.crafting().recipeId()).isEqualTo(before.crafting().recipeId());

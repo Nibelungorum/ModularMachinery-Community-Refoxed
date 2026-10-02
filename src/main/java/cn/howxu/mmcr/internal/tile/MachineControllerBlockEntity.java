@@ -911,8 +911,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void notifyResourceAvailability(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
+        notifyResourceAvailability(reason, resource, null);
+    }
+
+    public void notifyResourceAvailability(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource,
+                                          @Nullable BlockPos sourcePos) {
         if (reason == null) return;
-        runtime.componentRuntime().markCapabilityPresentationChanged();
+        runtime.componentRuntime().markCapabilityPresentationChanged(sourcePos);
         long gameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
         if (lastResourceAvailabilityTick != gameTime) {
             lastResourceAvailabilityTick = gameTime;
@@ -923,6 +928,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void notifyCapabilityPresentationChanged() {
         runtime.componentRuntime().markCapabilityPresentationChanged();
+    }
+
+    public void notifyCapabilityPresentationChanged(BlockPos sourcePos) {
+        runtime.componentRuntime().markCapabilityPresentationChanged(sourcePos);
     }
 
     public void refreshModuleConnectionState() {
@@ -3830,8 +3839,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void onRecipeInputsChanged() {
+        onRecipeInputsChanged(null);
+    }
+
+    void onRecipeInputsChanged(@Nullable BlockPos sourcePos) {
         recipeSearchRetryCounter = 0;
-        runtime.componentRuntime().markCapabilityPresentationChanged();
+        runtime.componentRuntime().markCapabilityPresentationChanged(sourcePos);
     }
 
     private boolean applySearchResult(RecipeSearchResult result) {

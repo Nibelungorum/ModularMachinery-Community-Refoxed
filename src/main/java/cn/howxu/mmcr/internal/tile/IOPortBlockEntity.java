@@ -114,7 +114,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         notifyAvailabilityChanges(true);
         for (BlockPos controllerPos : linkedControllerPositions()) {
             if (level != null && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
-                controller.notifyCapabilityPresentationChanged();
+                controller.notifyCapabilityPresentationChanged(getBlockPos());
             }
         }
     }
@@ -257,7 +257,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (level == null || level.isClientSide()) return;
         for (BlockPos controllerPos : linkedControllerPositions()) {
             if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
-                controller.notifyResourceAvailability(reason, resource);
+                controller.notifyResourceAvailability(reason, resource, getBlockPos());
             }
         }
     }
@@ -278,7 +278,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     protected void notifyControllerOfInputChange() {
         if (loadingAdditional || ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
         if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
-            controller.onRecipeInputsChanged();
+            controller.onRecipeInputsChanged(getBlockPos());
         }
     }
 

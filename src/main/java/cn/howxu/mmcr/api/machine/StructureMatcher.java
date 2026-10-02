@@ -226,7 +226,7 @@ public final class StructureMatcher {
                         ScanStatus.INVALIDATED, invalidated, stateSensitive);
             }
             List<ScanEntry> entries = new java.util.ArrayList<>();
-            IdentityHashMap<BlockPredicate, BlockPredicate> memo = new IdentityHashMap<>();
+            CapturePredicates memo = new CapturePredicates();
             int budget = batchSize();
             int nextSentinelCursor = sentinelCursor;
             boolean nextSentinelsChecked = sentinelsChecked;
@@ -278,7 +278,7 @@ public final class StructureMatcher {
         }
 
         private ScanEntry entryAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
-                                  IdentityHashMap<BlockPredicate, BlockPredicate> memo) {
+                                  CapturePredicates memo) {
             Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
                     structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
             List<SingleBlockModifierReplacement> entryReplacements = replacements.getOrDefault(relativePos, List.of());
@@ -290,7 +290,11 @@ public final class StructureMatcher {
         }
 
         private static BlockPredicate snapshotPredicate(BlockPredicate predicate,
-                                                        IdentityHashMap<BlockPredicate, BlockPredicate> memo) {
+                                                        CapturePredicates memo) {
+            if (!(predicate instanceof BlockPredicate.AnyOf)
+                    && !(predicate instanceof BlockPredicate.DeferredBlock deferred && !deferred.networkInterface())) {
+                return predicate;
+            }
             BlockPredicate cached = memo.get(predicate);
             if (cached != null) return cached;
             BlockPredicate snapshot = switch (predicate) {
@@ -313,6 +317,20 @@ public final class StructureMatcher {
             };
             memo.put(predicate, snapshot);
             return snapshot;
+        }
+
+        /** @author howxu <dev@howxu.cn> */
+        private static final class CapturePredicates {
+            private @Nullable IdentityHashMap<BlockPredicate, BlockPredicate> captured;
+
+            @Nullable BlockPredicate get(BlockPredicate predicate) {
+                return captured == null ? null : captured.get(predicate);
+            }
+
+            void put(BlockPredicate predicate, BlockPredicate snapshot) {
+                if (captured == null) captured = new IdentityHashMap<>();
+                captured.put(predicate, snapshot);
+            }
         }
 
         private boolean sentinelWasChecked(int index, int cursor, boolean checked) {

@@ -545,6 +545,74 @@ class StructureMatcherTest {
     }
 
     @Test
+    void capture_preserves_static_leaf_identity_in_mixed_batches_and_refreshes_shared_dynamic_snapshots() {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Block> supplied = new AtomicReference<>(Blocks.GOLD_BLOCK);
+        BlockPredicate deferred = new BlockPredicate.DeferredBlock(() -> {
+            calls.incrementAndGet();
+            return supplied.get();
+        });
+        BlockPredicate fallback = new BlockPredicate.OfBlock(Blocks.BEDROCK);
+        BlockPredicate shared = new BlockPredicate.AnyOf(List.of(fallback, deferred));
+        Map<BlockPos, BlockPredicate> predicates = new LinkedHashMap<>();
+        Map<BlockPos, Block> blocks = new LinkedHashMap<>();
+        List<BlockPos> dynamicPositions = new ArrayList<>();
+        for (int batchIndex = 0; batchIndex < 2; batchIndex++) {
+            for (int index = 0; index < 32; index++) {
+                BlockPos position = new BlockPos(predicates.size(), 0, 0);
+                Block block = index % 2 == 0 ? Blocks.STONE : Blocks.DIRT;
+                predicates.put(position, new BlockPredicate.OfBlock(block));
+                blocks.put(position, block);
+            }
+            for (BlockPredicate predicate : List.of(deferred, shared, shared, deferred)) {
+                BlockPos position = new BlockPos(predicates.size(), 0, 0);
+                predicates.put(position, predicate);
+                blocks.put(position, Blocks.GOLD_BLOCK);
+                dynamicPositions.add(position);
+            }
+        }
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(predicates), Map.of(), true,
+                StructureMatcher.ScanOptions.of(2, false, 0));
+        BlockPredicate previousSharedSnapshot = null;
+        BlockPredicate previousDeferredSnapshot = null;
+        for (int batchIndex = 0; batchIndex < 2; batchIndex++) {
+            StructureMatcher.ScanBatch batch = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+            assertThat(calls.get()).isEqualTo(batchIndex + 1);
+            BlockPredicate sharedSnapshot = batch.entries().stream()
+                    .filter(entry -> entry.mismatch().expected() == shared)
+                    .findFirst().orElseThrow().matchingExpected();
+            BlockPredicate deferredSnapshot = batch.entries().stream()
+                    .filter(entry -> entry.mismatch().expected() == deferred)
+                    .findFirst().orElseThrow().matchingExpected();
+            assertThat(sharedSnapshot).isNotSameAs(shared).isNotSameAs(previousSharedSnapshot);
+            assertThat(deferredSnapshot).isNotSameAs(deferred).isNotSameAs(previousDeferredSnapshot);
+            assertThat(sharedSnapshot.children().getFirst()).isSameAs(fallback);
+            assertThat(sharedSnapshot.children().getLast()).isSameAs(deferredSnapshot);
+            for (StructureMatcher.ScanEntry entry : batch.entries()) {
+                BlockPredicate expected = predicates.get(entry.mismatch().relativePos());
+                assertThat(entry.mismatch().expected()).isSameAs(expected);
+                if (expected == shared) {
+                    assertThat(entry.matchingExpected()).isSameAs(sharedSnapshot);
+                } else if (expected == deferred) {
+                    assertThat(entry.matchingExpected()).isSameAs(deferredSnapshot);
+                } else {
+                    assertThat(entry.matchingExpected()).isSameAs(expected);
+                }
+            }
+            supplied.set(Blocks.DIAMOND_BLOCK);
+            StructureMatcher.ScanResult result = batch.match();
+            assertThat(result.status()).isEqualTo(batchIndex == 0
+                    ? StructureMatcher.ScanStatus.IN_PROGRESS : StructureMatcher.ScanStatus.VALID);
+            assertThat(calls.get()).isEqualTo(batchIndex + 1);
+            scan.apply(batch.identity(), result);
+            for (BlockPos position : dynamicPositions) blocks.put(position, Blocks.DIAMOND_BLOCK);
+            previousSharedSnapshot = sharedSnapshot;
+            previousDeferredSnapshot = deferredSnapshot;
+        }
+        assertThat(scan.cursor()).isEqualTo(predicates.size());
+    }
+
+    @Test
     void capture_memo_uses_predicate_identity_instead_of_record_equality() {
         AtomicInteger calls = new AtomicInteger();
         Supplier<Block> supplier = () -> {
