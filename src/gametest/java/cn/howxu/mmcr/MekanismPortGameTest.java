@@ -4,6 +4,11 @@ import appeng.core.definitions.AEItems;
 import com.mojang.authlib.GameProfile;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -16,6 +21,9 @@ import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
@@ -209,6 +217,60 @@ public class MekanismPortGameTest {
         helper.assertTrue(port.heatCapacitor().getHeat() > baseline,
                 "Heat output port stores more heat than its ambient baseline after handleHeat");
         helper.succeed();
+    }
+
+    public void heatRecipeOutputUsesInternalHandler(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        HeatPortBlockEntity port = helper.getBlockEntity(pos);
+        double before = port.heatCapacitor().getHeat();
+        var capability = port.capability(new CapabilityType(MekanismRecipeTypes.HEAT));
+        RequirementPlan plan = LoadedMekanismBridge.heatHandler().plan(
+                LoadedHeatRequirement.outputHeat(1_200D), List.of(capability), new PlanningContext(3L, 0));
+        RequirementPlan materialized = plan.materialize(3L, new PlanningReservations(), null);
+        helper.assertTrue(materialized.successful() && !materialized.operations().isEmpty(),
+                "A real heat output hatch admits the recipe heat output");
+        for (var operation : materialized.operations()) {
+            helper.assertTrue(operation.commit().success(), "Recipe heat output commits successfully");
+        }
+        port.heatCapacitor().update();
+        helper.assertValueEqual(before + 3_600D, port.heatCapacitor().getHeat(),
+                "Recipe heat output reaches the internal capacitor with the selected parallelism");
+        port.externalHeatHandler().handleHeat(100D);
+        port.heatCapacitor().update();
+        helper.assertValueEqual(before + 3_600D, port.heatCapacitor().getHeat(),
+                "External heat input remains rejected after internal recipe output");
+        helper.succeed();
+    }
+
+    public void anyPortsFormsWithRadioactiveHatches(GameTestHelper helper) {
+        var predicate = KubeJSInterfaceHelpers.ports();
+        var inputBlock = ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get();
+        var outputBlock = ModBlocks.BLOCKS.get("radioactive_chemical_output_hatch").get();
+        helper.assertTrue(predicate.matches(inputBlock.defaultBlockState()),
+                "KubeJS any.ports() includes radioactive chemical input hatches");
+        helper.assertTrue(predicate.matches(outputBlock.defaultBlockState()),
+                "KubeJS any.ports() includes radioactive chemical output hatches");
+        helper.assertFalse(KubeJSInterfaceHelpers.anyOfChemicalPorts().matches(inputBlock.defaultBlockState()),
+                "Ordinary chemical predicates remain separate from radioactive hatches");
+        helper.assertTrue(KubeJSInterfaceHelpers.anyOfRadioactiveChemicalInput().matches(inputBlock.defaultBlockState())
+                        && !KubeJSInterfaceHelpers.anyOfRadioactiveChemicalInput().matches(outputBlock.defaultBlockState()),
+                "Radioactive chemical predicates preserve their direction");
+        BlockPos controllerPos = new BlockPos(1, 1, 1);
+        helper.setBlock(controllerPos.above(), inputBlock.defaultBlockState());
+        helper.setBlock(controllerPos.below(), outputBlock.defaultBlockState());
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        ResourceLocation id = MMCR.id("radioactive_any_ports_regression");
+        DynamicMachine machine = new DynamicMachine(id, "Radioactive port regression", new BlockArray(Map.of(
+                new BlockPos(0, 1, 0), predicate, new BlockPos(0, -1, 0), predicate)));
+        if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.requestImmediateStructureCheck();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(),
+                "A structure using any.ports() forms with both radioactive hatches")).thenSucceed();
     }
 
     public void heatOutputCapabilityRejectsExternalHeatInput(GameTestHelper helper) {

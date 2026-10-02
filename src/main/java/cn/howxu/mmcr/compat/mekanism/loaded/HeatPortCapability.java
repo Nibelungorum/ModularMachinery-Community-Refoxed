@@ -102,7 +102,7 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     }
 
     public HeatPortCapability(HeatPortBlockEntity port) {
-        this(port.heatCapacitor(), port.heatHandler(), port.ioType());
+        this(port.heatCapacitor(), port.ioType());
     }
 
     @Override

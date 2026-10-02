@@ -11,6 +11,21 @@ import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
+import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.compat.appmek.loaded.MEChemicalCapability;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
@@ -27,12 +42,16 @@ import me.ramidzkh.mekae2.ae2.MekanismKey;
 import mekanism.api.Action;
 import mekanism.common.capabilities.Capabilities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import me.ramidzkh.mekae2.ae2.MekanismKeyType;
 import net.minecraft.gametest.framework.GameTestHelper;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Runtime registration and validation of all existing ME interface variants.
@@ -40,6 +59,71 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class AppMekInterfaceGameTest {
+    public void stockingHydrogenFeedsRadioactiveRecipeThroughAnyPorts(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(1, 1, 1);
+        BlockPos inputPos = controllerPos.above();
+        BlockPos outputPos = controllerPos.below();
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("eae_me_oversize_stocking_input_interface").get().defaultBlockState());
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("radioactive_chemical_output_hatch").get().defaultBlockState());
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        ResourceLocation id = MMCR.id("stocking_hydrogen_radioactive_recipe_regression");
+        var predicate = KubeJSInterfaceHelpers.ports();
+        DynamicMachine machine = new DynamicMachine(id, "Stocking hydrogen regression", new BlockArray(Map.of(
+                new BlockPos(0, 1, 0), predicate, new BlockPos(0, -1, 0), predicate)));
+        if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
+        var hydrogen = AppMekGameTestFixtures.chemical("hydrogen", 1L);
+        var polonium = AppMekGameTestFixtures.chemical("polonium", 1L);
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id(id.getPath() + "_recipe"), id, 2,
+                List.of(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(
+                                ResourceLocation.parse(hydrogen.getChemicalHolder().getRegisteredName()), 1_000L)),
+                        LoadedChemicalRequirement.output(ResourceLocation.parse(polonium.getChemicalHolder().getRegisteredName()), 10L, 1F)),
+                List.of(new LoadedChemicalOutput(ResourceLocation.parse(polonium.getChemicalHolder().getRegisteredName()), 10L, 1F)),
+                List.of(), 0, 1, false, false, false, Set.of()));
+        StockingInterfaceBlockEntity input = helper.getBlockEntity(inputPos);
+        ChemicalPortBlockEntity output = helper.getBlockEntity(outputPos);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.requestImmediateStructureCheck();
+        MekanismKey key = MekanismKey.of(hydrogen);
+        input.getInterfaceLogic().getConfig().setStack(35, new GenericStack(key, 1L));
+        var network = AppMekGameTestFixtures.createChemicalNetwork(helper, inputPos);
+        helper.startSequence().thenWaitUntil(() -> network.connectWhenReady(helper))
+                .thenExecute(() -> helper.assertTrue(network.storage().insert(key, 1_000L, Actionable.MODULATE,
+                        new BaseActionSource()) == 1_000L, "Real AppMek cell supplies the hydrogen recipe"))
+                .thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed()
+                                && output.chemicalTank().getStack().getAmount() == 10L,
+                        "Stocking hydrogen in slot 35 produces polonium through an any.ports() structure"))
+                .thenExecute(() -> {
+                    helper.assertTrue(output.chemicalTank().getStack().getChemical() == polonium.getChemical(),
+                            "The radioactive output hatch receives the recipe chemical");
+                    helper.assertTrue(network.storage().extract(key, Long.MAX_VALUE, Actionable.SIMULATE,
+                            new BaseActionSource()) == 0L, "The recipe consumes exactly its hydrogen input");
+                }).thenSucceed();
+    }
+
+    public void stockingReadsRadioactiveWasteBarrelStorageBus(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(1, 1, 1);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("eae_me_oversize_stocking_input_interface").get().defaultBlockState());
+        StockingInterfaceBlockEntity input = helper.getBlockEntity(pos);
+        MekanismKey polonium = MekanismKey.of(AppMekGameTestFixtures.chemical("polonium", 1L));
+        input.getInterfaceLogic().getConfig().setStack(35, new GenericStack(polonium, 1L));
+        var network = AppMekGameTestFixtures.createWasteBarrelNetwork(helper, pos);
+        network.barrel().getChemicalTank().setStack(polonium.withAmount(1_000L));
+        helper.startSequence().thenWaitUntil(() -> network.connectWhenReady(helper))
+                .thenWaitUntil(() -> helper.assertTrue(new MachineIoView(input.capabilitySnapshot()).chemicalAmount(polonium.getId()) == 1_000L,
+                        "Stocking input and public IO query see radioactive storage bus contents"))
+                .thenExecute(() -> {
+                    MachineIoPlan plan = new MachineIoPlan(input.capabilitySnapshot());
+                    plan.addInput(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(polonium.getId(), 500L)));
+                    helper.assertTrue(plan.simulate().inputsSatisfied() && plan.commit().successful(),
+                            "Recipe consumes radioactive chemicals through the live Stocking handler");
+                    helper.assertTrue(network.barrel().getChemicalTank().getStored() == 500L,
+                            "Recipe extraction debits the real radioactive waste barrel");
+                }).thenSucceed();
+    }
+
     public void configuredInputFeedsRecipeFromRealChemicalCell(GameTestHelper helper) {
         var machine = AppMekGameTestFixtures.createChemicalMachine(helper, "appmek_network_recipe", "ae2_me_input_interface", 500L);
         var input = (InputInterfaceBlockEntity) machine.input();
@@ -226,10 +310,10 @@ public final class AppMekInterfaceGameTest {
                 .thenSucceed();
     }
 
-    public void chemicalPredicatesIncludeMePortsWithoutRadioactivity(GameTestHelper helper) {
+    public void chemicalPredicatesIncludeBothRadiationCategories(GameTestHelper helper) {
         var inputs = BlockConditions.chemicalInput().alternatives();
         var outputs = BlockConditions.chemicalOutput().alternatives();
-        var radioactive = BlockConditions.radioactiveChemicalPorts().alternatives();
+        var radioactive = KubeJSInterfaceHelpers.anyOfRadioactiveChemicalPorts();
         for (String id : PORTS) {
             var block = ModBlocks.BLOCKS.get(id).get();
             if (!id.contains("output")) helper.assertTrue(inputs.stream()
@@ -238,8 +322,7 @@ public final class AppMekInterfaceGameTest {
             if (id.contains("output") || id.contains("pattern")) helper.assertTrue(outputs.stream()
                     .anyMatch(condition -> condition.blockSupplier().map(supplier -> supplier.get() == block).orElse(false)),
                     id + " matches the public ordinary chemical output predicate");
-            helper.assertTrue(radioactive.stream().noneMatch(condition -> condition.blockSupplier()
-                    .map(supplier -> supplier.get() == block).orElse(false)), id + " does not match radioactive chemical ports");
+            helper.assertTrue(radioactive.matches(block.defaultBlockState()), id + " matches radioactive chemical ports");
         }
         helper.succeed();
     }
@@ -267,27 +350,31 @@ public final class AppMekInterfaceGameTest {
         helper.succeed();
     }
 
-    public void genericCapabilitiesRejectRadioactiveChemicals(GameTestHelper helper) {
+    public void genericCapabilitiesAcceptRadioactiveChemicals(GameTestHelper helper) {
         BlockPos pos = new BlockPos(1, 1, 1);
         helper.setBlock(pos, ModBlocks.BLOCKS.get("ae2_me_input_interface").get().defaultBlockState());
         BlockPos world = helper.absolutePos(pos);
+        InputInterfaceBlockEntity host = helper.getBlockEntity(pos);
+        helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE, world, null) == null,
+                "An unconfigured disconnected interface preserves the native absence of ME storage");
         var chemicals = helper.getLevel().getCapability(Capabilities.CHEMICAL.block(), world, null);
         helper.assertTrue(chemicals != null, "AppMek adapts the MMCR generic inventory capability");
         var waste = AppMekGameTestFixtures.chemical("nuclear_waste", 100L);
-        helper.assertTrue(chemicals.insertChemical(0, waste, Action.SIMULATE).getAmount() == 100L,
-                "External chemical simulation rejects radioactive material");
-        helper.assertTrue(chemicals.insertChemical(0, waste, Action.EXECUTE).getAmount() == 100L,
-                "External chemical execution rejects radioactive material");
+        helper.assertTrue(chemicals.insertChemical(0, waste, Action.SIMULATE).isEmpty(),
+                "External chemical simulation accepts radioactive material");
+        helper.assertTrue(chemicals.insertChemical(0, waste, Action.EXECUTE).isEmpty(),
+                "External chemical execution accepts radioactive material");
+        host.getInterfaceLogic().getConfig().setStack(0, new GenericStack(MekanismKey.of(waste), 500L));
         MEStorage storage = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, world, null);
-        helper.assertTrue(storage.insert(MekanismKey.of(waste), 100L, Actionable.MODULATE, new BaseActionSource()) == 0L,
-                "ME storage access cannot bypass chemical attribute validation");
+        helper.assertTrue(storage != null, "A configured interface exposes native local ME storage");
+        helper.assertTrue(storage.insert(MekanismKey.of(waste), 100L, Actionable.MODULATE, new BaseActionSource()) == 100L,
+                "ME storage access accepts radioactive material through native filters");
         GenericInternalInventory generic = helper.getLevel().getCapability(AECapabilities.GENERIC_INTERNAL_INV, world, null);
-        helper.assertTrue(generic.insert(0, MekanismKey.of(waste), 100L, Actionable.MODULATE) == 0L,
-                "Generic inventory access cannot bypass chemical attribute validation");
-        InputInterfaceBlockEntity host = helper.getBlockEntity(pos);
-        helper.assertTrue(host.getStorage().isEmpty(), "Rejected external chemicals do not enter the input cache");
-        helper.assertTrue(chemicals.insertChemical(0, AppMekGameTestFixtures.chemical("oxygen", 500L), Action.EXECUTE).isEmpty(),
-                "Ordinary chemical input remains usable");
+        helper.assertTrue(generic.insert(0, MekanismKey.of(waste), 100L, Actionable.MODULATE) == 100L,
+                "Generic inventory access accepts radioactive material through native filters");
+        helper.assertTrue(host.getStorage().getAmount(0) == 300L, "All native entry points conserve the radioactive input");
+        helper.assertTrue(chemicals.insertChemical(1, AppMekGameTestFixtures.chemical("oxygen", 500L), Action.EXECUTE).isEmpty(),
+                "Ordinary and radioactive chemicals share different native slots");
         helper.succeed();
     }
 }

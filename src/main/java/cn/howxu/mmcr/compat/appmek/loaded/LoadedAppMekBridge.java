@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
@@ -68,6 +69,8 @@ public final class LoadedAppMekBridge implements AppMekBridge {
             if (base.stream().anyMatch(family -> family.ioType() == direction)) {
                 families.add(new PortFamilyDescriptor(MekanismRecipeTypes.CHEMICAL, direction, tier,
                         List.of(direction == IOType.INPUT ? "chemical_input_hatch" : "chemical_output_hatch")));
+                families.add(new PortFamilyDescriptor(MekanismPortFamilies.RADIOACTIVE_CHEMICAL, direction, tier,
+                        List.of(direction == IOType.INPUT ? "radioactive_chemical_input_hatch" : "radioactive_chemical_output_hatch")));
             }
         }
         return List.copyOf(families);
@@ -83,6 +86,7 @@ public final class LoadedAppMekBridge implements AppMekBridge {
     @Override public Object inventoryView(Object inventory) { return new ValidatedGenericInventory((GenericInternalInventory) inventory); }
 
     @Override public Object storageView(Object storage) {
+        if (storage == null) return null;
         MEStorage delegate = (MEStorage) storage;
         return new MEStorage() {
             @Override public boolean isPreferredStorageFor(AEKey key, IActionSource source) { return delegate.isPreferredStorageFor(key, source); }

@@ -61,6 +61,32 @@ public final class AppMekPatternGameTest {
         mixedPattern(helper, "eae_me_extended_pattern_interface", 35);
     }
 
+    public void radioactivePatternReturnsProductsThroughWasteBarrelStorageBus(GameTestHelper helper) {
+        PatternInterfaceBlockEntity host = chemicalMachine(helper, "appmek_radioactive_pattern", false, true);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
+        MekanismKey waste = MekanismKey.of(AppMekGameTestFixtures.chemical("nuclear_waste", 1L));
+        MekanismKey polonium = MekanismKey.of(AppMekGameTestFixtures.chemical("polonium", 1L));
+        var network = AppMekGameTestFixtures.createWasteBarrelNetwork(helper, new BlockPos(0, 1, 0));
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(),
+                        "Radioactive chemical pattern controller forms"))
+                .thenExecute(() -> {
+                    IPatternDetails pattern = installChemicalPattern(host, waste, polonium);
+                    KeyCounter[] holders = holders(pattern, 1L);
+                    helper.assertTrue(host.craftingMachine().pushBatchPattern(pattern, holders, 1L, Direction.NORTH),
+                            "Pattern accepts radioactive input holders and radioactive output");
+                    for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(), "Accepted radioactive holders transfer ownership once");
+                }).thenWaitUntil(() -> helper.assertTrue(amount(host.getLogic().getReturnInv(), polonium) == 600L
+                                && amount(host.getLogic().getReturnInv(), waste) == 500L,
+                        "Pattern preserves radioactive output and returns excess radioactive input"))
+                .thenWaitUntil(() -> network.connectWhenReady(helper))
+                .thenWaitUntil(() -> helper.assertTrue(network.barrel().getChemicalTank().getStored() == 601L
+                                && amount(host.getLogic().getReturnInv(), polonium) == 0L,
+                        "Native ME storage bus transfers radioactive pattern output into the waste barrel"))
+                .thenExecute(() -> helper.assertTrue(amount(host.getLogic().getReturnInv(), waste) == 500L,
+                        "The polonium barrel does not consume unmatched nuclear waste"))
+                .thenSucceed();
+    }
+
     private void mixedPattern(GameTestHelper helper, String portId, int patternSlot) {
         BlockPos controllerPos = new BlockPos(1, 1, 1);
         BlockPos portPos = controllerPos.above();
@@ -182,6 +208,10 @@ public final class AppMekPatternGameTest {
     }
 
     private PatternInterfaceBlockEntity chemicalMachine(GameTestHelper helper, String name, boolean factory) {
+        return chemicalMachine(helper, name, factory, false);
+    }
+
+    private PatternInterfaceBlockEntity chemicalMachine(GameTestHelper helper, String name, boolean factory, boolean radioactive) {
         ResourceLocation machineId = MMCR.id(name);
         BlockPos portPos = new BlockPos(0, 1, 0);
         helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
@@ -200,8 +230,8 @@ public final class AppMekPatternGameTest {
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 2)
                 : new DynamicMachine(machineId, "AppMek chemical pattern test", new BlockArray(blocks));
         if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
-        ResourceLocation oxygen = ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen");
-        ResourceLocation hydrogen = ResourceLocation.fromNamespaceAndPath("mekanism", "hydrogen");
+        ResourceLocation oxygen = ResourceLocation.fromNamespaceAndPath("mekanism", radioactive ? "nuclear_waste" : "oxygen");
+        ResourceLocation hydrogen = ResourceLocation.fromNamespaceAndPath("mekanism", radioactive ? "polonium" : "hydrogen");
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id(name + "_recipe"), machineId, 2,
                 List.of(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(oxygen, 500L)),
                         LoadedChemicalRequirement.output(hydrogen, 600L, 1F)),

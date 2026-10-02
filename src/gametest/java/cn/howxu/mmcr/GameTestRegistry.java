@@ -211,6 +211,10 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatTemperatureRequirementReadsWithoutConsumingHeat(helper));
         register(event, "mekanism_heat_output_handle_heat_increases_storage", 100,
                 helper -> new MekanismPortGameTest().heatOutputHandleHeatIncreasesStoredHeat(helper));
+        register(event, "mekanism_heat_recipe_output_internal_handler", 100,
+                helper -> new MekanismPortGameTest().heatRecipeOutputUsesInternalHandler(helper));
+        register(event, "mekanism_radioactive_any_ports_structure", 100,
+                helper -> new MekanismPortGameTest().anyPortsFormsWithRadioactiveHatches(helper));
         register(event, "mekanism_heat_output_rejects_external_input", 100,
                 helper -> new MekanismPortGameTest().heatOutputCapabilityRejectsExternalHeatInput(helper));
         register(event, "mekanism_heat_port_loses_heat_to_environment", 100,
@@ -286,8 +290,12 @@ public final class GameTestRegistry {
                 helper -> new AppMekAdapterGameTest().multiSlotSyncPreservesMixedResourcesAndNetworkKeys(helper));
         register(event, "appmek_chemical_async_boundary", 100,
                 helper -> new AppMekAdapterGameTest().localAsyncSnapshotKeepsMixedNetworkInputOnMainThread(helper));
-        register(event, "appmek_ordinary_chemical_predicates", 100,
-                helper -> new AppMekInterfaceGameTest().chemicalPredicatesIncludeMePortsWithoutRadioactivity(helper));
+        register(event, "appmek_chemical_predicates_both_radiation_categories", 100,
+                helper -> new AppMekInterfaceGameTest().chemicalPredicatesIncludeBothRadiationCategories(helper));
+        register(event, "appmek_stocking_hydrogen_radioactive_recipe", 400,
+                helper -> new AppMekInterfaceGameTest().stockingHydrogenFeedsRadioactiveRecipeThroughAnyPorts(helper));
+        register(event, "appmek_stocking_radioactive_storage_bus", 400,
+                helper -> new AppMekInterfaceGameTest().stockingReadsRadioactiveWasteBarrelStorageBus(helper));
         register(event, "appmek_chemical_kind_wakeup", 200,
                 helper -> new AppMekInterfaceGameTest().chemicalKindChangesWakeBlockedController(helper));
         register(event, "appmek_real_cell_input_recipe", 400,
@@ -306,6 +314,8 @@ public final class GameTestRegistry {
                 helper -> new AppMekInterfaceGameTest().chemicalMemoryCardConfigurationPullsFromNetwork(helper));
         register(event, "appmek_mixed_pattern", 200,
                 helper -> new AppMekPatternGameTest().mixedPatternReturnsProductsAndExcessInputs(helper));
+        register(event, "appmek_radioactive_pattern_waste_barrel_storage_bus", 400,
+                helper -> new AppMekPatternGameTest().radioactivePatternReturnsProductsThroughWasteBarrelStorageBus(helper));
         register(event, "appmek_extended_pattern_last_slot", 200,
                 helper -> new AppMekPatternGameTest().extendedPatternLastSlotProcessesChemicals(helper));
         register(event, "appmek_rejected_pattern_ownership", 200,
@@ -317,7 +327,7 @@ public final class GameTestRegistry {
         register(event, "appmek_all_me_kinds", 100,
                 helper -> new AppMekInterfaceGameTest().allMeKindsExposeChemicalCapabilities(helper));
         register(event, "appmek_generic_radioactivity_validation", 100,
-                helper -> new AppMekInterfaceGameTest().genericCapabilitiesRejectRadioactiveChemicals(helper));
+                helper -> new AppMekInterfaceGameTest().genericCapabilitiesAcceptRadioactiveChemicals(helper));
         register(event, "appmek_partial_network_output", 100,
                 helper -> new AppMekAdapterGameTest().partialNetworkOutputConservesRemainder(helper));
         register(event, "appmek_disconnected_output", 100,

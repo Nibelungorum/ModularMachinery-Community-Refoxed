@@ -12,7 +12,6 @@ import me.ramidzkh.mekae2.ae2.MekanismKey;
 import mekanism.api.Action;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalHandler;
-import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -41,7 +40,7 @@ public final class OutputChemicalHandler implements IChemicalHandler, NativeRese
     @Override public ChemicalStack getChemicalInTank(int tank) { return local.getChemicalInTank(tank); }
     @Override public long getChemicalTankCapacity(int tank) { return local.getChemicalTankCapacity(tank); }
     @Override public void setChemicalInTank(int tank, ChemicalStack stack) { local.setChemicalInTank(tank, stack); }
-    @Override public boolean isValid(int tank, ChemicalStack stack) { return !stack.isEmpty() && ChemicalAttributeValidator.DEFAULT.process(stack); }
+    @Override public boolean isValid(int tank, ChemicalStack stack) { return !stack.isEmpty(); }
     @Override public ChemicalStack extractChemical(int tank, long amount, Action action) { return local.extractChemical(tank, amount, action); }
 
     @Override public ChemicalStack insertChemical(int tank, ChemicalStack stack, Action action) {
@@ -50,7 +49,7 @@ public final class OutputChemicalHandler implements IChemicalHandler, NativeRese
 
     @Override public ChemicalStack insertChemical(ChemicalStack stack, Action action) {
         MekanismKey key = MekanismKey.of(stack);
-        if (key == null || !ChemicalAttributeValidator.DEFAULT.process(stack)) return stack.copy();
+        if (key == null) return stack.copy();
         MEStorage network = storage.get();
         long accepted = network == null ? 0L : network.insert(key, stack.getAmount(),
                 action == Action.SIMULATE ? Actionable.SIMULATE : Actionable.MODULATE, source);
@@ -68,7 +67,7 @@ public final class OutputChemicalHandler implements IChemicalHandler, NativeRese
     @Override public List<CapabilityRequests.ResourceAction<ChemicalStack>> reserveOutput(
             ChemicalStack identity, long amount, PlanningReservations reservations) {
         MekanismKey key = MekanismKey.of(identity);
-        if (key == null || amount <= 0L || !ChemicalAttributeValidator.DEFAULT.process(identity)) return List.of();
+        if (key == null || amount <= 0L) return List.of();
         long remaining = amount;
         MEStorage network = storage.get();
         if (network != null) {

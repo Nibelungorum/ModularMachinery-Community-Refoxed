@@ -6,10 +6,9 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import me.ramidzkh.mekae2.ae2.MekanismKey;
-import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 
 /**
- * Ordinary chemical validation for AE2's externally exposed generic inventory.
+ * Chemical-key validation for AE2's externally exposed generic inventory.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -19,7 +18,7 @@ public final class ValidatedGenericInventory implements GenericInternalInventory
     public ValidatedGenericInventory(GenericInternalInventory delegate) { this.delegate = delegate; }
 
     static boolean accepted(AEKey key) {
-        return !(key instanceof MekanismKey chemical) || ChemicalAttributeValidator.DEFAULT.process(chemical.getStack());
+        return !(key instanceof MekanismKey chemical) || !chemical.getStack().isEmpty();
     }
 
     @Override public int size() { return delegate.size(); }

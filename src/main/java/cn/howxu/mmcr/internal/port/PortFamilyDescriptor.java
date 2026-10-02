@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.port;
 
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 
@@ -36,6 +37,9 @@ public record PortFamilyDescriptor(
     }
 
     public boolean matches(CapabilityBinding binding) {
-        return binding != null && familyId.equals(binding.type().id()) && binding.directions().supports(ioType);
+        return binding != null && binding.directions().supports(ioType)
+                && (familyId.equals(binding.type().id())
+                || familyId.equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL)
+                && binding.type().id().equals(MekanismPortFamilies.CHEMICAL));
     }
 }

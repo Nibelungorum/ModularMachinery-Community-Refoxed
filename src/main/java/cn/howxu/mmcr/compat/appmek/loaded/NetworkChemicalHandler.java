@@ -9,7 +9,6 @@ import me.ramidzkh.mekae2.ae2.MekanismKey;
 import mekanism.api.Action;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalHandler;
-import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -45,7 +44,7 @@ public final class NetworkChemicalHandler implements IChemicalHandler, NativeRes
 
     private List<MekanismKey> keys() {
         return configuredKeys.get().stream().filter(MekanismKey.class::isInstance).map(MekanismKey.class::cast)
-                .filter(key -> ChemicalAttributeValidator.DEFAULT.process(key.getStack())).distinct().toList();
+                .filter(ValidatedGenericInventory::accepted).distinct().toList();
     }
 
     @Override public int getChemicalTanks() { return keys().size(); }

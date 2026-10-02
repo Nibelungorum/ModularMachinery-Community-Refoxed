@@ -11,7 +11,10 @@ import appeng.api.networking.IGridConnection;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
+import appeng.blockentity.networking.CableBusBlockEntity;
 import appeng.core.definitions.AEBlocks;
+import appeng.core.definitions.AEParts;
+import appeng.parts.storagebus.StorageBusPart;
 import me.ramidzkh.mekae2.AMItems;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -37,6 +40,8 @@ import net.minecraft.world.item.Items;
 import me.ramidzkh.mekae2.ae2.MekanismKeyType;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.ChemicalStack;
+import mekanism.common.registries.MekanismBlocks;
+import mekanism.common.tile.TileEntityRadioactiveWasteBarrel;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
@@ -104,6 +109,49 @@ public final class AppMekGameTestFixtures {
         MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
         chest.setCell(new ItemStack(AMItems.CHEMICAL_CELL_1K.get()));
         return new ChemicalNetwork(helper.getBlockEntity(portPos), chest, helper.getBlockEntity(energyPos));
+    }
+
+    public static WasteBarrelNetwork createWasteBarrelNetwork(GameTestHelper helper, BlockPos portPos) {
+        BlockPos busPos = new BlockPos(4, 2, 1);
+        BlockPos barrelPos = busPos.below();
+        BlockPos energyPos = new BlockPos(4, 1, 3);
+        helper.setBlock(barrelPos, MekanismBlocks.RADIOACTIVE_WASTE_BARREL.get().defaultBlockState());
+        helper.setBlock(busPos, AEBlocks.CABLE_BUS.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        TileEntityRadioactiveWasteBarrel barrel = helper.getBlockEntity(barrelPos);
+        barrel.getChemicalTank().setStack(chemical("polonium", 1L));
+        CableBusBlockEntity host = helper.getBlockEntity(busPos);
+        StorageBusPart bus = host.getCableBus().addPart(AEParts.STORAGE_BUS.get(), Direction.DOWN, null);
+        helper.assertTrue(bus != null, "Native storage bus attaches to the waste barrel's exposed top side");
+        return new WasteBarrelNetwork(helper.getBlockEntity(portPos), bus, helper.getBlockEntity(energyPos), barrel);
+    }
+
+    /** Native AppMek storage bus backed by a real waste barrel. @author howxu <dev@howxu.cn> */
+    public static final class WasteBarrelNetwork {
+        private final IGridConnectedBlockEntity port;
+        private final StorageBusPart bus;
+        private final CreativeEnergyCellBlockEntity energy;
+        private final TileEntityRadioactiveWasteBarrel barrel;
+        private IGridConnection storageConnection;
+        private IGridConnection energyConnection;
+
+        private WasteBarrelNetwork(IGridConnectedBlockEntity port, StorageBusPart bus,
+                                   CreativeEnergyCellBlockEntity energy, TileEntityRadioactiveWasteBarrel barrel) {
+            this.port = port;
+            this.bus = bus;
+            this.energy = energy;
+            this.barrel = barrel;
+        }
+
+        public void connectWhenReady(GameTestHelper helper) {
+            helper.assertTrue(port.getMainNode().getNode() != null && bus.getGridNode() != null
+                    && energy.getMainNode().getNode() != null, "Waste barrel network nodes initialize before connection");
+            if (storageConnection == null) storageConnection = GridHelper.createConnection(port.getMainNode().getNode(), bus.getGridNode());
+            if (energyConnection == null) energyConnection = GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode());
+            helper.assertTrue(port.getMainNode().isActive(), "Chemical interface becomes active on the waste barrel network");
+        }
+
+        public TileEntityRadioactiveWasteBarrel barrel() { return barrel; }
     }
 
     /** State-driven real chemical cell network fixture. @author howxu <dev@howxu.cn> */

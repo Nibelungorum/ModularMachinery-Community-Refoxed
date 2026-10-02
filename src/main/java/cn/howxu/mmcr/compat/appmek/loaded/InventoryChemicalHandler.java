@@ -10,12 +10,11 @@ import me.ramidzkh.mekae2.ae2.MekanismKeyType;
 import mekanism.api.Action;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalHandler;
-import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 
 import java.util.Objects;
 
 /**
- * Ordinary chemical projection of an AE2 inventory, preserving mixed physical slots.
+ * Chemical projection of an AE2 inventory, preserving mixed physical slots.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -41,7 +40,7 @@ public final class InventoryChemicalHandler implements IChemicalHandler, NativeR
 
     @Override public boolean isValid(int tank, ChemicalStack stack) {
         MekanismKey key = MekanismKey.of(stack);
-        return key != null && ChemicalAttributeValidator.DEFAULT.process(stack) && inventory.isAllowedIn(tank, key);
+        return key != null && inventory.isAllowedIn(tank, key);
     }
 
     @Override public ChemicalStack insertChemical(int tank, ChemicalStack stack, Action action) {
@@ -51,8 +50,7 @@ public final class InventoryChemicalHandler implements IChemicalHandler, NativeR
     }
 
     @Override public ChemicalStack extractChemical(int tank, long amount, Action action) {
-        if (!(inventory.getKey(tank) instanceof MekanismKey key) || amount <= 0L
-                || !ChemicalAttributeValidator.DEFAULT.process(key.getStack())) return ChemicalStack.EMPTY;
+        if (!(inventory.getKey(tank) instanceof MekanismKey key) || amount <= 0L) return ChemicalStack.EMPTY;
         return key.withAmount(inventory.extract(tank, key, amount, mode(action)));
     }
 

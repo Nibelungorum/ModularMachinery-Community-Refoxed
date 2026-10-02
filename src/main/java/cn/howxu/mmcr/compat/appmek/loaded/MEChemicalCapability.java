@@ -38,7 +38,6 @@ import mekanism.api.Action;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.Chemical;
-import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import mekanism.api.chemical.IChemicalHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -58,7 +57,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * MMCR's multi-slot ordinary chemical view of an existing ME interface.
+ * MMCR's multi-slot chemical view of an existing ME interface.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -106,6 +105,7 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
     @Override public CapabilityDirections directions() { return directions; }
     @Override public CapabilityView view() { return view; }
     @Override public IChemicalHandler chemicalHandler() { return handler; }
+    @Override public boolean supportsRadioactivity(boolean radioactive) { return true; }
     @Override public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.ofNullable(asyncPlanning).map(facetType::cast);
         return ChemicalHandlerPort.super.facet(facetType);
@@ -175,7 +175,6 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
             for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
                 if (!(action.resource() instanceof ChemicalStack stack) || stack.isEmpty() || action.amount() <= 0L
                         || !directions.supports(action.insert() ? IOType.OUTPUT : IOType.INPUT)
-                        || !ChemicalAttributeValidator.DEFAULT.process(stack)
                         || action.slot() < 0 && !(action.insert() && action.slot() == -1
                         && handler instanceof ChemicalOutputAdmission)
                         || action.slot() >= handler.getChemicalTanks()) {
@@ -241,8 +240,7 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
                     : capacity == handler.getChemicalTankCapacity(slot);
             if (amount < 0L || capacity < amount || !validCapacity
                     || amount > 0L && identity.isEmpty() || amount == 0L && !identity.isEmpty()
-                    || !identity.isEmpty() && (!ChemicalAttributeValidator.DEFAULT.process(identity)
-                    || !(handler instanceof NetworkChemicalHandler) && !handler.isValid(slot, identity)
+                    || !identity.isEmpty() && (!(handler instanceof NetworkChemicalHandler) && !handler.isValid(slot, identity)
                     || handler instanceof NetworkChemicalHandler network
                     && !network.storedKey(slot).equals(network.resourceKey(identity)))) {
                 throw new IllegalArgumentException("Invalid ME chemical sync state");

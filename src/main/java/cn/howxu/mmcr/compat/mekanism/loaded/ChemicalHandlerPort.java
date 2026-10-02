@@ -15,6 +15,9 @@ public interface ChemicalHandlerPort extends MachineCapability {
 
     default boolean radioactive() { return false; }
 
+    /** Whether this port supports the requested chemical's radiation category. */
+    default boolean supportsRadioactivity(boolean radioactive) { return radioactive() == radioactive; }
+
     default Object planningIdentity() {
         return chemicalHandler() instanceof NativeReservationAccess access ? access.reservationIdentity() : this;
     }

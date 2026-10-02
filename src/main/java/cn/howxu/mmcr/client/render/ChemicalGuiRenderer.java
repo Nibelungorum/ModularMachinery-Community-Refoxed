@@ -29,7 +29,8 @@ public final class ChemicalGuiRenderer {
         TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS)
                 .apply(state.identifier());
         int fillHeight = Math.min(state.fillHeight(), height);
-        FluidGuiRenderer.drawSprite(graphics, sprite, state.tint(), x, y + height - fillHeight,
+        // Mekanism chemical tints may contain only RGB, unlike fluid ARGB colors.
+        FluidGuiRenderer.drawSprite(graphics, sprite, state.tint() | 0xFF000000, x, y + height - fillHeight,
                 width, fillHeight);
     }
 }

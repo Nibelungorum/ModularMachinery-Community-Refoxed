@@ -508,7 +508,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             boolean resourceRadioactive = matcher.exactHolder() != null
                     && matcher.exactHolder().value().isRadioactive();
             List<ChemicalHandlerPort> matchingPorts = plannedPorts.stream()
-                    .filter(p -> p.radioactive() == resourceRadioactive)
+                    .filter(p -> p.supportsRadioactivity(resourceRadioactive))
                     .toList();
             boolean allowPartialOutput = output && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
             long maximum;
