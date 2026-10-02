@@ -43,8 +43,16 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.assertj:assertj-core:3.25.0'
 
-    // 1.21.1 only for test and runtime
+    // 1.21.1
     implementation("de.mari_023:${ae2wtlib_id}:${ae2wtlib_version}")
+    // applied mek
+    implementation "curse.maven:${appliedmek_id}:${appliedmek_version}"
+    // ars
+    implementation "curse.maven:${ars_id}:${ars_version}"
+    runtimeOnly "curse.maven:${geckolib_id}:${geckolib_version}"
+    runtimeOnly "curse.maven:${curios_id}:${curios_version}"
+    // create
+    implementation "curse.maven:${create_id}:${create_version}"
 }
 
 dependencies {

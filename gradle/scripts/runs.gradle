@@ -40,7 +40,7 @@ runs {
         dependencies{
             // CustomSkinLoader
             // 题外话 我真的是有点讨厌cross platform的mod
-            runtime("curse.maven:${csl_id}:${csl_version}")
+            // runtime("curse.maven:${csl_id}:${csl_version}")
         }
     }
 
