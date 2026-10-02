@@ -41,6 +41,8 @@ public final class StructureRuntime {
     private int matchedStructureStage;
     private long version;
     private long stateEpoch;
+    private @Nullable StructureSnapshot cachedSnapshot;
+    private long cachedSnapshotEpoch = Long.MIN_VALUE;
     private CheckReason checkReason = CheckReason.DIRTY_EVENT;
     private boolean componentRefreshRequired;
     private long chunkStateEpoch;
@@ -182,9 +184,12 @@ public final class StructureRuntime {
     }
 
     public StructureSnapshot snapshot() {
-        return new StructureSnapshot(machine, foundMachine, foundPattern, foundCompiledPattern, controllerFacing,
+        if (cachedSnapshot != null && cachedSnapshotEpoch == stateEpoch) return cachedSnapshot;
+        cachedSnapshot = new StructureSnapshot(machine, foundMachine, foundPattern, foundCompiledPattern, controllerFacing,
                 matchedRollFacing, matchedStructureStage, formed, version, lastStructureError,
                 mismatchDiagnostic, formationFailure, dirty, structureAreaLoaded, criticalChunks);
+        cachedSnapshotEpoch = stateEpoch;
+        return cachedSnapshot;
     }
 
     StructureWorkSnapshot workSnapshot() {
@@ -422,7 +427,9 @@ public final class StructureRuntime {
     }
 
     void setFormationFailure(@Nullable PortRequirementSpec.Failure formationFailure) {
+        if (Objects.equals(this.formationFailure, formationFailure)) return;
         this.formationFailure = formationFailure;
+        stateEpoch = nextVersion(stateEpoch);
     }
 
     @Nullable String mismatchDiagnostic() {
@@ -430,7 +437,9 @@ public final class StructureRuntime {
     }
 
     void setMismatchDiagnostic(@Nullable String mismatchDiagnostic) {
+        if (Objects.equals(this.mismatchDiagnostic, mismatchDiagnostic)) return;
         this.mismatchDiagnostic = mismatchDiagnostic;
+        stateEpoch = nextVersion(stateEpoch);
     }
 
     @Nullable Object lastStructureError() {
@@ -438,7 +447,9 @@ public final class StructureRuntime {
     }
 
     void setLastStructureError(@Nullable Object lastStructureError) {
+        if (Objects.equals(this.lastStructureError, lastStructureError)) return;
         this.lastStructureError = lastStructureError;
+        stateEpoch = nextVersion(stateEpoch);
     }
 
     boolean setFormed(boolean formed) {
@@ -457,6 +468,8 @@ public final class StructureRuntime {
         FormationIdentity nextIdentity = new FormationIdentity(machine.registryName(), pattern, compiledPattern, facing, normalizedRoll,
                 matchedStage, true);
         boolean changed = !formationIdentity().equals(nextIdentity);
+        boolean snapshotChanged = changed || this.machine != machine || this.foundMachine != machine
+                || this.foundPattern != pattern || this.foundCompiledPattern != compiledPattern;
         this.machine = machine;
         this.foundMachine = machine;
         this.foundPattern = pattern;
@@ -468,8 +481,8 @@ public final class StructureRuntime {
         this.structureBlockCounts = Map.copyOf(Objects.requireNonNull(structureBlockCounts, "structureBlockCounts"));
         if (changed) {
             version = nextVersion(version);
-            stateEpoch = nextVersion(stateEpoch);
         }
+        if (snapshotChanged) stateEpoch = nextVersion(stateEpoch);
         return changed;
     }
 
@@ -482,11 +495,13 @@ public final class StructureRuntime {
     }
 
     boolean publishClientState(@Nullable Machine machine, boolean formed, boolean structureAreaLoaded) {
+        boolean referencesChanged = this.machine != machine || this.foundMachine != machine;
         boolean changed = !Objects.equals(this.machine, machine)
                 || !Objects.equals(this.foundMachine, machine)
                 || this.foundPattern != null
                 || this.foundCompiledPattern != null
                 || this.controllerFacing != null
+                || this.matchedRollFacing != Direction.SOUTH
                 || this.matchedStructureStage != 0
                 || this.lastStructureError != null
                 || this.mismatchDiagnostic != null
@@ -494,7 +509,8 @@ public final class StructureRuntime {
                 || !this.criticalChunks.isEmpty()
                 || this.scan != null
                 || this.structureAreaLoaded != structureAreaLoaded
-                || this.formed != formed;
+                || this.formed != formed
+                || this.dirty;
         this.machine = machine;
         this.foundMachine = machine;
         this.foundPattern = null;
@@ -514,10 +530,8 @@ public final class StructureRuntime {
         this.pendingInvalidation = false;
         this.formed = formed;
         this.dirty = false;
-        if (changed) {
-            version = nextVersion(version);
-            stateEpoch = nextVersion(stateEpoch);
-        }
+        if (changed) version = nextVersion(version);
+        if (changed || referencesChanged) stateEpoch = nextVersion(stateEpoch);
         return changed;
     }
 

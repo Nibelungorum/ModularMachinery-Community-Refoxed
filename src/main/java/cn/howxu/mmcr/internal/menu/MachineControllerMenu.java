@@ -337,9 +337,18 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         if (owner == null || serverPlayer == null) return;
         PktMachineStatePayload next = PktMachineStatePayload.from(pos, owner.runtimeSnapshot(),
                 owner.currentRecipePoolId());
-        if (lastSentSnapshot != null && !PktMachineStatePayload.stateChanged(next, lastSentSnapshot)) return;
-        serverPlayer.connection.send(new ClientboundCustomPayloadPacket(next));
+        var update = PktMachineStatePayload.nextUpdate(next, lastSentSnapshot);
+        if (update == null) return;
+        serverPlayer.connection.send(new ClientboundCustomPayloadPacket(update));
         lastSentSnapshot = next;
+    }
+
+    public void applyClientProgress(String recipeName, int tick, int totalTick) {
+        if (clientSnapshot == null || !clientSnapshot.recipeName().equals(recipeName)
+                || clientSnapshot.totalTick() != totalTick) return;
+        clientSnapshot = clientSnapshot.withProgress(tick, totalTick);
+        activeTick.set(tick);
+        activeTotalTick.set(totalTick);
     }
 
     public void applyClientSnapshot(PktMachineStatePayload snapshot) {

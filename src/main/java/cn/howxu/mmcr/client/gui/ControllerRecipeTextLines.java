@@ -67,8 +67,9 @@ final class ControllerRecipeTextLines {
     static List<ControllerTextLine> outputs(List<MachineOutputAmount> outputs) {
         List<ControllerTextLine> lines = new ArrayList<>();
         for (MachineOutputAmount output : outputs) {
-            if (!isRenderable(output)) continue;
-            lines.add(line(output));
+            MachineOutput ownedOutput = output.output();
+            if (!isRenderable(ownedOutput, output.amount())) continue;
+            lines.add(line(ownedOutput, output.amount()));
         }
         if (lines.size() > MAX_OUTPUT_LINES) {
             lines.subList(MAX_OUTPUT_LINES - 1, lines.size()).clear();
@@ -82,7 +83,8 @@ final class ControllerRecipeTextLines {
             ControllerRecipePresentation presentation) {
         if (presentation == null) return Optional.empty();
         for (MachineOutputAmount output : presentation.outputs()) {
-            if (isRenderable(output)) return Optional.of(icon(output));
+            MachineOutput ownedOutput = output.output();
+            if (isRenderable(ownedOutput, output.amount())) return Optional.of(icon(ownedOutput, output.amount()));
         }
         return Optional.empty();
     }
@@ -95,66 +97,66 @@ final class ControllerRecipeTextLines {
                 .toList());
     }
 
-    private static boolean isRenderable(MachineOutputAmount output) {
-        if (output.amount() <= 0L) return false;
-        if (output.output() instanceof MachineOutput.ItemOutput item) return !item.stack().isEmpty();
-        if (output.output() instanceof MachineOutput.FluidOutput fluid) return !fluid.stack().isEmpty();
-        if (output.output() instanceof LoadedChemicalOutput chemical) {
+    private static boolean isRenderable(MachineOutput output, long amount) {
+        if (amount <= 0L) return false;
+        if (output instanceof MachineOutput.ItemOutput item) return !item.stack().isEmpty();
+        if (output instanceof MachineOutput.FluidOutput fluid) return !fluid.stack().isEmpty();
+        if (output instanceof LoadedChemicalOutput chemical) {
             return MekanismBridge.get().chemicalRenderData(chemical.id()) != null;
         }
         return false;
     }
 
-    private static ControllerTextLine line(MachineOutputAmount output) {
-        ControllerTextLine.Icon icon = icon(output);
-        if (output.output() instanceof MachineOutput.ItemOutput item) {
+    private static ControllerTextLine line(MachineOutput output, long amount) {
+        ControllerTextLine.Icon icon = icon(output, amount);
+        if (output instanceof MachineOutput.ItemOutput item) {
             ItemStack stack = item.resolvedStack();
             MutableComponent name = Component.empty().append(stack.getHoverName())
                     .withStyle(stack.getRarity().getStyleModifier());
             if (stack.has(DataComponents.CUSTOM_NAME)) name.withStyle(ChatFormatting.ITALIC);
-            String count = output.amount() > 1L
-                    ? ReadableNumber.formatForSlot(output.amount(), 0, "") + " " : "";
+            String count = amount > 1L
+                    ? ReadableNumber.formatForSlot(amount, 0, "") + " " : "";
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.item", count,
                     name), MachineControllerScreen.STATUS_LABEL_COLOR,
                     icon,
-                    List.of(name, Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    List.of(name, Component.literal(ReadableNumber.formatExact(amount))),
                     OUTPUT_INDENT);
         }
-        if (output.output() instanceof MachineOutput.FluidOutput fluid) {
-            String amount = fluidAmount(output.amount());
-            return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.fluid", amount,
+        if (output instanceof MachineOutput.FluidOutput fluid) {
+            String displayAmount = fluidAmount(amount);
+            return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.fluid", displayAmount,
                     fluidName(fluid.stack())), MachineControllerScreen.STATUS_LABEL_COLOR,
                     icon,
-                    List.of(fluidName(fluid.stack()), exactFluidAmount(output.amount())),
+                    List.of(fluidName(fluid.stack()), exactFluidAmount(amount)),
                     OUTPUT_INDENT);
         }
-        if (output.output() instanceof LoadedChemicalOutput chemical) {
+        if (output instanceof LoadedChemicalOutput chemical) {
             MekanismBridge.ChemicalRenderData data = MekanismBridge.get().chemicalRenderData(chemical.id());
             if (data == null) return new ControllerTextLine(Component.empty(), MachineControllerScreen.STATUS_LABEL_COLOR);
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.chemical",
-                    fluidAmount(output.amount()), data.displayName()), MachineControllerScreen.STATUS_LABEL_COLOR,
+                    fluidAmount(amount), data.displayName()), MachineControllerScreen.STATUS_LABEL_COLOR,
                     icon,
-                    List.of(data.displayName(), exactFluidAmount(output.amount())),
+                    List.of(data.displayName(), exactFluidAmount(amount)),
                     OUTPUT_INDENT);
         }
-        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.output().outputType().id());
+        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.outputType().id());
     }
 
-    private static ControllerTextLine.Icon icon(MachineOutputAmount output) {
-        if (output.output() instanceof MachineOutput.ItemOutput item) {
+    private static ControllerTextLine.Icon icon(MachineOutput output, long amount) {
+        if (output instanceof MachineOutput.ItemOutput item) {
             ItemStack stack = item.resolvedStack();
             stack.setCount(1);
             return new ControllerTextLine.ItemIcon(stack);
         }
-        if (output.output() instanceof MachineOutput.FluidOutput fluid) {
+        if (output instanceof MachineOutput.FluidOutput fluid) {
             FluidStack stack = fluid.stack().copy();
             stack.setAmount(1);
             return new ControllerTextLine.FluidIcon(stack);
         }
-        if (output.output() instanceof LoadedChemicalOutput chemical) {
-            return new ControllerTextLine.ChemicalIcon(chemical.id(), output.amount());
+        if (output instanceof LoadedChemicalOutput chemical) {
+            return new ControllerTextLine.ChemicalIcon(chemical.id(), amount);
         }
-        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.output().outputType().id());
+        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.outputType().id());
     }
 
     private static ControllerTextLine summary(String textKey, String tooltipKey, String value, String exact) {

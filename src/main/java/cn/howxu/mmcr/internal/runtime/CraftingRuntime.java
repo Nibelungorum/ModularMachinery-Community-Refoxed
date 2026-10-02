@@ -86,6 +86,13 @@ public final class CraftingRuntime {
     private @Nullable CraftingPlan finishPlan;
     private List<MachineRequirement> effectiveRequirements = List.of();
     private List<MachineOutput> effectiveOutputs = List.of();
+    private @Nullable ControllerRecipePresentation cachedRecipePresentation;
+    private @Nullable ActiveMachineRecipe cachedPresentationRecipe;
+    private long presentationEpoch;
+    private long cachedPresentationEpoch = Long.MIN_VALUE;
+    private long cachedActiveExecutionRevision = Long.MIN_VALUE;
+    private long cachedPresentationParallelism;
+    private int cachedPresentationDuration;
     private @Nullable List<MachineRequirement> cachedPerTickSource;
     private @Nullable Set<Integer> cachedPerTickConsumed;
     private @Nullable Set<Integer> cachedPerTickRetained;
@@ -264,6 +271,7 @@ public final class CraftingRuntime {
         effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements().stream()
                 .map(MachineRequirement::copyOf).toList());
         effectiveOutputs = MachineOutput.copyList(prepared.effective().outputs());
+        presentationEpoch++;
         activatePrefetches(prepared.prefetches(), effectiveRequirements, activeRecipe.getParallelism());
         captureInputState(effectiveRequirements, prepared.plan(), !prepared.prefetches().isEmpty());
         captureVersions(prepared.runtime());
@@ -403,6 +411,7 @@ public final class CraftingRuntime {
         effectiveRequirements = MachineRequirement.copyList(effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList());
         effectiveOutputs = MachineOutput.copyList(effective.outputs());
+        presentationEpoch++;
         activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
         captureInputState(effectiveRequirements, plan, !prefetches.isEmpty());
         captureVersions(runtime);
@@ -795,6 +804,27 @@ public final class CraftingRuntime {
         return activeRecipe;
     }
 
+    public ControllerRecipePresentation recipePresentation() {
+        long currentParallelism = active() ? parallelism() : 0L;
+        int currentDuration = active() ? totalTick() : 0;
+        long executionRevision = activeRecipe == null ? 0L : activeRecipe.effectiveExecutionRevision();
+        if (cachedRecipePresentation != null
+                && cachedPresentationRecipe == activeRecipe
+                && cachedPresentationEpoch == presentationEpoch
+                && cachedActiveExecutionRevision == executionRevision
+                && cachedPresentationParallelism == currentParallelism
+                && cachedPresentationDuration == currentDuration) {
+            return cachedRecipePresentation;
+        }
+        cachedRecipePresentation = ControllerRecipePresentation.from(this);
+        cachedPresentationRecipe = activeRecipe;
+        cachedPresentationEpoch = presentationEpoch;
+        cachedActiveExecutionRevision = executionRevision;
+        cachedPresentationParallelism = currentParallelism;
+        cachedPresentationDuration = currentDuration;
+        return cachedRecipePresentation;
+    }
+
     /**
      * Temporary string presentation boundary for unchanged Task 7 packet/menu callers.
      * Remove it when those callers consume the typed failure directly.
@@ -920,6 +950,7 @@ public final class CraftingRuntime {
         upgradeContentRevision = runtime.upgradeContentRevision();
         effectiveRequirements = MachineRequirement.copyList(requirements);
         effectiveOutputs = MachineOutput.copyList(outputs);
+        presentationEpoch++;
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
@@ -1545,6 +1576,7 @@ public final class CraftingRuntime {
     private void clearEffectiveRecipe() {
         effectiveRequirements = List.of();
         effectiveOutputs = List.of();
+        presentationEpoch++;
     }
 
     private List<MachineRequirement> effectiveRequirements() {

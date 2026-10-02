@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonPrimitive;
@@ -95,6 +96,7 @@ class ControllerRecipeTextLinesTest {
         assertThat(line.text()).isEqualTo(Component.translatable(
                 "gui.mmcr.controller.recipe_output.item", "", styledName));
         assertThat(line.tooltip().getFirst()).isEqualTo(styledName);
+        assertThat(line.color()).isEqualTo(MachineControllerScreen.STATUS_LABEL_COLOR);
     }
 
     @Test
@@ -108,9 +110,10 @@ class ControllerRecipeTextLinesTest {
         var components = new DataComponentPredicateSet(Map.of(DataComponents.RARITY,
                 ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive("rare")))));
         var output = new MachineOutput.ItemOutput(stack, 1F, components);
+        var amount = new MachineOutputAmount(output, 1L);
+        var presentation = new ControllerRecipePresentation(List.of(amount), 0L, 0L, 0D);
 
-        ControllerTextLine line = ControllerRecipeTextLines.outputs(List.of(
-                new MachineOutputAmount(output, 1L))).getFirst();
+        ControllerTextLine line = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
 
         Component name = Component.empty().append(stack.getHoverName()).withStyle(ChatFormatting.AQUA);
         assertThat(name.getStyle().getColor().getValue()).isEqualTo(ChatFormatting.AQUA.getColor());
@@ -119,7 +122,53 @@ class ControllerRecipeTextLinesTest {
         assertThat(line.tooltip().getFirst()).isEqualTo(name);
         assertThat(line.icon()).isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class,
                 icon -> assertThat(icon.stack().getRarity()).isEqualTo(Rarity.RARE));
+        assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation).orElseThrow())
+                .isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class, icon -> {
+                    assertThat(icon.stack().getRarity()).isEqualTo(Rarity.RARE);
+                    icon.stack().set(DataComponents.RARITY, Rarity.COMMON);
+                    icon.stack().setCount(64);
+                });
+        ((ControllerTextLine.ItemIcon) line.icon()).stack().set(DataComponents.RARITY, Rarity.COMMON);
+        ControllerTextLine next = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
+        assertThat(next.text()).isEqualTo(line.text());
+        assertThat(next.tooltip()).isEqualTo(line.tooltip());
+        assertThat(next.color()).isEqualTo(MachineControllerScreen.STATUS_LABEL_COLOR);
+        assertThat(next.icon()).isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class, icon -> {
+            assertThat(icon.stack().getRarity()).isEqualTo(Rarity.RARE);
+            assertThat(icon.stack().getCount()).isEqualTo(1);
+        });
+        assertThat(((MachineOutput.ItemOutput) amount.output()).resolvedStack().getRarity()).isEqualTo(Rarity.RARE);
         assertThat(stack.getRarity()).isEqualTo(Rarity.COMMON);
+    }
+
+    @Test
+    void fluidIconsCannotMutateOwnedPresentationOutputs() {
+        FluidStack stack = new FluidStack(Fluids.WATER, 1_000);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal("Owned water"));
+        var amount = new MachineOutputAmount(new MachineOutput.FluidOutput(stack, 1F), 1_000L);
+        var presentation = new ControllerRecipePresentation(List.of(amount), 0L, 0L, 0D);
+        ControllerTextLine first = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
+
+        assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation).orElseThrow())
+                .isInstanceOfSatisfying(ControllerTextLine.FluidIcon.class, icon -> {
+                    assertThat(icon.stack().get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Owned water"));
+                    icon.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Changed water"));
+                    icon.stack().setAmount(64);
+                });
+        ((ControllerTextLine.FluidIcon) first.icon()).stack().setAmount(64);
+        ControllerTextLine next = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
+
+        assertThat(next.text()).isEqualTo(first.text());
+        assertThat(next.tooltip()).isEqualTo(first.tooltip());
+        assertThat(next.color()).isEqualTo(MachineControllerScreen.STATUS_LABEL_COLOR);
+        assertThat(next.icon()).isInstanceOfSatisfying(ControllerTextLine.FluidIcon.class, icon -> {
+            assertThat(icon.stack().getAmount()).isEqualTo(1);
+            assertThat(icon.stack().get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Owned water"));
+        });
+        FluidStack owned = ((MachineOutput.FluidOutput) amount.output()).stack();
+        assertThat(owned.getAmount()).isEqualTo(1_000);
+        assertThat(owned.get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("Owned water"));
+        assertThat(stack.getAmount()).isEqualTo(1_000);
     }
 
     @Test
@@ -184,7 +233,8 @@ class ControllerRecipeTextLinesTest {
                 return new ChemicalRenderData(chemicalId, 0xFFFFFFFF, Component.literal("Test chemical"));
             }
         });
-        try {
+        try (var outputScope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(LoadedChemicalOutput.TYPE);
             ControllerRecipePresentation presentation = new ControllerRecipePresentation(List.of(
                     new MachineOutputAmount(new MachineOutput.FluidOutput(
                             new FluidStack(Fluids.WATER, 1_000), 1F), 1_000L),

@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
@@ -18,6 +19,7 @@ import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMachineProgressPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
@@ -56,6 +58,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -71,7 +74,7 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ModEventRegistration {
-    static final String PAYLOAD_PROTOCOL_VERSION = "7";
+    static final String PAYLOAD_PROTOCOL_VERSION = "8";
 
     private ModEventRegistration() {
     }
@@ -105,6 +108,8 @@ public final class ModEventRegistration {
         gameBus.add(EntityJoinLevelEvent.class, handlers.fallingBlockJoined());
         gameBus.add(ChunkEvent.Unload.class, handlers.chunkUnloaded());
         gameBus.add(ChunkEvent.Load.class, handlers.chunkLoaded());
+        gameBus.add(ChunkWatchEvent.Sent.class, handlers.chunkSent());
+        gameBus.add(ChunkWatchEvent.UnWatch.class, handlers.chunkUnWatch());
         gameBus.add(LevelTickEvent.Post.class, handlers.levelTick());
         gameBus.add(ServerTickEvent.Post.class, handlers.serverTick());
         gameBus.add(LevelEvent.Unload.class, handlers.levelUnload());
@@ -141,6 +146,8 @@ public final class ModEventRegistration {
     static void registerPayloads(PayloadRegistrar registrar) {
         registrar.playToClient(
                         PktMachineStatePayload.TYPE, PktMachineStatePayload.STREAM_CODEC, PktMachineStatePayload::handle)
+                .playToClient(PktMachineProgressPayload.TYPE, PktMachineProgressPayload.STREAM_CODEC,
+                        PktMachineProgressPayload::handle)
                 .playToClient(PktFactoryControllerStatePayload.TYPE, PktFactoryControllerStatePayload.STREAM_CODEC,
                         PktFactoryControllerStatePayload::handle)
                 .playToClient(PktControllerSpecsPayload.TYPE, PktControllerSpecsPayload.STREAM_CODEC,
@@ -208,6 +215,8 @@ public final class ModEventRegistration {
             Consumer<EntityJoinLevelEvent> fallingBlockJoined,
             Consumer<ChunkEvent.Unload> chunkUnloaded,
             Consumer<ChunkEvent.Load> chunkLoaded,
+            Consumer<ChunkWatchEvent.Sent> chunkSent,
+            Consumer<ChunkWatchEvent.UnWatch> chunkUnWatch,
             Consumer<LevelTickEvent.Post> levelTick,
             Consumer<ServerTickEvent.Post> serverTick,
             Consumer<LevelEvent.Unload> levelUnload,
@@ -234,6 +243,8 @@ public final class ModEventRegistration {
                     StructureDirtyEvents::onFallingBlockJoined,
                     StructureDirtyEvents::onChunkUnloaded,
                     StructureDirtyEvents::onChunkLoaded,
+                    ControllerSyncEvents::onChunkSent,
+                    ControllerSyncEvents::onChunkUnWatch,
                     SharedIoEvents::onLevelTick,
                     SharedIoEvents::onServerTick,
                     SharedIoEvents::onLevelUnload,

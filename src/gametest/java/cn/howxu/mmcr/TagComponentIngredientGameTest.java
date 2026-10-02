@@ -47,8 +47,11 @@ public class TagComponentIngredientGameTest {
 
         helper.assertTrue(input.item().test(matchingLog), "Named log matches the tag ingredient");
         helper.assertTrue(input.components().matches(matchingLog), "Named log matches the component predicate");
+        helper.assertTrue(input.components().matches(matchingLog, ops), "Named log matches with runtime registry ops");
         helper.assertTrue(input.item().test(unnamedLog), "Unnamed log matches the tag ingredient");
         helper.assertTrue(!input.components().matches(unnamedLog), "Unnamed log fails the component predicate");
+        matchingLog.set(DataComponents.CUSTOM_NAME, Component.literal("Different"));
+        helper.assertTrue(!input.components().matches(matchingLog, ops), "A changed name fails registry-aware matching");
         helper.assertTrue(!input.item().test(namedIngot), "Named ingot fails the tag ingredient");
         helper.succeed();
     }

@@ -27,7 +27,6 @@ import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.ui.IElementHelper;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,28 +53,30 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
         List<MachineOutputAmount> outputs = RecipeOutputCodec.read(accessor.getServerData());
-        List<MachineOutputAmount> renderable = new ArrayList<>(outputs.size());
+        boolean labelAdded = false;
         for (MachineOutputAmount output : outputs) {
-            if (isRenderable(output)) renderable.add(output);
-        }
-        if (renderable.isEmpty()) return;
-        tooltip.add(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
-        for (MachineOutputAmount output : renderable) {
-            if (output.output() instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, output.amount());
-            else if (output.output() instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, output.amount());
-            else if (output.output() instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, output.amount());
+            MachineOutput owned = output.output();
+            long amount = output.amount();
+            if (!isRenderable(owned, amount)) continue;
+            if (!labelAdded) {
+                tooltip.add(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
+                labelAdded = true;
+            }
+            if (owned instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, amount);
+            else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
+            else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
         }
     }
 
-    private static boolean isRenderable(MachineOutputAmount output) {
-        if (output.output() instanceof MachineOutput.ItemOutput item) {
-            return !item.stack().isEmpty() && output.amount() > 0L;
+    private static boolean isRenderable(MachineOutput output, long amount) {
+        if (output instanceof MachineOutput.ItemOutput item) {
+            return !item.stack().isEmpty() && amount > 0L;
         }
-        if (output.output() instanceof MachineOutput.FluidOutput fluid) {
-            return !fluid.stack().isEmpty() && output.amount() > 0L;
+        if (output instanceof MachineOutput.FluidOutput fluid) {
+            return !fluid.stack().isEmpty() && amount > 0L;
         }
-        if (output.output() instanceof LoadedChemicalOutput chemical) {
-            if (output.amount() <= 0L) return false;
+        if (output instanceof LoadedChemicalOutput chemical) {
+            if (amount <= 0L) return false;
             Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
                     ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
             return holder != null && holder.isPresent();

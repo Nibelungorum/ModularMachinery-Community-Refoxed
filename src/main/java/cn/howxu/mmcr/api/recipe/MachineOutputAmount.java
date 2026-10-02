@@ -9,7 +9,12 @@ import java.util.Objects;
  */
 public record MachineOutputAmount(MachineOutput output, long amount) {
     public MachineOutputAmount {
-        output = Objects.requireNonNull(output, "output");
+        output = MachineOutput.copyOf(Objects.requireNonNull(output, "output"));
         if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+    }
+
+    @Override
+    public MachineOutput output() {
+        return MachineOutput.copyOf(output);
     }
 }

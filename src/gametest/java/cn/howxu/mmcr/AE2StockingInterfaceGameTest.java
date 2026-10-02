@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import appeng.api.AECapabilities;
 import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.IGridConnection;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
@@ -26,6 +27,7 @@ import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -39,10 +41,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 import com.mojang.authlib.GameProfile;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -81,6 +85,7 @@ public class AE2StockingInterfaceGameTest {
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
         port.getInterfaceLogic().getConfig().setStack(1,
                 new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L));
+        List<IGridConnection> connections = new ArrayList<>();
 
         helper.runAtTickTime(2, () -> {
             helper.assertTrue(port.getMainNode().getNode() != null,
@@ -91,9 +96,9 @@ public class AE2StockingInterfaceGameTest {
                     "Fluid ME Chest has initialized its AE2 grid node");
             helper.assertTrue(energy.getMainNode().getNode() != null,
                     "Creative energy cell has initialized its AE2 grid node");
-            GridHelper.createConnection(port.getMainNode().getNode(), itemChest.getMainNode().getNode());
-            GridHelper.createConnection(port.getMainNode().getNode(), fluidChest.getMainNode().getNode());
-            GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode());
+            connections.add(GridHelper.createConnection(port.getMainNode().getNode(), itemChest.getMainNode().getNode()));
+            connections.add(GridHelper.createConnection(port.getMainNode().getNode(), fluidChest.getMainNode().getNode()));
+            connections.add(GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode()));
         });
 
         helper.runAtTickTime(10, () -> {
@@ -221,7 +226,69 @@ public class AE2StockingInterfaceGameTest {
                     "Item watcher display updates on the next tick without a full scan");
             helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(1)).amount() == FLUID_AMOUNT - 1_000L,
                     "Fluid watcher display updates on the next tick without a full scan");
-            helper.succeed();
+            var items = port.nativeItemHandler();
+            var fluids = port.nativeFluidHandler();
+            var itemAccess = (NativeReservationAccess) items;
+            var fluidAccess = (NativeReservationAccess) fluids;
+            Object originalNetwork = itemAccess.reservationIdentity();
+            helper.startSequence()
+                    .thenExecute(() -> {
+                        port.getInterfaceLogic().getConfig().setStack(0,
+                                new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L));
+                        port.getInterfaceLogic().getConfig().setStack(1,
+                                new GenericStack(AEFluidKey.of(Fluids.LAVA), 1_000L));
+                        helper.assertTrue(items == port.nativeItemHandler() && fluids == port.nativeFluidHandler(),
+                                "Config changes rebind the existing live storage views");
+                        helper.assertTrue(items.getSlots() == 1 && fluids.getTanks() == 1
+                                        && AEItemKey.of(Items.GOLD_INGOT).equals(itemAccess.storedKey(0))
+                                        && AEFluidKey.of(Fluids.LAVA).equals(fluidAccess.storedKey(0)),
+                                "Config changes immediately replace the typed native resource keys");
+                        helper.assertTrue(itemAccess.reservationIdentity() == originalNetwork
+                                        && fluidAccess.reservationIdentity() == originalNetwork,
+                                "Config rebind retains the live network reservation identity");
+                        helper.assertTrue(itemChest.getInventory().insert(AEItemKey.of(Items.GOLD_INGOT),
+                                        6L, Actionable.MODULATE, IActionSource.empty()) == 6L,
+                                "Item storage accepts the newly configured key");
+                        helper.assertTrue(fluidChest.getInventory().insert(AEFluidKey.of(Fluids.LAVA),
+                                        2_000L, Actionable.MODULATE, IActionSource.empty()) == 2_000L,
+                                "Fluid storage accepts the newly configured key");
+                    })
+                    .thenWaitUntil(() -> helper.assertTrue(itemAccess.storedAmount(0) == 6L && fluidAccess.storedAmount(0) == 2_000L,
+                            "Watchers update quantities for the new delegate configuration"))
+                    .thenExecute(() -> {
+                        helper.assertTrue(items.extractItem(0, 1, false).getCount() == 1
+                                        && fluids.drain(new FluidStack(Fluids.LAVA, 500), IFluidHandler.FluidAction.EXECUTE)
+                                        .getAmount() == 500,
+                                "Reconfigured delegates extract the new keys from live storage");
+                        connections.forEach(IGridConnection::destroy);
+                        connections.clear();
+                    })
+                    .thenWaitUntil(() -> helper.assertTrue(itemAccess.storedAmount(0) == 0L && fluidAccess.storedAmount(0) == 0L,
+                            "Disconnecting the network clears watcher quantities"))
+                    .thenExecute(() -> {
+                        MEStorage isolatedNetwork = port.getMainNode().getGrid().getStorageService().getInventory();
+                        helper.assertTrue(itemAccess.reservationIdentity() == isolatedNetwork
+                                        && fluidAccess.reservationIdentity() == isolatedNetwork,
+                                "Network split rebinds both delegates to the isolated network");
+                        helper.assertTrue(AEItemKey.of(Items.GOLD_INGOT).equals(itemAccess.storedKey(0))
+                                        && AEFluidKey.of(Fluids.LAVA).equals(fluidAccess.storedKey(0)),
+                                "Network rebind retains the current resource configuration");
+                        helper.assertTrue(items.extractItem(0, 1, true).isEmpty()
+                                        && fluids.drain(new FluidStack(Fluids.LAVA, 500), IFluidHandler.FluidAction.SIMULATE).isEmpty(),
+                                "Isolated delegates cannot extract from the previous network");
+                        connections.add(GridHelper.createConnection(port.getMainNode().getNode(), itemChest.getMainNode().getNode()));
+                        connections.add(GridHelper.createConnection(port.getMainNode().getNode(), fluidChest.getMainNode().getNode()));
+                        connections.add(GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode()));
+                    })
+                    .thenWaitUntil(() -> helper.assertTrue(itemAccess.storedAmount(0) == 5L && fluidAccess.storedAmount(0) == 1_500L,
+                            "Reconnected delegates receive the live network quantities"))
+                    .thenExecute(() -> {
+                        MEStorage reconnectedNetwork = port.getMainNode().getGrid().getStorageService().getInventory();
+                        helper.assertTrue(itemAccess.reservationIdentity() == reconnectedNetwork
+                                        && fluidAccess.reservationIdentity() == reconnectedNetwork,
+                                "Reconnected delegates share the current network reservation identity");
+                    })
+                    .thenSucceed();
         });
     }
 

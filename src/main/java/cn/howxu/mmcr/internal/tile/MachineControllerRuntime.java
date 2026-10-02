@@ -24,7 +24,6 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
-import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -234,7 +233,7 @@ public final class MachineControllerRuntime {
                  machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
                  parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),
                  components.upgradeItems(), components.upgradeContentRevision(), currentDataStorageValues(),
-                 ControllerRecipePresentation.from(craftingRuntime()));
+                 craftingRuntime().recipePresentation());
         workingStructureEpoch = structure.stateEpoch();
         workingCapabilityVersion = components.capabilityVersion();
         workingCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
@@ -318,7 +317,10 @@ public final class MachineControllerRuntime {
                 && workingComponentStateVersion == components.stateVersion()
                 && workingFactoryEpoch == factoryRuntime.stateEpoch()
                 && workingCraftingEpoch == craftingStateEpoch
-                && workingDataStorageStateEpoch == dataStorageStateEpoch;
+                && workingDataStorageStateEpoch == dataStorageStateEpoch
+                && workingSnapshot.recipePresentation() == craftingRuntime.recipePresentation()
+                && workingSnapshot.maxParallelism() == components.maxParallelism(workingSnapshot.structure().machine() != null
+                        ? workingSnapshot.structure().machine() : workingSnapshot.structure().configuredMachine());
     }
 
     private boolean epochsUnchanged() {
@@ -329,7 +331,11 @@ public final class MachineControllerRuntime {
                 && publishedComponentStateVersion == components.stateVersion()
                 && publishedFactoryEpoch == factoryRuntime.stateEpoch()
                 && publishedCraftingEpoch == craftingStateEpoch
-                && publishedDataStorageStateEpoch == dataStorageStateEpoch;
+                && publishedDataStorageStateEpoch == dataStorageStateEpoch
+                && publishedSnapshot != null
+                && publishedSnapshot.recipePresentation() == craftingRuntime.recipePresentation()
+                && publishedSnapshot.maxParallelism() == components.maxParallelism(publishedSnapshot.structure().machine() != null
+                        ? publishedSnapshot.structure().machine() : publishedSnapshot.structure().configuredMachine());
     }
 
     private void updateCraftingState(CraftingStateSnapshot nextCrafting) {
@@ -633,6 +639,13 @@ public final class MachineControllerRuntime {
                 structure.version(), components.capabilityVersion(), components.modifierVersion(),
                 tick, totalTick, parallelism, maxParallelism);
         updateCraftingState(nextCrafting);
+        publishSnapshot();
+    }
+
+    void publishClientProgress(int tick, int totalTick) {
+        updateCraftingState(new CraftingStateSnapshot(craftingState.recipeId(), craftingState.status(),
+                craftingState.failure(), craftingState.structureVersion(), craftingState.capabilityVersion(),
+                craftingState.modifierVersion(), tick, totalTick, craftingState.parallelism(), craftingState.maxParallelism()));
         publishSnapshot();
     }
 }

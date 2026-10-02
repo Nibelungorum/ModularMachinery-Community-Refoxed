@@ -926,6 +926,15 @@ class CraftingRuntimeTest {
         RuntimeTestFixtures.registerRecipePool(foreignMachineId);
         controller.setMachine(new DynamicMachine(foreignMachineId, "foreign pool machine", new BlockArray(Map.of())));
 
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNull();
+        assertThat(runtime.snapshot().status().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        ControllerRuntimeSnapshot rebound = controller.currentRuntimeSnapshot();
+        assertThat(rebound.crafting().recipeId()).isNull();
+        assertThat(rebound.crafting().failure()).isNull();
+        assertThat(rebound.recipePresentation()).isEqualTo(ControllerRecipePresentation.empty());
+        assertThat(controller.currentRecipePoolId()).isEqualTo(foreignMachineId);
+
         runtime.rebindCurrentVersions();
 
         assertThat(runtime.active()).isFalse();

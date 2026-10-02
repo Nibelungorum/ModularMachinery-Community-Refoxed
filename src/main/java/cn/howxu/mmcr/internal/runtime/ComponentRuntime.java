@@ -351,11 +351,12 @@ public final class ComponentRuntime {
         if (machine == null || !machine.parallelizable()) {
             return 1L;
         }
-        long max = components.stream()
-                .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
-                .map(component -> (ParallelControllerBlockEntity) component.getContainer())
-                .mapToLong(ParallelControllerBlockEntity::currentParallelism)
-                .reduce(0L, ComponentRuntime::saturatingAdd);
+        long max = 0L;
+        for (ProcessingComponent component : components) {
+            if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
+                max = saturatingAdd(max, parallel.currentParallelism());
+            }
+        }
         long effective = boundedLong(MachineModifier.apply(flattenedModifiers, ModifierTarget.PARALLELISM,
                 Math.max(1L, max), false), 1L, Long.MAX_VALUE);
         return Math.min(Math.max(1L, machine.maxParallelism()), Math.max(1L, effective));

@@ -3,10 +3,15 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalBuilder;
@@ -33,6 +38,7 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,6 +49,7 @@ class RecipeOutputComponentProviderTest {
         MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
         OutputRegistry.register(LoadedChemicalOutput.TYPE);
+        OutputRegistry.register(CountingOutput.TYPE);
         // Unit tests don't load resource packs, so seed the translation we assert against.
         var ctor = ClientLanguage.class.getDeclaredConstructor(Map.class, boolean.class);
         ctor.setAccessible(true);
@@ -65,6 +72,19 @@ class RecipeOutputComponentProviderTest {
         List<Object> calls = collect(data);
         assertThat(calls.getFirst()).isInstanceOf(Component.class);
         assertThat(((Component) calls.getFirst()).getString()).contains("Recipe Output");
+    }
+
+    @Test
+    void tooltipTakesOneOwnedCopyToClassifyEachOutput() {
+        CompoundTag data = new CompoundTag();
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(new CountingOutput(5L, 1F), 5L)));
+        CountingOutput.COPIES.set(0);
+        assertThat(RecipeOutputCodec.read(data)).hasSize(1);
+        int decodeCopies = CountingOutput.COPIES.get();
+        CountingOutput.COPIES.set(0);
+
+        assertThat(collect(data)).isEmpty(); // Unsupported types still require only one owned classification copy.
+        assertThat(CountingOutput.COPIES).hasValue(decodeCopies + 1);
     }
 
     @Test
@@ -150,6 +170,31 @@ class RecipeOutputComponentProviderTest {
     }
 
     private record TooltipCall(String method, Object value) {}
+
+    /** @author howxu <dev@howxu.cn> */
+    private record CountingOutput(long amount, float chance) implements MachineOutput {
+        private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("mmcr_test", "jade_counting_output");
+        private static final AtomicInteger COPIES = new AtomicInteger();
+        private static final OutputType<CountingOutput> TYPE = new OutputType.Definition<>(ID,
+                RecordCodecBuilder.mapCodec(instance -> instance.group(
+                        Codec.STRING.fieldOf("type").forGetter(ignored -> ID.toString()),
+                        Codec.LONG.fieldOf("amount").forGetter(CountingOutput::amount),
+                        Codec.FLOAT.fieldOf("chance").forGetter(CountingOutput::chance)
+                ).apply(instance, (ignored, amount, chance) -> new CountingOutput(amount, chance))),
+                (output, chance) -> new CountingOutput(output.amount(), chance),
+                (output, modifiers) -> output,
+                output -> {
+                    COPIES.incrementAndGet();
+                    return new CountingOutput(output.amount(), output.chance());
+                }, OutputType.Presentation.defaults(ID), ID.toString(),
+                (output, tags) -> new EnergyRequirement(IOType.OUTPUT, output.amount(), tags),
+                requirement -> false);
+
+        @Override
+        public OutputType<CountingOutput> outputType() {
+            return TYPE;
+        }
+    }
 
     @SuppressWarnings("removal")
     private static Holder.Reference<Chemical> registerChemical(String name) {

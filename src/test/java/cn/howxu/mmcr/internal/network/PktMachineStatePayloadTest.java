@@ -10,6 +10,12 @@ import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import io.netty.buffer.Unpooled;
@@ -181,6 +187,91 @@ class PktMachineStatePayloadTest {
                 Map.of("mode", DataValue.of("running")));
 
         assertThat(PktMachineStatePayload.stateChanged(after, before)).isTrue();
+        assertThat(PktMachineStatePayload.fullStateChanged(after, before)).isTrue();
+    }
+
+    @Test
+    void progress_merge_preserves_every_full_state_field_and_original_comparison() {
+        PktMachineStatePayload before = payload(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
+                List.of("mmcr:steel"), failure(1), Map.of("mode", DataValue.of("running")));
+        PktMachineStatePayload after = before.withProgress(7, 10);
+
+        assertThat(PktMachineStatePayload.stateChanged(after, before)).isTrue();
+        assertThat(PktMachineStatePayload.fullStateChanged(after, before)).isFalse();
+        assertThat(after.withProgress(0, 10)).isEqualTo(before);
+        assertThat(after.recipePresentation()).isSameAs(before.recipePresentation());
+        assertThat(after.failure()).isSameAs(before.failure());
+        assertThat(PktMachineStatePayload.nextUpdate(after, before))
+                .isEqualTo(new PktMachineProgressPayload(before.pos(), before.recipeName(), 7, 10));
+        assertThat(PktMachineStatePayload.nextUpdate(before, null)).isSameAs(before);
+        assertThat(PktMachineStatePayload.nextUpdate(before, before)).isNull();
+        assertThat(PktMachineStatePayload.nextUpdate(before.withProgress(0, 11), before))
+                .isInstanceOf(PktMachineStatePayload.class);
+    }
+
+    @Test
+    void every_non_tick_field_requires_a_full_update_including_same_recipe_new_outputs() throws Exception {
+        PktMachineStatePayload before = payload(List.of("mmcr:steel"), failure(1));
+        var fields = PktMachineStatePayload.class.getRecordComponents();
+        Class<?>[] types = new Class<?>[fields.length];
+        Object[] values = new Object[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            types[i] = fields[i].getType();
+            values[i] = fields[i].getAccessor().invoke(before);
+        }
+        var constructor = PktMachineStatePayload.class.getDeclaredConstructor(types);
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i].getName().equals("tick")) continue;
+            Object[] changed = values.clone();
+            Object value = values[i];
+            changed[i] = switch (fields[i].getName()) {
+                case "pos" -> before.pos().above();
+                case "foundLevelIds" -> List.of("mmcr:other_level");
+                case "craftingStatus" -> CraftingStatus.Status.CRAFTING;
+                case "failure" -> null;
+                case "dataStorageValues" -> Map.of("mode", DataValue.of("other"));
+                case "recipePresentation" -> new ControllerRecipePresentation(List.of(), 1L, 2L, 3D, 10, 1L);
+                default -> value instanceof Boolean bool ? !bool
+                        : value instanceof Integer number ? number + 1
+                        : value instanceof Long number ? number + 1L : value + "_changed";
+            };
+            PktMachineStatePayload after = constructor.newInstance(changed);
+            assertThat(PktMachineStatePayload.fullStateChanged(after, before)).as(fields[i].getName()).isTrue();
+            assertThat(PktMachineStatePayload.nextUpdate(after, before)).isSameAs(after);
+        }
+    }
+
+    @Test
+    void same_recipe_id_with_changed_effective_component_output_requires_full_and_merge_keeps_outputs() {
+        PktMachineStatePayload base = payload(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
+                List.of("mmcr:steel"), failure(1), Map.of("mode", DataValue.of("running")));
+        ItemStack first = new ItemStack(Items.DIAMOND);
+        first.set(DataComponents.CUSTOM_NAME, Component.literal("first"));
+        ItemStack second = first.copy();
+        second.set(DataComponents.CUSTOM_NAME, Component.literal("second"));
+        PktMachineStatePayload before = withOutput(base, first);
+        PktMachineStatePayload after = withOutput(base, second);
+        assertThat(before.recipeName()).isEqualTo(after.recipeName());
+        assertThat(PktMachineStatePayload.nextUpdate(after, before)).isSameAs(after);
+        PktMachineStatePayload progressed = before.withProgress(5, 10);
+        assertThat(progressed.withProgress(0, 10)).isEqualTo(before);
+        assertThat(progressed.recipePresentation()).isSameAs(before.recipePresentation());
+        var output = (MachineOutput.ItemOutput) progressed.recipePresentation().outputs().getFirst().output();
+        assertThat(output.stack().get(DataComponents.CUSTOM_NAME)).isEqualTo(Component.literal("first"));
+        assertThat(progressed.recipePresentation().outputs().getFirst().amount()).isEqualTo(Long.MAX_VALUE);
+    }
+
+    private static PktMachineStatePayload withOutput(PktMachineStatePayload base, ItemStack stack) {
+        return new PktMachineStatePayload(base.pos(), base.recipeName(), base.formed(), base.active(),
+                base.foundLevelIds(), base.machineId(), base.controllerRole(), base.installedModuleCount(),
+                base.moduleConnected(), base.connectedHostId(), base.craftingStatus(), base.craftingMessage(),
+                base.failure(), base.structureAreaLoaded(), base.redstonePaused(), base.tick(), base.totalTick(),
+                base.parallelism(), base.maxParallelism(), base.factoryControllerPresent(), base.factoryThreadCount(),
+                base.activeFactoryThreadCount(), base.parallelControllerCount(), base.maxParallelControllerCount(),
+                base.dataStorageValues(), base.matchedStage(), base.stageCount(),
+                new ControllerRecipePresentation(List.of(new MachineOutputAmount(
+                        new MachineOutput.ItemOutput(stack, 1F), Long.MAX_VALUE)), 0L, 0L, 0D, 10, Long.MAX_VALUE),
+                base.recipePoolId());
     }
 
     private static PktMachineStatePayload payload(List<String> levels, ExecutionStatus failure) {

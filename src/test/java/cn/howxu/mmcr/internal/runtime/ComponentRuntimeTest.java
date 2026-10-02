@@ -277,6 +277,75 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void parallelism_reads_changed_controller_configuration_without_replacing_components() {
+        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
+        ParallelControllerBlockEntity first = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
+                new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
+        ParallelControllerBlockEntity second = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
+                new BlockPos(2, 0, 0), parallelBlock.defaultBlockState());
+        first.setCurrentParallelism(4);
+        second.setCurrentParallelism(7);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(first, "first"),
+                new ProcessingComponent(null, "input", BlockPos.ZERO), component(second, "second")));
+        Machine machine = parallelizableMachine(ResourceLocation.fromNamespaceAndPath("mmcr_test", "live_parallel_machine"));
+        long stateVersion = runtime.stateVersion();
+        long capabilityVersion = runtime.capabilityVersion();
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(11L);
+
+        first.setCurrentParallelism(19);
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(26L);
+        assertThat(runtime.stateVersion()).isEqualTo(stateVersion);
+        assertThat(runtime.capabilityVersion()).isEqualTo(capabilityVersion);
+    }
+
+    @Test
+    void parallelism_applies_additive_modifiers_before_multiplication_and_clamps_the_result() {
+        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
+        ParallelControllerBlockEntity controller = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
+                new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
+        controller.setCurrentParallelism(10);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(controller, "controller")));
+        runtime.replaceModifiers(Map.of("parallelism", List.of(
+                MachineModifier.numeric("parallelism", "machine", 2D, "multiply", false),
+                MachineModifier.numeric("parallelism", "machine", -3D, "add", false))));
+        Machine machine = parallelizableMachine(ResourceLocation.fromNamespaceAndPath("mmcr_test", "modified_parallel_machine"));
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(14L);
+
+        controller.setCurrentParallelism(2);
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(1L);
+    }
+
+    @Test
+    void parallelism_without_controllers_uses_the_minimum_before_modifiers_and_saturates_at_machine_limit() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(new ProcessingComponent(null, "input", BlockPos.ZERO)));
+        ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "bounded_parallel_machine");
+        Machine machine = parallelizableMachine(machineId);
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(1L);
+
+        runtime.replaceModifiers(Map.of("parallelism", List.of(
+                MachineModifier.numeric("parallelism", "machine", 3D, "add", false),
+                MachineModifier.numeric("parallelism", "machine", 2D, "multiply", false))));
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(8L);
+
+        runtime.replaceModifiers(Map.of("parallelism", List.of(
+                MachineModifier.numeric("parallelism", "machine", Double.MAX_VALUE, "multiply", false),
+                MachineModifier.numeric("parallelism", "machine", 2D, "multiply", false))));
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(Long.MAX_VALUE);
+        assertThat(runtime.maxParallelism(parallelizableMachine(machineId, 5L))).isEqualTo(5L);
+        assertThat(runtime.maxParallelism(parallelizableMachine(machineId, 0L))).isEqualTo(1L);
+    }
+
+    @Test
     void negative_level_parallelism_bonus_reduces_the_effective_limit_without_wrapping() {
         ResourceLocation machineId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "negative_parallel_machine");
         ResourceLocation levelId = ResourceLocation.fromNamespaceAndPath("mmcr_test", "negative_parallel_level");
@@ -438,6 +507,10 @@ class ComponentRuntimeTest {
     }
 
     private static Machine parallelizableMachine(ResourceLocation id) {
+        return parallelizableMachine(id, Long.MAX_VALUE);
+    }
+
+    private static Machine parallelizableMachine(ResourceLocation id, long maxParallelism) {
         return new Machine() {
             @Override
             public ResourceLocation registryName() {
@@ -456,7 +529,7 @@ class ComponentRuntimeTest {
 
             @Override
             public long maxParallelism() {
-                return Long.MAX_VALUE;
+                return maxParallelism;
             }
 
             @Override

@@ -1241,6 +1241,59 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void empty_requirements_do_not_poison_later_energy_planning() {
+        LongValueStorage storage = new LongValueStorage(10L, 10L, null);
+        storage.setAmount(6L);
+        var capabilities = List.<MachineCapability>of(new StorageCapability(
+                EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage));
+        RequirementPlanner planner = new RequirementPlanner();
+
+        var empty = planner.plan(List.of(), capabilities, new PlanningContext(3, 0));
+        assertThat(empty.successful()).isTrue();
+        assertThat(empty.plan().requirements()).isEmpty();
+        assertThat(empty.plan().commit()).isTrue();
+        assertThat(storage.amount()).isEqualTo(6L);
+
+        var result = planner.plan(List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 2)),
+                capabilities, new PlanningContext(3, 0));
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(3L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount()).isZero();
+    }
+
+    @Test
+    void failed_candidates_and_separate_plans_do_not_share_energy_reservations() {
+        LongValueStorage storage = new LongValueStorage(10L, 10L, null);
+        storage.setAmount(9L);
+        var requirements = List.<MachineRequirement>of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 2),
+                new EnergyRequirement(RecipeModifier.IOType.INPUT, 1));
+        var capabilities = List.<MachineCapability>of(new StorageCapability(
+                EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage));
+        RequirementPlanner planner = new RequirementPlanner();
+
+        var failed = planner.plan(List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 10)),
+                capabilities, new PlanningContext(1, 0));
+        assertThat(failed.successful()).isFalse();
+        var first = planner.plan(requirements, capabilities, new PlanningContext(4, 0));
+        var second = planner.plan(requirements, capabilities, new PlanningContext(4, 0));
+        assertThat(first.successful()).isTrue();
+        assertThat(second.successful()).isTrue();
+        assertThat(first.plan().parallelism()).isEqualTo(3L);
+        assertThat(second.plan().parallelism()).isEqualTo(3L);
+        assertThat(storage.amount()).isEqualTo(9L);
+        assertThat(first.plan().commit()).isTrue();
+        assertThat(storage.amount()).isZero();
+
+        storage.setAmount(9L);
+        var third = planner.plan(requirements, capabilities, new PlanningContext(4, 0));
+        assertThat(third.successful()).isTrue();
+        assertThat(third.plan().parallelism()).isEqualTo(3L);
+        assertThat(third.plan().commit()).isTrue();
+        assertThat(storage.amount()).isZero();
+    }
+
+    @Test
     void planning_reservations_use_virtual_energy_state_for_both_transfer_orders() {
         LongValueStorage outputThenInput = new LongValueStorage(10, 10, null);
         outputThenInput.setAmount(5);

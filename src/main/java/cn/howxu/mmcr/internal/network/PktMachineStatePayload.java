@@ -124,6 +124,10 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     }
 
     public static boolean stateChanged(PktMachineStatePayload current, PktMachineStatePayload previous) {
+        return current.tick != previous.tick || fullStateChanged(current, previous);
+    }
+
+    public static boolean fullStateChanged(PktMachineStatePayload current, PktMachineStatePayload previous) {
         return !current.pos.equals(previous.pos)
                 || current.formed != previous.formed
                 || current.active != previous.active
@@ -139,7 +143,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || !Objects.equals(current.failure, previous.failure)
                 || current.structureAreaLoaded != previous.structureAreaLoaded
                 || current.redstonePaused != previous.redstonePaused
-                || current.tick != previous.tick
                 || current.totalTick != previous.totalTick
                 || current.parallelism != previous.parallelism
                 || current.maxParallelism != previous.maxParallelism
@@ -153,6 +156,22 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || current.stageCount != previous.stageCount
                 || !current.recipePresentation.equals(previous.recipePresentation)
                 || !current.recipePoolId.equals(previous.recipePoolId);
+    }
+
+    public PktMachineStatePayload withProgress(int tick, int totalTick) {
+        return new PktMachineStatePayload(pos, recipeName, formed, active, foundLevelIds, machineId,
+                controllerRole, installedModuleCount, moduleConnected, connectedHostId, craftingStatus,
+                craftingMessage, failure, structureAreaLoaded, redstonePaused, tick, totalTick, parallelism,
+                maxParallelism, factoryControllerPresent, factoryThreadCount, activeFactoryThreadCount,
+                parallelControllerCount, maxParallelControllerCount, dataStorageValues, matchedStage,
+                stageCount, recipePresentation, recipePoolId);
+    }
+
+    public static CustomPacketPayload nextUpdate(PktMachineStatePayload current, PktMachineStatePayload previous) {
+        if (previous == null || fullStateChanged(current, previous)) return current;
+        return current.tick != previous.tick
+                ? new PktMachineProgressPayload(current.pos, current.recipeName, current.tick, current.totalTick)
+                : null;
     }
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));

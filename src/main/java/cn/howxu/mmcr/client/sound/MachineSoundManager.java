@@ -14,8 +14,6 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -31,6 +29,15 @@ import java.util.Set;
  */
 public class MachineSoundManager {
     private final Map<ControllerKey, TrackedSound> tracked = new HashMap<>();
+    private final LoadedSoundControllerTracker loadedControllers;
+
+    public MachineSoundManager() {
+        this(new LoadedSoundControllerTracker());
+    }
+
+    public MachineSoundManager(LoadedSoundControllerTracker loadedControllers) {
+        this.loadedControllers = loadedControllers;
+    }
 
     public void clientTick(Minecraft minecraft) {
         ClientLevel level = minecraft.level;
@@ -39,7 +46,9 @@ public class MachineSoundManager {
             return;
         }
 
-        reconcile(descriptorsFor(level), (key, soundId) -> {
+        loadedControllers.prune(level.getChunkSource());
+        ChunkPos center = minecraft.player == null ? new ChunkPos(0, 0) : minecraft.player.chunkPosition();
+        reconcile(descriptorsFor(level.dimension(), center, minecraft.options.getEffectiveRenderDistance()), (key, soundId) -> {
             SoundEvent sound = MachineSoundRegistry.get(soundId);
             if (sound == null) return null;
             MachineLoopSound instance = new MachineLoopSound(sound, key.pos(), () -> tracked.containsKey(key));
@@ -51,6 +60,7 @@ public class MachineSoundManager {
     public void clear() {
         tracked.values().forEach(trackedSound -> trackedSound.sound().stopSound());
         tracked.clear();
+        loadedControllers.clear();
     }
 
     void reconcile(Collection<ControllerDescriptor> controllers) {
@@ -84,28 +94,15 @@ public class MachineSoundManager {
         });
     }
 
-    private static List<ControllerDescriptor> descriptorsFor(ClientLevel level) {
-        return loadedBlockEntities(level).stream()
-                .filter(MachineControllerBlockEntity.class::isInstance)
-                .map(MachineControllerBlockEntity.class::cast)
-                .map(controller -> descriptorFor(level, controller))
+    List<ControllerDescriptor> descriptorsFor(ResourceKey<Level> dimension, ChunkPos center, int viewDistance) {
+        return loadedControllers.controllers().stream()
+                .filter(controller -> {
+                    ChunkPos pos = new ChunkPos(controller.getBlockPos());
+                    return Math.abs(pos.x - center.x) <= viewDistance
+                            && Math.abs(pos.z - center.z) <= viewDistance;
+                })
+                .map(controller -> descriptorFor(new ControllerKey(dimension, controller.getBlockPos()), controller))
                 .toList();
-    }
-
-    private static List<BlockEntity> loadedBlockEntities(ClientLevel level) {
-        int viewDistance = Minecraft.getInstance().options.getEffectiveRenderDistance();
-        ChunkPos center = Minecraft.getInstance().player == null ? new ChunkPos(0, 0)
-                : Minecraft.getInstance().player.chunkPosition();
-        return ChunkPos.rangeClosed(center, viewDistance)
-                .map(chunkPos -> level.getChunkSource().getChunkNow(chunkPos.x, chunkPos.z))
-                .filter(chunk -> chunk instanceof LevelChunk)
-                .map(levelChunk -> levelChunk)
-                .flatMap(chunk -> chunk.getBlockEntities().values().stream())
-                .toList();
-    }
-
-    private static ControllerDescriptor descriptorFor(ClientLevel level, MachineControllerBlockEntity controller) {
-        return descriptorFor(new ControllerKey(level.dimension(), controller.getBlockPos()), controller);
     }
 
     private static ResourceLocation controllerMachineId(MachineControllerBlockEntity controller) {

@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
@@ -53,6 +54,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.ChunkPos;
+import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -122,6 +125,47 @@ public final class DataStorageGameTest {
             helper.assertTrue(clientMenu.hasActiveRecipe(), "Client controller menu keeps active state");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
                     "Pure-tick behavior does not start recipe runtime");
+            // Neighboring tests may share this chunk; exercise that case in isolated runs too.
+            BlockPos neighborBlockPos = controllerBlockPos.above();
+            helper.setBlock(neighborBlockPos, ModBlocks.controllerFor(MACHINE_ID).get().defaultBlockState());
+            MachineControllerBlockEntity neighbor = helper.getBlockEntity(neighborBlockPos);
+            neighbor.setMachine(MachineRegistry.getMachine(MACHINE_ID));
+            BlockPos neighborPos = neighbor.getBlockPos();
+            long baselineCount = machineStatePackets(observer, controllerPos).size();
+            long neighborBaselineCount = machineStatePackets(observer, neighborPos).size();
+            PktMachineStatePayload expectedBaseline = PktMachineStatePayload.from(controllerPos,
+                    controller.runtimeSnapshot(), controller.currentRecipePoolId());
+            PktMachineStatePayload expectedNeighborBaseline = PktMachineStatePayload.from(neighborPos,
+                    neighbor.runtimeSnapshot(), neighbor.currentRecipePoolId());
+            MachineControllerMenu serverMenu = new MachineControllerMenu(2, observer.getInventory(), controller);
+            serverMenu.broadcastChanges();
+            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 1,
+                    "Initial menu broadcast sends a full baseline even for an unchanged idle recipe state");
+            serverMenu.broadcastChanges();
+            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 1,
+                    "Unchanged menu state does not resend the full presentation");
+            var chunkPos = new ChunkPos(controllerPos);
+            var chunk = helper.getLevel().getChunkSource().getChunkNow(chunkPos.x, chunkPos.z);
+            helper.assertTrue(chunk != null, "Controller chunk is already loaded");
+            helper.assertTrue(chunkPos.equals(new ChunkPos(neighborPos)),
+                    "Both fixture controllers share the sent chunk");
+            ControllerSyncEvents.onChunkSent(new ChunkWatchEvent.Sent(observer, chunk, helper.getLevel()));
+            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 2,
+                    "Chunk Sent sends a complete baseline after the chunk payload");
+            helper.assertTrue(machineStatePackets(observer, neighborPos).size() == neighborBaselineCount + 1,
+                    "Chunk Sent also sends exactly one baseline for the neighboring controller");
+            helper.assertTrue(machineStatePackets(observer, controllerPos).getLast().equals(expectedBaseline)
+                            && machineStatePackets(observer, neighborPos).getLast().equals(expectedNeighborBaseline),
+                    "Chunk Sent preserves both controllers' complete baseline contents");
+            ControllerSyncEvents.onChunkUnWatch(new ChunkWatchEvent.UnWatch(observer, chunkPos, helper.getLevel()));
+            ControllerSyncEvents.onChunkSent(new ChunkWatchEvent.Sent(observer, chunk, helper.getLevel()));
+            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 3,
+                    "Chunk reentry sends a fresh full baseline without requiring state changes");
+            helper.assertTrue(machineStatePackets(observer, neighborPos).size() == neighborBaselineCount + 2,
+                    "Chunk reentry also sends exactly one fresh baseline for the neighboring controller");
+            helper.assertTrue(machineStatePackets(observer, controllerPos).getLast().equals(expectedBaseline)
+                            && machineStatePackets(observer, neighborPos).getLast().equals(expectedNeighborBaseline),
+                    "Chunk reentry preserves both unchanged complete baselines");
             helper.getLevel().players().remove(observer);
             ControllerScreenTextCache.clear(controllerPos);
             helper.succeed();
@@ -283,6 +327,15 @@ public final class DataStorageGameTest {
                 .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
                 .reduce((first, second) -> second)
                 .orElse(null);
+    }
+
+    private static List<PktMachineStatePayload> machineStatePackets(ServerPlayer player, BlockPos controllerPos) {
+        return ((RecordingConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktMachineStatePayload)
+                .map(packet -> (PktMachineStatePayload) ((ClientboundCustomPayloadPacket) packet).payload())
+                .filter(payload -> payload.pos().equals(controllerPos))
+                .toList();
     }
 
     /**

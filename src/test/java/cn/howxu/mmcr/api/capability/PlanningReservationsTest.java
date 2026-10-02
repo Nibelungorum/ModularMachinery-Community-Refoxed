@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability;
 
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
@@ -81,5 +82,80 @@ class PlanningReservationsTest {
         assertThat(reservations.reserveFluidExtract(fluids, 0, new FluidStack(Fluids.WATER, 1), amount)).isTrue();
         assertThat(reservations.itemAmount(items, 0)).isZero();
         assertThat(reservations.fluidAmount(fluids, 0)).isZero();
+    }
+
+    @Test
+    void empty_reads_copies_and_rejected_writes_do_not_allocate_maps() {
+        LongItemStorage items = new LongItemStorage(1, 10L, () -> {});
+        ItemStack iron = new ItemStack(Items.IRON_INGOT);
+        Object identity = new Object();
+        PlanningReservations reservations = new PlanningReservations();
+
+        assertThat(reservations.item(items, 0).isEmpty()).isTrue();
+        assertThat(reservations.itemAmount(items, 0)).isZero();
+        assertThat(reservations.nativeKey(identity, 0, null)).isNull();
+        assertThat(reservations.nativeAmount(identity, 0, 0L)).isZero();
+        assertThat(reservations.reserveItemExtract(items, 0, iron, 1L)).isFalse();
+        assertThat(reservations.reserveItemInsert(items, 0, iron, 0L, 10L)).isFalse();
+        assertThat(reservations.reserveItemInsert(items, 0, iron, 11L, 10L)).isFalse();
+        assertThat(reservations.reserveNativeExtract(identity, 0, "iron", null, 0L, 1L)).isFalse();
+        assertThat(reservations.reserveNativeInsert(identity, 0, "iron", null, 0L, 10L, 11L)).isFalse();
+        PlanningReservations copy = reservations.copy();
+        assertThat(reservations).extracting("resources", "outputReservations", "values", "nativeSlots")
+                .containsExactly(null, null, null, null);
+        assertThat(copy).extracting("resources", "outputReservations", "values", "nativeSlots")
+                .containsExactly(null, null, null, null);
+        assertThat(copy.reserveItemInsert(items, 0, iron, 4L, 10L)).isTrue();
+        assertThat(copy.itemAmount(items, 0)).isEqualTo(4L);
+        assertThat(reservations.itemAmount(items, 0)).isZero();
+    }
+
+    @Test
+    void native_copies_share_physical_slots_but_isolate_reservations_and_identities() {
+        Object identity = new String("network");
+        Object equalIdentity = new String("network");
+        PlanningReservations reservations = new PlanningReservations();
+        assertThat(reservations.reserveNativeInsert(identity, 0, "iron", null, 0L, 10L, 4L)).isTrue();
+        PlanningReservations copy = reservations.copy();
+        assertThat(copy.reserveNativeExtract(identity, 0, "iron", null, 0L, 2L)).isTrue();
+        assertThat(copy.reserveNativeInsert(identity, 0, "iron", null, 0L, 10L, 3L)).isTrue();
+        assertThat(copy.reserveNativeInsert(identity, 0, "copper", null, 0L, 10L, 1L)).isFalse();
+        assertThat(copy.reserveNativeInsert(identity, 1, "copper", null, 0L, 10L, 6L)).isTrue();
+        assertThat(copy.reserveNativeInsert(equalIdentity, 0, "copper", null, 0L, 10L, 1L)).isTrue();
+        assertThat(copy.nativeAmount(identity, 0, 0L)).isEqualTo(5L);
+        assertThat(reservations.nativeAmount(identity, 0, 0L)).isEqualTo(4L);
+        assertThat(reservations.nativeKey(identity, 1, null)).isNull();
+        assertThat(reservations.nativeAmount(equalIdentity, 0, 0L)).isZero();
+        assertThat(reservations).extracting("resources", "outputReservations", "values").containsExactly(null, null, null);
+    }
+
+    @Test
+    void populated_copies_isolate_all_reservation_kinds() {
+        Object identity = new Object();
+        LongItemStorage items = new LongItemStorage(1, 10L, () -> {});
+        ItemStack iron = new ItemStack(Items.IRON_INGOT);
+        items.setContents(0, iron, 6L);
+        LongValueStorage value = new LongValueStorage(10L, 10L, null);
+        value.setAmount(6L);
+        PlanningReservations reservations = new PlanningReservations();
+        assertThat(reservations.reserveItemExtract(items, 0, iron, 2L)).isTrue();
+        assertThat(reservations.reserveNativeExtract(identity, 0, "iron", "iron", 6L, 2L)).isTrue();
+        assertThat(reservations.reserveOutput(identity, "iron", 2L)).isTrue();
+        assertThat(reservations.reserveValue(value, 2L, false)).isTrue();
+        PlanningReservations copy = reservations.copy();
+        assertThat(copy.reserveItemExtract(items, 0, iron, 4L)).isTrue();
+        assertThat(copy.reserveNativeExtract(identity, 0, "iron", "iron", 6L, 4L)).isTrue();
+        assertThat(copy.reserveOutput(identity, "iron", 4L)).isTrue();
+        assertThat(copy.reserveValue(value, 4L, false)).isTrue();
+        assertThat(copy.itemAmount(items, 0)).isZero();
+        assertThat(copy.nativeAmount(identity, 0, 6L)).isZero();
+        assertThat(copy.outputAvailable(identity, "iron", 10L)).isEqualTo(4L);
+        assertThat(copy.valueAvailable(value, false)).isZero();
+        assertThat(reservations.itemAmount(items, 0)).isEqualTo(4L);
+        assertThat(reservations.nativeAmount(identity, 0, 6L)).isEqualTo(4L);
+        assertThat(reservations.outputAvailable(identity, "iron", 10L)).isEqualTo(8L);
+        assertThat(reservations.valueAvailable(value, false)).isEqualTo(4L);
+        assertThat(items.amount(0)).isEqualTo(6L);
+        assertThat(value.amount()).isEqualTo(6L);
     }
 }

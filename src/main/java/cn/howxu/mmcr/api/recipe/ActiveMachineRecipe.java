@@ -64,6 +64,7 @@ public final class ActiveMachineRecipe {
     private List<MachineRequirement> effectiveRequirements;
     private List<MachineOutput> effectiveOutputs;
     private boolean effectiveSnapshotPresent;
+    private long effectiveExecutionRevision;
 
     public record InputConsumptionPlan(List<Integer> consumedInputBatches) {
         public InputConsumptionPlan {
@@ -409,6 +410,10 @@ public final class ActiveMachineRecipe {
         return effectiveSnapshotPresent;
     }
 
+    public long effectiveExecutionRevision() {
+        return effectiveExecutionRevision;
+    }
+
     public List<MachineRequirement> effectiveRequirements() {
         return MachineRequirement.copyList(effectiveRequirements);
     }
@@ -432,6 +437,7 @@ public final class ActiveMachineRecipe {
                 .map(MachineRequirement::copyOf).toList());
         this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
         this.effectiveSnapshotPresent = true;
+        this.effectiveExecutionRevision++;
     }
 
     private static boolean validRequirements(List<MachineRequirement> requirements) {

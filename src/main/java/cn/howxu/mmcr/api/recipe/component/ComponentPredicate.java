@@ -27,6 +27,10 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
 
     boolean matches(Dynamic<?> candidate);
 
+    default boolean matches(Dynamic<?> candidate, Codec<?> codec) {
+        return matches(candidate);
+    }
+
     static <T> ComponentPredicate exact(Dynamic<T> value) {
         return new Exact(value);
     }
@@ -214,7 +218,13 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
 
         @Override
         public boolean matches(Dynamic<?> candidate) {
-            var component = ComponentSerialization.CODEC.parse(candidate).result();
+            return matches(candidate, ComponentSerialization.CODEC);
+        }
+
+        @Override
+        public boolean matches(Dynamic<?> candidate, Codec<?> codec) {
+            var component = codec.parse(candidate).result()
+                    .filter(Component.class::isInstance).map(Component.class::cast);
             if (component.isEmpty()) return false;
             if (mode == TextMode.PLAIN) return value.getString().equals(component.get().getString());
             return ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE, value).result()

@@ -25,6 +25,8 @@ import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.client.model.RuntimeMachineResourcePack;
 import cn.howxu.mmcr.client.renderer.MachineControllerRendererDispatcher;
 import cn.howxu.mmcr.client.sound.MachineSoundManager;
+import cn.howxu.mmcr.client.sound.LoadedSoundControllerTracker;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.client.preview.StructurePreviewReloadListener;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -59,9 +61,11 @@ import java.lang.reflect.Constructor;
 
 @Mod(value = MMCR.MODID, dist = Dist.CLIENT)
 public class Client {
-    private final MachineSoundManager machineSoundManager = new MachineSoundManager();
+    private final LoadedSoundControllerTracker loadedSoundControllers = new LoadedSoundControllerTracker();
+    private final MachineSoundManager machineSoundManager = new MachineSoundManager(loadedSoundControllers);
 
     public Client(IEventBus modBus, ModContainer modContainer) {
+        MachineControllerBlockEntity.setClientLifecycleListeners(loadedSoundControllers::loaded, loadedSoundControllers::removed);
         modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
@@ -96,6 +100,7 @@ public class Client {
 
     private void clearControllerScreenTextCache(ChunkEvent.Unload event) {
         if (event.getLevel().isClientSide()) {
+            loadedSoundControllers.unloadChunk(event.getChunk().getPos());
             ControllerScreenTextCache.clearChunk(event.getChunk().getPos().x, event.getChunk().getPos().z);
         }
     }

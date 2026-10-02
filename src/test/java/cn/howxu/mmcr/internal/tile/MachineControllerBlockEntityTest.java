@@ -33,6 +33,7 @@ import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -71,6 +72,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
@@ -84,6 +86,10 @@ import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.server.network.PlayerChunkSender;
+import net.minecraft.server.level.ChunkMap;
+import net.minecraft.server.level.ChunkTrackingView;
+import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
@@ -192,6 +198,98 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void live_parallel_configuration_updates_working_and_published_snapshots() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        Machine machine = new DynamicMachine(MMCR.id("live_parallel_snapshot"), "Live Parallel Snapshot",
+                new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(MMCR.id("live_parallel_snapshot")),
+                PortRequirementSpec.none(), List.of(), Map.of(), 64, true, false, 1);
+        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_reinforced").get();
+        ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.REINFORCED,
+                new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
+        parallel.setCurrentParallelism(4);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, parallel, parallel.getBlockPos(), parallel.getBlockPos(), List.of())));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.publishFormationState(machine, machine.pattern(), null, Direction.SOUTH, Direction.SOUTH, 1);
+        var first = controller.currentRuntimeSnapshot();
+        assertThat(controller.getMaxParallelism()).isEqualTo(4L);
+        assertThat(controller.runtimeSnapshot()).isSameAs(first);
+        long stateVersion = controller.componentRuntime().stateVersion();
+        long capabilityVersion = controller.componentRuntime().capabilityVersion();
+        long modifierVersion = controller.componentRuntime().modifierVersion();
+        int publications = runtime.snapshotBuildCountForTesting();
+
+        parallel.setCurrentParallelism(19);
+
+        assertThat(controller.getMaxParallelism()).isEqualTo(19L);
+        var increased = controller.currentRuntimeSnapshot();
+        assertThat(increased).isNotSameAs(first);
+        assertThat(increased.maxParallelism()).isEqualTo(19L);
+        assertThat(controller.currentRuntimeSnapshot()).isSameAs(increased);
+        runtime.publishSnapshot();
+        assertThat(controller.runtimeSnapshot()).isSameAs(increased);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        assertThat(first.maxParallelism()).isEqualTo(4L);
+
+        parallel.setCurrentParallelism(2);
+        runtime.publishSnapshot();
+
+        var decreased = controller.runtimeSnapshot();
+        assertThat(decreased).isNotSameAs(increased);
+        assertThat(decreased.maxParallelism()).isEqualTo(2L);
+        assertThat(controller.currentRuntimeSnapshot()).isSameAs(decreased);
+        assertThat(controller.getMaxParallelism()).isEqualTo(2L);
+        assertThat(increased.maxParallelism()).isEqualTo(19L);
+        assertThat(decreased.structure()).isSameAs(first.structure());
+        assertThat(controller.componentRuntime().stateVersion()).isEqualTo(stateVersion);
+        assertThat(controller.componentRuntime().capabilityVersion()).isEqualTo(capabilityVersion);
+        assertThat(controller.componentRuntime().modifierVersion()).isEqualTo(modifierVersion);
+        runtime.publishSnapshot();
+        assertThat(controller.runtimeSnapshot()).isSameAs(decreased);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 2);
+    }
+
+    @Test
+    void loading_existing_parallel_configuration_invalidates_outer_snapshot_caches() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        Machine machine = new DynamicMachine(MMCR.id("loaded_parallel_snapshot"), "Loaded Parallel Snapshot",
+                new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(MMCR.id("loaded_parallel_snapshot")),
+                PortRequirementSpec.none(), List.of(), Map.of(), 64, true, false, 1);
+        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_reinforced").get();
+        ParallelControllerBlockEntity parallel = new ParallelControllerBlockEntity(ParallelTier.REINFORCED,
+                new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
+        parallel.setCurrentParallelism(4);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, parallel, parallel.getBlockPos(), parallel.getBlockPos(), List.of())));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.publishFormationState(machine, machine.pattern(), null, Direction.SOUTH, Direction.SOUTH, 1);
+        var first = controller.currentRuntimeSnapshot();
+        assertThat(controller.getMaxParallelism()).isEqualTo(4L);
+        long stateVersion = controller.componentRuntime().stateVersion();
+        long capabilityVersion = controller.componentRuntime().capabilityVersion();
+        long modifierVersion = controller.componentRuntime().modifierVersion();
+
+        for (int configured : new int[]{19, 2}) {
+            var previous = controller.runtimeSnapshot();
+            CompoundTag output = new CompoundTag();
+            output.putInt("current_parallelism", configured);
+            parallel.loadAdditional(output, HolderLookup.Provider.create(Stream.empty()));
+            runtime.publishSnapshot();
+
+            var loaded = controller.runtimeSnapshot();
+            assertThat(loaded).isNotSameAs(previous);
+            assertThat(loaded.maxParallelism()).isEqualTo(configured);
+            assertThat(controller.currentRuntimeSnapshot()).isSameAs(loaded);
+            assertThat(controller.getMaxParallelism()).isEqualTo(configured);
+            assertThat(previous.maxParallelism()).isEqualTo(configured == 19 ? 4L : 19L);
+            assertThat(loaded.structure()).isSameAs(first.structure());
+            assertThat(controller.componentRuntime().stateVersion()).isEqualTo(stateVersion);
+            assertThat(controller.componentRuntime().capabilityVersion()).isEqualTo(capabilityVersion);
+            assertThat(controller.componentRuntime().modifierVersion()).isEqualTo(modifierVersion);
+        }
+    }
+
+    @Test
     void data_storage_reuses_the_dynamic_casing_model() {
         var definition = RuntimeMachineModelRegistry.dynamicBlockState(ModBlocks.DATA_STORAGE.get());
         assertThat(definition.id()).isEqualTo(MMCR.id("data_storage"));
@@ -255,6 +353,45 @@ class MachineControllerBlockEntityTest {
         assertThat(machineStatePackets(player)).hasSize(2);
         assertThat(machineStatePackets(player).getLast().dataStorageValues())
                 .containsEntry("mode", DataValue.of("changed"));
+    }
+
+    @Test
+    void unchanged_idle_batches_initialize_later_recipients_only_after_the_chunk_is_sent() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        ResourceLocation machineId = MMCR.id("idle_recipient_baseline");
+        RuntimeTestFixtures.formStructureWithComponents(controller, new DynamicMachine(machineId,
+                "Idle Recipient Baseline", new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))), MachineControllerSpec.defaultsFor(machineId)));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer first = player(level, BlockPos.ZERO);
+        ServerPlayer later = player(level, BlockPos.ZERO);
+        setPlayers(level, List.of(first));
+        runtime.beginUpdateBatch();
+        runtime.endUpdateBatch();
+        assertThat(machineStatePackets(first)).hasSize(1);
+        var snapshot = controller.runtimeSnapshot();
+        Field pending = PlayerChunkSender.class.getDeclaredField("pendingChunks");
+        pending.setAccessible(true);
+        LongSet pendingChunks = (LongSet) pending.get(later.connection.chunkSender);
+        pendingChunks.add(new ChunkPos(BlockPos.ZERO).toLong());
+        setPlayers(level, List.of(first, later));
+        runtime.beginUpdateBatch();
+        runtime.endUpdateBatch();
+        assertThat(machineStatePackets(later)).isEmpty();
+        pendingChunks.clear();
+        runtime.beginUpdateBatch();
+        runtime.endUpdateBatch();
+        assertThat(controller.runtimeSnapshot()).isSameAs(snapshot);
+        assertThat(machineStatePackets(first)).hasSize(1);
+        assertThat(machineStatePackets(later)).containsExactly(machineStatePackets(first).getFirst());
+        setPlayers(level, List.of(first));
+        runtime.beginUpdateBatch();
+        runtime.endUpdateBatch();
+        setPlayers(level, List.of(first, later));
+        runtime.beginUpdateBatch();
+        runtime.endUpdateBatch();
+        assertThat(machineStatePackets(later)).hasSize(2);
     }
 
     @Test
@@ -2104,7 +2241,14 @@ class MachineControllerBlockEntityTest {
         setField(Entity.class, player, "position", Vec3.atCenterOf(pos));
         TestConnection connection = (TestConnection) unsafe().allocateInstance(TestConnection.class);
         connection.packets = new ArrayList<>();
+        setField(ServerGamePacketListenerImpl.class, connection, "chunkSender", new PlayerChunkSender(true));
         player.connection = connection;
+        player.setChunkTrackingView(ChunkTrackingView.of(new ChunkPos(pos), 4));
+        if (level.getChunkSource() == null) {
+            var source = (ServerChunkCache) unsafe().allocateInstance(ServerChunkCache.class);
+            setField(ServerChunkCache.class, source, "chunkMap", unsafe().allocateInstance(ChunkMap.class));
+            setField(ServerLevel.class, level, "chunkSource", source);
+        }
         return player;
     }
 

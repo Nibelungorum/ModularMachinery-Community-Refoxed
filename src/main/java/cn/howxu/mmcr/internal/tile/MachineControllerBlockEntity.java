@@ -149,7 +149,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -162,6 +164,7 @@ import java.util.OptionalInt;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.function.LongFunction;
 
@@ -176,6 +179,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
+    private static Consumer<MachineControllerBlockEntity> clientLoadedListener = controller -> { };
+    private static Consumer<MachineControllerBlockEntity> clientRemovedListener = controller -> { };
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
     private boolean chunkUnloaded;
 
@@ -189,7 +194,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Integer buildBlocksPerTickOverrideForTesting;
     private boolean clientActive;
     private @Nullable ResourceLocation clientRecipeId;
-    private @Nullable PktMachineStatePayload lastBroadcastState;
+    private final Map<ServerPlayer, PktMachineStatePayload> stateReceivers = new IdentityHashMap<>();
+    private boolean clientStateBaseline;
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable ResourceLocation selectedRecipePoolId;
     private boolean redstonePaused;
@@ -581,7 +587,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void publishRuntimeStateAfterSnapshotBatch() {
-        if (runtimeStateBroadcastPending) {
+        if (runtimeStateBroadcastPending || level instanceof ServerLevel) {
             runtimeStateBroadcastPending = false;
             broadcastStateIfChanged();
         }
@@ -736,6 +742,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 currentState.linkedPortPositions());
         refreshModuleConnectionState();
         setChanged();
+        // Resolve pool changes before publishing, independently of network recipients.
+        currentRecipePoolId();
         publishRuntimeState();
         syncOpenControllerScreenText();
     }
@@ -1162,6 +1170,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishClientDataStorageState(dataStorageValues);
         runtime.publishCraftingState(clientRecipeId, craftingStatus, failure,
                 tick, totalTick, parallelism, maxParallelism);
+        clientStateBaseline = true;
+    }
+
+    public void applyClientProgress(String recipeName, int tick, int totalTick) {
+        if (level == null || !level.isClientSide() || isRemoved() || !clientStateBaseline) return;
+        String currentRecipe = clientRecipeId == null ? "" : clientRecipeId.toString();
+        if (!currentRecipe.equals(recipeName) || runtime.snapshot().crafting().totalTick() != totalTick) return;
+        runtime.publishClientProgress(tick, totalTick);
     }
 
     public boolean hasClientActiveRecipe() { return clientActive; }
@@ -1197,9 +1213,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Map<MachineOutput.AggregationKey, Aggregate> aggregates = new LinkedHashMap<>();
         for (CraftingRuntime lane : factory.activeRuntimes()) {
             for (MachineOutputAmount output : scaleOutputs(lane.activeOutputs(), lane.parallelism())) {
-                MachineOutput.AggregationKey key = MachineOutput.aggregationKey(output.output());
-                aggregates.computeIfAbsent(key, k -> new Aggregate(output))
-                        .absorb(output);
+                MachineOutput owned = output.output();
+                MachineOutput.AggregationKey key = MachineOutput.aggregationKey(owned);
+                aggregates.computeIfAbsent(key, k -> new Aggregate(owned))
+                        .absorb(owned, output.amount());
             }
         }
         List<MachineOutputAmount> merged = new ArrayList<>(aggregates.size());
@@ -1221,13 +1238,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         private long amount;
         private float minChance = Float.POSITIVE_INFINITY;
 
-        Aggregate(MachineOutputAmount output) {
-            this.template = output.output();
+        Aggregate(MachineOutput output) {
+            this.template = output;
         }
 
-        void absorb(MachineOutputAmount output) {
-            amount = SaturatingLong.add(amount, output.amount());
-            minChance = Math.min(minChance, output.output().chance());
+        void absorb(MachineOutput output, long outputAmount) {
+            amount = SaturatingLong.add(amount, outputAmount);
+            minChance = Math.min(minChance, output.chance());
         }
 
         MachineOutputAmount materialize() {
@@ -3697,18 +3714,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void broadcastStateIfChanged() {
+        if (!(level instanceof ServerLevel sl) || isRemoved()) return;
         PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot(),
                 currentRecipePoolId());
-        if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)) {
-            return;
-        }
-        lastBroadcastState = packet;
-        if (!(level instanceof ServerLevel sl)) return;
-        for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
+        ChunkPos chunkPos = new ChunkPos(getBlockPos());
+        broadcastState(sl.getPlayers(p -> p.getChunkTrackingView().contains(chunkPos.x, chunkPos.z)
+                && !p.connection.chunkSender.isPending(chunkPos.toLong())
+                && (p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
                 || (p.containerMenu instanceof MachineControllerMenu menu
-                && menu.controllerPos().equals(getBlockPos())))) {
-            player.connection.send(new ClientboundCustomPayloadPacket(packet));
+                && menu.controllerPos().equals(getBlockPos())))), packet);
+    }
+
+    void broadcastState(List<ServerPlayer> recipients, PktMachineStatePayload packet) {
+        Set<ServerPlayer> currentReceivers = Collections.newSetFromMap(new IdentityHashMap<>());
+        currentReceivers.addAll(recipients);
+        stateReceivers.keySet().removeIf(player -> !currentReceivers.contains(player));
+        for (ServerPlayer player : recipients) {
+            var update = PktMachineStatePayload.nextUpdate(packet, stateReceivers.get(player));
+            if (update == null) continue;
+            player.connection.send(new ClientboundCustomPayloadPacket(update));
+            stateReceivers.put(player, packet);
         }
+    }
+
+    public void sendClientStateBaseline(ServerPlayer player) {
+        if (!(level instanceof ServerLevel) || isRemoved()) return;
+        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot(),
+                currentRecipePoolId());
+        player.connection.send(new ClientboundCustomPayloadPacket(packet));
+        stateReceivers.put(player, packet);
+    }
+
+    public void forgetClientStateBaseline(ServerPlayer player) {
+        stateReceivers.remove(player);
     }
 
     private boolean tryStartNewRecipe() {
@@ -4169,8 +4207,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
+    public static void setClientLifecycleListeners(Consumer<MachineControllerBlockEntity> loaded,
+                                                    Consumer<MachineControllerBlockEntity> removed) {
+        clientLoadedListener = loaded;
+        clientRemovedListener = removed;
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && level.isClientSide()) clientLoadedListener.accept(this);
+    }
+
     @Override
     public void setRemoved() {
+        stateReceivers.clear();
+        clientStateBaseline = false;
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
         ACTIVE_STRUCTURE_SCANS.remove(this);
         unregisterFormedController();
@@ -4179,11 +4231,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         structureScanBatchesOverrideForTesting = null;
         buildBlocksPerTickOverrideForTesting = null;
         super.setRemoved();
+        if (level != null && level.isClientSide()) clientRemovedListener.accept(this);
         if (level != null && !level.isClientSide() && !chunkUnloaded) resetMachine(true, false);
     }
 
     @Override
     public void onChunkUnloaded() {
+        stateReceivers.clear();
+        clientStateBaseline = false;
+        if (level != null && level.isClientSide()) clientRemovedListener.accept(this);
         chunkUnloaded = true;
         if (structureWorkSnapshot().scan() != null) {
             invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
