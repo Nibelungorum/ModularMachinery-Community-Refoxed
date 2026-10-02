@@ -2,6 +2,9 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.compat.create.CreateBridge;
+import cn.howxu.mmcr.compat.create.CreateBridgeBootstrap;
+import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -32,9 +35,12 @@ public class MMCR {
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
         BuiltinFailureReasons.register();
+        CreateBridgeBootstrap.bootstrap();
+        CreateRecipeTypes.register();
         MekanismBridgeBootstrap.bootstrap();
         MekanismRecipeTypes.register();
         PublicApiBootstrap.begin();
+        CreateBridge.get().registerPorts(modBus);
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
         MekanismBridge.get().registerTransferPolicies();

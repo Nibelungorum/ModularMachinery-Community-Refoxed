@@ -101,6 +101,7 @@ public final class FactoryRuntime {
 
     /** Drops deferred lane work when the owning controller changes execution lifecycle. */
     public void cancelAsyncState() {
+        releaseStressContributions();
         for (FactoryRecipeThread lane : lanes) {
             lane.cancelAsyncState();
             if (patternStartReservations.remove(lane)) lane.runtime().releasePatternStart();
@@ -584,6 +585,11 @@ public final class FactoryRuntime {
 
     public List<CraftingRuntime> activeRuntimes() {
         return lanes.stream().map(FactoryRecipeThread::runtime).filter(CraftingRuntime::active).toList();
+    }
+
+    /** Releases contributions from every lane before controller unload or component replacement. */
+    public void releaseStressContributions() {
+        for (FactoryRecipeThread lane : lanes) lane.runtime().releaseStressContributions();
     }
 
     public void invalidateForSmartInterfaceChange() {

@@ -69,7 +69,8 @@ public final class RequirementPlanner {
             List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
             RequirementPlan requirementPlan = handler.plan(requirement, matching,
                     new PlanningContext(context.requestedParallelism(), requirementIndexes.get(index),
-                            context.allowPartialOutputs(), context.reservations(), context.outputPolicies()));
+                            context.allowPartialOutputs(), context.reservations(), context.outputPolicies(),
+                            context.reservationOwner()));
             if (!requirementPlan.successful()) {
                 return failed(requirementPlan.failure(), requirementIndexes.get(index), plans, requirementPlan);
             }

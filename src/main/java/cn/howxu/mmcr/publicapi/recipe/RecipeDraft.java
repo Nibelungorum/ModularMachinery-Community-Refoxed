@@ -10,6 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import org.jetbrains.annotations.ApiStatus;
+import java.util.List;
 
 /** Library-produced mutable draft backed by one recipe builder. @author howxu <dev@howxu.cn> */
 @ApiStatus.NonExtendable
@@ -22,6 +23,8 @@ public interface RecipeDraft {
     RecipeDraft inputItem(Ingredient item, int count, ComponentConstraints components, float consumeChance);
     RecipeDraft inputFluid(Fluid fluid, int amount); RecipeDraft inputFluid(Fluid fluid, int amount, float consumeChance);
     RecipeDraft outputFluid(Fluid fluid, int amount);
+    RecipeDraft inputStress(double stress, double minRpm); RecipeDraft inputStress(double stress, double minRpm, List<String> tags);
+    RecipeDraft outputStress(double stress, double rpm); RecipeDraft outputStress(double stress, double rpm, List<String> tags);
     RecipeDraft inputEnergy(long fePerTick); RecipeDraft outputEnergy(long fePerTick); RecipeDraft iFEt(long fePerTick); RecipeDraft oFEt(long fePerTick);
     RecipeDraft outputItem(Item item, int count); RecipeDraft outputItem(ItemStack stack); RecipeDraft outputItem(ItemStack stack, ComponentConstraints components);
     RecipeDraft outputChance(ItemStack stack, float chance); RecipeDraft outputChance(ItemStack stack, float chance, ComponentConstraints components);

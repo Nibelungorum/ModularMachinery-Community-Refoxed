@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.create.CreateBridge;
+import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
@@ -174,6 +176,22 @@ public final class InterfacePredicates {
         return BlockPredicate.anyOf(predicates);
     }
 
+    public static BlockPredicate anyOfStressInput() {
+        return CreateBridge.get().available() ? anyOfPorts(CreateRecipeTypes.STRESS, IOType.INPUT) : BlockPredicate.none();
+    }
+
+    public static BlockPredicate anyStressInput() { return anyOfStressInput(); }
+
+    public static BlockPredicate anyOfStressOutput() {
+        return CreateBridge.get().available() ? anyOfPorts(CreateRecipeTypes.STRESS, IOType.OUTPUT) : BlockPredicate.none();
+    }
+
+    public static BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
+
+    public static BlockPredicate anyOfStressPorts() { return combine(anyOfStressInput(), anyOfStressOutput()); }
+
+    public static BlockPredicate anyStressPorts() { return anyOfStressPorts(); }
+
     public static BlockPredicate anyUpgradeBus() {
         return anyOfUpgradeBus();
     }
@@ -188,6 +206,8 @@ public final class InterfacePredicates {
         addIfPresent(predicates, anyOfRadioactiveChemicalOutput());
         addIfPresent(predicates, anyOfHeatInput());
         addIfPresent(predicates, anyOfHeatOutput());
+        addIfPresent(predicates, anyOfStressInput());
+        addIfPresent(predicates, anyOfStressOutput());
         return BlockPredicate.any(predicates.toArray(BlockPredicate[]::new));
     }
 

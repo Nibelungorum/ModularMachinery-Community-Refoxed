@@ -9,11 +9,16 @@ import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * 一种 IO 端口类型的协议。新增一种 IO 端口(气体、魔源等)
@@ -27,7 +32,11 @@ public interface IOPortKind {
     IOType ioType();
 
     /** 该 kind 对应的 BlockEntity 工厂。Block 注册时由这里创建对应实体。 */
-    BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory();
+    BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory();
+
+    default Block createBlock(BlockBehaviour.Properties properties, Supplier<? extends BlockEntityType<?>> type) {
+        return new IOPortBlock(this, type, properties);
+    }
 
     /** Returns the immutable capability binding declaration for this port kind. */
     PortDefinition definition();

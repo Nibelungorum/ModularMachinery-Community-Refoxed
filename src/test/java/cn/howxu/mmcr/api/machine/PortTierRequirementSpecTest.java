@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import org.junit.jupiter.api.Test;
@@ -192,7 +193,7 @@ class PortTierRequirementSpecTest {
 
     private static IOPortKind combinedKind(IOType ioType, List<PortFamilyDescriptor> families) {
         return new PortKinds.CombinedKind("combined_" + ioType.getSerializedName() + "_test", ioType, families,
-                PortKinds.ITEM_INPUT.entityFactory(), PortDefinition.of(
+                ItemInputBusBlockEntity::new, PortDefinition.of(
                         MMCR.id("combined_" + ioType.getSerializedName() + "_test"),
                         families.stream().map(family -> IOPortKind.binding(
                                 family.familyId().equals(PortFamilyIds.ITEM)
@@ -207,7 +208,7 @@ class PortTierRequirementSpecTest {
 
     private static void assertInvalidCombined(List<PortFamilyDescriptor> families, List<CapabilityType> types) {
         assertThatIllegalArgumentException().isThrownBy(() -> new PortKinds.CombinedKind("combined_invalid_test",
-                IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(), PortDefinition.of(
+                IOType.INPUT, families, ItemInputBusBlockEntity::new, PortDefinition.of(
                         MMCR.id("combined_invalid_test"), types.stream()
                                 .map(type -> IOPortKind.binding(type, IOType.INPUT, families)).toList())));
     }

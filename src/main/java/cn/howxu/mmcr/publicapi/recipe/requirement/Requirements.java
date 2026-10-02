@@ -17,6 +17,10 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
  * @author howxu <dev@howxu.cn> */
 public final class Requirements {
     private Requirements() {}
+    public static StressRequirementSpec stressInput(double stress, double minRpm) { return stressInput(stress, minRpm, List.of()); }
+    public static StressRequirementSpec stressInput(double stress, double minRpm, List<String> tags) { return RequirementFactories.stressInput(stress, minRpm, tags); }
+    public static StressRequirementSpec stressOutput(double stress, double rpm) { return stressOutput(stress, rpm, List.of()); }
+    public static StressRequirementSpec stressOutput(double stress, double rpm, List<String> tags) { return RequirementFactories.stressOutput(stress, rpm, tags); }
     public static <R> RequirementSpec extension(RequirementKind<R> kind, R payload) { return RequirementExtensionAdapter.requirement(kind, payload); }
     public static ItemRequirementSpec item(IoDirection io, Ingredient item, int count, ItemStack stack) { return RequirementFactories.item(io, item, count, stack); }
     public static ItemRequirementSpec item(IoDirection io, Ingredient item, int count, ItemStack stack, List<String> tags) { return RequirementFactories.item(io, item, count, stack, tags); }

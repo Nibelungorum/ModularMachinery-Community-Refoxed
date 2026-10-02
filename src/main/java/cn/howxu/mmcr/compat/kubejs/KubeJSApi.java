@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
+import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
@@ -36,6 +37,7 @@ import cn.howxu.mmcr.api.network.view.RequestBody;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.presentation.ReadableNumber;
 import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -194,6 +196,12 @@ public final class KubeJSApi {
         return KubeJSInterfaceHelpers.anyOfRadioactiveChemicalPorts();
     }
     public BlockPredicate anyOfHeatPorts() { return KubeJSInterfaceHelpers.anyOfHeatPorts(); }
+    public BlockPredicate anyOfStressInput() { return KubeJSInterfaceHelpers.anyOfStressInput(); }
+    public BlockPredicate anyOfStressOutput() { return KubeJSInterfaceHelpers.anyOfStressOutput(); }
+    public BlockPredicate anyOfStressPorts() { return KubeJSInterfaceHelpers.anyOfStressPorts(); }
+    public BlockPredicate anyStressInput() { return anyOfStressInput(); }
+    public BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
+    public BlockPredicate anyStressPorts() { return anyOfStressPorts(); }
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
@@ -341,6 +349,50 @@ public final class KubeJSApi {
 
     public EnergyRequirement energyRequirement(IOType io, long fePerTick) {
         return new EnergyRequirement(io, fePerTick);
+    }
+
+    // Java keeps typed overloads; scripts validate original values before Rhino can coerce strings.
+    @HideFromJS
+    public CustomRecipeIo stressInput(double stress, double minRpm) {
+        return stressInput(stress, minRpm, List.of());
+    }
+
+    @HideFromJS
+    public CustomRecipeIo stressInput(double stress, double minRpm, List<String> tags) {
+        return customRecipeIo(StressRequirement.TYPE.id().toString(), IOType.INPUT,
+                MachineRecipeBuilder.stressInputPayload(stress, minRpm, tags));
+    }
+
+    @HideFromJS
+    public CustomRecipeIo stressOutput(double stress, double rpm) {
+        return stressOutput(stress, rpm, List.of());
+    }
+
+    @HideFromJS
+    public CustomRecipeIo stressOutput(double stress, double rpm, List<String> tags) {
+        return customRecipeIo(StressRequirement.TYPE.id().toString(), IOType.OUTPUT,
+                MachineRecipeBuilder.stressOutputPayload(stress, rpm, tags));
+    }
+
+    public CustomRecipeIo stressInput(Object stress, Object minRpm) {
+        return stressInput(stress, minRpm, List.of());
+    }
+
+    public CustomRecipeIo stressInput(Object stress, Object minRpm, List<String> tags) {
+        return stressInput(stressNumber(stress), stressNumber(minRpm), tags);
+    }
+
+    public CustomRecipeIo stressOutput(Object stress, Object rpm) {
+        return stressOutput(stress, rpm, List.of());
+    }
+
+    public CustomRecipeIo stressOutput(Object stress, Object rpm, List<String> tags) {
+        return stressOutput(stressNumber(stress), stressNumber(rpm), tags);
+    }
+
+    private static double stressNumber(Object value) {
+        if (!(value instanceof Number number)) throw new IllegalArgumentException("Stress parameters must be numbers");
+        return number.doubleValue();
     }
 
     /**

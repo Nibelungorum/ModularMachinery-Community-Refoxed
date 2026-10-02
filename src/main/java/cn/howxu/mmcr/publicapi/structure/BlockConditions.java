@@ -36,6 +36,9 @@ public final class BlockConditions {
     public static BlockCondition radioactiveChemicalOutput() { return BlockAdapters.radioactiveChemicalOutput(); }
     public static BlockCondition heatInput() { return BlockAdapters.heatInput(); }
     public static BlockCondition heatOutput() { return BlockAdapters.heatOutput(); }
+    public static BlockCondition stressInput() { return BlockAdapters.stressInput(); }
+    public static BlockCondition stressOutput() { return BlockAdapters.stressOutput(); }
+    public static BlockCondition stressPorts() { return BlockAdapters.stressPorts(); }
     public static BlockCondition itemPorts() { return BlockAdapters.itemPorts(); }
     public static BlockCondition fluidPorts() { return BlockAdapters.fluidPorts(); }
     public static BlockCondition energyPorts() { return BlockAdapters.energyPorts(); }

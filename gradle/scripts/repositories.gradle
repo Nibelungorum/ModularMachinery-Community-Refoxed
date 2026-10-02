@@ -1,6 +1,18 @@
 repositories {
 
     maven {
+        url = uri("https://maven.createmod.net")
+        content {
+            includeGroup "dev.engine-room.flywheel"
+            includeGroup "net.createmod.ponder"
+        }
+    }
+    maven {
+        url = uri("https://maven.ithundxr.dev/snapshots")
+        content { includeGroup "com.tterrag.registrate" }
+    }
+
+    maven {
         url = uri("https://modmaven.dev/")
     }
     

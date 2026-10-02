@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -51,6 +52,7 @@ import java.util.Set;
 public final class CraftingContext {
     private List<MachineCapability> capabilities;
     private List<RecipeModifier> modifiers;
+    private @Nullable Object reservationOwner;
 
     public CraftingContext(CapabilitySnapshot snapshot) {
         this(snapshot, List.of());
@@ -75,6 +77,25 @@ public final class CraftingContext {
             throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
         }
         return prepareAsyncPlan(requirements, parallelism, captureAsyncCapabilities());
+    }
+
+    public AsyncRequirementPlanner.PreparedPlan planAsync(List<MachineRequirement> requirements, long parallelism,
+                                                         List<Integer> requirementIndexes) {
+        if (requirements == null || requirementIndexes == null || requirements.size() != requirementIndexes.size()
+                || parallelism <= 0L) {
+            throw new IllegalArgumentException("requirements and indexes must match and parallelism must be positive");
+        }
+        List<AsyncRequirementPlanner.Capability> asyncCapabilities = captureAsyncCapabilities();
+        List<AsyncRequirementPlanner.Requirement> preparedRequirements = new ArrayList<>();
+        List<Integer> fallback = new ArrayList<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            int originalIndex = requirementIndexes.get(index);
+            AsyncRequirementPlanner.Requirement prepared = prepareAsyncRequirement(originalIndex,
+                    requirements.get(index), parallelism, asyncCapabilities);
+            if (prepared == null) fallback.add(originalIndex);
+            else preparedRequirements.add(prepared);
+        }
+        return new AsyncRequirementPlanner.PreparedPlan(preparedRequirements, asyncCapabilities, fallback);
     }
 
     public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities() {
@@ -118,7 +139,8 @@ public final class CraftingContext {
 
     public PlanningResult planInputs(MachineRecipe recipe, long parallelism,
                                      Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
-        return plan(startRequirements(recipe), parallelism, RecipeModifier.IOType.INPUT,
+        IndexedRequirements requirements = startRequirements(recipe.runtimeRequirements(modifiers));
+        return plan(requirements.requirements(), requirements.indexes(), parallelism, RecipeModifier.IOType.INPUT,
                 consumedAtStart == null ? Set.of() : consumedAtStart,
                 retainedInputs == null ? Set.of() : retainedInputs, Map.of());
     }
@@ -176,9 +198,9 @@ public final class CraftingContext {
 
     public PlanningResult planStartResult(MachineRecipe recipe, long requestedParallelism) {
         List<MachineRequirement> allRequirements = recipe.runtimeRequirements(modifiers);
-        List<MachineRequirement> requirements = startRequirements(allRequirements);
-        PlanningResult result = plan(requirements, requestedParallelism, null, Set.of(), Set.of(),
-                partialOutputPolicies(requirements, recipe.allowPartialOutputs()));
+        IndexedRequirements requirements = startRequirements(allRequirements);
+        PlanningResult result = planSelected(requirements.requirements(), requestedParallelism,
+                partialOutputPolicies(allRequirements, recipe.allowPartialOutputs()), requirements.indexes());
         if (!result.successful()) return result;
         List<RecipeModifier> durationModifiers = new ArrayList<>(recipe.modifiers());
         durationModifiers.addAll(modifiers);
@@ -188,16 +210,19 @@ public final class CraftingContext {
         return prefetchFailure == null ? result : prefetchFailure;
     }
 
-    private List<MachineRequirement> startRequirements(MachineRecipe recipe) {
-        return startRequirements(recipe.runtimeRequirements(modifiers));
-    }
-
-    private List<MachineRequirement> startRequirements(List<MachineRequirement> requirements) {
+    private IndexedRequirements startRequirements(List<MachineRequirement> requirements) {
         boolean hasPrefetch = capabilities.stream()
                 .anyMatch(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).isPresent());
-        if (!hasPrefetch) return requirements;
-        return requirements.stream().filter(requirement -> !(requirement instanceof EnergyRequirement energy
-                && energy.io() == RecipeModifier.IOType.INPUT)).toList();
+        if (!hasPrefetch) return new IndexedRequirements(requirements, indexes(requirements.size()));
+        List<MachineRequirement> selected = new ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            MachineRequirement requirement = requirements.get(index);
+            if (requirement instanceof EnergyRequirement && requirement.io() == RecipeModifier.IOType.INPUT) continue;
+            selected.add(requirement);
+            indexes.add(index);
+        }
+        return new IndexedRequirements(List.copyOf(selected), List.copyOf(indexes));
     }
 
     private @Nullable PlanningResult validatePrefetch(List<MachineRequirement> requirements, int duration,
@@ -267,6 +292,16 @@ public final class CraftingContext {
         return plan(requirements, parallelism, null, Set.of(), Set.of(), outputPolicies);
     }
 
+    public PlanningResult planRequirements(List<MachineRequirement> requirements, long parallelism,
+                                           Map<Integer, OutputPolicy> outputPolicies, List<Integer> requirementIndexes) {
+        return planSelected(requirements, parallelism, outputPolicies, requirementIndexes);
+    }
+
+    public CraftingContext withReservationOwner(Object owner) {
+        reservationOwner = owner;
+        return this;
+    }
+
     public PlanningResult planInputRequirements(List<MachineRequirement> requirements, long parallelism,
                                                  Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
         return planInputs(requirements, parallelism, consumedAtStart, retainedInputs);
@@ -294,6 +329,7 @@ public final class CraftingContext {
         if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
         capabilities = snapshot.capabilities();
         setModifiers(modifiers);
+        reservationOwner = null;
     }
 
     private PlanningResult plan(MachineRecipe recipe, long parallelism, RecipeModifier.IOType direction,
@@ -428,13 +464,20 @@ public final class CraftingContext {
                                 Set<Integer> consumedAtStart, Set<Integer> retainedInputs,
                                 Map<Integer, OutputPolicy> outputPolicies) {
         if (source == null) throw new IllegalArgumentException("requirements must not be null");
+        return plan(source, indexes(source.size()), parallelism, direction, consumedAtStart, retainedInputs, outputPolicies);
+    }
+
+    private PlanningResult plan(List<MachineRequirement> source, List<Integer> sourceIndexes, long parallelism,
+                                RecipeModifier.IOType direction, Set<Integer> consumedAtStart,
+                                Set<Integer> retainedInputs, Map<Integer, OutputPolicy> outputPolicies) {
         List<MachineRequirement> requirements = new ArrayList<>();
         List<Integer> requirementIndexes = new ArrayList<>();
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
+            int originalIndex = sourceIndexes.get(index);
             if (direction != null && requirement.io() != direction) continue;
-            if (consumedAtStart.contains(index)) continue;
-            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
+            if (consumedAtStart.contains(originalIndex)) continue;
+            if (retainedInputs.contains(originalIndex) && requirement instanceof ItemRequirement(
                     RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
                     net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
                     cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components, float consumeChance
@@ -444,7 +487,7 @@ public final class CraftingContext {
                         stack, chance, tags, components, 0F);
             }
             requirements.add(requirement);
-            requirementIndexes.add(index);
+            requirementIndexes.add(originalIndex);
         }
         return planSelected(requirements, parallelism, outputPolicies, requirementIndexes);
     }
@@ -455,7 +498,8 @@ public final class CraftingContext {
             throw new IllegalArgumentException("requirements and indexes must match");
         }
         return new RequirementPlanner().plan(requirements, capabilities,
-                new PlanningContext(parallelism, 0, outputPolicies), requirementIndexes);
+                new PlanningContext(parallelism, 0, false, new PlanningReservations(), outputPolicies,
+                        reservationOwner), requirementIndexes);
     }
 
     private PlanningResult planSelected(List<MachineRequirement> source, List<Integer> sourceIndexes,

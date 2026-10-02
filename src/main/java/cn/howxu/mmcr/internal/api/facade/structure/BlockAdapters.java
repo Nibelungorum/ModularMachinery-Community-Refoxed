@@ -43,6 +43,9 @@ public final class BlockAdapters {
     public static BlockCondition radioactiveChemicalOutput() { return StructureAdapters.wrap(InterfacePredicates.anyRadioactiveChemicalOutput()); }
     public static BlockCondition heatInput() { return StructureAdapters.wrap(InterfacePredicates.anyHeatInput()); }
     public static BlockCondition heatOutput() { return StructureAdapters.wrap(InterfacePredicates.anyHeatOutput()); }
+    public static BlockCondition stressInput() { return StructureAdapters.wrap(InterfacePredicates.anyStressInput()); }
+    public static BlockCondition stressOutput() { return StructureAdapters.wrap(InterfacePredicates.anyStressOutput()); }
+    public static BlockCondition stressPorts() { return StructureAdapters.wrap(InterfacePredicates.anyStressPorts()); }
     public static BlockCondition itemPorts() { return StructureAdapters.wrap(InterfacePredicates.anyItemPorts()); }
     public static BlockCondition fluidPorts() { return StructureAdapters.wrap(InterfacePredicates.anyFluidPorts()); }
     public static BlockCondition energyPorts() { return StructureAdapters.wrap(InterfacePredicates.anyEnergyPorts()); }

@@ -14,7 +14,9 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.compat.create.StressRequirement;
 import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -108,6 +110,30 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder outputHeat(double heat) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.HEAT, IOType.OUTPUT,
                 heatOutputPayload(heat)));
+    }
+    public MachineRecipeBuilder inputStress(double stress, double minRpm) { return inputStress(stress, minRpm, List.of()); }
+    public MachineRecipeBuilder inputStress(double stress, double minRpm, List<String> tags) {
+        return requirement(StressRequirement.input(stress, minRpm, tags));
+    }
+    public MachineRecipeBuilder outputStress(double stress, double rpm) { return outputStress(stress, rpm, List.of()); }
+    public MachineRecipeBuilder outputStress(double stress, double rpm, List<String> tags) {
+        return requirement(StressRequirement.output(stress, rpm, tags));
+    }
+
+    /** Canonical codec payload shared by script stress helpers.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject stressInputPayload(double stress, double minRpm, List<String> tags) {
+        return StressRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
+                StressRequirement.input(stress, minRpm, tags)).getOrThrow().getAsJsonObject();
+    }
+
+    /** Canonical codec payload retaining output direction and signed RPM.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject stressOutputPayload(double stress, double rpm, List<String> tags) {
+        return StressRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
+                StressRequirement.output(stress, rpm, tags)).getOrThrow().getAsJsonObject();
     }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.INPUT, new EnergyInput(fePerTick).fePerTick())); }
     public MachineRecipeBuilder outputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.OUTPUT, new EnergyInput(fePerTick).fePerTick())); }

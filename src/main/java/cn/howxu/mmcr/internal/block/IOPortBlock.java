@@ -12,6 +12,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedFluidHatchBlockEntity;
@@ -52,7 +53,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
 
-public class IOPortBlock extends Block implements EntityBlock {
+public class IOPortBlock extends Block implements EntityBlock, MachinePort {
 
     enum PortMenuKind {
         ITEM, FLUID, ENERGY,

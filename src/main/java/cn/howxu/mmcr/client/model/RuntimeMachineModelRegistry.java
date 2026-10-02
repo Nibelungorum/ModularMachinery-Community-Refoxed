@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -147,6 +148,8 @@ public final class RuntimeMachineModelRegistry {
     }
 
     private static @Nullable RuntimeBlockModelDefinition definition(String blockName, Block block) {
+        // Native integration ports supply their own static casing and animated renderer.
+        if (block instanceof MachinePort && !(block instanceof IOPortBlock)) return null;
         if (block instanceof MachineControllerBlock controller) {
             return new RuntimeBlockModelDefinition(
                     block,

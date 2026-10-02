@@ -12,6 +12,8 @@ import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.HeatViewFacet;
+import cn.howxu.mmcr.api.compat.create.StressFacet;
+import cn.howxu.mmcr.api.compat.create.StressState;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
@@ -205,6 +207,19 @@ public final class MachineIoView {
             }
         }
         return amount;
+    }
+
+    public List<StressState> stressInputs() { return stressStates(IOType.INPUT); }
+
+    public List<StressState> stressOutputs() { return stressStates(IOType.OUTPUT); }
+
+    private List<StressState> stressStates(IOType ioType) {
+        List<StressState> states = new ArrayList<>();
+        for (MachineCapability capability : capabilities(ioType)) {
+            StressFacet facet = capability.facet(StressFacet.class).orElse(null);
+            if (facet != null) states.add(facet.state());
+        }
+        return List.copyOf(states);
     }
 
     public long itemAmount(Ingredient ingredient) {

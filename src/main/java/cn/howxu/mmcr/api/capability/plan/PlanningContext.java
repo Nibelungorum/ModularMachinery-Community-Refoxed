@@ -10,11 +10,16 @@ import java.util.Map;
  * @param allowPartialOutputs whether output handlers may accept partial capacity
  * @param reservations shared reservations for one planning pass
  * @param outputPolicies output policies keyed by recipe requirement index
+ * @param reservationOwner optional persistent owner of recipe-scoped reservations
  * @author howxu <dev@howxu.cn>
  */
 public record PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
                                PlanningReservations reservations,
-                               Map<Integer, OutputPolicy> outputPolicies) {
+                               Map<Integer, OutputPolicy> outputPolicies, Object reservationOwner) {
+    public PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
+                           PlanningReservations reservations, Map<Integer, OutputPolicy> outputPolicies) {
+        this(requestedParallelism, requirementIndex, allowPartialOutputs, reservations, outputPolicies, null);
+    }
     public PlanningContext(long requestedParallelism, int requirementIndex) {
         this(requestedParallelism, requirementIndex, false, new PlanningReservations(), Map.of());
     }

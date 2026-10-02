@@ -27,6 +27,7 @@ import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -56,7 +57,7 @@ import java.util.Objects;
 import java.util.Optional;
 import org.jetbrains.annotations.Nullable;
 
-public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost {
+public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost, MachinePort {
     private static final String AUTO_IO_CAPABILITIES_KEY = "auto_io_capabilities";
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;

@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.registry.PortKinds;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
@@ -123,7 +125,7 @@ class PortDefinitionRegistryTest {
                         new PortFamilyDescriptor(MMCR.id("generic_item"), IOType.INPUT, 0, List.of("item")),
                         new PortFamilyDescriptor(MMCR.id("generic_fluid"), IOType.INPUT, 0, List.of("fluid")),
                         new PortFamilyDescriptor(MMCR.id("generic_gas"), IOType.INPUT, 0, List.of("gas"))),
-                PortKinds.ITEM_INPUT.entityFactory(), definition);
+                ItemInputBusBlockEntity::new, definition);
 
         assertThat(kind.definition()).isSameAs(definition);
         assertThat(kind.bindings()).extracting(CapabilityBinding::type)
@@ -136,7 +138,7 @@ class PortDefinitionRegistryTest {
                 List.of(
                         new PortFamilyDescriptor(MMCR.id("item"), IOType.OUTPUT, 2, List.of("item")),
                         new PortFamilyDescriptor(MMCR.id("fluid"), IOType.OUTPUT, 5, List.of("fluid"))),
-                PortKinds.ITEM_OUTPUT.entityFactory(), PortDefinition.of(id("prioritized"), List.of(
+                ItemOutputBusBlockEntity::new, PortDefinition.of(id("prioritized"), List.of(
                         binding("item", IOType.OUTPUT, PortTierPolicy.always()),
                         binding("fluid", IOType.OUTPUT, PortTierPolicy.always()))));
 

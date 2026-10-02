@@ -45,6 +45,9 @@ import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.create.StressSession;
+import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -70,7 +73,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.stream.IntStream;
 
 /**
  * Owns one recipe lifecycle. Capability plans are the only mutable-resource boundary.
@@ -80,6 +82,7 @@ import java.util.stream.IntStream;
 public final class CraftingRuntime {
     private final MachineControllerBlockEntity controller;
     private final ComponentRuntime components;
+    private final StressSession stressSession = new StressSession();
     private @Nullable ControllerScreenText screenText;
     private @Nullable ActiveMachineRecipe activeRecipe;
     private @Nullable CraftingPlan startPlan;
@@ -98,6 +101,7 @@ public final class CraftingRuntime {
     private @Nullable Set<Integer> cachedPerTickRetained;
     private @Nullable List<ActivePrefetch> cachedPerTickPrefetches;
     private List<MachineRequirement> cachedPerTickRequirements = List.of();
+    private List<Integer> cachedPerTickRequirementIndexes = List.of();
     private @Nullable List<MachineRequirement> cachedPublicRequirementSource;
     private List<MachineRequirement> cachedPublicRequirements = List.of();
     private Set<Integer> consumedAtStart = Set.of();
@@ -114,6 +118,7 @@ public final class CraftingRuntime {
     private @Nullable PreparedStart pendingPatternStart;
     private @Nullable ExecutionStatus capabilityTickFailure;
     private @Nullable AsyncTickPreparation asyncTickPreparation;
+    private boolean asyncTickPowerWait;
     private @Nullable RecipeFinishContext preparedAsyncFinishContext;
     private List<ActivePrefetch> activePrefetches = List.of();
     private long prefetchedEnergyPerTick;
@@ -172,8 +177,8 @@ public final class CraftingRuntime {
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
-        PlanningResult result = context(runtime, requestCapabilities).planInputs(startRequirements(requirements, facets), effectiveParallelism,
-                Set.of(), Set.of());
+        PlanningResult result = planStartInputs(context(runtime, requestCapabilities), requirements, facets,
+                effectiveParallelism);
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) return null;
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
@@ -191,6 +196,7 @@ public final class CraftingRuntime {
     }
 
     public void releasePatternStart() {
+        if (!active()) releaseStressContributions();
         if (pendingPatternStart != null) releasePreparedPrefetches(pendingPatternStart);
         pendingPatternStart = null;
         patternStartReserved = false;
@@ -273,7 +279,7 @@ public final class CraftingRuntime {
         effectiveOutputs = MachineOutput.copyList(prepared.effective().outputs());
         presentationEpoch++;
         activatePrefetches(prepared.prefetches(), effectiveRequirements, activeRecipe.getParallelism());
-        captureInputState(effectiveRequirements, prepared.plan(), !prepared.prefetches().isEmpty());
+        captureInputState(effectiveRequirements, prepared.plan());
         captureVersions(prepared.runtime());
         pendingPatternStart = null;
         patternStartReserved = false;
@@ -385,8 +391,7 @@ public final class CraftingRuntime {
                 .map(MachineRequirement::copyOf).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(List.of());
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planInputs(startRequirements(requirements, facets), effectiveParallelism,
-                Set.of(), Set.of());
+        PlanningResult result = planStartInputs(context, requirements, facets, effectiveParallelism);
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) {
             return fail(result.failure());
@@ -401,7 +406,10 @@ public final class CraftingRuntime {
             if (commitFailure != null) return fail(commitFailure);
             committed = true;
         } finally {
-            if (!committed) releasePreparedPrefetches(prepared);
+            if (!committed) {
+                releaseStressContributions();
+                releasePreparedPrefetches(prepared);
+            }
         }
 
         activeRecipe = new ActiveMachineRecipe(recipe, plan.parallelism(), effective);
@@ -413,7 +421,7 @@ public final class CraftingRuntime {
         effectiveOutputs = MachineOutput.copyList(effective.outputs());
         presentationEpoch++;
         activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
-        captureInputState(effectiveRequirements, plan, !prefetches.isEmpty());
+        captureInputState(effectiveRequirements, plan);
         captureVersions(runtime);
         status = CraftingStatus.working();
         failure = null;
@@ -421,7 +429,7 @@ public final class CraftingRuntime {
     }
 
     public CraftingStatus tick() {
-        if (!active()) return status;
+        if (!active() || status.isPaused()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (activeRecipe.isFinishPending()) return status;
 
@@ -452,15 +460,17 @@ public final class CraftingRuntime {
             return waiting(result.failure());
         }
         try {
-            if (!tickPlan.commit()) return waiting(tickPlan.failure());
+            if (!tickPlan.commit()) return waiting(tickPlan.failure(), false);
         } catch (RuntimeException exception) {
             logTickFailure("commit", runtime, activeRecipe.getRecipe(), exception);
-            return waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+            return waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
         }
         ExecutionStatus prefetchFailure = consumePrefetchedEnergy();
-        if (prefetchFailure != null) return waiting(prefetchFailure);
+        if (prefetchFailure != null) return waiting(prefetchFailure, false);
+        if (!commitStressOutputs(runtime)) return status;
         if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, machineContext, recipeTickContext)) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
+            if (finishPending()) releaseStressContributions();
             return status;
         }
 
@@ -468,13 +478,16 @@ public final class CraftingRuntime {
         if (activeRecipe.needsFinishCommit()) {
             if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) {
                 if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
+                if (finishPending()) releaseStressContributions();
                 return status;
             }
             activeRecipe.beginFinishCommit();
+            releaseStressContributions();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
+        if (activeRecipe.isFinishPending()) releaseStressContributions();
         if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
         status = CraftingStatus.working();
         failure = null;
@@ -484,8 +497,9 @@ public final class CraftingRuntime {
     /** Captures the main-thread recipe tick context before any worker-side planning begins. */
     public boolean prepareAsyncTick(ControllerRuntimeSnapshot runtime) {
         asyncTickPreparation = null;
+        asyncTickPowerWait = false;
         if (runtime == null) throw new IllegalArgumentException("runtime must not be null");
-        if (!active()) return false;
+        if (!active() || status.isPaused()) return false;
         if (!versionsCurrent()) {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
             return false;
@@ -516,7 +530,12 @@ public final class CraftingRuntime {
     }
 
     public void discardAsyncTickPreparation() {
+        if (asyncTickPreparation != null) {
+            if (asyncTickPowerWait) stressSession.releaseOutputs();
+            else releaseStressContributions();
+        }
         asyncTickPreparation = null;
+        asyncTickPowerWait = false;
     }
 
     /** Runs main-thread tick preparation and captures the worker-safe native requirement plan. */
@@ -546,10 +565,10 @@ public final class CraftingRuntime {
         if (requirements.stream().allMatch(requirement -> requirement instanceof EnergyRequirement
                 || requirement instanceof LoadedHeatRequirement)) {
             return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(),
-                    IntStream.range(0, requirements.size()).boxed().toList());
+                    cachedPerTickRequirementIndexes);
         }
         AsyncRequirementPlanner.PreparedPlan prepared = context(preparation.runtime())
-                .planAsync(requirements, activeRecipe.getParallelism());
+                .planAsync(requirements, activeRecipe.getParallelism(), cachedPerTickRequirementIndexes);
         // A known fallback replans the entire tick, so worker operations would be discarded.
         return prepared.initialMainThreadRequirements().isEmpty() ? prepared
                 : new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), prepared.initialMainThreadRequirements());
@@ -583,6 +602,7 @@ public final class CraftingRuntime {
         if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS,
                 preparation.machineContext(), preparation.tickContext())) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
+            if (finishPending()) releaseStressContributions();
             asyncTickPreparation = null;
             return false;
         }
@@ -600,13 +620,16 @@ public final class CraftingRuntime {
             if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
                     preparation.machineContext(), preparation.tickContext())) {
                 if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
+                if (finishPending()) releaseStressContributions();
                 return status;
             }
             activeRecipe.beginFinishCommit();
+            releaseStressContributions();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
+        if (activeRecipe.isFinishPending()) releaseStressContributions();
         if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
                 preparation.machineContext(), preparation.tickContext())) return status;
         status = CraftingStatus.working();
@@ -627,7 +650,7 @@ public final class CraftingRuntime {
         if (result == null) throw new IllegalArgumentException("result must not be null");
         if (result.failure() != null) {
             capabilityTickFailure = result.failure();
-            waiting(result.failure());
+            waiting(result.failure(), false);
         } else if (capabilityTickFailure != null && capabilityTickFailure.equals(failure)) {
             capabilityTickFailure = null;
             failure = null;
@@ -641,6 +664,7 @@ public final class CraftingRuntime {
         if (!active()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (!activeRecipe.isFinishPending()) return status;
+        releaseStressContributions();
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
         RecipeFinishContext finishContext = preparedAsyncFinishContext;
@@ -713,6 +737,7 @@ public final class CraftingRuntime {
 
     /** Executes the finish behavior callback before a shared-IO output transaction is requested. */
     public boolean prepareAsyncFinish() {
+        if (finishPending()) releaseStressContributions();
         if (!active() || !versionsCurrent() || !activeRecipe.isFinishPending()
                 || !activeRecipe.shouldRetryFinish(currentGameTime())) return false;
         preparedAsyncFinishContext = prepareFinishContext();
@@ -776,7 +801,13 @@ public final class CraftingRuntime {
     }
 
     public void pause() {
+        releaseStressContributions();
         if (active()) status = CraftingStatus.paused();
+    }
+
+    /** Releases this lane's contributions, including facets no longer in the component snapshot. */
+    public void releaseStressContributions() {
+        stressSession.releaseAll();
     }
 
     public void resume() {
@@ -858,6 +889,7 @@ public final class CraftingRuntime {
     }
 
     public void recordSearchFailure(@Nullable ExecutionStatus nextFailure) {
+        releaseStressContributions();
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.RECIPE_SEARCH, FailurePhase.RECIPE_SEARCH, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
@@ -879,6 +911,7 @@ public final class CraftingRuntime {
     }
 
     public void invalidate() {
+        releaseStressContributions();
         releasePatternStart();
         releaseActivePrefetches();
         activeRecipe = null;
@@ -905,6 +938,7 @@ public final class CraftingRuntime {
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
                         long restoredStructureVersion, long restoredCapabilityVersion,
                         long restoredModifierVersion, long restoredComponentStateVersion) {
+        releaseStressContributions();
         if (restored == null || restored.getRecipe() == null) {
             failLoad();
             return;
@@ -975,6 +1009,7 @@ public final class CraftingRuntime {
     public void rebindCurrentVersions() {
         if (!active()) return;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        if (capabilityVersion != runtime.capabilityVersion()) releaseStressContributions();
         if (!recipeBelongsToMachine(activeRecipe.getRecipe(), runtime)) {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
             return;
@@ -1054,10 +1089,20 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure) {
+        return waiting(nextFailure, true);
+    }
+
+    /** Only a pre-commit Create power check may retain the lane's previous input contributions. */
+    private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure, boolean allowInputRetention) {
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
+        boolean retainInput = allowInputRetention && isPowerWait(failure);
+        if (asyncTickPreparation != null) asyncTickPowerWait = retainInput;
+        if (retainInput) stressSession.releaseOutputs();
+        else releaseStressContributions();
         if (activeRecipe != null && activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
+            releaseStressContributions();
             releaseActivePrefetches();
             activeRecipe = null;
             startPlan = null;
@@ -1068,7 +1113,12 @@ public final class CraftingRuntime {
         return status;
     }
 
+    private static boolean isPowerWait(ExecutionStatus status) {
+        return CreateFailureReasons.isPowerFailure(status.reason());
+    }
+
     private CraftingStatus finishBlocked(@Nullable ExecutionStatus nextFailure) {
+        releaseStressContributions();
         if (activeRecipe != null) activeRecipe.markFinishBlocked(currentGameTime());
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.FINISH, FailurePhase.FINISH, Map.of()) : nextFailure;
@@ -1077,6 +1127,7 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus invalidate(FailureReason reason, FailurePhase phase) {
+        releaseStressContributions();
         failure = failure(reason, phase, Map.of());
         releaseActivePrefetches();
         activeRecipe = null;
@@ -1092,6 +1143,7 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus fail(@Nullable ExecutionStatus nextFailure) {
+        releaseStressContributions();
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
@@ -1113,13 +1165,15 @@ public final class CraftingRuntime {
     }
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
-        return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime));
+        return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime))
+                .withReservationOwner(stressSession);
     }
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime, List<MachineCapability> requestCapabilities) {
         List<MachineCapability> capabilities = new ArrayList<>(components.capabilities());
         if (requestCapabilities != null) capabilities.addAll(requestCapabilities);
-        return new CraftingContext(new CapabilitySnapshot(capabilities), contextModifiers(runtime));
+        return new CraftingContext(new CapabilitySnapshot(capabilities), contextModifiers(runtime))
+                .withReservationOwner(stressSession);
     }
 
     private List<RecipeEnergyPrefetchFacet> prefetchFacets(List<MachineCapability> requestCapabilities) {
@@ -1128,11 +1182,18 @@ public final class CraftingRuntime {
         return new CapabilitySnapshot(capabilities).facets(RecipeEnergyPrefetchFacet.class);
     }
 
-    private static List<MachineRequirement> startRequirements(List<MachineRequirement> requirements,
-                                                               List<RecipeEnergyPrefetchFacet> facets) {
-        if (facets.isEmpty()) return requirements;
-        return requirements.stream().filter(requirement -> !(requirement instanceof EnergyRequirement energy
-                && energy.io() == RecipeModifier.IOType.INPUT)).toList();
+    private static PlanningResult planStartInputs(CraftingContext context, List<MachineRequirement> requirements,
+                                                  List<RecipeEnergyPrefetchFacet> facets, long parallelism) {
+        List<MachineRequirement> inputs = new ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            MachineRequirement requirement = requirements.get(index);
+            if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
+            if (!facets.isEmpty() && requirement instanceof EnergyRequirement) continue;
+            inputs.add(requirement);
+            indexes.add(index);
+        }
+        return context.planRequirements(inputs, parallelism, Map.of(), indexes);
     }
 
     private @Nullable List<PreparedPrefetch> planPrefetches(List<MachineRequirement> requirements, int duration,
@@ -1178,18 +1239,24 @@ public final class CraftingRuntime {
     }
 
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared) {
-        for (PreparedPrefetch prefetch : prepared.prefetches()) {
-            CapabilityResult result = prefetch.plan().operation().commit();
-            if (result == null || !result.success()) {
-                return result == null || result.status() == null ? missingInputStatus() : result.status();
+        boolean committed = false;
+        try {
+            for (PreparedPrefetch prefetch : prepared.prefetches()) {
+                CapabilityResult result = prefetch.plan().operation().commit();
+                if (result == null || !result.success()) {
+                    return result == null || result.status() == null ? missingInputStatus() : result.status();
+                }
+                prefetch.committed = true;
             }
-            prefetch.committed = true;
+            if (!prepared.plan().commitInputs()) {
+                ExecutionStatus failure = prepared.plan().failure();
+                return failure == null ? missingInputStatus() : failure;
+            }
+            committed = true;
+            return null;
+        } finally {
+            if (!committed) releaseStressContributions();
         }
-        if (!prepared.plan().commitInputs()) {
-            ExecutionStatus failure = prepared.plan().failure();
-            return failure == null ? missingInputStatus() : failure;
-        }
-        return null;
     }
 
     private ExecutionStatus missingInputStatus() {
@@ -1351,16 +1418,56 @@ public final class CraftingRuntime {
     }
 
     private PlanningResult planPerTick(CraftingContext context) {
-        List<MachineRequirement> requirements = perTickRequirements();
+        List<MachineRequirement> source = perTickRequirements();
+        List<MachineRequirement> requirements = new ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
         Map<Integer, OutputPolicy> outputPolicies = new LinkedHashMap<>();
-        for (int index = 0; index < requirements.size(); index++) {
-            MachineRequirement requirement = requirements.get(index);
+        for (int index = 0; index < source.size(); index++) {
+            MachineRequirement requirement = source.get(index);
+            if (isStressOutput(requirement)) continue;
+            int originalIndex = cachedPerTickRequirementIndexes.get(index);
+            requirements.add(requirement);
+            indexes.add(originalIndex);
             if (isPerTickOutput(requirement)) {
-                outputPolicies.put(index, activeRecipe.getRecipe().allowPartialOutputs()
+                outputPolicies.put(originalIndex, activeRecipe.getRecipe().allowPartialOutputs()
                         ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
             }
         }
-        return context.planRequirements(requirements, activeRecipe.getParallelism(), outputPolicies);
+        return context.planRequirements(requirements, activeRecipe.getParallelism(), outputPolicies, indexes);
+    }
+
+    private boolean commitStressOutputs(ControllerRuntimeSnapshot runtime) {
+        List<MachineRequirement> source = perTickRequirements();
+        List<MachineRequirement> outputs = new ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
+        for (int index = 0; index < source.size(); index++) {
+            if (!isStressOutput(source.get(index))) continue;
+            outputs.add(source.get(index));
+            indexes.add(cachedPerTickRequirementIndexes.get(index));
+        }
+        if (outputs.isEmpty()) return true;
+        try {
+            PlanningResult result = context(runtime).planRequirements(outputs, activeRecipe.getParallelism(),
+                    Map.of(), indexes);
+            CraftingPlan plan = result.plan();
+            if (!result.successful() || plan == null || plan.parallelism() < activeRecipe.getParallelism()) {
+                waiting(result.failure(), false);
+                return false;
+            }
+            if (!plan.commit()) {
+                waiting(plan.failure(), false);
+                return false;
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            logTickFailure("stress_output_commit", runtime, activeRecipe.getRecipe(), exception);
+            waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
+            return false;
+        }
+    }
+
+    private static boolean isStressOutput(MachineRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT && StressRequirement.TYPE.equals(requirement.type());
     }
 
     private boolean commitAsyncTickPlan(AsyncRequirementPlanner.PlanResult planned,
@@ -1374,18 +1481,18 @@ public final class CraftingRuntime {
             }
             try {
                 if (!plan.commit()) {
-                    waiting(plan.failure());
+                    waiting(plan.failure(), false);
                     return false;
                 }
                 ExecutionStatus prefetchFailure = consumePrefetchedEnergy();
                 if (prefetchFailure != null) {
-                    waiting(prefetchFailure);
+                    waiting(prefetchFailure, false);
                     return false;
                 }
-                return true;
+                return commitStressOutputs(runtime);
             } catch (RuntimeException exception) {
                 logTickFailure("fallback_commit", runtime, activeRecipe.getRecipe(), exception);
-                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
                 return false;
             }
         }
@@ -1393,13 +1500,13 @@ public final class CraftingRuntime {
             try {
                 ExecutionStatus prefetchFailure = consumePrefetchedEnergy();
                 if (prefetchFailure != null) {
-                    waiting(prefetchFailure);
+                    waiting(prefetchFailure, false);
                     return false;
                 }
                 return true;
             } catch (RuntimeException exception) {
                 logTickFailure("async_commit", runtime, activeRecipe.getRecipe(), exception);
-                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
                 return false;
             }
         }
@@ -1410,25 +1517,25 @@ public final class CraftingRuntime {
             for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
                 if (operation.capabilityIndex() >= facets.size()
                         || facets.get(operation.capabilityIndex()) == null) {
-                    waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()));
+                    waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()), false);
                     return false;
                 }
                 CapabilityResult result = facets.get(operation.capabilityIndex()).commit(operation.operation());
                 if (result == null || !result.success()) {
                     waiting(result == null ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of())
-                            : result.status());
+                            : result.status(), false);
                     return false;
                 }
             }
             ExecutionStatus prefetchFailure = consumePrefetchedEnergy();
             if (prefetchFailure != null) {
-                waiting(prefetchFailure);
+                waiting(prefetchFailure, false);
                 return false;
             }
             return true;
         } catch (RuntimeException exception) {
             logTickFailure("async_commit", runtime, activeRecipe.getRecipe(), exception);
-            waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+            waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
             return false;
         }
     }
@@ -1439,6 +1546,7 @@ public final class CraftingRuntime {
             return cachedPerTickRequirements;
         }
         List<MachineRequirement> requirements = new ArrayList<>();
+        List<Integer> indexes = new ArrayList<>();
         List<MachineRequirement> source = effectiveRequirements;
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
@@ -1455,8 +1563,10 @@ public final class CraftingRuntime {
                             chance, tags, components1, 0F);
                 }
                 requirements.add(requirement);
+                indexes.add(index);
             } else if (isPerTickOutput(requirement)) {
                 requirements.add(requirement);
+                indexes.add(index);
             }
         }
         cachedPerTickSource = effectiveRequirements;
@@ -1464,6 +1574,7 @@ public final class CraftingRuntime {
         cachedPerTickRetained = retainedInputs;
         cachedPerTickPrefetches = activePrefetches;
         cachedPerTickRequirements = List.copyOf(requirements);
+        cachedPerTickRequirementIndexes = List.copyOf(indexes);
         return cachedPerTickRequirements;
     }
 
@@ -1482,11 +1593,13 @@ public final class CraftingRuntime {
     private static boolean isPerTickOutput(MachineRequirement requirement) {
         return requirement.io() == RecipeModifier.IOType.OUTPUT
                 && (requirement instanceof EnergyRequirement
+                || StressRequirement.TYPE.equals(requirement.type())
                 || MekanismRecipeTypes.HEAT.equals(requirement.type().id()));
     }
 
     private static boolean isPerTickOutput(MachineOutput output) {
-        return MekanismRecipeTypes.HEAT.equals(output.outputType().id());
+        return MekanismRecipeTypes.HEAT.equals(output.outputType().id())
+                || StressRequirement.TYPE.id().equals(output.outputType().id());
     }
 
     private RecipeBehavior recipeBehavior(ControllerRuntimeSnapshot runtime) {
@@ -1542,27 +1655,18 @@ public final class CraftingRuntime {
     }
 
     private void captureInputState(List<MachineRequirement> requirements, CraftingPlan plan) {
-        captureInputState(requirements, plan, false);
-    }
-
-    private void captureInputState(List<MachineRequirement> requirements, CraftingPlan plan, boolean prefetchesEnergy) {
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
-        int planIndex = 0;
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            boolean prefetchedEnergy = prefetchesEnergy && requirement instanceof EnergyRequirement
-                    && requirement.io() == RecipeModifier.IOType.INPUT;
             if (!(ItemRequirement.TYPE.equals(requirement.type())
                     || FluidRequirement.TYPE.equals(requirement.type())
                     || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) {
-                if (!prefetchedEnergy) planIndex++;
                 continue;
             }
-            if (plan.hasOperations(planIndex)) consumed.add(index);
+            if (plan.hasOperations(index)) consumed.add(index);
             else retained.add(index);
-            planIndex++;
         }
         consumedAtStart = Set.copyOf(consumed);
         retainedInputs = Set.copyOf(retained);

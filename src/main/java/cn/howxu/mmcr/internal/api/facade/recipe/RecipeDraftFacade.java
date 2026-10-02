@@ -12,6 +12,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
+import java.util.List;
 
 /** One-state builder delegation. @author howxu <dev@howxu.cn> */
 final class RecipeDraftFacade implements RecipeDraft {
@@ -32,6 +33,10 @@ final class RecipeDraftFacade implements RecipeDraft {
     public RecipeDraft inputFluid(Fluid fluid, int amount) { delegate.inputFluid(fluid, amount); return this; }
     public RecipeDraft inputFluid(Fluid fluid, int amount, float consumeChance) { delegate.inputFluid(fluid, amount, consumeChance); return this; }
     public RecipeDraft outputFluid(Fluid fluid, int amount) { delegate.outputFluid(fluid, amount); return this; }
+    public RecipeDraft inputStress(double stress, double minRpm) { delegate.inputStress(stress, minRpm); return this; }
+    public RecipeDraft inputStress(double stress, double minRpm, List<String> tags) { delegate.inputStress(stress, minRpm, tags); return this; }
+    public RecipeDraft outputStress(double stress, double rpm) { delegate.outputStress(stress, rpm); return this; }
+    public RecipeDraft outputStress(double stress, double rpm, List<String> tags) { delegate.outputStress(stress, rpm, tags); return this; }
     public RecipeDraft inputEnergy(long rate) { delegate.inputEnergy(rate); return this; }
     public RecipeDraft outputEnergy(long rate) { delegate.outputEnergy(rate); return this; }
     public RecipeDraft iFEt(long rate) { delegate.iFEt(rate); return this; }

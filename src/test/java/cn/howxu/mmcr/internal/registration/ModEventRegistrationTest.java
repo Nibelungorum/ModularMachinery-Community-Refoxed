@@ -232,7 +232,7 @@ class ModEventRegistrationTest {
             assertThat(block).isInstanceOf(IOPortBlock.class);
             assertThat(((IOPortBlock) block).kind().id()).isEqualTo(id);
 
-            IOPortBlockEntity entity = kind.entityFactory().create(BlockPos.ZERO, block.defaultBlockState());
+            IOPortBlockEntity entity = (IOPortBlockEntity) kind.entityFactory().create(BlockPos.ZERO, block.defaultBlockState());
             assertThat(entity.kind().id()).isEqualTo(id);
             assertThat(ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, block.defaultBlockState()))
                     .isInstanceOf(IOPortBlockEntity.class);

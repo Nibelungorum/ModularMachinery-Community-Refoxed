@@ -2159,7 +2159,7 @@ class RequirementPlannerTest {
     private static IOPortBlockEntity port(String id) {
         IOPortKind kind = PortKinds.all().stream().filter(candidate -> candidate.id().equals(id)).findFirst().orElseThrow();
         BlockState state = ModBlocks.BLOCKS.get(id).get().defaultBlockState();
-        return kind.entityFactory().create(BlockPos.ZERO, state);
+        return (IOPortBlockEntity) kind.entityFactory().create(BlockPos.ZERO, state);
     }
 
 }

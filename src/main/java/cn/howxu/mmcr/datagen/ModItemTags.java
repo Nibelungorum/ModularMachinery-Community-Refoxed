@@ -2,11 +2,11 @@ package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -65,7 +65,7 @@ public final class ModItemTags extends ItemTagsProvider {
                 || block instanceof MachineControllerBlock
                 || block instanceof ParallelControllerBlock
                 || block instanceof FactorySchedulerBlock
-                || block instanceof IOPortBlock);
+                || block instanceof MachinePort);
     }
 
     private static TagKey<Item> itemTag(String path) {

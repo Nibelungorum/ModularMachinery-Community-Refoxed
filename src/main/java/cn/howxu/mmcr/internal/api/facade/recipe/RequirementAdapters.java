@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.publicapi.recipe.component.ComponentConstraints;
 import cn.howxu.mmcr.publicapi.recipe.requirement.*;
@@ -30,6 +31,7 @@ public final class RequirementAdapters {
             case LevelRequirement v -> new LevelView(v);
             case StageRequirement v -> new StageView(v);
             case SmartInterfaceRequirement v -> new SmartView(v);
+            case StressRequirement v -> new StressView(v);
             default -> new View(value);
         };
     }
@@ -73,6 +75,12 @@ public final class RequirementAdapters {
     private static final class EnergyView extends View implements EnergyRequirementSpec {
         EnergyView(EnergyRequirement value) { super(value); }
         public long fePerTick() { return ((EnergyRequirement) delegate).fePerTick(); }
+    }
+    private static final class StressView extends View implements StressRequirementSpec {
+        StressView(StressRequirement value) { super(value); }
+        public double stress() { return ((StressRequirement) delegate).stress(); }
+        public double minRpm() { return ((StressRequirement) delegate).minRpm(); }
+        public double rpm() { return ((StressRequirement) delegate).rpm(); }
     }
     private static final class LevelView extends View implements LevelRequirementSpec {
         LevelView(LevelRequirement value) { super(value); }

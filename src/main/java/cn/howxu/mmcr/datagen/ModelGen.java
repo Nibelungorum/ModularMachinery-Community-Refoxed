@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
+import cn.howxu.mmcr.compat.create.loaded.StressInterfaceAppearance;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -29,8 +30,12 @@ public final class ModelGen extends BlockStateProvider {
     @Override
     protected void registerStatesAndModels() {
         registerModels((block, name) -> {
-                    var model = models().cubeAll(name, textureFor(name));
-                    simpleBlockWithItem(block.get(), model);
+                    if (isCreateStressPort(name)) {
+                        StressInterfaceAppearance.generateModels(this, block.get(), name);
+                    } else {
+                        var model = models().cubeAll(name, textureFor(name));
+                        simpleBlockWithItem(block.get(), model);
+                    }
                 }, (item, name) -> itemModels().basicItem(item.get()));
     }
 
@@ -84,12 +89,17 @@ public final class ModelGen extends BlockStateProvider {
     }
 
     private static boolean shouldGenerateBlockModels(String name, Supplier<? extends Block> block) {
+        if (isCreateStressPort(name)) return true;
         return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && !"smart_interface".equals(name) && !"module_bridge".equals(name)
                 && !(block.get() instanceof MachineControllerBlock)
                 && !(block.get() instanceof DataStorageBlock)
                 && !(block.get() instanceof UpgradeBusBlock)
                 && !(block.get() instanceof NetworkInterfaceBlock);
+    }
+
+    private static boolean isCreateStressPort(String name) {
+        return "create_stress_input_interface".equals(name) || "create_stress_output_interface".equals(name);
     }
 
     @FunctionalInterface

@@ -4,6 +4,14 @@ import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.InterfacePredicates;
 import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.create.CreateBridgeBootstrap;
+import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
+import cn.howxu.mmcr.internal.api.facade.structure.StructureAdapters;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortType;
 import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
@@ -23,6 +31,9 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.RotatedPillarBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -122,6 +133,62 @@ class InterfaceHelpersTest {
         assertFamilyPortsMatch(InterfacePredicates.anyOfFluidOutput(), PortFamilyIds.FLUID, IOType.OUTPUT);
         assertFamilyPortsMatch(InterfacePredicates.anyOfEnergyInput(), PortFamilyIds.ENERGY, IOType.INPUT);
         assertFamilyPortsMatch(InterfacePredicates.anyOfEnergyOutput(), PortFamilyIds.ENERGY, IOType.OUTPUT);
+    }
+
+    @Test
+    void stress_predicates_match_registered_family_and_direction_without_concrete_interface_ids() {
+        CreateBridgeBootstrap.installForTesting(() -> true);
+        try {
+            PortKinds.clearForTesting();
+            PortKinds.register(new StressPortKind("minecraft:stone", IOType.INPUT, IOType.INPUT));
+            PortKinds.register(new StressPortKind("minecraft:dirt", IOType.OUTPUT, IOType.OUTPUT));
+            PortKinds.register(new StressPortKind("minecraft:cobblestone", IOType.INPUT, IOType.OUTPUT));
+            var input = Blocks.STONE.defaultBlockState();
+            var output = Blocks.DIRT.defaultBlockState();
+            var mismatched = Blocks.COBBLESTONE.defaultBlockState();
+
+            assertThat(predicateBlocks(InterfacePredicates.anyOfStressInput())).contains(input.getBlock()).doesNotContain(output.getBlock());
+            assertThat(predicateBlocks(InterfacePredicates.anyOfStressOutput())).contains(output.getBlock()).doesNotContain(input.getBlock());
+            assertThat(predicateBlocks(InterfacePredicates.anyOfStressPorts())).doesNotContain(mismatched.getBlock());
+            assertThat(InterfacePredicates.anyStressInput()).isEqualTo(InterfacePredicates.anyOfStressInput());
+            assertThat(InterfacePredicates.anyStressOutput()).isEqualTo(InterfacePredicates.anyOfStressOutput());
+            assertThat(InterfacePredicates.anyStressPorts()).isEqualTo(InterfacePredicates.anyOfStressPorts());
+            assertThat(predicateBlocks(StructureAdapters.unwrap(BlockConditions.stressInput()))).contains(input.getBlock());
+            assertThat(predicateBlocks(StructureAdapters.unwrap(BlockConditions.stressOutput()))).contains(output.getBlock());
+            assertThat(predicateBlocks(StructureAdapters.unwrap(BlockConditions.stressPorts()))).contains(output.getBlock());
+            assertThat(KubeJSInterfaceHelpers.anyOfStressInput().matches(input)).isTrue();
+            assertThat(KubeJSInterfaceHelpers.anyOfStressInput().matches(output)).isFalse();
+            assertThat(KubeJSInterfaceHelpers.anyOfStressOutput().matches(output)).isTrue();
+            assertThat(KubeJSInterfaceHelpers.anyOfStressPorts().matches(input)).isTrue();
+            assertThat(predicateBlocks(InterfacePredicates.ports())).contains(output.getBlock());
+
+            CreateBridgeBootstrap.installForTesting(() -> false);
+            assertThat(InterfacePredicates.anyOfStressInput().alternatives()).isEmpty();
+            assertThat(InterfacePredicates.anyOfStressOutput().alternatives()).isEmpty();
+            assertThat(KubeJSInterfaceHelpers.anyOfStressPorts().matches(input)).isFalse();
+        } finally {
+            PortKinds.clearForTesting();
+            CreateBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    /** Family predicate fixture with an independently declared binding direction.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record StressPortKind(String id, IOType ioType, IOType bindingDirection) implements IOPortKind {
+        public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() { return (position, state) -> null; }
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(CreateRecipeTypes.STRESS, ioType, 0, List.of()));
+        }
+        public PortDefinition definition() {
+            return PortDefinition.of(ResourceLocation.parse(id),
+                    IOPortKind.binding(new CapabilityType(CreateRecipeTypes.STRESS), bindingDirection, families()));
+        }
+    }
+
+    private static List<Block> predicateBlocks(BlockPredicate predicate) {
+        if (predicate.blockSupplier().isPresent()) return List.of(predicate.blockSupplier().orElseThrow().get());
+        return predicate.alternatives().stream().flatMap(child -> predicateBlocks(child).stream()).toList();
     }
 
     @Test

@@ -69,6 +69,7 @@ import cn.howxu.mmcr.internal.network.MachineReferenceHasher;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
@@ -731,7 +732,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 && current.configuredMachine() == null
                 && m != null;
         if (m == null) runtime.clearAllText();
-        if (!bindingRestoredMachine) stopFactoryController();
+        if (!bindingRestoredMachine) {
+            releaseStressContributions();
+            stopFactoryController();
+        }
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
         runtime.setModifiersAllowed(allowsModifiers(m));
@@ -2972,6 +2976,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                   Direction facing, Set<BlockPos> previousLinkedPortPositions,
                                    Map<String, List<MachineModifier>> foundModifiers,
                                   Map<ResourceLocation, MachineLevel> foundLevels) {
+        releaseStressContributions();
         List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
         for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
         unbindUpgradeBuses();
@@ -3083,6 +3088,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             if (tile instanceof IOPortBlockEntity port) {
                 port.linkControllerAppearanceSource(getBlockPos(), formedTexture);
+                nextLinkedPortPositions.add(worldPos.immutable());
+            }
+            if (tile instanceof MachinePort port) {
+                port.onMachineFormed(getBlockPos());
                 nextLinkedPortPositions.add(worldPos.immutable());
             }
             var component = tile.provideComponent();
@@ -3216,12 +3225,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 if (entity instanceof LinkedAppearanceBlockEntity linkedAppearance) {
                     linkedAppearance.unlinkControllerAppearance(getBlockPos());
                 }
+                if (entity instanceof MachinePort port) port.onMachineUnformed(getBlockPos());
             }
         }
         for (BlockPos portPos : linkedPortPositions) {
-            if (level.getBlockEntity(portPos) instanceof LinkedAppearanceBlockEntity linkedAppearance) {
+            BlockEntity entity = level.getBlockEntity(portPos);
+            if (entity instanceof LinkedAppearanceBlockEntity linkedAppearance) {
                 linkedAppearance.unlinkControllerAppearance(getBlockPos());
             }
+            if (entity instanceof MachinePort port) port.onMachineUnformed(getBlockPos());
         }
         runtime.publishComponentState(runtime.components(), current.foundModifiers(), current.foundLevels(), Set.of());
     }
@@ -3234,12 +3246,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 if (entity instanceof LinkedAppearanceBlockEntity linkedAppearance) {
                     linkedAppearance.unlinkControllerAppearance(getBlockPos());
                 }
+                if (entity instanceof MachinePort port) port.onMachineUnformed(getBlockPos());
             }
         }
         for (BlockPos portPos : linkedPortPositions) {
-            if (level.getBlockEntity(portPos) instanceof LinkedAppearanceBlockEntity linkedAppearance) {
+            BlockEntity entity = level.getBlockEntity(portPos);
+            if (entity instanceof LinkedAppearanceBlockEntity linkedAppearance) {
                 linkedAppearance.unlinkControllerAppearance(getBlockPos());
             }
+            if (entity instanceof MachinePort port) port.onMachineUnformed(getBlockPos());
         }
     }
 
@@ -3270,7 +3285,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 : MachinePatternCompiler.positionsExcludingNetworkInterfaces(rotatedPattern);
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
+            if (!(level.getBlockEntity(worldPos) instanceof MachinePort port)) continue;
             IOPortKind kind = port.kind();
             counts.merge(kind.id(), 1, Integer::sum);
             Set<String> countedAliases = new HashSet<>();
@@ -3296,7 +3311,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<IOPortKind> kinds = new ArrayList<>();
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port) {
+            if (level.getBlockEntity(worldPos) instanceof MachinePort port) {
                 kinds.add(port.kind());
             }
         }
@@ -3481,6 +3496,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void pauseActiveForUnloadedStructure() {
+        releaseStressContributions();
         stopFactoryController();
         if (!runtime.craftingRuntime().active()) {
             syncRuntimeStateIfChanged();
@@ -3539,6 +3555,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
+        releaseStressContributions();
         if (level instanceof ServerLevel serverLevel) {
             invalidateAsyncLifecycle(serverLevel);
         }
@@ -3629,6 +3646,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void stopFactoryController() {
         runtime.factoryRuntime().clear();
+    }
+
+    private void releaseStressContributions() {
+        runtime.craftingRuntime().releaseStressContributions();
+        runtime.factoryRuntime().releaseStressContributions();
     }
 
     private void syncOpenFactoryControllerMenus() {
@@ -4221,6 +4243,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void setRemoved() {
+        if (level != null && !level.isClientSide()) releaseStressContributions();
         stateReceivers.clear();
         clientStateBaseline = false;
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
@@ -4237,6 +4260,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void onChunkUnloaded() {
+        if (level != null && !level.isClientSide()) releaseStressContributions();
         stateReceivers.clear();
         clientStateBaseline = false;
         if (level != null && level.isClientSide()) clientRemovedListener.accept(this);

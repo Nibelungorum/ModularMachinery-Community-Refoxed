@@ -3,7 +3,7 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
@@ -189,7 +189,7 @@ public final class MachinePatternCompiler {
 
     private static boolean couldBeComponent(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock
+            case BlockPredicate.OfBlock of -> of.block() instanceof MachinePort
                     && !isNetworkInterfaceBlock(of.block())
                     || of.block() instanceof ParallelControllerBlock
                     || of.block() instanceof FactorySchedulerBlock
@@ -214,7 +214,7 @@ public final class MachinePatternCompiler {
 
     private static boolean couldBePort(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block() instanceof IOPortBlock && !isNetworkInterfaceBlock(of.block());
+            case BlockPredicate.OfBlock of -> of.block() instanceof MachinePort && !isNetworkInterfaceBlock(of.block());
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
             case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
             case BlockPredicate.AnyOf anyOf -> !couldBeNetworkInterface(anyOf);

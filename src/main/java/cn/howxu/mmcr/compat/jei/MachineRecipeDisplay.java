@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -192,6 +193,27 @@ public record MachineRecipeDisplay(
                 .findFirst();
     }
 
+    public List<StressDisplay> stressInputs() { return stressDisplays(IOType.INPUT); }
+
+    public List<StressDisplay> stressOutputs() { return stressDisplays(IOType.OUTPUT); }
+
+    private List<StressDisplay> stressDisplays(IOType io) {
+        return recipe.runtimeRequirements().stream()
+                .filter(StressRequirement.class::isInstance)
+                .map(StressRequirement.class::cast)
+                .filter(requirement -> requirement.io() == io)
+                .map(requirement -> new StressDisplay(requirement.stress(), requirement.minRpm(),
+                        requirement.rpm(), requirement.tags()))
+                .toList();
+    }
+
+    /** Typed stress data reserved for future presentation; no ingredient slots are allocated.
+     * @author howxu <dev@howxu.cn>
+     */
+    public record StressDisplay(double baseStress, double minRpm, double rpm, List<String> tags) {
+        public StressDisplay { tags = List.copyOf(tags); }
+    }
+
     public static Component minimumTemperatureLabel(double kelvin) {
         var unit = MekanismTemperatureDisplay.configuredUnit();
         return Component.translatable("jei.mmcr.machine_recipe.mekanism_temperature",
@@ -215,7 +237,8 @@ public record MachineRecipeDisplay(
                         && !(requirement instanceof LoadedHeatRequirement)
                         && !(requirement instanceof SmartInterfaceRequirement)
                         && !(requirement instanceof LevelRequirement)
-                        && !(requirement instanceof StageRequirement))
+                        && !(requirement instanceof StageRequirement)
+                        && !(requirement instanceof StressRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.registry;
 
+import cn.howxu.mmcr.compat.create.CreateBridge;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -475,6 +477,7 @@ public final class PortKinds {
         }
         defaults.addAll(AE2Bridge.get().portKinds());
         defaults.addAll(AppliedFluxBridge.get().portKinds());
+        defaults.addAll(CreateBridge.get().portKinds());
         for (MekanismBridge.PortDeclaration declaration : MekanismBridge.get().portDeclarations()) {
             if (declaration.type() == MekanismBridge.PortType.CHEMICAL) {
                 defaults.add(new ChemicalKind(declaration.id(), declaration.ioType(), declaration.tier(),

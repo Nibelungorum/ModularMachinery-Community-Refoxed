@@ -39,6 +39,12 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfHeatInput() { return convert(InterfacePredicates.anyOfHeatInput()); }
     public static BlockPredicate anyOfHeatOutput() { return convert(InterfacePredicates.anyOfHeatOutput()); }
     public static BlockPredicate anyOfHeatPorts() { return convert(InterfacePredicates.anyOfHeatPorts()); }
+    public static BlockPredicate anyOfStressInput() { return convert(InterfacePredicates.anyOfStressInput()); }
+    public static BlockPredicate anyOfStressOutput() { return convert(InterfacePredicates.anyOfStressOutput()); }
+    public static BlockPredicate anyOfStressPorts() { return convert(InterfacePredicates.anyOfStressPorts()); }
+    public static BlockPredicate anyStressInput() { return anyOfStressInput(); }
+    public static BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
+    public static BlockPredicate anyStressPorts() { return anyOfStressPorts(); }
     public static BlockPredicate anyOfUpgradeBus() { return convert(InterfacePredicates.anyOfUpgradeBus()); }
 
     public static BlockPredicate anyOfPort(String... ids) {

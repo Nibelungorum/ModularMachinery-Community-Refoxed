@@ -213,6 +213,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         generatedPortRecipes();
         ae2InterfaceRecipes();
         appliedFluxInterfaceRecipes();
+        createStressInterfaceRecipes();
         mekanismPortsRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
@@ -617,6 +618,29 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('A', ModBlocks.BASIC_CASING.get())
                 .define('B', accessor)
                 .save(whenLoaded("ae2", "appflux"));
+    }
+
+    private void createStressInterfaceRecipes() {
+        if (!ModBlocks.BLOCKS.containsKey("create_stress_input_interface")) return;
+        createStressRecipe(output, ModBlocks.BLOCKS.get("create_stress_input_interface").get(),
+                externalItem("create", "encased_chain_drive"), ModBlocks.BASIC_CASING.get(),
+                ModItems.MODULARIUM.get(), false);
+        createStressRecipe(output, ModBlocks.BLOCKS.get("create_stress_output_interface").get(),
+                externalItem("create", "encased_chain_drive"), ModBlocks.BASIC_CASING.get(),
+                ModItems.MODULARIUM.get(), true);
+    }
+
+    static void createStressRecipe(RecipeOutput output, ItemLike result, ItemLike chainDrive,
+                                  ItemLike casing, ItemLike modularium, boolean reverse) {
+        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, result, 1)
+                .pattern(reverse ? "C" : "A")
+                .pattern("B")
+                .pattern(reverse ? "A" : "C")
+                .define('A', chainDrive)
+                .define('B', casing)
+                .define('C', modularium)
+                .unlockedBy(getHasName(casing), has(casing))
+                .save(output.withConditions(new ModLoadedCondition("create")));
     }
 
     private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {

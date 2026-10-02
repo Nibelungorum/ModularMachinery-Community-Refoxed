@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.publicapi.event.RegisterControllerRenderersEvent;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
 import cn.howxu.mmcr.client.gui.ExtendedCombinedScreen;
@@ -42,6 +43,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -70,6 +72,7 @@ public class Client {
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerMachineRenderers);
+        modBus.addListener(Client::registerCreateVisuals);
         // modBus.addListener(ArtificialStarRenderer::registerModel);
         modBus.addListener(Client::registerRuntimeResourcePack);
         modBus.addListener(Client::registerPreviewReloadListener);
@@ -167,6 +170,7 @@ public class Client {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void registerMachineRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        invokeCreateClientRegistration("registerRenderers", EntityRenderersEvent.RegisterRenderers.class, event);
         RegisterControllerRenderersEvent registrations = new RegisterControllerRenderersEvent(
                 ModBlockEntities.controllerMachineIds());
         NeoForge.EVENT_BUS.post(registrations);
@@ -178,6 +182,20 @@ public class Client {
                         (BlockEntityType) ModBlockEntities.controllerFor(machineId).get(),
                         provider);
         });
+    }
+
+    private static void registerCreateVisuals(FMLClientSetupEvent event) {
+        invokeCreateClientRegistration("registerVisuals", FMLClientSetupEvent.class, event);
+    }
+
+    private static void invokeCreateClientRegistration(String method, Class<?> eventType, Object event) {
+        if (!CreateBridge.get().available()) return;
+        try {
+            Class.forName("cn.howxu.mmcr.compat.create.loaded.CreateClientRegistration")
+                    .getMethod(method, eventType).invoke(null, event);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unable to register Create client rendering", exception);
+        }
     }
 
     private static void registerRuntimeResourcePack(AddPackFindersEvent event) {
