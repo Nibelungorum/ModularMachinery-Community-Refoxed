@@ -3,6 +3,10 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -180,6 +184,53 @@ class PortTierRequirementSpecTest {
                 .filter(kind -> kind.id().equals(id))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    @Test
+    void source_input_requires_its_family_and_direction_and_reports_absence() {
+        var spec = PortTierRequirementSpec.from(PortTiers.builder().anySourceInput().build());
+        assertThat(spec.validate(List.of(sourceKind(IOType.INPUT)))).isEmpty();
+        assertThat(spec.validate(List.of(sourceKind(IOType.OUTPUT), kind("energy_input_hatch_ultimate"))))
+                .hasValueSatisfying(failure -> {
+                    assertThat(failure.requirement().id()).isEqualTo("source_input_interface>=normal");
+                    assertThat(failure.actualPortIds()).isEmpty();
+                });
+        assertThat(spec.validate(List.of())).hasValueSatisfying(failure ->
+                assertThat(failure.requirement().category()).isEqualTo(PortTierRequirementSpec.PortCategory.SOURCE));
+        var output = PortTierRequirementSpec.builder().anySourceOutput().build();
+        assertThat(output.validate(List.of(sourceKind(IOType.OUTPUT)))).isEmpty();
+        assertThat(output.validate(List.of(sourceKind(IOType.INPUT)))).isPresent();
+    }
+
+    @Test
+    void source_tier_is_fixed_at_normal_in_both_declaration_layers() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTiers.Requirement(
+                PortTiers.PortCategory.SOURCE, IOType.INPUT, 1, "normal"));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTiers.Requirement(
+                PortTiers.PortCategory.SOURCE, IOType.INPUT, 0, "tiny"));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.SOURCE, IOType.OUTPUT, 1, "normal"));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.SOURCE, IOType.OUTPUT, 0, "tiny"));
+    }
+
+    private static IOPortKind sourceKind(IOType direction) { return new SourceKind(direction); }
+
+    /** Neutral family declaration avoids loading the unfinished Ars port implementation.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record SourceKind(IOType ioType) implements IOPortKind {
+        public String id() { return "source_" + ioType.getSerializedName() + "_interface"; }
+        public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            return PortKinds.ITEM_INPUT.entityFactory();
+        }
+        public List<PortFamilyDescriptor> families() {
+            return List.of(new PortFamilyDescriptor(ArsSourceIds.SOURCE, ioType, 0, List.of(id())));
+        }
+        public PortDefinition definition() {
+            return PortDefinition.of(MMCR.id(id()), List.of(IOPortKind.binding(
+                    new CapabilityType(ArsSourceIds.SOURCE), ioType, families())));
+        }
     }
 
     private static IOPortKind combinedKind(List<PortFamilyDescriptor> families) {

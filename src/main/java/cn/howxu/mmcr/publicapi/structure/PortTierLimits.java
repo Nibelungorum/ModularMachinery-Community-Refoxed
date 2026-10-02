@@ -13,7 +13,7 @@ public interface PortTierLimits {
     /** Independently tiered port families.
      * @author howxu <dev@howxu.cn>
      */
-    enum PortCategory { ITEM, FLUID, ENERGY }
+    enum PortCategory { ITEM, FLUID, ENERGY, SOURCE }
     /** Item bus tiers.
      * @author howxu <dev@howxu.cn>
      */
@@ -84,6 +84,8 @@ public interface PortTierLimits {
         Builder anyFluidOutput();
         Builder anyEnergyInput();
         Builder anyEnergyOutput();
+        Builder anySourceInput();
+        Builder anySourceOutput();
         Builder minItemInput(ItemTier tier);
         Builder minItemOutput(ItemTier tier);
         Builder minFluidInput(FluidTier tier);

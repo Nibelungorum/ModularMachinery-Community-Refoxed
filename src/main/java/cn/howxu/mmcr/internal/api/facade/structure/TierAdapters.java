@@ -114,6 +114,8 @@ public final class TierAdapters {
         public PortTierLimits.Builder anyFluidOutput() { value.anyFluidOutput(); return this; }
         public PortTierLimits.Builder anyEnergyInput() { value.anyEnergyInput(); return this; }
         public PortTierLimits.Builder anyEnergyOutput() { value.anyEnergyOutput(); return this; }
+        public PortTierLimits.Builder anySourceInput() { value.anySourceInput(); return this; }
+        public PortTierLimits.Builder anySourceOutput() { value.anySourceOutput(); return this; }
         public PortTierLimits.Builder minItemInput(PortTierLimits.ItemTier tier) { value.minItemInput(toCore(tier)); return this; }
         public PortTierLimits.Builder minItemOutput(PortTierLimits.ItemTier tier) { value.minItemOutput(toCore(tier)); return this; }
         public PortTierLimits.Builder minFluidInput(PortTierLimits.FluidTier tier) { value.minFluidInput(toCore(tier)); return this; }
@@ -145,6 +147,7 @@ public final class TierAdapters {
                 case ITEM -> PortTierLimits.PortCategory.ITEM;
                 case FLUID -> PortTierLimits.PortCategory.FLUID;
                 case ENERGY -> PortTierLimits.PortCategory.ENERGY;
+                case SOURCE -> PortTierLimits.PortCategory.SOURCE;
             };
         }
         public IoDirection ioType() { return toPublic(value.ioType()); }

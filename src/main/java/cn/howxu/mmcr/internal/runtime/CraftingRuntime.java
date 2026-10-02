@@ -45,6 +45,7 @@ import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -956,7 +957,8 @@ public final class CraftingRuntime {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
+                    || LoadedChemicalRequirement.TYPE.equals(requirement.type())
+                    || SourceRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
@@ -1555,7 +1557,8 @@ public final class CraftingRuntime {
                     && requirement.io() == RecipeModifier.IOType.INPUT;
             if (!(ItemRequirement.TYPE.equals(requirement.type())
                     || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
+                    || LoadedChemicalRequirement.TYPE.equals(requirement.type())
+                    || SourceRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) {
                 if (!prefetchedEnergy) planIndex++;
                 continue;

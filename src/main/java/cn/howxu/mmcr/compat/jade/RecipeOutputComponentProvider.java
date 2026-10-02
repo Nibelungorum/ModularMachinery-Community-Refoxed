@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.util.ReadableNumber;
 import mekanism.api.MekanismAPI;
@@ -65,10 +66,13 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
             if (owned instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, amount);
             else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
             else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
+            else if (owned instanceof SourceOutput) tooltip.add(Component.translatable(
+                    "gui.mmcr.source.exact", ReadableNumber.formatExact(amount)));
         }
     }
 
     private static boolean isRenderable(MachineOutput output, long amount) {
+        if (output instanceof SourceOutput) return amount > 0L;
         if (output instanceof MachineOutput.ItemOutput item) {
             return !item.stack().isEmpty() && amount > 0L;
         }

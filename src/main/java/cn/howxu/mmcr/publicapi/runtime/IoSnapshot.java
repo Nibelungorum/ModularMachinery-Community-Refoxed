@@ -28,6 +28,8 @@ public interface IoSnapshot {
     List<HeatState> heatInputs();
     List<HeatState> heatOutputs();
     long energyInput();
+    long sourceInput();
+    long sourceOutputCapacity();
     long itemAmount(Ingredient ingredient);
     long fluidAmount(FluidIngredient ingredient);
     long itemOutputCapacity(ItemStack stack);

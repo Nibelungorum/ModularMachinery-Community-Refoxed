@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -186,6 +188,9 @@ public final class KubeJSApi {
     public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
     public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
     public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate anyOfSourceInput() { return KubeJSInterfaceHelpers.anyOfSourceInput(); }
+    public BlockPredicate anyOfSourceOutput() { return KubeJSInterfaceHelpers.anyOfSourceOutput(); }
+    public BlockPredicate anyOfSourcePorts() { return KubeJSInterfaceHelpers.anyOfSourcePorts(); }
     public BlockPredicate anyOfItemPorts() { return KubeJSInterfaceHelpers.anyOfItemPorts(); }
     public BlockPredicate anyOfFluidPorts() { return KubeJSInterfaceHelpers.anyOfFluidPorts(); }
     public BlockPredicate anyOfEnergyPorts() { return KubeJSInterfaceHelpers.anyOfEnergyPorts(); }
@@ -337,6 +342,14 @@ public final class KubeJSApi {
     public CustomRecipeIo heatOutput(double heat) {
         return customRecipeIo(MekanismPortFamilies.HEAT.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.heatOutputPayload(heat));
+    }
+
+    public CustomRecipeIo sourceInput(long amount) {
+        return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.INPUT, SourceRecipeDeclarations.inputPayload(amount));
+    }
+
+    public CustomRecipeIo sourceOutput(long amount) {
+        return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount));
     }
 
     public EnergyRequirement energyRequirement(IOType io, long fePerTick) {
@@ -573,6 +586,7 @@ public final class KubeJSApi {
             case "item" -> PortTierRequirementSpec.PortCategory.ITEM;
             case "fluid" -> PortTierRequirementSpec.PortCategory.FLUID;
             case "energy" -> PortTierRequirementSpec.PortCategory.ENERGY;
+            case "source" -> PortTierRequirementSpec.PortCategory.SOURCE;
             default -> throw new IllegalArgumentException("Unknown port category: " + categoryName);
         };
         var io = switch (ioName) {
@@ -580,9 +594,12 @@ public final class KubeJSApi {
             case "output" -> cn.howxu.mmcr.util.IOType.OUTPUT;
             default -> throw new IllegalArgumentException("Unknown port IO: " + ioName);
         };
-        String expectedFamily = category == PortTierRequirementSpec.PortCategory.ITEM ? "bus" : "hatch";
+        String expectedFamily = category == PortTierRequirementSpec.PortCategory.SOURCE ? "interface"
+                : category == PortTierRequirementSpec.PortCategory.ITEM ? "bus" : "hatch";
         if (!port[2].equals(expectedFamily)) throw new IllegalArgumentException("Invalid port family: " + parts[0]);
-        String[] tiers = category == PortTierRequirementSpec.PortCategory.FLUID
+        String[] tiers = category == PortTierRequirementSpec.PortCategory.SOURCE
+                ? new String[] {"normal"}
+                : category == PortTierRequirementSpec.PortCategory.FLUID
                 ? new String[] {"tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "vacuum"}
                 : category == PortTierRequirementSpec.PortCategory.ENERGY
                 ? new String[] {"tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "ultimate"}

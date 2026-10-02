@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.publicapi.event.RegisterControllerRenderersEvent;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
 import cn.howxu.mmcr.client.gui.ExtendedCombinedScreen;
@@ -135,6 +136,10 @@ public class Client {
                     "cn.howxu.mmcr.client.gui.ChemicalHatchScreen");
             registerOptionalMenuScreen(event, ModUIs.HEAT_PORT,
                     "cn.howxu.mmcr.client.gui.HeatHatchScreen");
+        }
+        if (ArsNouveauBridge.get().available()) {
+            registerOptionalMenuScreen(event, ModUIs.SOURCE_PORT,
+                    "cn.howxu.mmcr.client.gui.SourceHatchScreen");
         }
     }
 

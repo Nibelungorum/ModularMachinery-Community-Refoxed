@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.HeatViewFacet;
+import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
@@ -189,6 +190,26 @@ public final class MachineIoView {
 
     public List<HeatState> heatOutputs() {
         return heatStates(IOType.OUTPUT);
+    }
+
+    public long sourceInput() {
+        return sourceValue(IOType.INPUT, false);
+    }
+
+    public long sourceOutputCapacity() {
+        return sourceValue(IOType.OUTPUT, true);
+    }
+
+    private long sourceValue(IOType direction, boolean freeCapacity) {
+        long total = 0L;
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (MachineCapability capability : capabilities(direction)) {
+            SourceViewFacet source = capability.facet(SourceViewFacet.class).orElse(null);
+            if (source == null || !seen.add(source.queryIdentity())) continue;
+            long value = freeCapacity ? Math.max(0L, source.capacity() - source.amount()) : source.amount();
+            total = saturatedAdd(total, value);
+        }
+        return total;
     }
 
     public long energyInput() {

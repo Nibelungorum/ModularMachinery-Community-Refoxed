@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -72,11 +74,14 @@ public final class ModUIs {
 
     public static final DeferredHolder<MenuType<?>, ?> CHEMICAL_PORT;
     public static final DeferredHolder<MenuType<?>, ?> HEAT_PORT;
+    public static final DeferredHolder<MenuType<?>, ?> SOURCE_PORT;
 
     static {
         MekanismBridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
+        ArsNouveauBridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
         CHEMICAL_PORT = OPTIONAL_MENUS.get("chemical_port");
         HEAT_PORT = OPTIONAL_MENUS.get("heat_port");
+        SOURCE_PORT = OPTIONAL_MENUS.get(ArsSourceIds.MENU);
     }
 
     public static void register(IEventBus bus) {

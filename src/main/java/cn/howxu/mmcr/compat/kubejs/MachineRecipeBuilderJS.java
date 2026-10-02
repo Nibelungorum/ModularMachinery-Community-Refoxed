@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
@@ -157,6 +159,14 @@ public class MachineRecipeBuilderJS {
      */
     public MachineRecipeBuilderJS custom(String typeId, IOType io, JsonElement payload) {
         return addRequirement(new CustomRecipeIo(ResourceLocation.parse(typeId), io, payload));
+    }
+
+    public MachineRecipeBuilderJS inputSource(long amount) {
+        return custom(ArsSourceIds.SOURCE.toString(), IOType.INPUT, SourceRecipeDeclarations.inputPayload(amount));
+    }
+
+    public MachineRecipeBuilderJS outputSource(long amount) {
+        return custom(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount));
     }
 
     public MachineRecipeBuilderJS priority(int priority) {

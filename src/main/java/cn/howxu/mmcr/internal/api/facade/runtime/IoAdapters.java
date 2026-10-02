@@ -53,6 +53,8 @@ public final class IoAdapters {
         public List<HeatState> heatInputs() { return delegate.heatInputs().stream().map(v -> new HeatState(v.heat(), v.temperature(), v.heatCapacity())).toList(); }
         public List<HeatState> heatOutputs() { return delegate.heatOutputs().stream().map(v -> new HeatState(v.heat(), v.temperature(), v.heatCapacity())).toList(); }
         public long energyInput() { return delegate.energyInput(); }
+        public long sourceInput() { return delegate.sourceInput(); }
+        public long sourceOutputCapacity() { return delegate.sourceOutputCapacity(); }
         public long itemAmount(Ingredient ingredient) { return delegate.itemAmount(ingredient); }
         public long fluidAmount(FluidIngredient ingredient) { return delegate.fluidAmount(ingredient); }
         public long itemOutputCapacity(ItemStack stack) { return delegate.itemOutputCapacity(stack); }

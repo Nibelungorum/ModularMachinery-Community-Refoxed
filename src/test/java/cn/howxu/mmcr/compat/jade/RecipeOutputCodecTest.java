@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import com.google.gson.JsonPrimitive;
@@ -89,5 +91,23 @@ class RecipeOutputCodecTest {
     @Test
     void missingKeyReadsAsEmpty() {
         assertThat(RecipeOutputCodec.read(new CompoundTag())).isEmpty();
+    }
+
+    @Test
+    void roundTripsSourceTemplateAndParallelLongTotalThroughTheGenericOutputCodec() {
+        try (var outputScope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(SourceOutput.TYPE);
+            SourceOutput source = new SourceOutput(3_000_000_001L);
+            CompoundTag data = new CompoundTag();
+
+            RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(source, Long.MAX_VALUE)));
+            List<MachineOutputAmount> decoded = RecipeOutputCodec.read(data);
+
+            assertThat(decoded).singleElement().satisfies(output -> {
+                assertThat(output.output()).isEqualTo(source);
+                assertThat(output.amount()).isEqualTo(Long.MAX_VALUE);
+                assertThat(output.output().chance()).isEqualTo(1F);
+            });
+        }
     }
 }

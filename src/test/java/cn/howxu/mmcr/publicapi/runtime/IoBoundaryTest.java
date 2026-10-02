@@ -2,6 +2,14 @@ package cn.howxu.mmcr.publicapi.runtime;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -180,5 +188,65 @@ class IoBoundaryTest {
         assertEquals(FailurePhase.CAPABILITY_COMMIT, failure.trace().getLast().phase());
         assertNull(failure.trace().getLast().requirementIndex());
         assertThrows(UnsupportedOperationException.class, () -> failure.trace().clear());
+    }
+
+    @Test
+    void source_queries_deduplicate_physical_views_filter_tags_and_stay_independent_of_fe() {
+        long[] shared = {30L, 100L};
+        var input = new SourceView(shared, shared, IOType.INPUT, List.of("arcane"));
+        var duplicate = new SourceView(shared, shared, IOType.INPUT, List.of("arcane", "duplicate"));
+        var output = new SourceView(shared, shared, IOType.OUTPUT, List.of("arcane"));
+        var duplicateOutput = new SourceView(shared, shared, IOType.OUTPUT, List.of("arcane"));
+        var other = new SourceView(new Object(), new long[]{7L, 10L}, IOType.INPUT, List.of("other"));
+        var overfull = new SourceView(new Object(), new long[]{20L, 10L}, IOType.OUTPUT, List.of("other"));
+        var energy = new LongEnergyStorage(100, 100, null);
+        energy.setAmount(11L);
+        IoSnapshot snapshot = IoAdapters.wrap(new MachineIoView(new CapabilitySnapshot(List.of(
+                input, duplicate, output, duplicateOutput, other, overfull,
+                new EnergyHatchCapability(energy, IOType.INPUT), new EnergyHatchCapability(energy, IOType.OUTPUT)))));
+
+        assertEquals(37L, snapshot.sourceInput());
+        assertEquals(70L, snapshot.sourceOutputCapacity());
+        assertEquals(11L, snapshot.energyInput());
+        assertEquals(89L, snapshot.energyOutputCapacity());
+        assertEquals(30L, snapshot.forTags(Set.of("arcane")).sourceInput());
+        assertEquals(30L, snapshot.forTags(Set.of("arcane", "duplicate")).sourceInput());
+        assertEquals(70L, snapshot.forTags(Set.of("arcane")).sourceOutputCapacity());
+        assertEquals(0L, snapshot.forTags(Set.of("missing")).sourceInput());
+        assertEquals(0L, snapshot.forTags(Set.of("arcane")).energyInput());
+        shared[0] = 50L;
+        assertEquals(57L, snapshot.sourceInput());
+        assertEquals(50L, snapshot.sourceOutputCapacity());
+        assertEquals(11L, snapshot.energyInput());
+    }
+
+    @Test
+    void source_identity_uses_reference_equality_and_aggregates_saturate() {
+        Object firstIdentity = new String("same");
+        Object secondIdentity = new String("same");
+        var core = new MachineIoView(new CapabilitySnapshot(List.of(
+                new SourceView(firstIdentity, new long[]{Long.MAX_VALUE - 5L, Long.MAX_VALUE}, IOType.INPUT, List.of()),
+                new SourceView(secondIdentity, new long[]{10L, Long.MAX_VALUE}, IOType.INPUT, List.of()),
+                new SourceView(firstIdentity, new long[]{0L, Long.MAX_VALUE - 5L}, IOType.OUTPUT, List.of()),
+                new SourceView(secondIdentity, new long[]{0L, 10L}, IOType.OUTPUT, List.of()))));
+        assertEquals(Long.MAX_VALUE, core.sourceInput());
+        assertEquals(Long.MAX_VALUE, IoAdapters.wrap(core).sourceOutputCapacity());
+        assertEquals(0L, core.energyInput());
+        assertEquals(0L, core.energyOutputCapacity());
+    }
+
+    /** Neutral read-only source view; deliberately exposes no FE value facet.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record SourceView(Object queryIdentity, long[] storage, IOType direction, List<String> tags)
+            implements MachineCapability, CapabilityView, SourceViewFacet {
+        public CapabilityType type() { return new CapabilityType(ArsSourceIds.SOURCE); }
+        public CapabilityDirections directions() { return CapabilityDirections.of(direction); }
+        public IOType ioType() { return direction; }
+        public CapabilityView view() { return this; }
+        public Set<Class<? extends CapabilityFacet>> facets() { return Set.of(SourceViewFacet.class); }
+        public long amount() { return storage[0]; }
+        public long capacity() { return storage[1]; }
+        public CapabilityOperation prepare(CapabilityRequest request) { throw new UnsupportedOperationException(); }
     }
 }

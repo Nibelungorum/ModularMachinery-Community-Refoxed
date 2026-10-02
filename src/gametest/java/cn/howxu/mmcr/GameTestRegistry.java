@@ -3,6 +3,9 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.compat.appmek.AppMekAdapterGameTest;
 import cn.howxu.mmcr.compat.appmek.AppMekInterfaceGameTest;
 import cn.howxu.mmcr.compat.appmek.AppMekPatternGameTest;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceRecipeGameTest;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceTransportGameTest;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
@@ -38,6 +41,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.fml.ModList;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -348,6 +352,14 @@ public final class GameTestRegistry {
                 helper -> new AppliedFluxInterfaceGameTest().fluxCapabilitiesBelongToEnergyFamilyWithoutTransferFacet(helper));
         register(event, "appflux_me_flux_output_interface", 100,
                 helper -> new AppliedFluxInterfaceGameTest().controllerFormsWithFluxPortsAndResolvesEnergyFamily(helper));
+        if (ModList.get().isLoaded("ars_nouveau")) {
+            register(event, "ars_source_wand_native_relays", 20,
+                    helper -> new ArsSourceTransportGameTest().wandMenusAndNativeRelaysRespectDirections(helper));
+            register(event, "ars_source_discovery_restore_reload_menu", 20,
+                    helper -> new ArsSourceTransportGameTest().discoveryRestorationReloadAndMenuUseRealStorage(helper));
+            register(event, "ars_source_recipe_restore_wakeups", 20,
+                    helper -> new ArsSourceRecipeGameTest().recipeLifecycleConsumesOnceAndNativeTransfersWakeSearches(helper));
+        }
         return event;
     }
 
@@ -396,6 +408,11 @@ public final class GameTestRegistry {
             }
             event.registerMachine(definition);
         }
+        if (ModList.get().isLoaded("ars_nouveau")) {
+            event.registerMachine(MachineBuilder.machine(ArsSourceRecipeGameTest.MACHINE_ID)
+                    .displayNameKey("machine.mmcr_test.ars_source_task9")
+                    .maxParallelism(2).parallelizable(true).build());
+        }
     }
 
     public static void registerMachineStructures(RegisterMachineStructuresEvent event) {
@@ -403,6 +420,17 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        if (ModList.get().isLoaded("ars_nouveau")) {
+            event.registerStructure(ArsSourceRecipeGameTest.MACHINE_ID, structure -> {
+                structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("ICO", " P ")
+                        .where('I', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get(ArsSourceIds.INPUT).get()))
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(ArsSourceRecipeGameTest.MACHINE_ID).get()))
+                        .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get(ArsSourceIds.OUTPUT).get()))
+                        .where('P', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("parallel_controller_normal").get()))
+                        .controller('C')));
+                return structure;
+            });
+        }
         ResourceLocation terminalLevelType = MMCR.id("terminal_test_level_type");
         event.registerLevelType(new LevelType(terminalLevelType, Component.literal("Terminal Test Level")));
         event.registerLevel(new MachineLevel(MMCR.id("terminal_test_level"), terminalLevelType, 0,
@@ -552,6 +580,13 @@ public final class GameTestRegistry {
     }
 
     public static void registerRecipes(MachineRecipeRegistration event) {
+        if (ModList.get().isLoaded("ars_nouveau")) {
+            event.registerRecipe(MachineRecipeBuilder.recipe(ArsSourceRecipeGameTest.RECIPE_ID)
+                    .recipePool(ArsSourceRecipeGameTest.MACHINE_ID).duration(3).parallelized(true)
+                    .inputSource(300).outputSource(100).build());
+            event.registerRecipe(MachineRecipeBuilder.recipe(ArsSourceRecipeGameTest.OUTPUT_WAIT_ID)
+                    .recipePool(ArsSourceRecipeGameTest.MACHINE_ID).duration(3).outputSource(200).build());
+        }
         event.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("distillation_test_recipe"))
                         .recipePool(MMCR.id("distillation_tower_test"))
                 .duration(20).inputItem(Items.COAL, 1).outputFluid(Fluids.WATER, 1).build());

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import net.minecraft.client.Minecraft;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.neoforge.NeoForgeTypes;
@@ -21,6 +22,7 @@ public record MachineRecipeLayout(
         int height,
         RegionPlan inputs,
         RegionPlan outputs,
+        List<TextPlan> sourceTextLines,
         int durationTextX,
         int hostRequirementTextY,
         int durationTextY,
@@ -30,6 +32,7 @@ public record MachineRecipeLayout(
 
     public static final int WIDTH = 150;
     public static final int HEIGHT = 150;
+    static final int CATEGORY_WIDTH = 168;
 
     private static final int COLUMNS = 3;
     private static final int SLOT_SIZE = 18;
@@ -47,6 +50,7 @@ public record MachineRecipeLayout(
                 HEIGHT,
                 region(display.entries(), RecipeIngredientRole.INPUT, 12, false, guiScale),
                 region(display.entries(), RecipeIngredientRole.OUTPUT, 102, true, guiScale),
+                sourceTextLines(display, guiScale),
                 8,
                 hostRequirementTextY(display, guiScale),
                 durationTextY(display, guiScale),
@@ -90,7 +94,24 @@ public record MachineRecipeLayout(
     }
 
     private static int durationTextY(MachineRecipeDisplay display, int guiScale) {
-        return baseMetadataTextY(display, guiScale);
+        return baseMetadataTextY(display, guiScale) + sourceTextLines(display, guiScale).size() * TEXT_LINE_SPACING;
+    }
+
+    private static List<TextPlan> sourceTextLines(MachineRecipeDisplay display, int guiScale) {
+        List<TextPlan> lines = new ArrayList<>();
+        int y = baseMetadataTextY(display, guiScale);
+        for (JeiDisplayEntry entry : display.entries().stream()
+                .filter(MachineRecipeLayout::isSourceText)
+                .sorted(Comparator.comparingInt(entry -> entry.role() == RecipeIngredientRole.INPUT ? 0 : 1))
+                .toList()) {
+            lines.add(new TextPlan(entry, 8, y, CATEGORY_WIDTH - 16));
+            y += TEXT_LINE_SPACING;
+        }
+        return List.copyOf(lines);
+    }
+
+    private static boolean isSourceText(JeiDisplayEntry entry) {
+        return entry.isTextOnly() && entry.typeId().equals(ArsSourceIds.SOURCE);
     }
 
     private static int baseMetadataTextY(MachineRecipeDisplay display, int guiScale) {
@@ -105,7 +126,7 @@ public record MachineRecipeLayout(
     }
 
     private static int entryCount(MachineRecipeDisplay display, RecipeIngredientRole role) {
-        return (int) display.entries().stream().filter(entry -> entry.role() == role).count();
+        return (int) display.entries().stream().filter(entry -> entry.role() == role && !isSourceText(entry)).count();
     }
 
     private static RegionPlan region(List<JeiDisplayEntry> displayEntries, RecipeIngredientRole role,
@@ -116,7 +137,7 @@ public record MachineRecipeLayout(
         int chemicalIndex = 0;
         int textIndex = 0;
         for (JeiDisplayEntry entry : displayEntries.stream()
-                .filter(candidate -> candidate.role() == role)
+                .filter(candidate -> candidate.role() == role && !isSourceText(candidate))
                 .sorted(Comparator.comparingInt(MachineRecipeLayout::kindOrder))
                 .toList()) {
             if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
@@ -247,6 +268,17 @@ public record MachineRecipeLayout(
     }
 
     public record SlotPlan(EntryPlan entry, int x, int y) {}
+
+    /**
+     * A reserved, bounded text row with a full-row tooltip hit area.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    public record TextPlan(JeiDisplayEntry entry, int x, int y, int width) {
+        public boolean contains(double mouseX, double mouseY) {
+            return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + TEXT_LINE_SPACING;
+        }
+    }
 
     public record OverflowSlotPlan(int x, int y) {}
 
