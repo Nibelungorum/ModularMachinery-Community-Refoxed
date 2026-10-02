@@ -39,7 +39,7 @@ public final class OutputAdapters {
     }
     private static final class ItemView extends View implements ItemOutputView {
         ItemView(MachineOutput.ItemOutput value) { super(value); }
-        public ItemStack stack() { return ((MachineOutput.ItemOutput) delegate).stack().copy(); }
+        public ItemStack stack() { return ((MachineOutput.ItemOutput) delegate).resolvedStack(); }
     }
     private static final class FluidView extends View implements FluidOutputView {
         FluidView(MachineOutput.FluidOutput value) { super(value); }

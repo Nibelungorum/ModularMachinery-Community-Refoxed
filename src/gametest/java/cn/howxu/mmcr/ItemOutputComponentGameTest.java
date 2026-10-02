@@ -12,6 +12,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
+import cn.howxu.mmcr.publicapi.recipe.Outputs;
+import cn.howxu.mmcr.publicapi.runtime.ItemOutputView;
 import cn.howxu.mmcr.util.IOType;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Dynamic;
@@ -67,6 +70,23 @@ public class ItemOutputComponentGameTest {
         helper.assertTrue(plan.successful() && plan.plan().commit(), "Finish output replacement must commit successfully");
         assertComponents(helper, storage.getStackInSlot(0));
         helper.assertTrue(storage.getStackInSlot(1).isEmpty(), "Finish output replacement must not produce a second unenchanted output");
+        helper.succeed();
+    }
+
+    public void publicOutputViewPreservesComponentsWhenRebuilt(GameTestHelper helper) {
+        ItemRequirement requirement = output();
+        var view = (ItemOutputView) Outputs.fromRequirement(RequirementAdapters.wrap(requirement)).orElseThrow();
+        ItemStack stack = view.stack();
+        assertComponents(helper, stack);
+        stack.setCount(2);
+        var rebuilt = Outputs.item(stack, view.chance());
+        assertComponents(helper, rebuilt.stack());
+        helper.assertTrue(rebuilt.stack().getCount() == 2,
+                "Rebuilt output must retain the callback's stack changes");
+        assertComponents(helper, view.stack());
+        helper.assertTrue(view.stack().getCount() == 1
+                        && requirement.stack().get(DataComponents.ENCHANTMENTS).isEmpty(),
+                "Reading and modifying the public view must not mutate the source output or its base stack");
         helper.succeed();
     }
 
