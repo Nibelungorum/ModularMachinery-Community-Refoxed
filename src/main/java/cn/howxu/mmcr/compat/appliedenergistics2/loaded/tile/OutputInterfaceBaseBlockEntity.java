@@ -13,6 +13,7 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -61,6 +62,7 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
         logic = kind instanceof InterfaceLogicKind logicKind
                 ? logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem())
                 : new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
+        AppMekBridge.get().configureInventory(logic.getStorage());
     }
 
     @Override

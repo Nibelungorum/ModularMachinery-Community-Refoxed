@@ -23,6 +23,7 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,10 +135,16 @@ public final class MachineIoView {
 
     public List<ResourceAmount<ResourceLocation>> chemicalInputs() {
         Map<ResourceLocation, Long> amounts = new LinkedHashMap<>();
+        Map<Object, Set<ResourceLocation>> counted = new IdentityHashMap<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
             ChemicalViewFacet facet = capability.facet(ChemicalViewFacet.class).orElse(null);
-            if (facet == null || facet.amount() <= 0L) continue;
-            facet.chemicalId().ifPresent(id -> amounts.merge(id, facet.amount(), MachineIoView::saturatedAdd));
+            if (facet == null) continue;
+            Set<ResourceLocation> seen = counted.computeIfAbsent(facet.queryIdentity(), ignored -> new HashSet<>());
+            for (ChemicalViewFacet.ChemicalAmount entry : facet.contents()) {
+                if (entry.amount() > 0L && seen.add(entry.id())) {
+                    amounts.merge(entry.id(), entry.amount(), MachineIoView::saturatedAdd);
+                }
+            }
         }
         return resourceAmounts(amounts);
     }
@@ -154,10 +161,13 @@ public final class MachineIoView {
     public long chemicalTagAmount(ResourceLocation tagId) {
         Objects.requireNonNull(tagId, "tagId");
         long amount = 0L;
+        Map<Object, Set<ResourceLocation>> counted = new IdentityHashMap<>();
         for (MachineCapability capability : capabilities(IOType.INPUT)) {
             ChemicalViewFacet facet = capability.facet(ChemicalViewFacet.class).orElse(null);
-            if (facet != null && facet.amount() > 0L && facet.matchesTag(tagId)) {
-                amount = saturatedAdd(amount, facet.amount());
+            if (facet == null) continue;
+            Set<ResourceLocation> seen = counted.computeIfAbsent(facet.queryIdentity(), ignored -> new HashSet<>());
+            for (ChemicalViewFacet.ChemicalAmount entry : facet.tagContents(tagId)) {
+                if (entry.amount() > 0L && seen.add(entry.id())) amount = saturatedAdd(amount, entry.amount());
             }
         }
         return amount;

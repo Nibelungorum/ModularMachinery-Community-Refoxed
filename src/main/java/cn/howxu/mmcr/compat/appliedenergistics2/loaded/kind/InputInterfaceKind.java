@@ -22,7 +22,7 @@ public final class InputInterfaceKind implements InterfaceLogicKind {
 
     public static final InputInterfaceKind INSTANCE = new InputInterfaceKind();
 
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
+    private final PortDefinition definition = AE2ResourceFamilies.definition(MMCR.id(ID), List.of(
             AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler(), false),
             AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler(), false)));
 

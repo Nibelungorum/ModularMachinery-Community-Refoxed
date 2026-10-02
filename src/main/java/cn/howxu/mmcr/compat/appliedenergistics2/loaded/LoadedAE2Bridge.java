@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import appeng.api.AECapabilities;
+import appeng.api.behaviors.GenericInternalInventory;
+import appeng.api.storage.MEStorage;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import appeng.api.ids.AEComponents;
 import appeng.api.implementations.items.IMemoryCard;
 import appeng.api.implementations.items.MemoryCardMessages;
@@ -181,10 +184,10 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 (be, ignored) -> be instanceof InputInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, inputInterfaceType,
                 (be, direction) -> be instanceof InputInterfaceBlockEntity host
-                        ? host.getInterfaceLogic().getStorage() : null);
+                        ? (GenericInternalInventory) AppMekBridge.get().inventoryView(host.getInterfaceLogic().getStorage()) : null);
         event.registerBlockEntity(AECapabilities.ME_STORAGE, inputInterfaceType,
                 (be, direction) -> be instanceof InputInterfaceBlockEntity host
-                        ? host.getInterfaceLogic().getInventory() : null);
+                        ? (MEStorage) AppMekBridge.get().storageView(host.getInterfaceLogic().getInventory()) : null);
         BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
                 (be, ignored) -> be instanceof StockingInterfaceBlockEntity host ? host : null);
@@ -198,7 +201,8 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, patternInterfaceType,
                 (be, ignored) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, patternInterfaceType,
-                (be, direction) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
+                (be, direction) -> be instanceof PatternInterfaceBlockEntity host
+                        ? (GenericInternalInventory) AppMekBridge.get().inventoryView(host.getLogic().getReturnInv()) : null);
         if (contributor.available()) contributor.registerCapabilities(event);
     }
 

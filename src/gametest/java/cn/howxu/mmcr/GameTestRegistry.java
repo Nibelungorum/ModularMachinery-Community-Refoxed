@@ -1,5 +1,9 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.compat.appmek.AppMekAdapterGameTest;
+import cn.howxu.mmcr.compat.appmek.AppMekInterfaceGameTest;
+import cn.howxu.mmcr.compat.appmek.AppMekPatternGameTest;
+
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
@@ -272,6 +276,60 @@ public final class GameTestRegistry {
         //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
         register(event, "eae_me_extended_pattern_slot_35", 100,
                 helper -> new AE2PatternInterfaceGameTest().extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(helper));
+        register(event, "appmek_local_simulation", 100,
+                helper -> new AppMekAdapterGameTest().localSimulationPreservesInventory(helper));
+        register(event, "appmek_multi_chemical_queries_and_apis", 100,
+                helper -> new AppMekAdapterGameTest().queriesAndExistingApisSeeAllChemicalKinds(helper));
+        register(event, "appmek_chemical_tag_queries", 100,
+                helper -> new AppMekAdapterGameTest().tagQueriesCountOnlyMatchingChemicals(helper));
+        register(event, "appmek_multi_slot_sync", 100,
+                helper -> new AppMekAdapterGameTest().multiSlotSyncPreservesMixedResourcesAndNetworkKeys(helper));
+        register(event, "appmek_chemical_async_boundary", 100,
+                helper -> new AppMekAdapterGameTest().localAsyncSnapshotKeepsMixedNetworkInputOnMainThread(helper));
+        register(event, "appmek_ordinary_chemical_predicates", 100,
+                helper -> new AppMekInterfaceGameTest().chemicalPredicatesIncludeMePortsWithoutRadioactivity(helper));
+        register(event, "appmek_chemical_kind_wakeup", 200,
+                helper -> new AppMekInterfaceGameTest().chemicalKindChangesWakeBlockedController(helper));
+        register(event, "appmek_real_cell_input_recipe", 400,
+                helper -> new AppMekInterfaceGameTest().configuredInputFeedsRecipeFromRealChemicalCell(helper));
+        register(event, "appmek_stocking_chemical_reconnect", 400,
+                helper -> new AppMekInterfaceGameTest().stockingTracksChemicalDisconnectAndReconnect(helper));
+        register(event, "appmek_normal_chemical_cache_flush", 400,
+                helper -> new AppMekInterfaceGameTest().normalOutputFlushesDisconnectedChemicalCache(helper));
+        register(event, "appmek_async_real_cell_partial_output", 400,
+                helper -> new AppMekInterfaceGameTest().asyncOutputConservesRealCellPartialAcceptance(helper));
+        register(event, "appmek_oversize_last_slot_long_recipe", 200,
+                helper -> new AppMekInterfaceGameTest().oversizeLastSlotConsumesLongRecipeAmount(helper));
+        register(event, "appmek_chemical_native_save_load", 100,
+                helper -> new AppMekInterfaceGameTest().chemicalStorageAndConfigurationSurviveNativeSaveLoad(helper));
+        register(event, "appmek_chemical_memory_card", 400,
+                helper -> new AppMekInterfaceGameTest().chemicalMemoryCardConfigurationPullsFromNetwork(helper));
+        register(event, "appmek_mixed_pattern", 200,
+                helper -> new AppMekPatternGameTest().mixedPatternReturnsProductsAndExcessInputs(helper));
+        register(event, "appmek_extended_pattern_last_slot", 200,
+                helper -> new AppMekPatternGameTest().extendedPatternLastSlotProcessesChemicals(helper));
+        register(event, "appmek_rejected_pattern_ownership", 200,
+                helper -> new AppMekPatternGameTest().rejectedPatternPreservesInputHolders(helper));
+        register(event, "appmek_factory_chemical_batch", 200,
+                helper -> new AppMekPatternGameTest().batchPatternAccountsForChemicalInputsAcrossLanes(helper));
+        register(event, "appmek_long_pattern_output_matching", 100,
+                helper -> new AppMekPatternGameTest().chemicalPatternOutputMatchingPreservesLongAmounts(helper));
+        register(event, "appmek_all_me_kinds", 100,
+                helper -> new AppMekInterfaceGameTest().allMeKindsExposeChemicalCapabilities(helper));
+        register(event, "appmek_generic_radioactivity_validation", 100,
+                helper -> new AppMekInterfaceGameTest().genericCapabilitiesRejectRadioactiveChemicals(helper));
+        register(event, "appmek_partial_network_output", 100,
+                helper -> new AppMekAdapterGameTest().partialNetworkOutputConservesRemainder(helper));
+        register(event, "appmek_disconnected_output", 100,
+                helper -> new AppMekAdapterGameTest().disconnectedOutputReturnsUnacceptedAmount(helper));
+        register(event, "appmek_network_input_reservations", 100,
+                helper -> new AppMekAdapterGameTest().networkInputFiltersDeduplicatesAndSharesReservations(helper));
+        register(event, "appmek_multi_slot_reservations", 100,
+                helper -> new AppMekAdapterGameTest().multiSlotInputAndAliasedViewsRespectReservations(helper));
+        register(event, "appmek_mixed_slot_reservations", 100,
+                helper -> new AppMekAdapterGameTest().mixedViewsSharePhysicalSlotAndSyncPreservesItems(helper));
+        register(event, "appmek_long_amounts", 100,
+                helper -> new AppMekAdapterGameTest().chemicalAmountsAreNotTruncated(helper));
         register(event, "appflux_me_flux_input_interface", 100,
                 helper -> new AppliedFluxInterfaceGameTest().portBlocksResolveToFluxBlockEntities(helper));
         register(event, "appflux_me_flux_input_grid_node", 100,

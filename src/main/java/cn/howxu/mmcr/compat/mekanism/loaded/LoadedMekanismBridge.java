@@ -87,8 +87,29 @@ import java.util.function.Predicate;
  */
 public final class LoadedMekanismBridge implements MekanismBridge {
     /** Machine capability seam supplied by a loaded Mekanism chemical port. */
-    public interface ChemicalPort extends MachineCapability {
+    public interface ChemicalPort extends ChemicalHandlerPort {
         IChemicalTank chemicalTank();
+
+        @Override
+        default Object planningIdentity() { return chemicalTank(); }
+
+        @Override
+        default IChemicalHandler chemicalHandler() {
+            IChemicalTank tank = chemicalTank();
+            return new IChemicalHandler() {
+                @Override public int getChemicalTanks() { return 1; }
+                @Override public ChemicalStack getChemicalInTank(int slot) { return tank.getStack().copy(); }
+                @Override public void setChemicalInTank(int slot, ChemicalStack stack) { tank.setStack(stack); }
+                @Override public long getChemicalTankCapacity(int slot) { return tank.getCapacity(); }
+                @Override public boolean isValid(int slot, ChemicalStack stack) { return tank.isValid(stack); }
+                @Override public ChemicalStack insertChemical(int slot, ChemicalStack stack, Action action) {
+                    return tank.insert(stack, action, AutomationType.INTERNAL);
+                }
+                @Override public ChemicalStack extractChemical(int slot, long amount, Action action) {
+                    return tank.extract(amount, action, AutomationType.INTERNAL);
+                }
+            };
+        }
 
         default boolean radioactive() {
             return false;
@@ -382,12 +403,15 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     private static final class ChemicalTransferPolicy implements AutoIoHandler {
         @Override
         public boolean hasWork(MachineCapability capability) {
-            ChemicalPort port = chemicalPort(capability);
+            ChemicalHandlerPort port = chemicalPort(capability);
             if (port == null) return false;
-            IChemicalTank tank = port.chemicalTank();
-            return capability.directions().supports(IOType.OUTPUT)
-                    ? tank.getStored() > 0L
-                    : tank.getStored() < tank.getCapacity();
+            IChemicalHandler handler = port.chemicalHandler();
+            for (int slot = 0; slot < handler.getChemicalTanks(); slot++) {
+                long amount = handler.getChemicalInTank(slot).getAmount();
+                if (capability.directions().supports(IOType.OUTPUT)
+                        ? amount > 0L : amount < handler.getChemicalTankCapacity(slot)) return true;
+            }
+            return false;
         }
 
         @Override
@@ -397,28 +421,34 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
         @Override
         public AutoIoResult transfer(MachineCapability capability, Direction side, Object selectedResource, long ejectionLimit) {
-            ChemicalPort port = chemicalPort(capability);
+            ChemicalHandlerPort port = chemicalPort(capability);
             TransferFacet transfer = transferFacet(capability);
             if (port == null || transfer == null) {
                 return transferBlocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
             boolean eject = ejectionLimit > 0L;
-            if (eject ? port.chemicalTank().getStored() <= 0L : !hasWork(port)) {
+            boolean work = hasWork(port);
+            if (eject) {
+                work = false;
+                IChemicalHandler handler = port.chemicalHandler();
+                for (int slot = 0; slot < handler.getChemicalTanks(); slot++) {
+                    if (!handler.getChemicalInTank(slot).isEmpty()) {
+                        work = true;
+                        break;
+                    }
+                }
+            }
+            if (!work) {
                 return transferBlocked(BuiltinFailureReasons.NO_WORK);
             }
             IChemicalHandler adjacent = adjacentChemical(capability, side);
             if (adjacent == null) return transferBlocked(BuiltinFailureReasons.NO_TARGET);
             long limit = eject ? ejectionLimit : transfer.transferLimit();
-            long moved = eject ? moveChemical(port.chemicalTank(), adjacent, limit, false)
+            long moved = eject ? moveChemical(port.chemicalHandler(), adjacent, limit, false)
                     : capability.directions().supports(IOType.INPUT)
-                    ? moveChemical(adjacent, port.chemicalTank(), limit, false)
-                    : moveChemical(port.chemicalTank(), adjacent, limit, false);
+                    ? moveChemical(adjacent, port.chemicalHandler(), limit, false)
+                    : moveChemical(port.chemicalHandler(), adjacent, limit, false);
             return AutoIoResult.moved(moved);
-        }
-
-        private static boolean hasWork(ChemicalPort port) {
-            IChemicalTank tank = port.chemicalTank();
-            return tank.getStored() < tank.getCapacity();
         }
 
         private static IChemicalHandler adjacentChemical(MachineCapability capability, Direction side) {
@@ -434,8 +464,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return capability == null ? null : capability.facet(TransferFacet.class).orElse(null);
     }
 
-    private static ChemicalPort chemicalPort(MachineCapability capability) {
-        return capability instanceof ChemicalPort port ? port : null;
+    private static ChemicalHandlerPort chemicalPort(MachineCapability capability) {
+        return capability instanceof ChemicalHandlerPort port ? port : null;
     }
 
     private static AutoIoResult transferBlocked(FailureReason reason) {
@@ -471,13 +501,13 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
             boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
             IOType direction = IOType.valueOf(requirement.io().name());
-            List<ChemicalPort> ports = chemicalPorts(capabilities, direction);
-            List<ChemicalPort> plannedPorts = output
-                    ? ports.stream().sorted(Comparator.comparingInt(ChemicalPort::outputPriority).reversed()).toList()
+            List<ChemicalHandlerPort> ports = chemicalPorts(capabilities, direction);
+            List<ChemicalHandlerPort> plannedPorts = output
+                    ? ports.stream().sorted(Comparator.comparingInt(ChemicalHandlerPort::outputPriority).reversed()).toList()
                     : ports;
             boolean resourceRadioactive = matcher.exactHolder() != null
                     && matcher.exactHolder().value().isRadioactive();
-            List<ChemicalPort> matchingPorts = plannedPorts.stream()
+            List<ChemicalHandlerPort> matchingPorts = plannedPorts.stream()
                     .filter(p -> p.radioactive() == resourceRadioactive)
                     .toList();
             boolean allowPartialOutput = output && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
@@ -526,9 +556,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             RequirementHandlerSupport.ConsumeProfile consumed = !output
                     ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), requestedParallelism) : null;
             RequirementPlan.OperationFactory operationFactory = (parallelism, reservations) -> planOperations(
-                    requirement, matcher, plannedPorts, parallelism, consumed, reservations, direction, allowPartialOutput, true);
+                    requirement, matcher, matchingPorts, parallelism, consumed, reservations, direction, allowPartialOutput, true);
             RequirementPlan.ReservationFactory reservationFactory = RequirementHandlerSupport.reservationFactory(
-                    (parallelism, reservations) -> planOperations(requirement, matcher, plannedPorts, parallelism,
+                    (parallelism, reservations) -> planOperations(requirement, matcher, matchingPorts, parallelism,
                             consumed, reservations, direction, allowPartialOutput, false));
             return RequirementHandlerSupport.deferredPlan(context, maximum, operationFactory, reservationFactory);
         }
@@ -560,7 +590,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
 
         private RequirementPlan.OperationPlan planOperations(LoadedChemicalRequirement requirement,
-                                                              ChemicalMatcher matcher, List<ChemicalPort> ports,
+                                                              ChemicalMatcher matcher, List<ChemicalHandlerPort> ports,
                                                               long rawParallelism,
                                                               RequirementHandlerSupport.ConsumeProfile consumed,
                                                               PlanningReservations reservations,
@@ -575,30 +605,48 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             Map<MachineCapability, List<CapabilityRequests.ResourceAction<ChemicalStack>>> actions =
                     new LinkedHashMap<>();
             long remaining = amount;
-            for (ChemicalPort port : ports) {
-                ChemicalStack current = ChemicalPortCapability.identity(port.chemicalTank().getStack());
-                long currentAmount = port.chemicalTank().getStored();
-                if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                    if (current.isEmpty() || !matcher.matches(current.getChemicalHolder())
-                            || port.chemicalTank().extract(1L, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) continue;
-                    long available = reservations.outputAvailable(port, current, currentAmount);
-                    long moved = Math.min(remaining, available);
-                    if (reservations.reserveOutput(port, current, moved)) {
-                        actions.computeIfAbsent(port, ignored -> new ArrayList<>())
-                                .add(new CapabilityRequests.ResourceAction<>(0, current, moved, false));
-                        remaining -= moved;
-                    }
-                } else {
-                    if (requestedResource == null || !current.isEmpty()
-                            && !ChemicalStack.isSameChemical(current, requestedResource)
-                            || !port.chemicalTank().isValid(requestedResource)) continue;
-                    long capacity = reservations.outputAvailable(port, requestedResource,
-                            Math.max(0L, port.chemicalTank().getCapacity() - currentAmount));
-                    long moved = Math.min(remaining, capacity);
-                    if (moved > 0L && reservations.reserveOutput(port, requestedResource, moved)) {
-                        actions.computeIfAbsent(port, ignored -> new ArrayList<>())
-                                .add(new CapabilityRequests.ResourceAction<>(0, requestedResource, moved, true));
-                        remaining -= moved;
+            for (ChemicalHandlerPort port : ports) {
+                IChemicalHandler handler = port.chemicalHandler();
+                if (!input && requestedResource != null && handler instanceof ChemicalOutputAdmission admission) {
+                    List<CapabilityRequests.ResourceAction<ChemicalStack>> admitted =
+                            admission.reserveOutput(requestedResource, remaining, reservations);
+                    for (CapabilityRequests.ResourceAction<ChemicalStack> action : admitted) remaining -= action.amount();
+                    if (!admitted.isEmpty()) actions.computeIfAbsent(port, ignored -> new ArrayList<>()).addAll(admitted);
+                    if (remaining == 0L) break;
+                    continue;
+                }
+                for (int slot = 0; slot < handler.getChemicalTanks() && remaining > 0L; slot++) {
+                    ChemicalStack current = ChemicalPortCapability.identity(handler.getChemicalInTank(slot));
+                    Object identity = port.planningIdentity();
+                    Object slotKey = port.planningSlot(slot);
+                    Object storedKey = port.storedKey(slot);
+                    long storedAmount = port.storedAmount(slot);
+                    long currentAmount = reservations.nativeAmount(identity, slotKey, storedAmount);
+                    Object virtualKey = reservations.nativeKey(identity, slotKey, storedKey);
+                    if (input) {
+                        if (current.isEmpty() || !matcher.matches(current.getChemicalHolder())) continue;
+                        long available = Math.min(currentAmount,
+                                handler.extractChemical(slot, Long.MAX_VALUE, Action.SIMULATE).getAmount());
+                        long moved = Math.min(remaining, available);
+                        if (reservations.reserveNativeExtract(identity, slotKey, port.planningKey(current),
+                                storedKey, storedAmount, moved)) {
+                            actions.computeIfAbsent(port, ignored -> new ArrayList<>())
+                                    .add(new CapabilityRequests.ResourceAction<>(slot, current, moved, false));
+                            remaining -= moved;
+                        }
+                    } else {
+                        if (requestedResource == null || !handler.isValid(slot, requestedResource)
+                                || currentAmount > 0L && !port.planningKey(requestedResource).equals(virtualKey)) continue;
+                        long capacity = handler.getChemicalTankCapacity(slot);
+                        long simulated = remaining - handler.insertChemical(slot,
+                                requestedResource.copyWithAmount(remaining), Action.SIMULATE).getAmount();
+                        long moved = Math.min(simulated, Math.max(0L, capacity - currentAmount));
+                        if (reservations.reserveNativeInsert(identity, slotKey, port.planningKey(requestedResource),
+                                storedKey, storedAmount, capacity, moved)) {
+                            actions.computeIfAbsent(port, ignored -> new ArrayList<>())
+                                    .add(new CapabilityRequests.ResourceAction<>(slot, requestedResource, moved, true));
+                            remaining -= moved;
+                        }
                     }
                 }
                 if (remaining == 0L) break;
@@ -631,40 +679,64 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     RequirementHandlerSupport.outputSimulation(requested, amount - remaining));
         }
 
-        private long inputMaximum(ChemicalMatcher matcher, List<ChemicalPort> ports,
+        private long inputMaximum(ChemicalMatcher matcher, List<ChemicalHandlerPort> ports,
                                    long amount, long requested) {
             long available = 0L;
-            for (ChemicalPort port : ports) {
-                ChemicalStack resource = port.chemicalTank().getStack();
-                if (resource.isEmpty() || !matcher.matches(resource.getChemicalHolder())
-                        || port.chemicalTank().extract(1L, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()) continue;
-                available = RequirementHandlerSupport.saturatingAdd(available, port.chemicalTank().getStored());
+            PlanningReservations reservations = new PlanningReservations();
+            for (ChemicalHandlerPort port : ports) {
+                IChemicalHandler handler = port.chemicalHandler();
+                for (int slot = 0; slot < handler.getChemicalTanks(); slot++) {
+                    ChemicalStack resource = handler.getChemicalInTank(slot);
+                    if (resource.isEmpty() || !matcher.matches(resource.getChemicalHolder())) continue;
+                    long simulated = handler.extractChemical(slot, Long.MAX_VALUE, Action.SIMULATE).getAmount();
+                    long remaining = reservations.nativeAmount(port.planningIdentity(), port.planningSlot(slot), port.storedAmount(slot));
+                    long moved = Math.min(simulated, remaining);
+                    if (reservations.reserveNativeExtract(port.planningIdentity(), port.planningSlot(slot), port.planningKey(resource),
+                            port.storedKey(slot), port.storedAmount(slot), moved)) {
+                        available = RequirementHandlerSupport.saturatingAdd(available, moved);
+                    }
+                }
             }
             return Math.min(requested, available / amount);
         }
 
-        private OutputCapacity outputCapacity(Holder<Chemical> holder, List<ChemicalPort> ports) {
+        private OutputCapacity outputCapacity(Holder<Chemical> holder, List<ChemicalHandlerPort> ports) {
             ChemicalStack resource = new ChemicalStack(holder, 1L);
             long capacity = 0L;
             boolean rejected = false;
-            for (ChemicalPort port : ports) {
-                IChemicalTank tank = port.chemicalTank();
-                if (!tank.getAttributeValidator().process(resource)) {
+            PlanningReservations reservations = new PlanningReservations();
+            for (ChemicalHandlerPort port : ports) {
+                if (port instanceof ChemicalPort single && !single.chemicalTank().getAttributeValidator().process(resource)) {
                     rejected |= resource.isRadioactive();
                     continue;
                 }
-                if (!tank.isValid(resource)) continue;
-                ChemicalStack current = tank.getStack();
-                if (!current.isEmpty() && !ChemicalStack.isSameChemical(current, resource)) continue;
-                capacity = RequirementHandlerSupport.saturatingAdd(capacity,
-                        Math.max(0L, tank.getCapacity() - tank.getStored()));
+                IChemicalHandler handler = port.chemicalHandler();
+                if (handler instanceof ChemicalOutputAdmission admission) {
+                    for (CapabilityRequests.ResourceAction<ChemicalStack> action
+                            : admission.reserveOutput(resource, Long.MAX_VALUE, reservations)) {
+                        capacity = RequirementHandlerSupport.saturatingAdd(capacity, action.amount());
+                    }
+                    continue;
+                }
+                for (int slot = 0; slot < handler.getChemicalTanks(); slot++) {
+                    if (!handler.isValid(slot, resource)) continue;
+                    long simulated = Long.MAX_VALUE - handler.insertChemical(slot, resource.copyWithAmount(Long.MAX_VALUE),
+                            Action.SIMULATE).getAmount();
+                    long stored = port.storedAmount(slot);
+                    long available = Math.min(simulated, Math.max(0L, handler.getChemicalTankCapacity(slot)
+                            - reservations.nativeAmount(port.planningIdentity(), port.planningSlot(slot), stored)));
+                    if (reservations.reserveNativeInsert(port.planningIdentity(), port.planningSlot(slot), port.planningKey(resource),
+                            port.storedKey(slot), stored, handler.getChemicalTankCapacity(slot), available)) {
+                        capacity = RequirementHandlerSupport.saturatingAdd(capacity, available);
+                    }
+                }
             }
             return new OutputCapacity(capacity, rejected);
         }
 
-        private static List<ChemicalPort> chemicalPorts(List<MachineCapability> capabilities, IOType direction) {
-            return capabilities.stream().filter(ChemicalPort.class::isInstance)
-                    .map(ChemicalPort.class::cast)
+        private static List<ChemicalHandlerPort> chemicalPorts(List<MachineCapability> capabilities, IOType direction) {
+            return capabilities.stream().filter(ChemicalHandlerPort.class::isInstance)
+                    .map(ChemicalHandlerPort.class::cast)
                     .filter(port -> port.view().directions().supports(direction)).toList();
         }
 
@@ -804,30 +876,23 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return tank.extract(amount, action, AutomationType.INTERNAL).getAmount();
     }
 
-    private static long moveChemical(IChemicalTank source, IChemicalHandler destination, long limit,
-                                     boolean simulate) {
-        if (limit <= 0L) return 0L;
-        ChemicalStack extracted = source.extract(limit, Action.SIMULATE, AutomationType.INTERNAL);
-        if (extracted.isEmpty()) return 0L;
-        ChemicalStack remainder = destination.insertChemical(extracted, Action.SIMULATE);
-        long moved = extracted.getAmount() - remainder.getAmount();
-        if (moved <= 0L || simulate) return Math.max(0L, moved);
-        ChemicalStack committed = source.extract(moved, Action.EXECUTE, AutomationType.INTERNAL);
-        if (committed.getAmount() != moved) return 0L;
-        return moved - destination.insertChemical(committed, Action.EXECUTE).getAmount();
-    }
-
-    private static long moveChemical(IChemicalHandler source, IChemicalTank destination, long limit,
-                                     boolean simulate) {
-        if (limit <= 0L) return 0L;
-        ChemicalStack extracted = source.extractChemical(limit, Action.SIMULATE);
-        if (extracted.isEmpty()) return 0L;
-        ChemicalStack remainder = destination.insert(extracted, Action.SIMULATE, AutomationType.INTERNAL);
-        long moved = extracted.getAmount() - remainder.getAmount();
-        if (moved <= 0L || simulate) return Math.max(0L, moved);
-        ChemicalStack committed = source.extractChemical(moved, Action.EXECUTE);
-        if (committed.getAmount() != moved) return 0L;
-        return moved - destination.insert(committed, Action.EXECUTE, AutomationType.INTERNAL).getAmount();
+    private static long moveChemical(IChemicalHandler source, IChemicalHandler destination, long limit,
+                                      boolean simulate) {
+        long total = 0L;
+        for (int slot = 0; slot < source.getChemicalTanks() && total < limit; slot++) {
+            ChemicalStack extracted = source.extractChemical(slot, limit - total, Action.SIMULATE);
+            if (extracted.isEmpty()) continue;
+            long moved = extracted.getAmount() - destination.insertChemical(extracted, Action.SIMULATE).getAmount();
+            if (moved <= 0L) continue;
+            if (simulate) {
+                total += moved;
+                continue;
+            }
+            ChemicalStack committed = source.extractChemical(slot, moved, Action.EXECUTE);
+            if (committed.getAmount() != moved) return total;
+            total += moved - destination.insertChemical(committed, Action.EXECUTE).getAmount();
+        }
+        return total;
     }
 
     private static long requestedHeat(double heat, long parallelism) {

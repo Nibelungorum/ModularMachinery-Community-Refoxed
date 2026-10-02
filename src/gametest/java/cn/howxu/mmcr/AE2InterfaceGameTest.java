@@ -32,6 +32,8 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -162,13 +164,14 @@ public class AE2InterfaceGameTest {
 
             CapabilitySnapshot snapshot = entity.capabilitySnapshot();
             List<MachineCapability> capabilities = snapshot.capabilities();
-            helper.assertTrue(capabilities.size() == 2,
-                    "MMCR AE2 input interface exposes exactly two capabilities");
+            helper.assertTrue(capabilities.size() == (AppMekBridge.get().available() ? 3 : 2),
+                    "MMCR AE2 input interface exposes its supported resource capabilities");
             helper.assertTrue(capabilities.stream()
                             .map(MachineCapability::type)
                             .allMatch(type -> type.id().equals(PortFamilyIds.ITEM)
-                                    || type.id().equals(PortFamilyIds.FLUID)),
-                    "MMCR AE2 input interface capabilities cover ITEM and FLUID families");
+                                    || type.id().equals(PortFamilyIds.FLUID)
+                                    || AppMekBridge.get().available() && type.id().equals(MekanismRecipeTypes.CHEMICAL)),
+                    "MMCR AE2 input interface capabilities cover supported resource families");
             for (MachineCapability capability : capabilities) {
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "MMCR AE2 input interface capability does not expose TransferFacet");

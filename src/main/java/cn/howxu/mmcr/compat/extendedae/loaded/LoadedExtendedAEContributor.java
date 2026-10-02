@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.extendedae.loaded;
 
 import appeng.api.AECapabilities;
+import appeng.api.behaviors.GenericInternalInventory;
+import appeng.api.storage.MEStorage;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
@@ -24,6 +27,7 @@ import com.glodblock.github.extendedae.common.EAESingletons;
 import com.glodblock.github.extendedae.container.ContainerExInterface;
 import com.glodblock.github.extendedae.container.ContainerExPatternProvider;
 import java.util.List;
+import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -37,13 +41,16 @@ import org.jetbrains.annotations.Nullable;
  * @author howxu <dev@howxu.cn>
  */
 public final class LoadedExtendedAEContributor implements ExtendedAEContributor {
-    // OversizeStockingInputInterfaceKind is intentionally excluded until its UI behavior stabilizes;
-    // the kind class is retained so the implementation can be re-enabled without re-deriving it.
-    private static final List<IOPortKind> KINDS = List.of(
-            ExtendedInputInterfaceKind.INSTANCE, ExtendedStockingInputInterfaceKind.INSTANCE,
-            ExtendedOutputInterfaceKind.INSTANCE, OversizeInputInterfaceKind.INSTANCE,
-            OversizeOutputInterfaceKind.INSTANCE,
-            ExtendedPatternInterfaceKind.INSTANCE);
+    private static final List<IOPortKind> KINDS;
+
+    static {
+        List<IOPortKind> kinds = new ArrayList<>(List.of(
+                ExtendedInputInterfaceKind.INSTANCE, ExtendedStockingInputInterfaceKind.INSTANCE,
+                ExtendedOutputInterfaceKind.INSTANCE, OversizeInputInterfaceKind.INSTANCE,
+                OversizeOutputInterfaceKind.INSTANCE, ExtendedPatternInterfaceKind.INSTANCE));
+        if (AppMekBridge.get().available()) kinds.add(OversizeStockingInputInterfaceKind.INSTANCE);
+        KINDS = List.copyOf(kinds);
+    }
 
     @Override public boolean available() { return true; }
     @Override public List<IOPortKind> portKinds() { return KINDS; }
@@ -92,13 +99,17 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
         registerInterface(event, ExtendedInputInterfaceKind.INSTANCE.id(), InputInterfaceBlockEntity.class, true);
         registerInterface(event, OversizeInputInterfaceKind.INSTANCE.id(), InputInterfaceBlockEntity.class, true);
         registerInterface(event, ExtendedStockingInputInterfaceKind.INSTANCE.id(), StockingInterfaceBlockEntity.class, false);
+        if (KINDS.contains(OversizeStockingInputInterfaceKind.INSTANCE)) {
+            registerInterface(event, OversizeStockingInputInterfaceKind.INSTANCE.id(), StockingInterfaceBlockEntity.class, false);
+        }
         registerInterface(event, ExtendedOutputInterfaceKind.INSTANCE.id(), OutputInterfaceBlockEntity.class, false);
         registerInterface(event, OversizeOutputInterfaceKind.INSTANCE.id(), OutputInterfaceBlockEntity.class, false);
         BlockEntityType<?> type = type(ExtendedPatternInterfaceKind.INSTANCE.id());
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, type,
                 (be, v) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
-                (be, v) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
+                (be, v) -> be instanceof PatternInterfaceBlockEntity host
+                        ? (GenericInternalInventory) AppMekBridge.get().inventoryView(host.getLogic().getReturnInv()) : null);
     }
 
     private static boolean isOversize(IOPortKind kind) {
@@ -116,9 +127,11 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
                 (be, v) -> hostType.isInstance(be) ? hostType.cast(be) : null);
         if (storage) {
             event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
-                    (be, direction) -> hostType.isInstance(be) ? hostType.cast(be).getInterfaceLogic().getStorage() : null);
+                    (be, direction) -> hostType.isInstance(be) ? (GenericInternalInventory) AppMekBridge.get()
+                            .inventoryView(hostType.cast(be).getInterfaceLogic().getStorage()) : null);
             event.registerBlockEntity(AECapabilities.ME_STORAGE, type,
-                    (be, direction) -> hostType.isInstance(be) ? hostType.cast(be).getInterfaceLogic().getInventory() : null);
+                    (be, direction) -> hostType.isInstance(be) ? (MEStorage) AppMekBridge.get()
+                            .storageView(hostType.cast(be).getInterfaceLogic().getInventory()) : null);
         }
     }
 }

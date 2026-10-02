@@ -19,7 +19,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 /** @author howxu <dev@howxu.cn> */
 public final class OversizeOutputInterfaceKind implements InterfaceLogicKind {
     public static final OversizeOutputInterfaceKind INSTANCE = new OversizeOutputInterfaceKind();
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(
+    private final PortDefinition definition = AE2ResourceFamilies.definition(MMCR.id(id()), List.of(
             AE2ResourceFamilies.itemBinding(CapabilityDirections.output(), host -> host.nativeItemHandler()),
             AE2ResourceFamilies.fluidBinding(CapabilityDirections.output(), host -> host.nativeFluidHandler())));
     private OversizeOutputInterfaceKind() {}

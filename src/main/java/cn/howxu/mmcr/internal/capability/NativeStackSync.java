@@ -17,6 +17,10 @@ public final class NativeStackSync {
 
         long capacity(int slot);
 
+        default boolean isSyncCapacityValid(int slot, ItemStack stack, long capacity) {
+            return capacity == capacity(slot);
+        }
+
         void setContents(int slot, ItemStack stack, long amount);
     }
 
@@ -24,6 +28,10 @@ public final class NativeStackSync {
         long amount(int tank);
 
         long capacity(int tank);
+
+        default boolean isSyncCapacityValid(int tank, FluidStack stack, long capacity) {
+            return capacity == capacity(tank);
+        }
 
         void setContents(int tank, FluidStack stack, long amount);
     }

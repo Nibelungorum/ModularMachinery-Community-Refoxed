@@ -22,7 +22,7 @@ public final class AsyncOutputInterfaceKind implements InterfaceLogicKind {
 
     public static final AsyncOutputInterfaceKind INSTANCE = new AsyncOutputInterfaceKind();
 
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
+    private final PortDefinition definition = AE2ResourceFamilies.definition(MMCR.id(ID), List.of(
             AE2ResourceFamilies.itemBinding(CapabilityDirections.output(), host -> host.nativeItemHandler(), false),
             AE2ResourceFamilies.fluidBinding(CapabilityDirections.output(), host -> host.nativeFluidHandler(), false)));
 

@@ -7,9 +7,13 @@ import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
+import appeng.api.stacks.AEKeyType;
+import appeng.api.networking.security.IActionSource;
+import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
@@ -20,6 +24,7 @@ import net.minecraft.core.Direction;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Virtual AE2 crafting machine that forwards processing patterns to linked MMCR controllers.
@@ -45,8 +50,10 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     public long maxBatchSize(IPatternDetails patternDetails) {
         if (!(patternDetails instanceof AEProcessingPattern pattern) || !hasSupportedInputs(pattern)) return 0L;
+        List<MachineOutput> outputs = outputs(pattern);
+        if (outputs == null) return 0L;
         long machineCap = host.maxPatternBatchSize();
-        long recipeCap = host.maxRecipeBatchSize(outputs(pattern));
+        long recipeCap = host.maxRecipeBatchSize(outputs);
         return Math.min(machineCap, recipeCap);
     }
 
@@ -60,34 +67,38 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
             List<LaneRequest> laneRequests = new ArrayList<>();
             PatternStartBatchReservation reservation = host.reservePatternStarts(outputs, batchSize, parallelism -> {
                 KeyCounter[] slice = slice(inputHolders, parallelism, batchSize);
-                appeng.helpers.externalstorage.GenericStackInv itemRequest = AE2NativeAdapters.requestInventory(slice,
-                        appeng.api.stacks.AEKeyType.items());
-                appeng.helpers.externalstorage.GenericStackInv fluidRequest = AE2NativeAdapters.requestInventory(slice,
-                        appeng.api.stacks.AEKeyType.fluids());
-                laneRequests.add(new LaneRequest(itemRequest, fluidRequest));
-                return List.of(new ItemBusCapability(AE2NativeAdapters.items(itemRequest), IOType.INPUT),
-                        new FluidHatchCapability(AE2NativeAdapters.fluids(fluidRequest), IOType.INPUT));
+                GenericStackInv itemRequest = AE2NativeAdapters.requestInventory(slice, AEKeyType.items());
+                GenericStackInv fluidRequest = AE2NativeAdapters.requestInventory(slice, AEKeyType.fluids());
+                AppMekBridge.PatternRequest chemicalRequest = AppMekBridge.get().patternRequest(slice);
+                laneRequests.add(new LaneRequest(itemRequest, fluidRequest, chemicalRequest));
+                List<MachineCapability> inputs = new ArrayList<>(List.of(
+                        new ItemBusCapability(AE2NativeAdapters.items(itemRequest), IOType.INPUT),
+                        new FluidHatchCapability(AE2NativeAdapters.fluids(fluidRequest), IOType.INPUT)));
+                inputs.addAll(chemicalRequest.capabilities());
+                return List.copyOf(inputs);
             });
             if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
                     || reservation.parallelism() != batchSize) return false;
 
             try (reservation) {
-                appeng.helpers.externalstorage.GenericStackInv simulatedReturns =
+                GenericStackInv simulatedReturns =
                         AE2NativeAdapters.copyForSimulation(host.getLogic().getReturnInv());
                 for (LaneRequest request : laneRequests) {
                     if (!AE2NativeAdapters.returnRemaining(request.itemRequest(), simulatedReturns,
-                            appeng.api.stacks.AEKeyType.items(), appeng.api.networking.security.IActionSource.ofMachine(host))
+                            AEKeyType.items(), IActionSource.ofMachine(host))
                             || !AE2NativeAdapters.returnRemaining(request.fluidRequest(), simulatedReturns,
-                            appeng.api.stacks.AEKeyType.fluids(), appeng.api.networking.security.IActionSource.ofMachine(host))) {
+                            AEKeyType.fluids(), IActionSource.ofMachine(host))
+                            || !request.chemicalRequest().returnRemaining(simulatedReturns, IActionSource.ofMachine(host))) {
                         return false;
                     }
                 }
                 if (!reservation.commit()) return false;
                 for (LaneRequest request : laneRequests) {
                     if (!AE2NativeAdapters.returnRemaining(request.itemRequest(), host.getLogic().getReturnInv(),
-                            appeng.api.stacks.AEKeyType.items(), appeng.api.networking.security.IActionSource.ofMachine(host))
+                            AEKeyType.items(), IActionSource.ofMachine(host))
                             || !AE2NativeAdapters.returnRemaining(request.fluidRequest(), host.getLogic().getReturnInv(),
-                            appeng.api.stacks.AEKeyType.fluids(), appeng.api.networking.security.IActionSource.ofMachine(host))) {
+                            AEKeyType.fluids(), IActionSource.ofMachine(host))
+                            || !request.chemicalRequest().returnRemaining(host.getLogic().getReturnInv(), IActionSource.ofMachine(host))) {
                         return false;
                     }
                 }
@@ -115,8 +126,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         return slice;
     }
 
-    private record LaneRequest(appeng.helpers.externalstorage.GenericStackInv itemRequest,
-                               appeng.helpers.externalstorage.GenericStackInv fluidRequest) {
+    private record LaneRequest(GenericStackInv itemRequest, GenericStackInv fluidRequest,
+                               AppMekBridge.PatternRequest chemicalRequest) {
     }
 
     @Override
@@ -126,20 +137,24 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     private static boolean hasSupportedInputs(AEProcessingPattern pattern) {
         return pattern.getSparseInputs().stream().filter(stack -> stack != null).allMatch(stack ->
-                stack.amount() > 0L && (stack.what() instanceof AEItemKey || stack.what() instanceof AEFluidKey));
+                stack.amount() > 0L && (stack.what() instanceof AEItemKey || stack.what() instanceof AEFluidKey
+                        || AppMekBridge.get().supportsPatternInput(stack.what())));
     }
 
     private static List<MachineOutput> outputs(AEProcessingPattern pattern) {
         List<MachineOutput> outputs = new ArrayList<>();
         for (GenericStack stack : pattern.getOutputs()) {
-            if (stack.amount() <= 0L || stack.amount() > Integer.MAX_VALUE) return null;
-            int amount = (int) stack.amount();
+            if (stack.amount() <= 0L) return null;
             if (stack.what() instanceof AEItemKey item) {
-                outputs.add(new MachineOutput.ItemOutput(item.toStack(amount), 1F));
+                if (stack.amount() > Integer.MAX_VALUE) return null;
+                outputs.add(new MachineOutput.ItemOutput(item.toStack((int) stack.amount()), 1F));
             } else if (stack.what() instanceof AEFluidKey fluid) {
-                outputs.add(new MachineOutput.FluidOutput(fluid.toStack(amount), 1F));
+                if (stack.amount() > Integer.MAX_VALUE) return null;
+                outputs.add(new MachineOutput.FluidOutput(fluid.toStack((int) stack.amount()), 1F));
             } else {
-                return null;
+                Optional<MachineOutput> chemical = AppMekBridge.get().patternOutput(stack.what(), stack.amount());
+                if (chemical.isEmpty()) return null;
+                outputs.add(chemical.get());
             }
         }
         return List.copyOf(outputs);

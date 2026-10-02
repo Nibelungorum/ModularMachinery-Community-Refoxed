@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
 
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -13,6 +15,7 @@ import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 import java.util.function.Function;
@@ -33,6 +36,12 @@ public final class AE2ResourceFamilies {
             FluidHatchSize.VACUUM.ordinal() + 1, List.of("fluid_output_hatch"));
 
     private AE2ResourceFamilies() {
+    }
+
+    public static PortDefinition definition(ResourceLocation id, List<CapabilityBinding> bindings) {
+        CapabilityBinding primary = bindings.getFirst();
+        return PortDefinition.of(id, AppMekBridge.get().appendBindings(bindings,
+                primary.directions(), primary.nativeTransferExposure()));
     }
 
     public static CapabilityBinding itemBinding(CapabilityDirections directions,
@@ -68,14 +77,14 @@ public final class AE2ResourceFamilies {
     }
 
     public static List<PortFamilyDescriptor> inputFamilies() {
-        return List.of(ITEM_INPUT, FLUID_INPUT);
+        return AppMekBridge.get().appendFamilies(List.of(ITEM_INPUT, FLUID_INPUT));
     }
 
     public static List<PortFamilyDescriptor> outputFamilies() {
-        return List.of(ITEM_OUTPUT, FLUID_OUTPUT);
+        return AppMekBridge.get().appendFamilies(List.of(ITEM_OUTPUT, FLUID_OUTPUT));
     }
 
     public static List<PortFamilyDescriptor> patternFamilies() {
-        return List.of(ITEM_INPUT, FLUID_INPUT, ITEM_OUTPUT, FLUID_OUTPUT);
+        return AppMekBridge.get().appendFamilies(List.of(ITEM_INPUT, FLUID_INPUT, ITEM_OUTPUT, FLUID_OUTPUT));
     }
 }

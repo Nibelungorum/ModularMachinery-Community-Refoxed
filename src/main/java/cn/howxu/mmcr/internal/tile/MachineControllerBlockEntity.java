@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
@@ -4254,6 +4256,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return expectedFluid.stack().getAmount() == actualFluid.stack().getAmount()
                     && expectedFluid.stack().getFluid() == actualFluid.stack().getFluid()
                     && Objects.equals(expectedFluid.stack().getComponents(), actualFluid.stack().getComponents());
+        }
+        if (expected instanceof LoadedChemicalOutput expectedChemical
+                && actual instanceof LoadedChemicalOutput actualChemical) {
+            return expectedChemical.amount() == actualChemical.amount()
+                    && expectedChemical.id().equals(actualChemical.id());
         }
         return false;
     }

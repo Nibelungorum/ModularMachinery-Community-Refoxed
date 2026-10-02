@@ -208,7 +208,7 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
     public void encode(RegistryFriendlyByteBuf buffer) {
         buffer.writeVarInt(itemHandler.getSlots());
         for (int slot = 0; slot < itemHandler.getSlots(); slot++) {
-            ItemStack.STREAM_CODEC.encode(buffer, itemHandler.getStackInSlot(slot).copyWithCount(1));
+            ItemStack.OPTIONAL_STREAM_CODEC.encode(buffer, itemHandler.getStackInSlot(slot).copyWithCount(1));
             buffer.writeLong(itemAmount(slot));
             buffer.writeLong(itemCapacity(slot));
         }
@@ -219,10 +219,12 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
         int count = buffer.readVarInt();
         if (count < 0 || count > 1024 || count != itemHandler.getSlots()) throw new IllegalArgumentException("Invalid item sync state");
         for (int slot = 0; slot < count; slot++) {
-            ItemStack stack = ItemStack.STREAM_CODEC.decode(buffer);
+            ItemStack stack = ItemStack.OPTIONAL_STREAM_CODEC.decode(buffer);
             long amount = buffer.readLong();
             long capacity = buffer.readLong();
-            if (amount < 0L || capacity < amount || capacity != itemCapacity(slot)) throw new IllegalArgumentException("Invalid item sync amount");
+            boolean validCapacity = itemHandler instanceof NativeStackSync.Item storage
+                    ? storage.isSyncCapacityValid(slot, stack, capacity) : capacity == itemCapacity(slot);
+            if (amount < 0L || capacity < amount || !validCapacity) throw new IllegalArgumentException("Invalid item sync amount");
             if (itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage) storage.setContents(slot, stack, amount);
             else if (itemHandler instanceof NativeStackSync.Item storage) storage.setContents(slot, stack, amount);
             else throw new IllegalStateException("Item handler cannot apply synchronized state");

@@ -83,8 +83,13 @@ public final class CraftingContext {
 
     public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities(@Nullable Set<ResourceLocation> capabilityIds) {
         List<AsyncRequirementPlanner.Capability> asyncCapabilities = new ArrayList<>();
+        boolean chemicalFallback = capabilities.stream().anyMatch(capability ->
+                capability.type().id().equals(MekanismRecipeTypes.CHEMICAL)
+                        && capability.directions().supports(IOType.INPUT)
+                        && capability.facet(AsyncPlanningFacet.class).isEmpty());
         for (MachineCapability capability : capabilities) {
             if (capabilityIds != null && !capabilityIds.contains(capability.type().id())) continue;
+            if (chemicalFallback && capability.type().id().equals(MekanismRecipeTypes.CHEMICAL)) continue;
             AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
             if (facet == null) continue;
             AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();

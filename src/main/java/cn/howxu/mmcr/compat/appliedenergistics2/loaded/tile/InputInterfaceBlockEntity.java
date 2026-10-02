@@ -15,6 +15,7 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -74,6 +75,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         this.kind = kind;
         InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
         logic = logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
+        AppMekBridge.get().configureInventory(logic.getStorage());
         networkOwned = new GenericStack[logic.getStorage().size()];
         itemHandler = AE2NativeAdapters.items(logic.getStorage());
         fluidHandler = AE2NativeAdapters.fluids(logic.getStorage());

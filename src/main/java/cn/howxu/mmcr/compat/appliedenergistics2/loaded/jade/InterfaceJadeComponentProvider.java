@@ -49,7 +49,10 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
         InterfaceJadeDataProvider.outputs(accessor.getServerData()).forEach(display -> tooltip.add(
                 Component.translatable("gui.mmcr.port."
                                 + (display.label().equals("energy") ? "energy" : display.label() + "s"))
-                        .append(Component.literal(" " + display.value()
-                                + (display.unit().equals("item") ? "" : " " + display.unit())))));
+                        .append(display.label().equals("chemical")
+                                ? Component.literal(" " + display.value()).append(Component.literal(" ")
+                                        .append(Component.translatable("mmcr.unit.chemical")))
+                                : Component.literal(" " + display.value()
+                                        + (display.unit().equals("item") ? "" : " " + display.unit())))));
     }
 }

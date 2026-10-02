@@ -343,6 +343,7 @@
   "gui.mmcr.port.empty": "无",
   "gui.mmcr.port.items": "物品:",
   "gui.mmcr.port.fluids": "流体:",
+  "gui.mmcr.port.chemicals": "化学品:",
   "gui.mmcr.port.energy": "能量:",
   "gui.mmcr.port.stored": "已存储:",
   "gui.mmcr.controller.failure.level_insufficient": "等级不足",

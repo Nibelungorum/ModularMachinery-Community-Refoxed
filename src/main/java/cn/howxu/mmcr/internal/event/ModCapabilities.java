@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
@@ -47,6 +49,7 @@ public final class ModCapabilities {
         MekanismBridge.get().registerCapabilities(event);
         AE2Bridge.get().registerCapabilities(event);
         AppliedFluxBridge.get().registerCapabilities(event);
+        AppMekBridge.get().registerCapabilities(event);
         event.registerBlockEntity(ITEM_BLOCK, ModBlockEntities.BES.get("factory_controller").get(),
                 (be, side) -> be instanceof FactorySchedulerBlockEntity scheduler ? scheduler.itemHandler() : null);
     }

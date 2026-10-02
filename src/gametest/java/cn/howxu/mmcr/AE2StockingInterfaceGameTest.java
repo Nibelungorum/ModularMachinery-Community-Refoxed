@@ -22,6 +22,8 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -147,11 +149,12 @@ public class AE2StockingInterfaceGameTest {
                     "Stocking display fake stack cannot accept external insertion");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == 2,
-                    "Stocking interface exposes item and fluid MMCR capabilities");
+            helper.assertTrue(snapshot.capabilities().size() == (AppMekBridge.get().available() ? 3 : 2),
+                    "Stocking interface exposes its loaded resource families");
             for (MachineCapability capability : snapshot.capabilities()) {
                 helper.assertTrue(capability.type().id().equals(PortFamilyIds.ITEM)
-                                || capability.type().id().equals(PortFamilyIds.FLUID),
+                                || capability.type().id().equals(PortFamilyIds.FLUID)
+                                || AppMekBridge.get().available() && capability.type().id().equals(MekanismPortFamilies.CHEMICAL),
                         "Stocking capability has an item or fluid family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Stocking capability does not expose TransferFacet");

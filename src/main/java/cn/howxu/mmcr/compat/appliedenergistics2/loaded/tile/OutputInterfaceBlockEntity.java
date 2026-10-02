@@ -9,6 +9,7 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.MEStorage;
 import appeng.core.settings.TickRates;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -26,6 +27,7 @@ import java.util.function.Supplier;
 public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEntity {
     private final IItemHandler itemHandler;
     private final IFluidHandler fluidHandler;
+    private final Supplier<@Nullable MEStorage> networkSupplier;
     public final OutputTicker outputTicker;
 
     public OutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
@@ -37,7 +39,8 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
                                       @Nullable IActionSource actionSource) {
         super(pos, state, kind);
         Supplier<@Nullable MEStorage> effectiveNetworkSupplier = networkSupplier == null
-                ? this::networkStorage : networkSupplier;
+                ? this::gridStorage : networkSupplier;
+        this.networkSupplier = effectiveNetworkSupplier;
         IActionSource effectiveActionSource = actionSource == null
                 ? IActionSource.ofMachine(this) : actionSource;
         outputTicker = new OutputTicker();
@@ -64,7 +67,7 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
         wakeOutputTicker();
     }
 
-    private void onStorageChanged() {
+    public void onStorageChanged() {
         notifyStorageChanged();
         wakeOutputTicker();
     }
@@ -80,7 +83,12 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
     }
 
     @Nullable
-    private MEStorage networkStorage() {
+    public MEStorage networkStorage() {
+        return networkSupplier.get();
+    }
+
+    @Nullable
+    private MEStorage gridStorage() {
         IGrid grid = mainNode.getGrid();
         return grid == null ? null : grid.getStorageService().getInventory();
     }
@@ -102,6 +110,7 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
                         IActionSource.ofMachine(OutputInterfaceBlockEntity.this), appeng.api.stacks.AEKeyType.fluids(),
                         256L - moved);
             }
+            if (moved < 256L) moved += AppMekBridge.get().flush(OutputInterfaceBlockEntity.this, 256L - moved);
             if (getStorage().isEmpty()) return TickRateModulation.SLEEP;
             return moved > 0L ? TickRateModulation.FASTER : TickRateModulation.SLOWER;
         }

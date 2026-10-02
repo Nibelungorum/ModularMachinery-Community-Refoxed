@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -83,6 +84,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         this.kind = kind;
         PatternLogicKind logicKind = (PatternLogicKind) kind;
         logic = logicKind.createPatternLogic(mainNode, this);
+        AppMekBridge.get().configureInventory(logic.getReturnInv());
         itemHandler = AE2NativeAdapters.items(logic.getReturnInv());
         fluidHandler = AE2NativeAdapters.fluids(logic.getReturnInv());
     }

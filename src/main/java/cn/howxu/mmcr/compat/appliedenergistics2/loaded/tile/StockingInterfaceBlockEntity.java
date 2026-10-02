@@ -9,8 +9,6 @@ import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.IStackWatcher;
 import appeng.api.networking.storage.IStorageWatcherNode;
 import appeng.api.stacks.AEKey;
-import appeng.api.stacks.AEFluidKey;
-import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.api.util.AECableType;
 import appeng.api.storage.MEStorage;
@@ -24,6 +22,8 @@ import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import appeng.api.stacks.AEKeyTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -103,6 +103,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         this.kind = kind;
         InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
         logic = logicKind.createInterfaceLogic(uiNode, this, AEBlocks.INTERFACE.asItem());
+        AppMekBridge.get().configureInventory(logic.getStorage());
         configureStorageMirrorCapacity();
     }
 
@@ -261,8 +262,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         if (storage instanceof ConfigInventoryAccessor accessor) {
             accessor.mmcr$setAllowOverstacking(true);
         }
-        storage.setCapacity(AEKeyType.items(), Long.MAX_VALUE);
-        storage.setCapacity(AEKeyType.fluids(), Long.MAX_VALUE);
+        AEKeyTypes.getAll().forEach(type -> storage.setCapacity(type, Long.MAX_VALUE));
     }
 
     private void clearNetworkWatcher() {
@@ -274,12 +274,12 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         // Native handlers resolve the current grid and configuration lazily.
     }
 
-    private MEStorage networkStorage() {
+    public MEStorage networkStorage() {
         IGrid grid = mainNode.getGrid();
         return grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
     }
 
-    private List<AEKey> configuredKeys() {
+    public List<AEKey> configuredKeys() {
         List<AEKey> keys = new ArrayList<>();
         for (int slot = 0; slot < logic.getConfig().size(); slot++) {
             AEKey key = logic.getConfig().getKey(slot);
@@ -347,9 +347,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         try {
             for (int slot = 0; slot < config.size(); slot++) {
                 GenericStack stack = config.getStack(slot);
-                long defaultAmount = stack != null && stack.what() instanceof AEFluidKey
-                        ? 1_000L
-                        : 1L;
+                long defaultAmount = stack == null ? 1L : Math.max(1L, stack.what().getType().getAmountPerUnit());
                 if (stack != null && stack.amount() != defaultAmount) {
                     config.setStack(slot, new GenericStack(stack.what(), defaultAmount));
                 }

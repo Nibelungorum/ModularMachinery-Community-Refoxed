@@ -343,6 +343,7 @@
   "gui.mmcr.port.empty": "Empty",
   "gui.mmcr.port.items": "Items:",
   "gui.mmcr.port.fluids": "Fluids:",
+  "gui.mmcr.port.chemicals": "Chemicals:",
   "gui.mmcr.port.energy": "Energy:",
   "gui.mmcr.port.stored": "Stored:",
   "gui.mmcr.controller.failure.level_insufficient": "Insufficient Level",

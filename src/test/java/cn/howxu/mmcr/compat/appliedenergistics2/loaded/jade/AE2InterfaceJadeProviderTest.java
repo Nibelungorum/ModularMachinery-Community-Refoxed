@@ -111,6 +111,24 @@ class AE2InterfaceJadeProviderTest {
     }
 
     @Test
+    void chemicalOutputsPreserveLongTextAndUseTranslatedUnits() {
+        CompoundTag data = new CompoundTag();
+        String amount = Long.toString((long) Integer.MAX_VALUE + 5_000L);
+        Object host = capabilityGridHost(new AtomicReference<>(List.of(
+                new PresentedCapability("chemical", amount, "mB", IOType.OUTPUT),
+                new PresentedCapability("unknown", "100", "unknown", IOType.OUTPUT),
+                new PresentedCapability("chemical", "200", "mB", IOType.INPUT))));
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(data, accessor(host, new CompoundTag()));
+        assertThat(InterfaceJadeDataProvider.outputs(data)).containsExactly(
+                new InterfaceJadeDataProvider.OutputPresentation("chemical", amount, "mB"));
+        List<Component> added = new ArrayList<>();
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(tooltip(added), accessor(gridHost(), data), null);
+        assertThat(added).contains(Component.translatable("gui.mmcr.port.chemicals")
+                .append(Component.literal(" " + amount).append(Component.literal(" ")
+                        .append(Component.translatable("mmcr.unit.chemical")))));
+    }
+
+    @Test
     void componentProviderRendersServerSynchronizedOutputCapabilityContentsWithoutInputContents() {
         CompoundTag serverData = new CompoundTag();
         AtomicReference<List<MachineCapability>> capabilities = new AtomicReference<>(List.of(

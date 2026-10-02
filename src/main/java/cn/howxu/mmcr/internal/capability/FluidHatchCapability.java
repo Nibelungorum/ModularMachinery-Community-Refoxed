@@ -198,7 +198,7 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
     public void encode(RegistryFriendlyByteBuf buffer) {
         buffer.writeVarInt(fluidHandler.getTanks());
         for (int tank = 0; tank < fluidHandler.getTanks(); tank++) {
-            FluidStack.STREAM_CODEC.encode(buffer, fluidHandler.getFluidInTank(tank).copyWithAmount(1));
+            FluidStack.OPTIONAL_STREAM_CODEC.encode(buffer, fluidHandler.getFluidInTank(tank).copyWithAmount(1));
             buffer.writeLong(fluidAmount(tank));
             buffer.writeLong(fluidCapacity(tank));
         }
@@ -209,10 +209,12 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
         int count = buffer.readVarInt();
         if (count < 0 || count > 1024 || count != fluidHandler.getTanks()) throw new IllegalArgumentException("Invalid fluid sync state");
         for (int tank = 0; tank < count; tank++) {
-            FluidStack stack = FluidStack.STREAM_CODEC.decode(buffer);
+            FluidStack stack = FluidStack.OPTIONAL_STREAM_CODEC.decode(buffer);
             long amount = buffer.readLong();
             long capacity = buffer.readLong();
-            if (amount < 0L || capacity < amount || capacity != fluidCapacity(tank)) throw new IllegalArgumentException("Invalid fluid sync amount");
+            boolean validCapacity = fluidHandler instanceof NativeStackSync.Fluid storage
+                    ? storage.isSyncCapacityValid(tank, stack, capacity) : capacity == fluidCapacity(tank);
+            if (amount < 0L || capacity < amount || !validCapacity) throw new IllegalArgumentException("Invalid fluid sync amount");
             if (fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage) storage.setContents(tank, stack, amount);
             else if (fluidHandler instanceof NativeStackSync.Fluid storage) storage.setContents(tank, stack, amount);
             else throw new IllegalStateException("Fluid handler cannot apply synchronized state");

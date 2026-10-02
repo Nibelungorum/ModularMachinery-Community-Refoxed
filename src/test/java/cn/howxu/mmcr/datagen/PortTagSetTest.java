@@ -42,6 +42,20 @@ class PortTagSetTest {
         assertTrue(tags.optionalEntries());
     }
 
+    @Test
+    void mixedMePatternFamiliesDeriveOrdinaryChemicalTagsInBothDirections() {
+        ResourceLocation chemical = ResourceLocation.fromNamespaceAndPath("mekanism", "chemical");
+        IOPortKind kind = new TestPortKind("test_me_pattern", IOType.INPUT, List.of(
+                new PortFamilyDescriptor(MMCR.id("item"), IOType.INPUT, 0, List.of()),
+                new PortFamilyDescriptor(chemical, IOType.INPUT, 0, List.of()),
+                new PortFamilyDescriptor(chemical, IOType.OUTPUT, 0, List.of())), List.of("ae2"));
+        PortTagSet tags = PortTagSet.forKind(kind);
+        assertTrue(tags.tags().containsAll(List.of(MMCR.id("mekanism_chemical_ports"),
+                MMCR.id("mekanism_chemical_input_ports"), MMCR.id("mekanism_chemical_output_ports"))));
+        assertFalse(tags.tags().contains(MMCR.id("mekanism_radioactive_chemical_ports")));
+        assertTrue(tags.optionalEntries());
+    }
+
     private record TestPortKind(String id, IOType ioType, List<PortFamilyDescriptor> families,
                                 List<String> modDependencies) implements IOPortKind {
         @Override

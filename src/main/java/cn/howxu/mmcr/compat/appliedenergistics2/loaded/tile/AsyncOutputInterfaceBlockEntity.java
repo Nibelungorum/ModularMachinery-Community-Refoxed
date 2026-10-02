@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEntity {
     private final IItemHandler itemHandler;
     private final IFluidHandler fluidHandler;
+    private final Supplier<@Nullable MEStorage> networkSupplier;
 
     public AsyncOutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         this(pos, state, kind, null, null);
@@ -31,7 +32,8 @@ public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBl
                                     @Nullable IActionSource actionSource) {
         super(pos, state, kind);
         Supplier<@Nullable MEStorage> effectiveNetworkSupplier = networkSupplier == null
-                ? this::networkStorage : networkSupplier;
+                ? this::gridStorage : networkSupplier;
+        this.networkSupplier = effectiveNetworkSupplier;
         IActionSource effectiveActionSource = actionSource == null
                 ? IActionSource.ofMachine(this) : actionSource;
         itemHandler = AE2NativeAdapters.outputItems(getStorage(), effectiveNetworkSupplier,
@@ -51,7 +53,12 @@ public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBl
     }
 
     @Nullable
-    private MEStorage networkStorage() {
+    public MEStorage networkStorage() {
+        return networkSupplier.get();
+    }
+
+    @Nullable
+    private MEStorage gridStorage() {
         IGrid grid = mainNode.getGrid();
         return grid == null ? null : grid.getStorageService().getInventory();
     }

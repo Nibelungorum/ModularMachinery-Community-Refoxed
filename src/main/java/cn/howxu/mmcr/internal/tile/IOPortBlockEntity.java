@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
@@ -135,8 +136,13 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                         ? storage.getAmountAsLong() : energyStorage.getEnergyStored();
                 slots.add(new SlotAvailability(resource, amount));
             } else if (chemical != null) {
-                amount = chemical.amount();
-                slots.add(new SlotAvailability(resource, amount));
+                resources.clear();
+                for (ChemicalViewFacet.ChemicalAmount entry : chemical.contents()) {
+                    if (entry.amount() <= 0L) continue;
+                    resources.add(entry.id());
+                    slots.add(new SlotAvailability(entry.id(), entry.amount()));
+                    amount = RequirementHandlerSupport.saturatingAdd(amount, entry.amount());
+                }
             } else {
                 IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);
                 IFluidHandler fluidHandler = CapabilityFactories.fluidHandler(capability);
@@ -162,6 +168,28 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
             long previousAmount = previous == null ? 0L : previous.amount();
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
+            if (chemical != null) {
+                List<SlotAvailability> previousSlots = previous == null ? List.of() : previous.slots();
+                if (capability.directions().supports(IOType.INPUT)) {
+                    for (SlotAvailability current : slots) {
+                        long before = previousSlots.stream().filter(slot -> slot.resource().equals(current.resource()))
+                                .mapToLong(SlotAvailability::amount).sum();
+                        if (current.amount() > before) {
+                            notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, current.resource());
+                        }
+                    }
+                }
+                if (capability.directions().supports(IOType.OUTPUT)) {
+                    for (SlotAvailability before : previousSlots) {
+                        long current = slots.stream().filter(slot -> slot.resource().equals(before.resource()))
+                                .mapToLong(SlotAvailability::amount).sum();
+                        if (current < before.amount()) {
+                            notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, before.resource());
+                        }
+                    }
+                }
+                continue;
+            }
             boolean resourceChanged = previous != null && !resources.equals(previousResources);
             if (amount > previousAmount && capability.directions().supports(IOType.INPUT)) {
                 ResourceAvailabilityNotifier.Reason reason = valueStorage != null || energyStorage != null

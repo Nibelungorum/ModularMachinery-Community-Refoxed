@@ -258,14 +258,8 @@ public final class InterfacePredicates {
 
     private static BlockPredicate anyOfChemicalPorts(IOType ioType, boolean radioactive) {
         if (!MekanismBridge.get().available()) return BlockPredicate.none();
-        List<BlockPredicate> predicates = new ArrayList<>();
-        for (IOPortKind kind : PortKinds.all()) {
-            if (kind instanceof PortKinds.ChemicalKind chemical
-                    && chemical.ioType() == ioType && chemical.radioactive() == radioactive) {
-                predicates.add(port(kind.id()));
-            }
-        }
-        return predicates.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(predicates);
+        return anyOfPorts(radioactive ? MekanismPortFamilies.RADIOACTIVE_CHEMICAL
+                : MekanismPortFamilies.CHEMICAL, ioType);
     }
 
     private static void addIfPresent(List<BlockPredicate> predicates, BlockPredicate predicate) {

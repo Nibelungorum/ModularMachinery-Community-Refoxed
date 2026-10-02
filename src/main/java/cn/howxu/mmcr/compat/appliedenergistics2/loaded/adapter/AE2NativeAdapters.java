@@ -11,6 +11,7 @@ import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
+import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
@@ -174,7 +175,7 @@ public final class AE2NativeAdapters {
         @Override public boolean canInsert() { return source.canInsert(); }
     }
 
-    private static final class InventoryItems implements IItemHandler, NativeStackSync.Item {
+    private static final class InventoryItems implements IItemHandler, NativeStackSync.Item, NativeReservationAccess {
         private final GenericStackInv inventory;
 
         private InventoryItems(GenericStackInv inventory) {
@@ -182,6 +183,13 @@ public final class AE2NativeAdapters {
         }
 
         @Override public int getSlots() { return inventory.size(); }
+
+        @Override public Object reservationIdentity() { return inventory; }
+        @Override public Object reservationSlot(int slot) { return slot; }
+        @Override public Object resourceKey(Object resource) { return AEItemKey.of((ItemStack) resource); }
+        @Override public Object resource(Object key) { return key instanceof AEItemKey item ? item.toStack(1) : ItemStack.EMPTY; }
+        @Override public Object storedKey(int slot) { return inventory.getKey(slot); }
+        @Override public long storedAmount(int slot) { return inventory.getAmount(slot); }
 
         @Override public ItemStack getStackInSlot(int slot) {
             AEKey key = inventory.getKey(slot);
@@ -222,12 +230,19 @@ public final class AE2NativeAdapters {
         }
 
         @Override public void setContents(int slot, ItemStack stack, long amount) {
+            if ((stack.isEmpty() || amount <= 0L) && inventory.getKey(slot) != null
+                    && !(inventory.getKey(slot) instanceof AEItemKey)) return;
             inventory.setStack(slot, stack.isEmpty() || amount <= 0L ? null
                     : new GenericStack(AEItemKey.of(stack), amount));
         }
+
+        @Override public boolean isSyncCapacityValid(int slot, ItemStack stack, long capacity) {
+            return stack.isEmpty() ? capacity == 0L || capacity == inventory.getCapacity(AEKeyType.items())
+                    : capacity == inventory.getMaxAmount(AEItemKey.of(stack));
+        }
     }
 
-    private static final class InventoryFluids implements IFluidHandler, NativeStackSync.Fluid {
+    private static final class InventoryFluids implements IFluidHandler, NativeStackSync.Fluid, NativeReservationAccess {
         private final GenericStackInv inventory;
 
         private InventoryFluids(GenericStackInv inventory) {
@@ -235,6 +250,13 @@ public final class AE2NativeAdapters {
         }
 
         @Override public int getTanks() { return inventory.size(); }
+
+        @Override public Object reservationIdentity() { return inventory; }
+        @Override public Object reservationSlot(int slot) { return slot; }
+        @Override public Object resourceKey(Object resource) { return AEFluidKey.of((FluidStack) resource); }
+        @Override public Object resource(Object key) { return key instanceof AEFluidKey fluid ? fluid.toStack(1) : FluidStack.EMPTY; }
+        @Override public Object storedKey(int slot) { return inventory.getKey(slot); }
+        @Override public long storedAmount(int slot) { return inventory.getAmount(slot); }
 
         @Override public FluidStack getFluidInTank(int tank) {
             AEKey key = inventory.getKey(tank);
@@ -291,12 +313,19 @@ public final class AE2NativeAdapters {
         }
 
         @Override public void setContents(int tank, FluidStack stack, long amount) {
+            if ((stack.isEmpty() || amount <= 0L) && inventory.getKey(tank) != null
+                    && !(inventory.getKey(tank) instanceof AEFluidKey)) return;
             inventory.setStack(tank, stack.isEmpty() || amount <= 0L ? null
                     : new GenericStack(AEFluidKey.of(stack), amount));
         }
+
+        @Override public boolean isSyncCapacityValid(int tank, FluidStack stack, long capacity) {
+            return stack.isEmpty() ? capacity == 0L || capacity == inventory.getCapacity(AEKeyType.fluids())
+                    : capacity == inventory.getMaxAmount(AEFluidKey.of(stack));
+        }
     }
 
-    private static final class NetworkItems implements IItemHandler, NativeStackSync.Item {
+    private static final class NetworkItems implements IItemHandler, NativeStackSync.Item, NativeReservationAccess {
         private final Supplier<MEStorage> storage;
         private final Supplier<List<AEKey>> keys;
         private final IActionSource source;
@@ -309,6 +338,13 @@ public final class AE2NativeAdapters {
         }
 
         @Override public int getSlots() { return keys().size(); }
+
+        @Override public Object reservationIdentity() { return storage.get(); }
+        @Override public Object reservationSlot(int slot) { return key(slot); }
+        @Override public Object resourceKey(Object resource) { return AEItemKey.of((ItemStack) resource); }
+        @Override public Object resource(Object key) { return key instanceof AEItemKey item ? item.toStack(1) : ItemStack.EMPTY; }
+        @Override public Object storedKey(int slot) { return key(slot); }
+        @Override public long storedAmount(int slot) { return storage.get().extract(key(slot), Long.MAX_VALUE, Actionable.SIMULATE, source); }
 
         @Override public ItemStack getStackInSlot(int slot) {
             AEKey key = key(slot);
@@ -346,13 +382,13 @@ public final class AE2NativeAdapters {
         }
 
         private List<AEKey> keys() {
-            return keys.get().stream().filter(key -> key instanceof AEItemKey).toList();
+            return keys.get().stream().filter(key -> key instanceof AEItemKey).distinct().toList();
         }
 
         private AEKey key(int slot) { return keys().get(slot); }
     }
 
-    private static final class NetworkFluids implements IFluidHandler, NativeStackSync.Fluid {
+    private static final class NetworkFluids implements IFluidHandler, NativeStackSync.Fluid, NativeReservationAccess {
         private final Supplier<MEStorage> storage;
         private final Supplier<List<AEKey>> keys;
         private final IActionSource source;
@@ -365,6 +401,13 @@ public final class AE2NativeAdapters {
         }
 
         @Override public int getTanks() { return keys().size(); }
+
+        @Override public Object reservationIdentity() { return storage.get(); }
+        @Override public Object reservationSlot(int tank) { return key(tank); }
+        @Override public Object resourceKey(Object resource) { return AEFluidKey.of((FluidStack) resource); }
+        @Override public Object resource(Object key) { return key instanceof AEFluidKey fluid ? fluid.toStack(1) : FluidStack.EMPTY; }
+        @Override public Object storedKey(int tank) { return key(tank); }
+        @Override public long storedAmount(int tank) { return storage.get().extract(key(tank), Long.MAX_VALUE, Actionable.SIMULATE, source); }
 
         @Override public FluidStack getFluidInTank(int tank) {
             AEKey key = key(tank);
@@ -411,13 +454,13 @@ public final class AE2NativeAdapters {
         }
 
         private List<AEKey> keys() {
-            return keys.get().stream().filter(key -> key instanceof AEFluidKey).toList();
+            return keys.get().stream().filter(key -> key instanceof AEFluidKey).distinct().toList();
         }
 
         private AEKey key(int tank) { return keys().get(tank); }
     }
 
-    private static final class OutputItems implements IItemHandler, NativeStackSync.Item {
+    private static final class OutputItems implements IItemHandler, NativeStackSync.Item, NativeReservationAccess {
         private final Supplier<@Nullable MEStorage> storage;
         private final IActionSource source;
         private final Runnable changed;
@@ -432,12 +475,21 @@ public final class AE2NativeAdapters {
         }
 
         @Override public int getSlots() { return local.getSlots(); }
+        @Override public Object reservationIdentity() { return ((NativeReservationAccess) local).reservationIdentity(); }
+        @Override public Object reservationSlot(int slot) { return slot; }
+        @Override public Object resourceKey(Object resource) { return ((NativeReservationAccess) local).resourceKey(resource); }
+        @Override public Object resource(Object key) { return ((NativeReservationAccess) local).resource(key); }
+        @Override public Object storedKey(int slot) { return ((NativeReservationAccess) local).storedKey(slot); }
+        @Override public long storedAmount(int slot) { return ((NativeReservationAccess) local).storedAmount(slot); }
         @Override public ItemStack getStackInSlot(int slot) { return local.getStackInSlot(slot); }
         @Override public ItemStack extractItem(int slot, int amount, boolean simulate) { return local.extractItem(slot, amount, simulate); }
         @Override public int getSlotLimit(int slot) { return local.getSlotLimit(slot); }
         @Override public boolean isItemValid(int slot, ItemStack stack) { return local.isItemValid(slot, stack); }
         @Override public long amount(int slot) { return ((NativeStackSync.Item) local).amount(slot); }
         @Override public long capacity(int slot) { return ((NativeStackSync.Item) local).capacity(slot); }
+        @Override public boolean isSyncCapacityValid(int slot, ItemStack stack, long capacity) {
+            return ((NativeStackSync.Item) local).isSyncCapacityValid(slot, stack, capacity);
+        }
         @Override public void setContents(int slot, ItemStack stack, long amount) {
             ((NativeStackSync.Item) local).setContents(slot, stack, amount);
         }
@@ -461,7 +513,7 @@ public final class AE2NativeAdapters {
         }
     }
 
-    private static final class OutputFluids implements IFluidHandler, NativeStackSync.Fluid {
+    private static final class OutputFluids implements IFluidHandler, NativeStackSync.Fluid, NativeReservationAccess {
         private final Supplier<@Nullable MEStorage> storage;
         private final IActionSource source;
         private final Runnable changed;
@@ -476,11 +528,20 @@ public final class AE2NativeAdapters {
         }
 
         @Override public int getTanks() { return local.getTanks(); }
+        @Override public Object reservationIdentity() { return ((NativeReservationAccess) local).reservationIdentity(); }
+        @Override public Object reservationSlot(int tank) { return tank; }
+        @Override public Object resourceKey(Object resource) { return ((NativeReservationAccess) local).resourceKey(resource); }
+        @Override public Object resource(Object key) { return ((NativeReservationAccess) local).resource(key); }
+        @Override public Object storedKey(int tank) { return ((NativeReservationAccess) local).storedKey(tank); }
+        @Override public long storedAmount(int tank) { return ((NativeReservationAccess) local).storedAmount(tank); }
         @Override public FluidStack getFluidInTank(int tank) { return local.getFluidInTank(tank); }
         @Override public int getTankCapacity(int tank) { return local.getTankCapacity(tank); }
         @Override public boolean isFluidValid(int tank, FluidStack stack) { return local.isFluidValid(tank, stack); }
         @Override public long amount(int tank) { return ((NativeStackSync.Fluid) local).amount(tank); }
         @Override public long capacity(int tank) { return ((NativeStackSync.Fluid) local).capacity(tank); }
+        @Override public boolean isSyncCapacityValid(int tank, FluidStack stack, long capacity) {
+            return ((NativeStackSync.Fluid) local).isSyncCapacityValid(tank, stack, capacity);
+        }
         @Override public void setContents(int tank, FluidStack stack, long amount) {
             ((NativeStackSync.Fluid) local).setContents(tank, stack, amount);
         }

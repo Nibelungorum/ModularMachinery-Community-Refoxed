@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -104,20 +105,20 @@ public class AE2AsyncOutputInterfaceGameTest {
                     "Async output interface does not expose an external fluid handler");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == 2,
-                    "Async output interface exposes exactly item and fluid MMCR capabilities");
+            helper.assertTrue(snapshot.capabilities().size() == (AppMekBridge.get().available() ? 3 : 2),
+                    "Async output interface exposes its loaded resource families");
             for (MachineCapability capability : snapshot.capabilities()) {
                 ResourceLocation id = capability.type().id();
-                helper.assertTrue(id.equals(PortFamilyIds.ITEM) || id.equals(PortFamilyIds.FLUID),
+                helper.assertTrue(id.equals(PortFamilyIds.ITEM) || id.equals(PortFamilyIds.FLUID)
+                                || AppMekBridge.get().available() && id.equals(MekanismPortFamilies.CHEMICAL),
                         "Async output capability is bound to the item or fluid family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Async output capability does not expose TransferFacet");
             }
             helper.assertTrue(snapshot.capabilities().stream()
                             .map(MachineCapability::type)
-                            .noneMatch(type -> type.id().equals(MekanismPortFamilies.CHEMICAL)
-                                    || type.id().equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL)),
-                    "Async output interface does not expose a chemical capability");
+                            .noneMatch(type -> type.id().equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL)),
+                    "Async output interface does not expose radioactive chemicals");
             helper.assertTrue(port.nativeItemHandler().getSlots() == 9,
                     "Async output exposes the native nine-slot item cache");
             helper.assertTrue(port.nativeFluidHandler().getTanks() == 9,

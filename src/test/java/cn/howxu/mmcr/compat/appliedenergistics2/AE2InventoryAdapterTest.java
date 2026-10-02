@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEFluidKey;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -87,6 +89,25 @@ class AE2InventoryAdapterTest {
         assertThat(reservations.reserveFluidExtract(fluids, 0, new FluidStack(Fluids.WATER, 1), amount)).isTrue();
         assertThat(reservations.itemAmount(items, 0)).isZero();
         assertThat(reservations.fluidAmount(fluids, 0)).isZero();
+    }
+
+    @Test
+    void empty_sync_projections_preserve_other_resource_families() {
+        GenericStackInv inventory = inventory(Set.of(AEKeyType.items(), AEKeyType.fluids()));
+        NativeStackSync.Item items = (NativeStackSync.Item) AE2NativeAdapters.items(inventory);
+        NativeStackSync.Fluid fluids = (NativeStackSync.Fluid) AE2NativeAdapters.fluids(inventory);
+        fluids.setContents(0, new FluidStack(Fluids.WATER, 1), 1_000L);
+        items.setContents(0, ItemStack.EMPTY, 0L);
+        assertThat(fluids.amount(0)).isEqualTo(1_000L);
+        assertThat(items.isSyncCapacityValid(0, new ItemStack(Items.IRON_INGOT),
+                inventory.getMaxAmount(AEItemKey.of(Items.IRON_INGOT)))).isTrue();
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), 4L);
+        fluids.setContents(0, FluidStack.EMPTY, 0L);
+        assertThat(items.amount(0)).isEqualTo(4L);
+        assertThat(fluids.isSyncCapacityValid(0, new FluidStack(Fluids.WATER, 1),
+                inventory.getMaxAmount(AEFluidKey.of(Fluids.WATER)))).isTrue();
+        items.setContents(0, ItemStack.EMPTY, 0L);
+        assertThat(inventory.isEmpty()).isTrue();
     }
 
     private static GenericStackInv inventory(Set<AEKeyType> types) {
