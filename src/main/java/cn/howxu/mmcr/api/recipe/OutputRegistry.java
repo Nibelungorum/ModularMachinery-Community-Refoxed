@@ -92,7 +92,7 @@ public final class OutputRegistry {
         return outputs.stream()
                 .filter(MachineOutput.ItemOutput.class::isInstance)
                 .map(MachineOutput.ItemOutput.class::cast)
-                .map(output -> output.stack().copy())
+                .map(MachineOutput.ItemOutput::resolvedStack)
                 .toList();
     }
 
@@ -130,11 +130,8 @@ public final class OutputRegistry {
     }
 
     private static boolean sameOutput(MachineOutput first, MachineOutput second) {
-        if (first instanceof MachineOutput.ItemOutput(ItemStack stack3, float chance3) && second instanceof MachineOutput.ItemOutput(
-                ItemStack stack2, float chance2
-        )) {
-            return chance3 == chance2 && stack3.getCount() == stack2.getCount()
-                    && ItemStack.isSameItemSameComponents(stack3, stack2);
+        if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
+            return firstItem.chance() == secondItem.chance() && MachineOutput.sameItemOutputResource(firstItem, secondItem);
         }
         if (first instanceof MachineOutput.FluidOutput(FluidStack stack1, float chance1) && second instanceof MachineOutput.FluidOutput(
                 FluidStack stack, float chance

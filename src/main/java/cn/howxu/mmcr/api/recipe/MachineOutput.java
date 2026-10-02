@@ -5,9 +5,11 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.MMCR;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.resources.ResourceLocation;
@@ -101,33 +103,45 @@ public interface MachineOutput {
         return ((OutputType<O>) type).copy((O) output);
     }
 
-    record ItemOutput(ItemStack stack, float chance) implements CustomOutput {
+    record ItemOutput(ItemStack stack, float chance, DataComponentPredicateSet components) implements CustomOutput {
         static final OutputType<ItemOutput> TYPE = new OutputType.Definition<>(
                 MMCR.id("item"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "item"),
                         RECIPE_ITEM_STACK_CODEC.fieldOf("stack").forGetter(ItemOutput::stack),
-                        Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(ItemOutput::chance)
-                ).apply(instance, (ignored, stack, chance) -> new ItemOutput(stack, chance))),
-                (output, chance) -> new ItemOutput(output.stack(), chance),
+                        Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(ItemOutput::chance),
+                        DataComponentPredicateSet.CODEC.optionalFieldOf("components", DataComponentPredicateSet.EMPTY)
+                                .forGetter(ItemOutput::components)
+                ).apply(instance, (ignored, stack, chance, components) -> new ItemOutput(stack, chance, components))),
+                (output, chance) -> new ItemOutput(output.stack(), chance, output.components()),
                 (output, modifiers) -> {
                     ItemStack derived = output.stack().copy();
                     derived.setCount(IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyItemOutput(modifiers, output.stack().getCount())));
-                    return new ItemOutput(derived, IntegrationTypeHelper.applyItemOutputChance(modifiers, output.chance()));
+                    return new ItemOutput(derived, IntegrationTypeHelper.applyItemOutputChance(modifiers, output.chance()), output.components());
                 },
-                output -> new ItemOutput(output.stack(), output.chance()), OutputType.Presentation.defaults(
+                output -> new ItemOutput(output.stack(), output.chance(), output.components()), OutputType.Presentation.defaults(
                 MMCR.id("item")), "item",
                 (output, tags) -> new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        output.stack(), output.chance(), tags),
+                        output.stack(), output.chance(), tags, output.components(), 1F),
                 requirement -> requirement instanceof ItemRequirement item
                         && item.io() == RecipeModifier.IOType.OUTPUT,
                 requirement -> requirement instanceof ItemRequirement item
                         && item.io() == RecipeModifier.IOType.OUTPUT
-                        ? new ItemOutput(item.resolvedStack(), item.chance()) : null);
+                        ? new ItemOutput(item.stack(), item.chance(), item.components()) : null);
+
+        public ItemOutput(ItemStack stack, float chance) {
+            this(stack, chance, DataComponentPredicateSet.EMPTY);
+        }
 
         public ItemOutput {
             stack = stack == null ? ItemStack.EMPTY : stack.copy();
             chance = clampChance(chance);
+            components = components == null ? DataComponentPredicateSet.EMPTY : components;
+        }
+
+        public ItemStack resolvedStack() {
+            return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, chance,
+                    List.of(), components, 1F).resolvedStack();
         }
 
         @Override
@@ -144,6 +158,13 @@ public interface MachineOutput {
         public ItemOutput applyModifiers(List<RecipeModifier> modifiers) {
             return TYPE.applyModifiers(this, modifiers);
         }
+    }
+
+    static boolean sameItemOutputResource(ItemOutput first, ItemOutput second) {
+        return first.stack().getCount() == second.stack().getCount()
+                && ItemStack.isSameItemSameComponents(first.stack(), second.stack())
+                && DataComponentPredicateSet.CODEC.encodeStart(JsonOps.INSTANCE, first.components()).getOrThrow()
+                .equals(DataComponentPredicateSet.CODEC.encodeStart(JsonOps.INSTANCE, second.components()).getOrThrow());
     }
 
     record FluidOutput(FluidStack stack, float chance) implements CustomOutput {
@@ -243,7 +264,7 @@ public interface MachineOutput {
 
     static AggregationKey aggregationKey(MachineOutput output) {
         if (output instanceof ItemOutput item) {
-            ItemStack stripped = item.stack().copy();
+            ItemStack stripped = item.resolvedStack();
             stripped.setCount(1);
             return new AggregationKey(item.outputType(), stripped, null);
         }
@@ -265,7 +286,7 @@ public interface MachineOutput {
          if (template instanceof ItemOutput item) {
              ItemStack stack = item.stack().copy();
              stack.setCount((int) Math.min(amount, Integer.MAX_VALUE));
-             return new ItemOutput(stack, chance);
+             return new ItemOutput(stack, chance, item.components());
          }
          if (template instanceof FluidOutput fluid) {
              FluidStack stack = fluid.stack().copy();

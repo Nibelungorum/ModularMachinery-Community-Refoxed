@@ -62,9 +62,10 @@ public final class RecipeOutputCodec {
     }
 
     private static MachineOutput templateForTransport(MachineOutput output) {
-        if (output instanceof MachineOutput.ItemOutput(net.minecraft.world.item.ItemStack stack, float chance1)) {
+        if (output instanceof MachineOutput.ItemOutput item) {
+            var stack = item.stack().copy();
             stack.setCount(1);
-            return new MachineOutput.ItemOutput(stack, chance1);
+            return new MachineOutput.ItemOutput(stack, item.chance(), item.components());
         }
         if (output instanceof MachineOutput.FluidOutput(net.neoforged.neoforge.fluids.FluidStack stack, float chance)) {
             stack.setAmount(1);

@@ -12,10 +12,12 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import org.jetbrains.annotations.Nullable;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.List;
 import java.util.Optional;
@@ -102,6 +104,8 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
     public ItemStack stack(DynamicOps<?> ops) {
         ItemStack copy = stack.copy();
         if (!components.isEmpty()) {
+            var server = ServerLifecycleHooks.getCurrentServer();
+            if (ops == null && server != null) ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
             if (ops == null) components.applyTo(copy);
             else components.applyTo(copy, ops);
         }

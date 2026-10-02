@@ -356,7 +356,10 @@ class PublicRecipeBuilderTest {
 
         MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
         assertThat(decoded.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
-                decodedOutput -> assertThat(decodedOutput.stack().get(DataComponents.ENCHANTMENTS)).isNotNull()
+                decodedOutput -> assertThat(((ItemRequirement)
+                        OutputRegistry.toRequirement(decodedOutput, List.of()))
+                        .stack(networkRegistryAccess().createSerializationContext(JsonOps.INSTANCE))
+                        .get(DataComponents.ENCHANTMENTS)).isNotNull()
                         .isNotEqualTo(ItemEnchantments.EMPTY));
     }
 

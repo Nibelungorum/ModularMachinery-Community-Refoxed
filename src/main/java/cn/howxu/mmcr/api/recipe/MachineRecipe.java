@@ -248,11 +248,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     private static boolean sameOutput(MachineOutput first, MachineOutput second) {
-        if (first instanceof MachineOutput.ItemOutput(ItemStack stack3, float chance3) && second instanceof MachineOutput.ItemOutput(
-                ItemStack stack2, float chance2
-        )) {
-            return chance3 == chance2 && stack3.getCount() == stack2.getCount()
-                    && ItemStack.isSameItemSameComponents(stack3, stack2);
+        if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
+            return firstItem.chance() == secondItem.chance() && MachineOutput.sameItemOutputResource(firstItem, secondItem);
         }
         if (first instanceof MachineOutput.FluidOutput(FluidStack stack1, float chance1) && second instanceof MachineOutput.FluidOutput(
                 FluidStack stack, float chance
@@ -266,8 +263,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     private static boolean sameOutputResource(MachineOutput first, MachineOutput second) {
         if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
-            return firstItem.stack().getCount() == secondItem.stack().getCount()
-                    && ItemStack.isSameItemSameComponents(firstItem.stack(), secondItem.stack());
+            return MachineOutput.sameItemOutputResource(firstItem, secondItem);
         }
         if (first instanceof MachineOutput.FluidOutput firstFluid && second instanceof MachineOutput.FluidOutput secondFluid) {
             return firstFluid.stack().getAmount() == secondFluid.stack().getAmount()

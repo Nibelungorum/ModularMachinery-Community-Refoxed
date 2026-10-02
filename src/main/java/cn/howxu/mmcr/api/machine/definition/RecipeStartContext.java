@@ -164,7 +164,7 @@ public final class RecipeStartContext {
         for (MachineRequirement requirement : requirements) {
             if (requirement instanceof ItemRequirement item
                     && item.io() == RecipeModifier.IOType.OUTPUT) {
-                result.add(new MachineOutput.ItemOutput(item.resolvedStack(), item.chance()));
+                result.add(new MachineOutput.ItemOutput(item.stack(), item.chance(), item.components()));
             } else if (requirement instanceof FluidRequirement fluid
                     && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 result.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));

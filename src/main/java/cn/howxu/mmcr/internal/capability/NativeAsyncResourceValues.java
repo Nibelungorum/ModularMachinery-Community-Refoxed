@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
@@ -13,6 +15,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
  * Converts native resources at the main-thread boundary of async planning.
@@ -62,10 +65,17 @@ public final class NativeAsyncResourceValues {
     }
 
     private static String patch(DataComponentPatch patch) {
-        return DataComponentPatch.CODEC.encodeStart(JsonOps.INSTANCE, patch).getOrThrow().toString();
+        if (patch.isEmpty()) return "{}";
+        return DataComponentPatch.CODEC.encodeStart(componentOps(), patch).getOrThrow().toString();
     }
 
     private static DataComponentPatch patch(String value) {
-        return DataComponentPatch.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(value)).getOrThrow();
+        if (value.equals("{}")) return DataComponentPatch.EMPTY;
+        return DataComponentPatch.CODEC.parse(componentOps(), JsonParser.parseString(value)).getOrThrow();
+    }
+
+    private static DynamicOps<JsonElement> componentOps() {
+        var server = ServerLifecycleHooks.getCurrentServer();
+        return server == null ? JsonOps.INSTANCE : server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
     }
 }
