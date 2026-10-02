@@ -51,6 +51,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.item.Item;
@@ -71,6 +72,33 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ControllerTickGameTest {
+
+    public void formedControllerCanBeBroken(GameTestHelper helper, boolean active) {
+        ResourceLocation machineId = MMCR.id("controller_tick");
+        BlockPos pos = new BlockPos(1, 1, 1);
+        for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)
+            helper.setBlock(new BlockPos(x, 1, z), ModBlocks.CASING.get().defaultBlockState());
+        helper.setBlock(pos, ModBlocks.controllerFor(machineId).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(pos);
+        controller.setMachine(MachineRegistry.getMachine(machineId));
+        controller.setFormed(true);
+        BlockPos worldPos = helper.absolutePos(pos);
+        ServerLevel level = helper.getLevel();
+        level.setBlock(worldPos, level.getBlockState(worldPos).setValue(MachineControllerBlock.ACTIVE, active), 3);
+        helper.assertTrue(level.getBlockEntity(worldPos) == controller && !controller.isRemoved()
+                        && level.getBlockState(worldPos).getValue(MachineControllerBlock.FORMED),
+                "Controller property updates preserve the formed block entity");
+
+        ServerPlayer player = observer(helper);
+        player.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_PICKAXE));
+        helper.assertTrue(player.gameMode.destroyBlock(worldPos), "Player can break the formed controller");
+        helper.assertTrue(level.getBlockState(worldPos).isAir(), "Breaking does not restore the controller block");
+        helper.assertTrue(level.getBlockEntity(worldPos) == null && controller.isRemoved(),
+                "Breaking removes the controller entity and its ticker");
+        helper.assertTrue(!controller.structureSnapshot().formed(), "Breaking clears the formed runtime");
+        helper.succeed();
+    }
 
     public void structureForms3x3Casing(GameTestHelper helper) {
         ResourceLocation machineId = MMCR.id("controller_tick");

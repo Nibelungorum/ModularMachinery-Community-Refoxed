@@ -77,6 +77,10 @@ public final class GameTestRegistry {
                 helper -> new ItemOutputComponentGameTest().publicOutputViewPreservesComponentsWhenRebuilt(helper));
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
+        register(event, "formed_controller_break", 20,
+                helper -> new ControllerTickGameTest().formedControllerCanBeBroken(helper, false));
+        register(event, "active_controller_break", 20,
+                helper -> new ControllerTickGameTest().formedControllerCanBeBroken(helper, true));
         register(event, "upgrade_bus_invalidation", 100,
                 helper -> new UpgradeBusGameTest().optionalBusesPreserveActiveRecipe(helper));
         register(event, "controller_tick_recipe_hooks", 100,

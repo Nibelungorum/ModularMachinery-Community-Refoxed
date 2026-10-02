@@ -226,8 +226,11 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         return InteractionResult.SUCCESS;
     }
 
+    @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
+        // Mark the entity removed before cleanup can write its cached controller state back into the world.
+        super.onRemove(state, level, pos, newState, moving);
         if (moving || state.getBlock() == newState.getBlock()) return;
         if (!level.isClientSide() && blockEntity instanceof MachineControllerBlockEntity controller) {
             controller.onBlockRemoved();
