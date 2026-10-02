@@ -240,6 +240,7 @@ public final class MachineDefinitionConverter {
                             case ITEM -> PortTierRequirementSpec.PortCategory.ITEM;
                             case FLUID -> PortTierRequirementSpec.PortCategory.FLUID;
                             case ENERGY -> PortTierRequirementSpec.PortCategory.ENERGY;
+                            case SOURCE -> PortTierRequirementSpec.PortCategory.SOURCE;
                         },
                         requirement.ioType(),
                         requirement.minTier(),

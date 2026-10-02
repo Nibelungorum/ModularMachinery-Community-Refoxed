@@ -30,6 +30,9 @@ public final class BlockConditions {
     public static BlockCondition fluidOutput() { return BlockAdapters.fluidOutput(); }
     public static BlockCondition energyInput() { return BlockAdapters.energyInput(); }
     public static BlockCondition energyOutput() { return BlockAdapters.energyOutput(); }
+    public static BlockCondition sourceInput() { return BlockAdapters.sourceInput(); }
+    public static BlockCondition sourceOutput() { return BlockAdapters.sourceOutput(); }
+    public static BlockCondition sourcePorts() { return BlockAdapters.sourcePorts(); }
     public static BlockCondition chemicalInput() { return BlockAdapters.chemicalInput(); }
     public static BlockCondition chemicalOutput() { return BlockAdapters.chemicalOutput(); }
     public static BlockCondition radioactiveChemicalInput() { return BlockAdapters.radioactiveChemicalInput(); }

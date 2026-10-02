@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.create;
 
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -17,6 +18,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.api.compat.create.StressFacet;
 import cn.howxu.mmcr.api.compat.create.StressState;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -327,6 +329,23 @@ class StressPlanningTest {
         assertThat(firstOutput.ledger.baseStress()).isZero();
         lane.releaseAll();
         assertThat(input.ledger.baseStress()).isZero();
+    }
+
+    @Test
+    void exact_output_planning_preserves_session_ownership_for_commit_and_release() {
+        var output = new Port(new Network(0), 0, IOType.OUTPUT);
+        var lane = new StressSession();
+        var context = new CraftingContext(new CapabilitySnapshot(List.of(new PortCapability(output))))
+                .withReservationOwner(lane);
+        var result = context.planOutputRequirements(List.of(StressRequirement.output(8, -64)), 2, false);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(output.ledger.get(lane, 0)).isNull();
+        assertThat(result.plan().commitOutputs()).isTrue();
+        assertThat(output.ledger.get(lane, 0)).isEqualTo(new StressContributions.Contribution(16, -64));
+        lane.releaseAll();
+        assertThat(output.ledger.get(lane, 0)).isNull();
+        assertThat(output.ledger.baseStress()).isZero();
     }
 
     @Test

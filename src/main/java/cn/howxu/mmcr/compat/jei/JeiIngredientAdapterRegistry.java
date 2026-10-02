@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiAdapter;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import mekanism.api.MekanismAPI;
@@ -61,6 +62,7 @@ public final class JeiIngredientAdapterRegistry {
         register(new ItemAdapter());
         register(new FluidAdapter());
         register(new ChemicalAdapter());
+        register(new SourceJeiAdapter());
     }
 
     static JeiDisplayEntry textEntry(RecipeIoEntry entry) {

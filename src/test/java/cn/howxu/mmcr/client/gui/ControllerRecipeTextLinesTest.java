@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.util.ReadableNumber;
 import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
@@ -102,6 +104,47 @@ class ControllerRecipeTextLinesTest {
     @Test
     void plainTextDoesNotReserveSpaceForAnIcon() {
         assertThat(new ControllerTextLine(Component.literal("external"), 0xFFFFFFFF).textXOffset()).isZero();
+    }
+
+    @Test
+    void sourceOutputRetainsItsLongTotalAndAnItemIconWithoutAnArsIcon() {
+        try (var outputScope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(SourceOutput.TYPE);
+            var presentation = new ControllerRecipePresentation(List.of(
+                    new MachineOutputAmount(new SourceOutput(10_000L), Long.MAX_VALUE)), 0L, 0L, 0D);
+
+            List<ControllerTextLine> lines = ControllerRecipeTextLines.create(presentation);
+
+            assertThat(lines).hasSize(2);
+            assertThat(lines.getFirst().text()).isEqualTo(Component.translatable("gui.mmcr.controller.recipe_output.title"));
+            ControllerTextLine output = lines.getLast();
+            assertThat(output.text()).isEqualTo(Component.translatable("gui.mmcr.controller.recipe_output.source",
+                    ReadableNumber.format(Long.MAX_VALUE)));
+            assertThat(output.tooltip()).containsExactly(Component.translatable(
+                    "gui.mmcr.source.exact", "9,223,372,036,854,775,807"));
+            assertThat(output.leftIndent()).isEqualTo(4);
+            assertThat(output.icon()).isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class,
+                    icon -> assertThat(icon.stack().isEmpty()).isTrue());
+            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation).orElseThrow())
+                    .isInstanceOf(ControllerTextLine.ItemIcon.class);
+        }
+    }
+
+    @Test
+    void sourceOutputUsesParallelRecipeTotalsAndSaturatesLongOverflow() {
+        try (var outputScope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(SourceOutput.TYPE);
+            MachineRecipe recipe = new MachineRecipe(MMCR.id("source_recipe_text"), MMCR.id("test_cube"), 20,
+                    List.of(), List.of(new SourceOutput(3_000_000_001L)),
+                    List.of(), 0, 1, false, false, false, Set.of());
+
+            assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L)).singleElement().satisfies(line ->
+                    assertThat(line.tooltip()).containsExactly(Component.translatable(
+                            "gui.mmcr.source.exact", "9,000,000,003")));
+            assertThat(ControllerRecipeTextLines.forRecipe(recipe, Long.MAX_VALUE)).singleElement().satisfies(line ->
+                    assertThat(line.tooltip()).containsExactly(Component.translatable(
+                            "gui.mmcr.source.exact", "9,223,372,036,854,775,807")));
+        }
     }
 
     @Test

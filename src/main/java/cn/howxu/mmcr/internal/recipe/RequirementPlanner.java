@@ -49,6 +49,21 @@ public final class RequirementPlanner {
                                List<MachineCapability> capabilities,
                                PlanningContext context,
                                List<Integer> requirementIndexes) {
+        return plan(requirements, capabilities, context, requirementIndexes, false);
+    }
+
+    /** Plans an already active batch without searching for a smaller candidate. */
+    public PlanningResult planExact(List<MachineRequirement> requirements,
+                                    List<MachineCapability> capabilities,
+                                    PlanningContext context,
+                                    List<Integer> requirementIndexes) {
+        return plan(requirements, capabilities, context, requirementIndexes, true);
+    }
+
+    private PlanningResult plan(List<MachineRequirement> requirements,
+                                List<MachineCapability> capabilities,
+                                PlanningContext context,
+                                List<Integer> requirementIndexes, boolean exactParallelism) {
         if (requirements == null || capabilities == null || context == null) {
             throw new IllegalArgumentException("requirements, capabilities and context must not be null");
         }
@@ -87,6 +102,20 @@ public final class RequirementPlanner {
         long lower = 0L;
         long upper = parallelism;
         ReservationAttempt lastFailure = null;
+        if (exactParallelism) {
+            ReservationAttempt attempt = reserveCandidate(plans, requirementIndexes,
+                    context.requestedParallelism(), context.reservations());
+            if (!attempt.successful()) {
+                return new PlanningResult(null, attempt.failure(), attempt.outputSimulations(), attempt.failureIndex());
+            }
+            for (int index = 0; index < plans.size(); index++) {
+                if (plans.get(index).maxParallelism() < context.requestedParallelism()) {
+                    return new PlanningResult(null, failure(requirements.get(index), requirementIndexes.get(index)),
+                            attempt.outputSimulations(), requirementIndexes.get(index));
+                }
+            }
+            lower = context.requestedParallelism();
+        }
         while (lower < upper) {
             long distance = upper - lower;
             long candidate = lower + (distance >>> 1) + (distance & 1L);

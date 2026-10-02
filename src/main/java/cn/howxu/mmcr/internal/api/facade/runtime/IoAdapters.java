@@ -60,6 +60,8 @@ public final class IoAdapters {
         public List<StressState> stressInputs() { return delegate.stressInputs().stream().map(IoAdapters::wrap).toList(); }
         public List<StressState> stressOutputs() { return delegate.stressOutputs().stream().map(IoAdapters::wrap).toList(); }
         public long energyInput() { return delegate.energyInput(); }
+        public long sourceInput() { return delegate.sourceInput(); }
+        public long sourceOutputCapacity() { return delegate.sourceOutputCapacity(); }
         public long itemAmount(Ingredient ingredient) { return delegate.itemAmount(ingredient); }
         public long fluidAmount(FluidIngredient ingredient) { return delegate.fluidAmount(ingredient); }
         public long itemOutputCapacity(ItemStack stack) { return delegate.itemOutputCapacity(stack); }

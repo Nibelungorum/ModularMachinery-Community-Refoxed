@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
@@ -478,6 +479,7 @@ public final class PortKinds {
         defaults.addAll(AE2Bridge.get().portKinds());
         defaults.addAll(AppliedFluxBridge.get().portKinds());
         defaults.addAll(CreateBridge.get().portKinds());
+        defaults.addAll(ArsNouveauBridge.get().portKinds());
         for (MekanismBridge.PortDeclaration declaration : MekanismBridge.get().portDeclarations()) {
             if (declaration.type() == MekanismBridge.PortType.CHEMICAL) {
                 defaults.add(new ChemicalKind(declaration.id(), declaration.ioType(), declaration.tier(),

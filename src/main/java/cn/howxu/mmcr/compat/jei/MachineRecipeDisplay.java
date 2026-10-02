@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -258,6 +259,7 @@ public record MachineRecipeDisplay(
         }
         if (requirement instanceof EnergyRequirement energy) return energy.fePerTick();
         if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.ingredient().amount();
+        if (requirement instanceof SourceRequirement source) return source.amount();
         return 1L;
     }
 

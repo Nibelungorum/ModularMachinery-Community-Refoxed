@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 
@@ -41,6 +42,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                             case ITEM -> PortCategory.ITEM;
                             case FLUID -> PortCategory.FLUID;
                             case ENERGY -> PortCategory.ENERGY;
+                            case SOURCE -> PortCategory.SOURCE;
                         }, requirement.ioType(), requirement.minTier(), requirement.minTierId()))
                 .toList());
     }
@@ -75,7 +77,8 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
     public enum PortCategory {
         ITEM,
         FLUID,
-        ENERGY
+        ENERGY,
+        SOURCE
     }
 
     public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
@@ -84,6 +87,9 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
             if (minTierId == null || minTierId.isBlank()) throw new IllegalArgumentException("minTierId blank");
+            if (category == PortCategory.SOURCE && (minTier != 0 || !minTierId.equals("normal"))) {
+                throw new IllegalArgumentException("Source ports only support the normal tier");
+            }
         }
 
         public String id() {
@@ -95,6 +101,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                 case ITEM -> ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus";
                 case FLUID -> ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch";
                 case ENERGY -> ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch";
+                case SOURCE -> ioType == IOType.INPUT ? "source_input_interface" : "source_output_interface";
             };
         }
 
@@ -116,6 +123,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                 case ITEM -> PortFamilyIds.ITEM;
                 case FLUID -> PortFamilyIds.FLUID;
                 case ENERGY -> PortFamilyIds.ENERGY;
+                case SOURCE -> ArsSourceIds.SOURCE;
             };
             return port.families().stream()
                     .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType)
@@ -158,6 +166,10 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         public Builder anyEnergyOutput() {
             return minEnergyOutput(EnergyHatchSize.TINY);
         }
+
+        public Builder anySourceInput() { return add(PortCategory.SOURCE, IOType.INPUT, 0, "normal"); }
+
+        public Builder anySourceOutput() { return add(PortCategory.SOURCE, IOType.OUTPUT, 0, "normal"); }
 
         public Builder minItemInput(ItemBusSize size) {
             return add(PortCategory.ITEM, IOType.INPUT, size.ordinal(), size.id());

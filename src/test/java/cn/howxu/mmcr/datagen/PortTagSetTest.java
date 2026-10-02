@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.SourcePortKind;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
@@ -18,6 +20,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PortTagSetTest {
+    @Test
+    void sourceInterfacesDeriveOptionalSourceTagsWithoutEnergyTags() {
+        for (IOType direction : IOType.values()) {
+            String id = direction == IOType.INPUT ? ArsSourceIds.INPUT : ArsSourceIds.OUTPUT;
+            PortTagSet tags = PortTagSet.forKind(new SourcePortKind(id, direction));
+
+            assertEquals(List.of(MMCR.id("ports"), MMCR.id("machines"),
+                    MMCR.id("ars_nouveau_source_ports"),
+                    MMCR.id("ars_nouveau_source_" + direction.getSerializedName() + "_ports"),
+                    MMCR.id("ars_nouveau_ports")), tags.tags());
+            assertTrue(tags.optionalEntries());
+        }
+    }
+
     @Test
     void classifiesBuiltInItemInputPort() {
         PortTagSet tags = PortTagSet.forKind(PortKinds.ITEM_INPUT);

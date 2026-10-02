@@ -3,6 +3,11 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauRecipeTypes;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
@@ -545,6 +550,28 @@ class MachineRecipeSchemaTest {
         @Override
         public RequirementType<TestRequirement> type() {
             return TYPE;
+        }
+    }
+
+    @Test
+    void generic_schema_source_io_matches_direct_builder_and_retains_long_amounts() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var outputs = OutputRegistry.openTestScope()) {
+            ArsNouveauRecipeTypes.register();
+            long amount = 3_000_000_000L;
+            var recipe = new KubeRecipe();
+            recipe.json = new JsonObject();
+            MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(recipe),
+                    List.of(ArsSourceIds.SOURCE.toString(), "input", SourceRecipeDeclarations.inputPayload(amount)));
+            MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(recipe),
+                    List.of(ArsSourceIds.SOURCE.toString(), "output", SourceRecipeDeclarations.outputPayload(amount)));
+            var builder = new MachineRecipeBuilderJS("test:source_schema").inputSource(amount).outputSource(amount);
+            assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                    recipe.json.getAsJsonArray("requirements").get(0)).getOrThrow()).isEqualTo(SourceRequirement.input(amount));
+            assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
+                    recipe.json.getAsJsonArray("outputs").get(0)).getOrThrow()).isEqualTo(new SourceOutput(amount));
+            assertThat(builder.requirements).containsExactly(SourceRequirement.input(amount));
+            assertThat(builder.customOutputs).containsExactly(new SourceOutput(amount));
         }
     }
 

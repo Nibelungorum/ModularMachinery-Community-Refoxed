@@ -64,6 +64,8 @@ dependencies {
 }
 
 dependencies {
+    // Native Ars relay types expose GeckoLib interfaces during GameTest compilation.
+    gametestCompileOnly "curse.maven:${geckolib_id}:${geckolib_version}"
     gametestCompileOnly fileTree("${gradle.gradleUserHomeDir}/caches/neoformruntime/intermediate_results") {
         include 'compiledWithNeoForge_*_output.jar'
     }

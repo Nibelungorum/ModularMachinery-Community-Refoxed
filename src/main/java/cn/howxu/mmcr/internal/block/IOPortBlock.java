@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.MachinePort;
@@ -96,6 +97,9 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
     @Override
     protected @NonNull ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
                                                        BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        if (ArsNouveauBridge.get().isSourcePort(kind.id()) && ArsNouveauBridge.get().isDominionWand(stack)) {
+            return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
+        }
         if (AE2Bridge.get().useMemoryCard(stack, level, pos, player)) {
             return ItemInteractionResult.SUCCESS;
         }
@@ -145,6 +149,8 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
                     if (!(level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined)) return InteractionResult.SUCCESS;
                     player.openMenu(provider, buffer -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined));
                     PktPortStorageSyncPayload.sendTo(player, combined);
+                } else if (ArsNouveauBridge.get().isSourcePort(kind.id())) {
+                    player.openMenu(provider, pos);
                 } else if (MekanismBridge.get().isPort(kind.id())) {
                     player.openMenu(provider, buffer -> MekanismBridge.get().writeClientOpenData(buffer, kind.id(), pos));
                 }
@@ -240,7 +246,10 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
                     level.getBlockEntity(pos) instanceof CombinedPortBlockEntity combined ? combined : null);
             case EXTENDED_COMBINED -> new ExtendedCombinedMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined ? combined : null);
-            case NONE -> MekanismBridge.get().createMenu(kind, containerId, playerInv, level, pos);
+            case NONE -> {
+                AbstractContainerMenu menu = ArsNouveauBridge.get().createMenu(kind, containerId, playerInv, level, pos);
+                yield menu != null ? menu : MekanismBridge.get().createMenu(kind, containerId, playerInv, level, pos);
+            }
         };
     }
 

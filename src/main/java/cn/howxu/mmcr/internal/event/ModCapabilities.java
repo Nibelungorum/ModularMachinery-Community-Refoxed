@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -50,6 +51,7 @@ public final class ModCapabilities {
         AE2Bridge.get().registerCapabilities(event);
         AppliedFluxBridge.get().registerCapabilities(event);
         AppMekBridge.get().registerCapabilities(event);
+        ArsNouveauBridge.get().registerCapabilities(event);
         event.registerBlockEntity(ITEM_BLOCK, ModBlockEntities.BES.get("factory_controller").get(),
                 (be, side) -> be instanceof FactorySchedulerBlockEntity scheduler ? scheduler.itemHandler() : null);
     }

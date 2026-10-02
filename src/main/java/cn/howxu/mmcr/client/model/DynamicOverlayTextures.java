@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ars_nouveau.SourcePortKind;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
@@ -35,6 +36,9 @@ public final class DynamicOverlayTextures {
         }
         if (kind instanceof PortKinds.HeatKind) {
             return heatOverlay(kind.ioType());
+        }
+        if (kind instanceof SourcePortKind) {
+            return ImmutableList.of(baseOverlay("ars_nouveau/source"), directionOverlay(kind.ioType()));
         }
         // vanilla
         if (kind.itemBusSize().isPresent()) {

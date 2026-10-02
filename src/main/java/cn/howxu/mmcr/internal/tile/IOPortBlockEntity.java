@@ -12,11 +12,13 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
@@ -109,7 +111,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (loadingAdditional) return;
         setChanged();
         sendStorageSnapshot();
-        notifyAvailabilityChanges();
+        notifyAvailabilityChanges(true);
         for (BlockPos controllerPos : linkedControllerPositions()) {
             if (level != null && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
                 controller.notifyCapabilityPresentationChanged();
@@ -117,11 +119,17 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         }
     }
 
-    private void notifyAvailabilityChanges() {
+    /** Captures real loaded inventory without publishing a resource wakeup. */
+    protected final void initializeAvailabilityBaseline() {
+        notifyAvailabilityChanges(false);
+    }
+
+    private void notifyAvailabilityChanges(boolean notify) {
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             IEnergyStorage energyStorage = CapabilityFactories.energyStorage(capability);
             ChemicalViewFacet chemical = capability.facet(ChemicalViewFacet.class).orElse(null);
+            SourceViewFacet source = capability.facet(SourceViewFacet.class).orElse(null);
             Object resource = chemical == null
                     ? valueStorage == null && energyStorage == null ? null : capability.type()
                     : chemical.chemicalId().orElse(null);
@@ -144,6 +152,12 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     slots.add(new SlotAvailability(entry.id(), entry.amount()));
                     amount = RequirementHandlerSupport.saturatingAdd(amount, entry.amount());
                 }
+            } else if (source != null) {
+                resource = ArsSourceIds.SOURCE;
+                resources.clear();
+                resources.add(resource);
+                amount = source.amount();
+                slots.add(new SlotAvailability(resource, amount));
             } else {
                 IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);
                 IFluidHandler fluidHandler = CapabilityFactories.fluidHandler(capability);
@@ -167,6 +181,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             }
             AvailabilityState previous = availabilityStates.put(new AvailabilityKey(capability.type(), capability.directions()),
                     new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
+            if (!notify) continue;
             long previousAmount = previous == null ? 0L : previous.amount();
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
             if (chemical != null) {

@@ -33,8 +33,12 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.StringSplitter;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -119,12 +123,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getWidth() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 168;
-            case 2 -> 168;
-            case 3 -> 168;
-            default -> 168;
-        };
+        return MachineRecipeLayout.CATEGORY_WIDTH;
     }
 
     @Override
@@ -221,6 +220,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         guiGraphics.pose().popPose();
         drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
         drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
+        drawSourceTextLines(layout, guiGraphics);
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
         drawRecipeInformation(recipe, layout, guiGraphics);
@@ -258,7 +258,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         } else if (isMouseOver(layout.outputs().overflowSlot(), mouseX, mouseY)) {
             appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
         } else {
-            smartInterfaceTooltip(recipe, layout, mouseX, mouseY).ifPresent(tooltip::add);
+            sourceTooltip(layout, mouseX, mouseY)
+                    .or(() -> smartInterfaceTooltip(recipe, layout, mouseX, mouseY)).ifPresent(tooltip::add);
         }
     }
 
@@ -539,6 +540,26 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             displayEntry(recipe, slot.entry(), input).ifPresent(entry -> guiGraphics.drawString(Minecraft.getInstance().font,
                     (Component) entry.ingredient(), slot.x(), slot.y() + 4, 0xFF404040, false));
         }
+    }
+
+    private static void drawSourceTextLines(MachineRecipeLayout layout, GuiGraphics guiGraphics) {
+        var font = Minecraft.getInstance().font;
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
+        for (MachineRecipeLayout.TextPlan line : layout.sourceTextLines()) {
+            guiGraphics.drawString(font, Language.getInstance().getVisualOrder(sourceTextLine(line, font.getSplitter())),
+                    (int) (line.x() / TEXT_SCALE), (int) (line.y() / TEXT_SCALE), 0xFF404040, false);
+        }
+        guiGraphics.pose().popPose();
+    }
+
+    static FormattedText sourceTextLine(MachineRecipeLayout.TextPlan line, StringSplitter splitter) {
+        return splitter.headByWidth((Component) line.entry().ingredient(), (int) (line.width() / TEXT_SCALE), Style.EMPTY);
+    }
+
+    static Optional<Component> sourceTooltip(MachineRecipeLayout layout, double mouseX, double mouseY) {
+        return layout.sourceTextLines().stream().filter(line -> line.contains(mouseX, mouseY))
+                .map(line -> (Component) line.entry().ingredient()).findFirst();
     }
 
     private static void addTransferSlots(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe) {

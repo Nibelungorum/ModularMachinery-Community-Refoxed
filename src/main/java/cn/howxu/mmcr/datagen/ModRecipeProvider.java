@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.datagen;
 
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -214,6 +215,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         ae2InterfaceRecipes();
         appliedFluxInterfaceRecipes();
         createStressInterfaceRecipes();
+        arsSourceInterfaceRecipes();
         mekanismPortsRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
@@ -641,6 +643,20 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('C', modularium)
                 .unlockedBy(getHasName(casing), has(casing))
                 .save(output.withConditions(new ModLoadedCondition("create")));
+    }
+
+    private void arsSourceInterfaceRecipes() {
+        if (!ModItems.ITEMS.containsKey(ArsSourceIds.INPUT)) return;
+        ItemLike gem = externalItem("ars_nouveau", "source_gem");
+        ItemLike jar = externalItem("ars_nouveau", "source_jar");
+        shaped(ModItems.ITEMS.get(ArsSourceIds.INPUT).get(), 1)
+                .pattern("G").pattern("J").pattern("C")
+                .define('G', gem).define('J', jar).define('C', ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded("ars_nouveau"));
+        shaped(ModItems.ITEMS.get(ArsSourceIds.OUTPUT).get(), 1)
+                .pattern("G").pattern("C").pattern("J")
+                .define('G', gem).define('J', jar).define('C', ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded("ars_nouveau"));
     }
 
     private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {

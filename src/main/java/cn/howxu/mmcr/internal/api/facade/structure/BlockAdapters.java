@@ -37,6 +37,9 @@ public final class BlockAdapters {
     public static BlockCondition fluidOutput() { return StructureAdapters.wrap(InterfacePredicates.anyFluidOutput()); }
     public static BlockCondition energyInput() { return StructureAdapters.wrap(InterfacePredicates.anyEnergyInput()); }
     public static BlockCondition energyOutput() { return StructureAdapters.wrap(InterfacePredicates.anyEnergyOutput()); }
+    public static BlockCondition sourceInput() { return StructureAdapters.wrap(InterfacePredicates.anySourceInput()); }
+    public static BlockCondition sourceOutput() { return StructureAdapters.wrap(InterfacePredicates.anySourceOutput()); }
+    public static BlockCondition sourcePorts() { return StructureAdapters.wrap(InterfacePredicates.anySourcePorts()); }
     public static BlockCondition chemicalInput() { return StructureAdapters.wrap(InterfacePredicates.anyChemicalInput()); }
     public static BlockCondition chemicalOutput() { return StructureAdapters.wrap(InterfacePredicates.anyChemicalOutput()); }
     public static BlockCondition radioactiveChemicalInput() { return StructureAdapters.wrap(InterfacePredicates.anyRadioactiveChemicalInput()); }

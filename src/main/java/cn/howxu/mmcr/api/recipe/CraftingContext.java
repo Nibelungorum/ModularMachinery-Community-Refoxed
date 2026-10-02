@@ -23,6 +23,8 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -307,16 +309,18 @@ public final class CraftingContext {
         return planInputs(requirements, parallelism, consumedAtStart, retainedInputs);
     }
 
+    /** Completion must retain the effective parallelism whose inputs were already committed. */
     public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, long parallelism,
                                                   boolean allowPartialOutputs) {
-        return plan(requirements, parallelism, RecipeModifier.IOType.OUTPUT, Set.of(), Set.of(),
+        if (requirements == null) throw new IllegalArgumentException("requirements must not be null");
+        return planSelectedExact(requirements, indexes(requirements.size()), parallelism, RecipeModifier.IOType.OUTPUT,
                 partialOutputPolicies(requirements, allowPartialOutputs));
     }
 
     public PlanningResult planOutputRequirements(List<MachineRequirement> requirements, List<MachineOutput> outputs,
                                                   long parallelism, boolean allowPartialOutputs) {
         IndexedRequirements replacement = replaceOutputs(requirements, outputs);
-        return planSelected(replacement.requirements(), replacement.indexes(), parallelism,
+        return planSelectedExact(replacement.requirements(), replacement.indexes(), parallelism,
                 RecipeModifier.IOType.OUTPUT,
                 outputPoliciesForIndexes(replacement.indexes(), allowPartialOutputs));
     }
@@ -408,6 +412,12 @@ public final class CraftingContext {
             }
             return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount, IOType.INPUT,
                     requests);
+        }
+        if (requirement instanceof SourceRequirement source) {
+            long amount = scaled(source.amount(), parallelism);
+            return new AsyncRequirementPlanner.Requirement(index, amount,
+                    IOType.valueOf(source.io().name()), List.of(new AsyncCapabilityRequest.Scalar(
+                    ArsSourceIds.SOURCE, parallelism, amount, source.io() == RecipeModifier.IOType.OUTPUT)));
         }
         if (requirement instanceof EnergyRequirement energy && energy.fePerTick() > 0L) {
             return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),
@@ -502,9 +512,9 @@ public final class CraftingContext {
                         reservationOwner), requirementIndexes);
     }
 
-    private PlanningResult planSelected(List<MachineRequirement> source, List<Integer> sourceIndexes,
-                                         long parallelism, RecipeModifier.IOType direction,
-                                        Map<Integer, OutputPolicy> outputPolicies) {
+    private PlanningResult planSelectedExact(List<MachineRequirement> source, List<Integer> sourceIndexes,
+                                            long parallelism, RecipeModifier.IOType direction,
+                                            Map<Integer, OutputPolicy> outputPolicies) {
         if (source == null || sourceIndexes == null || source.size() != sourceIndexes.size()) {
             throw new IllegalArgumentException("requirements and indexes must match");
         }
@@ -516,7 +526,9 @@ public final class CraftingContext {
             requirements.add(requirement);
             requirementIndexes.add(sourceIndexes.get(index));
         }
-        return planSelected(requirements, parallelism, outputPolicies, requirementIndexes);
+        return new RequirementPlanner().planExact(requirements, capabilities,
+                new PlanningContext(parallelism, 0, false, new PlanningReservations(), outputPolicies,
+                        reservationOwner), requirementIndexes);
     }
 
     private static Map<Integer, OutputPolicy> partialOutputPolicies(int size) {

@@ -30,6 +30,8 @@ public interface IoSnapshot {
     List<StressState> stressInputs();
     List<StressState> stressOutputs();
     long energyInput();
+    long sourceInput();
+    long sourceOutputCapacity();
     long itemAmount(Ingredient ingredient);
     long fluidAmount(FluidIngredient ingredient);
     long itemOutputCapacity(ItemStack stack);
