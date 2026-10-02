@@ -10,7 +10,9 @@ import mekanism.api.chemical.Chemical;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
@@ -82,7 +84,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
     }
 
     private static void renderItem(ITooltip tooltip, MachineOutput.ItemOutput item, long amount) {
-        ItemStack stack = item.stack();
+        ItemStack stack = item.resolvedStack();
         if (stack.isEmpty() || amount <= 0L) return;
         ItemStack iconStack = stack.copy();
         iconStack.setCount(1);
@@ -92,9 +94,12 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         String count = amount > 1L
                 ? ReadableNumber.formatForSlot(amount, 0, "") + " "
                 : "";
+        MutableComponent name = Component.empty().append(stack.getHoverName())
+                .withStyle(stack.getRarity().getStyleModifier());
+        if (stack.has(DataComponents.CUSTOM_NAME)) name.withStyle(ChatFormatting.ITALIC);
         Component text = Component.translatable("jade.mmcr.machine_controller.recipe_output.item",
                 count,
-                stack.getHoverName().copy().withStyle(ChatFormatting.WHITE));
+                name);
         tooltip.append(text);
     }
 

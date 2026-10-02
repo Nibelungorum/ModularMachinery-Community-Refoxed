@@ -63,7 +63,7 @@ public final class RecipeOutputCodec {
 
     private static MachineOutput templateForTransport(MachineOutput output) {
         if (output instanceof MachineOutput.ItemOutput item) {
-            var stack = item.stack().copy();
+            var stack = item.resolvedStack();
             stack.setCount(1);
             return new MachineOutput.ItemOutput(stack, item.chance(), item.components());
         }

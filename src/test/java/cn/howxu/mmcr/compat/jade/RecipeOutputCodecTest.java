@@ -2,6 +2,13 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import com.google.gson.JsonPrimitive;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.Rarity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
@@ -13,6 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +55,21 @@ class RecipeOutputCodecTest {
         RecipeOutputCodec.write(data, List.of());
         assertThat(data.contains(RecipeOutputCodec.OUTPUT_KEY)).isFalse();
         assertThat(RecipeOutputCodec.read(data)).isEmpty();
+    }
+
+    @Test
+    void materializesDeclaredRarityForTheTransportedItem() {
+        ItemStack stack = new ItemStack(Items.STONE);
+        var components = new DataComponentPredicateSet(Map.of(DataComponents.RARITY,
+                ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive("rare")))));
+        CompoundTag data = new CompoundTag();
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
+                new MachineOutput.ItemOutput(stack, 1F, components), 1L)));
+
+        var decoded = (MachineOutput.ItemOutput) RecipeOutputCodec.read(data).getFirst().output();
+
+        assertThat(decoded.stack().getRarity()).isEqualTo(Rarity.RARE);
+        assertThat(stack.getRarity()).isEqualTo(Rarity.COMMON);
     }
 
     @Test

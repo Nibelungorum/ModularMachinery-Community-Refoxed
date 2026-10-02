@@ -68,6 +68,9 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
             long amount = MachineOutput.scaledAmount(output);
             if (amount <= 0L) continue;
             if (outputs.size() < MAX_OUTPUTS) {
+                if (output instanceof MachineOutput.ItemOutput item) {
+                    output = new MachineOutput.ItemOutput(item.resolvedStack(), item.chance(), item.components());
+                }
                 outputs.add(new MachineOutputAmount(output, SaturatingLong.multiply(amount, parallelism)));
             }
         }
