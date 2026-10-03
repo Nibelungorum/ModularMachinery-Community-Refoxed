@@ -23,15 +23,20 @@ public final class PreviewCamera {
     private long version;
 
     public void reset(Vector3f center, float radius) {
+        reset(center, radius, INITIAL_YAW, INITIAL_PITCH);
+    }
+
+    public void reset(Vector3f center, float radius, float yaw, float pitch) {
         float updatedDistance = clamp(radius, MIN_DISTANCE, MAX_DISTANCE);
+        float updatedPitch = clamp(pitch, MIN_PITCH, MAX_PITCH);
         boolean changed = !lookAt.equals(center) || distance != updatedDistance
-                || yaw != INITIAL_YAW || pitch != INITIAL_PITCH;
+                || this.yaw != yaw || this.pitch != updatedPitch;
         if (changed) version++;
         lookAt.set(center);
         distance = updatedDistance;
-        if (yaw != INITIAL_YAW || pitch != INITIAL_PITCH) rotationVersion++;
-        yaw = INITIAL_YAW;
-        pitch = INITIAL_PITCH;
+        if (this.yaw != yaw || this.pitch != updatedPitch) rotationVersion++;
+        this.yaw = yaw;
+        this.pitch = updatedPitch;
     }
 
     public void orbit(float yawDelta, float pitchDelta) {

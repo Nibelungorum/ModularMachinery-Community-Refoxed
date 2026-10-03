@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.joml.Vector3f;
 
 import net.minecraft.world.level.block.state.BlockState;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +27,27 @@ class StructurePreviewWidgetTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void initial_camera_and_reset_look_horizontally_at_each_controller_front() {
+        BlockState controller = TestBootstrap.newController().getBlockState();
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            var schema = new StructurePreviewSchema(MMCR.id("front_camera"), Map.of(
+                    BlockPos.ZERO, controller.setValue(MachineControllerBlock.FACING, facing),
+                    new BlockPos(-3, 0, -3), Blocks.OAK_STAIRS.defaultBlockState(),
+                    new BlockPos(3, 0, 3), Blocks.OAK_STAIRS.defaultBlockState()), Map.of());
+            var widget = new StructurePreviewWidget(new RecordingRenderer(schema));
+            Vector3f front = new Vector3f(facing.getStepX(), 0.0F, facing.getStepZ());
+            assertThat(widget.camera().position().sub(widget.camera().lookAt()).normalize().distance(front))
+                    .isLessThan(0.00001F);
+            assertThat(widget.camera().lookAt().y).isEqualTo((float) BlockPos.ZERO.getCenter().y);
+            assertThat(widget.camera().position().y).isEqualTo((float) BlockPos.ZERO.getCenter().y);
+            widget.camera().orbit(0.7F, 0.4F);
+            widget.reset();
+            assertThat(widget.camera().position().sub(widget.camera().lookAt()).normalize().distance(front))
+                    .isLessThan(0.00001F);
+        }
     }
 
     @Test
