@@ -7,7 +7,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  */
 public final class ClientConfig {
     public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
-    public static final double DEFAULT_INTERACTIVE_RENDER_SCALE = 0.5;
+    public static final double DEFAULT_INTERACTIVE_RENDER_SCALE = 0.8;
     public static final int DEFAULT_INTERACTIVE_RESTORE_DELAY_MS = 150;
     public static final boolean DEFAULT_INTERACTIVE_SKIP_TRANSLUCENT = true;
     public static final boolean DEFAULT_INTERACTIVE_SKIP_BLOCK_ENTITIES = true;
