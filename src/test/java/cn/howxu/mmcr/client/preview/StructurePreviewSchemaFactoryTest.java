@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -423,6 +424,33 @@ class StructurePreviewSchemaFactoryTest {
                 Blocks.BLAST_FURNACE.asItem(), Blocks.DIAMOND_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
         assertThat(schema.previewCandidatesAt(position)).extracting(StructurePreviewSchema.Candidate::modifier).containsExactly(
                 false, true, true);
+    }
+
+    @Test
+    void symmetric_exported_structure_uses_template_facing_without_rotating_stair_states_again() {
+        var builder = BlockArray.builder()
+                .pattern(" AXXXB ").pattern("AD   EB").pattern("F     G")
+                .pattern("F  C  G").pattern("F     G").pattern("HI   JK").pattern(" LMMMK ");
+        BlockState stairs = Blocks.OAK_STAIRS.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.SOUTH);
+        for (char symbol : "XABDEFGHIJKLM".toCharArray()) {
+            builder.set(symbol, new BlockPredicate.OfBlockState(stairs));
+        }
+        builder.set('C', new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("test_cube")).get()));
+        BlockArray pattern = builder.controller('C').build();
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("aaa_preview"), facing);
+            assertThat(schema.stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING)).isEqualTo(facing);
+            var expectedPattern = BlockArrayCache.get(pattern, facing);
+            expectedPattern.pattern().forEach((position, predicate) -> {
+                if (predicate instanceof BlockPredicate.OfBlockState state) {
+                    assertThat(schema.stateAt(position)).isEqualTo(state.state());
+                }
+            });
+        }
     }
 
     @Test

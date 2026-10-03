@@ -1,9 +1,12 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.config.ClientConfig;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jspecify.annotations.Nullable;
 import org.joml.Vector3f;
@@ -189,7 +192,17 @@ public final class StructurePreviewWidget implements AutoCloseable {
         float width = schema.max().getX() - schema.min().getX() + 1.0F;
         float height = schema.max().getY() - schema.min().getY() + 1.0F;
         float depth = schema.max().getZ() - schema.min().getZ() + 1.0F;
-        camera.reset(new Vector3f(schema.center().get(0), schema.center().get(1), schema.center().get(2)),
-                Math.max(width, Math.max(height, depth)) * 1.5F);
+        Vector3f center = new Vector3f(schema.center().get(0), schema.center().get(1), schema.center().get(2));
+        float radius = Math.max(width, Math.max(height, depth)) * 1.5F;
+        BlockState controller = schema.stateAt(BlockPos.ZERO);
+        if (controller != null && controller.getBlock() instanceof MachineControllerBlock) {
+            Direction facing = controller.getValue(MachineControllerBlock.FACING);
+            if (facing.getAxis().isHorizontal()) {
+                center.y += 0.5F;
+                camera.reset(center, radius, (float) Math.atan2(facing.getStepX(), facing.getStepZ()), 0.0F);
+                return;
+            }
+        }
+        camera.reset(center, radius);
     }
 }

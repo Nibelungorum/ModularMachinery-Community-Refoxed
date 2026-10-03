@@ -175,8 +175,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
             if (facing.getAxis().isVertical()) {
                 return state.setValue(MachineControllerBlock.FACING, facing);
             }
-            if (correctedFacing == null) return state;
-            Direction controllerFacing = correctedFacing;
+            Direction controllerFacing = correctedFacing == null ? facing : correctedFacing;
             return state.setValue(MachineControllerBlock.FACING, controllerFacing);
         }
         if (correctedFacing == null || !facing.getAxis().isHorizontal()) return state;
