@@ -56,7 +56,7 @@ dependencies {
     runtimeOnly "curse.maven:${curios_id}:${curios_version}"
     // create
     implementation "curse.maven:${create_id}:${create_version}"
-    // Flux Networks 1.21.1-8.0.0 (NeoForge)
+    // Flux Networks 1.21.1-8.0.0
     compileOnly "curse.maven:${fluxnetworks_id}:${fluxnetworks_version}"
     localRuntime "curse.maven:${fluxnetworks_id}:${fluxnetworks_version}"
     // Exact APIs bundled by the existing Create artifact; nested jars are not on javac's classpath.
