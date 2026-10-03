@@ -477,7 +477,6 @@ public abstract class RecipeThread {
         pendingStartCatalogVersion = Long.MIN_VALUE;
         pendingStartRecipePoolId = null;
         pendingStartSearchContextKey = null;
-        if (!runtime.active()) runtime.completeStressHandoff(false);
     }
 
     private void invalidatePendingStartForCatalog(long token, MachineRecipe recipe) {
@@ -493,13 +492,11 @@ public abstract class RecipeThread {
     }
 
     public void tick(@Nullable ControllerRuntimeSnapshot tickSnapshot) {
-        runtime.expireStressHandoff();
         if (startPending && !isPendingStart(pendingStartToken, pendingStartRecipe)) {
             clearPendingStart(pendingStartToken, pendingStartRecipe);
             controller.clearRecipeScreenText(laneId());
         }
         if (!runtime.active()) return;
-        runtime.beginStressHandoff();
         if (!usesAsyncPlanning()) {
             tickSynchronously();
             return;
@@ -982,12 +979,8 @@ public abstract class RecipeThread {
         if (wasActive && !runtime.active()) {
             if (runtime.failure() == null) {
                 controller.clearRecipeScreenText(laneId());
-                try {
-                    onRecipeFinished();
-                    onFinished();
-                } finally {
-                    runtime.completeStressHandoff(isStartPending());
-                }
+                onRecipeFinished();
+                onFinished();
             } else {
                 onRecipeFailure();
                 controller.clearRecipeScreenText(laneId());
@@ -1026,7 +1019,6 @@ public abstract class RecipeThread {
         asyncFinishPrepared = false;
         clearPendingStartUnconditionally();
         clearPendingTick();
-        if (!runtime.active()) runtime.completeStressHandoff(false);
     }
 
     public void discardForRecipePoolChange() {

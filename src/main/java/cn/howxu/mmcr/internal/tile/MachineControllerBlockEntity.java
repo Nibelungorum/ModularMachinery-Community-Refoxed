@@ -1785,7 +1785,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void tickSingleAsyncRecipe() {
-        runtime.craftingRuntime().expireStressHandoff();
         boolean startedThisTick = false;
         if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()
                 && !normalRecipeThread.hasPendingAsyncSearch()) {
