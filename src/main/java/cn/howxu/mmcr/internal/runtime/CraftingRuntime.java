@@ -507,12 +507,12 @@ public final class CraftingRuntime {
                 return status;
             }
             activeRecipe.beginFinishCommit();
-            releaseStressContributions();
+            stressSession.onRecipeFinished();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (activeRecipe.isFinishPending()) releaseStressContributions();
+        if (activeRecipe.isFinishPending()) stressSession.onRecipeFinished();
         if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
         status = CraftingStatus.working();
         failure = null;
@@ -649,12 +649,12 @@ public final class CraftingRuntime {
                 return status;
             }
             activeRecipe.beginFinishCommit();
-            releaseStressContributions();
+            stressSession.onRecipeFinished();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (activeRecipe.isFinishPending()) releaseStressContributions();
+        if (activeRecipe.isFinishPending()) stressSession.onRecipeFinished();
         if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
                 preparation.machineContext(), preparation.tickContext())) return status;
         status = CraftingStatus.working();
@@ -689,7 +689,7 @@ public final class CraftingRuntime {
         if (!active()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (!activeRecipe.isFinishPending()) return status;
-        releaseStressContributions();
+        stressSession.onRecipeFinished();
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
         RecipeFinishContext finishContext = preparedAsyncFinishContext;
@@ -762,7 +762,7 @@ public final class CraftingRuntime {
 
     /** Executes the finish behavior callback before a shared-IO output transaction is requested. */
     public boolean prepareAsyncFinish() {
-        if (finishPending()) releaseStressContributions();
+        if (finishPending()) stressSession.onRecipeFinished();
         if (!active() || !versionsCurrent() || !activeRecipe.isFinishPending()
                 || !activeRecipe.shouldRetryFinish(currentGameTime())) return false;
         preparedAsyncFinishContext = prepareFinishContext();
@@ -914,7 +914,8 @@ public final class CraftingRuntime {
     }
 
     public void recordSearchFailure(@Nullable ExecutionStatus nextFailure) {
-        releaseStressContributions();
+        // An idle candidate miss is not a running-recipe failure; let completed outputs coast to their deadline.
+        if (active()) releaseStressContributions();
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.RECIPE_SEARCH, FailurePhase.RECIPE_SEARCH, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));

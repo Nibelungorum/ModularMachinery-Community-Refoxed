@@ -53,6 +53,7 @@ public final class StressPortCapability implements MachineCapability, Capability
     private final Runnable onChanged;
     private final StressContributions contributions = new StressContributions();
     private final Map<StressSession, Set<Integer>> owners = new IdentityHashMap<>();
+    private final Map<StressSession, CoastingOutput> coastingOutputs = new IdentityHashMap<>();
     private final CapabilitySnapshot snapshot = new CapabilitySnapshot(List.of(this));
     private BlockPos controllerPos;
     private StressState notifiedState;
@@ -73,8 +74,16 @@ public final class StressPortCapability implements MachineCapability, Capability
     }
 
     public CapabilitySnapshot snapshot() { return snapshot; }
-    public double baseStress() { return contributions.baseStress(); }
-    public double generatedRpm() { return contributions.generatedRpm(); }
+    public double baseStress() {
+        double total = contributions.baseStress();
+        for (CoastingOutput output : coastingOutputs.values()) total += output.contribution().baseStress();
+        return total;
+    }
+    public double generatedRpm() {
+        double activeRpm = contributions.generatedRpm();
+        if (activeRpm != 0D) return activeRpm;
+        return coastingOutputs.isEmpty() ? 0D : coastingOutputs.values().iterator().next().contribution().generatedRpm();
+    }
     @Override public CapabilityType type() { return StressInterfaceKind.TYPE; }
     @Override public CapabilityDirections directions() { return CapabilityDirections.of(kind.ioType()); }
     @Override public IOType ioType() { return kind.ioType(); }
@@ -160,6 +169,10 @@ public final class StressPortCapability implements MachineCapability, Capability
         }
         Contribution previous = contributions.get(session, requirementIndex);
         double nextBase = contributions.baseStress() - (previous == null ? 0D : previous.baseStress()) + baseStress;
+        for (var entry : coastingOutputs.entrySet()) {
+            Contribution coasting = entry.getValue().contribution();
+            if (entry.getKey() != session && coasting.generatedRpm() == generatedRpm) nextBase += coasting.baseStress();
+        }
         double rpm = kind.ioType() == IOType.INPUT ? Math.abs(entity.getTheoreticalSpeed()) : Math.abs(generatedRpm);
         if (!positiveFloat(baseStress) || !positiveFloat(nextBase) || !positiveFloat((float) nextBase * (float) rpm)) {
             return failure(CreateFailureReasons.INSUFFICIENT_STRESS, requirementIndex);
@@ -183,6 +196,8 @@ public final class StressPortCapability implements MachineCapability, Capability
         double beforeBase = baseStress();
         double beforeRpm = generatedRpm();
         contributions.replace(session, requirementIndex, new Contribution(baseStress, generatedRpm));
+        coastingOutputs.remove(session);
+        coastingOutputs.values().removeIf(output -> output.contribution().generatedRpm() != generatedRpm);
         owners.computeIfAbsent(session, ignored -> new HashSet<>()).add(requirementIndex);
         session.track(this, requirementIndex, kind.ioType() == IOType.INPUT
                 ? RecipeModifier.IOType.INPUT : RecipeModifier.IOType.OUTPUT);
@@ -206,6 +221,7 @@ public final class StressPortCapability implements MachineCapability, Capability
         double base = baseStress();
         double rpm = generatedRpm();
         contributions.release(session);
+        coastingOutputs.remove(session);
         owners.remove(session);
         changed(base, rpm);
     }
@@ -216,6 +232,7 @@ public final class StressPortCapability implements MachineCapability, Capability
         double base = baseStress();
         double rpm = generatedRpm();
         contributions.release(session, requirementIndex);
+        coastingOutputs.remove(session);
         Set<Integer> indexes = owners.get(session);
         if (indexes != null) {
             indexes.remove(requirementIndex);
@@ -230,8 +247,41 @@ public final class StressPortCapability implements MachineCapability, Capability
         double rpm = generatedRpm();
         for (StressSession owner : owners.keySet()) contributions.release(owner);
         owners.clear();
+        coastingOutputs.clear();
         changed(base, rpm);
     }
+
+    @Override
+    public void onRecipeFinished(StressSession session) {
+        checkThread();
+        if (kind.ioType() != IOType.OUTPUT || !serverEntity()) {
+            release(session);
+            return;
+        }
+        Set<Integer> indexes = owners.get(session);
+        if (indexes == null) return; // Repeated finish preparation must not renew the deadline.
+        double beforeBase = baseStress();
+        double beforeRpm = generatedRpm();
+        double ownedBase = 0D;
+        for (int index : indexes) ownedBase += contributions.get(session, index).baseStress();
+        coastingOutputs.put(session, new CoastingOutput(new Contribution(ownedBase, contributions.generatedRpm()),
+                entity.getLevel().getGameTime() + 5));
+        contributions.release(session);
+        owners.remove(session);
+        changed(beforeBase, beforeRpm);
+    }
+
+    public void tickOutputGrace() {
+        if (!serverEntity() || coastingOutputs.isEmpty()) return;
+        double beforeBase = baseStress();
+        double beforeRpm = generatedRpm();
+        long gameTime = entity.getLevel().getGameTime();
+        coastingOutputs.values().removeIf(output -> gameTime >= output.expiresAt());
+        changed(beforeBase, beforeRpm);
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record CoastingOutput(Contribution contribution, long expiresAt) { }
 
     private void changed(double beforeBase, double beforeRpm) {
         if (beforeBase == baseStress() && beforeRpm == generatedRpm()) return;

@@ -29,4 +29,9 @@ public interface StressFacet extends CapabilityFacet {
 
     /** Removes exactly one requirement, preserving other requirements owned by the same lane. */
     void release(StressSession session, int requirementIndex);
+
+    /** Releases logical recipe ownership; native outputs may coast briefly after normal completion. */
+    default void onRecipeFinished(StressSession session) {
+        release(session);
+    }
 }

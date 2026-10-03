@@ -52,6 +52,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -78,6 +79,9 @@ public final class StressInterfaceGameTest {
                 test("create_stress_propagation_sessions", 300, StressInterfaceGameTest::propagationAndSessions),
                 test("create_stress_controller_recovery", 600, StressInterfaceGameTest::controllerRecovery),
                 test("create_stress_output_takeover", 400, StressInterfaceGameTest::outputTakeover),
+                test("create_stress_output_grace", 300, StressInterfaceGameTest::outputGrace),
+                test("create_stress_grace_pause", 300, StressInterfaceGameTest::gracePause),
+                test("create_stress_continuous_restart", 300, StressInterfaceGameTest::continuousRestart),
                 test("create_stress_persistence_removal", 300, StressInterfaceGameTest::persistenceAndRemoval));
     }
 
@@ -305,6 +309,111 @@ public final class StressInterfaceGameTest {
                 .thenWaitUntil(() -> helper.assertTrue(shaft.getSpeed() == 0F && fan.getSpeed() == 0F
                                 && output.getGeneratedSpeed() == 0F,
                         "Removing the foreign source cannot resurrect a completed recipe generator"))
+                .thenSucceed();
+    }
+
+    private static void outputGrace(GameTestHelper helper) {
+        helper.setBlock(PORT, portState(StressInterfaceKind.OUTPUT));
+        helper.setBlock(SHAFT, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
+        helper.setBlock(MOTOR, AllBlocks.ENCASED_FAN.get().defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH));
+        StressOutputBlockEntity output = helper.getBlockEntity(PORT);
+        KineticBlockEntity shaft = helper.getBlockEntity(SHAFT);
+        KineticBlockEntity fan = helper.getBlockEntity(MOTOR);
+        bind(helper, output);
+        StressSession session = new StressSession();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(fixtureAssociated(helper, output),
+                        "Grace fixture has a real formed controller association"))
+                .thenExecute(() -> {
+                    apply(helper, output, session, 1, 4, -16);
+                    session.onRecipeFinished();
+                    helper.assertTrue(output.getGeneratedSpeed() == -16F && shaft.getSpeed() == -16F
+                                    && fan.getSpeed() == -16F && facet(output).ownedBaseStress(session, 1) == 0D,
+                            "Normal finish releases logical ownership without stopping the native source");
+                }).thenExecuteAfter(3, () -> {
+                    helper.assertTrue(output.getGeneratedSpeed() == -16F && fan.getSpeed() == -16F,
+                            "Native dependants keep turning during the output grace period");
+                    apply(helper, output, session, 7, 8, -32);
+                    helper.assertTrue(output.getGeneratedSpeed() == -32F && shaft.getSpeed() == -32F && fan.getSpeed() == -32F,
+                            "A different requirement and RPM update the coasting native source directly");
+                    session.onRecipeFinished();
+                }).thenWaitUntil(() -> helper.assertTrue(output.getGeneratedSpeed() == 0F && shaft.getSpeed() == 0F
+                                && fan.getSpeed() == 0F && facet(output).state().baseContribution() == 0D,
+                        "Unrenewed grace expires and removes native generation and capacity"))
+                .thenExecute(() -> {
+                    apply(helper, output, session, 2, 4, -16);
+                    session.onRecipeFinished();
+                    session.releaseAll();
+                    helper.assertTrue(output.getGeneratedSpeed() == 0F && shaft.getSpeed() == 0F && fan.getSpeed() == 0F,
+                            "Explicit cleanup revokes coasting immediately without waiting for its deadline");
+                }).thenSucceed();
+    }
+
+    private static void gracePause(GameTestHelper helper) {
+        helper.setBlock(PORT, portState(StressInterfaceKind.OUTPUT));
+        helper.setBlock(SHAFT, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
+        helper.setBlock(MOTOR, AllBlocks.ENCASED_FAN.get().defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH));
+        ControllerRig machine = controller(helper, "create_stress_grace_pause_machine", StressInterfaceKind.OUTPUT);
+        ResourceLocation recipeId = MMCR.id("create_stress_grace_pause_recipe");
+        if (!RecipeRegistry.containsStatic(recipeId)) {
+            RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId)
+                    .recipePool(machine.id()).duration(6).inputItem(Items.COAL, 1).outputStress(8D, -16D)
+                    .outputItem(new ItemStack(Items.DIAMOND)).build(),
+                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+        }
+        StressOutputBlockEntity output = helper.getBlockEntity(PORT);
+        KineticBlockEntity fan = helper.getBlockEntity(MOTOR);
+        BlockPos pausePos = new BlockPos(3, 1, 1);
+        AtomicBoolean lateStop = new AtomicBoolean();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(machine.controller().structureSnapshot().formed(),
+                        "Pause fixture forms before receiving its single input batch"))
+                .thenExecute(() -> machine.items().nativeItemHandler().setStackInSlot(0, new ItemStack(Items.COAL)))
+                .thenWaitUntil(() -> helper.assertTrue(products(machine) == 1 && output.getGeneratedSpeed() == -16F,
+                        "Completed idle recipe leaves its native generator coasting"))
+                .thenExecute(() -> helper.setBlock(pausePos, Blocks.LEVER.defaultBlockState()
+                        .setValue(LeverBlock.FACE, AttachFace.WALL).setValue(LeverBlock.FACING, Direction.EAST)
+                        .setValue(LeverBlock.POWERED, true)))
+                .thenWaitUntil(() -> {
+                    boolean paused = machine.controller().isRedstonePaused();
+                    if (paused && (output.getGeneratedSpeed() != 0F || fan.getSpeed() != 0F)) lateStop.set(true);
+                    helper.assertTrue(paused, "Idle controller detects its redstone pause");
+                    helper.assertTrue(!lateStop.get(), "The first observed pause immediately revokes completed-recipe grace");
+                }).thenSucceed();
+    }
+
+    private static void continuousRestart(GameTestHelper helper) {
+        helper.setBlock(PORT, portState(StressInterfaceKind.OUTPUT));
+        helper.setBlock(SHAFT, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
+        helper.setBlock(MOTOR, AllBlocks.ENCASED_FAN.get().defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH));
+        ControllerRig machine = controller(helper, "create_stress_continuous_machine", StressInterfaceKind.OUTPUT);
+        ResourceLocation recipeId = MMCR.id("create_stress_continuous_recipe");
+        if (!RecipeRegistry.containsStatic(recipeId)) {
+            RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId)
+                    .recipePool(machine.id()).duration(6).inputItem(Items.COAL, 1).outputStress(8D, -16D)
+                    .outputItem(new ItemStack(Items.DIAMOND)).build(),
+                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+        }
+        StressOutputBlockEntity output = helper.getBlockEntity(PORT);
+        KineticBlockEntity shaft = helper.getBlockEntity(SHAFT);
+        KineticBlockEntity fan = helper.getBlockEntity(MOTOR);
+        AtomicBoolean interrupted = new AtomicBoolean();
+        AtomicReference<Object> network = new AtomicReference<>();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(machine.controller().structureSnapshot().formed(),
+                        "Continuous generator forms before receiving its input batches"))
+                .thenExecute(() -> machine.items().nativeItemHandler().setStackInSlot(0, new ItemStack(Items.COAL, 4)))
+                .thenWaitUntil(() -> helper.assertTrue(output.getGeneratedSpeed() == -16F && fan.getSpeed() == -16F,
+                        "First funded tick activates the native generator"))
+                .thenExecute(() -> network.set(facet(output).networkIdentity()))
+                .thenWaitUntil(() -> {
+                    if (output.getGeneratedSpeed() != -16F || shaft.getSpeed() != -16F || fan.getSpeed() != -16F
+                            || facet(output).networkIdentity() != network.get()) interrupted.set(true);
+                    helper.assertTrue(products(machine) >= 3, "Three completed recipes exercise asynchronous restart gaps");
+                    helper.assertTrue(!interrupted.get(), "Grace absorbs recipe boundaries without any native interruption");
+                }).thenWaitUntil(() -> helper.assertTrue(products(machine) == 4 && output.getGeneratedSpeed() == 0F
+                                && shaft.getSpeed() == 0F && fan.getSpeed() == 0F,
+                        "The last batch finishes and unrenewed output stops after its grace period"))
                 .thenSucceed();
     }
 

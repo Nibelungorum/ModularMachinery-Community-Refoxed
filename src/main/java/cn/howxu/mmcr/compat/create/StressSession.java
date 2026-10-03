@@ -5,12 +5,16 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 
 /** Persistent main-thread owner of one crafting lane's transient Create contributions.
  * @author howxu <dev@howxu.cn>
  */
 public final class StressSession {
     private final List<Tracked> tracked = new ArrayList<>();
+    private final Set<StressFacet> finishedOutputs = Collections.newSetFromMap(new IdentityHashMap<>());
     private Integer committingIndex;
 
     /** Native facets may trust the handler's aggregate network preflight during this main-thread batch. */
@@ -34,6 +38,7 @@ public final class StressSession {
     public void track(StressFacet facet, int requirementIndex, RecipeModifier.IOType io) {
         Objects.requireNonNull(facet, "facet");
         Objects.requireNonNull(io, "io");
+        if (io == RecipeModifier.IOType.OUTPUT) finishedOutputs.remove(facet);
         if (tracked.stream().noneMatch(value -> value.facet() == facet && value.index() == requirementIndex
                 && value.io() == io)) tracked.add(new Tracked(facet, requirementIndex, io));
     }
@@ -63,6 +68,8 @@ public final class StressSession {
     }
 
     public void releaseOutputs() {
+        for (StressFacet facet : finishedOutputs) facet.release(this);
+        finishedOutputs.clear();
         for (Tracked value : List.copyOf(tracked)) {
             if (value.io() != RecipeModifier.IOType.OUTPUT) continue;
             if (value.index() < 0) value.facet().release(this);
@@ -73,6 +80,17 @@ public final class StressSession {
 
     public void releaseAll() {
         for (Tracked value : List.copyOf(tracked)) value.facet().release(this);
+        for (StressFacet facet : finishedOutputs) facet.release(this);
+        finishedOutputs.clear();
+        tracked.clear();
+    }
+
+    public void onRecipeFinished() {
+        for (Tracked value : List.copyOf(tracked)) {
+            value.facet().onRecipeFinished(this);
+            if (value.io() == RecipeModifier.IOType.OUTPUT) finishedOutputs.add(value.facet());
+        }
+        // Keep output references so pause, failure and invalidation can also revoke coasting output.
         tracked.clear();
     }
 

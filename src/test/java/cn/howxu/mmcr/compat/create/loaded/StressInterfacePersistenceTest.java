@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.create.loaded;
 
 import cn.howxu.mmcr.compat.create.StressContributions;
 import cn.howxu.mmcr.compat.create.StressSession;
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.electronwill.nightconfig.core.CommentedConfig;
@@ -30,7 +31,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.EnumMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -111,6 +115,95 @@ class StressInterfacePersistenceTest {
         Field field = AllConfigs.class.getDeclaredField("server");
         field.setAccessible(true);
         field.set(null, previousServer);
+    }
+
+    @Test
+    void normalFinishCoastsForFiveGameTicksWithoutRenewingOnRepeatedFinish() throws Exception {
+        OutputFixture fixture = outputFixture();
+        StressSession session = new StressSession();
+        assertTrue(fixture.port().apply(session, 1, 4, -16).success());
+        session.onRecipeFinished();
+        assertEquals(0D, fixture.port().ownedBaseStress(session, 1));
+        assertEquals(new OutputSample(4, -16), fixture.sample());
+        LevelStub.setGameTime(fixture.entity().getLevel(), 4);
+        session.onRecipeFinished();
+        fixture.port().tickOutputGrace();
+        assertEquals(new OutputSample(4, -16), fixture.sample());
+        assertEquals(List.of(new OutputSample(4, -16)), fixture.changes());
+        LevelStub.setGameTime(fixture.entity().getLevel(), 5);
+        fixture.port().tickOutputGrace();
+        assertEquals(new OutputSample(0, 0), fixture.sample());
+    }
+
+    @Test
+    void unchangedOutputRenewsGraceWithoutNativeSourceChurn() throws Exception {
+        OutputFixture fixture = outputFixture();
+        StressSession session = new StressSession();
+        assertTrue(fixture.port().apply(session, 1, 4, -16).success());
+        session.onRecipeFinished();
+        LevelStub.setGameTime(fixture.entity().getLevel(), 3);
+        assertTrue(fixture.port().apply(session, 1, 4, -16).success());
+        session.onRecipeFinished();
+        LevelStub.setGameTime(fixture.entity().getLevel(), 5);
+        fixture.port().tickOutputGrace();
+        assertEquals(new OutputSample(4, -16), fixture.sample());
+        assertEquals(List.of(new OutputSample(4, -16)), fixture.changes());
+        LevelStub.setGameTime(fixture.entity().getLevel(), 8);
+        fixture.port().tickOutputGrace();
+        assertEquals(new OutputSample(0, 0), fixture.sample());
+    }
+
+    @Test
+    void newRequirementIndexAndRpmReplaceCoastingOutputWithoutAnIntermediateZero() throws Exception {
+        OutputFixture fixture = outputFixture();
+        StressSession session = new StressSession();
+        assertTrue(fixture.port().apply(session, 1, 4, -16).success());
+        session.onRecipeFinished();
+        LevelStub.setGameTime(fixture.entity().getLevel(), 3);
+        assertTrue(fixture.port().apply(session, 7, 8, 32).success());
+        LevelStub.setGameTime(fixture.entity().getLevel(), 5);
+        fixture.port().tickOutputGrace();
+        assertEquals(List.of(new OutputSample(4, -16), new OutputSample(8, 32)), fixture.changes());
+        assertEquals(0D, fixture.port().ownedBaseStress(session, 1));
+        assertEquals(8D, fixture.port().ownedBaseStress(session, 7));
+        session.releaseAll();
+        assertEquals(new OutputSample(0, 0), fixture.sample());
+    }
+
+    @Test
+    void sharedLanesExpireIndependentlyAndCannotOverrideAnActiveLanesRpm() throws Exception {
+        OutputFixture fixture = outputFixture();
+        StressSession first = new StressSession();
+        StressSession second = new StressSession();
+        assertTrue(fixture.port().apply(first, 1, 4, -16).success());
+        assertTrue(fixture.port().apply(second, 1, 8, -16).success());
+        first.onRecipeFinished();
+        assertFalse(fixture.port().apply(first, 2, 4, 32).success());
+        assertEquals(new OutputSample(12, -16), fixture.sample());
+        LevelStub.setGameTime(fixture.entity().getLevel(), 1);
+        second.onRecipeFinished();
+        LevelStub.setGameTime(fixture.entity().getLevel(), 5);
+        fixture.port().tickOutputGrace();
+        assertEquals(new OutputSample(8, -16), fixture.sample());
+        LevelStub.setGameTime(fixture.entity().getLevel(), 6);
+        fixture.port().tickOutputGrace();
+        assertEquals(new OutputSample(0, 0), fixture.sample());
+    }
+
+    @Test
+    void explicitReleaseAndInterfaceClearRevokeCoastingImmediately() throws Exception {
+        for (int cleanup = 0; cleanup < 3; cleanup++) {
+            OutputFixture fixture = outputFixture();
+            StressSession session = new StressSession();
+            assertTrue(fixture.port().apply(session, 1, 4, -16).success());
+            session.onRecipeFinished();
+            switch (cleanup) {
+                case 0 -> fixture.port().clear();
+                case 1 -> session.releaseAll();
+                case 2 -> session.releaseOutputs();
+            }
+            assertEquals(new OutputSample(0, 0), fixture.sample());
+        }
     }
 
     @Test
@@ -257,6 +350,37 @@ class StressInterfacePersistenceTest {
 
     private static StressOutputBlockEntity output() {
         return new StressOutputBlockEntity(new BlockPos(2, 0, 0), BLOCKS.get(StressInterfaceKind.OUTPUT).defaultBlockState());
+    }
+
+    private static OutputFixture outputFixture() throws Exception {
+        KineticBlockEntity entity = new StaticKineticEntity();
+        entity.setLevel(LevelStub.create(Map.of(BlockPos.ZERO, Blocks.CHEST), List.of(entity)));
+        LevelStub.setGameTime(entity.getLevel(), 0);
+        List<OutputSample> changes = new ArrayList<>();
+        AtomicReference<StressPortCapability> reference = new AtomicReference<>();
+        StressPortCapability port = new StressPortCapability(entity, StressInterfaceKind.OUTPUT, () -> 1_000_000D,
+                () -> 0D, () -> changes.add(new OutputSample(reference.get().baseStress(), reference.get().generatedRpm())));
+        reference.set(port);
+        Field controller = StressPortCapability.class.getDeclaredField("controllerPos");
+        controller.setAccessible(true);
+        controller.set(port, BlockPos.ZERO);
+        return new OutputFixture(entity, port, changes);
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record OutputFixture(KineticBlockEntity entity, StressPortCapability port, List<OutputSample> changes) {
+        OutputSample sample() { return new OutputSample(port.baseStress(), port.generatedRpm()); }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record OutputSample(double baseStress, double rpm) { }
+
+    /** No native propagation runs in the facet's deterministic clock fixture.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class StaticKineticEntity extends KineticBlockEntity {
+        private StaticKineticEntity() { super(BlockEntityType.CHEST, BlockPos.ZERO, Blocks.CHEST.defaultBlockState()); }
+        @Override public float getSpeed() { return getTheoreticalSpeed(); }
     }
 
     private static CompoundTag savedInput() throws Exception {

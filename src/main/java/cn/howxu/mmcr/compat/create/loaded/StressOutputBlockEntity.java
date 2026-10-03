@@ -57,7 +57,7 @@ public final class StressOutputBlockEntity extends GeneratingKineticBlockEntity 
         setChanged();
     }
 
-    @Override public void tick() { settleSavedNetwork(); super.tick(); port.tickAppearance(); port.notifyStateTransition(); }
+    @Override public void tick() { settleSavedNetwork(); port.tickOutputGrace(); super.tick(); port.tickAppearance(); port.notifyStateTransition(); }
 
     @Override public ModelData getModelData() { return port.modelData(); }
 
