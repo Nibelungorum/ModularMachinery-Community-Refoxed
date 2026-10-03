@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.fluxnetworks.loaded;
 
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -20,6 +21,11 @@ public final class LoadedFluxNetworksBridge implements FluxNetworksBridge {
     @Override
     public List<IOPortKind> portKinds() {
         return List.of(FluxNetworkInterfaceKind.INPUT, FluxNetworkInterfaceKind.OUTPUT);
+    }
+
+    @Override
+    public Item createBlockItem(Block block, Item.Properties properties) {
+        return new FluxNetworkInterfaceItem(block, properties);
     }
 
     @Override

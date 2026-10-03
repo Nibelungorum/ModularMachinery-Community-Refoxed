@@ -2,6 +2,8 @@ package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.internal.item.InterfaceBlockItem;
 import cn.howxu.mmcr.internal.item.KeyCardItem;
 import cn.howxu.mmcr.internal.item.BlueprintItem;
@@ -47,7 +49,9 @@ public final class ModItems {
         ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
             DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
                     {
-                        Item item = new InterfaceBlockItem(blockHolder.get(), new Item.Properties());
+                        Item item = FluxNetworksIds.INPUT.equals(name) || FluxNetworksIds.OUTPUT.equals(name)
+                                ? FluxNetworksBridge.get().createBlockItem(blockHolder.get(), new Item.Properties())
+                                : new InterfaceBlockItem(blockHolder.get(), new Item.Properties());
                         ResourceLocation machineId = ModBlocks.machineIdForController(blockHolder.get());
                         if (machineId != null) {
                             Map<Item, ResourceLocation> ids = new LinkedHashMap<>(controllerMachineIds);

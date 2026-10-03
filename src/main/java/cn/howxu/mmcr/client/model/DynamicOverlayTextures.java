@@ -2,7 +2,7 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.SourcePortKind;
-import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworkOverlay;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
@@ -31,8 +31,8 @@ public final class DynamicOverlayTextures {
         if (isStressPort(kind)) {
             return overlay(MMCR.id("block/create/" + kind.ioType().getSerializedName()));
         }
-        if (FluxNetworksIds.INPUT.equals(kind.id()) || FluxNetworksIds.OUTPUT.equals(kind.id())) {
-            return ImmutableList.of(baseOverlay("energy"), directionOverlay(kind.ioType()), typeOverlay("energy"));
+        if (FluxNetworkOverlay.isPort(kind)) {
+            return FluxNetworkOverlay.textures(kind);
         }
         // for ae2
         ResourceLocation compatibilityOverlay = compatibilityOverlay(kind.id());

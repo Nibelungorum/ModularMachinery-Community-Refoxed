@@ -32,12 +32,14 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ItemLike;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.conditions.ICondition;
 import net.neoforged.neoforge.common.conditions.ModLoadedCondition;
 import net.neoforged.neoforge.common.Tags;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public final class ModRecipeProvider extends RecipeProvider {
@@ -649,6 +651,13 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .requires(ModBlocks.BASIC_CASING.get()).requires(ModItems.MODULARIUM.get())
                 .unlockedBy("has_modularium", has(ModItems.MODULARIUM.get()))
                 .save(conditioned, MMCR.id(FluxNetworksIds.OUTPUT));
+        for (String id : List.of(FluxNetworksIds.INPUT, FluxNetworksIds.OUTPUT)) {
+            Block block = ModBlocks.BLOCKS.get(id).get();
+            ShapelessRecipeBuilder.shapeless(RecipeCategory.MISC, block)
+                    .requires(block)
+                    .unlockedBy("has_flux_interface", has(block))
+                    .save(conditioned, MMCR.id("wipe_" + id));
+        }
     }
 
     private void createStressInterfaceRecipes() {

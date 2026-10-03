@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.compat.athena.AthenaModelBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworkOverlay;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.port.MachinePort;
 import com.google.common.collect.ImmutableList;
@@ -313,7 +314,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                         description.stateOverlayTexture())) {
                     for (Direction direction : description.overlayFaces()) {
                         if (itemShaft != null && direction.getAxis() != Direction.Axis.Z) continue;
-                        quads.add(overlayFace(direction, Direction.NORTH, sprite(layer.texture()), layer.grow(),
+                        quads.add(overlayFace(direction, Direction.NORTH, layer.texture(), layer.grow(),
                                 itemShaft == null ? null : Direction.Axis.Z));
                     }
                 }
@@ -338,7 +339,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                 for (Direction direction : Direction.values()) {
                     if (shaftAxis != null && direction.getAxis() != shaftAxis) continue;
                     if (overlayFace == null || direction == overlayFace) {
-                        quads.add(overlayFace(direction, rollFacing, sprite(layer.texture()), layer.grow(), shaftAxis));
+                        quads.add(overlayFace(direction, rollFacing, layer.texture(), layer.grow(), shaftAxis));
                     }
                 }
             }
@@ -405,8 +406,11 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             }
         }
 
-        private BakedQuad overlayFace(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
+        private BakedQuad overlayFace(Direction direction, Direction rollFacing, ResourceLocation texture,
                                       float grow, @Nullable Direction.Axis shaftAxis) {
+            TextureAtlasSprite sprite = sprite(texture);
+            BakedQuad flux = FluxNetworkOverlay.quad(texture, direction, sprite, grow);
+            if (flux != null) return flux;
             return direction.getAxis() == shaftAxis
                     ? endFace(direction, sprite, grow, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F)
                     : face(direction, rollFacing, sprite, grow);

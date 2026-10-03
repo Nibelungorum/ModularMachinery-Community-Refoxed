@@ -5,6 +5,8 @@ import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
+import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworksClient;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
 import cn.howxu.mmcr.client.gui.ExtendedCombinedScreen;
@@ -43,6 +45,7 @@ import net.minecraft.server.packs.repository.PackSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
@@ -74,6 +77,10 @@ public class Client {
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerMachineRenderers);
         modBus.addListener(Client::registerCreateVisuals);
+        if (ModList.get().isLoaded(FluxNetworksIds.MOD_ID)) {
+            modBus.addListener(FluxNetworksClient::registerBlockColors);
+            modBus.addListener(FluxNetworksClient::registerItemColors);
+        }
         // modBus.addListener(ArtificialStarRenderer::registerModel);
         modBus.addListener(Client::registerRuntimeResourcePack);
         modBus.addListener(Client::registerPreviewReloadListener);
