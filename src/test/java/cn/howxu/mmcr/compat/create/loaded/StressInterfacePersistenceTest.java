@@ -3,6 +3,8 @@ package cn.howxu.mmcr.compat.create.loaded;
 import cn.howxu.mmcr.compat.create.StressContributions;
 import cn.howxu.mmcr.compat.create.StressSession;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.electronwill.nightconfig.core.CommentedConfig;
@@ -34,6 +36,9 @@ import java.util.EnumMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -115,6 +120,91 @@ class StressInterfacePersistenceTest {
         Field field = AllConfigs.class.getDeclaredField("server");
         field.setAccessible(true);
         field.set(null, previousServer);
+    }
+
+    @Test
+    void chunkUnloadClearsInputAndOutputOwnershipWithoutNativeUpdates() throws Exception {
+        for (StressInterfaceKind kind : StressInterfaceKind.values()) {
+            KineticBlockEntity entity = kind == StressInterfaceKind.INPUT ? input() : output();
+            attachLevel(entity);
+            StressPortCapability port = port(entity);
+            AtomicInteger nativeUpdates = observeNativeUpdates(port);
+            StressSession session = new StressSession();
+            seedOwnedContribution(entity, port, session, kind);
+            entity.onChunkUnloaded();
+            assertTrue(entity.isChunkUnloaded());
+            assertEquals(0D, port.baseStress());
+            assertEquals(0D, port.generatedRpm());
+            assertEquals(0D, port.ownedBaseStress(session, 1));
+            assertEquals(0, nativeUpdates.get(), "Unloading must not recalculate or propagate a kinetic network");
+            session.releaseAll();
+            assertEquals(0, nativeUpdates.get(), "Late controller cleanup must not update the unloaded port");
+        }
+    }
+
+    @Test
+    void chunkUnloadRevokesOutputGraceWithoutNativeUpdates() throws Exception {
+        StressOutputBlockEntity output = output();
+        attachLevel(output);
+        StressPortCapability port = port(output);
+        AtomicInteger nativeUpdates = observeNativeUpdates(port);
+        StressSession session = new StressSession();
+        seedOwnedContribution(output, port, session, StressInterfaceKind.OUTPUT);
+        session.onRecipeFinished();
+        assertNotEquals(0F, output.getGeneratedSpeed());
+        assertEquals(0D, port.ownedBaseStress(session, 1));
+        output.onChunkUnloaded();
+        assertEquals(0F, output.getGeneratedSpeed());
+        assertEquals(0D, port.baseStress());
+        session.releaseAll();
+        assertEquals(0, nativeUpdates.get(), "Unloading a coasting generator must not traverse neighbouring chunks");
+    }
+
+    @Test
+    void savingAfterUnloadRetainsDebitOfClearedLiveContributions() throws Exception {
+        for (StressInterfaceKind kind : StressInterfaceKind.values()) {
+            KineticBlockEntity entity = kind == StressInterfaceKind.INPUT ? input() : output();
+            attachLevel(entity);
+            StressPortCapability port = port(entity);
+            AtomicInteger nativeUpdates = observeNativeUpdates(port);
+            StressSession session = new StressSession();
+            seedOwnedContribution(entity, port, session, kind);
+            entity.network = 7L;
+            entity.source = BlockPos.ZERO;
+            entity.setSpeed(-64F);
+            entity.updateFromNetwork(1088F, 256F, 3);
+            CompoundTag before = entity.saveWithoutMetadata(LOOKUP);
+            entity.onChunkUnloaded();
+            session.releaseAll();
+            CompoundTag after = entity.saveWithoutMetadata(LOOKUP);
+            assertEquals(0D, port.baseStress());
+            assertEquals(before.getCompound("Network"), after.getCompound("Network"));
+            assertEquals(before.getCompound("StressRecovery"), after.getCompound("StressRecovery"));
+            assertEquals(0, nativeUpdates.get());
+            KineticBlockEntity reloaded = kind == StressInterfaceKind.INPUT ? input() : output();
+            reloaded.loadWithComponents(after, LOOKUP);
+            KineticNetwork network = new KineticNetwork();
+            assertTrue(recovery(reloaded).settle(network, reloaded));
+            assertFalse(recovery(reloaded).settle(network, reloaded), "Preserved debit must be settled exactly once");
+            assertEquals(0F, reloaded.getGeneratedSpeed(), "Cleared output must not restart from saved generation");
+        }
+    }
+
+    @Test
+    void unloadBeforeInitializationPreservesSavedNetworkDebt() throws Exception {
+        for (StressInterfaceKind kind : StressInterfaceKind.values()) {
+            KineticBlockEntity entity = kind == StressInterfaceKind.INPUT ? input() : output();
+            CompoundTag saved = kind == StressInterfaceKind.INPUT ? savedInput() : savedOutput();
+            entity.loadWithComponents(saved, LOOKUP);
+            attachLevel(entity);
+            entity.onChunkUnloaded();
+            assertTrue(recovery(entity).pending(), "Unloading must not initialize or settle a saved native network");
+            CompoundTag resaved = entity.saveWithoutMetadata(LOOKUP);
+            assertEquals(saved.getCompound("Network"), resaved.getCompound("Network"));
+            assertEquals(saved.getCompound("StressRecovery"), resaved.getCompound("StressRecovery"));
+            assertEquals(saved.get("Source"), resaved.get("Source"));
+            assertEquals(saved.getFloat("Speed"), resaved.getFloat("Speed"));
+        }
     }
 
     @Test
@@ -346,6 +436,33 @@ class StressInterfacePersistenceTest {
 
     private static StressInputBlockEntity input() {
         return new StressInputBlockEntity(new BlockPos(1, 0, 0), BLOCKS.get(StressInterfaceKind.INPUT).defaultBlockState());
+    }
+
+    private static StressPortCapability port(KineticBlockEntity entity) {
+        return (StressPortCapability) ((CapabilityHost) entity).capabilitySnapshot().capabilities().getFirst();
+    }
+
+    private static void attachLevel(KineticBlockEntity entity) {
+        entity.setLevel(LevelStub.createWithBlockEntities(List.of(entity)));
+    }
+
+    private static AtomicInteger observeNativeUpdates(StressPortCapability port) throws Exception {
+        AtomicInteger updates = new AtomicInteger();
+        Field callback = StressPortCapability.class.getDeclaredField("onChanged");
+        callback.setAccessible(true);
+        callback.set(port, (Runnable) () -> updates.incrementAndGet());
+        return updates;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void seedOwnedContribution(KineticBlockEntity entity, StressPortCapability port,
+                                              StressSession session, StressInterfaceKind kind) throws Exception {
+        ledger(entity).replace(session, 1, new StressContributions.Contribution(4D,
+                kind == StressInterfaceKind.OUTPUT ? -16D : 0D));
+        Field owners = StressPortCapability.class.getDeclaredField("owners");
+        owners.setAccessible(true);
+        ((Map<StressSession, Set<Integer>>) owners.get(port)).put(session, new HashSet<>(Set.of(1)));
+        session.track(port, 1, kind == StressInterfaceKind.INPUT ? RecipeModifier.IOType.INPUT : RecipeModifier.IOType.OUTPUT);
     }
 
     private static StressOutputBlockEntity output() {

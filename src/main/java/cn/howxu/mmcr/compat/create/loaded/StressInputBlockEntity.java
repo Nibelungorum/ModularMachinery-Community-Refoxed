@@ -43,7 +43,7 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
     @Override public float calculateAddedStressCapacity() { return lastCapacityProvided = 0F; }
 
     private void contributionChanged() {
-        if (level == null || level.isClientSide()) return;
+        if (!port.nativeUpdatesAllowed()) return;
         settleSavedNetwork();
         if (hasNetwork()) getOrCreateNetwork().updateStressFor(this, calculateStressApplied());
         else calculateStressApplied();
@@ -66,7 +66,7 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
      * @author howxu <dev@howxu.cn>
      */
     public void settleSavedNetwork() {
-        if (!recovery.pending() || level == null || level.isClientSide()) return;
+        if (!recovery.pending() || !port.nativeUpdatesAllowed()) return;
         network = recovery.networkId();
         KineticNetwork restored = getOrCreateNetwork();
         recovery.settle(restored, this);
@@ -75,6 +75,16 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
         port.networkChanged(restored);
         restored.updateNetwork();
         restored.sync();
+    }
+
+    /** Keeps the cached native debit without traversing or updating a kinetic network. */
+    void preserveSavedNetwork() {
+        if (recovery.pending() || level == null || level.isClientSide() || !hasNetwork()) return;
+        CompoundTag tag = new CompoundTag();
+        // The parent writes local cached fields; our write() would already replace the old base with zero.
+        super.write(tag, level.registryAccess(), false);
+        recovery.write(tag, 0F);
+        recovery.read(tag);
     }
 
     @Override
@@ -98,9 +108,9 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
 
     @Override
     public void onChunkUnloaded() {
-        settleSavedNetwork();
-        port.clear();
+        // Mark unloaded before clearing ownership; retain any unsettled debit for the next load.
         super.onChunkUnloaded();
+        port.clear();
     }
 
     @Override public void remove() { settleSavedNetwork(); port.clear(); super.remove(); }

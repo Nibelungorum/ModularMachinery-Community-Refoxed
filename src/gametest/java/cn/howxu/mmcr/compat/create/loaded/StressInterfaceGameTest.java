@@ -565,12 +565,30 @@ public final class StressInterfaceGameTest {
                 .thenExecute(() -> {
                     apply(helper, restoredInput.get(), session, 0, 0.5D, 0D);
                     apply(helper, restoredOutput.get(), session, 1, 5D, 16D);
+                    CompoundTag inputBeforeUnload = restoredInput.get().saveWithoutMetadata(helper.getLevel().registryAccess());
+                    CompoundTag outputBeforeUnload = restoredOutput.get().saveWithoutMetadata(helper.getLevel().registryAccess());
                     restoredInput.get().onChunkUnloaded();
                     restoredOutput.get().onChunkUnloaded();
-                    close(helper, restoredNetwork.get().calculateStress(), baselineStress.get(),
-                            "Native unload callbacks release newly acquired load after a full-network restore");
-                    close(helper, restoredNetwork.get().calculateCapacity(), 64D,
-                            "Native unload callbacks release newly acquired output capacity");
+                    helper.assertTrue(restoredInput.get().isChunkUnloaded() && restoredOutput.get().isChunkUnloaded(),
+                            "Both native ports enter the unloaded lifecycle before ownership is cleared");
+                    close(helper, facet(restoredInput.get()).ownedBaseStress(session, 0), 0D,
+                            "Unloading releases newly acquired input ownership");
+                    close(helper, facet(restoredOutput.get()).ownedBaseStress(session, 1), 0D,
+                            "Unloading releases newly acquired output ownership");
+                    close(helper, facet(restoredInput.get()).state().baseContribution(), 0D,
+                            "Unloaded input retains no recipe load");
+                    close(helper, restoredOutput.get().getGeneratedSpeed(), 0D,
+                            "Unloaded output retains no recipe generation or grace");
+                    // The entities remain in this fixture until the following removals. Do not force a
+                    // network recalculation here: real unload must not load neighbouring chunks.
+                    CompoundTag inputAfterUnload = restoredInput.get().saveWithoutMetadata(helper.getLevel().registryAccess());
+                    CompoundTag outputAfterUnload = restoredOutput.get().saveWithoutMetadata(helper.getLevel().registryAccess());
+                    helper.assertTrue(inputBeforeUnload.getCompound("Network").equals(inputAfterUnload.getCompound("Network"))
+                                    && inputBeforeUnload.getCompound("StressRecovery").equals(inputAfterUnload.getCompound("StressRecovery")),
+                            "Input cleanup preserves its debit against the unchanged native cached total");
+                    helper.assertTrue(outputBeforeUnload.getCompound("Network").equals(outputAfterUnload.getCompound("Network"))
+                                    && outputBeforeUnload.getCompound("StressRecovery").equals(outputAfterUnload.getCompound("StressRecovery")),
+                            "Output cleanup preserves its own-RPM debit without updating the unloading network");
                     helper.setBlock(inputPos, Blocks.AIR);
                     helper.setBlock(outputPos, Blocks.AIR);
                     session.releaseAll();

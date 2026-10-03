@@ -285,6 +285,12 @@ public final class StressPortCapability implements MachineCapability, Capability
 
     private void changed(double beforeBase, double beforeRpm) {
         if (beforeBase == baseStress() && beforeRpm == generatedRpm()) return;
+        if (!nativeUpdatesAllowed()) {
+            // Native totals still contain the old contribution. Preserve its debit if saving follows cleanup.
+            if (entity instanceof StressInputBlockEntity input) input.preserveSavedNetwork();
+            else if (entity instanceof StressOutputBlockEntity output) output.preserveSavedNetwork((float) beforeRpm);
+            return;
+        }
         onChanged.run();
         notifyStateTransition();
     }
@@ -309,6 +315,7 @@ public final class StressPortCapability implements MachineCapability, Capability
         appearanceRefreshPending = true;
         appearanceLinked = controllerPos != null;
         if (controllerPos == null) appearanceSource = MachineAppearanceSpec.defaults().formedPortTextureSource();
+        if (!nativeUpdatesAllowed()) return;
         entity.setChanged();
         if (serverEntity()) entity.sendData();
     }
@@ -384,8 +391,13 @@ public final class StressPortCapability implements MachineCapability, Capability
     }
 
     private boolean serverEntity() {
-        return entity.getLevel() != null && !entity.getLevel().isClientSide() && !entity.isRemoved()
-                && !entity.isChunkUnloaded();
+        return nativeUpdatesAllowed() && !entity.isRemoved();
+    }
+
+    /** Network callbacks can load chunks, so they must not run during unload or server shutdown. */
+    boolean nativeUpdatesAllowed() {
+        return entity.getLevel() != null && !entity.getLevel().isClientSide() && !entity.isChunkUnloaded()
+                && (entity.getLevel().getServer() == null || entity.getLevel().getServer().isRunning());
     }
 
     private void checkThread() {
