@@ -42,10 +42,10 @@ class DynamicOverlayTexturesTest {
     void sourceInterfacesShareTheSourceBaseAndRetainTheirDirectionLayer() {
         assertThat(DynamicOverlayTextures.portOverlayTexture(new SourcePortKind(ArsSourceIds.INPUT, IOType.INPUT)))
                 .containsExactly(MMCR.id("block/overlay/base/ars_nouveau/source"),
-                        MMCR.id("block/overlay/direction/input"));
+                         MMCR.id("block/overlay/direction/input"), MMCR.id("block/overlay/tier/big"));
         assertThat(DynamicOverlayTextures.portOverlayTexture(new SourcePortKind(ArsSourceIds.OUTPUT, IOType.OUTPUT)))
                 .containsExactly(MMCR.id("block/overlay/base/ars_nouveau/source"),
-                        MMCR.id("block/overlay/direction/output"));
+                         MMCR.id("block/overlay/direction/output"), MMCR.id("block/overlay/tier/big"));
     }
 
     @Test

@@ -125,7 +125,7 @@ class SourceHatchScreenTest {
         assertThat(screen.children()).isEmpty();
         assertThat(screen.supportsAutoIOControlPage()).isFalse();
         assertThat(screen.portSlotCount()).isZero();
-        assertThat(screen.texture(false)).isEqualTo(MMCR.id("textures/gui/guibar.png"));
+        assertThat(screen.texture(false)).isEqualTo(MMCR.id("textures/gui/ars_nouveau/guibar.png"));
         assertThat(screen.texture(true)).isEqualTo(screen.texture(false));
 
         screen.resize(null, 640, 480);

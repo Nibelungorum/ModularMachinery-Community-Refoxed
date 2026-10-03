@@ -52,6 +52,7 @@ import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import java.util.Arrays;
@@ -358,9 +359,14 @@ class PublicApiLifecycleTest {
                     .isBetween(1, RecipeSyncCodec.DEFAULT_MAX_PAYLOAD_SIZE);
         }
 
-        assertThat(PortDefinitionRegistry.values()).isNotEmpty().allSatisfy(definition ->
-                definition.bindings().forEach(binding ->
-                        assertThat(CapabilityRegistry.get(binding.type())).isNotNull()));
+        // begin() installs builtin capabilities; optional bridges have their own registration phase.
+        assertThat(PortKinds.all().stream().filter(kind -> kind.modDependencies().isEmpty())
+                .map(kind -> PortDefinitionRegistry.get(MMCR.id(kind.id()))).toList())
+                .isNotEmpty().allSatisfy(definition -> {
+                    assertThat(definition).isNotNull();
+                    definition.bindings().forEach(binding ->
+                            assertThat(CapabilityRegistry.get(binding.type())).isNotNull());
+                });
 
         List<MachineCapability> capabilities = List.of(
                 RuntimeTestFixtures.itemInput(new BlockPos(14, 0, 0))

@@ -107,7 +107,7 @@ class ControllerRecipeTextLinesTest {
     }
 
     @Test
-    void sourceOutputRetainsItsLongTotalAndAnItemIconWithoutAnArsIcon() {
+    void sourceOutputRetainsItsLongTotalAndNativeSourceIcon() {
         try (var outputScope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(SourceOutput.TYPE);
             var presentation = new ControllerRecipePresentation(List.of(
@@ -123,10 +123,9 @@ class ControllerRecipeTextLinesTest {
             assertThat(output.tooltip()).containsExactly(Component.translatable(
                     "gui.mmcr.source.exact", "9,223,372,036,854,775,807"));
             assertThat(output.leftIndent()).isEqualTo(4);
-            assertThat(output.icon()).isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class,
-                    icon -> assertThat(icon.stack().isEmpty()).isTrue());
+            assertThat(output.icon()).isInstanceOf(ControllerTextLine.SourceIcon.class);
             assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation).orElseThrow())
-                    .isInstanceOf(ControllerTextLine.ItemIcon.class);
+                    .isInstanceOf(ControllerTextLine.SourceIcon.class);
         }
     }
 

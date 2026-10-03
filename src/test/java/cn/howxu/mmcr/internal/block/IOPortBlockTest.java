@@ -36,8 +36,10 @@ class IOPortBlockTest {
     }
 
     @Test
-    void every_registered_port_kind_has_an_explicit_menu_category() {
+    void every_builtin_port_kind_has_an_explicit_menu_category() {
         for (IOPortKind kind : PortKinds.all()) {
+            // Optional integrations route menus through their bridges, not the builtin category enum.
+            if (!kind.modDependencies().isEmpty()) continue;
             IOPortBlock.PortMenuKind expected = expectedCategory(kind);
             assertThat(expected).isNotEqualTo(IOPortBlock.PortMenuKind.NONE);
             assertThat(IOPortBlock.menuKindFor(kind.id()))

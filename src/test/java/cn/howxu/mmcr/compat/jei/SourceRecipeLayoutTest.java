@@ -9,10 +9,11 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauRecipeTypes;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.ReadableNumber;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import net.minecraft.client.StringSplitter;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.core.Holder;
 import net.minecraft.locale.Language;
@@ -33,7 +34,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Exercises the Source rows consumed by the JEI category, including clipping and hover bounds.
+ * Exercises native Source slots, priority, overflow and exact translated tooltips.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -44,7 +45,7 @@ class SourceRecipeLayoutTest {
     }
 
     @Test
-    void sourceOnlyInputOutputAndBothHaveIndependentRowsBeforeMetadata() {
+    void sourceOnlyInputOutputAndBothHaveSlotsBeforeMetadata() {
         try (var requirements = RequirementHandlerRegistry.openTestScope();
              var outputs = OutputRegistry.openTestScope()) {
             ArsNouveauRecipeTypes.register();
@@ -55,10 +56,11 @@ class SourceRecipeLayoutTest {
                 MachineRecipeDisplay display = display(source);
                 MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
 
-                assertThat(layout.inputs().slots()).isEmpty();
-                assertThat(layout.outputs().slots()).isEmpty();
-                assertThat(layout.sourceTextLines()).hasSize(source.size());
-                assertThat(layout.sourceTextLines()).extracting(line -> line.entry().role())
+                List<MachineRecipeLayout.SlotPlan> slots = Stream.concat(layout.inputs().slots().stream(),
+                        layout.outputs().slots().stream()).toList();
+                assertThat(slots).hasSize(source.size());
+                assertThat(layout.sourceTextLines()).isEmpty();
+                assertThat(slots).extracting(slot -> slot.entry().displayEntry().role())
                         .containsExactlyElementsOf(source.stream().map(requirement -> requirement.io() == IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT).toList());
                 assertRowsAreSeparate(layout, display, 150);
@@ -67,7 +69,7 @@ class SourceRecipeLayoutTest {
     }
 
     @Test
-    void mixedItemGridsAndOverflowReserveSourceRowsAtEveryGuiScale() {
+    void mixedItemGridsAndOverflowKeepSourceFirstAtEveryGuiScale() {
         try (var requirements = RequirementHandlerRegistry.openTestScope();
              var outputs = OutputRegistry.openTestScope()) {
             ArsNouveauRecipeTypes.register();
@@ -82,9 +84,14 @@ class SourceRecipeLayoutTest {
                 MachineRecipeDisplay display = display(mixed);
                 for (int scale = 1; scale <= 4; scale++) {
                     MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, scale);
-                    assertThat(layout.sourceTextLines()).hasSize(2);
-                    assertThat(layout.inputs().slots()).allSatisfy(slot -> assertThat(slot.entry().kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
-                    assertThat(layout.outputs().slots()).allSatisfy(slot -> assertThat(slot.entry().kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
+                    assertThat(layout.sourceTextLines()).isEmpty();
+                    for (var region : List.of(layout.inputs(), layout.outputs())) {
+                        assertThat(region.slots().getFirst().entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE);
+                        assertThat(region.slots().subList(1, region.slots().size()))
+                                .allSatisfy(slot -> assertThat(slot.entry().kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
+                        assertThat(region.hiddenEntries().size() + region.slots().size()).isEqualTo(itemCount + 1);
+                        assertThat(region.overflowSlot() != null).isEqualTo(itemCount == 50);
+                    }
                     assertThat(layout.inputs().hiddenEntries()).allSatisfy(entry -> assertThat(entry.kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
                     assertThat(layout.outputs().hiddenEntries()).allSatisfy(entry -> assertThat(entry.kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
                     assertRowsAreSeparate(layout, display, switch (scale) {
@@ -99,35 +106,34 @@ class SourceRecipeLayoutTest {
     }
 
     @Test
-    void translatedLongTotalsAreBoundedAndExactTooltipsUseTheRealRowHitArea() throws Exception {
+    void nativeSlotsPreserveExactLongTotalsAndTranslatedTooltipDirections() throws Exception {
         Language previous = Language.getInstance();
         try (var requirements = RequirementHandlerRegistry.openTestScope();
              var outputs = OutputRegistry.openTestScope()) {
             ArsNouveauRecipeTypes.register();
             for (String language : List.of("en_us", "zh_cn")) {
                 injectLanguage(language);
-                StringSplitter splitter = new StringSplitter((codePoint, style) -> codePoint > 127 ? 9F : 6F);
                 for (long amount : List.of(1L, 10_000L, 3_000_000_001L, Long.MAX_VALUE)) {
                     MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display(List.of(
                             SourceRequirement.input(amount), SourceRequirement.output(amount))), 4);
-                    for (MachineRecipeLayout.TextPlan line : layout.sourceTextLines()) {
-                        Component full = (Component) line.entry().ingredient();
-                        var visible = MachineRecipeCategory.sourceTextLine(line, splitter);
-                        assertThat(visible.getString()).isNotEmpty();
-                        assertThat(splitter.stringWidth(visible) * 0.85F).isLessThanOrEqualTo((float) line.width());
-                        assertThat(line.x() + line.width()).isLessThanOrEqualTo(MachineRecipeLayout.CATEGORY_WIDTH);
-                        assertThat(full.getString()).contains(ReadableNumber.formatExact(amount));
-                        assertThat(MachineRecipeCategory.sourceTooltip(layout, line.x(), line.y())).contains(full);
-                        assertThat(MachineRecipeCategory.sourceTooltip(layout, line.x() + line.width() - 0.01,
-                                line.y() + MachineRecipeLayout.TEXT_LINE_SPACING - 0.01)).contains(full);
-                        assertThat(MachineRecipeCategory.sourceTooltip(layout, line.x() - 0.01, line.y())).isEmpty();
-                        assertThat(MachineRecipeCategory.sourceTooltip(layout, line.x() + line.width(), line.y())).isEmpty();
-                        assertThat(line.contains(line.x(), line.y() - 0.01)).isFalse();
-                        assertThat(line.contains(line.x(), line.y() + MachineRecipeLayout.TEXT_LINE_SPACING)).isFalse();
-                        assertThat(line.entry().isTextOnly()).isTrue();
-                        assertThat(line.entry().transferable()).isFalse();
+                    List<MachineRecipeLayout.SlotPlan> slots = Stream.concat(layout.inputs().slots().stream(),
+                            layout.outputs().slots().stream()).toList();
+                    assertThat(slots).hasSize(2);
+                    for (var slot : slots) {
+                        var entry = slot.entry().displayEntry();
+                        SourceJeiIngredient ingredient = (SourceJeiIngredient) entry.ingredient();
+                        assertThat(ingredient.amount()).isEqualTo(amount);
+                        assertThat(ingredient.input()).isEqualTo(entry.role() == RecipeIngredientRole.INPUT);
+                        assertThat(ingredient.tooltip()).isEqualTo(Component.translatable(ingredient.input()
+                                ? "jei.mmcr.machine_recipe.source_input" : "jei.mmcr.machine_recipe.source_output",
+                                ReadableNumber.formatExact(amount)));
+                        assertThat(ingredient.tooltip().getString()).contains(ReadableNumber.formatExact(amount));
+                        assertThat(entry.ingredientType()).isSameAs(SourceJeiIngredient.TYPE);
+                        assertThat(entry.isTextOnly()).isFalse();
+                        assertThat(entry.transferable()).isFalse();
+                        assertThat(slot.x() + 16).isLessThanOrEqualTo(MachineRecipeLayout.CATEGORY_WIDTH);
                     }
-                    assertThat(MachineRecipeCategory.sourceTooltip(layout, 8, layout.durationTextY())).isEmpty();
+                    assertThat(layout.sourceTextLines()).isEmpty();
                 }
             }
         } finally {

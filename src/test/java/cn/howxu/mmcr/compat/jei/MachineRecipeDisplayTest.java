@@ -56,6 +56,7 @@ import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.drawable.IDrawableStatic;
+import sun.misc.Unsafe;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1044,8 +1045,8 @@ class MachineRecipeDisplayTest {
     private static IGuiHelper guiHelper() {
         return (IGuiHelper) Proxy.newProxyInstance(
                 MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{IGuiHelper.class},
-                (proxy, method, arguments) -> method.getName().equals("getSlotDrawable")
-                        ? staticDrawable() : method.getName().equals("createDrawableItemLike") ? drawable() : null);
+                 (proxy, method, arguments) -> method.getName().equals("getSlotDrawable")
+                         ? staticDrawable() : method.getName().equals("createDrawableItemLike") ? drawable() : null);
     }
 
     private static IDrawable drawable() {
@@ -1078,7 +1079,12 @@ class MachineRecipeDisplayTest {
         Method method = MachineRecipeCategory.class.getDeclaredMethod("addEntry", IRecipeLayoutBuilder.class,
                 MachineRecipeDisplay.class, MachineRecipeLayout.SlotPlan.class, boolean.class);
         method.setAccessible(true);
-        method.invoke(null, builder, display, new MachineRecipeLayout.SlotPlan(entry, 0, 0), input);
+        // Exercise slot population without initializing global block registries through the category constructor.
+        var unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        MachineRecipeCategory category = (MachineRecipeCategory) ((Unsafe) unsafeField.get(null))
+                .allocateInstance(MachineRecipeCategory.class);
+        method.invoke(category, builder, display, new MachineRecipeLayout.SlotPlan(entry, 0, 0), input);
     }
 
     private static Object recipeSlotBuilder(SlotCapture capture) {

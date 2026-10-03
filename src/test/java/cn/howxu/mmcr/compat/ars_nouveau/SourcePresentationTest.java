@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiAdapter;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJadeElement;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourcePortJadeComponentProvider;
 import cn.howxu.mmcr.compat.jade.RecipeOutputCodec;
 import cn.howxu.mmcr.compat.jade.RecipeOutputComponentProvider;
@@ -42,9 +44,9 @@ class SourcePresentationTest {
     }
 
     @Test
-    void jeiAdapterPreservesExactLongTotalsAsNonTransferableTextForBothRoles() {
+    void jeiAdapterPreservesExactLongTotalsAsNonTransferableIngredientsForBothRoles() {
         SourceJeiAdapter adapter = new SourceJeiAdapter();
-        assertThat(adapter.ingredientType()).isNull();
+        assertThat(adapter.ingredientType()).isSameAs(SourceJeiIngredient.TYPE);
         assertThat(adapter.transferHandler()).isEmpty();
         for (RecipeIngredientRole role : List.of(RecipeIngredientRole.INPUT, RecipeIngredientRole.OUTPUT)) {
             SourceRequirement requirement = role == RecipeIngredientRole.INPUT
@@ -54,10 +56,11 @@ class SourcePresentationTest {
 
             assertThat(display.role()).isEqualTo(role);
             assertThat(display.typeId()).isEqualTo(ArsSourceIds.SOURCE);
-            assertThat(display.isTextOnly()).isTrue();
+            assertThat(display.isTextOnly()).isFalse();
             assertThat(display.transferable()).isFalse();
             assertThat(display.count()).isEqualTo(Integer.MAX_VALUE);
-            assertThat(display.ingredient()).isEqualTo(Component.translatable(role == RecipeIngredientRole.INPUT
+            assertThat(display.ingredient()).isEqualTo(new SourceJeiIngredient(Long.MAX_VALUE, role == RecipeIngredientRole.INPUT));
+            assertThat(((SourceJeiIngredient) display.ingredient()).tooltip()).isEqualTo(Component.translatable(role == RecipeIngredientRole.INPUT
                     ? "jei.mmcr.machine_recipe.source_input" : "jei.mmcr.machine_recipe.source_output",
                     "9,223,372,036,854,775,807"));
         }
@@ -80,20 +83,17 @@ class SourcePresentationTest {
                     .isInstanceOf(SourceJeiAdapter.class);
             assertThat(entries).hasSize(2);
             assertThat(entries.get(0).role()).isEqualTo(RecipeIngredientRole.INPUT);
-            assertThat(entries.get(0).ingredient()).isEqualTo(Component.translatable(
-                    "jei.mmcr.machine_recipe.source_input", "10,000"));
+            assertThat(entries.get(0).ingredient()).isEqualTo(new SourceJeiIngredient(10_000L, true));
             assertThat(entries.get(1).role()).isEqualTo(RecipeIngredientRole.OUTPUT);
-            assertThat(entries.get(1).ingredient()).isEqualTo(Component.translatable(
-                    "jei.mmcr.machine_recipe.source_output", "3,000,000,001"));
+            assertThat(entries.get(1).ingredient()).isEqualTo(new SourceJeiIngredient(3_000_000_001L, false));
             assertThat(entries).allSatisfy(entry -> {
-                assertThat(entry.isTextOnly()).isTrue();
+                assertThat(entry.isTextOnly()).isFalse();
                 assertThat(entry.transferable()).isFalse();
             });
-            assertThat(layout.sourceTextLines()).extracting(MachineRecipeLayout.TextPlan::entry)
-                    .containsExactlyElementsOf(entries);
-            assertThat(layout.inputs().slots()).isEmpty();
-            assertThat(layout.outputs().slots()).isEmpty();
-            assertThat(layout.durationTextY()).isGreaterThan(layout.sourceTextLines().getLast().y());
+            assertThat(layout.sourceTextLines()).isEmpty();
+            assertThat(layout.inputs().slots()).extracting(slot -> slot.entry().displayEntry()).containsExactly(entries.get(0));
+            assertThat(layout.outputs().slots()).extracting(slot -> slot.entry().displayEntry()).containsExactly(entries.get(1));
+            assertThat(layout.durationTextY()).isGreaterThan(layout.inputs().slots().getFirst().y() + 16);
         }
     }
 
@@ -110,11 +110,11 @@ class SourcePresentationTest {
 
             SourcePortJadeComponentProvider.INSTANCE.appendTooltip(tooltip(lines), serverOnlyAccessor(data), null);
 
-            assertThat(lines).containsExactly(Component.translatable("gui.mmcr.source.amount", "10,000", "50,000"));
+            assertThat(lines).containsExactly(Component.translatable("jade.mmcr.source_port.amount", "10,000"));
             source.putInt("amount", 0);
             lines.clear();
             SourcePortJadeComponentProvider.INSTANCE.appendTooltip(tooltip(lines), serverOnlyAccessor(data), null);
-            assertThat(lines).containsExactly(Component.translatable("gui.mmcr.source.amount", "0", "50,000"));
+            assertThat(lines).containsExactly(Component.translatable("jade.mmcr.source_port.amount", "0"));
         }
     }
 
@@ -129,15 +129,17 @@ class SourcePresentationTest {
     }
 
     @Test
-    void controllerJadeRendersTheTransportedLongSourceTotalAsExactText() {
+    void controllerJadeRendersTheTransportedLongSourceTotalWithNativeIcon() {
         try (var outputScope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(SourceOutput.TYPE);
             CompoundTag data = new CompoundTag();
             RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(new SourceOutput(10_000L), Long.MAX_VALUE)));
             List<Component> lines = new ArrayList<>();
+            List<Object> elements = new ArrayList<>();
 
-            RecipeOutputComponentProvider.INSTANCE.appendTooltip(tooltip(lines), serverOnlyAccessor(data), null);
+            RecipeOutputComponentProvider.INSTANCE.appendTooltip(tooltip(lines, elements), serverOnlyAccessor(data), null);
 
+            assertThat(elements).anyMatch(SourceJadeElement.class::isInstance);
             assertThat(lines).containsExactly(Component.translatable("jade.mmcr.machine_controller.recipe_output"),
                     Component.translatable("gui.mmcr.source.exact", "9,223,372,036,854,775,807"));
         }
@@ -152,10 +154,15 @@ class SourcePresentationTest {
     }
 
     private static ITooltip tooltip(List<Component> lines) {
+        return tooltip(lines, new ArrayList<>());
+    }
+
+    private static ITooltip tooltip(List<Component> lines, List<Object> elements) {
         return (ITooltip) Proxy.newProxyInstance(SourcePresentationTest.class.getClassLoader(),
                 new Class<?>[]{ITooltip.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("add") && arguments[0] instanceof Component component) {
-                        lines.add(component);
+                    if (method.getName().equals("add") || method.getName().equals("append")) {
+                        if (arguments[0] instanceof Component component) lines.add(component);
+                        else elements.add(arguments[0]);
                     }
                     return null;
                 });
