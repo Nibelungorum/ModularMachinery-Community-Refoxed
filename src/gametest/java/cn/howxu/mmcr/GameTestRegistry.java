@@ -6,6 +6,10 @@ import cn.howxu.mmcr.compat.appmek.AppMekPatternGameTest;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceRecipeGameTest;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceTransportGameTest;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksDeviceGameTest;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksRecipeGameTest;
 
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
@@ -360,6 +364,28 @@ public final class GameTestRegistry {
             register(event, "ars_source_recipe_restore_wakeups", 20,
                     helper -> new ArsSourceRecipeGameTest().recipeLifecycleConsumesOnceAndNativeTransfersWakeSearches(helper));
         }
+        if (FluxNetworksBridge.get().available()) {
+            register(event, "fluxnetworks_device_menu", 100,
+                    helper -> new FluxNetworksDeviceGameTest().nativeMenuAndCapabilities(helper));
+            register(event, "fluxnetworks_recipe_prefetch", 100,
+                    helper -> new FluxNetworksRecipeGameTest().prefetchAndConsumeOnce(helper));
+            register(event, "fluxnetworks_recipe_restore", 100,
+                    helper -> new FluxNetworksRecipeGameTest().restoreAndCancelWithoutSecondDebit(helper));
+            register(event, "fluxnetworks_cross_dimension", 100,
+                    helper -> new FluxNetworksDeviceGameTest().crossDimensionNativeTransfer(helper));
+            register(event, "fluxnetworks_drop_configuration", 100,
+                    helper -> new FluxNetworksDeviceGameTest().dropAndReplacePreserveEnergy(helper));
+            register(event, "fluxnetworks_native_item_crafting", 100,
+                    helper -> new FluxNetworksDeviceGameTest().nativeItemCraftingRecipes(helper));
+            register(event, "fluxnetworks_pending_connections", 100,
+                    helper -> new FluxNetworksDeviceGameTest().pendingConnectionsAndRemoval(helper));
+            register(event, "fluxnetworks_same_network_paste_sort", 100,
+                    helper -> new FluxNetworksDeviceGameTest().sameNetworkPasteSortsNativeLists(helper));
+            register(event, "fluxnetworks_failed_owner_restore", 100,
+                    helper -> new FluxNetworksRecipeGameTest().failedLoadReleasesUnownedReservation(helper));
+            register(event, "fluxnetworks_candidate_warmup_withdrawal", 100,
+                    helper -> new FluxNetworksRecipeGameTest().successfulCandidateRetractsFailedWarmup(helper));
+        }
         return event;
     }
 
@@ -368,6 +394,12 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        if (FluxNetworksBridge.get().available()) {
+            event.registerMachine(MachineBuilder.machine(FluxNetworksRecipeGameTest.MACHINE_ID)
+                    .displayNameKey("machine.mmcr_test.fluxnetworks")
+                    .appearance(appearance -> appearance.machineBasicBlock("minecraft:gold_block"))
+                    .maxParallelism(2).parallelizable(true).build());
+        }
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             ResourceLocation id = MMCR.id(name);
@@ -420,6 +452,17 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        if (FluxNetworksBridge.get().available()) {
+            event.registerStructure(FluxNetworksRecipeGameTest.MACHINE_ID, structure -> {
+                structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("ICO", " P ")
+                        .where('I', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get(FluxNetworksIds.INPUT).get()))
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(FluxNetworksRecipeGameTest.MACHINE_ID).get()))
+                        .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get(FluxNetworksIds.OUTPUT).get()))
+                        .where('P', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("parallel_controller_normal").get()))
+                        .controller('C')));
+                return structure;
+            });
+        }
         if (ModList.get().isLoaded("ars_nouveau")) {
             event.registerStructure(ArsSourceRecipeGameTest.MACHINE_ID, structure -> {
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("ICO", " P ")
@@ -580,6 +623,14 @@ public final class GameTestRegistry {
     }
 
     public static void registerRecipes(MachineRecipeRegistration event) {
+        if (FluxNetworksBridge.get().available()) {
+            event.registerRecipe(MachineRecipeBuilder.recipe(FluxNetworksRecipeGameTest.RECIPE_ID)
+                    .recipePool(FluxNetworksRecipeGameTest.MACHINE_ID).priority(10).duration(5).parallelized(true).inputEnergy(10L).build());
+            event.registerRecipe(MachineRecipeBuilder.recipe(FluxNetworksRecipeGameTest.OUTPUT_RECIPE_ID)
+                    .recipePool(FluxNetworksRecipeGameTest.MACHINE_ID).duration(5).parallelized(true).outputEnergy(10L).build());
+            event.registerRecipe(MachineRecipeBuilder.recipe(FluxNetworksRecipeGameTest.HIGH_BUDGET_RECIPE_ID)
+                    .recipePool(FluxNetworksRecipeGameTest.MACHINE_ID).priority(0).duration(5).parallelized(true).inputEnergy(20L).build());
+        }
         if (ModList.get().isLoaded("ars_nouveau")) {
             event.registerRecipe(MachineRecipeBuilder.recipe(ArsSourceRecipeGameTest.RECIPE_ID)
                     .recipePool(ArsSourceRecipeGameTest.MACHINE_ID).duration(3).parallelized(true)

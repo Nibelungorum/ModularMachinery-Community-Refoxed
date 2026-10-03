@@ -1,15 +1,19 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
@@ -107,11 +111,8 @@ final class NativeRequirementPlanning {
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
         long available = 0L;
         for (MachineCapability capability : ordered) {
-            EnergyStorageFacet facet = capability.facet(EnergyStorageFacet.class).orElse(null);
-            if (facet != null && facet.energyStorage() != null) {
-                available = RequirementHandlerSupport.saturatingAdd(available,
-                        energyAvailable(facet.energyStorage(), context.reservations(), insert));
-            }
+            available = RequirementHandlerSupport.saturatingAdd(available,
+                    energyAvailable(capability, context.reservations(), insert));
         }
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
@@ -203,14 +204,31 @@ final class NativeRequirementPlanning {
         long remaining = RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism);
         List<cn.howxu.mmcr.api.capability.plan.CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
+            if (remaining <= 0L) break;
+            EnergyOutputAdmissionFacet admission = insert
+                    ? capability.facet(EnergyOutputAdmissionFacet.class).orElse(null) : null;
+            if (admission != null) {
+                long available = Math.max(0L, admission.outputCapacity(reservations));
+                if (available < remaining && !admission.supportsSplitOutput()) continue;
+                long moved = Math.min(remaining, available);
+                if (moved <= 0L) continue;
+                EnergyOutputAdmissionFacet.OutputPlan planned = admission.planOutput(moved, reservations, materialize);
+                if (planned.accepted() != moved) continue;
+                if (materialize && planned.operation() != null) operations.add(planned.operation());
+                remaining -= moved;
+                continue;
+            }
             EnergyStorageFacet facet = capability.facet(EnergyStorageFacet.class).orElse(null);
-            if (facet == null || facet.energyStorage() == null || remaining <= 0L) continue;
-            long moved = Math.min(remaining, Math.min(
-                    energyAvailable(facet.energyStorage(), reservations, insert),
-                    RequirementHandlerSupport.scaled(energyTransferLimit(facet.energyStorage()), parallelism)));
+            ValueFacet<?> value = capability.facet(ValueFacet.class).orElse(null);
+            IEnergyStorage nativeStorage = facet == null ? null : facet.energyStorage();
+            LongValueStorage local = value != null && value.storage() instanceof LongValueStorage storage ? storage : null;
+            long transfer = nativeStorage != null ? energyTransferLimit(nativeStorage)
+                    : local == null ? 0L : local.transferLimit();
+            long moved = Math.min(remaining, Math.min(energyAvailable(capability, reservations, insert),
+                    RequirementHandlerSupport.scaled(transfer, parallelism)));
             if (moved <= 0L) continue;
-            if (facet.energyStorage() instanceof LongEnergyHandler storage
-                    && !reservations.reserveValueTotal(storage, moved, insert)) continue;
+            if (nativeStorage != null ? !reservations.reserveValueTotal(nativeStorage, moved, insert)
+                    : local == null || !reservations.reserveValueTotal(local, moved, insert)) continue;
             if (materialize) {
                 operations.add(capability.prepare(new CapabilityRequests.ValueRequest(capability.type(),
                         IOType.valueOf(requirement.io().name()), parallelism, moved, insert)));
@@ -288,9 +306,21 @@ final class NativeRequirementPlanning {
         return result;
     }
 
-    private static long energyAvailable(IEnergyStorage storage, PlanningReservations reservations, boolean insert) {
-        if (storage instanceof LongEnergyHandler longStorage) return reservations.valueAvailable(longStorage, insert);
-        return insert ? (long) storage.getMaxEnergyStored() - storage.getEnergyStored() : storage.getEnergyStored();
+    private static long energyAvailable(MachineCapability capability, PlanningReservations reservations, boolean insert) {
+        EnergyOutputAdmissionFacet admission = insert
+                ? capability.facet(EnergyOutputAdmissionFacet.class).orElse(null) : null;
+        if (admission != null) return Math.max(0L, admission.outputCapacity(reservations));
+        EnergyStorageFacet facet = capability.facet(EnergyStorageFacet.class).orElse(null);
+        if (facet != null && facet.energyStorage() != null) {
+            return reservations.valueAvailable(facet.energyStorage(), insert);
+        }
+        ValueFacet<?> value = capability.facet(ValueFacet.class).orElse(null);
+        if (value == null || !(value.storage() instanceof LongValueStorage storage)) return 0L;
+        long available = reservations.valueAvailable(storage, insert);
+        RecipeEnergyPrefetchFacet prefetch = capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null);
+        return !insert && prefetch != null
+                ? Math.min(available, Math.max(0L, prefetch.availableForConsumption() - (storage.amount() - available)))
+                : available;
     }
 
     private static long energyTransferLimit(IEnergyStorage storage) {

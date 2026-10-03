@@ -11,6 +11,17 @@ import org.jetbrains.annotations.Nullable;
  */
 public interface EnergyOutputAdmissionFacet extends CapabilityFacet {
     /**
+     * Whether planners may offer only the portion of the remaining output that fits this destination.
+     * By default, a destination must fit the entire remaining requirement, even under a partial-output
+     * policy; otherwise it is skipped. Opting in permits splitting across destinations, but each
+     * {@link #planOutput} request must still be accepted in full to count toward the plan.
+     *
+     * @return whether this destination supports splitting the remaining output
+     * @author howxu <dev@howxu.cn>
+     */
+    default boolean supportsSplitOutput() { return false; }
+
+    /**
      * Returns the amount currently available after applying the supplied planning reservations.
      * This query must not commit or mutate the caller-owned transaction.
      *

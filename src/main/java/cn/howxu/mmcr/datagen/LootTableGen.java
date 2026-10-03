@@ -2,6 +2,7 @@ package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.HolderLookup;
@@ -45,13 +46,16 @@ public final class LootTableGen extends LootTableProvider {
     @Override
     public CompletableFuture<?> run(CachedOutput cachedOutput) {
         var paths = output.createRegistryElementsPathProvider(Registries.LOOT_TABLE);
-        Set<Path> sourceTables = Set.of(paths.json(MMCR.id("blocks/" + ArsSourceIds.INPUT)),
-                paths.json(MMCR.id("blocks/" + ArsSourceIds.OUTPUT)));
+        Map<Path, String> conditions = Map.of(
+                paths.json(MMCR.id("blocks/" + ArsSourceIds.INPUT)), "ars_nouveau",
+                paths.json(MMCR.id("blocks/" + ArsSourceIds.OUTPUT)), "ars_nouveau",
+                paths.json(MMCR.id("blocks/" + FluxNetworksIds.INPUT)), FluxNetworksIds.MOD_ID,
+                paths.json(MMCR.id("blocks/" + FluxNetworksIds.OUTPUT)), FluxNetworksIds.MOD_ID);
         Map<Path, JsonObject> conditionedTables = new ConcurrentHashMap<>();
         // Keep vanilla generation, random sequences and validation. Its 1.21.1 loot
         // provider has no conditional output hook, unlike RecipeOutput.withConditions.
         CachedOutput collectingOutput = (path, bytes, hash) -> {
-            if (sourceTables.contains(path)) {
+            if (conditions.containsKey(path)) {
                 conditionedTables.put(path, JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
             } else {
                 cachedOutput.writeIfNeeded(path, bytes, hash);
@@ -59,7 +63,7 @@ public final class LootTableGen extends LootTableProvider {
         };
         return super.run(collectingOutput).thenCompose(unused -> registries.thenCompose(lookup -> {
             CompletableFuture<?>[] saves = conditionedTables.entrySet().stream().map(entry -> {
-                ICondition.writeConditions(lookup, entry.getValue(), new ModLoadedCondition("ars_nouveau"));
+                ICondition.writeConditions(lookup, entry.getValue(), new ModLoadedCondition(conditions.get(entry.getKey())));
                 return DataProvider.saveStable(cachedOutput, entry.getValue(), entry.getKey());
             }).toArray(CompletableFuture[]::new);
             return CompletableFuture.allOf(saves);

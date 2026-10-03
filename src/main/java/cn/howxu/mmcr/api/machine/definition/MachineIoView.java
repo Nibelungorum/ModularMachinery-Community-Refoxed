@@ -5,6 +5,9 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
@@ -224,7 +227,10 @@ public final class MachineIoView {
             }
             LongValueStorage storage = valueStorage(capability, LongValueStorage.class);
             if (storage != null) {
-                amount = saturatedAdd(amount, Math.max(0L, storage.amount()));
+                RecipeEnergyPrefetchFacet prefetch = capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null);
+                long available = prefetch == null ? storage.amount()
+                        : Math.min(storage.amount(), prefetch.availableForConsumption());
+                amount = saturatedAdd(amount, Math.max(0L, available));
             }
         }
         return amount;
@@ -311,15 +317,31 @@ public final class MachineIoView {
 
     public long energyOutputCapacity() {
         long capacity = 0L;
+        PlanningReservations reservations = new PlanningReservations();
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
+            EnergyOutputAdmissionFacet admission = capability.facet(EnergyOutputAdmissionFacet.class).orElse(null);
+            if (admission != null) {
+                long available = Math.max(0L, admission.outputCapacity(reservations));
+                if (available > 0L) {
+                    capacity = saturatedAdd(capacity, admission.planOutput(available, reservations, false).accepted());
+                }
+                continue;
+            }
             EnergyStorageFacet nativeFacet = capability.facet(EnergyStorageFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.energyStorage() != null) {
-                capacity = saturatedAdd(capacity, Math.max(0L, energyCapacity(nativeFacet.energyStorage()) - energyAmount(nativeFacet.energyStorage())));
+                var storage = nativeFacet.energyStorage();
+                long available = reservations.valueAvailable(storage, true);
+                if (reservations.reserveValueTotal(storage, available, true)) {
+                    capacity = saturatedAdd(capacity, available);
+                }
                 continue;
             }
             LongValueStorage storage = valueStorage(capability, LongValueStorage.class);
             if (storage != null) {
-                capacity = saturatedAdd(capacity, Math.max(0L, storage.capacity() - storage.amount()));
+                long available = reservations.valueAvailable(storage, true);
+                if (reservations.reserveValueTotal(storage, available, true)) {
+                    capacity = saturatedAdd(capacity, available);
+                }
             }
         }
         return capacity;
@@ -444,8 +466,4 @@ public final class MachineIoView {
                 ? longStorage.getAmountAsLong() : storage.getEnergyStored();
     }
 
-    private static long energyCapacity(net.neoforged.neoforge.energy.IEnergyStorage storage) {
-        return storage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler longStorage
-                ? longStorage.getCapacityAsLong() : storage.getMaxEnergyStored();
-    }
 }

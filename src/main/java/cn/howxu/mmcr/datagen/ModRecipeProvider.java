@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.datagen;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -214,6 +217,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         generatedPortRecipes();
         ae2InterfaceRecipes();
         appliedFluxInterfaceRecipes();
+        fluxNetworksInterfaceRecipes();
         createStressInterfaceRecipes();
         arsSourceInterfaceRecipes();
         mekanismPortsRecipes();
@@ -620,6 +624,21 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('A', ModBlocks.BASIC_CASING.get())
                 .define('B', accessor)
                 .save(whenLoaded("ae2", "appflux"));
+    }
+
+    private void fluxNetworksInterfaceRecipes() {
+        if (!FluxNetworksBridge.get().available()) return;
+        RecipeOutput conditioned = output.withConditions(new ModLoadedCondition(FluxNetworksIds.MOD_ID));
+        ShapelessRecipeBuilder.shapeless(RecipeCategory.MISC, ModBlocks.BLOCKS.get(FluxNetworksIds.INPUT).get())
+                .requires(externalItem(FluxNetworksIds.MOD_ID, "flux_point"))
+                .requires(ModBlocks.BASIC_CASING.get()).requires(ModItems.MODULARIUM.get())
+                .unlockedBy("has_modularium", has(ModItems.MODULARIUM.get()))
+                .save(conditioned, MMCR.id(FluxNetworksIds.INPUT));
+        ShapelessRecipeBuilder.shapeless(RecipeCategory.MISC, ModBlocks.BLOCKS.get(FluxNetworksIds.OUTPUT).get())
+                .requires(externalItem(FluxNetworksIds.MOD_ID, "flux_plug"))
+                .requires(ModBlocks.BASIC_CASING.get()).requires(ModItems.MODULARIUM.get())
+                .unlockedBy("has_modularium", has(ModItems.MODULARIUM.get()))
+                .save(conditioned, MMCR.id(FluxNetworksIds.OUTPUT));
     }
 
     private void createStressInterfaceRecipes() {

@@ -29,6 +29,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
@@ -110,9 +111,13 @@ public final class CraftingContext {
                 capability.type().id().equals(MekanismRecipeTypes.CHEMICAL)
                         && capability.directions().supports(IOType.INPUT)
                         && capability.facet(AsyncPlanningFacet.class).isEmpty());
+        boolean energyFallback = capabilities.stream().anyMatch(capability ->
+                capability.type().equals(BuiltinCapabilityDefinitions.ENERGY_TYPE)
+                        && capability.facet(AsyncPlanningFacet.class).isEmpty());
         for (MachineCapability capability : capabilities) {
             if (capabilityIds != null && !capabilityIds.contains(capability.type().id())) continue;
             if (chemicalFallback && capability.type().id().equals(MekanismRecipeTypes.CHEMICAL)) continue;
+            if (energyFallback && capability.type().equals(BuiltinCapabilityDefinitions.ENERGY_TYPE)) continue;
             AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
             if (facet == null) continue;
             AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
@@ -244,6 +249,7 @@ public final class CraftingContext {
         if (firstEnergyIndex < 0) return null;
         int energyIndex = firstEnergyIndex;
         List<Map.Entry<RecipeEnergyPrefetchFacet, RecipeEnergyPrefetchFacet.PrefetchPlan>> planned = new ArrayList<>();
+        long total = 0L;
         try {
             Set<String> reservationKeys = new HashSet<>();
             if (facets.stream().anyMatch(facet -> facet.reservationKey() == null
@@ -255,6 +261,11 @@ public final class CraftingContext {
                 if (!(requirement instanceof EnergyRequirement energy)
                         || energy.io() != RecipeModifier.IOType.INPUT) continue;
                 long remaining = scaled(scaled(energy.fePerTick(), duration), parallelism);
+                try {
+                    total = Math.addExact(total, remaining);
+                } catch (ArithmeticException exception) {
+                    return prefetchFailure(requirements, index);
+                }
                 for (RecipeEnergyPrefetchFacet facet : facets) {
                     if (remaining <= 0L) break;
                     Optional<RecipeEnergyPrefetchFacet.PrefetchPlan> candidate = facet.planPrefetch(remaining);

@@ -246,6 +246,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable CompoundTag pendingFactoryRuntimeInput;
     private @Nullable CompoundTag pendingCraftingRuntimeInput;
     private @Nullable HolderLookup.Provider pendingRuntimeRegistries;
+    private boolean pendingRuntimeRequiresTopology;
+    private boolean runtimeTopologyReady;
+    private boolean loadingRuntime;
     private boolean restoringFactoryRuntime;
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
@@ -502,25 +505,44 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void ensureFactoryRuntimeLoaded() {
+        if (loadingRuntime) return;
         if (pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null) return;
         StructureSnapshot structure = runtime.currentStructureSnapshot();
         if (structure.machine() == null && structure.configuredMachine() == null) return;
+        if (pendingRuntimeRequiresTopology && (!runtimeTopologyReady || !structure.formed()
+                || !structure.structureAreaLoaded() || !isStructureAreaLoaded(structure))) return;
         HolderLookup.Provider registries = Objects.requireNonNull(pendingRuntimeRegistries,
                 "pending runtime registries");
-        if (pendingFactoryRuntimeInput != null) {
-            CompoundTag input = pendingFactoryRuntimeInput;
-            pendingFactoryRuntimeInput = null;
-            runtime.factoryRuntime().load(input, this, registries);
-            restoringFactoryRuntime = true;
-            runtime.publishSnapshot();
+        loadingRuntime = true;
+        try {
+            if (pendingFactoryRuntimeInput != null) {
+                runtime.factoryRuntime().load(pendingFactoryRuntimeInput, this, registries);
+                pendingFactoryRuntimeInput = null;
+                restoringFactoryRuntime = true;
+            }
+            if (pendingCraftingRuntimeInput != null) {
+                runtime.craftingRuntime().load(pendingCraftingRuntimeInput, resourceDomain(), registries);
+                pendingCraftingRuntimeInput = null;
+            }
+            if (runtimeTopologyReady) {
+                runtime.craftingRuntime().rebindCurrentVersions();
+                runtime.factoryRuntime().rebindCurrentVersions();
+            }
+            pendingRuntimeRegistries = null;
+            pendingRuntimeRequiresTopology = false;
+        } finally {
+            loadingRuntime = false;
         }
-        if (pendingCraftingRuntimeInput != null) {
-            CompoundTag input = pendingCraftingRuntimeInput;
-            pendingCraftingRuntimeInput = null;
-            runtime.craftingRuntime().load(input, resourceDomain(), registries);
-            runtime.publishSnapshot();
-        }
-        pendingRuntimeRegistries = null;
+        runtime.publishSnapshot();
+    }
+
+    /** True only after discovery and both normal/factory restoration decisions have completed. */
+    public boolean runtimeRestorationComplete() {
+        ensureFactoryRuntimeLoaded();
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
+        return runtimeTopologyReady && !loadingRuntime
+                && pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null
+                && structure.formed() && structure.structureAreaLoaded() && isStructureAreaLoaded(structure);
     }
 
     public StructureSnapshot structureSnapshot() {
@@ -728,6 +750,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void setMachine(Machine m) {
         StructureSnapshot current = runtimeSnapshot().structure();
+        runtimeTopologyReady = false;
         boolean bindingRestoredMachine = (restoringFactoryRuntime || pendingFactoryRuntimeInput != null)
                 && current.configuredMachine() == null
                 && m != null;
@@ -2328,6 +2351,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private boolean tryFormMachine(Machine candidate, Direction facing, CandidatePattern candidatePattern) {
         BlockArray rotatedPattern = candidatePattern.pattern();
+        // Initial direct matching otherwise reads blocks/BEs even before the entire saved topology is loaded.
+        if (pendingRuntimeRequiresTopology && !isPatternAreaLoaded(rotatedPattern)) return false;
         CompiledMachinePattern stageCompiled = candidatePattern.compiled();
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
@@ -2847,6 +2872,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void onStructureFormed(Machine matchedMachine, BlockArray rotatedPattern, CompiledMachinePattern compiledPattern,
                                    Direction facing, Direction rollFacing, Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
         Map<ResourceLocation, MachineLevel> levels) {
+        boolean topologyPreviouslyReady = runtimeTopologyReady;
+        runtimeTopologyReady = false;
         runtime.beginUpdateBatch();
         try {
             clearStructureDiagnosticRequest();
@@ -2862,13 +2889,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
 
             boolean refreshComponents = !previousStructure.formed() || structureChanged
-                    || previousWork.componentRefreshRequired();
+                    || previousWork.componentRefreshRequired() || !topologyPreviouslyReady;
             if (!refreshComponents) {
                 publishStructureWork(state -> state.withDirty(false).withComponentRefreshRequired(false)
                         .withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK)
                         .withNextCheckTick(nextStructureSafetyCheckTick(level.getGameTime()))
                         .withFormationFailure(null).withLastStructureError(null));
                 registerFormedController();
+                runtimeTopologyReady = true;
+                ensureFactoryRuntimeLoaded();
                 restoringFactoryRuntime = false;
                 resumePausedRecipeAfterStructureCheck();
                 setChanged();
@@ -2899,7 +2928,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 notifyPreviewReceiversStructureFormed();
             }
             registerFormedController();
-            if (structureChanged || componentsChanged) {
+            if (structureChanged || componentsChanged || !topologyPreviouslyReady) {
                 updateComponents(previousStructure, matchedMachine, rotatedPattern, compiledPattern, facing,
                         previousLinkedPortPositions, foundModifiers, levels);
                 if (level instanceof ServerLevel serverLevel) {
@@ -2910,6 +2939,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 runtime.craftingRuntime().rebindCurrentVersions();
                 runtime.factoryRuntime().rebindCurrentVersions();
             }
+            // All ports, modifiers and factory capacity are now discovered. Publications above
+            // must not consume pending NBT against an intermediate topology.
+            runtimeTopologyReady = true;
+            ensureFactoryRuntimeLoaded();
             restoringFactoryRuntime = false;
             resumePausedRecipeAfterStructureCheck();
             if (structureChanged || componentsChanged || modifiersChanged || capabilityTopologyChanged) {
@@ -3564,6 +3597,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
+        runtimeTopologyReady = false;
         releaseStressContributions();
         if (level instanceof ServerLevel serverLevel) {
             invalidateAsyncLifecycle(serverLevel);
@@ -4377,12 +4411,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         output.put("found_levels", levels);
         CompoundTag craftingRuntimeOutput = new CompoundTag();
-        runtime.craftingRuntime().save(craftingRuntimeOutput, registries);
+        if (pendingCraftingRuntimeInput != null) craftingRuntimeOutput = pendingCraftingRuntimeInput.copy();
+        else runtime.craftingRuntime().save(craftingRuntimeOutput, registries);
         output.put("crafting_runtime", craftingRuntimeOutput);
         if (selectedRecipePoolId != null) output.putString("selected_recipe_pool", selectedRecipePoolId.toString());
-        if (hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
+        if (pendingFactoryRuntimeInput != null || hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
             CompoundTag factoryRuntimeOutput = new CompoundTag();
-            runtime.factoryRuntime().save(factoryRuntimeOutput, registries);
+            if (pendingFactoryRuntimeInput != null) factoryRuntimeOutput = pendingFactoryRuntimeInput.copy();
+            else runtime.factoryRuntime().save(factoryRuntimeOutput, registries);
             output.put("factory_runtime", factoryRuntimeOutput);
         }
     }
@@ -4390,6 +4426,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
         super.loadAdditional(input, registries);
+        runtimeTopologyReady = false;
+        loadingRuntime = true;
         try {
             CompoundTag factoryRuntimeInput = input.getCompound("factory_runtime");
             StructureSnapshot currentStructure = runtimeSnapshot().structure();
@@ -4409,15 +4447,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.publishComponentState(runtime.components(), current.foundModifiers(), restoredLevels,
                     current.linkedPortPositions());
             lastFailure = null;
+            pendingFactoryRuntimeInput = null;
             if ((factoryRuntimeInput.contains("lane_count") ? factoryRuntimeInput.getInt("lane_count") : -1) >= 0) {
                 pendingFactoryRuntimeInput = factoryRuntimeInput;
             }
             pendingCraftingRuntimeInput = input.getCompound("crafting_runtime");
+            pendingRuntimeRequiresTopology = CraftingRuntime.requiresTopologyForLoad(pendingCraftingRuntimeInput);
+            if (pendingFactoryRuntimeInput != null && !pendingRuntimeRequiresTopology) {
+                for (String key : pendingFactoryRuntimeInput.getAllKeys()) {
+                    if (key.startsWith("lane_") && CraftingRuntime.requiresTopologyForLoad(
+                            pendingFactoryRuntimeInput.getCompound(key).getCompound("runtime"))) {
+                        pendingRuntimeRequiresTopology = true;
+                        break;
+                    }
+                }
+            }
             pendingRuntimeRegistries = registries;
             ensureFactoryRuntimeLoaded();
             runtime.requestStructureCheck();
             runtime.restoreStructureVersion(input.getLong("structure_runtime_version"));
         } finally {
+            loadingRuntime = false;
             publishRuntimeState();
         }
     }

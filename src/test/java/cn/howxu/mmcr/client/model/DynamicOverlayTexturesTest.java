@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourcePortKind;
+import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInterfaceKind;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
@@ -26,6 +27,16 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DynamicOverlayTexturesTest {
+
+    @Test
+    void fluxNetworksInterfacesShareExistingEnergyLayersAndRetainTheirMmcrDirection() {
+        assertThat(DynamicOverlayTextures.portOverlayTexture(FluxNetworkInterfaceKind.INPUT))
+                .containsExactly(MMCR.id("block/overlay/base/energy"),
+                        MMCR.id("block/overlay/direction/input"), MMCR.id("block/overlay/type/energy"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(FluxNetworkInterfaceKind.OUTPUT))
+                .containsExactly(MMCR.id("block/overlay/base/energy"),
+                        MMCR.id("block/overlay/direction/output"), MMCR.id("block/overlay/type/energy"));
+    }
 
     @Test
     void sourceInterfacesShareTheSourceBaseAndRetainTheirDirectionLayer() {

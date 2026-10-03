@@ -1,8 +1,11 @@
 package cn.howxu.mmcr.datagen;
 
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.loot.BlockLootSubProvider;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Block;
@@ -30,6 +33,13 @@ public final class BlockLoot extends BlockLootSubProvider {
 
     @Override
     public void generate() {
-        getKnownBlocks().forEach(this::dropSelf);
+        getKnownBlocks().forEach(block -> {
+            String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
+            if (FluxNetworksIds.INPUT.equals(id) || FluxNetworksIds.OUTPUT.equals(id)) {
+                add(block, FluxNetworksBridge.get().deviceLoot(block));
+            } else {
+                dropSelf(block);
+            }
+        });
     }
 }

@@ -56,6 +56,17 @@ public interface RecipeEnergyPrefetchFacet extends CapabilityFacet {
         return CapabilityResult.successful();
     }
 
+    /** Limits ordinary scalar IO to energy not held by a recipe or a tentative start. */
+    default long availableForConsumption() { return Long.MAX_VALUE; }
+
+    /**
+     * Publishes this runtime owner's committed balance after activation, saved restore, settlement,
+     * or release. Activation/restore also visits unused endpoints with a zero balance, so they can
+     * withdraw obsolete search demand. A positive balance supplies a server-thread cancellation
+     * callback for inventory replacement; zero removes that owner's association.
+     */
+    default void onRecipeReservationChanged(Object owner, long remaining, Runnable cancelOwner) { }
+
     /**
      * A positive prefetched amount and its transaction-aware operation.
      *

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
 import cn.howxu.mmcr.api.capability.facet.EnergyStorageFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -39,7 +40,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
     @Override
     public EnergyRequirement applyLevelModifiers(EnergyRequirement requirement, double energyMultiplier,
                                                  double outputMultiplier) {
-        return new EnergyRequirement(requirement.io(), floorNonNegative(requirement.fePerTick() * energyMultiplier),
+        long amount = energyMultiplier == 1D ? Math.max(0L, requirement.fePerTick())
+                : floorNonNegative(requirement.fePerTick() * energyMultiplier);
+        return new EnergyRequirement(requirement.io(), amount,
                 requirement.tags());
     }
 
@@ -177,25 +180,8 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                                                    List<MachineCapability> capabilities,
                                                    PlanningReservations reservations) {
         long required = RequirementHandlerSupport.scaled(perBatch, batches);
-        long available = 0L;
-        for (MachineCapability capability : capabilities) {
-            if (insert) {
-                EnergyOutputAdmissionFacet admission = outputAdmission(capability);
-                if (admission != null) {
-                    available = RequirementHandlerSupport.saturatingAdd(available,
-                            Math.max(0L, admission.outputCapacity(reservations)));
-                    if (available >= required) return true;
-                    continue;
-                }
-            }
-            LongValueStorage storage = energyStorage(capability);
-            if (storage == null) continue;
-            long transferable = Math.min(reservations.valueAvailable(storage, insert),
-                    RequirementHandlerSupport.scaled(storage.transferLimit(), batches));
-            available = RequirementHandlerSupport.saturatingAdd(available, transferable);
-            if (available >= required) return true;
-        }
-        return available >= required;
+        return energyAmount(reserveEnergy(required, batches, insert, capabilities, reservations.copy(),
+                false, new ArrayList<>())) >= required;
     }
 
     private static List<EnergyAction> reserveEnergy(long amount, long batches, boolean insert,
@@ -205,22 +191,31 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         long remaining = amount;
         List<EnergyAction> actions = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
+            if (remaining <= 0L) break;
             if (insert) {
                 EnergyOutputAdmissionFacet admission = outputAdmission(capability);
                 if (admission != null) {
-                    if (admission.outputCapacity(reservations) < remaining) continue;
-                    EnergyOutputAdmissionFacet.OutputPlan planned = admission.planOutput(remaining, reservations,
+                    long available = Math.max(0L, admission.outputCapacity(reservations));
+                    if (available < remaining && !admission.supportsSplitOutput()) continue;
+                    long moved = Math.min(remaining, available);
+                    if (moved <= 0L) continue;
+                    EnergyOutputAdmissionFacet.OutputPlan planned = admission.planOutput(moved, reservations,
                             materialize);
-                    if (planned.accepted() != remaining) continue;
+                    if (planned.accepted() != moved) continue;
                     if (materialize && planned.operation() != null) operations.add(planned.operation());
-                    actions.add(new EnergyAction(capability, remaining, true));
-                    remaining = 0L;
-                    break;
+                    actions.add(new EnergyAction(capability, moved, true));
+                    remaining -= moved;
+                    continue;
                 }
             }
             LongValueStorage storage = energyStorage(capability);
             if (storage == null) continue;
             long available = reservations.valueAvailable(storage, insert);
+            RecipeEnergyPrefetchFacet prefetch = capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null);
+            if (!insert && prefetch != null) {
+                long plannedConsumption = storage.amount() - available;
+                available = Math.min(available, Math.max(0L, prefetch.availableForConsumption() - plannedConsumption));
+            }
             long moved = Math.min(remaining, Math.min(available,
                     RequirementHandlerSupport.scaled(storage.transferLimit(), batches)));
             if (moved <= 0L || !reservations.reserveValueTotal(storage, moved, insert)) continue;

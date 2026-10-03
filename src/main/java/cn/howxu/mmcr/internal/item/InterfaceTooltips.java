@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.item;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -32,6 +33,11 @@ public final class InterfaceTooltips {
     public static List<Component> tooltipLines(Block block) {
         if (block instanceof IOPortBlock port) {
             var kind = port.kind();
+            if (FluxNetworksIds.INPUT.equals(kind.id()) || FluxNetworksIds.OUTPUT.equals(kind.id())) {
+                return List.of(Component.translatable(FluxNetworksIds.INPUT.equals(kind.id())
+                                ? "tooltip.mmcr.fluxnetworks.input" : "tooltip.mmcr.fluxnetworks.output"),
+                        Component.translatable("tooltip.mmcr.fluxnetworks.configure"));
+            }
             if (kind instanceof PortKinds.ChemicalKind chemical) return chemicalTooltip(chemical);
             if (kind instanceof PortKinds.HeatKind heat) return heatTooltip(heat);
             return kind.itemBusSize().map(InterfaceTooltips::itemTooltip)

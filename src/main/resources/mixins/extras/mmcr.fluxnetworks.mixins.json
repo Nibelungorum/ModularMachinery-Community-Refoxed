@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.fluxnetworks.loaded",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "FluxNetworkAccessor",
+    "ServerFluxNetworkMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

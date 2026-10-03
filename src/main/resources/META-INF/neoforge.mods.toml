@@ -38,6 +38,10 @@ requiredMods=["extendedae"]
 config="mixins/extras/mmcr.appmek.mixins.json"
 requiredMods=["ae2", "mekanism", "appmek"]
 
+[[mixins]]
+config="mixins/extras/mmcr.fluxnetworks.mixins.json"
+requiredMods=["fluxnetworks"]
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
@@ -126,5 +130,12 @@ side="BOTH"
 modId="create"
 type="optional"
 versionRange="[6.0.6,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="fluxnetworks"
+type="optional"
+versionRange="[8.0.0,)"
 ordering="AFTER"
 side="BOTH"
