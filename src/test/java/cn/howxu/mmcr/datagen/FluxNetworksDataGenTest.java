@@ -183,7 +183,8 @@ class FluxNetworksDataGenTest {
             assertThat(output.recipes).isEmpty();
             bridge.set(null, FluxNetworksBridgeBootstrap.selectForTesting(true));
             generate.invoke(provider);
-            assertThat(output.recipes.keySet()).containsExactlyInAnyOrder(MMCR.id(FluxNetworksIds.INPUT), MMCR.id(FluxNetworksIds.OUTPUT));
+            assertThat(output.recipes.keySet()).containsExactlyInAnyOrder(MMCR.id(FluxNetworksIds.INPUT), MMCR.id(FluxNetworksIds.OUTPUT),
+                    MMCR.id("wipe_" + FluxNetworksIds.INPUT), MMCR.id("wipe_" + FluxNetworksIds.OUTPUT));
             var ops = registries.createSerializationContext(JsonOps.INSTANCE);
             for (var kind : FluxNetworkInterfaceKind.values()) {
                 JsonObject json = output.recipes.get(MMCR.id(kind.id()));
@@ -198,6 +199,15 @@ class FluxNetworksDataGenTest {
                 assertThat(json.getAsJsonArray("ingredients").get(2).getAsJsonObject().get("item").getAsString())
                         .isEqualTo("minecraft:copper_ingot");
                 assertThat(json.getAsJsonObject("result").get("id").getAsString()).isEqualTo(fixtureId(kind).toString());
+                JsonObject wipe = output.recipes.get(MMCR.id("wipe_" + kind.id()));
+                assertThat(ICondition.LIST_CODEC.parse(ops, wipe.get(ConditionalOps.DEFAULT_CONDITIONS_KEY)).getOrThrow())
+                        .containsExactly(new ModLoadedCondition(FluxNetworksIds.MOD_ID));
+                assertThat(Recipe.CODEC.parse(ops, wipe).getOrThrow()).isInstanceOf(ShapelessRecipe.class);
+                assertThat(wipe.getAsJsonArray("ingredients")).hasSize(1);
+                assertThat(wipe.getAsJsonArray("ingredients").get(0).getAsJsonObject().get("item").getAsString())
+                        .isEqualTo(fixtureId(kind).toString());
+                assertThat(wipe.getAsJsonObject("result").get("id").getAsString()).isEqualTo(fixtureId(kind).toString());
+                assertThat(wipe.getAsJsonObject("result").has("components")).isFalse();
             }
             Field instance = ModList.class.getDeclaredField("INSTANCE");
             instance.setAccessible(true);

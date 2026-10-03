@@ -158,7 +158,7 @@ class FluxNetworksRuntimeLifecycleTest {
     }
 
     @Test
-    void actualSearchWithdrawsAllAssociatedPointHintsWhenTheSmallerRecipeActivates() {
+    void actualSearchReplacesCandidateHintsWithTheActiveRecipesNextBatchDemand() {
         Point first = point("search_first", 100L);
         Point unused = point("search_unused", 0L);
         Rig rig = rig(first.capability(), unused.capability());
@@ -178,7 +178,7 @@ class FluxNetworksRuntimeLifecycleTest {
         assertThat(rig.runtime().start(found.recipe(), 1L).isCrafting()).isTrue();
         first.handler().onCycleStart();
         unused.handler().onCycleStart();
-        assertThat(first.handler().getRequest()).isZero();
+        assertThat(first.handler().getRequest()).isEqualTo(100L);
         assertThat(unused.handler().getRequest()).isZero();
         assertBalances(first, 100L, 100L);
         assertBalances(unused, 0L, 0L);
@@ -245,7 +245,7 @@ class FluxNetworksRuntimeLifecycleTest {
         assertBalances(restored, 80L, 0L);
         assertThat(restoredRig.runtime().start(recipe("replacement_recipe", 2, 25L), 1L).isCrafting()).isTrue();
         restored.handler().onCycleStart();
-        assertThat(restored.handler().getRequest()).isZero();
+        assertThat(restored.handler().getRequest()).isEqualTo(20L);
         assertBalances(restored, 80L, 50L);
     }
 

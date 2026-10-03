@@ -92,7 +92,7 @@ public abstract class RecipeThread {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
-                    availableParallelism, machineCandidates, controller.componentRuntime().capabilities()).compute();
+                    availableParallelism, machineCandidates, controller.componentRuntime().capabilities()).compute(runtime);
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
@@ -120,7 +120,7 @@ public abstract class RecipeThread {
         try {
             result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
                     context.maxParallelism(), machineCandidates,
-                    context.capabilities(), MachineModifier.recipeModifiers(context.modifiers())).compute();
+                    context.capabilities(), MachineModifier.recipeModifiers(context.modifiers())).compute(runtime);
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
@@ -168,6 +168,7 @@ public abstract class RecipeThread {
         AsyncRequirementPlanner.RecipeSearchResult result = search.result();
         if (result == null || result.failure() != null || result.result() == null || !result.result().success()) {
             controller.clearPendingConflictStart();
+            if (result != null && result.failure() == null && result.result() != null) runtime.stopEnergyPrefetch();
             onStartSearchFailed(result == null || result.result() == null ? null : result.result().failure());
             return MainThreadStep.Result.success();
         }

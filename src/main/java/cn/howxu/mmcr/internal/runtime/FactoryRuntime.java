@@ -150,6 +150,9 @@ public final class FactoryRuntime {
                                   long maxParallelism, long gameTime, Runnable onFinished) {
         long initialEpoch = factoryStateEpoch;
         if (paused || controller == null) return currentTickResult(initialEpoch, false);
+        if (candidates == null || maxParallelism <= 0L) {
+            lanes.forEach(this::stopEmptyLanePrefetch);
+        }
         if (!requiresFullTick(snapshot, candidates, maxParallelism, gameTime)) return tickIdleBaseRuntime(initialEpoch);
         return tick(createSearchContext(snapshot, candidates, maxParallelism, gameTime), onFinished);
     }
@@ -221,6 +224,9 @@ public final class FactoryRuntime {
         boolean asyncSearchTick = controller.activeWorkMode() == MachineWorkMode.ASYNC
                 && controller.getLevel() instanceof ServerLevel && controller.resourceDomain() != null
                 && context.gameTime() == controller.getLevel().getGameTime();
+        if (context.orderedCandidates().isEmpty() || context.maxParallelism() <= 0L) {
+            laneSnapshot.forEach(this::stopEmptyLanePrefetch);
+        }
         if (asyncSearchTick) {
             if (hasIdleLane || lanes.size() < laneLimit) {
                 scheduleAsyncSearches(context, laneSnapshot, activeCounts, (ServerLevel) controller.getLevel());
@@ -229,7 +235,10 @@ public final class FactoryRuntime {
             for (FactoryRecipeThread lane : laneSnapshot) {
                 if (patternStartReservations.contains(lane) || !lane.isIdle()) continue;
                 List<MachineRecipe> available = filterAvailableCandidates(context.orderedCandidates(), activeCounts);
-                if (available.isEmpty()) break;
+                if (available.isEmpty()) {
+                    stopEmptyLanePrefetch(lane);
+                    continue;
+                }
                 RecipeSearchContextKey key = searchContextKey(context, lane);
                 if (!lane.canSearch(gameTime, key)) continue;
                 lane.setSearchGameTime(gameTime);
@@ -321,6 +330,12 @@ public final class FactoryRuntime {
         }
     }
 
+    private void stopEmptyLanePrefetch(FactoryRecipeThread lane) {
+        if (lane.isIdle() && !pendingAsyncSearches.containsKey(lane) && !patternStartReservations.contains(lane)) {
+            lane.runtime().stopEnergyPrefetch();
+        }
+    }
+
     private boolean scheduleAsyncSearch(FactorySearchContext context, FactoryRecipeThread lane,
                                         Map<ResourceLocation, Integer> activeCounts, ServerLevel level) {
         if (pendingAsyncSearches.containsKey(lane) || patternStartReservations.contains(lane) || !lane.isIdle()) {
@@ -330,7 +345,10 @@ public final class FactoryRuntime {
         if (!lane.canSearch(context.gameTime(), key)) return false;
         List<MachineRecipe> available = filterAvailableCandidates(context.orderedCandidates(), activeCounts);
         List<MachineRecipe> candidates = lane.candidatesFor(available, context.catalogVersion());
-        if (candidates.isEmpty()) return false;
+        if (candidates.isEmpty()) {
+            stopEmptyLanePrefetch(lane);
+            return false;
+        }
         if (lane.tryRestartLastRecipe(context, candidates, perThreadParallelLimit,
                 context.snapshot().structure().version(), context.snapshot().capabilityVersion(),
                 context.snapshot().modifierVersion(), context.snapshot().stateVersion())) {
@@ -344,7 +362,7 @@ public final class FactoryRuntime {
         } catch (RuntimeException exception) {
             searchAttemptsForTesting++;
             boolean started = lane.startSearchResult(context, candidates, context.snapshot().structure().version(),
-                    FactoryRecipeThread.search(context, candidates, context.snapshot().structure().version()));
+                    FactoryRecipeThread.search(context, candidates, context.snapshot().structure().version(), lane.runtime()));
             reserveStart(lane, started, activeCounts);
             if (started) markLaneStateChanged();
             return false;
@@ -1046,8 +1064,10 @@ public final class FactoryRuntime {
         }
         for (FactoryRecipeThread lane : lanes) {
             if (lane.isStartPending() || lane.runtime().active()) return true;
-            if (lane.needsSearch(currentSearchContextKey(snapshot, lane), gameTime)
-                    && candidates != null && !candidates.isEmpty()) return true;
+            if (lane.needsSearch(currentSearchContextKey(snapshot, lane), gameTime) && candidates != null) {
+                if (!candidates.isEmpty()) return true;
+                stopEmptyLanePrefetch(lane);
+            }
             if (lane.idleTimeoutDue(gameTime)) return true;
         }
         return false;

@@ -65,14 +65,13 @@ public final class FluxNetworkInputCapability implements MachineCapability, Scal
     public Optional<PrefetchPlan> planPrefetch(long amount) {
         reservationKey();
         if (amount <= 0L) return Optional.empty();
-        if (!handler.reserveCandidate(amount)) {
-            handler.requestWarmup(amount);
-            return Optional.empty();
-        }
+        long accepted = Math.min(amount, handler.availableForPrefetch());
+        if (accepted < amount) handler.requestWarmup(amount);
+        if (!handler.reserveCandidate(accepted)) return Optional.empty();
         boolean[] committed = {false};
-        return Optional.of(new PrefetchPlan(amount, (NativeCapabilityOperation) () -> {
+        return Optional.of(new PrefetchPlan(accepted, (NativeCapabilityOperation) () -> {
             reservationKey();
-            if (committed[0] || !handler.commitCandidate(amount)) return failure(BuiltinFailureReasons.MISSING_INPUT);
+            if (committed[0] || !handler.commitCandidate(accepted)) return failure(BuiltinFailureReasons.MISSING_INPUT);
             committed[0] = true;
             return CapabilityResult.successful();
         }));
@@ -102,6 +101,42 @@ public final class FluxNetworkInputCapability implements MachineCapability, Scal
     public void onRecipeReservationChanged(Object owner, long remaining, Runnable cancelOwner) {
         reservationKey();
         handler.updateRecipeOwner(owner, remaining, cancelOwner);
+    }
+
+    @Override
+    public void onRecipeContinuationRequested(Object owner, long amount) {
+        reservationKey();
+        handler.updateContinuation(owner, amount);
+    }
+
+    @Override
+    public void onRecipeSearchStarted(Object owner) {
+        reservationKey();
+        handler.beginSearch(owner);
+    }
+
+    @Override
+    public void onRecipeSearchCandidate(Object owner, boolean eligible) {
+        reservationKey();
+        handler.searchCandidate(owner, eligible);
+    }
+
+    @Override
+    public void onRecipeSearchFinished(Object owner, boolean found) {
+        reservationKey();
+        handler.endSearch(owner, found);
+    }
+
+    @Override
+    public void onRecipeSearchFinished(Object owner, boolean found, boolean patternRequest) {
+        reservationKey();
+        handler.endSearch(owner, found, patternRequest);
+    }
+
+    @Override
+    public void onPatternPrefetchCancelled() {
+        reservationKey();
+        handler.clearPatternDemand();
     }
 
     @Override

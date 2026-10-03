@@ -121,6 +121,7 @@ public final class FluxNetworksRecipeGameTest {
         MachineRig rig = null;
         try {
             rig = machine(helper);
+            rig.input().getTransferHandler().setLimit(1000L);
             form(helper, rig.controller());
             TileFluxStorage supply = storage(helper, STORAGE, 500L);
             connectAndCycle(supply, network);
@@ -146,40 +147,42 @@ public final class FluxNetworksRecipeGameTest {
             restored = runtime(rig.controller()).craftingRuntime();
             network.onEndServerTick();
             helper.assertTrue(restored.active() && restored.parallelism() == 2 && restored.tickCount() == 1
-                            && input.getTransferHandler().reserved() == 80L && supply.getTransferBuffer() == 400L
+                            && input.getTransferBuffer() == 180L && input.getTransferHandler().reserved() == 80L
+                            && supply.getTransferBuffer() == 300L
                             && input.getNetwork() == network && network.getConnectionByPos(input.getGlobalPos()) == input,
-                    "Actual runtime load rebinds serialized allocation without reserving or fetching energy twice");
+                    "Actual runtime load rebinds the remaining allocation and prefetches exactly one next batch");
             restored.load(savedRuntime, rig.controller().resourceDomain(), helper.getLevel().registryAccess());
             restored.rebindCurrentVersions();
             restored.start(recipe, 2);
             network.onEndServerTick();
-            helper.assertTrue(restored.active() && input.getTransferBuffer() == 80L
-                            && input.getTransferHandler().reserved() == 80L && supply.getTransferBuffer() == 400L,
+            helper.assertTrue(restored.active() && input.getTransferBuffer() == 180L
+                            && input.getTransferHandler().reserved() == 80L && supply.getTransferBuffer() == 300L,
                     "Repeated load and active start remain idempotent against actual native supply");
             restored.tick();
-            helper.assertTrue(input.getTransferBuffer() == 60L && input.getTransferHandler().reserved() == 60L,
+            helper.assertTrue(input.getTransferBuffer() == 160L && input.getTransferHandler().reserved() == 60L,
                     "Restored allocation consumes only the next parallel settlement from the reloaded local buffer");
             restored.invalidate();
+            tickDevice(input);
             network.onEndServerTick();
             helper.assertTrue(!restored.active() && input.getTransferHandler().reserved() == 0L
-                            && input.getTransferBuffer() == 60L && supply.getTransferBuffer() == 400L,
-                    "Cancellation releases remaining allocation while preserving already-paid native Point energy");
-            restored.start(recipe, 1);
+                            && input.getTransferBuffer() == 0L && supply.getTransferBuffer() == 460L,
+                    "Cancellation returns both unused allocation and next-batch energy to their native source");
+            warmAndStart(helper, restored, recipe, 1, network);
             helper.assertTrue(restored.active() && input.getTransferHandler().reserved() == 50L,
-                    "Next actual recipe reuses the canceled buffer for its whole-duration single batch");
+                    "Next actual recipe obtains its whole-duration single batch from the refunded network");
             settle(helper, restored);
             network.onEndServerTick();
-            helper.assertTrue(input.getTransferBuffer() == 10L && input.getTransferHandler().reserved() == 0L
-                            && supply.getTransferBuffer() == 400L,
-                    "Reused local budget consumes exactly 50 FE without a second network debit");
+            helper.assertTrue(input.getTransferBuffer() == 50L && input.getTransferHandler().reserved() == 0L
+                            && supply.getTransferBuffer() == 360L,
+                    "Completion consumes exactly 50 FE and retains one next-batch budget for continuation");
 
             original = restored;
             warmAndStart(helper, original, recipe, 2, network);
             long paid = supply.getTransferBuffer();
             helper.assertTrue(input.getTransferBuffer() == 100L && input.getTransferHandler().reserved() == 100L
                             && paid == 310L,
-                    "A new real parallel batch pays only its 90 FE shortfall");
-            FluxNetworksDeviceGameTest.configure(rig.output(), "live-settings", 29, 100L, true);
+                    "A new real parallel batch pays only its 50 FE shortfall");
+            FluxNetworksDeviceGameTest.configure(rig.output(), "live-settings", 29, 1000L, true);
             FluxNetworksDeviceGameTest.pasteFrom(helper, owner, rig.output(), input);
             helper.assertTrue(original.active() && input.getTransferBuffer() == 100L
                             && input.getTransferHandler().reserved() == 100L && input.getRawPriority() == 29
@@ -193,19 +196,20 @@ public final class FluxNetworksRecipeGameTest {
             original = runtime(rig.controller()).craftingRuntime();
             network.onEndServerTick();
             helper.assertTrue(original.active() && original.tickCount() == 0
-                            && input.getTransferBuffer() == 100L && input.getTransferHandler().reserved() == 100L
-                            && input.getRawPriority() == 29 && input.getSurgeMode() && supply.getTransferBuffer() == paid,
-                    "Direct post-paste save restores the actual owner/allocation and settings without another start or debit");
+                            && input.getTransferBuffer() == 200L && input.getTransferHandler().reserved() == 100L
+                            && input.getRawPriority() == 29 && input.getSurgeMode() && supply.getTransferBuffer() == paid - 100L,
+                    "Direct post-paste save restores owner and settings, reserving once and warming one next batch");
             original.tick();
-            helper.assertTrue(original.tickCount() == 1 && input.getTransferBuffer() == 80L
-                            && input.getTransferHandler().reserved() == 80L && supply.getTransferBuffer() == paid,
+            helper.assertTrue(original.tickCount() == 1 && input.getTransferBuffer() == 180L
+                            && input.getTransferHandler().reserved() == 80L && supply.getTransferBuffer() == paid - 100L,
                     "The restored post-paste runtime really settles its next 20 FE from the paid local reservation");
             rig.controller().invalidateFormedStructure();
+            tickDevice(input);
             network.onEndServerTick();
             helper.assertTrue(!original.active() && input.getTransferHandler().reserved() == 0L
-                            && input.getTransferBuffer() == 80L && input.getTransferHandler().getRequest() == 0L
-                            && supply.getTransferBuffer() == paid,
-                    "Real controller teardown cancels its owned runtime, releases reservations and clears demand without another debit");
+                            && input.getTransferBuffer() == 0L && input.getTransferHandler().getRequest() == 0L
+                            && supply.getTransferBuffer() == paid + 80L,
+                    "Real controller teardown cancels reservations and refunds all unused energy without losing consumed energy");
 
             form(helper, rig.controller());
             original.start(recipe(helper, OUTPUT_RECIPE_ID), 2);
@@ -215,7 +219,7 @@ public final class FluxNetworksRecipeGameTest {
             helper.assertTrue(!original.active() && rig.output().getTransferBuffer() == 20L,
                     "Unformation blocks new admission but preserves already-committed native Plug output");
             network.onEndServerTick();
-            helper.assertTrue(rig.output().getTransferBuffer() == 0L && supply.getTransferBuffer() == paid + 20L,
+            helper.assertTrue(rig.output().getTransferBuffer() == 0L && supply.getTransferBuffer() == paid + 100L,
                     "Unformed Plug still drains committed output through the actual native network");
         } finally {
             try {
@@ -235,6 +239,7 @@ public final class FluxNetworksRecipeGameTest {
         CraftingRuntime runtime = null;
         try {
             rig = machine(helper);
+            rig.input().getTransferHandler().setLimit(1000L);
             form(helper, rig.controller());
             TileFluxStorage supply = storage(helper, STORAGE, 500L);
             connectAndCycle(supply, network);
@@ -259,17 +264,22 @@ public final class FluxNetworksRecipeGameTest {
                     "Actual load rejects a fully serialized old recipe definition that no longer matches the catalog");
             tickDevice(input);
             network.onEndServerTick();
-            helper.assertTrue(input.getTransferHandler().reserved() == 0L && input.getTransferBuffer() == 60L,
-                    "Actual load rejects the stale recipe definition and releases its now-ownerless reservation without destroying paid energy");
-            helper.assertTrue(supply.getTransferBuffer() == 420L, "Failed owner restore never requests replacement energy");
-            runtime.start(recipe(helper, RECIPE_ID), 1);
+            helper.assertTrue(input.getTransferHandler().reserved() == 0L && input.getTransferBuffer() == 0L,
+                    "Actual load rejects the stale definition and refunds its now-ownerless reservation");
+            helper.assertTrue(supply.getTransferBuffer() == 480L, "Failed owner restore returns paid energy without replacing consumed energy");
+            warmAndStart(helper, runtime, recipe(helper, RECIPE_ID), 1, network);
             helper.assertTrue(runtime.active() && input.getTransferHandler().reserved() == 50L,
-                    "A current recipe reuses the unlocked paid buffer without an extra native prefetch");
+                    "A current recipe reserves its whole budget from the recovered source network");
             settle(helper, runtime);
             network.onEndServerTick();
-            helper.assertTrue(input.getTransferBuffer() == 10L && input.getTransferHandler().reserved() == 0L
-                            && supply.getTransferBuffer() == 420L,
-                    "Recovery consumes exactly its local budget and leaves no orphan reservation or second debit");
+            helper.assertTrue(input.getTransferBuffer() == 50L && input.getTransferHandler().reserved() == 0L
+                            && supply.getTransferBuffer() == 380L,
+                    "Recovery consumes exactly its local budget and leaves one unreserved continuation batch");
+            runtime.stopEnergyPrefetch();
+            tickDevice(input);
+            network.onEndServerTick();
+            helper.assertTrue(input.getTransferBuffer() == 0L && supply.getTransferBuffer() == 430L,
+                    "Confirmed idle refunds continuation energy, conserving both recipes' actual consumption");
         } finally {
             try {
                 if (runtime != null) runtime.invalidate();
@@ -316,13 +326,13 @@ public final class FluxNetworksRecipeGameTest {
                     "Low-budget activation owns exactly the arrived local whole-duration budget");
             network.onEndServerTick();
             helper.assertTrue(rig.input().getTransferHandler().getRequest() == 0L
-                            && rig.input().getTransferBuffer() == 100L && supply.getTransferBuffer() == 400L,
-                    "Successful activation withdraws failed-candidate hints before the same-tick real network allocation");
+                            && rig.input().getTransferBuffer() == 200L && supply.getTransferBuffer() == 300L,
+                    "Successful activation replaces failed-candidate hints with exactly one next-batch allocation");
             runtime.tick();
             network.onEndServerTick();
-            helper.assertTrue(rig.input().getTransferBuffer() == 80L && rig.input().getTransferHandler().reserved() == 80L
-                            && supply.getTransferBuffer() == 400L,
-                    "Actual settlement consumes 20 FE locally and cannot reopen the abandoned high-budget demand");
+            helper.assertTrue(rig.input().getTransferBuffer() == 180L && rig.input().getTransferHandler().reserved() == 80L
+                            && supply.getTransferBuffer() == 300L,
+                    "Actual settlement consumes 20 FE while retaining only the selected recipe's next batch");
         } finally {
             try {
                 if (runtime != null) runtime.invalidate();

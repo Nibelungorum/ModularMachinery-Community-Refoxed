@@ -133,8 +133,9 @@ class RuntimeMachineModelRegistryTest {
                 assertThat(description.portKind()).isSameAs(kind);
                 assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
                 assertThat(description.baseTextureSource()).isEqualTo(MachineAppearanceSpec.defaults().formedPortTextureSource());
-                assertThat(description.overlayTextures()).containsExactly(MMCR.id("block/overlay/base/energy"),
-                        MMCR.id("block/overlay/direction/" + kind.ioType().getSerializedName()), MMCR.id("block/overlay/type/energy"));
+                String core = kind == FluxNetworkInterfaceKind.INPUT ? "flux_point" : "flux_plug";
+                assertThat(description.overlayTextures()).containsExactly(ResourceLocation.parse("fluxnetworks:block/" + core + "_on"),
+                        ResourceLocation.parse("fluxnetworks:block/" + core + "_colour"));
 
                 FluxNetworkInterfaceBlockEntity entity = (FluxNetworkInterfaceBlockEntity) BuiltInRegistries.BLOCK_ENTITY_TYPE.get(id)
                         .create(BlockPos.ZERO, block.defaultBlockState());

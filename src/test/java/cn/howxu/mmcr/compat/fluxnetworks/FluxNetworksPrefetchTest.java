@@ -168,7 +168,13 @@ class FluxNetworksPrefetchTest {
         handler.setLimit(10L);
         FluxNetworkInputCapability capability = capability(handler);
         for (int cycle = 0; cycle < 3; cycle++) {
-            assertThat(capability.planPrefetch(25L)).isEmpty();
+            var partial = capability.planPrefetch(25L);
+            if (cycle == 0) {
+                assertThat(partial).isEmpty();
+            } else {
+                assertThat(partial.orElseThrow().amount()).isEqualTo(handler.getBuffer());
+                capability.restoreReservation(partial.orElseThrow().amount());
+            }
             handler.onCycleStart();
             handler.addToBuffer(handler.getRequest());
             handler.onCycleEnd();
@@ -269,7 +275,9 @@ class FluxNetworksPrefetchTest {
         assertThat(handler.getRequest()).isZero();
         handler.clearDemand();
         assertThat(capability.facet(RecipeEnergyPrefetchFacet.class)).isPresent();
-        assertThat(capability.planPrefetch(50L)).isEmpty();
+        var partial = capability.planPrefetch(50L).orElseThrow();
+        assertThat(partial.amount()).isEqualTo(20L);
+        capability.restoreReservation(partial.amount());
         handler.onCycleStart();
         assertThat(handler.getRequest()).isZero();
         assertThat(capability.consumeReservation(10L).success()).isTrue();

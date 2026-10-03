@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.fluxnetworks.loaded;
 
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.loot.LootPool;
@@ -33,7 +34,8 @@ public final class LoadedFluxNetworksBridge implements FluxNetworksBridge {
         return LootTable.lootTable().withPool(LootPool.lootPool().setRolls(ConstantValue.exactly(1))
                 .when(ExplosionCondition.survivesExplosion())
                 .add(LootItem.lootTableItem(block).apply(CopyComponentsFunction.copyComponents(
-                        CopyComponentsFunction.Source.BLOCK_ENTITY)
-                        .include(FluxDataComponents.FLUX_CONFIG).include(FluxDataComponents.STORED_ENERGY))));
+                         CopyComponentsFunction.Source.BLOCK_ENTITY)
+                        .include(FluxDataComponents.FLUX_CONFIG).include(FluxDataComponents.STORED_ENERGY)
+                        .include(DataComponents.CUSTOM_DATA))));
     }
 }

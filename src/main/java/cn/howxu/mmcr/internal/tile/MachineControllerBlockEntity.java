@@ -3827,7 +3827,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         try {
             result = new RecipeSearchTask(current, machineId, currentRecipePoolId(), current.structure().version(),
                     maxParallelism, candidates, componentRuntime().capabilities(),
-                    MachineModifier.recipeModifiers(componentRuntime().modifierList())).compute();
+                    MachineModifier.recipeModifiers(componentRuntime().modifierList())).compute(runtime.craftingRuntime());
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();

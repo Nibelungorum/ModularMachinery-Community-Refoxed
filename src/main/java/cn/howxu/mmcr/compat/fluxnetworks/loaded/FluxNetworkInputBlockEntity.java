@@ -5,7 +5,10 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.state.BlockState;
 import sonar.fluxnetworks.api.FluxConstants;
 import sonar.fluxnetworks.api.FluxDataComponents;
@@ -16,8 +19,10 @@ import java.util.List;
 
 /** @author howxu <dev@howxu.cn> */
 public final class FluxNetworkInputBlockEntity extends FluxNetworkInterfaceBlockEntity implements IFluxPoint {
+    private static final String BUFFER_SOURCES = "mmcr_flux_sources";
     private final FluxNetworkPointHandler handler = new FluxNetworkPointHandler(this::acceptsNetworkEnergy,
-            () -> { checkServerThread(); return level == null ? 0L : level.getGameTime(); }, this::energyChanged);
+            () -> { checkServerThread(); return level == null ? 0L : level.getGameTime(); }, this::energyChanged,
+            this::getNetworkID);
     private final MachineCapability capability = new FluxNetworkInputCapability(handler, () -> {
         checkServerThread();
         return FluxNetworksIds.INPUT + ":" + getGlobalPos().dimension().location() + ":" + getBlockPos().asLong();
@@ -42,7 +47,7 @@ public final class FluxNetworkInputBlockEntity extends FluxNetworkInterfaceBlock
     @Override
     public void onMachineUnformed(BlockPos pos) {
         super.onMachineUnformed(pos);
-        if (controllerPos == null) handler.clearDemand();
+        if (controllerPos == null) handler.stopPrefetch();
     }
 
     @Override
@@ -71,12 +76,33 @@ public final class FluxNetworkInputBlockEntity extends FluxNetworkInterfaceBlock
             }
         }
         super.applyImplicitComponents(input);
+        if (input.get(FluxDataComponents.FLUX_CONFIG) != null && input.get(FluxDataComponents.STORED_ENERGY) != null) {
+            CustomData data = input.get(DataComponents.CUSTOM_DATA);
+            CompoundTag sources = data == null ? new CompoundTag() : data.copyTag().getCompound(BUFFER_SOURCES);
+            handler.loadSources(sources, input.get(FluxDataComponents.FLUX_CONFIG).networkId());
+        }
+    }
+
+    @Override
+    protected void collectImplicitComponents(DataComponentMap.Builder components) {
+        super.collectImplicitComponents(components);
+        CustomData existing = components.build().get(DataComponents.CUSTOM_DATA);
+        CompoundTag data = existing == null ? new CompoundTag() : existing.copyTag();
+        data.put(BUFFER_SOURCES, handler.saveSources());
+        components.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
     }
 
     @Override
     protected void onServerTick() {
         reconcileLoadedReservations();
         super.onServerTick();
+        FluxNetworkRefunds.track(this);
+    }
+
+    @Override
+    public void setRemoved() {
+        if (level != null && !level.isClientSide()) FluxNetworkRefunds.forget(this);
+        super.setRemoved();
     }
 
     private void reconcileLoadedReservations() {

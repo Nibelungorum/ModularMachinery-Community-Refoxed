@@ -67,6 +67,23 @@ public interface RecipeEnergyPrefetchFacet extends CapabilityFacet {
      */
     default void onRecipeReservationChanged(Object owner, long remaining, Runnable cancelOwner) { }
 
+    /** Hints at one subsequent batch; zero withdraws this owner's speculative demand. */
+    default void onRecipeContinuationRequested(Object owner, long amount) { }
+
+    default void onRecipeSearchStarted(Object owner) { }
+
+    default void onRecipeSearchCandidate(Object owner, boolean eligible) { }
+
+    default void onRecipeSearchFinished(Object owner, boolean found) {
+        if (!found) onRecipeContinuationRequested(owner, 0L);
+    }
+
+    default void onRecipeSearchFinished(Object owner, boolean found, boolean patternRequest) {
+        onRecipeSearchFinished(owner, found);
+    }
+
+    default void onPatternPrefetchCancelled() { }
+
     /**
      * A positive prefetched amount and its transaction-aware operation.
      *

@@ -350,12 +350,17 @@ public final class FactoryRecipeThread extends RecipeThread {
         List<MachineRecipe> filtered = candidatesFor(candidates, context.catalogVersion());
         failureCandidates = filtered.stream().filter(Objects::nonNull).toList();
         return startSearchResult(context, filtered, structureVersion,
-                search(context, filtered, structureVersion));
+                search(context, filtered, structureVersion, runtime));
     }
 
     /** Computes an immutable factory-lane search result without accessing the lane runtime. */
     public static SearchResult search(FactorySearchContext context, List<MachineRecipe> candidates,
-                                      long structureVersion) {
+                                       long structureVersion) {
+        return search(context, candidates, structureVersion, null);
+    }
+
+    public static SearchResult search(FactorySearchContext context, List<MachineRecipe> candidates,
+                                      long structureVersion, @Nullable Object prefetchOwner) {
         if (context == null) return new SearchResult(null, null, false);
         Machine machine = context.snapshot().structure().machine() == null
                 ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
@@ -367,8 +372,8 @@ public final class FactoryRecipeThread extends RecipeThread {
             return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId,
                     recipePoolId, structureVersion,
                     context.maxParallelism(), candidates, context.capabilities(),
-                    MachineModifier.recipeModifiers(context.modifiers())).compute(),
-                    null, false);
+                    MachineModifier.recipeModifiers(context.modifiers())).compute(prefetchOwner),
+                    null, false, prefetchOwner != null);
         } catch (RuntimeException exception) {
             return new SearchResult(null, exception, false);
         }
@@ -382,10 +387,11 @@ public final class FactoryRecipeThread extends RecipeThread {
         setSearchGameTime(context.gameTime());
         failureCandidates = candidates.stream().filter(Objects::nonNull).toList();
         SearchResult resolved = searchResult.requiresMainThreadReplan()
-                ? search(context, candidates, structureVersion) : searchResult;
+                ? search(context, candidates, structureVersion, runtime) : searchResult;
         RecipeSearchResult result = resolved.result();
         if (resolved.failure() != null || result == null || !result.success()) {
             controller.clearPendingConflictStart();
+            if (!resolved.livePrefetchSearch() && resolved.failure() == null && result != null) runtime.stopEnergyPrefetch();
             onStartSearchFailed(result == null ? null : result.failure());
             return false;
         }
@@ -395,7 +401,11 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     /** Immutable outcome of a worker-side factory recipe search. */
     public record SearchResult(@Nullable RecipeSearchResult result, @Nullable RuntimeException failure,
-                               boolean requiresMainThreadReplan) {
+                               boolean requiresMainThreadReplan, boolean livePrefetchSearch) {
+        public SearchResult(@Nullable RecipeSearchResult result, @Nullable RuntimeException failure,
+                            boolean requiresMainThreadReplan) {
+            this(result, failure, requiresMainThreadReplan, false);
+        }
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,

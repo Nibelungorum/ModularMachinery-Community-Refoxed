@@ -22,6 +22,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import com.google.common.collect.ImmutableList;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,13 +30,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DynamicOverlayTexturesTest {
 
     @Test
-    void fluxNetworksInterfacesShareExistingEnergyLayersAndRetainTheirMmcrDirection() {
+    void fluxNetworksInterfacesUseNativePointAndPlugCoreLayers() {
         assertThat(DynamicOverlayTextures.portOverlayTexture(FluxNetworkInterfaceKind.INPUT))
-                .containsExactly(MMCR.id("block/overlay/base/energy"),
-                        MMCR.id("block/overlay/direction/input"), MMCR.id("block/overlay/type/energy"));
+                .containsExactly(ResourceLocation.parse("fluxnetworks:block/flux_point_on"),
+                        ResourceLocation.parse("fluxnetworks:block/flux_point_colour"));
         assertThat(DynamicOverlayTextures.portOverlayTexture(FluxNetworkInterfaceKind.OUTPUT))
-                .containsExactly(MMCR.id("block/overlay/base/energy"),
-                        MMCR.id("block/overlay/direction/output"), MMCR.id("block/overlay/type/energy"));
+                .containsExactly(ResourceLocation.parse("fluxnetworks:block/flux_plug_on"),
+                        ResourceLocation.parse("fluxnetworks:block/flux_plug_colour"));
     }
 
     @Test

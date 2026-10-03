@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -25,6 +26,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Searches published controller state with the current execution capabilities and returns a recipe handle.
@@ -95,6 +97,26 @@ public final class RecipeSearchTask {
     }
 
     public RecipeSearchResult compute() {
+        return compute(null);
+    }
+
+    /** Associates live prefetch hints with the searching runtime; worker captures have no live facets. */
+    public RecipeSearchResult compute(@Nullable Object prefetchOwner) {
+        List<RecipeEnergyPrefetchFacet> facets = prefetchOwner == null ? List.of() : capabilities.stream()
+                .map(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null))
+                .filter(Objects::nonNull).distinct().toList();
+        for (RecipeEnergyPrefetchFacet facet : facets) facet.onRecipeSearchStarted(prefetchOwner);
+        boolean found = true; // An exception does not establish that the machine is idle.
+        try {
+            RecipeSearchResult result = computeCandidates(prefetchOwner, facets);
+            found = result.success();
+            return result;
+        } finally {
+            for (RecipeEnergyPrefetchFacet facet : facets) facet.onRecipeSearchFinished(prefetchOwner, found);
+        }
+    }
+
+    private RecipeSearchResult computeCandidates(@Nullable Object prefetchOwner, List<RecipeEnergyPrefetchFacet> facets) {
         FailureReport failureReport = FailureReport.forRecipeSearch();
         List<MachineRecipe> ordered = candidates;
 
@@ -105,13 +127,20 @@ public final class RecipeSearchTask {
                 failureReport = failureReport.plus(moduleFailure, validity(moduleFailure));
                 continue;
             }
+            ExecutionStatus levelFailure = planningValues == null ? levelFailure(recipe) : null;
+            if (levelFailure != null) {
+                failureReport = failureReport.plus(levelFailure, 1.0F);
+                continue;
+            }
+            for (RecipeEnergyPrefetchFacet facet : facets) {
+                facet.onRecipeSearchCandidate(prefetchOwner, true);
+            }
             PlanningResult result = planStart(recipe);
             if (!result.successful()) {
                 ExecutionStatus failure = withSearchTrace(recipe, result);
                 if (failure != null) failureReport = failureReport.plus(failure, validity(result));
                 continue;
             }
-            ExecutionStatus levelFailure = planningValues == null ? levelFailure(recipe) : null;
             if (levelFailure == null) {
                 boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
                 return RecipeSearchResult.success(recipe, machineId, structureVersion,

@@ -131,6 +131,7 @@ public final class CraftingRuntime {
     private static final String PREFETCH_ALLOCATIONS_KEY = "prefetched_energy_allocations";
     private static final String PREFETCH_ALLOCATION_KEY = "key";
     private static final String PREFETCH_ALLOCATION_AMOUNT = "amount";
+    private static final String PREFETCH_BATCH_AMOUNT = "batch_amount";
     private static final String PREFETCH_TICK_CONSUMED_KEY = "prefetched_energy_tick_consumed";
 
     public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
@@ -173,7 +174,11 @@ public final class CraftingRuntime {
             } finally {
                 flushScreenTextReplacements(machineContext.screenText());
             }
-            if (startContext.cancelled()) return null;
+            if (startContext.cancelled()) {
+                stopEnergyPrefetch();
+                for (RecipeEnergyPrefetchFacet facet : prefetchFacets(requestCapabilities)) facet.onPatternPrefetchCancelled();
+                return null;
+            }
             effective = startContext.snapshot();
         } else {
             effective = new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
@@ -186,7 +191,18 @@ public final class CraftingRuntime {
                 effectiveParallelism);
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) return null;
-        List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
+        for (RecipeEnergyPrefetchFacet facet : facets) {
+            facet.onRecipeSearchStarted(this);
+            facet.onRecipeSearchCandidate(this, true);
+        }
+        List<PreparedPrefetch> prefetches = null;
+        try {
+            prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
+        } finally {
+            for (RecipeEnergyPrefetchFacet facet : facets) {
+                facet.onRecipeSearchFinished(this, prefetches != null, true);
+            }
+        }
         if (prefetches == null) return null;
         pendingPatternStart = new PreparedStart(effectiveRecipe, runtime,
                 catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan,
@@ -202,7 +218,10 @@ public final class CraftingRuntime {
 
     public void releasePatternStart() {
         if (!active()) releaseStressContributions();
-        if (pendingPatternStart != null) releasePreparedPrefetches(pendingPatternStart);
+        if (pendingPatternStart != null) {
+            releasePreparedPrefetches(pendingPatternStart);
+            for (RecipeEnergyPrefetchFacet facet : prefetchFacets(List.of())) facet.onPatternPrefetchCancelled();
+        }
         pendingPatternStart = null;
         patternStartReserved = false;
     }
@@ -360,6 +379,7 @@ public final class CraftingRuntime {
             return null;
         }
         if (startContext.cancelled()) {
+            stopEnergyPrefetch();
             failure = null;
             status = CraftingStatus.IDLE;
             return null;
@@ -686,7 +706,7 @@ public final class CraftingRuntime {
         }
         if (finishContext.outputsDiscarded()) {
             activeRecipe.applyTickGrant(true, true, currentGameTime());
-            releaseActivePrefetches();
+            releaseActivePrefetches(true);
             activeRecipe = null;
             startPlan = null;
             finishPlan = null;
@@ -726,7 +746,7 @@ public final class CraftingRuntime {
             return finishBlocked(finishPlan.failure());
         }
         activeRecipe.applyTickGrant(true, true, currentGameTime());
-        releaseActivePrefetches();
+        releaseActivePrefetches(true);
         activeRecipe = null;
         startPlan = null;
         finishPlan = null;
@@ -1294,7 +1314,7 @@ public final class CraftingRuntime {
             long remaining = existing == null ? prefetch.plan().amount()
                     : Math.addExact(existing.remaining(), prefetch.plan().amount());
             allocations.put(prefetch.reservationKey(), new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
-                    remaining));
+                    remaining, remaining));
         }
         activePrefetches = List.copyOf(allocations.values());
         prefetchedEnergyPerTick = prefetchedEnergyPerTick(requirements, parallelism);
@@ -1314,7 +1334,18 @@ public final class CraftingRuntime {
         }
         for (RecipeEnergyPrefetchFacet facet : facets) {
             facet.onRecipeReservationChanged(this, remainingByKey.getOrDefault(facet.reservationKey(), 0L), this::invalidate);
+            long nextBatch = activePrefetches.stream()
+                    .filter(prefetch -> prefetch.reservationKey().equals(facet.reservationKey()))
+                    .mapToLong(ActivePrefetch::batchAmount).findFirst().orElse(0L);
+            facet.onRecipeContinuationRequested(this, nextBatch);
         }
+    }
+
+    /** Called after a complete candidate search, not after a last-recipe retry alone. */
+    public void stopEnergyPrefetch() {
+        Set<RecipeEnergyPrefetchFacet> facets = new LinkedHashSet<>(prefetchFacets(List.of()));
+        for (ActivePrefetch prefetch : activePrefetches) facets.add(prefetch.facet());
+        for (RecipeEnergyPrefetchFacet facet : facets) facet.onRecipeContinuationRequested(this, 0L);
     }
 
     private boolean restorePrefetches(ActiveMachineRecipe restored, List<MachineRequirement> requirements) {
@@ -1338,7 +1369,10 @@ public final class CraftingRuntime {
             if (!(allocation.get(PREFETCH_ALLOCATION_AMOUNT) instanceof LongTag longTag)) return false;
             long amount = longTag.getAsLong();
             if (reservationKey.isBlank() || !storedKeys.add(reservationKey) || amount < 0L) return false;
-            allocations.add(new StoredPrefetch(reservationKey, amount));
+            long batchAmount = allocation.contains(PREFETCH_BATCH_AMOUNT)
+                    ? allocation.getLong(PREFETCH_BATCH_AMOUNT) : -1L;
+            if (allocation.contains(PREFETCH_BATCH_AMOUNT) && batchAmount < amount) return false;
+            allocations.add(new StoredPrefetch(reservationKey, amount, batchAmount));
         }
         if (allocations.isEmpty()) return false;
 
@@ -1373,11 +1407,30 @@ public final class CraftingRuntime {
             }
         }
         if (allocationTotal != remaining) return false;
+        long batchTotal = 0L;
+        boolean legacy = false;
+        try {
+            for (StoredPrefetch allocation : allocations) {
+                legacy |= allocation.batchAmount() < 0L;
+                batchTotal = Math.addExact(batchTotal,
+                        allocation.batchAmount() < 0L ? allocation.amount() : allocation.batchAmount());
+            }
+        } catch (ArithmeticException exception) {
+            return false;
+        }
+        if (batchTotal > total || !legacy && batchTotal != total) return false;
+        long unassigned = total - batchTotal;
         try {
             for (StoredPrefetch allocation : allocations) {
                 RecipeEnergyPrefetchFacet facet = facetsByKey.get(allocation.reservationKey());
+                long batchAmount = allocation.batchAmount();
+                if (batchAmount < 0L) {
+                    // Old ledgers retained only balances. Reconstruct a full batch in debit order.
+                    batchAmount = allocation.amount() + unassigned;
+                    unassigned = 0L;
+                }
                 ActivePrefetch restoredPrefetch = new ActivePrefetch(allocation.reservationKey(), facet,
-                        allocation.amount());
+                        allocation.amount(), batchAmount);
                 restoredPrefetches.add(restoredPrefetch);
                 if (allocation.amount() > 0L) facet.restoreReservation(allocation.amount());
             }
@@ -1405,6 +1458,7 @@ public final class CraftingRuntime {
             CompoundTag allocation = new CompoundTag();
             allocation.putString(PREFETCH_ALLOCATION_KEY, prefetch.reservationKey());
             allocation.putLong(PREFETCH_ALLOCATION_AMOUNT, prefetch.remaining());
+            allocation.putLong(PREFETCH_BATCH_AMOUNT, prefetch.batchAmount());
             allocations.add(allocation);
         }
         data.put(PREFETCH_ALLOCATIONS_KEY, allocations);
@@ -1459,7 +1513,7 @@ public final class CraftingRuntime {
                         ? failure(BuiltinFailureReasons.MISSING_INPUT, FailurePhase.PER_TICK, Map.of()) : result.status();
             }
             updated.set(index, new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
-                    prefetch.remaining() - consumed));
+                    prefetch.remaining() - consumed, prefetch.batchAmount()));
             // Publish each successful debit before visiting the next allocation, which may fail.
             activePrefetches = List.copyOf(updated);
             prefetchedEnergyRemaining -= consumed;
@@ -1472,6 +1526,11 @@ public final class CraftingRuntime {
     }
 
     private void releaseActivePrefetches() {
+        releaseActivePrefetches(false);
+    }
+
+    private void releaseActivePrefetches(boolean keepContinuation) {
+        if (!keepContinuation) stopEnergyPrefetch();
         List<ActivePrefetch> prefetches = activePrefetches;
         activePrefetches = List.of();
         prefetchedEnergyPerTick = 0L;
@@ -1799,10 +1858,10 @@ public final class CraftingRuntime {
                                         RecipeTickContext tickContext) {
     }
 
-    private record StoredPrefetch(String reservationKey, long amount) {
+    private record StoredPrefetch(String reservationKey, long amount, long batchAmount) {
     }
 
-    private record ActivePrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet, long remaining) {
+    private record ActivePrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet, long remaining, long batchAmount) {
     }
 
     private static String failureUnloc(ExecutionStatus status) {

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.mixin.compat.fluxnetworks.loaded;
 
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkRefunds;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -22,6 +23,13 @@ import java.util.LinkedList;
 @Mixin(value = ServerFluxNetwork.class, remap = false)
 public abstract class ServerFluxNetworkMixin {
     @Shadow @Final private LinkedList<TileFluxDevice> mToAdd;
+
+    @Inject(method = "onEndServerTick()V", at = @At(value = "INVOKE",
+            target = "Lsonar/fluxnetworks/common/connection/ServerFluxNetwork;getLogicalDevices(I)Ljava/util/ArrayList;",
+            ordinal = 1))
+    private void mmcr$returnIdleEnergy(CallbackInfo ci) {
+        FluxNetworkRefunds.refund((ServerFluxNetwork) (Object) this);
+    }
 
     @Inject(method = "enqueueConnectionRemoval(Lsonar/fluxnetworks/common/device/TileFluxDevice;Z)V", at = @At("HEAD"), cancellable = true)
     private void mmcr$cancelPendingAddition(TileFluxDevice device, boolean unload, CallbackInfo ci) {
