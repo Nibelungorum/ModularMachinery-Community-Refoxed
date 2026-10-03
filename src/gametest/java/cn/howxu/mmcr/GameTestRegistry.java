@@ -10,6 +10,7 @@ import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksDeviceGameTest;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksRecipeGameTest;
+import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
 
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
@@ -385,6 +386,14 @@ public final class GameTestRegistry {
                     helper -> new FluxNetworksRecipeGameTest().failedLoadReleasesUnownedReservation(helper));
             register(event, "fluxnetworks_candidate_warmup_withdrawal", 100,
                     helper -> new FluxNetworksRecipeGameTest().successfulCandidateRetractsFailedWarmup(helper));
+        }
+        if (ModList.get().isLoaded("extendedae_plus")) {
+            register(event, "eaep_mirror_sync", 200,
+                    helper -> new MirrorPatternInterfaceGameTest().syncAndPersistence(helper));
+            register(event, "eaep_mirror_tool", 100,
+                    helper -> new MirrorPatternInterfaceGameTest().nativeToolBinding(helper));
+            register(event, "eaep_mirror_dispatch", 200,
+                    helper -> new MirrorPatternInterfaceGameTest().dispatchesOwnController(helper));
         }
         return event;
     }

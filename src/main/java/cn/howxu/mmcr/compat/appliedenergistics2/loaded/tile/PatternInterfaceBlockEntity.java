@@ -110,18 +110,26 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    public boolean isVisibleInTerminal() {
+        return !((PatternLogicKind) kind).readOnlyPatterns()
+                && PatternProviderLogicHost.super.isVisibleInTerminal();
+    }
+
+    @Override
     public Component memoryCardSettingsSource() {
         return getMainMenuIcon().getHoverName();
     }
 
     @Override
     public void exportMemoryCardSettings(DataComponentMap.Builder builder, @Nullable Player player) {
+        if (((PatternLogicKind) kind).readOnlyPatterns()) return;
         MemoryCardHost.super.exportMemoryCardSettings(builder, player);
         logic.exportSettings(builder);
     }
 
     @Override
     public void importMemoryCardSettings(DataComponentMap input, @Nullable Player player) {
+        if (((PatternLogicKind) kind).readOnlyPatterns()) return;
         MemoryCardHost.super.importMemoryCardSettings(input, player);
         logic.importSettings(input, player);
     }

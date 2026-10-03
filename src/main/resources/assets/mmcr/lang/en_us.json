@@ -945,5 +945,9 @@
   "item.mmcr.eae_me_oversize_output_interface": "ME Oversize Output Interface",
   "block.mmcr.eae_me_extended_pattern_interface": "ME Extended Pattern Interface",
   "container.mmcr.eae_me_extended_pattern_interface": "ME Extended Pattern Interface",
-  "item.mmcr.eae_me_extended_pattern_interface": "ME Extended Pattern Interface"
+  "item.mmcr.eae_me_extended_pattern_interface": "ME Extended Pattern Interface",
+  "block.mmcr.eaep_me_mirror_pattern_interface": "ME Mirror Pattern Interface",
+  "container.mmcr.eaep_me_mirror_pattern_interface": "ME Mirror Pattern Interface",
+  "item.mmcr.eaep_me_mirror_pattern_interface": "ME Mirror Pattern Interface",
+  "message.mmcr.mirror_pattern_interface.master_dimension": " (Master dimension: %s)"
 }

@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.extendedae_plus",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MirrorPatternBindingToolItemMixin",
+    "MirrorPatternProviderBlockEntityMixin",
+    "PatternInterfaceBlockEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -35,6 +35,10 @@ config="mixins/extras/mmcr.extendedae.mixins.json"
 requiredMods=["extendedae"]
 
 [[mixins]]
+config="mixins/extras/mmcr.extendedae_plus.mixins.json"
+requiredMods=["ae2", "extendedae", "extendedae_plus"]
+
+[[mixins]]
 config="mixins/extras/mmcr.appmek.mixins.json"
 requiredMods=["ae2", "mekanism", "appmek"]
 
@@ -95,6 +99,13 @@ side="BOTH"
 modId="extendedae"
 type="optional"
 versionRange="[1.21-2.2.26-neoforge,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="extendedae_plus"
+type="optional"
+versionRange="[1.6.3,)"
 ordering="AFTER"
 side="BOTH"
 

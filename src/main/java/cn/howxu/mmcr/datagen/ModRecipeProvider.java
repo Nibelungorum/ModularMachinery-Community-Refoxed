@@ -216,6 +216,7 @@ public final class ModRecipeProvider extends RecipeProvider {
 
         generatedPortRecipes();
         ae2InterfaceRecipes();
+        extendedAePlusInterfaceRecipes();
         appliedFluxInterfaceRecipes();
         fluxNetworksInterfaceRecipes();
         createStressInterfaceRecipes();
@@ -468,6 +469,15 @@ public final class ModRecipeProvider extends RecipeProvider {
             upgradeRecipe(result, previous);
             previous = result;
         }
+    }
+
+    private void extendedAePlusInterfaceRecipes() {
+        String id = "eaep_me_mirror_pattern_interface";
+        if (!ModItems.ITEMS.containsKey(id)) return;
+        shapeless(ModItems.ITEMS.get(id).get(), 1)
+                .requires(externalItem("extendedae_plus", "mirror_pattern_provider"))
+                .requires(ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded("ae2", "extendedae", "extendedae_plus"));
     }
 
     private void ae2InterfaceRecipes() {
