@@ -16,7 +16,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
-import com.simibubi.create.content.kinetics.chainDrive.ChainDriveBlock;
+import com.simibubi.create.content.kinetics.simpleRelays.AbstractShaftBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.MappedRegistry;
@@ -51,7 +51,7 @@ class StressPortRegistrationTest {
         for (var kind : StressInterfaceKind.values()) {
             var nativeBlock = registeredBlock(kind, () -> BuiltInRegistries.BLOCK_ENTITY_TYPE.get(fixtureId(kind)));
             var type = registeredType(kind, nativeBlock);
-            assertInstanceOf(ChainDriveBlock.class, nativeBlock);
+            assertInstanceOf(AbstractShaftBlock.class, nativeBlock);
             assertSame(kind, ((MachinePort) nativeBlock).kind());
             var stressBlock = (StressInterfaceBlock) nativeBlock;
             assertSame(type, stressBlock.getBlockEntityType());

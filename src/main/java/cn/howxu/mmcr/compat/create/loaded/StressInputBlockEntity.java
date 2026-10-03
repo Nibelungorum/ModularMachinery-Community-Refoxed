@@ -13,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
 /** @author howxu <dev@howxu.cn> */
 public final class StressInputBlockEntity extends KineticBlockEntity implements MachineComponentTile, CapabilityHost, MachinePort {
@@ -50,7 +51,9 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
         sendData();
     }
 
-    @Override public void tick() { settleSavedNetwork(); super.tick(); port.notifyStateTransition(); }
+    @Override public void tick() { settleSavedNetwork(); super.tick(); port.tickAppearance(); port.notifyStateTransition(); }
+
+    @Override public ModelData getModelData() { return port.modelData(); }
 
     @Override public void initialize() { settleSavedNetwork(); super.initialize(); }
 
@@ -106,6 +109,7 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         float base = calculateStressApplied();
         super.write(tag, registries, clientPacket);
+        port.writeAppearance(tag);
         if (clientPacket) tag.putFloat("StressBase", base);
         else recovery.write(tag, 0F);
     }
@@ -119,6 +123,7 @@ public final class StressInputBlockEntity extends KineticBlockEntity implements 
             recovery.read(wasMoved ? new CompoundTag() : tag);
         }
         super.read(tag, registries, clientPacket);
+        port.readAppearance(tag);
         clientPacketState = clientPacket;
         clientBaseStress = clientPacket ? tag.getFloat("StressBase") : 0F;
         if (!clientPacket) {

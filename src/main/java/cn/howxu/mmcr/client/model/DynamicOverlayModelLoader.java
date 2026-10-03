@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.compat.athena.AthenaModelBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
@@ -17,6 +18,7 @@ import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.BlockModelRotation;
 import net.minecraft.client.resources.model.Material;
 import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.ModelState;
@@ -31,6 +33,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
 import net.neoforged.neoforge.client.NeoForgeRenderTypes;
 import net.neoforged.neoforge.client.model.IDynamicBakedModel;
@@ -187,7 +190,9 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                 description = block == null ? DynamicOverlayItemModel.Description.staticItem()
                         : DynamicOverlayItemModel.describeBlock(block);
             }
-            return new DynamicModel(kind, description, spriteGetter, context.getTransforms(), overrides);
+            BakedModel shaft = description != null && DynamicOverlayTextures.isStressPort(description.portKind())
+                    ? baker.bake(ResourceLocation.parse("create:block/shaft"), BlockModelRotation.X90_Y0) : null;
+            return new DynamicModel(kind, description, spriteGetter, context.getTransforms(), overrides, shaft);
         }
     }
 
@@ -202,16 +207,18 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         private final ItemOverrides overrides;
         private final TextureAtlasSprite particle;
         private final List<BakedModel> itemPasses;
+        private final @Nullable BakedModel itemShaft;
 
         private DynamicModel(DynamicOverlayBakedModel.Kind kind,
                              @Nullable DynamicOverlayItemModel.Description itemDescription,
                              Function<Material, TextureAtlasSprite> spriteGetter,
-                             ItemTransforms transforms, ItemOverrides overrides) {
+                             ItemTransforms transforms, ItemOverrides overrides, @Nullable BakedModel itemShaft) {
             this.kind = kind;
             this.itemDescription = itemDescription;
             this.spriteGetter = spriteGetter;
             this.transforms = transforms;
             this.overrides = overrides;
+            this.itemShaft = itemShaft;
             this.particle = sprite(FALLBACK_TEXTURE);
             this.itemPasses = List.of(new ItemPass(this, false), new ItemPass(this, true));
         }
@@ -250,13 +257,25 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             }
 
             List<BakedQuad> quads = new ArrayList<>();
+            Direction.Axis shaftAxis = stressAxis(state);
             CtmContext ctm = modelData.get(CTM_CONTEXT);
             if (ctm != null && (renderType == null
                     || ctm.renderTypes().contains(renderType))) {
-                quads.addAll(ctm.model().getQuads(ctm.state(), side, random, ctm.data(), renderType));
-            } else if (ctm == null && side != null && (renderType == null || renderType == RenderType.solid())) {
+                for (BakedQuad quad : ctm.model().getQuads(ctm.state(), side, random, ctm.data(), renderType)) {
+                    if (quad.getDirection().getAxis() != shaftAxis) quads.add(quad);
+                }
+            } else if (ctm == null && side != null && side.getAxis() != shaftAxis
+                    && (renderType == null || renderType == RenderType.solid())) {
                 DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
                 quads.add(face(side, Direction.NORTH, baseSprite(textures.base().forFace(side)), 0.0f));
+            }
+            if (shaftAxis != null && side == null && (renderType == null || renderType == RenderType.solid())) {
+                var textures = textures(state, modelData);
+                for (Direction direction : Direction.values()) {
+                    if (direction.getAxis() == shaftAxis) {
+                        addShaftEnd(quads, direction, baseSprite(textures.base().forFace(direction)));
+                    }
+                }
             }
             if (side == null && (renderType == null || renderType == RenderType.translucent())) {
                 addBlockOverlays(quads, state, modelData);
@@ -276,14 +295,26 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             List<BakedQuad> quads = new ArrayList<>();
             if (renderType == null || renderType == RenderType.solid()) {
                 for (Direction direction : Direction.values()) {
-                    quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
+                    if (itemShaft != null && direction.getAxis() == Direction.Axis.Z) {
+                        addShaftEnd(quads, direction, baseSprite(base.forFace(direction)));
+                    } else {
+                        quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
+                    }
+                }
+                if (itemShaft != null) {
+                    quads.addAll(itemShaft.getQuads(null, null, RandomSource.create()));
+                    for (Direction direction : Direction.values()) {
+                        quads.addAll(itemShaft.getQuads(null, direction, RandomSource.create()));
+                    }
                 }
             }
             if (renderType == null || renderType == RenderType.translucent()) {
                 for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
                         description.stateOverlayTexture())) {
                     for (Direction direction : description.overlayFaces()) {
-                        quads.add(face(direction, Direction.NORTH, sprite(layer.texture()), layer.grow()));
+                        if (itemShaft != null && direction.getAxis() != Direction.Axis.Z) continue;
+                        quads.add(overlayFace(direction, Direction.NORTH, sprite(layer.texture()), layer.grow(),
+                                itemShaft == null ? null : Direction.Axis.Z));
                     }
                 }
             }
@@ -302,10 +333,12 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
                     state.getValue(MachineControllerBlock.ACTIVE),
                     Boolean.TRUE.equals(modelData.get(EASTER_EGG_ACTIVE))) : null;
+            Direction.Axis shaftAxis = stressAxis(state);
             for (OverlayLayer layer : overlayLayers(textures.overlays(), stateOverlay)) {
                 for (Direction direction : Direction.values()) {
+                    if (shaftAxis != null && direction.getAxis() != shaftAxis) continue;
                     if (overlayFace == null || direction == overlayFace) {
-                        quads.add(face(direction, rollFacing, sprite(layer.texture()), layer.grow()));
+                        quads.add(overlayFace(direction, rollFacing, sprite(layer.texture()), layer.grow(), shaftAxis));
                     }
                 }
             }
@@ -337,13 +370,72 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         private BakedQuad face(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
                                float grow) {
+            return face(direction, rollFacing, sprite, vertices(direction, grow));
+        }
+
+        private static @Nullable Direction.Axis stressAxis(BlockState state) {
+            return state.getBlock() instanceof MachinePort port && DynamicOverlayTextures.isStressPort(port.kind())
+                    ? state.getValue(BlockStateProperties.AXIS) : null;
+        }
+
+        private void addShaftEnd(List<BakedQuad> quads, Direction direction, TextureAtlasSprite sprite) {
+            quads.add(endFace(direction, sprite, 0F, 0F, 0F, 1F, 0.125F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0F, 0.875F, 1F, 1F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0F, 0.125F, 0.125F, 0.875F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0.875F, 0.125F, 1F, 0.875F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F));
+            // Close the recessed opening's inner walls so oblique views cannot see through the casing.
+            for (Direction wall : Direction.values()) {
+                if (wall.getAxis() == direction.getAxis()) continue;
+                Vector3f min = new Vector3f(0.125F);
+                Vector3f max = new Vector3f(0.875F);
+                int axis = direction.getAxis().ordinal();
+                boolean positive = direction.getAxisDirection() == Direction.AxisDirection.POSITIVE;
+                min.setComponent(axis, positive ? 1F - 0.95F / 16F : 0F);
+                max.setComponent(axis, positive ? 1F : 0.95F / 16F);
+                float edge = wall.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 0.125F : 0.875F;
+                min.setComponent(wall.getAxis().ordinal(), edge);
+                max.setComponent(wall.getAxis().ordinal(), edge);
+                List<Vector3f> points = vertices(wall, 0F);
+                for (Vector3f point : points) {
+                    point.set(Mth.lerp(point.x, min.x, max.x), Mth.lerp(point.y, min.y, max.y),
+                            Mth.lerp(point.z, min.z, max.z));
+                }
+                quads.add(face(wall, Direction.NORTH, sprite, points));
+            }
+        }
+
+        private BakedQuad overlayFace(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
+                                      float grow, @Nullable Direction.Axis shaftAxis) {
+            return direction.getAxis() == shaftAxis
+                    ? endFace(direction, sprite, grow, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F)
+                    : face(direction, rollFacing, sprite, grow);
+        }
+
+        private BakedQuad endFace(Direction direction, TextureAtlasSprite sprite, float grow,
+                                  float minU, float minV, float maxU, float maxV, float inset) {
+            List<Vector3f> points = vertices(direction, 0F);
+            for (Vector3f point : points) {
+                switch (direction.getAxis()) {
+                    case X -> { point.y = Mth.lerp(point.y, minV, maxV); point.z = Mth.lerp(point.z, minU, maxU); }
+                    case Y -> { point.x = Mth.lerp(point.x, minU, maxU); point.z = Mth.lerp(point.z, minV, maxV); }
+                    case Z -> { point.x = Mth.lerp(point.x, minU, maxU); point.y = Mth.lerp(point.y, minV, maxV); }
+                }
+                Vec3i normal = direction.getNormal();
+                point.add(normal.getX() * (grow - inset), normal.getY() * (grow - inset), normal.getZ() * (grow - inset));
+            }
+            return face(direction, Direction.NORTH, sprite, points);
+        }
+
+        private BakedQuad face(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
+                               List<Vector3f> points) {
             QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
             builder.setSprite(sprite);
             builder.setDirection(direction);
             builder.setShade(true);
             builder.setHasAmbientOcclusion(true);
             Vec3i normal = direction.getNormal();
-            for (Vector3f vertex : vertices(direction, grow)) {
+            for (Vector3f vertex : points) {
                 // Growing geometry must not sample outside its atlas sprite.
                 float[] uv = uv(direction, rollFacing, new Vector3f(
                         Mth.clamp(vertex.x(), 0.0f, 1.0f), Mth.clamp(vertex.y(), 0.0f, 1.0f),
@@ -397,6 +489,9 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             CtmContext ctm = data.get(CTM_CONTEXT);
             ChunkRenderTypeSet base = ctm == null ? ChunkRenderTypeSet.of(RenderType.solid())
                     : ctm.renderTypes();
+            if (stressAxis(state) != null) {
+                base = ChunkRenderTypeSet.union(base, ChunkRenderTypeSet.of(RenderType.solid()));
+            }
             return ChunkRenderTypeSet.union(base, ChunkRenderTypeSet.of(RenderType.translucent()));
         }
 

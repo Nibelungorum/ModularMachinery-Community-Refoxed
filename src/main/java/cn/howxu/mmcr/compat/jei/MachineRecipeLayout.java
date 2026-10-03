@@ -218,6 +218,10 @@ public record MachineRecipeLayout(
         return stageRequirementTextY(display) + TEXT_LINE_SPACING * display.recipe().stageRequirements().size();
     }
 
+    public int stressTextY(MachineRecipeDisplay display) {
+        return durationTextY + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size());
+    }
+
     public int stageRequirementTextY(MachineRecipeDisplay display) {
         int levelCount = display.recipe().levelRequirements().size();
         if (levelCount > 0) {
@@ -256,6 +260,7 @@ public record MachineRecipeLayout(
 
     private static int metadataLineCount(MachineRecipeDisplay display) {
         return 1 + display.energyInputs().size() + display.energyOutputs().size()
+                + display.stressInputs().size() + display.stressOutputs().size()
                 + (display.minimumTemperature().isPresent() ? 1 : 0)
                 + (display.outputHeat().isPresent() ? 1 : 0);
     }

@@ -37,6 +37,7 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -208,11 +209,29 @@ public record MachineRecipeDisplay(
                 .toList();
     }
 
-    /** Typed stress data reserved for future presentation; no ingredient slots are allocated.
+    /** Stress metadata uses minimum input RPM or specified output RPM; no ingredient slots are allocated.
      * @author howxu <dev@howxu.cn>
      */
     public record StressDisplay(double baseStress, double minRpm, double rpm, List<String> tags) {
         public StressDisplay { tags = List.copyOf(tags); }
+
+        private String stressText(boolean input) {
+            return BigDecimal.valueOf(input ? minRpm : Math.abs(rpm))
+                    .multiply(BigDecimal.valueOf(baseStress)).stripTrailingZeros().toPlainString();
+        }
+
+        public Component label(boolean input) {
+            return Component.translatable(input ? "jei.mmcr.machine_recipe.stress_in"
+                    : "jei.mmcr.machine_recipe.stress_out", stressText(input));
+        }
+
+        public List<Component> tooltip(boolean input) {
+            Component formula = Component.translatable("jei.mmcr.machine_recipe.stress_formula",
+                    BigDecimal.valueOf(input ? minRpm : rpm).stripTrailingZeros().toPlainString(),
+                    BigDecimal.valueOf(baseStress).stripTrailingZeros().toPlainString(), stressText(input));
+            return input ? List.of(formula, Component.translatable("jei.mmcr.machine_recipe.stress_minimum_note"))
+                    : List.of(formula);
+        }
     }
 
     public static Component minimumTemperatureLabel(double kelvin) {

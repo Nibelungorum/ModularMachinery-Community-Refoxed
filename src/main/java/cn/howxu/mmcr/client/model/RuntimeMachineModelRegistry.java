@@ -148,7 +148,11 @@ public final class RuntimeMachineModelRegistry {
     }
 
     private static @Nullable RuntimeBlockModelDefinition definition(String blockName, Block block) {
-        // Native integration ports supply their own static casing and animated renderer.
+        if (block instanceof MachinePort port && DynamicOverlayTextures.isStressPort(port.kind())) {
+            return new RuntimeBlockModelDefinition(block, blockName, DynamicOverlayBakedModel.Kind.PORT,
+                    portStyleDefinition(block), DynamicOverlayItemModel.Description.port(port.kind()));
+        }
+        // Other native integration ports supply their own static casing and animated renderer.
         if (block instanceof MachinePort && !(block instanceof IOPortBlock)) return null;
         if (block instanceof MachineControllerBlock controller) {
             return new RuntimeBlockModelDefinition(

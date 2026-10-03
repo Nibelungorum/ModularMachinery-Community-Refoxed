@@ -28,6 +28,9 @@ public final class DynamicOverlayTextures {
 
     public static ImmutableList<ResourceLocation> portOverlayTexture(IOPortKind kind) {
         if (kind == null) return overlay(DynamicOverlayBakedModel.defaultPortOverlayTexture());
+        if (isStressPort(kind)) {
+            return overlay(MMCR.id("block/create/" + kind.ioType().getSerializedName()));
+        }
         if (FluxNetworksIds.INPUT.equals(kind.id()) || FluxNetworksIds.OUTPUT.equals(kind.id())) {
             return ImmutableList.of(baseOverlay("energy"), directionOverlay(kind.ioType()), typeOverlay("energy"));
         }
@@ -102,6 +105,11 @@ public final class DynamicOverlayTextures {
             case "appflux_me_flux_output_interface" -> MMCR.id("block/appliedflux/appflux_output");
             default -> null;
         };
+    }
+
+    static boolean isStressPort(IOPortKind kind) {
+        return kind != null && ("create_stress_input_interface".equals(kind.id())
+                || "create_stress_output_interface".equals(kind.id()));
     }
 
     private static ImmutableList<ResourceLocation> overlay(ResourceLocation texture) {

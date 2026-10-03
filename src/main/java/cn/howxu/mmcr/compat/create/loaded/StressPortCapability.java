@@ -17,6 +17,9 @@ import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.api.compat.create.StressFacet;
 import cn.howxu.mmcr.api.compat.create.StressState;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.client.model.MachineModelDataKeys;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.compat.create.StressContributions;
 import cn.howxu.mmcr.compat.create.StressContributions.Contribution;
 import cn.howxu.mmcr.compat.create.StressSession;
@@ -28,6 +31,9 @@ import com.simibubi.create.content.kinetics.base.IRotate.StressImpact;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import com.simibubi.create.infrastructure.config.AllConfigs;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.client.model.data.ModelData;
 
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -52,6 +58,10 @@ public final class StressPortCapability implements MachineCapability, Capability
     private StressState notifiedState;
     private Object notifiedNetwork;
     private KineticNetwork nativeNetwork;
+    private MachineAppearanceSpec.TextureSource appearanceSource = MachineAppearanceSpec.defaults().formedPortTextureSource();
+    private boolean appearanceLinked;
+    private boolean appearanceRefreshPending;
+    private int appearanceCheck;
 
     public StressPortCapability(KineticBlockEntity entity, StressInterfaceKind kind,
                                 DoubleSupplier capacity, DoubleSupplier stress, Runnable onChanged) {
@@ -246,8 +256,67 @@ public final class StressPortCapability implements MachineCapability, Capability
     }
 
     private void refreshAppearance() {
-        if (serverEntity()) entity.getLevel().sendBlockUpdated(entity.getBlockPos(), entity.getBlockState(),
-                entity.getBlockState(), 3);
+        appearanceRefreshPending = true;
+        appearanceLinked = controllerPos != null;
+        if (controllerPos == null) appearanceSource = MachineAppearanceSpec.defaults().formedPortTextureSource();
+        entity.setChanged();
+        if (serverEntity()) entity.sendData();
+    }
+
+    public void tickAppearance() {
+        if (!serverEntity()) return;
+        if (!appearanceRefreshPending && Math.floorMod(appearanceCheck++ + entity.getBlockPos().asLong(),
+                ServerConfig.linkAppearanceCheckIntervalTicks()) != 0L) return;
+        appearanceRefreshPending = false;
+        if (controllerPos != null && !entity.getLevel().hasChunkAt(controllerPos)) return;
+        MachineAppearanceSpec.TextureSource next = MachineAppearanceSpec.defaults().formedPortTextureSource();
+        if (controllerPos != null) {
+            if (!(entity.getLevel().getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)
+                    || !controller.currentStructureSnapshot().formed()
+                    || !controller.runtimeSnapshot().linkedPortPositions().contains(entity.getBlockPos())) {
+                unbind(controllerPos);
+                return;
+            }
+            next = controller.currentStructureSnapshot().machine().appearance().formedPortTextureSource();
+        }
+        if (!next.equals(appearanceSource) || appearanceLinked != (controllerPos != null)) {
+            appearanceSource = next;
+            appearanceLinked = controllerPos != null;
+            entity.setChanged();
+            entity.sendData();
+        }
+    }
+
+    public ModelData modelData() {
+        return ModelData.builder()
+                .with(MachineModelDataKeys.PORT_BASE_TEXTURE, appearanceSource.overrideTexture())
+                .with(MachineModelDataKeys.PORT_TEXTURE_SOURCE, appearanceSource)
+                .with(MachineModelDataKeys.PORT_LINKED, appearanceLinked).build();
+    }
+
+    public void writeAppearance(CompoundTag tag) {
+        CompoundTag appearance = new CompoundTag();
+        appearance.putString("SourceBlock", appearanceSource.blockId().toString());
+        if (appearanceSource.overrideTexture() != null) {
+            appearance.putString("Texture", appearanceSource.overrideTexture().toString());
+        }
+        appearance.putBoolean("Linked", appearanceLinked);
+        tag.put("PortAppearance", appearance);
+    }
+
+    public void readAppearance(CompoundTag tag) {
+        CompoundTag appearance = tag.getCompound("PortAppearance");
+        String block = appearance.getString("SourceBlock");
+        String texture = appearance.getString("Texture");
+        appearanceSource = block.isEmpty() ? MachineAppearanceSpec.defaults().formedPortTextureSource()
+                : new MachineAppearanceSpec.TextureSource(ResourceLocation.parse(block),
+                        texture.isEmpty() ? null : ResourceLocation.parse(texture));
+        appearanceLinked = appearance.getBoolean("Linked");
+        appearanceRefreshPending = true;
+        if (entity.getLevel() != null && entity.getLevel().isClientSide()) {
+            entity.requestModelDataUpdate();
+            entity.getLevel().sendBlockUpdated(entity.getBlockPos(), entity.getBlockState(), entity.getBlockState(), 3);
+        }
     }
 
     public void notifyStateTransition() {

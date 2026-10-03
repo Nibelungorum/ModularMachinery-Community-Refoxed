@@ -17,6 +17,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.kinetics.KineticNetwork;
@@ -47,6 +48,7 @@ import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -105,6 +107,12 @@ public final class StressInterfaceGameTest {
         StressSession second = new StressSession();
         sequence.thenWaitUntil(() -> {
             GearRig current = rig.get();
+            MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
+            helper.assertTrue(controller.structureSnapshot().formed(),
+                    "Native session fixture waits for its real controller association to form");
+            helper.assertTrue(controller.runtimeSnapshot().linkedPortPositions().containsAll(List.of(
+                            current.slow().getBlockPos(), current.output().getBlockPos(), current.fast().getBlockPos())),
+                    "Real controller discovers all three native interfaces before standalone session commits");
             StressFacet slow = facet(current.slow());
             StressFacet fast = facet(current.fast());
             helper.assertTrue(slow.state().connected() && fast.state().connected()
@@ -114,11 +122,8 @@ public final class StressInterfaceGameTest {
                             && Math.abs(current.slow().getSpeed()) == 16F
                             && Math.abs(current.fast().getSpeed()) == 32F,
                     "Shaft, vanilla chain drive, both native ports and 2:1 cogs propagate on one real network");
-            helper.assertTrue(current.chain().getBlockState().getValue(ChainDriveBlock.PART) == ChainDriveBlock.Part.MIDDLE,
-                    "Native chain shape connects the input and output ends, including rotated layout");
-            helper.assertTrue(current.slow().getBlockState().getValue(ChainDriveBlock.PART) == ChainDriveBlock.Part.START
-                            && current.output().getBlockState().getValue(ChainDriveBlock.PART) == ChainDriveBlock.Part.END,
-                    "Both native interface ends retain connected chain shape after rotation");
+            helper.assertTrue(current.chain().getBlockState().getValue(ChainDriveBlock.PART) != ChainDriveBlock.Part.NONE,
+                    "Vanilla chain drives bridge the separate shaft axes, including rotated layout");
         }).thenExecute(() -> {
             GearRig current = rig.get();
             network.set((KineticNetwork) facet(current.slow()).networkIdentity());
@@ -143,7 +148,15 @@ public final class StressInterfaceGameTest {
                     "Releasing one same-network session preserves the other session");
             second.releaseAll();
             close(helper, network.get().calculateStress(), baseline.get(), "Last session release restores native baseline");
-        });
+        }).thenExecute(() -> helper.setBlock(rig.get().positions().get(4), Blocks.AIR))
+                .thenWaitUntil(() -> helper.assertTrue(Math.abs(rig.get().slow().getSpeed()) == 16F
+                                && rig.get().output().getSpeed() == 0F && rig.get().fast().getSpeed() == 0F,
+                        "Side-adjacent interfaces cannot bypass a removed vanilla chain bridge"))
+                .thenExecute(() -> helper.setBlock(rig.get().positions().get(4), axis(AllBlocks.ENCASED_CHAIN_DRIVE.get(),
+                        rig.get().slow().getBlockState().getValue(RotatedPillarKineticBlock.AXIS))))
+                .thenWaitUntil(() -> helper.assertTrue(facet(rig.get().output()).networkIdentity() == facet(rig.get().slow()).networkIdentity()
+                                && Math.abs(rig.get().fast().getSpeed()) == 32F,
+                        "Restoring the vanilla chain bridge reconnects the isolated shaft branch"));
     }
 
     private static void controllerRecovery(GameTestHelper helper) {
@@ -296,14 +309,17 @@ public final class StressInterfaceGameTest {
     }
 
     private static void persistenceAndRemoval(GameTestHelper helper) {
-        BlockPos outputPos = PORT.east();
-        BlockPos reserveMotorPos = outputPos.south();
-        helper.setBlock(PORT, portState(StressInterfaceKind.INPUT));
+        BlockPos inputPos = PORT.south();
+        BlockPos shaftPos = SHAFT.south();
+        BlockPos motorPos = MOTOR.south();
+        BlockPos outputPos = PORT;
+        BlockPos reserveMotorPos = outputPos.north();
+        helper.setBlock(inputPos, portState(StressInterfaceKind.INPUT));
         helper.setBlock(outputPos, portState(StressInterfaceKind.OUTPUT));
-        helper.setBlock(SHAFT, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
-        motor(helper, MOTOR, Direction.NORTH, -64);
-        CreativeMotorBlockEntity reserveMotor = motor(helper, reserveMotorPos, Direction.NORTH, -32);
-        StressInputBlockEntity input = helper.getBlockEntity(PORT);
+        helper.setBlock(shaftPos, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
+        motor(helper, motorPos, Direction.NORTH, -64);
+        CreativeMotorBlockEntity reserveMotor = motor(helper, reserveMotorPos, Direction.SOUTH, 32);
+        StressInputBlockEntity input = helper.getBlockEntity(inputPos);
         StressOutputBlockEntity output = helper.getBlockEntity(outputPos);
         bind(helper, input, output);
         StressSession session = new StressSession();
@@ -319,6 +335,7 @@ public final class StressInterfaceGameTest {
         AtomicReference<Double> oldLoad = new AtomicReference<>();
         AtomicReference<Double> oldCapacity = new AtomicReference<>();
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(facet(input).state().connected()
+                        && fixtureAssociated(helper, input) && fixtureAssociated(helper, output)
                         && facet(output).networkIdentity() == facet(input).networkIdentity()
                         && input.getSpeed() == 64F && output.getSpeed() == 64F
                         && reserveMotor.hasSource() && reserveMotor.getSpeed() == 64F,
@@ -340,8 +357,8 @@ public final class StressInterfaceGameTest {
                     oldLoad.set((double) oldNetwork.get().getActualStressOf(input));
                     oldCapacity.set((double) oldNetwork.get().getActualCapacityOf(output));
                     // Save every member before cleanup, as a full network save does before unload.
-                    saved.set(List.of(saveNative(helper, MOTOR), saveNative(helper, SHAFT),
-                            saveNative(helper, PORT), saveNative(helper, outputPos), saveNative(helper, reserveMotorPos)));
+                    saved.set(List.of(saveNative(helper, motorPos), saveNative(helper, shaftPos),
+                            saveNative(helper, inputPos), saveNative(helper, outputPos), saveNative(helper, reserveMotorPos)));
                     for (SavedKinetic member : List.of(saved.get().get(0), saved.get().get(1), saved.get().get(4))) {
                         CompoundTag networkTag = member.tag().getCompound("Network");
                         close(helper, networkTag.getFloat("Stress"), baselineStress.get() + oldLoad.get(),
@@ -352,9 +369,9 @@ public final class StressInterfaceGameTest {
                     session.releaseAll();
                     helper.setBlock(reserveMotorPos, Blocks.AIR);
                     helper.setBlock(outputPos, Blocks.AIR);
-                    helper.setBlock(PORT, Blocks.AIR);
-                    helper.setBlock(SHAFT, Blocks.AIR);
-                    helper.setBlock(MOTOR, Blocks.AIR);
+                    helper.setBlock(inputPos, Blocks.AIR);
+                    helper.setBlock(shaftPos, Blocks.AIR);
+                    helper.setBlock(motorPos, Blocks.AIR);
                     helper.assertTrue(oldNetwork.get().members.isEmpty(), "Removing all saved members empties the old native network");
 
                     CreativeMotorBlockEntity source = (CreativeMotorBlockEntity) restoreNative(helper, saved.get().get(0));
@@ -433,7 +450,7 @@ public final class StressInterfaceGameTest {
                     cleanReattachment(helper, restoredInput.get(), restoredOutput.get(), baselineStress.get(), 64D);
                     helper.assertTrue(!restoredMotor.get().isOverStressed() && !restoredInput.get().isOverStressed()
                                     && !restoredOutput.get().isOverStressed()
-                                    && ((KineticBlockEntity) helper.getBlockEntity(SHAFT)).getSpeed() == 64F,
+                                    && ((KineticBlockEntity) helper.getBlockEntity(shaftPos)).getSpeed() == 64F,
                             "A smaller real source budget still rotates: no unloaded ghost load or ghost source masks overload");
                 })
                 .thenExecute(() -> {
@@ -445,14 +462,14 @@ public final class StressInterfaceGameTest {
                             "Native unload callbacks release newly acquired load after a full-network restore");
                     close(helper, restoredNetwork.get().calculateCapacity(), 64D,
                             "Native unload callbacks release newly acquired output capacity");
-                    helper.setBlock(PORT, Blocks.AIR);
+                    helper.setBlock(inputPos, Blocks.AIR);
                     helper.setBlock(outputPos, Blocks.AIR);
                     session.releaseAll();
                 }).thenWaitUntil(() -> {
                     close(helper, restoredNetwork.get().calculateStress(), baselineStress.get(), "Removal leaves no ghost SU");
                     close(helper, restoredNetwork.get().calculateCapacity(), 64D, "Removal leaves no ghost capacity");
                     helper.assertTrue(restoredNetwork.get().members.keySet().stream()
-                                    .noneMatch(entity -> entity.getBlockPos().equals(helper.absolutePos(PORT)))
+                                    .noneMatch(entity -> entity.getBlockPos().equals(helper.absolutePos(inputPos)))
                                     && restoredNetwork.get().sources.keySet().stream()
                                     .noneMatch(entity -> entity.getBlockPos().equals(helper.absolutePos(outputPos))),
                             "Native recalculation prunes removed load/source membership");
@@ -501,13 +518,14 @@ public final class StressInterfaceGameTest {
     }
 
     private static GearRig gearRig(GameTestHelper helper, boolean rotated, List<BlockState> connectedStates) {
-        List<BlockPos> positions = List.of(new BlockPos(1, 2, 3), new BlockPos(1, 2, 2),
-                new BlockPos(1, 2, 1), new BlockPos(2, 2, 1), new BlockPos(3, 2, 1),
-                new BlockPos(3, 2, 2), new BlockPos(4, 3, 2), new BlockPos(4, 3, 3)).stream()
+        List<BlockPos> positions = List.of(new BlockPos(1, 2, 4), new BlockPos(1, 2, 3),
+                new BlockPos(1, 2, 2), new BlockPos(1, 2, 1), new BlockPos(2, 2, 1),
+                new BlockPos(2, 2, 2), new BlockPos(2, 2, 3), new BlockPos(3, 3, 3), new BlockPos(3, 3, 4)).stream()
                 .map(pos -> rotated ? new BlockPos(4 - pos.getZ(), pos.getY(), pos.getX()) : pos).toList();
         List<BlockState> states = connectedStates == null ? List.of(
                 AllBlocks.CREATIVE_MOTOR.get().defaultBlockState().setValue(CreativeMotorBlock.FACING, Direction.NORTH),
                 axis(AllBlocks.SHAFT.get(), Direction.Axis.Z), portState(StressInterfaceKind.INPUT),
+                axis(AllBlocks.ENCASED_CHAIN_DRIVE.get(), Direction.Axis.Z),
                 axis(AllBlocks.ENCASED_CHAIN_DRIVE.get(), Direction.Axis.Z), portState(StressInterfaceKind.OUTPUT),
                 axis(AllBlocks.LARGE_COGWHEEL.get(), Direction.Axis.Z), axis(AllBlocks.COGWHEEL.get(), Direction.Axis.Z),
                 portState(StressInterfaceKind.INPUT)) : connectedStates;
@@ -518,10 +536,9 @@ public final class StressInterfaceGameTest {
         // NORTH reverses the scroll sign; rotation changes the axis/sign but preserves absolute RPM.
         motor.getBehaviour(ScrollValueBehaviour.TYPE).setValue(-16);
         StressInputBlockEntity slow = helper.getBlockEntity(positions.get(2));
-        StressOutputBlockEntity output = helper.getBlockEntity(positions.get(4));
-        StressInputBlockEntity fast = helper.getBlockEntity(positions.get(7));
-        bind(helper, slow, output);
-        fast.onMachineFormed(helper.absolutePos(BlockPos.ZERO));
+        StressOutputBlockEntity output = helper.getBlockEntity(positions.get(5));
+        StressInputBlockEntity fast = helper.getBlockEntity(positions.get(8));
+        bind(helper, slow, output, fast);
         return new GearRig(positions, motor, helper.getBlockEntity(positions.get(1)), slow,
                 helper.getBlockEntity(positions.get(3)), output, fast);
     }
@@ -565,15 +582,39 @@ public final class StressInterfaceGameTest {
         return host.capabilitySnapshot().facets(StressFacet.class).getFirst();
     }
 
-    private static void bind(GameTestHelper helper, StressInputBlockEntity input, StressOutputBlockEntity output) {
-        input.onMachineFormed(helper.absolutePos(BlockPos.ZERO));
-        output.onMachineFormed(helper.absolutePos(BlockPos.ZERO));
+    private static void bind(GameTestHelper helper, KineticBlockEntity... ports) {
+        ResourceLocation baseId = MMCR.id("test_cube");
+        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(baseId).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        for (KineticBlockEntity port : ports) {
+            pattern.put(port.getBlockPos().subtract(origin), new BlockPredicate.OfBlock(port.getBlockState().getBlock()));
+        }
+        ResourceLocation id = MMCR.id("create_stress_fixture_" + ports[0].getBlockPos().subtract(origin).asLong()
+                + "_" + ports.length + "_" + ports[0].getBlockState().getValue(RotatedPillarKineticBlock.AXIS).getSerializedName());
+        DynamicMachine machine = new DynamicMachine(id, "machine.mmcr_test.create_stress_fixture", new BlockArray(pattern),
+                MachineRegistry.getMachine(baseId).controller());
+        if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.requestImmediateStructureCheck();
     }
 
     private static void apply(GameTestHelper helper, CapabilityHost port, StressSession session,
                               int index, double baseStress, double rpm) {
+        KineticBlockEntity entity = (KineticBlockEntity) port;
+        helper.assertTrue(fixtureAssociated(helper, entity), "Standalone session commits require a formed, discovered port association");
+        ((MachinePort) port).onMachineFormed(helper.absolutePos(BlockPos.ZERO));
         var result = facet(port).apply(session, index, baseStress, rpm);
         helper.assertTrue(result.success(), "Native contribution commit succeeds: " + result.status());
+    }
+
+    private static boolean fixtureAssociated(GameTestHelper helper, KineticBlockEntity port) {
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
+        return controller.structureSnapshot().formed()
+                && controller.runtimeSnapshot().linkedPortPositions().contains(port.getBlockPos());
     }
 
     private static void close(GameTestHelper helper, double actual, double expected, String message) {

@@ -38,6 +38,7 @@ import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.StringSplitter;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -105,6 +106,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IDrawable icon;
     private final IDrawable slotBackground;
     private final IDrawable sourceSlotBackground;
+    private final IDrawable stressIcon;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
@@ -116,6 +118,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         this.sourceSlotBackground = guiHelper.drawableBuilder(
                 MMCR.id("textures/gui/ars_nouveau/jei_source_slot.png"), 0, 0, 18, 18)
                 .setTextureSize(18, 18).build();
+        this.stressIcon = guiHelper.createDrawableItemLike(
+                BuiltInRegistries.ITEM.get(ResourceLocation.parse("create:cogwheel")));
     }
 
     @Override
@@ -188,6 +192,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
+        for (MachineRecipeDisplay.StressDisplay stress : recipe.stressInputs()) {
+            drawStressLine(stress.label(true), guiGraphics, textX, (int) (y / TEXT_SCALE));
+            y += TEXT_LINE_SPACING;
+        }
+        for (MachineRecipeDisplay.StressDisplay stress : recipe.stressOutputs()) {
+            drawStressLine(stress.label(false), guiGraphics, textX, (int) (y / TEXT_SCALE));
+            y += TEXT_LINE_SPACING;
+        }
         if (recipe.minimumTemperature().isPresent()) {
             guiGraphics.drawString(Minecraft.getInstance().font,
                     MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
@@ -233,6 +245,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         drawRecipeInformation(recipe, layout, guiGraphics);
     }
 
+    private void drawStressLine(Component label, GuiGraphics guiGraphics, int x, int y) {
+        var font = Minecraft.getInstance().font;
+        float iconScale = (float) font.lineHeight / stressIcon.getHeight();
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0F);
+        guiGraphics.pose().scale(iconScale, iconScale, 1F);
+        stressIcon.draw(guiGraphics, 0, 0);
+        guiGraphics.pose().popPose();
+        guiGraphics.drawString(font, label, x + (int) (stressIcon.getWidth() * iconScale) + 2, y, 0xFF404040, false);
+    }
+
     private void drawRecipeInformation(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
                                        GuiGraphics guiGraphics) {
         List<Component> information = RecipeInformationRegistry.componentsFor(
@@ -265,6 +288,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         } else if (isMouseOver(layout.outputs().overflowSlot(), mouseX, mouseY)) {
             appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
         } else {
+            if (appendStressTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
             sourceTooltip(layout, mouseX, mouseY)
                     .or(() -> smartInterfaceTooltip(recipe, layout, mouseX, mouseY)).ifPresent(tooltip::add);
         }
@@ -900,6 +924,27 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {
         return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
+    }
+
+    private boolean appendStressTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                                        double mouseX, double mouseY) {
+        if (mouseX < layout.durationTextX() || mouseX >= getWidth() - layout.durationTextX()) return false;
+        int y = layout.stressTextY(recipe);
+        for (MachineRecipeDisplay.StressDisplay stress : recipe.stressInputs()) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) {
+                tooltip.addAll(stress.tooltip(true));
+                return true;
+            }
+            y += TEXT_LINE_SPACING;
+        }
+        for (MachineRecipeDisplay.StressDisplay stress : recipe.stressOutputs()) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) {
+                tooltip.addAll(stress.tooltip(false));
+                return true;
+            }
+            y += TEXT_LINE_SPACING;
+        }
+        return false;
     }
 
     private static Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,

@@ -13,8 +13,8 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.simibubi.create.content.kinetics.chainDrive.ChainDriveBlock;
-import com.simibubi.create.content.kinetics.chainDrive.ChainDriveGenerator;
+import com.simibubi.create.content.kinetics.simpleRelays.AbstractShaftBlock;
+import net.minecraft.core.Direction;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.data.PackOutput;
@@ -37,10 +37,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.tags.TagBuilder;
 import net.minecraft.tags.TagEntry;
 import net.neoforged.neoforge.client.model.generators.BlockStateProvider;
-import net.neoforged.neoforge.client.model.generators.ModelFile;
 import net.neoforged.neoforge.common.conditions.ICondition;
 import net.neoforged.neoforge.common.conditions.ModLoadedCondition;
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
@@ -71,8 +71,7 @@ class CreateStressDataGenTest {
     }
 
     @Test
-    void everyNativeAxisConnectionAndPartUsesCreateModelsAndRotations() {
-        var nativeRules = new NativeChainRules();
+    void everyShaftAxisUsesSingleCasingWithMatchingRotation() {
         for (var kind : StressInterfaceKind.values()) {
             var block = registeredBlock(kind);
             ExistingFileHelper files = new ExistingFileHelper(List.of(), Set.of(), true, null, null) {
@@ -92,13 +91,13 @@ class CreateStressDataGenTest {
                 JsonObject model = variants.entrySet().stream()
                         .filter(entry -> matches(entry.getKey(), state))
                         .findFirst().orElseThrow().getValue().getAsJsonObject();
-                assertEquals("create:block/encased_chain_drive/" + nativeRules.suffix(state), model.get("model").getAsString());
-                assertEquals(nativeRules.x(state), model.has("x") ? model.get("x").getAsInt() : 0);
-                assertEquals(nativeRules.y(state), model.has("y") ? model.get("y").getAsInt() : 0);
+                assertEquals("create:block/encased_chain_drive/single", model.get("model").getAsString());
+                Direction.Axis axis = state.getValue(BlockStateProperties.AXIS);
+                assertEquals(axis == Direction.Axis.Y ? 90 : 0, model.has("x") ? model.get("x").getAsInt() : 0);
+                assertEquals(axis == Direction.Axis.X ? 90 : 0, model.has("y") ? model.get("y").getAsInt() : 0);
             }
             assertEquals("create:block/encased_chain_drive/item",
                     provider.itemModels().getBuilder(kind.id()).toJson().get("parent").getAsString());
-            assertFalse(RuntimeMachineModelRegistry.isDynamicBlock(block));
         }
     }
 
@@ -154,10 +153,12 @@ class CreateStressDataGenTest {
             }
             for (StressInterfaceKind kind : StressInterfaceKind.values()) {
                 Block block = registeredBlock(kind, MMCR.id(kind.id()));
-                assertInstanceOf(ChainDriveBlock.class, block);
+                assertInstanceOf(AbstractShaftBlock.class, block);
                 previousBlockItems.put(block, Item.BY_BLOCK.get(block));
                 Item.BY_BLOCK.put(block, registeredBlockItem(block, MMCR.id(kind.id())));
                 ModBlocks.BLOCKS.put(kind.id(), DeferredHolder.create(Registries.BLOCK, MMCR.id(kind.id())));
+                RuntimeMachineModelRegistry.invalidate();
+                assertTrue(RuntimeMachineModelRegistry.isDynamicBlock(block));
             }
             HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.of(
                     BuiltInRegistries.BLOCK.asLookup(), BuiltInRegistries.ITEM.asLookup()));
@@ -202,6 +203,7 @@ class CreateStressDataGenTest {
         } finally {
             ModBlocks.BLOCKS.clear();
             ModBlocks.BLOCKS.putAll(previousBlocks);
+            RuntimeMachineModelRegistry.invalidate();
             previousBlockItems.forEach((block, item) -> {
                 if (item == null) Item.BY_BLOCK.remove(block);
                 else Item.BY_BLOCK.put(block, item);
@@ -234,10 +236,9 @@ class CreateStressDataGenTest {
     private static boolean matches(String variant, BlockState state) {
         for (String assignment : variant.split(",")) {
             String[] pair = assignment.split("=");
-            if (pair[0].equals(ChainDriveBlock.AXIS.getName()) && !pair[1].equals(state.getValue(ChainDriveBlock.AXIS).getSerializedName())) return false;
-            if (pair[0].equals(ChainDriveBlock.PART.getName()) && !pair[1].equals(state.getValue(ChainDriveBlock.PART).getSerializedName())) return false;
-            if (pair[0].equals(ChainDriveBlock.CONNECTED_ALONG_FIRST_COORDINATE.getName())
-                    && !pair[1].equals(state.getValue(ChainDriveBlock.CONNECTED_ALONG_FIRST_COORDINATE).toString())) return false;
+            if (pair[0].equals(BlockStateProperties.AXIS.getName()) && !pair[1].equals(state.getValue(BlockStateProperties.AXIS).getSerializedName())) return false;
+            if (pair[0].equals(BlockStateProperties.WATERLOGGED.getName())
+                    && !pair[1].equals(state.getValue(BlockStateProperties.WATERLOGGED).toString())) return false;
         }
         return true;
     }
@@ -280,18 +281,6 @@ class CreateStressDataGenTest {
         assertEquals(1, matches.size());
         assertTrue(matches.getFirst().isRequired());
         assertFalse(matches.getFirst().isTag());
-    }
-
-    /** Exposes the native generator as an independent model/rotation oracle.
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class NativeChainRules extends ChainDriveGenerator {
-        NativeChainRules() {
-            super((state, suffix) -> new ModelFile.UncheckedModelFile("create:block/encased_chain_drive/" + suffix));
-        }
-        int x(BlockState state) { return getXRotation(state); }
-        int y(BlockState state) { return getYRotation(state); }
-        String suffix(BlockState state) { return getModelSuffix(state); }
     }
 
     /** Captures recipes from the real RecipeOutput condition wrapper.
