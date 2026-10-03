@@ -172,6 +172,44 @@ class RecipeThreadTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void worker_free_ticks_wait_for_level_post_tick_and_ignore_duplicate_tickers(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        MachineControllerBlockEntity controller = controllerWithPorts();
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(command -> {
+            throw new AssertionError("worker-free ticks must not dispatch a worker");
+        }));
+        try {
+            MachineRecipeThread thread = new MachineRecipeThread(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("worker_free_tick_timing"), MMCR.id("test_cube"),
+                    20, List.of(), List.of());
+            assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
+
+            for (int tick = 1; tick <= 2; tick++) {
+                for (int duplicate = 0; duplicate < 8; duplicate++) thread.tick();
+                assertThat(thread.runtime().tickCount()).isEqualTo(tick - 1);
+                assertThat(thread.tickPendingForTesting()).isTrue();
+
+                SharedIoEvents.completeLevelTick(level);
+                assertThat(thread.runtime().tickCount()).isEqualTo(tick);
+                assertThat(thread.tickPendingForTesting()).isFalse();
+
+                for (int duplicate = 0; duplicate < 8; duplicate++) thread.tick();
+                assertThat(thread.tickPendingForTesting()).isFalse();
+                SharedIoEvents.completeLevelTick(level);
+                assertThat(thread.runtime().tickCount()).isEqualTo(tick);
+                RuntimeTestFixtures.advanceGameTime(level);
+            }
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
     @Test
     void energy_tick_rechecks_supply_at_arbitration_and_recovers_without_duplicate_consumption() throws Exception {
         EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));

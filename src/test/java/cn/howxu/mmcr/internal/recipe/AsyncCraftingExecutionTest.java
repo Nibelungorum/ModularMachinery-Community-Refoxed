@@ -181,7 +181,7 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void empty_per_tick_workset_completes_without_shared_io_resolution() {
+    void empty_per_tick_workset_waits_for_level_tick_submission() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
@@ -200,8 +200,13 @@ class AsyncCraftingExecutionTest {
 
         thread.tick();
 
-        assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(1);
+        assertThat(thread.runtime().activeRecipe().getTick()).isZero();
         assertThat(SharedIoCoordinator.get(level).resolve(level)).isZero();
+        assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isTrue();
+
+        completeTick(controller);
+
+        assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(1);
         assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isFalse();
     }
 
@@ -246,6 +251,9 @@ class AsyncCraftingExecutionTest {
         RuntimeTestFixtures.advanceGameTime(level);
         int tickBeforeRetry = thread.runtime().activeRecipe().getTick();
         thread.tick(controller.currentRuntimeSnapshot());
+        assertThat(thread.tickPendingForTesting()).isTrue();
+        assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(tickBeforeRetry);
+        completeTick(controller);
         assertThat(thread.tickPendingForTesting()).isFalse();
         assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(tickBeforeRetry + 1);
     }

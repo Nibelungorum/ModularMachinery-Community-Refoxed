@@ -17,6 +17,7 @@ import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -246,6 +247,42 @@ class MachineWorkModeIntegrationTest {
         assertThat(phases.indexOf("recipe")).isLessThan(phases.indexOf("post"));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void cancelled_tick_does_not_repeat_preparation_until_world_time_advances(MachineWorkMode mode) {
+        AtomicInteger callbacks = new AtomicInteger();
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .recipeTick(context -> callbacks.incrementAndGet()).build()));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        ConfigTestSupport.setMachineWorkMode(mode);
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("cancelled_tick_preparation"), machineId, 20,
+                List.of(), List.of());
+        assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
+
+        thread.tick();
+        assertThat(callbacks).hasValue(1);
+        thread.cancelAsyncState();
+        thread.tick();
+        assertThat(callbacks).hasValue(1);
+        completeAsyncLevelTick(level);
+        assertThat(thread.runtime().tickCount()).isZero();
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        thread.tick();
+        completeAsyncLevelTick(level);
+        assertThat(callbacks).hasValue(2);
+        assertThat(thread.runtime().tickCount()).isEqualTo(1);
+        thread.tick();
+        assertThat(callbacks).hasValue(2);
+        completeAsyncLevelTick(level);
+        assertThat(thread.runtime().tickCount()).isEqualTo(1);
+    }
+
     @Test
     void reset_machine_cancels_an_uncommitted_async_lane() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
@@ -332,10 +369,11 @@ class MachineWorkModeIntegrationTest {
             assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
         } else {
             SharedIoCoordinator.get(level).resolve(level);
-            assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
-            assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isFalse();
+            assertThat(controller.runtimeSnapshot().crafting().tick()).isZero();
+            assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
         }
         completeAsyncLevelTick(level);
+        assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
 
         for (int tick = 0; tick < 5 && !phases.contains("finish"); tick++) {
             RuntimeTestFixtures.advanceGameTime(level);
