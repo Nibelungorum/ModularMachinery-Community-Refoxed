@@ -85,6 +85,8 @@ public final class CraftingRuntime {
     private final MachineControllerBlockEntity controller;
     private final ComponentRuntime components;
     private final StressSession stressSession = new StressSession();
+    private boolean stressHandoffOpen;
+    private @Nullable StressHandoff stressHandoff;
     private @Nullable ControllerScreenText screenText;
     private @Nullable ActiveMachineRecipe activeRecipe;
     private @Nullable CraftingPlan startPlan;
@@ -373,6 +375,7 @@ public final class CraftingRuntime {
             return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
         }
         if (active() || patternStartReserved) return status;
+        expireStressHandoff();
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         if (!recipeBelongsToMachine(recipe, runtime)) {
@@ -405,6 +408,11 @@ public final class CraftingRuntime {
         if (prefetches == null) return fail(missingInputStatus());
         PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime,
                 catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches);
+        if (stressHandoff != null && (stressHandoff.recipe() != recipe
+                || stressHandoff.parallelism() != plan.parallelism()
+                || !stressHandoff.requirements().equals(stressRequirements(effective.requirements())))) {
+            releaseStressContributions();
+        }
         boolean committed = false;
         try {
             ExecutionStatus commitFailure = commitPreparedStart(prepared);
@@ -430,6 +438,7 @@ public final class CraftingRuntime {
         captureVersions(runtime);
         status = CraftingStatus.working();
         failure = null;
+        stressHandoff = null;
         return status;
     }
 
@@ -475,7 +484,7 @@ public final class CraftingRuntime {
         if (!commitStressOutputs(runtime)) return status;
         if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, machineContext, recipeTickContext)) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
-            if (finishPending()) releaseStressContributions();
+            if (finishPending()) releaseStressOnFinishPending();
             return status;
         }
 
@@ -483,16 +492,16 @@ public final class CraftingRuntime {
         if (activeRecipe.needsFinishCommit()) {
             if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) {
                 if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
-                if (finishPending()) releaseStressContributions();
+                if (finishPending()) releaseStressOnFinishPending();
                 return status;
             }
             activeRecipe.beginFinishCommit();
-            releaseStressContributions();
+            releaseStressOnFinishPending();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (activeRecipe.isFinishPending()) releaseStressContributions();
+        if (activeRecipe.isFinishPending()) releaseStressOnFinishPending();
         if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
         status = CraftingStatus.working();
         failure = null;
@@ -607,7 +616,7 @@ public final class CraftingRuntime {
         if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS,
                 preparation.machineContext(), preparation.tickContext())) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
-            if (finishPending()) releaseStressContributions();
+            if (finishPending()) releaseStressOnFinishPending();
             asyncTickPreparation = null;
             return false;
         }
@@ -625,16 +634,16 @@ public final class CraftingRuntime {
             if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
                     preparation.machineContext(), preparation.tickContext())) {
                 if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
-                if (finishPending()) releaseStressContributions();
+                if (finishPending()) releaseStressOnFinishPending();
                 return status;
             }
             activeRecipe.beginFinishCommit();
-            releaseStressContributions();
+            releaseStressOnFinishPending();
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (activeRecipe.isFinishPending()) releaseStressContributions();
+        if (activeRecipe.isFinishPending()) releaseStressOnFinishPending();
         if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
                 preparation.machineContext(), preparation.tickContext())) return status;
         status = CraftingStatus.working();
@@ -669,7 +678,7 @@ public final class CraftingRuntime {
         if (!active()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (!activeRecipe.isFinishPending()) return status;
-        releaseStressContributions();
+        releaseStressOnFinishPending();
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
         RecipeFinishContext finishContext = preparedAsyncFinishContext;
@@ -685,6 +694,7 @@ public final class CraftingRuntime {
                     FailurePhase.FINISH, Map.of()));
         }
         if (finishContext.outputsDiscarded()) {
+            releaseStressContributions();
             activeRecipe.applyTickGrant(true, true, currentGameTime());
             releaseActivePrefetches();
             activeRecipe = null;
@@ -726,6 +736,10 @@ public final class CraftingRuntime {
             return finishBlocked(finishPlan.failure());
         }
         activeRecipe.applyTickGrant(true, true, currentGameTime());
+        if (stressHandoff != null) {
+            stressHandoff = new StressHandoff(stressHandoff.recipe(), stressHandoff.parallelism(),
+                    stressHandoff.requirements(), currentGameTime());
+        }
         releaseActivePrefetches();
         activeRecipe = null;
         startPlan = null;
@@ -742,7 +756,7 @@ public final class CraftingRuntime {
 
     /** Executes the finish behavior callback before a shared-IO output transaction is requested. */
     public boolean prepareAsyncFinish() {
-        if (finishPending()) releaseStressContributions();
+        if (finishPending()) releaseStressOnFinishPending();
         if (!active() || !versionsCurrent() || !activeRecipe.isFinishPending()
                 || !activeRecipe.shouldRetryFinish(currentGameTime())) return false;
         preparedAsyncFinishContext = prepareFinishContext();
@@ -812,8 +826,46 @@ public final class CraftingRuntime {
 
     /** Releases this lane's contributions, including facets no longer in the component snapshot. */
     public void releaseStressContributions() {
+        stressHandoffOpen = false;
+        stressHandoff = null;
         stressSession.releaseAll();
     }
+
+    /** The recipe thread owns the finish/restart decision, including same-tick shared-IO starts. */
+    public void beginStressHandoff() {
+        expireStressHandoff();
+        stressHandoffOpen = true;
+    }
+
+    public void completeStressHandoff(boolean restartPending) {
+        stressHandoffOpen = false;
+        if (!active() && !restartPending) releaseStressContributions();
+    }
+
+    /** Bound the final grant to the async finish tick and its same-tick queued restart. */
+    public void expireStressHandoff() {
+        if (stressHandoff == null || stressHandoff.gameTime() == currentGameTime()) return;
+        // Full async execution submits its finish transaction on the following level tick.
+        if (active() && finishPending() && currentGameTime() - stressHandoff.gameTime() == 1) return;
+        releaseStressContributions();
+    }
+
+    private void releaseStressOnFinishPending() {
+        if (!stressHandoffOpen) {
+            releaseStressContributions();
+        } else if (stressHandoff == null) {
+            stressHandoff = new StressHandoff(activeRecipe.getRecipe(), activeRecipe.getParallelism(),
+                    stressRequirements(effectiveRequirements()), currentGameTime());
+        }
+    }
+
+    private static List<MachineRequirement> stressRequirements(List<MachineRequirement> requirements) {
+        return requirements.stream().filter(requirement -> StressRequirement.TYPE.equals(requirement.type())).toList();
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record StressHandoff(MachineRecipe recipe, long parallelism,
+                                List<MachineRequirement> requirements, int gameTime) { }
 
     public void resume() {
         if (active()) status = CraftingStatus.working();

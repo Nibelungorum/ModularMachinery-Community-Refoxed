@@ -52,6 +52,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -78,6 +79,7 @@ public final class StressInterfaceGameTest {
                 test("create_stress_propagation_sessions", 300, StressInterfaceGameTest::propagationAndSessions),
                 test("create_stress_controller_recovery", 600, StressInterfaceGameTest::controllerRecovery),
                 test("create_stress_output_takeover", 400, StressInterfaceGameTest::outputTakeover),
+                test("create_stress_continuous_restart", 300, StressInterfaceGameTest::continuousRestart),
                 test("create_stress_persistence_removal", 300, StressInterfaceGameTest::persistenceAndRemoval));
     }
 
@@ -305,6 +307,42 @@ public final class StressInterfaceGameTest {
                 .thenWaitUntil(() -> helper.assertTrue(shaft.getSpeed() == 0F && fan.getSpeed() == 0F
                                 && output.getGeneratedSpeed() == 0F,
                         "Removing the foreign source cannot resurrect a completed recipe generator"))
+                .thenSucceed();
+    }
+
+    private static void continuousRestart(GameTestHelper helper) {
+        helper.setBlock(PORT, portState(StressInterfaceKind.OUTPUT));
+        helper.setBlock(SHAFT, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
+        helper.setBlock(MOTOR, AllBlocks.ENCASED_FAN.get().defaultBlockState()
+                .setValue(DirectionalBlock.FACING, Direction.SOUTH));
+        ControllerRig machine = controller(helper, "create_stress_continuous_machine", StressInterfaceKind.OUTPUT);
+        ResourceLocation recipeId = MMCR.id("create_stress_continuous_recipe");
+        if (!RecipeRegistry.containsStatic(recipeId)) {
+            RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId)
+                    .recipePool(machine.id()).duration(6).inputItem(Items.COAL, 1).outputStress(8D, -16D)
+                    .outputItem(new ItemStack(Items.DIAMOND)).build(),
+                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+        }
+        StressOutputBlockEntity output = helper.getBlockEntity(PORT);
+        KineticBlockEntity shaft = helper.getBlockEntity(SHAFT);
+        KineticBlockEntity fan = helper.getBlockEntity(MOTOR);
+        AtomicReference<Object> network = new AtomicReference<>();
+        AtomicBoolean interrupted = new AtomicBoolean();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(machine.controller().structureSnapshot().formed(),
+                        "Continuous generator forms before receiving its four input batches"))
+                .thenExecute(() -> machine.items().nativeItemHandler().setStackInSlot(0, new ItemStack(Items.COAL, 4)))
+                .thenWaitUntil(() -> helper.assertTrue(output.getGeneratedSpeed() == -16F && fan.getSpeed() == -16F,
+                        "First funded tick activates the native generator"))
+                .thenExecute(() -> network.set(facet(output).networkIdentity()))
+                .thenWaitUntil(() -> {
+                    if (output.getGeneratedSpeed() != -16F || shaft.getSpeed() != -16F || fan.getSpeed() != -16F
+                            || facet(output).networkIdentity() != network.get()) interrupted.set(true);
+                    helper.assertTrue(products(machine) >= 3, "Three actual recipe completions exercise repeated handoffs");
+                    helper.assertTrue(!interrupted.get(),
+                            "Last-recipe boundaries never interrupted the real native source, shaft or fan");
+                }).thenWaitUntil(() -> helper.assertTrue(products(machine) == 4 && output.getGeneratedSpeed() == 0F
+                                && shaft.getSpeed() == 0F && fan.getSpeed() == 0F,
+                        "Exhausting the last input batch stops generation and native dependants"))
                 .thenSucceed();
     }
 

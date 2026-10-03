@@ -26,6 +26,8 @@ import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.api.compat.create.StressFacet;
 import cn.howxu.mmcr.api.compat.create.StressState;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
@@ -38,11 +40,17 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.compat.create.CreateBridgeBootstrap;
 import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.create.StressSession;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -50,18 +58,21 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.Codec;
+import com.electronwill.nightconfig.core.CommentedConfig;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,6 +103,11 @@ class CraftingRuntimeStressTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @BeforeEach
@@ -121,6 +137,126 @@ class CraftingRuntimeStressTest {
         } finally {
             if (currentServerField != null) currentServerField.set(null, previousServer);
         }
+    }
+
+    @Test
+    void lastRecipeRestartDoesNotClearThePreviousTicksGeneration() {
+        StressCapability input = new StressCapability(IOType.INPUT);
+        StressCapability output = new StressCapability(IOType.OUTPUT);
+        MachineControllerBlockEntity controller = asyncController(List.of(input, output));
+        MachineRecipe recipe = recipe(2, List.of(stressInput(), stressOutput()));
+        RecipeRegistry.registerStatic(recipe);
+        controller.setFormed(true);
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.currentRuntimeSnapshot().structure().version())).isTrue();
+        completeAsyncTick(controller);
+        thread.tick();
+        completeAsyncTick(controller);
+        StressSession owner = output.onlyOwner();
+        for (int tick = 0; tick < 6; tick++) {
+            RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+            thread.tick();
+            completeAsyncTick(controller);
+            assertThat(thread.runtime().active()).as("tick=%s failure=%s", tick, thread.runtime().failure()).isTrue();
+            assertThat(output.onlyOwner()).isSameAs(owner);
+            assertThat(output.baseStress()).isEqualTo(16D);
+            assertThat(output.releases).isZero();
+        }
+        input.actualRpm = 0;
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        thread.tick();
+        completeAsyncTick(controller);
+        assertThat(output.baseStress()).isZero();
+    }
+
+    @Test
+    void exhaustedLastRecipeReleasesGenerationAtTheFinishDecision() {
+        ItemInputBusBlockEntity items = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        items.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 1);
+        StressCapability output = new StressCapability(IOType.OUTPUT);
+        MachineControllerBlockEntity controller = asyncController(List.of(output), items);
+        MachineRecipe recipe = recipe(2, List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                stressOutput()));
+        RecipeRegistry.registerStatic(recipe);
+        controller.setFormed(true);
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.currentRuntimeSnapshot().structure().version())).isTrue();
+        completeAsyncTick(controller);
+        thread.tick();
+        completeAsyncTick(controller);
+        assertThat(output.baseStress()).isEqualTo(16D);
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        thread.tick();
+        completeAsyncTick(controller);
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        thread.tick();
+        completeAsyncTick(controller);
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(output.baseStress()).isZero();
+    }
+
+    @Test
+    void sameTickAsyncHandoffKeepsGenerationButPendingHandoffExpires() {
+        for (boolean restart : List.of(false, true)) {
+            StressCapability output = new StressCapability(IOType.OUTPUT);
+            MachineControllerBlockEntity controller = controller(output);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            MachineRecipe recipe = recipe(1, List.of(stressOutput()));
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+            runtime.beginStressHandoff();
+            assertThat(runTick(runtime, controller, true)).isTrue();
+            assertThat(runtime.prepareAsyncFinish()).isTrue();
+            runtime.finish();
+            runtime.completeStressHandoff(true);
+            assertThat(output.baseStress()).isEqualTo(16D);
+            if (restart) {
+                assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+                assertThat(output.releases).isZero();
+            }
+            LevelStub.setGameTime(controller.getLevel(), controller.getLevel().getGameTime() + 1);
+            runtime.expireStressHandoff();
+            assertThat(output.baseStress()).isEqualTo(restart ? 16D : 0D);
+            runtime.invalidate();
+        }
+    }
+
+    @Test
+    void stalledAsyncFinishCannotRetainGenerationIndefinitely() {
+        StressCapability output = new StressCapability(IOType.OUTPUT);
+        MachineControllerBlockEntity controller = controller(output);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe(1, List.of(stressOutput())), 1).isCrafting()).isTrue();
+        runtime.beginStressHandoff();
+        assertThat(runTick(runtime, controller, true)).isTrue();
+        assertThat(runtime.finishPending()).isTrue();
+        LevelStub.setGameTime(controller.getLevel(), controller.getLevel().getGameTime() + 1);
+        runtime.expireStressHandoff();
+        assertThat(output.baseStress()).isEqualTo(16D);
+        LevelStub.setGameTime(controller.getLevel(), controller.getLevel().getGameTime() + 1);
+        runtime.expireStressHandoff();
+        assertThat(output.baseStress()).isZero();
+        assertThat(runtime.finishPending()).isTrue();
+    }
+
+    @Test
+    void changedStressRequirementsCannotInheritPreviousGeneration() {
+        StressCapability output = new StressCapability(IOType.OUTPUT);
+        MachineControllerBlockEntity controller = controller(output);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe(1, List.of(stressOutput())), 1).isCrafting()).isTrue();
+        runtime.beginStressHandoff();
+        runtime.tick();
+        runtime.finish();
+        runtime.completeStressHandoff(true);
+        assertThat(output.baseStress()).isEqualTo(16D);
+        assertThat(runtime.start(recipe(20, List.of(StressRequirement.output(4, -32, List.of()))), 1)
+                .isCrafting()).isTrue();
+        assertThat(output.baseStress()).isZero();
+        runtime.tick();
+        assertThat(output.baseStress()).isEqualTo(4D);
     }
 
     @Test
@@ -728,6 +864,35 @@ class CraftingRuntimeStressTest {
         return controller;
     }
 
+    private static MachineControllerBlockEntity asyncController(List<MachineCapability> capabilities,
+                                                                IOPortBlockEntity... ports) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructureWithComponents(controller,
+                new DynamicMachine(MMCR.id("test_cube"), "async stress", new BlockArray(Map.of())), ports);
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        for (IOPortBlockEntity port : ports) {
+            components.add(new ProcessingComponent(port.provideComponent(), port,
+                    port.getBlockPos(), port.getBlockPos(), (String) null));
+        }
+        controller.componentRuntime().replaceComponents(components);
+        attach(controller, capabilities.toArray(MachineCapability[]::new));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        assertThat(controller.activeWorkMode()).isEqualTo(MachineWorkMode.ASYNC);
+        return controller;
+    }
+
+    private static void completeAsyncTick(MachineControllerBlockEntity controller) {
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        sharedIo.beginLevelTick(level.getGameTime());
+        async.beginLevelTick(level.getGameTime());
+        sharedIo.resolve(level);
+        async.completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
+    }
+
     private static void attach(MachineControllerBlockEntity controller, MachineCapability... capabilities) {
         List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
         for (MachineCapability capability : capabilities) {
@@ -770,6 +935,7 @@ class CraftingRuntimeStressTest {
         private double actualRpm = 64;
         private boolean overstressed;
         private int applyCalls;
+        private int releases;
         private int failOnApply = -1;
         private Runnable onApply = () -> { };
         private FailureReason tickFailure;
@@ -809,11 +975,13 @@ class CraftingRuntimeStressTest {
             onApply.run();
             return CapabilityResult.successful();
         }
-        @Override public void release(StressSession session) { contributions.remove(session); }
+        @Override public void release(StressSession session) {
+            if (contributions.remove(session) != null) releases++;
+        }
         @Override public void release(StressSession session, int index) {
             Map<Integer, Contribution> owned = contributions.get(session);
             if (owned == null) return;
-            owned.remove(index);
+            if (owned.remove(index) != null) releases++;
             if (owned.isEmpty()) contributions.remove(session);
         }
         private double baseStress() {
