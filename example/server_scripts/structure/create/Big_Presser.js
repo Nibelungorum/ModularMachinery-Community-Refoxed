@@ -16,8 +16,8 @@ MMCREvents.server(event => {
         .set('F', api.state('create:brass_encased_shaft[axis=x]'))
         .set('G', api.state('create:mechanical_press[facing=east]'))
         .set('K', api.anyOf(
-            api.ports(),
-            api.block('create:brass_casing')
+            api.block('create:brass_casing'),
+            api.ports()
         ))
         .controller('C')
         .build()

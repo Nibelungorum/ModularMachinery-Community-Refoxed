@@ -28,8 +28,6 @@ ServerEvents.recipes(event => {
             },
             // 运行期间输出动力，实际容量 = 16 × |32| = 512 SU。
             // rpm 为生成转速，使用 -32 可以反转输出，不能为 0。
-            // 我不建议你使用应力输出，因为 MMCR 的机器具有上下文准备阶段，虽然可以lastRecipe跳过配方搜索，但是始终有1-2tick的延迟
-            // 或者你应该准备一个超长时间的每tick消耗配方
             {
                 type: 'create:stress',
                 io: 'output',
