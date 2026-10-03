@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJadeElement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.util.ReadableNumber;
 import mekanism.api.MekanismAPI;
@@ -66,8 +67,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
             if (owned instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, amount);
             else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
             else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
-            else if (owned instanceof SourceOutput) tooltip.add(Component.translatable(
-                    "gui.mmcr.source.exact", ReadableNumber.formatExact(amount)));
+            else if (owned instanceof SourceOutput) renderSource(tooltip, amount);
         }
     }
 
@@ -106,6 +106,12 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 count,
                 name);
         tooltip.append(text);
+    }
+
+    private static void renderSource(ITooltip tooltip, long amount) {
+        tooltip.add(new SourceJadeElement().translate(new Vec2(0, -1)));
+        tooltip.append(IElementHelper.get().spacer(2, 0));
+        tooltip.append(Component.translatable("gui.mmcr.source.exact", ReadableNumber.formatExact(amount)));
     }
 
     private static void renderFluid(ITooltip tooltip, MachineOutput.FluidOutput fluid, long amount) {

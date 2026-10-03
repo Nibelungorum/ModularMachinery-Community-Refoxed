@@ -3,7 +3,6 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
@@ -153,7 +152,7 @@ final class ControllerRecipeTextLines {
 
     private static ControllerTextLine.Icon icon(MachineOutput output, long amount) {
         if (output instanceof SourceOutput) {
-            return new ControllerTextLine.ItemIcon(ArsNouveauBridge.get().sourceIcon().copy());
+            return new ControllerTextLine.SourceIcon();
         }
         if (output instanceof MachineOutput.ItemOutput item) {
             ItemStack stack = item.resolvedStack();

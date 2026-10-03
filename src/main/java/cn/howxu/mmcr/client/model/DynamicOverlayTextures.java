@@ -42,7 +42,7 @@ public final class DynamicOverlayTextures {
             return heatOverlay(kind.ioType());
         }
         if (kind instanceof SourcePortKind) {
-            return ImmutableList.of(baseOverlay("ars_nouveau/source"), directionOverlay(kind.ioType()));
+            return ImmutableList.of(baseOverlay("ars_nouveau/source"), directionOverlay(kind.ioType()),tierOverlay("big"));
         }
         // vanilla
         if (kind.itemBusSize().isPresent()) {

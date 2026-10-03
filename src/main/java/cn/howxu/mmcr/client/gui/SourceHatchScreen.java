@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.ars_nouveau.SourcePortMenu;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceGuiRenderer;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.client.gui.GuiGraphics;
@@ -19,7 +20,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class SourceHatchScreen extends AbstractPortScreen<SourcePortMenu> {
-    private static final ResourceLocation TEXTURE = MMCR.id("textures/gui/guibar.png");
+    private static final ResourceLocation TEXTURE = MMCR.id("textures/gui/ars_nouveau/guibar.png");
     private static final int GUI_TEXTURE_SIZE = 256;
     private static final int SOURCE_X = 15;
     private static final int SOURCE_Y = 10;
@@ -55,9 +56,8 @@ public final class SourceHatchScreen extends AbstractPortScreen<SourcePortMenu> 
         graphics.blit(TEXTURE, leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         int filled = filledHeight(menu);
-        if (filled > 0) graphics.blit(TEXTURE, leftPos + SOURCE_X,
-                topPos + SOURCE_Y + SOURCE_H - filled, 196, SOURCE_H - filled, SOURCE_W, filled,
-                GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
+        if (filled > 0) SourceGuiRenderer.drawSource(graphics, leftPos + SOURCE_X,
+                topPos + SOURCE_Y + SOURCE_H - filled, SOURCE_W, filled);
     }
 
     static Component amountLine(SourcePortMenu menu) {

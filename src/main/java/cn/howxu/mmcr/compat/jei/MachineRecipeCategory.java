@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -101,6 +104,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final RecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable slotBackground;
+    private final IDrawable sourceSlotBackground;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
@@ -109,6 +113,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         this.recipeType = JeiMachineRecipeTypes.forPool(poolId);
         this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(iconMachineId).get());
         this.slotBackground = guiHelper.getSlotDrawable();
+        this.sourceSlotBackground = guiHelper.drawableBuilder(
+                MMCR.id("textures/gui/ars_nouveau/jei_source_slot.png"), 0, 0, 18, 18)
+                .setTextureSize(18, 18).build();
     }
 
     @Override
@@ -449,18 +456,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .toList();
     }
 
-    private static void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
+    private void addRegion(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.RegionPlan region, boolean input) {
         for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
             addEntry(builder, recipe, slot, input);
         }
     }
 
-    private static void addEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
+    private void addEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe,
             MachineRecipeLayout.SlotPlan slot, boolean input) {
-        IRecipeSlotBuilder jeiSlot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slot.x(), slot.y());
-        jeiSlot.setStandardSlotBackground();
         Optional<JeiDisplayEntry> entry = displayEntry(recipe, slot.entry(), input);
+        boolean source = entry.isPresent() && entry.get().typeId().equals(ArsSourceIds.SOURCE);
+        IRecipeSlotBuilder jeiSlot = builder.addSlot(source ? entry.get().role() : RecipeIngredientRole.RENDER_ONLY,
+                slot.x(), slot.y());
+        if (source) {
+            jeiSlot.setBackground(sourceSlotBackground, -1, -1);
+        } else {
+            jeiSlot.setStandardSlotBackground();
+        }
         if (entry.isEmpty()) return;
         if (entry.get().typeId().equals(ItemRequirement.TYPE.id())) {
             addItem(jeiSlot, recipe, slot.entry(), input);
@@ -492,6 +505,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static void addGeneric(IRecipeSlotBuilder slot, JeiDisplayEntry entry) {
         if (entry.isTextOnly()) {
             slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
+            return;
+        }
+        if (entry.ingredient() instanceof SourceJeiIngredient source) {
+            String chance = source.input() ? inputOverlayText(entry.chance(), selectedLanguage())
+                    : outputOverlayText(entry.chance());
+            setItemOverlay(slot, chance, ReadableNumber.formatForSlot(source.amount(), 0, ""));
+            slot.addIngredient(SourceJeiIngredient.TYPE, source);
+            if (!source.input()) {
+                slot.addRichTooltipCallback((view, tooltip) -> appendOutputChanceTooltip(tooltip, entry.chance()));
+            }
             return;
         }
         boolean chemical = entry.typeId().equals(MekanismRecipeTypes.CHEMICAL);
@@ -793,6 +816,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 }
             } else if (entry.kind() == MachineRecipeLayout.Kind.CHEMICAL && entry.displayEntry() != null) {
                 tooltip.add(overflowChemicalEntry(entry.displayEntry().count(), chemicalDisplayName(entry.displayEntry().ingredient())));
+            } else if (entry.displayEntry() != null && entry.displayEntry().ingredient() instanceof SourceJeiIngredient source) {
+                tooltip.add(source.tooltip());
             } else if (entry.displayEntry() != null) {
                 Object ingredient = entry.displayEntry().ingredient();
                 Component name = ingredient instanceof Component component

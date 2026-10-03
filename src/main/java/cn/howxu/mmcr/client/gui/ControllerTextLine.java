@@ -37,7 +37,7 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
         return leftIndent + (icon == null ? 0 : icon.width() + 2);
     }
 
-    public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon {
+    public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon, SourceIcon {
         int width();
     }
 
@@ -68,6 +68,14 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
             if (chemicalId == null || amount <= 0L) throw new IllegalArgumentException("Invalid chemical icon");
         }
 
+        @Override
+        public int width() {
+            return 9;
+        }
+    }
+
+    /** Native Ars Nouveau source icon. @author howxu <dev@howxu.cn> */
+    public record SourceIcon() implements Icon {
         @Override
         public int width() {
             return 9;

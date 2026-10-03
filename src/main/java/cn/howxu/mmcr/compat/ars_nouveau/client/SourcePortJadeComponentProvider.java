@@ -37,7 +37,7 @@ public enum SourcePortJadeComponentProvider implements IComponentProvider<BlockA
         CompoundTag data = accessor.getServerData();
         if (!data.contains("mmcr_source", Tag.TAG_COMPOUND)) return;
         CompoundTag source = data.getCompound("mmcr_source");
-        tooltip.add(Component.translatable("gui.mmcr.source.amount",
-                ReadableNumber.format(source.getInt("amount")), ReadableNumber.format(source.getInt("capacity"))));
+        tooltip.add(Component.translatable("jade.mmcr.source_port.amount",
+                ReadableNumber.format(source.getInt("amount"))));
     }
 }

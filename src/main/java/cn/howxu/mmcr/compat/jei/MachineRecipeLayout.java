@@ -179,6 +179,7 @@ public record MachineRecipeLayout(
     }
 
     private static int kindOrder(JeiDisplayEntry entry) {
+        if (entry.typeId().equals(ArsSourceIds.SOURCE)) return -1;
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
         if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) return 1;
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 2;
