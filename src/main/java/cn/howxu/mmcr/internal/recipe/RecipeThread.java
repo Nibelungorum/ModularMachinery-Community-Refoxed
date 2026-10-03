@@ -56,6 +56,7 @@ public abstract class RecipeThread {
     private long nextTickToken;
     private long pendingTickToken;
     private long pendingTickCatalogVersion;
+    private long lastTickRequestGameTime = Long.MIN_VALUE;
 
     private record StartSnapshot(ControllerRuntimeSnapshot runtime, long structureVersion, long catalogVersion,
                                  ResourceLocation recipePoolId, @Nullable RecipeSearchContextKey searchContextKey) {
@@ -547,6 +548,10 @@ public abstract class RecipeThread {
 
     private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                              @Nullable ControllerRuntimeSnapshot tickSnapshot) {
+        long gameTime = level.getGameTime();
+        if (lastTickRequestGameTime == gameTime) return;
+        // Cancellation and completion must not allow another preparation in the same world tick.
+        lastTickRequestGameTime = gameTime;
         long token = beginPendingTick(domain);
         ControllerRuntimeSnapshot runtimeSnapshot = tickSnapshot == null
                 ? controller.currentRuntimeSnapshot() : tickSnapshot;
@@ -560,21 +565,11 @@ public abstract class RecipeThread {
             return;
         }
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(
-                controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(),
+                controller.getBlockPos(), gameTime, controller.activeWorkMode(),
                 asyncLaneId(), lifecycleEpoch);
         if (!requiresWorkerPlanning(preparedPlan)) {
             AsyncRequirementPlanner.PlanResult mainThreadPlan = new AsyncRequirementPlanner.PlanResult(
                     List.of(), preparedPlan.initialMainThreadRequirements());
-            if (preparedPlan.initialMainThreadRequirements().isEmpty()) {
-                boolean committed = runtime.commitAsyncTick(mainThreadPlan);
-                if (committed && runtime.completeAsyncTickAfterInputs()) {
-                    runtime.completeAsyncTickAfterRecipe();
-                } else if (!committed) {
-                    runtime.discardAsyncTickPreparation();
-                }
-                finishAsyncTick();
-                return;
-            }
             MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(level).submitMainThread(
                     taskKey, new MainThreadStep.TickTransitionCommit(asyncLaneId(), catalogVersion, mainThreadPlan),
                     this::executeAsyncMainStep, tickTaskHooks(token, lifecycleEpoch));
