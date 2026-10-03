@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.export;
 
+import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockRotator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -115,7 +116,8 @@ public final class MultiblockExportService {
         List<RenderedEntry> rendered = new ArrayList<>(entries.stream()
                 .filter(entry -> !entry.air() || entry.controller())
                 .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll),
-                        new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.state())),
+                        new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.controller() || entry.state() == null ? null
+                                : BlockArrayCache.normalizeState(entry.state(), controllerFace, normalizedRoll))),
                         entry.controller()))
                 .sorted(Comparator.comparingInt((RenderedEntry entry) -> entry.pos().getZ())
                         .thenComparingInt(entry -> entry.pos().getY())

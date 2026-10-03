@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 public final class BlockArrayCache {
 
@@ -115,27 +116,55 @@ public final class BlockArrayCache {
     private static BlockState rotateState(BlockState state, Direction facing, Direction rollFacing, Rotation rotation) {
         if (!facing.getAxis().isVertical()) return state.rotate(rotation);
 
-        BlockState rotated = state;
-        for (Property<?> property : state.getProperties()) {
-            Object value = state.getValue(property);
-            if (value instanceof Direction direction) {
-                Direction rotatedDirection = BlockRotator.rotateDirection(direction, facing, rollFacing);
-                if (property.getPossibleValues().contains(rotatedDirection)) {
-                    rotated = setValue(rotated, property, rotatedDirection);
-                }
-            } else if (value instanceof Direction.Axis axis) {
-                Direction axisDirection = switch (axis) {
-                    case X -> Direction.EAST;
-                    case Y -> Direction.UP;
-                    case Z -> Direction.SOUTH;
-                };
-                Direction.Axis rotatedAxis = BlockRotator.rotateDirection(axisDirection, facing, rollFacing).getAxis();
-                if (property.getPossibleValues().contains(rotatedAxis)) {
-                    rotated = setValue(rotated, property, rotatedAxis);
-                }
+        return transformDirectionalProperties(state, direction -> BlockRotator.rotateDirection(direction, facing, rollFacing));
+    }
+
+    /** Converts a captured world state back to the SOUTH-facing template orientation. */
+    public static BlockState normalizeState(BlockState state, Direction facing, Direction rollFacing) {
+        if (!facing.getAxis().isVertical()) {
+            for (Rotation rotation : Rotation.values()) {
+                if (rotation.rotate(facing) == Direction.SOUTH) return state.rotate(rotation);
             }
         }
+        UnaryOperator<Direction> transform = direction -> BlockRotator.rotateDirection(direction, facing, rollFacing);
+        BlockState normalized = state;
+        for (Property<?> property : state.getProperties()) {
+            Comparable<?> value = state.getValue(property);
+            if (!(value instanceof Direction) && !(value instanceof Direction.Axis)) continue;
+            // Restricted properties can make the existing forward transform non-bijective.
+            Comparable<?> source = property.getPossibleValues().stream()
+                    .filter(candidate -> transformDirectionalValue(property, candidate, transform).equals(value))
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                            "Cannot normalize " + state + " for facing " + facing + " and roll " + rollFacing));
+            normalized = setValue(normalized, property, source);
+        }
+        return normalized;
+    }
+
+    private static BlockState transformDirectionalProperties(BlockState state, UnaryOperator<Direction> transform) {
+        BlockState rotated = state;
+        for (Property<?> property : state.getProperties()) {
+            Comparable<?> value = state.getValue(property);
+            Comparable<?> transformed = transformDirectionalValue(property, value, transform);
+            if (!transformed.equals(value)) rotated = setValue(rotated, property, transformed);
+        }
         return rotated;
+    }
+
+    private static Comparable<?> transformDirectionalValue(Property<?> property, Comparable<?> value,
+                                                           UnaryOperator<Direction> transform) {
+        Comparable<?> transformed = value;
+        if (value instanceof Direction direction) {
+            transformed = transform.apply(direction);
+        } else if (value instanceof Direction.Axis axis) {
+            Direction axisDirection = switch (axis) {
+                case X -> Direction.EAST;
+                case Y -> Direction.UP;
+                case Z -> Direction.SOUTH;
+            };
+            transformed = transform.apply(axisDirection).getAxis();
+        }
+        return property.getPossibleValues().contains(transformed) ? transformed : value;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
