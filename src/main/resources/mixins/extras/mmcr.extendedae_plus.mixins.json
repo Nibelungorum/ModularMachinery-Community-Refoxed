@@ -6,7 +6,10 @@
   "mixins": [
     "MirrorPatternBindingToolItemMixin",
     "MirrorPatternProviderBlockEntityMixin",
-    "PatternInterfaceBlockEntityMixin"
+    "PatternInterfaceBlockEntityMixin",
+    "ChannelCardPortTickMixin",
+    "ChannelCardHostLifecycleMixin",
+    "StockingChannelCardLogicMixin"
   ],
   "injectors": {
     "defaultRequire": 1
