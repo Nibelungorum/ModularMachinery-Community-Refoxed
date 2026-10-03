@@ -424,7 +424,13 @@ public final class FluxNetworksDeviceGameTest {
                     "Pending B removal leaves no logical/map device and cannot spend the energy already copied into loot");
 
             var output = output(helper, CONTROLLER.east());
+            // Direct test placement bypasses player block events; request component rediscovery, not just matching.
+            rig.controller().onStructureBlockChanged(output.getBlockPos());
             form(helper, rig.controller());
+            helper.assertTrue(rig.controller().componentRuntime().components().stream()
+                            .anyMatch(component -> component.getContainer() == output)
+                            && Boolean.TRUE.equals(output.getModelData().get(MachineModelDataKeys.PORT_LINKED)),
+                    "Production rediscovery binds the replacement Plug entity, not just its unchanged position");
             connectAndCycle(output, a);
             helper.assertTrue(output.getTransferHandler().acceptRecipeEnergy(40L), "Replacement Plug commits its own output");
             helper.assertTrue(rig.input().connect(b) && output.connect(b)
