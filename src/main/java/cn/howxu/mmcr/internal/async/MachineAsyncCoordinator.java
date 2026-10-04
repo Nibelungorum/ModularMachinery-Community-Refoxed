@@ -7,7 +7,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +46,7 @@ public final class MachineAsyncCoordinator {
     private final int mainStepBudget;
     private final boolean autoResetBudgetForTesting;
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
-    private final ReadyQueue<TickBatch> readyBatches = new ReadyQueue<>();
+    private final ConcurrentLinkedQueue<TickBatch> readyBatches = new ConcurrentLinkedQueue<>();
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
     private final Object progressMonitor = new Object();
@@ -579,7 +578,7 @@ public final class MachineAsyncCoordinator {
     private static final class TickBatch {
         private final long gameTime;
         private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
-        private final ReadyQueue<PendingMainStep> pendingMainSteps = new ReadyQueue<>();
+        private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
         private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
         private final ConcurrentLinkedQueue<WorkerSegment> waitingWorkers = new ConcurrentLinkedQueue<>();
         private final ConcurrentLinkedQueue<PendingTermination> pendingTerminations = new ConcurrentLinkedQueue<>();
@@ -589,31 +588,6 @@ public final class MachineAsyncCoordinator {
             this.gameTime = gameTime;
         }
 
-    }
-
-    /**
-     * Publishes ready work with an O(1) fence count. Queue locks never cover task callbacks.
-     *
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class ReadyQueue<T> {
-        private final ArrayDeque<T> entries = new ArrayDeque<>();
-
-        private synchronized void add(T entry) {
-            entries.addLast(entry);
-        }
-
-        private synchronized @Nullable T poll() {
-            return entries.pollFirst();
-        }
-
-        private synchronized int size() {
-            return entries.size();
-        }
-
-        private synchronized boolean isEmpty() {
-            return entries.isEmpty();
-        }
     }
 
     private static final class PendingMainStep {
