@@ -142,11 +142,7 @@ public final class MachineAsyncCoordinator {
             return target;
         });
         if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
-        PendingMainStep pending = new PendingMainStep(task, List.of(step), null);
-        // TickTransitionCommit only admits a request to shared IO. The actual recipe work
-        // is bounded by that coordinator's budget, not a second per-lane step budget.
-        if (step instanceof MainThreadStep.TickTransitionCommit) batch.pendingTickAdmissions.add(pending);
-        else batch.pendingMainSteps.add(pending);
+        batch.pendingMainSteps.add(new PendingMainStep(task, List.of(step), null));
         readyBatches.add(batch);
         signalProgress();
         return SubmissionResult.ACCEPTED;
@@ -181,15 +177,13 @@ public final class MachineAsyncCoordinator {
         try {
             drainTerminations(batch);
             admitWaitingWorkers(batch);
-            int readyTickAdmissions = batch.pendingTickAdmissions.size();
             int completedSteps = pumpReadyMainThreadSteps(batch, remainingMainSteps);
             remainingMainSteps -= completedSteps;
-            pumpReadyTickAdmissions(batch, readyTickAdmissions);
             drainTerminations(batch);
             if (resolveSharedIo.getAsInt() > 0) signalProgress();
-            boolean allowNewerMainSteps = completedSteps == 0 || !batch.deferredMainSteps.isEmpty();
-            remainingMainSteps -= pumpNewerMainThreadSteps(batch.gameTime,
-                    allowNewerMainSteps ? remainingMainSteps : 0);
+            if (remainingMainSteps > 0 && (completedSteps == 0 || !batch.deferredMainSteps.isEmpty())) {
+                remainingMainSteps -= pumpNewerMainThreadSteps(batch.gameTime, remainingMainSteps);
+            }
             drainAllTerminations();
             if (afterTerminationDrainForTesting != null) afterTerminationDrainForTesting.run();
             batches.computeIfPresent(batch.gameTime, (gameTime, current) ->
@@ -253,8 +247,7 @@ public final class MachineAsyncCoordinator {
     }
 
     public boolean hasPendingMainStepForTesting() {
-        return batches.values().stream().anyMatch(batch -> !batch.pendingMainSteps.isEmpty()
-                || !batch.pendingTickAdmissions.isEmpty());
+        return batches.values().stream().anyMatch(batch -> !batch.pendingMainSteps.isEmpty());
     }
 
     public void completeUntilIdleForTesting(IntSupplier resolveSharedIo) {
@@ -374,17 +367,7 @@ public final class MachineAsyncCoordinator {
 
     private void pumpMainThreadSteps(TickBatch batch) {
         PendingMainStep pending;
-        while ((pending = batch.pendingTickAdmissions.poll()) != null) executePendingMainStep(batch, pending);
         while ((pending = batch.pendingMainSteps.poll()) != null) executePendingMainStep(batch, pending);
-    }
-
-    /** Admission stays at the level-end fence and uses its own fixed publication boundary. */
-    private void pumpReadyTickAdmissions(TickBatch batch, int readyCount) {
-        for (int index = 0; index < readyCount; index++) {
-            PendingMainStep pending = batch.pendingTickAdmissions.poll();
-            if (pending == null) break;
-            executePendingMainStep(batch, pending);
-        }
     }
 
     /** Processes only work ready when this level-end fence began. */
@@ -403,14 +386,12 @@ public final class MachineAsyncCoordinator {
     private int pumpNewerMainThreadSteps(long gameTime, int budget) {
         int completed = 0;
         int readyCount = readyBatches.size();
-        for (int index = 0; index < readyCount; index++) {
+        for (int index = 0; index < readyCount && completed < budget; index++) {
             TickBatch batch = readyBatches.poll();
             if (batch == null) break;
-            if (batch.gameTime <= gameTime) continue;
-            int readyTickAdmissions = batch.pendingTickAdmissions.size();
+            if (batch.gameTime <= gameTime || batch.pendingMainSteps.isEmpty()) continue;
             completed += pumpReadyMainThreadSteps(batch, budget - completed);
-            pumpReadyTickAdmissions(batch, readyTickAdmissions);
-            if (!batch.pendingMainSteps.isEmpty() || !batch.pendingTickAdmissions.isEmpty()) readyBatches.add(batch);
+            if (!batch.pendingMainSteps.isEmpty()) readyBatches.add(batch);
             nextBatchOffset++;
         }
         return completed;
@@ -599,7 +580,6 @@ public final class MachineAsyncCoordinator {
         private final long gameTime;
         private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
         private final ReadyQueue<PendingMainStep> pendingMainSteps = new ReadyQueue<>();
-        private final ReadyQueue<PendingMainStep> pendingTickAdmissions = new ReadyQueue<>();
         private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
         private final ConcurrentLinkedQueue<WorkerSegment> waitingWorkers = new ConcurrentLinkedQueue<>();
         private final ConcurrentLinkedQueue<PendingTermination> pendingTerminations = new ConcurrentLinkedQueue<>();

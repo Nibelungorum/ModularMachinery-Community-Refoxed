@@ -18,7 +18,6 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
-import cn.howxu.mmcr.internal.recipe.RecipeThread;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -215,54 +214,6 @@ class MachineWorkModeIntegrationTest {
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
         assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isTrue();
         assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
-    void more_than_one_thousand_active_lanes_advance_each_world_tick_despite_main_step_pressure(MachineWorkMode mode) {
-        Identifier machineId = MMCR.id("test_cube");
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
-        RuntimeTestFixtures.registerRecipePool(machineId);
-        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder().build()));
-        level = (ServerLevel) controller.getLevel();
-        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
-        ConfigTestSupport.setMachineWorkMode(mode);
-        controller.tickRuntimeWork(level, controller.getBlockPos());
-        MachineAsyncCoordinator.discard(level);
-        SharedIoCoordinator.discard(level);
-        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("budget_pressure_progress"), machineId, 20,
-                List.of(), List.of());
-        List<RecipeThread> threads = new ArrayList<>();
-        threads.add(new MachineRecipeThread(controller));
-        for (int lane = 1; lane < 1050; lane++) {
-            threads.add(FactoryRecipeThread.simple(controller, "pressure-" + lane));
-        }
-        for (RecipeThread thread : threads) assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
-
-        // Real main-thread work still obeys the existing budget, including across both fence passes.
-        AtomicInteger mainSteps = new AtomicInteger();
-        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
-        int budget = ServerConfig.asyncMainThreadStepsPerLevelTick();
-        for (int step = 0; step <= budget; step++) {
-            assertThat(async.submitMainThread(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                    level.getGameTime(), mode, "main-pressure-" + step, controller.lifecycleEpoch()),
-                    new MainThreadStep.TestStep(mainSteps::incrementAndGet), null,
-                    MachineAsyncCoordinator.TaskHooks.defaults())).isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
-        }
-        for (int tick = 1; tick <= 3; tick++) {
-            int expectedTick = tick;
-            for (RecipeThread thread : threads) thread.tick();
-            assertThat(threads).allSatisfy(thread -> assertThat(thread.runtime().tickCount()).isEqualTo(expectedTick - 1));
-            SharedIoEvents.completeLevelTick(level);
-            assertThat(threads).allSatisfy(thread -> assertThat(thread.runtime().tickCount()).isEqualTo(expectedTick));
-            assertThat(mainSteps).hasValue(tick == 1 ? budget : budget + 1);
-            // Another submission/fence in the same world tick must not advance the recipe twice.
-            for (RecipeThread thread : threads) thread.tick();
-            SharedIoEvents.completeLevelTick(level);
-            assertThat(threads).allSatisfy(thread -> assertThat(thread.runtime().tickCount()).isEqualTo(expectedTick));
-            assertThat(mainSteps).hasValue(tick == 1 ? budget : budget + 1);
-            RuntimeTestFixtures.advanceGameTime(level);
-        }
     }
 
     @ParameterizedTest
