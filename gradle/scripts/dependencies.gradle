@@ -26,7 +26,7 @@ dependencies {
     compileOnly "mekanism:Mekanism:${mekanism_version}"
 
     // ExtendedAE 26.1-1.0.3-neoforge
-    implementation "maven.modrinth:${eae_id}:${eae_version}"
+    implementation "curse.maven:${eae_id}:${eae_version}"
     // ExtendedAE-Plus 1.6.3
     compileOnly "maven.modrinth:${eaep_id}:${eaep_version}"
     localRuntime "maven.modrinth:${eaep_id}:${eaep_version}"

@@ -99,8 +99,7 @@ public final class DynamicOverlayTextures {
                     MMCR.id("block/extendedae/eae_me_oversize_stocking_input_interface");
             case "eae_me_oversize_output_interface" -> MMCR.id("block/extendedae/eae_me_oversize_output_interface");
             case "eae_me_extended_pattern_interface" -> MMCR.id("block/extendedae/eae_me_extended_pattern_interface");
-            case "eaep_me_mirror_pattern_interface" -> ResourceLocation.fromNamespaceAndPath("extendedae_plus",
-                    "block/mirror_pattern_provider/mirror_pattern_provider_default");
+            case "eaep_me_mirror_pattern_interface" -> MMCR.id("block/extendedae_plus/mirror_pattern_interface");
             case "appflux_me_flux_input_interface" -> MMCR.id("block/appliedflux/appflux_input");
             case "appflux_me_flux_output_interface" -> MMCR.id("block/appliedflux/appflux_output");
             default -> null;

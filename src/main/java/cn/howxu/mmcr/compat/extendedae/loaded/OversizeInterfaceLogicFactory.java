@@ -43,7 +43,7 @@ public final class OversizeInterfaceLogicFactory {
         @Override
         public long getMaxAmount(AEKey key) {
             try {
-                return Math.multiplyExact(super.getMaxAmount(key), EAEConfig.getOversizeMultiplier(key));
+                return Math.multiplyExact(super.getMaxAmount(key), EAEConfig.getOversizeMultiplier(key.getType()));
             } catch (Exception exception) {
                 return Long.MAX_VALUE;
             }
