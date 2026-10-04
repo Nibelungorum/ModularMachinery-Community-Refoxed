@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.api.machine.StructureMatcher;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -74,6 +75,80 @@ class MachineAsyncCoordinatorTest {
         coordinator.completeTick();
 
         assertThat(committed).isTrue();
+    }
+
+    @Test
+    void newer_tick_admissions_survive_an_exhausted_budget_without_releasing_other_main_steps() {
+        List<String> phases = new ArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L),
+                new MainThreadStep.TestStep(() -> phases.add("old-first")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO.above(), 40L),
+                new MainThreadStep.TestStep(() -> phases.add("old-second")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 41L),
+                new MainThreadStep.TickTransitionCommit("base", 0L,
+                        new AsyncRequirementPlanner.PlanResult(List.of(), List.of())),
+                (key, step) -> {
+                    phases.add("admit-tick");
+                    return MainThreadStep.Result.success();
+                }, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO.above(), 41L),
+                new MainThreadStep.TestStep(() -> phases.add("new-main")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("old-first", "admit-tick");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("old-first", "admit-tick", "old-second");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("old-first", "admit-tick", "old-second", "new-main");
+    }
+
+    @Test
+    void tick_admissions_keep_the_captured_boundary_when_an_executor_publishes_another_admission() {
+        List<String> phases = new ArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        MainThreadStep transition = new MainThreadStep.TickTransitionCommit("base", 0L,
+                new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L), transition,
+                (key, step) -> {
+                    phases.add("first");
+                    coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO.above(), 40L),
+                            transition, (nextKey, nextStep) -> {
+                                phases.add("second");
+                                return MainThreadStep.Result.success();
+                            }, MachineAsyncCoordinator.TaskHooks.defaults());
+                    return MainThreadStep.Result.success();
+                }, MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("first");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("first", "second");
+    }
+
+    @Test
+    void admission_published_by_a_regular_main_step_waits_for_the_next_captured_fence() {
+        List<String> phases = new ArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L),
+                new MainThreadStep.TestStep(() -> {
+                    phases.add("main");
+                    coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO.above(), 40L),
+                            new MainThreadStep.TickTransitionCommit("base", 0L,
+                                    new AsyncRequirementPlanner.PlanResult(List.of(), List.of())),
+                            (key, step) -> {
+                                phases.add("admit-tick");
+                                return MainThreadStep.Result.success();
+                            }, MachineAsyncCoordinator.TaskHooks.defaults());
+                }), null, MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("main");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("main", "admit-tick");
     }
 
     @Test
