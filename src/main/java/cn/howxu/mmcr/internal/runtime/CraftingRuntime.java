@@ -92,6 +92,9 @@ public final class CraftingRuntime {
     private @Nullable ControllerRecipePresentation cachedRecipePresentation;
     private @Nullable ActiveMachineRecipe cachedPresentationRecipe;
     private long presentationEpoch;
+    private int snapshotBuildCountForTesting;
+    private @Nullable Identifier cachedRecipeId;
+    private String cachedRecipeIdText = "";
     private long cachedPresentationEpoch = Long.MIN_VALUE;
     private long cachedActiveExecutionRevision = Long.MIN_VALUE;
     private long cachedPresentationParallelism;
@@ -778,12 +781,45 @@ public final class CraftingRuntime {
     }
 
     public CraftingStateSnapshot snapshot() {
+        snapshotBuildCountForTesting++;
         ActiveMachineRecipe recipe = activeRecipe;
         return new CraftingStateSnapshot(activeRecipe == null ? null : activeRecipe.getRecipe().id(), status, failure,
                 structureVersion == Long.MIN_VALUE ? 0L : structureVersion,
                 capabilityVersion == Long.MIN_VALUE ? 0L : capabilityVersion,
                 modifierVersion == Long.MIN_VALUE ? 0L : modifierVersion,
                 tickCount(), totalTick(), parallelism(), recipe == null ? 1 : recipe.getMaxParallelism());
+    }
+
+    int snapshotBuildCountForTesting() {
+        return snapshotBuildCountForTesting;
+    }
+
+    /** Value-only observation; does not copy the published crafting status. */
+    StateObservation observation() {
+        return new StateObservation(recipe() == null ? null : recipe().id(), status.getStatus(), status.getUnlocMessage(),
+                failure, structureVersion == Long.MIN_VALUE ? 0L : structureVersion,
+                capabilityVersion == Long.MIN_VALUE ? 0L : capabilityVersion,
+                modifierVersion == Long.MIN_VALUE ? 0L : modifierVersion,
+                tickCount(), totalTick(), parallelism(), activeRecipe == null ? 1 : activeRecipe.getMaxParallelism());
+    }
+
+    /**
+     * Immutable scalar state used for factory change detection.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    record StateObservation(@Nullable Identifier recipeId, CraftingStatus.Status status, String statusMessage,
+                            @Nullable ExecutionStatus failure, long structureVersion, long capabilityVersion,
+                            long modifierVersion, int tick, int totalTick, long parallelism, long maxParallelism) {
+    }
+
+    String recipeIdText() {
+        Identifier recipeId = recipe() == null ? null : recipe().id();
+        if (!Objects.equals(cachedRecipeId, recipeId)) {
+            cachedRecipeId = recipeId;
+            cachedRecipeIdText = recipeId == null ? "" : recipeId.toString();
+        }
+        return cachedRecipeIdText;
     }
 
     public @Nullable MachineRecipe recipe() {

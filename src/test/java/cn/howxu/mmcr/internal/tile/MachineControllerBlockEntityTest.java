@@ -1890,6 +1890,51 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void live_pool_and_catalog_queries_in_a_batch_do_not_derive_factory_lane_snapshots() throws Exception {
+        Identifier machineId = MMCR.id("lightweight_pool_query");
+        Identifier firstPool = MMCR.id("lightweight_pool_first");
+        Identifier secondPool = MMCR.id("lightweight_pool_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+        MachineControllerRuntime runtime = controllerRuntime(controller);
+        runtime.factoryRuntime().ensureBaseLane(controller);
+        var counter = runtime.factoryRuntime().getClass().getDeclaredMethod("laneSnapshotBuildCountForTesting");
+        counter.setAccessible(true);
+        var oldSnapshot = controller.runtimeSnapshot();
+        runtime.beginUpdateBatch();
+        try {
+            runtime.factoryRuntime().setLaneLimit(16);
+            int before = (int) counter.invoke(runtime.factoryRuntime());
+            assertThat(controller.supportedRecipePoolIds()).containsExactly(firstPool, secondPool);
+            assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+            long catalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
+            MachineRecipe reloaded = RecipeTestSupport.create(MMCR.id("lightweight_pool_reload_recipe"), firstPool,
+                    20, List.of(), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(reloaded.id(), reloaded));
+            assertThat(RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version()).isNotEqualTo(catalogVersion);
+            var oldCatalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
+            MachineRecipe replacementRecipe = RecipeTestSupport.create(reloaded.id(), firstPool, 30, List.of(), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(replacementRecipe.id(), replacementRecipe));
+            var newCatalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
+            assertThat(newCatalog.version()).isNotEqualTo(oldCatalog.version());
+            assertThat(newCatalog.recipes()).containsExactly(replacementRecipe);
+            assertThat(oldCatalog.recipes()).containsExactly(reloaded);
+            assertThat((int) counter.invoke(runtime.factoryRuntime())).isEqualTo(before);
+            assertThat(controller.runtimeSnapshot()).isSameAs(oldSnapshot);
+
+            Machine replacement = new DynamicMachine(machineId, "replacement recipe pool machine", new BlockArray(Map.of()));
+            controller.setMachine(replacement);
+            MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(secondPool)).build());
+            before = (int) counter.invoke(runtime.factoryRuntime());
+            assertThat(controller.currentStructureSnapshot().configuredMachine()).isSameAs(replacement);
+            assertThat(controller.supportedRecipePoolIds()).containsExactly(secondPool);
+            assertThat(controller.currentRecipePoolId()).isEqualTo(secondPool);
+            assertThat((int) counter.invoke(runtime.factoryRuntime())).isEqualTo(before);
+        } finally {
+            runtime.endUpdateBatch();
+        }
+    }
+
+    @Test
     void removed_current_recipe_pool_discards_active_work_when_falling_back() {
         Identifier machineId = MMCR.id("controller_recipe_pool_removed_active");
         Identifier firstPool = MMCR.id("controller_recipe_pool_removed_active_first");

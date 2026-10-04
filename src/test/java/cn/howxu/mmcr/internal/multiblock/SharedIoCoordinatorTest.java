@@ -21,9 +21,13 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.AbstractSet;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -54,6 +58,187 @@ class SharedIoCoordinatorTest {
         coordinator.resolveKnownDomainsForTesting(Map.of(first.id(), first, second.id(), second));
 
         assertThat(committed).containsExactly("A1", "B1");
+    }
+
+    @Test
+    void domain_rotation_skips_empty_domains_and_rotates_shared_lanes() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(1, 8);
+        StructureClaimRegistry.ResourceDomain first = domain(1L, A);
+        StructureClaimRegistry.ResourceDomain shared = domain(3L, B, C);
+        StructureClaimRegistry.ResourceDomain last = domain(5L, A);
+        Map<Long, StructureClaimRegistry.ResourceDomain> known = Map.of(1L, first, 3L, shared, 5L, last);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(first, A, 1L, () -> { committed.add("first"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(shared, B, 1L, () -> { committed.add("shared-B"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(shared, C, 1L, () -> { committed.add("shared-C"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(last, A, 1L, () -> { committed.add("last"); return true; }, () -> true, () -> 1L));
+
+        for (long gameTime = 1L; gameTime <= 4L; gameTime++) {
+            coordinator.beginLevelTick(gameTime);
+            assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(1);
+        }
+
+        assertThat(committed).containsExactly("first", "shared-B", "last", "shared-C");
+        assertThat(coordinator.pendingRequestCountForTesting()).isZero();
+    }
+
+    @Test
+    void selection_uses_live_topology_but_defers_callback_created_domains() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        StructureClaimRegistry.ResourceDomain first = domain(1L, A);
+        StructureClaimRegistry.ResourceDomain removed = domain(2L, B);
+        StructureClaimRegistry.ResourceDomain third = domain(3L, C);
+        StructureClaimRegistry.ResourceDomain added = domain(4L, B);
+        Map<Long, StructureClaimRegistry.ResourceDomain> known = Map.of(1L, first, 2L, removed, 3L, third, 4L, added);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(first, A, 1L, () -> {
+            committed.add("first");
+            coordinator.cancel(B);
+            coordinator.enqueue(tick(added, B, 1L, () -> { committed.add("added"); return true; }, () -> true, () -> 1L));
+            coordinator.enqueue(finish(first, A, 1L, () -> { committed.add("successor"); return true; }, () -> true, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(removed, B, 1L, () -> { committed.add("removed"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(third, C, 1L, () -> { committed.add("third"); return true; }, () -> true, () -> 1L));
+
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(3);
+        assertThat(committed).containsExactly("first", "third", "successor");
+        assertThat(coordinator.pendingRequestCountForTesting()).isEqualTo(1);
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(1);
+        assertThat(committed).containsExactly("first", "third", "successor", "added");
+    }
+
+    @Test
+    void reentrant_resolution_updates_cursor_and_shares_the_remaining_budget() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(3, 8);
+        StructureClaimRegistry.ResourceDomain first = domain(1L, A);
+        StructureClaimRegistry.ResourceDomain second = domain(2L, B);
+        StructureClaimRegistry.ResourceDomain third = domain(3L, C);
+        Map<Long, StructureClaimRegistry.ResourceDomain> known = Map.of(1L, first, 2L, second, 3L, third);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(first, A, 1L, () -> {
+            committed.add("first");
+            assertThat(coordinator.resolve(second)).isEqualTo(1);
+            return true;
+        }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(first, A, 1L, () -> { committed.add("first-again"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(second, B, 1L, () -> { committed.add("second"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(third, C, 1L, () -> { committed.add("third"); return true; }, () -> true, () -> 1L));
+
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(2);
+        assertThat(committed).containsExactly("first", "second", "third");
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isZero();
+        coordinator.beginLevelTick(1L);
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(1);
+        assertThat(committed).containsExactly("first", "second", "third", "first-again");
+    }
+
+    @Test
+    void deleted_cursor_wraps_and_failed_requests_retry_only_on_the_next_resolution() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        StructureClaimRegistry.ResourceDomain first = domain(1L, A);
+        StructureClaimRegistry.ResourceDomain last = domain(3L, C);
+        Map<Long, StructureClaimRegistry.ResourceDomain> known = Map.of(1L, first, 3L, last);
+        List<String> attempts = new ArrayList<>();
+        AtomicBoolean succeeds = new AtomicBoolean();
+        coordinator.enqueue(tick(last, C, 1L, () -> { attempts.add("last"); return false; }, () -> true, () -> 1L));
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isZero();
+        coordinator.cancel(C);
+        coordinator.enqueue(tick(first, A, 1L, () -> { attempts.add("first"); return succeeds.get(); }, () -> true, () -> 1L));
+        coordinator.beginLevelTick(1L);
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isZero();
+        assertThat(attempts).containsExactly("last", "first");
+        succeeds.set(true);
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(1);
+        assertThat(attempts).containsExactly("last", "first", "first");
+    }
+
+    @Test
+    void generation_and_unknown_domain_invalidation_preserve_cursor_order() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        StructureClaimRegistry.ResourceDomain old = domain(3L, C);
+        StructureClaimRegistry.ResourceDomain replacement = new StructureClaimRegistry.ResourceDomain(3L, 2L, Set.of(C));
+        StructureClaimRegistry.ResourceDomain unknown = domain(1L, A);
+        AtomicInteger discards = new AtomicInteger();
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(old, C, 1L, () -> false,
+                () -> { discards.incrementAndGet(); return true; }, () -> 1L));
+        assertThat(coordinator.resolve(old)).isZero();
+        discards.set(0);
+        coordinator.enqueue(tick(unknown, A, 1L, () -> { committed.add("unknown"); return true; },
+                () -> { discards.incrementAndGet(); return true; }, () -> 1L));
+        coordinator.enqueue(tick(replacement, C, 1L, () -> { committed.add("replacement"); return true; },
+                () -> true, () -> 1L));
+
+        assertThat(coordinator.resolveKnownDomainsForTesting(Map.of(3L, replacement))).isEqualTo(1);
+        assertThat(committed).containsExactly("replacement");
+        assertThat(discards).hasValue(2);
+        assertThat(coordinator.pendingRequestCountForTesting()).isZero();
+        assertThat(coordinator.indexedControllerCountForTesting()).isZero();
+    }
+
+    @Test
+    void resolving_many_requests_does_not_reenumerate_domain_keys_per_request() throws Exception {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(512, 8);
+        DomainTraversalMap<Object, Object> domains = new DomainTraversalMap<>();
+        Field field = SharedIoCoordinator.class.getDeclaredField("domains");
+        field.setAccessible(true);
+        field.set(coordinator, domains);
+        Map<Long, StructureClaimRegistry.ResourceDomain> known = new HashMap<>();
+        AtomicInteger commits = new AtomicInteger();
+        for (int index = 0; index < 64; index++) {
+            BlockPos owner = new BlockPos(index, 64, 0);
+            StructureClaimRegistry.ResourceDomain domain = domain(index + 1L, owner);
+            known.put(domain.id(), domain);
+            for (int request = 0; request < 8; request++) {
+                coordinator.enqueue(tick(domain, owner, 1L,
+                        () -> { commits.incrementAndGet(); return true; }, () -> true, () -> 1L));
+            }
+        }
+
+        assertThat(coordinator.resolveKnownDomainsForTesting(known)).isEqualTo(512);
+        assertThat(commits).hasValue(512);
+        // Stale-domain filtering may enumerate the keys once, but request selection must not
+        // repeat a full topology traversal/materialization for each of the 512 commits.
+        assertThat(domains.keyVisits).isLessThanOrEqualTo(64);
+        assertThat(coordinator.pendingRequestCountForTesting()).isZero();
+    }
+
+    /**
+     * Counts full domain-key enumeration independently of request validation/commit work.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class DomainTraversalMap<K, V> extends TreeMap<K, V> {
+        private int keyVisits;
+
+        @Override
+        public Set<K> keySet() {
+            Set<K> keys = super.keySet();
+            return new AbstractSet<>() {
+                @Override
+                public Iterator<K> iterator() {
+                    Iterator<K> iterator = keys.iterator();
+                    return new Iterator<>() {
+                        @Override
+                        public boolean hasNext() {
+                            return iterator.hasNext();
+                        }
+
+                        @Override
+                        public K next() {
+                            keyVisits++;
+                            return iterator.next();
+                        }
+                    };
+                }
+
+                @Override
+                public int size() {
+                    return keys.size();
+                }
+            };
+        }
     }
 
     @Test

@@ -211,15 +211,16 @@ public final class SharedIoCoordinator {
     }
 
     private DomainKey nextDomainWithWork(Set<Request> attempted, Set<Request> eligible) {
-        List<DomainKey> keys = new ArrayList<>(domains.keySet());
-        int start = 0;
-        if (domainCursor != null) {
-            while (start < keys.size() && keys.get(start).compareTo(domainCursor) <= 0) start++;
-            if (start == keys.size()) start = 0;
-        }
-        for (int offset = 0; offset < keys.size(); offset++) {
-            DomainKey key = keys.get((start + offset) % keys.size());
+        int domainCount = domains.size();
+        if (domainCount == 0) return null;
+        DomainKey key = domainCursor == null ? domains.firstKey() : domains.higherKey(domainCursor);
+        if (key == null) key = domains.firstKey();
+        // Selection invokes no callbacks. Re-read the live topology after each request instead
+        // of retaining an iterator across commits, which may add/remove domains or resolve again.
+        for (int offset = 0; offset < domainCount; offset++) {
             if (domains.get(key).hasUnattempted(attempted, eligible)) return key;
+            key = domains.higherKey(key);
+            if (key == null) key = domains.firstKey();
         }
         return null;
     }

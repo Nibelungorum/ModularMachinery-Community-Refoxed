@@ -4167,9 +4167,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public List<Identifier> supportedRecipePoolIds() {
-        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        StructureSnapshot snapshot = runtime.currentStructureSnapshot();
+        Machine machine = snapshot.machine() == null
+                ? snapshot.configuredMachine() : snapshot.machine();
         return MachineRegistry.recipePoolsForMachine(machine);
     }
 

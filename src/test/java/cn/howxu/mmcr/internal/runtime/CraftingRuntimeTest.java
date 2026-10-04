@@ -189,6 +189,40 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void lightweight_observation_tracks_live_progress_pause_failure_and_finish_without_mutating_published_status() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("observation_live_state", 2, List.of());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        CraftingStateSnapshot oldSnapshot = runtime.snapshot();
+        var started = runtime.observation();
+        String recipeText = runtime.recipeIdText();
+        assertThat(recipeText).isEqualTo(recipe.id().toString());
+
+        runtime.tick();
+        var progressed = runtime.observation();
+        assertThat(progressed).isNotEqualTo(started);
+        assertThat(progressed.tick()).isGreaterThan(started.tick());
+        assertThat(runtime.recipeIdText()).isSameAs(recipeText);
+        runtime.pause();
+        var paused = runtime.observation();
+        assertThat(paused.status()).isEqualTo(CraftingStatus.Status.PAUSED);
+        runtime.resume();
+        assertThat(runtime.observation().status()).isEqualTo(CraftingStatus.Status.CRAFTING);
+        runtime.recordSearchFailure(null);
+        assertThat(runtime.observation().failure()).isNotNull();
+        assertThat(started.failure()).isNull();
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        assertThat(runtime.observation().recipeId()).isNull();
+        assertThat(runtime.recipeIdText()).isEmpty();
+        assertThat(oldSnapshot.tick()).isZero();
+        assertThat(oldSnapshot.status().isPaused()).isFalse();
+        oldSnapshot.status().overrideStatusMessage("test.changed.returned.copy");
+        assertThat(oldSnapshot.status().getUnlocMessage()).isEqualTo(started.statusMessage());
+    }
+
+    @Test
     void recipe_tick_callback_is_preserved_when_capability_phases_are_enabled() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         AtomicInteger callbacks = new AtomicInteger();

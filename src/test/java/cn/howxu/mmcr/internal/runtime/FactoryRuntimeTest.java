@@ -19,6 +19,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -171,6 +173,74 @@ class FactoryRuntimeTest {
         runtime.tick(List.of(recipe), 1, level.getGameTime());
 
         assertThat(runtime.asyncSearchScansForTesting()).isEqualTo(searchScans);
+    }
+
+    @Test
+    void many_lane_snapshots_collect_state_once_and_keep_previous_progress_on_pause_and_finish() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(16);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("many_lane_snapshot"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 16);
+        runtime.tick(List.of(recipe), 1, 0L);
+        int builds = runtime.laneSnapshotBuildCountForTesting();
+        FactorySnapshot started = runtime.snapshot();
+        assertThat(started.lanes()).hasSize(16);
+        assertThat(runtime.laneSnapshotBuildCountForTesting() - builds).isEqualTo(runtime.laneCount());
+        assertThat(runtime.snapshot()).isSameAs(started);
+        runtime.threadSnapshots();
+        assertThat(runtime.laneSnapshotBuildCountForTesting() - builds).isEqualTo(runtime.laneCount());
+
+        runtime.tick(List.of(recipe), 1, 1L);
+        FactorySnapshot progressed = runtime.snapshot();
+        assertThat(progressed.lanes()).allSatisfy(lane -> assertThat(lane.tick()).isGreaterThan(0));
+        assertThat(started.lanes()).allSatisfy(lane -> assertThat(lane.tick()).isZero());
+        for (int index = 0; index < progressed.lanes().size(); index++) {
+            assertThat(progressed.presentationLanes().get(index).tick()).isEqualTo(progressed.lanes().get(index).tick());
+            assertThat(progressed.presentationLanes().get(index).recipeId()).isEqualTo(recipe.id().toString());
+        }
+
+        runtime.pause();
+        FactorySnapshot paused = runtime.snapshot();
+        assertThat(paused.paused()).isTrue();
+        assertThat(paused.lanes()).allSatisfy(lane -> assertThat(lane.status().isPaused()).isTrue());
+        assertThat(progressed.lanes()).allSatisfy(lane -> assertThat(lane.status().isPaused()).isFalse());
+        runtime.resume();
+        List<CraftingRuntime> active = runtime.activeRuntimes();
+        for (CraftingRuntime lane : active) {
+            for (int step = 0; step < 20; step++) lane.tick();
+            assertThat(lane.finish().isFailure()).isFalse();
+            runtime.markLaneRuntimeChanged(lane);
+        }
+        FactorySnapshot finished = runtime.snapshot();
+        assertThat(finished.active()).isFalse();
+        assertThat(finished.presentationLanes()).allSatisfy(lane -> assertThat(lane.active()).isFalse());
+        assertThat(paused.active()).isTrue();
+    }
+
+    @Test
+    void lane_failure_and_effective_output_revision_refresh_presentation_without_mutating_old_snapshot() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.tick(List.of(recipe("factory_revision_snapshot", 20)), 1, 0L);
+        FactorySnapshot before = runtime.snapshot();
+        CraftingRuntime lane = runtime.activeRuntimes().getFirst();
+        lane.activeRecipe().setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(
+                20, List.of(), List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F,
+                DataComponentPredicateSet.EMPTY))));
+        lane.recordSearchFailure(null);
+        runtime.markLaneRuntimeChanged(lane);
+
+        FactorySnapshot revised = runtime.snapshot();
+        assertThat(revised.failure()).isNotNull();
+        assertThat(revised.lanes().getFirst().failure()).isEqualTo(revised.failure());
+        assertThat(revised.presentationLanes().getFirst().failure()).isEqualTo(revised.failure());
+        assertThat(revised.presentationLanes().getFirst().presentation().outputs()).hasSize(1);
+        assertThat(before.failure()).isNull();
+        assertThat(before.presentationLanes().getFirst().presentation().outputs()).isEmpty();
+        assertThat(before.lanes().getFirst().failure()).isNull();
     }
 
     @Test
