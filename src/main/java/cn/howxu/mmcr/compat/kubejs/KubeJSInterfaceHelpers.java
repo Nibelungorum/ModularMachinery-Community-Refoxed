@@ -48,6 +48,12 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyStressInput() { return anyOfStressInput(); }
     public static BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
     public static BlockPredicate anyStressPorts() { return anyOfStressPorts(); }
+    public static BlockPredicate anyOfAirInput() { return convert(InterfacePredicates.anyOfAirInput()); }
+    public static BlockPredicate anyOfAirOutput() { return convert(InterfacePredicates.anyOfAirOutput()); }
+    public static BlockPredicate anyOfAirPorts() { return convert(InterfacePredicates.anyOfAirPorts()); }
+    public static BlockPredicate anyAirInput() { return anyOfAirInput(); }
+    public static BlockPredicate anyAirOutput() { return anyOfAirOutput(); }
+    public static BlockPredicate anyAirPorts() { return anyOfAirPorts(); }
     public static BlockPredicate anyOfUpgradeBus() { return convert(InterfacePredicates.anyOfUpgradeBus()); }
 
     public static BlockPredicate anyOfPort(String... ids) {

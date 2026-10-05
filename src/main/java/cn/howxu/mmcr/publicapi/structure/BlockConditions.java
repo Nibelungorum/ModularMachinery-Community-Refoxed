@@ -42,6 +42,9 @@ public final class BlockConditions {
     public static BlockCondition stressInput() { return BlockAdapters.stressInput(); }
     public static BlockCondition stressOutput() { return BlockAdapters.stressOutput(); }
     public static BlockCondition stressPorts() { return BlockAdapters.stressPorts(); }
+    public static BlockCondition airInput() { return BlockAdapters.airInput(); }
+    public static BlockCondition airOutput() { return BlockAdapters.airOutput(); }
+    public static BlockCondition airPorts() { return BlockAdapters.airPorts(); }
     public static BlockCondition itemPorts() { return BlockAdapters.itemPorts(); }
     public static BlockCondition fluidPorts() { return BlockAdapters.fluidPorts(); }
     public static BlockCondition energyPorts() { return BlockAdapters.energyPorts(); }

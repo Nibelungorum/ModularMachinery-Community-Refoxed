@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
 import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
@@ -207,6 +208,12 @@ public final class KubeJSApi {
     public BlockPredicate anyStressInput() { return anyOfStressInput(); }
     public BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
     public BlockPredicate anyStressPorts() { return anyOfStressPorts(); }
+    public BlockPredicate anyOfAirInput() { return KubeJSInterfaceHelpers.anyOfAirInput(); }
+    public BlockPredicate anyOfAirOutput() { return KubeJSInterfaceHelpers.anyOfAirOutput(); }
+    public BlockPredicate anyOfAirPorts() { return KubeJSInterfaceHelpers.anyOfAirPorts(); }
+    public BlockPredicate anyAirInput() { return anyOfAirInput(); }
+    public BlockPredicate anyAirOutput() { return anyOfAirOutput(); }
+    public BlockPredicate anyAirPorts() { return anyOfAirPorts(); }
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }
@@ -362,6 +369,73 @@ public final class KubeJSApi {
 
     public EnergyRequirement energyRequirement(IOType io, long fePerTick) {
         return new EnergyRequirement(io, fePerTick);
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airInput(long airPerTick, float minPressure) {
+        return airInput(airPerTick, minPressure, List.of());
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airInput(long airPerTick, float minPressure, List<String> tags) {
+        return customRecipeIo(PneumaticIds.AIR.toString(), IOType.INPUT,
+                MachineRecipeBuilder.airInputPayload(airPerTick, minPressure, tags));
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airOutput(long airPerTick) { return airOutput(airPerTick, List.of()); }
+
+    @HideFromJS
+    public CustomRecipeIo airOutput(long airPerTick, List<String> tags) {
+        return customRecipeIo(PneumaticIds.AIR.toString(), IOType.OUTPUT,
+                MachineRecipeBuilder.airOutputPayload(airPerTick, tags));
+    }
+
+    public CustomRecipeIo airInput(Object airPerTick, Object minPressure) {
+        return airInput(airPerTick, minPressure, List.of());
+    }
+
+    public CustomRecipeIo airInput(Object airPerTick, Object minPressure, List<String> tags) {
+        return airInput(airRate(airPerTick), airPressure(minPressure), tags);
+    }
+
+    public CustomRecipeIo airOutput(Object airPerTick) { return airOutput(airPerTick, List.of()); }
+
+    public CustomRecipeIo airOutput(Object airPerTick, List<String> tags) {
+        return airOutput(airRate(airPerTick), tags);
+    }
+
+    private static long airRate(Object value) {
+        if (!(value instanceof Number number)) throw new IllegalArgumentException("Air rate must be a number");
+        long rate;
+        try {
+            if (number instanceof BigInteger integer) rate = integer.longValueExact();
+            else if (number instanceof BigDecimal decimal) rate = decimal.longValueExact();
+            else if (number instanceof Byte || number instanceof Short || number instanceof Integer || number instanceof Long) {
+                rate = number.longValue();
+            } else if (number instanceof Float || number instanceof Double) {
+                double numeric = number.doubleValue();
+                // 2^63 is the first out-of-range double; (double) Long.MAX_VALUE rounds up to it.
+                if (!Double.isFinite(numeric) || numeric < 0D || numeric >= 0x1p63 || numeric != Math.rint(numeric)) {
+                    throw new IllegalArgumentException("Air rate must be a non-negative long integer");
+                }
+                rate = (long) numeric;
+            } else rate = new BigDecimal(number.toString()).longValueExact();
+        } catch (ArithmeticException | NumberFormatException exception) {
+            throw new IllegalArgumentException("Air rate must be a non-negative long integer", exception);
+        }
+        if (rate < 0L) throw new IllegalArgumentException("Air rate must be a non-negative long integer");
+        return rate;
+    }
+
+    private static float airPressure(Object value) {
+        if (!(value instanceof Number number)) throw new IllegalArgumentException("Air pressure must be a number");
+        double pressure = number.doubleValue();
+        float converted = (float) pressure;
+        if (!Double.isFinite(pressure) || pressure < 0D || !Float.isFinite(converted)) {
+            throw new IllegalArgumentException("Air pressure must be finite and non-negative");
+        }
+        return converted;
     }
 
     // Java keeps typed overloads; scripts validate original values before Rhino can coerce strings.

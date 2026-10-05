@@ -23,6 +23,8 @@ public interface RecipeDraft {
     RecipeDraft inputItem(Ingredient item, int count, ComponentConstraints components, float consumeChance);
     RecipeDraft inputFluid(Fluid fluid, int amount); RecipeDraft inputFluid(Fluid fluid, int amount, float consumeChance);
     RecipeDraft outputFluid(Fluid fluid, int amount);
+    RecipeDraft inputAir(long airPerTick, float minPressure); RecipeDraft inputAir(long airPerTick, float minPressure, List<String> tags);
+    RecipeDraft outputAir(long airPerTick); RecipeDraft outputAir(long airPerTick, List<String> tags);
     RecipeDraft inputStress(double stress, double minRpm); RecipeDraft inputStress(double stress, double minRpm, List<String> tags);
     RecipeDraft outputStress(double stress, double rpm); RecipeDraft outputStress(double stress, double rpm, List<String> tags);
     RecipeDraft inputEnergy(long fePerTick); RecipeDraft outputEnergy(long fePerTick); RecipeDraft iFEt(long fePerTick); RecipeDraft oFEt(long fePerTick);

@@ -120,6 +120,7 @@ public final class TypedFixture implements MachineDefinitionProvider {
         event.registerModifier(MODIFIER, bundle); event.registerModifierItem(new ItemStack(Items.DIAMOND), MODIFIER);
         BlockCondition ports = BlockConditions.any(BlockConditions.itemPorts(), BlockConditions.fluidPorts(),
                 BlockConditions.energyPorts(), BlockConditions.chemicalPorts(), BlockConditions.heatPorts(),
+                BlockConditions.airInput(), BlockConditions.airOutput(), BlockConditions.airPorts(),
                 BlockConditions.radioactiveChemicalPorts(), BlockConditions.upgradeBus(), BlockConditions.parallelControllers(),
                 BlockConditions.factoryController(), BlockConditions.smartInterface(), BlockConditions.dataStorage(),
                 BlockConditions.networkInterface(), BlockConditions.coupler());
@@ -186,6 +187,11 @@ public final class TypedFixture implements MachineDefinitionProvider {
         FluidRequirementSpec fluid = Requirements.fluid(IoDirection.INPUT, fluidInput.ingredient(), fluidInput.amount(),
                 FluidStack.EMPTY, 1, List.of("coolant"), fluidInput.consumeChance());
         EnergyRequirementSpec perTick = Requirements.energy(IoDirection.INPUT, energy.fePerTick(), List.of("power"));
+        AirRequirementSpec airInput = Requirements.airInput(10_000_000_000L, 4F, List.of("drive"));
+        AirRequirementSpec airOutput = Requirements.airOutput(80, List.of("generator"));
+        long airRate = airInput.airPerTick();
+        float pressure = airInput.minPressure();
+        AirRequirementSpec airCopy = (AirRequirementSpec) airOutput.copy();
         LevelRequirementSpec level = Requirements.level(LEVEL_TYPE, LEVEL);
         StageRequirementSpec stage = Requirements.stage(1);
         SmartInterfaceRequirementSpec smart = Requirements.smartInput("power", 1, 10);
@@ -195,6 +201,9 @@ public final class TypedFixture implements MachineDefinitionProvider {
         RecipeDraft draft = Recipes.recipe(id("recipe")).recipePool(POOL).duration(20).priority(1).maxThreads(2)
                 .parallelized(true).cancelIfPerTickFails(true).allowPartialOutputs(true)
                 .requirement(tagged).requirement(fluid).requirement(perTick).requirement(level).requirement(stage)
+                .requirement(airInput).requirement(airCopy)
+                .inputAir(40, 4F).inputAir(0, 8F, List.of("drive"))
+                .outputAir(80).outputAir(airRate, List.of("generator"))
                 .requirement(Requirements.itemOutput(output)).requirement(Requirements.fluidOutput(fluidOutput))
                 .smartInterface(smart).custom(chemical).custom(heat).requiredHost(host.id()).modifier(MODIFIER)
                 .inputItemTag(ItemTags.LOGS, 1).inputFluid(Fluids.WATER, 100, 0.5F)
@@ -231,6 +240,16 @@ public final class TypedFixture implements MachineDefinitionProvider {
         List<RequirementSpec> requirements = context.requirements();
         List<OutputView> outputs = context.outputs();
         IoSnapshot io = context.ioSnapshot().forTags(Set.of("power"));
+        List<AirState> airInputs = io.airInputs();
+        List<AirState> airOutputs = io.airOutputs();
+        for (AirState state : airInputs) {
+            float pressure = state.pressure();
+            long capacity = state.outputCapacity();
+            int signedAir = state.air();
+            int volume = state.volume();
+            float danger = state.dangerPressure();
+            float critical = state.criticalPressure();
+        }
         if (context.currentTick() < context.totalTick() && io.energyInput() == 0) text(context.machineContext());
     }
 

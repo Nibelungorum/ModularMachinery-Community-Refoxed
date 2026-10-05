@@ -17,6 +17,8 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.HeatViewFacet;
 import cn.howxu.mmcr.api.compat.create.StressFacet;
 import cn.howxu.mmcr.api.compat.create.StressState;
+import cn.howxu.mmcr.api.compat.pneumaticcraft.AirState;
+import cn.howxu.mmcr.api.compat.pneumaticcraft.PneumaticAirFacet;
 import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.util.IOType;
@@ -234,6 +236,20 @@ public final class MachineIoView {
             }
         }
         return amount;
+    }
+
+    public List<AirState> airInputs() { return airStates(IOType.INPUT); }
+
+    public List<AirState> airOutputs() { return airStates(IOType.OUTPUT); }
+
+    private List<AirState> airStates(IOType direction) {
+        List<AirState> states = new ArrayList<>();
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (MachineCapability capability : capabilities(direction)) {
+            PneumaticAirFacet facet = capability.facet(PneumaticAirFacet.class).orElse(null);
+            if (facet != null && seen.add(facet.queryIdentity())) states.add(facet.state());
+        }
+        return List.copyOf(states);
     }
 
     public List<StressState> stressInputs() { return stressStates(IOType.INPUT); }

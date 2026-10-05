@@ -129,3 +129,10 @@ type="optional"
 versionRange="[8.0.0,)"
 ordering="AFTER"
 side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="pneumaticcraft"
+type="optional"
+versionRange="[8.2.21,)"
+ordering="AFTER"
+side="BOTH"

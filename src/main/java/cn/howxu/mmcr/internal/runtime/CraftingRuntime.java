@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -49,6 +51,8 @@ import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.create.StressSession;
 import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirementHandler;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -1347,7 +1351,19 @@ public final class CraftingRuntime {
                 }
                 prefetch.committed = true;
             }
-            if (!prepared.plan().commitInputs()) {
+            Set<Integer> airInputIndexes = new HashSet<>();
+            List<MachineRequirement> requirements = prepared.effective().requirements();
+            PlanningReservations airReservations = new PlanningReservations();
+            for (int index = 0; index < requirements.size(); index++) {
+                if (requirements.get(index) instanceof AirRequirement air
+                        && air.io() == RecipeModifier.IOType.INPUT) {
+                    CapabilityResult result = AirRequirementHandler.preflightStart(air, components.capabilities(),
+                            new PlanningContext(prepared.plan().parallelism(), index, false, airReservations));
+                    if (!result.success()) return result.status();
+                    airInputIndexes.add(index);
+                }
+            }
+            if (!prepared.plan().commitInputsExcept(airInputIndexes)) {
                 ExecutionStatus failure = prepared.plan().failure();
                 return failure == null ? missingInputStatus() : failure;
             }
@@ -1767,6 +1783,7 @@ public final class CraftingRuntime {
 
     private List<MachineRequirement> finishRequirements() {
         return effectiveRequirements().stream()
+                .filter(requirement -> !(requirement instanceof AirRequirement))
                 .filter(requirement -> !isPerTickOutput(requirement))
                 .toList();
     }
@@ -1781,7 +1798,8 @@ public final class CraftingRuntime {
         return requirement.io() == RecipeModifier.IOType.OUTPUT
                 && (requirement instanceof EnergyRequirement
                 || StressRequirement.TYPE.equals(requirement.type())
-                || MekanismRecipeTypes.HEAT.equals(requirement.type().id()));
+                || MekanismRecipeTypes.HEAT.equals(requirement.type().id())
+                || AirRequirement.TYPE.equals(requirement.type()));
     }
 
     private static boolean isPerTickOutput(MachineOutput output) {

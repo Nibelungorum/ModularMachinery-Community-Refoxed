@@ -3,6 +3,7 @@ package cn.howxu.mmcr.datagen;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.HolderLookup;
@@ -50,7 +51,9 @@ public final class LootTableGen extends LootTableProvider {
                 paths.json(MMCR.id("blocks/" + ArsSourceIds.INPUT)), "ars_nouveau",
                 paths.json(MMCR.id("blocks/" + ArsSourceIds.OUTPUT)), "ars_nouveau",
                 paths.json(MMCR.id("blocks/" + FluxNetworksIds.INPUT)), FluxNetworksIds.MOD_ID,
-                paths.json(MMCR.id("blocks/" + FluxNetworksIds.OUTPUT)), FluxNetworksIds.MOD_ID);
+                paths.json(MMCR.id("blocks/" + FluxNetworksIds.OUTPUT)), FluxNetworksIds.MOD_ID,
+                paths.json(MMCR.id("blocks/" + PneumaticIds.INPUT)), PneumaticIds.MOD_ID,
+                paths.json(MMCR.id("blocks/" + PneumaticIds.OUTPUT)), PneumaticIds.MOD_ID);
         Path mirrorTable = paths.json(MMCR.id("blocks/eaep_me_mirror_pattern_interface"));
         Map<Path, JsonObject> conditionedTables = new ConcurrentHashMap<>();
         // Keep vanilla generation, random sequences and validation. Its 1.21.1 loot

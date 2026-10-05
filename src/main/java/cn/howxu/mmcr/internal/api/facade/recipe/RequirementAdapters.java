@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.publicapi.recipe.component.ComponentConstraints;
 import cn.howxu.mmcr.publicapi.recipe.requirement.*;
@@ -32,6 +33,7 @@ public final class RequirementAdapters {
             case StageRequirement v -> new StageView(v);
             case SmartInterfaceRequirement v -> new SmartView(v);
             case StressRequirement v -> new StressView(v);
+            case AirRequirement v -> new AirView(v);
             default -> new View(value);
         };
     }
@@ -75,6 +77,11 @@ public final class RequirementAdapters {
     private static final class EnergyView extends View implements EnergyRequirementSpec {
         EnergyView(EnergyRequirement value) { super(value); }
         public long fePerTick() { return ((EnergyRequirement) delegate).fePerTick(); }
+    }
+    private static final class AirView extends View implements AirRequirementSpec {
+        AirView(AirRequirement value) { super(value); }
+        public long airPerTick() { return ((AirRequirement) delegate).airPerTick(); }
+        public float minPressure() { return ((AirRequirement) delegate).minPressure(); }
     }
     private static final class StressView extends View implements StressRequirementSpec {
         StressView(StressRequirement value) { super(value); }

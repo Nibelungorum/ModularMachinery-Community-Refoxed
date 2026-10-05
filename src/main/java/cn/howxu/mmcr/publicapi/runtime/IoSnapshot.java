@@ -27,6 +27,8 @@ public interface IoSnapshot {
     long chemicalOutputCapacity(ResourceLocation chemicalId);
     List<HeatState> heatInputs();
     List<HeatState> heatOutputs();
+    List<AirState> airInputs();
+    List<AirState> airOutputs();
     List<StressState> stressInputs();
     List<StressState> stressOutputs();
     long energyInput();

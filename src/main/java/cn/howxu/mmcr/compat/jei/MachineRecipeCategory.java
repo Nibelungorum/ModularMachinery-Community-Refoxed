@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
@@ -107,6 +108,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IDrawable slotBackground;
     private final IDrawable sourceSlotBackground;
     private final IDrawable stressIcon;
+    private final @Nullable IDrawable airIcon;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
@@ -120,6 +122,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .setTextureSize(18, 18).build();
         this.stressIcon = guiHelper.createDrawableItemLike(
                 BuiltInRegistries.ITEM.get(ResourceLocation.parse("create:cogwheel")));
+        this.airIcon = BuiltInRegistries.ITEM.containsKey(PneumaticIds.ADVANCED_PRESSURE_TUBE)
+                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(PneumaticIds.ADVANCED_PRESSURE_TUBE))
+                : null;
     }
 
     @Override
@@ -139,12 +144,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getHeight() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 300;
-            case 2 -> 280;
-            case 3 -> 220;
-            default -> 150;
-        };
+        return MachineRecipeLayout.categoryHeight((int) Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     @Override
@@ -198,6 +198,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         for (MachineRecipeDisplay.StressDisplay stress : recipe.stressOutputs()) {
             drawStressLine(stress.label(false), guiGraphics, textX, (int) (y / TEXT_SCALE));
+            y += TEXT_LINE_SPACING;
+        }
+        y = layout.airTextY(recipe);
+        for (MachineRecipeDisplay.AirDisplay air : recipe.airInputs()) {
+            drawAirLine(air.label(true), guiGraphics, textX, (int) (y / TEXT_SCALE));
+            y += TEXT_LINE_SPACING;
+        }
+        for (MachineRecipeDisplay.AirDisplay air : recipe.airOutputs()) {
+            drawAirLine(air.label(false), guiGraphics, textX, (int) (y / TEXT_SCALE));
             y += TEXT_LINE_SPACING;
         }
         if (recipe.minimumTemperature().isPresent()) {
@@ -256,6 +265,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         guiGraphics.drawString(font, label, x + (int) (stressIcon.getWidth() * iconScale) + 2, y, 0xFF404040, false);
     }
 
+    private void drawAirLine(Component label, GuiGraphics guiGraphics, int x, int y) {
+        var font = Minecraft.getInstance().font;
+        if (airIcon != null) {
+            float iconScale = (float) font.lineHeight / airIcon.getHeight();
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(x, y, 0F);
+            guiGraphics.pose().scale(iconScale, iconScale, 1F);
+            airIcon.draw(guiGraphics, 0, 0);
+            guiGraphics.pose().popPose();
+            x += (int) (airIcon.getWidth() * iconScale) + 2;
+        }
+        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
+    }
+
     private void drawRecipeInformation(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
                                        GuiGraphics guiGraphics) {
         List<Component> information = RecipeInformationRegistry.componentsFor(
@@ -289,6 +312,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
         } else {
             if (appendStressTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
+            if (appendAirTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
             sourceTooltip(layout, mouseX, mouseY)
                     .or(() -> smartInterfaceTooltip(recipe, layout, mouseX, mouseY)).ifPresent(tooltip::add);
         }
@@ -960,6 +984,27 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += SMART_INTERFACE_LINE_SPACING;
         }
         return Optional.empty();
+    }
+
+    static boolean appendAirTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                                    double mouseX, double mouseY) {
+        if (mouseX < layout.durationTextX() || mouseX >= MachineRecipeLayout.CATEGORY_WIDTH - layout.durationTextX()) return false;
+        int y = layout.airTextY(recipe);
+        for (MachineRecipeDisplay.AirDisplay air : recipe.airInputs()) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) {
+                tooltip.addAll(air.tooltip(true));
+                return true;
+            }
+            y += TEXT_LINE_SPACING;
+        }
+        for (MachineRecipeDisplay.AirDisplay air : recipe.airOutputs()) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) {
+                tooltip.addAll(air.tooltip(false));
+                return true;
+            }
+            y += TEXT_LINE_SPACING;
+        }
+        return false;
     }
 
 }

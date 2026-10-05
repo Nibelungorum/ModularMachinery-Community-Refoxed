@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
@@ -114,6 +115,25 @@ public final class MachineRecipeBuilder {
         return custom(new CustomRecipeIo(MekanismPortFamilies.HEAT, IOType.OUTPUT,
                 heatOutputPayload(heat)));
     }
+    public MachineRecipeBuilder inputAir(long airPerTick, float minPressure) { return inputAir(airPerTick, minPressure, List.of()); }
+    public MachineRecipeBuilder inputAir(long airPerTick, float minPressure, List<String> tags) {
+        return requirement(AirRequirement.input(airPerTick, minPressure, tags));
+    }
+    public MachineRecipeBuilder outputAir(long airPerTick) { return outputAir(airPerTick, List.of()); }
+    public MachineRecipeBuilder outputAir(long airPerTick, List<String> tags) {
+        return requirement(AirRequirement.output(airPerTick, tags));
+    }
+
+    public static JsonObject airInputPayload(long airPerTick, float minPressure, List<String> tags) {
+        return AirRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
+                AirRequirement.input(airPerTick, minPressure, tags)).getOrThrow().getAsJsonObject();
+    }
+
+    public static JsonObject airOutputPayload(long airPerTick, List<String> tags) {
+        return AirRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
+                AirRequirement.output(airPerTick, tags)).getOrThrow().getAsJsonObject();
+    }
+
     public MachineRecipeBuilder inputStress(double stress, double minRpm) { return inputStress(stress, minRpm, List.of()); }
     public MachineRecipeBuilder inputStress(double stress, double minRpm, List<String> tags) {
         return requirement(StressRequirement.input(stress, minRpm, tags));

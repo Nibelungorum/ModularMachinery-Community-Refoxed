@@ -14,11 +14,14 @@ import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
+import cn.howxu.mmcr.api.compat.pneumaticcraft.AirState;
+import cn.howxu.mmcr.api.compat.pneumaticcraft.PneumaticAirFacet;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
@@ -130,6 +133,22 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             IEnergyStorage energyStorage = CapabilityFactories.energyStorage(capability);
             ChemicalViewFacet chemical = capability.facet(ChemicalViewFacet.class).orElse(null);
             SourceViewFacet source = capability.facet(SourceViewFacet.class).orElse(null);
+            PneumaticAirFacet air = capability.facet(PneumaticAirFacet.class).orElse(null);
+            if (air != null) {
+                AirState current = air.state();
+                AvailabilityState previous = availabilityStates.put(new AvailabilityKey(capability.type(), capability.directions()),
+                        new AvailabilityState(current.air(), List.of(PneumaticIds.AIR), List.of(), current));
+                if (!notify || previous == null || previous.air() == null) continue;
+                AirState before = previous.air();
+                if (capability.directions().supports(IOType.INPUT)
+                        && (Math.max(0L, current.air()) > Math.max(0L, before.air()) || current.pressure() > before.pressure())) {
+                    notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, PneumaticIds.AIR);
+                }
+                if (capability.directions().supports(IOType.OUTPUT) && current.outputCapacity() > before.outputCapacity()) {
+                    notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, PneumaticIds.AIR);
+                }
+                continue;
+            }
             Object resource = chemical == null
                     ? valueStorage == null && energyStorage == null ? null : capability.type()
                     : chemical.chemicalId().orElse(null);
@@ -180,7 +199,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 }
             }
             AvailabilityState previous = availabilityStates.put(new AvailabilityKey(capability.type(), capability.directions()),
-                    new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
+                    new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots), null));
             if (!notify) continue;
             long previousAmount = previous == null ? 0L : previous.amount();
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
@@ -262,7 +281,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         }
     }
 
-    private record AvailabilityState(long amount, List<Object> resources, List<SlotAvailability> slots) { }
+    private record AvailabilityState(long amount, List<Object> resources, List<SlotAvailability> slots,
+                                     @Nullable AirState air) { }
 
     private record AvailabilityKey(CapabilityType type, CapabilityDirections directions) { }
 

@@ -41,6 +41,9 @@ public final class IoAdapters {
         };
     }
     private static OutputAcceptance wrap(OutputSimulation value) { return new AcceptanceAdapter(value); }
+    private static AirState wrap(cn.howxu.mmcr.api.compat.pneumaticcraft.AirState value) {
+        return new AirState(value.position(), value.air(), value.volume(), value.dangerPressure(), value.criticalPressure());
+    }
     private static StressState wrap(cn.howxu.mmcr.api.compat.create.StressState value) {
         return new StressState(value.position(), value.actualRpm(), value.theoreticalRpm(), value.generatedRpm(),
                 value.baseContribution(), value.actualContribution(), value.networkCapacity(), value.networkStress(),
@@ -57,6 +60,8 @@ public final class IoAdapters {
         public long chemicalOutputCapacity(ResourceLocation id) { return delegate.chemicalOutputCapacity(id); }
         public List<HeatState> heatInputs() { return delegate.heatInputs().stream().map(v -> new HeatState(v.heat(), v.temperature(), v.heatCapacity())).toList(); }
         public List<HeatState> heatOutputs() { return delegate.heatOutputs().stream().map(v -> new HeatState(v.heat(), v.temperature(), v.heatCapacity())).toList(); }
+        public List<AirState> airInputs() { return delegate.airInputs().stream().map(IoAdapters::wrap).toList(); }
+        public List<AirState> airOutputs() { return delegate.airOutputs().stream().map(IoAdapters::wrap).toList(); }
         public List<StressState> stressInputs() { return delegate.stressInputs().stream().map(IoAdapters::wrap).toList(); }
         public List<StressState> stressOutputs() { return delegate.stressOutputs().stream().map(IoAdapters::wrap).toList(); }
         public long energyInput() { return delegate.energyInput(); }

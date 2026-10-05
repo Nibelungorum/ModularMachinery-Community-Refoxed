@@ -49,6 +49,9 @@ public final class BlockAdapters {
     public static BlockCondition stressInput() { return StructureAdapters.wrap(InterfacePredicates.anyStressInput()); }
     public static BlockCondition stressOutput() { return StructureAdapters.wrap(InterfacePredicates.anyStressOutput()); }
     public static BlockCondition stressPorts() { return StructureAdapters.wrap(InterfacePredicates.anyStressPorts()); }
+    public static BlockCondition airInput() { return StructureAdapters.wrap(InterfacePredicates.anyAirInput()); }
+    public static BlockCondition airOutput() { return StructureAdapters.wrap(InterfacePredicates.anyAirOutput()); }
+    public static BlockCondition airPorts() { return StructureAdapters.wrap(InterfacePredicates.anyAirPorts()); }
     public static BlockCondition itemPorts() { return StructureAdapters.wrap(InterfacePredicates.anyItemPorts()); }
     public static BlockCondition fluidPorts() { return StructureAdapters.wrap(InterfacePredicates.anyFluidPorts()); }
     public static BlockCondition energyPorts() { return StructureAdapters.wrap(InterfacePredicates.anyEnergyPorts()); }

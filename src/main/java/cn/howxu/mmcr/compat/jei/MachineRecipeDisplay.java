@@ -21,6 +21,8 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
+import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import com.mojang.serialization.DynamicOps;
@@ -234,6 +236,42 @@ public record MachineRecipeDisplay(
         }
     }
 
+    public List<AirDisplay> airInputs() { return airDisplays(IOType.INPUT); }
+
+    public List<AirDisplay> airOutputs() { return airDisplays(IOType.OUTPUT); }
+
+    private List<AirDisplay> airDisplays(IOType io) {
+        return recipe.runtimeRequirements().stream()
+                .filter(AirRequirement.class::isInstance)
+                .map(AirRequirement.class::cast)
+                .filter(requirement -> requirement.io() == io)
+                .map(requirement -> new AirDisplay(requirement.airPerTick(), requirement.minPressure(), requirement.tags()))
+                .toList();
+    }
+
+    /** Air is the resource; minimum pressure is an input condition, including zero-rate inputs.
+     * @author howxu <dev@howxu.cn>
+     */
+    public record AirDisplay(long airPerTick, float minPressure, List<String> tags) {
+        public AirDisplay { tags = List.copyOf(tags); }
+
+        private String pressureText() {
+            return new BigDecimal(Float.toString(minPressure)).stripTrailingZeros().toPlainString();
+        }
+
+        public Component label(boolean input) {
+            if (!input) return Component.translatable("jei.mmcr.machine_recipe.air_out", ReadableNumber.format(airPerTick));
+            if (airPerTick == 0) return Component.translatable("jei.mmcr.machine_recipe.air_condition", pressureText());
+            return Component.translatable("jei.mmcr.machine_recipe.air_in", ReadableNumber.format(airPerTick), pressureText());
+        }
+
+        public List<Component> tooltip(boolean input) {
+            if (!input) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_out.tooltip", airPerTick));
+            if (airPerTick == 0) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_condition.tooltip", pressureText()));
+            return List.of(Component.translatable("jei.mmcr.machine_recipe.air_in.tooltip", airPerTick, pressureText()));
+        }
+    }
+
     public static Component minimumTemperatureLabel(double kelvin) {
         var unit = MekanismTemperatureDisplay.configuredUnit();
         return Component.translatable("jei.mmcr.machine_recipe.mekanism_temperature",
@@ -258,7 +296,8 @@ public record MachineRecipeDisplay(
                         && !(requirement instanceof SmartInterfaceRequirement)
                         && !(requirement instanceof LevelRequirement)
                         && !(requirement instanceof StageRequirement)
-                        && !(requirement instanceof StressRequirement))
+                        && !(requirement instanceof StressRequirement)
+                        && !(requirement instanceof AirRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,

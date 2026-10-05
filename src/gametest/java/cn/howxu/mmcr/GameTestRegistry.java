@@ -11,6 +11,8 @@ import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksDeviceGameTest;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksRecipeGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeGameTest;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticTransportGameTest;
 
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
@@ -365,6 +367,24 @@ public final class GameTestRegistry {
             register(event, "ars_source_recipe_restore_wakeups", 20,
                     helper -> new ArsSourceRecipeGameTest().recipeLifecycleConsumesOnceAndNativeTransfersWakeSearches(helper));
         }
+        if (ModList.get().isLoaded("pneumaticcraft")) {
+            register(event, "pneumatic_native_tube_transport_cache", 20,
+                    helper -> new PneumaticTransportGameTest().nativeTubeEqualizationAndCacheLifecycle(helper));
+            register(event, "pneumatic_native_compressor_transport", 20,
+                    helper -> new PneumaticTransportGameTest().nativeCompressorFeedsInputThroughTube(helper));
+            register(event, "pneumatic_native_single_tick", 20,
+                    helper -> new PneumaticTransportGameTest().serverTickerRunsNativeHandlerExactlyOnce(helper));
+            register(event, "pneumatic_signed_persistence_sync", 20,
+                    helper -> new PneumaticTransportGameTest().signedPersistenceAndSyncPreserveNativeState(helper));
+            register(event, "pneumatic_native_recipe_validation", 20,
+                    helper -> new PneumaticTransportGameTest().recipeMutationRechecksDirectionPressureAndSafety(helper));
+            register(event, "pneumatic_native_signed_wakeups", 20,
+                    helper -> new PneumaticTransportGameTest().directNativeChangesPublishSignedPressureAndCapacityWakeups(helper));
+            register(event, "pneumatic_air_recipe_restore_wakeups", 20,
+                    helper -> new PneumaticRecipeGameTest().recipeLifecycleRestoreAndNativeRefillWakeSearch(helper));
+            register(event, "pneumatic_air_condition_output_recovery", 20,
+                    helper -> new PneumaticRecipeGameTest().pressureOnlyFallbackAndFullOutputRecovery(helper));
+        }
         if (FluxNetworksBridge.get().available()) {
             register(event, "fluxnetworks_device_menu", 100,
                     helper -> new FluxNetworksDeviceGameTest().nativeMenuAndCapabilities(helper));
@@ -403,6 +423,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        if (ModList.get().isLoaded("pneumaticcraft")) {
+            PneumaticRecipeGameTest.registerMachineDefinitions(event);
+        }
         if (FluxNetworksBridge.get().available()) {
             event.registerMachine(MachineBuilder.machine(FluxNetworksRecipeGameTest.MACHINE_ID)
                     .displayNameKey("machine.mmcr_test.fluxnetworks")
@@ -461,6 +484,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        if (ModList.get().isLoaded("pneumaticcraft")) {
+            PneumaticRecipeGameTest.registerMachineStructures(event);
+        }
         if (FluxNetworksBridge.get().available()) {
             event.registerStructure(FluxNetworksRecipeGameTest.MACHINE_ID, structure -> {
                 structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("ICO", " P ")
@@ -632,6 +658,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerRecipes(MachineRecipeRegistration event) {
+        if (ModList.get().isLoaded("pneumaticcraft")) {
+            PneumaticRecipeGameTest.registerRecipes(event);
+        }
         if (FluxNetworksBridge.get().available()) {
             event.registerRecipe(MachineRecipeBuilder.recipe(FluxNetworksRecipeGameTest.RECIPE_ID)
                     .recipePool(FluxNetworksRecipeGameTest.MACHINE_ID).priority(10).duration(5).parallelized(true).inputEnergy(10L).build());

@@ -12,6 +12,7 @@ import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
 import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
@@ -482,6 +483,7 @@ public final class PortKinds {
         defaults.addAll(CreateBridge.get().portKinds());
         defaults.addAll(ArsNouveauBridge.get().portKinds());
         defaults.addAll(FluxNetworksBridge.get().portKinds());
+        defaults.addAll(PneumaticCraftBridge.get().portKinds());
         for (MekanismBridge.PortDeclaration declaration : MekanismBridge.get().portDeclarations()) {
             if (declaration.type() == MekanismBridge.PortType.CHEMICAL) {
                 defaults.add(new ChemicalKind(declaration.id(), declaration.ioType(), declaration.tier(),

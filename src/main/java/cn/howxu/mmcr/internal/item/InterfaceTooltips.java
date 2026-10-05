@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.item;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -37,6 +38,13 @@ public final class InterfaceTooltips {
                 return List.of(Component.translatable(FluxNetworksIds.INPUT.equals(kind.id())
                                 ? "tooltip.mmcr.fluxnetworks.input" : "tooltip.mmcr.fluxnetworks.output"),
                         Component.translatable("tooltip.mmcr.fluxnetworks.configure"));
+            }
+            if (PneumaticIds.INPUT.equals(kind.id()) || PneumaticIds.OUTPUT.equals(kind.id())) {
+                return List.of(Component.translatable(PneumaticIds.INPUT.equals(kind.id())
+                                ? "tooltip.mmcr.pneumaticcraft.input" : "tooltip.mmcr.pneumaticcraft.output"),
+                        Component.translatable("tooltip.mmcr.pneumaticcraft.volume", 10_000),
+                        Component.translatable("tooltip.mmcr.pneumaticcraft.safe_pressure", 20),
+                        Component.translatable("tooltip.mmcr.pneumaticcraft.equalization"));
             }
             if (kind instanceof PortKinds.ChemicalKind chemical) return chemicalTooltip(chemical);
             if (kind instanceof PortKinds.HeatKind heat) return heatTooltip(heat);

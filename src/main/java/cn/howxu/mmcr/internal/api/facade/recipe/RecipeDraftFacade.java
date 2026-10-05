@@ -33,6 +33,10 @@ final class RecipeDraftFacade implements RecipeDraft {
     public RecipeDraft inputFluid(Fluid fluid, int amount) { delegate.inputFluid(fluid, amount); return this; }
     public RecipeDraft inputFluid(Fluid fluid, int amount, float consumeChance) { delegate.inputFluid(fluid, amount, consumeChance); return this; }
     public RecipeDraft outputFluid(Fluid fluid, int amount) { delegate.outputFluid(fluid, amount); return this; }
+    public RecipeDraft inputAir(long airPerTick, float minPressure) { delegate.inputAir(airPerTick, minPressure); return this; }
+    public RecipeDraft inputAir(long airPerTick, float minPressure, List<String> tags) { delegate.inputAir(airPerTick, minPressure, tags); return this; }
+    public RecipeDraft outputAir(long airPerTick) { delegate.outputAir(airPerTick); return this; }
+    public RecipeDraft outputAir(long airPerTick, List<String> tags) { delegate.outputAir(airPerTick, tags); return this; }
     public RecipeDraft inputStress(double stress, double minRpm) { delegate.inputStress(stress, minRpm); return this; }
     public RecipeDraft inputStress(double stress, double minRpm, List<String> tags) { delegate.inputStress(stress, minRpm, tags); return this; }
     public RecipeDraft outputStress(double stress, double rpm) { delegate.outputStress(stress, rpm); return this; }

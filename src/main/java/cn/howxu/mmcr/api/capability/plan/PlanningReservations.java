@@ -259,7 +259,12 @@ public final class PlanningReservations {
                 : reserveValue(storage, Integer.MAX_VALUE, storage.getMaxEnergyStored(), storage.getEnergyStored(), amount, insert, false);
     }
 
-    private long valueAvailable(Object storage, long capacity, long amount, boolean insert) {
+    public boolean reserveValueTotal(Object identity, long capacity, long currentAmount,
+                                     long amount, boolean insert) {
+        return reserveValue(identity, Long.MAX_VALUE, capacity, currentAmount, amount, insert, false);
+    }
+
+    public long valueAvailable(Object storage, long capacity, long amount, boolean insert) {
         long reserved = values == null ? 0L : values.getOrDefault(storage, 0L);
         long available;
         try {

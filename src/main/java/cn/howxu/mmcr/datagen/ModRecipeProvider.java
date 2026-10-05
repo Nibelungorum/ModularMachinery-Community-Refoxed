@@ -5,6 +5,7 @@ import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -223,6 +224,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         fluxNetworksInterfaceRecipes();
         createStressInterfaceRecipes();
         arsSourceInterfaceRecipes();
+        pneumaticAirInterfaceRecipes();
         mekanismPortsRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
@@ -695,6 +697,22 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .pattern("G").pattern("C").pattern("J")
                 .define('G', gem).define('J', jar).define('C', ModBlocks.BASIC_CASING.get())
                 .save(whenLoaded("ars_nouveau"));
+    }
+
+    private void pneumaticAirInterfaceRecipes() {
+        if (!ModItems.ITEMS.containsKey(PneumaticIds.INPUT) || !ModItems.ITEMS.containsKey(PneumaticIds.OUTPUT)) return;
+        ItemLike tube = externalItem(PneumaticIds.MOD_ID, PneumaticIds.ADVANCED_PRESSURE_TUBE.getPath());
+        if (tube == Items.AIR) return;
+        shaped(ModItems.ITEMS.get(PneumaticIds.INPUT).get(), 1)
+                .pattern("A").pattern("B")
+                .define('A', tube)
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded(PneumaticIds.MOD_ID));
+        shaped(ModItems.ITEMS.get(PneumaticIds.OUTPUT).get(), 1)
+                .pattern("A").pattern("B")
+                .define('A', ModBlocks.BASIC_CASING.get())
+                .define('B', tube)
+                .save(whenLoaded(PneumaticIds.MOD_ID));
     }
 
     private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {

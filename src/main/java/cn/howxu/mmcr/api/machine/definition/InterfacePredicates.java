@@ -8,6 +8,8 @@ import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
@@ -189,6 +191,22 @@ public final class InterfacePredicates {
         return BlockPredicate.anyOf(predicates);
     }
 
+    public static BlockPredicate anyOfAirInput() {
+        return PneumaticCraftBridge.get().available() ? anyOfPorts(PneumaticIds.AIR, IOType.INPUT) : BlockPredicate.none();
+    }
+
+    public static BlockPredicate anyAirInput() { return anyOfAirInput(); }
+
+    public static BlockPredicate anyOfAirOutput() {
+        return PneumaticCraftBridge.get().available() ? anyOfPorts(PneumaticIds.AIR, IOType.OUTPUT) : BlockPredicate.none();
+    }
+
+    public static BlockPredicate anyAirOutput() { return anyOfAirOutput(); }
+
+    public static BlockPredicate anyOfAirPorts() { return combine(anyOfAirInput(), anyOfAirOutput()); }
+
+    public static BlockPredicate anyAirPorts() { return anyOfAirPorts(); }
+
     public static BlockPredicate anyOfStressInput() {
         return CreateBridge.get().available() ? anyOfPorts(CreateRecipeTypes.STRESS, IOType.INPUT) : BlockPredicate.none();
     }
@@ -221,6 +239,8 @@ public final class InterfacePredicates {
         addIfPresent(predicates, anyOfHeatOutput());
         addIfPresent(predicates, anyOfStressInput());
         addIfPresent(predicates, anyOfStressOutput());
+        addIfPresent(predicates, anyOfAirInput());
+        addIfPresent(predicates, anyOfAirOutput());
         addIfPresent(predicates, anyOfSourceInput());
         addIfPresent(predicates, anyOfSourceOutput());
         return BlockPredicate.any(predicates.toArray(BlockPredicate[]::new));
