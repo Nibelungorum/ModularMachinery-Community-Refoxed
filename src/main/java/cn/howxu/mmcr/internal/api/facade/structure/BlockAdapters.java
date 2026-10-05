@@ -40,6 +40,9 @@ public final class BlockAdapters {
     public static BlockCondition sourceInput() { return StructureAdapters.wrap(InterfacePredicates.anySourceInput()); }
     public static BlockCondition sourceOutput() { return StructureAdapters.wrap(InterfacePredicates.anySourceOutput()); }
     public static BlockCondition sourcePorts() { return StructureAdapters.wrap(InterfacePredicates.anySourcePorts()); }
+    public static BlockCondition manaInput() { return StructureAdapters.wrap(InterfacePredicates.anyManaInput()); }
+    public static BlockCondition manaOutput() { return StructureAdapters.wrap(InterfacePredicates.anyManaOutput()); }
+    public static BlockCondition manaPorts() { return StructureAdapters.wrap(InterfacePredicates.anyManaPorts()); }
     public static BlockCondition chemicalInput() { return StructureAdapters.wrap(InterfacePredicates.anyChemicalInput()); }
     public static BlockCondition chemicalOutput() { return StructureAdapters.wrap(InterfacePredicates.anyChemicalOutput()); }
     public static BlockCondition radioactiveChemicalInput() { return StructureAdapters.wrap(InterfacePredicates.anyRadioactiveChemicalInput()); }

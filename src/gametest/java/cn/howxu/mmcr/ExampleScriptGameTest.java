@@ -3,6 +3,8 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
+import cn.howxu.mmcr.compat.botania.BotaniaBridge;
+import cn.howxu.mmcr.compat.botania.BotaniaManaExampleGameTest;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -25,6 +27,14 @@ import java.util.regex.Pattern;
  * @author howxu <dev@howxu.cn>
  */
 public class ExampleScriptGameTest {
+    public void botaniaManaExamplesExecute(GameTestHelper helper) {
+        if (!BotaniaBridge.get().available()) {
+            helper.succeed();
+            return;
+        }
+        new BotaniaManaExampleGameTest().examplesExecute(helper);
+    }
+
     public void nativeRecipeRequirementsDecode(GameTestHelper helper) {
         var context = new ContextFactory().enter();
         var scope = context.initStandardObjects();

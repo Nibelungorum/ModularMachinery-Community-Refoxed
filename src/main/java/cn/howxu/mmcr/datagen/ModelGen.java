@@ -7,6 +7,8 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.compat.create.loaded.StressInterfaceAppearance;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.client.ManaPortAppearance;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -30,7 +32,9 @@ public final class ModelGen extends BlockStateProvider {
     @Override
     protected void registerStatesAndModels() {
         registerModels((block, name) -> {
-                    if (isCreateStressPort(name)) {
+                    if (isManaPort(name)) {
+                        ManaPortAppearance.generateModels(this, block.get(), name);
+                    } else if (isCreateStressPort(name)) {
                         StressInterfaceAppearance.generateModels(this, block.get(), name);
                     } else {
                         var model = models().cubeAll(name, textureFor(name));
@@ -89,7 +93,7 @@ public final class ModelGen extends BlockStateProvider {
     }
 
     private static boolean shouldGenerateBlockModels(String name, Supplier<? extends Block> block) {
-        if (isCreateStressPort(name)) return true;
+        if (isManaPort(name) || isCreateStressPort(name)) return true;
         return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && !"smart_interface".equals(name) && !"module_bridge".equals(name)
                 && !(block.get() instanceof MachineControllerBlock)
@@ -100,6 +104,10 @@ public final class ModelGen extends BlockStateProvider {
 
     private static boolean isCreateStressPort(String name) {
         return "create_stress_input_interface".equals(name) || "create_stress_output_interface".equals(name);
+    }
+
+    private static boolean isManaPort(String name) {
+        return BotaniaManaIds.INPUT.equals(name) || BotaniaManaIds.OUTPUT.equals(name);
     }
 
     @FunctionalInterface

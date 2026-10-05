@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -140,6 +142,14 @@ public final class MachineRecipeBuilder {
     }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.INPUT, new EnergyInput(fePerTick).fePerTick())); }
     public MachineRecipeBuilder inputSource(long amount) { return requirement(SourceRequirement.input(amount)); }
+    public MachineRecipeBuilder inputMana(long amount) {
+        return custom(new CustomRecipeIo(BotaniaManaIds.MANA, IOType.INPUT,
+                ManaRecipeDeclarations.inputPayload(amount)));
+    }
+    public MachineRecipeBuilder outputMana(long amount) {
+        return custom(new CustomRecipeIo(BotaniaManaIds.MANA, IOType.OUTPUT,
+                ManaRecipeDeclarations.outputPayload(amount)));
+    }
     public MachineRecipeBuilder outputSource(long amount) {
         return custom(new CustomRecipeIo(ArsSourceIds.SOURCE, IOType.OUTPUT,
                 SourceRecipeDeclarations.outputPayload(amount)));

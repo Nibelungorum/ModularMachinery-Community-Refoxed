@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.resources.ResourceLocation;
 
@@ -24,6 +25,10 @@ record PortTagSet(List<ResourceLocation> tags, boolean optionalEntries) {
                     : family.familyId().getNamespace() + "_" + family.familyId().getPath();
             tags.add(MMCR.id(prefix + "_ports"));
             tags.add(MMCR.id(prefix + "_" + family.ioType().getSerializedName() + "_ports"));
+            if (family.familyId().equals(BotaniaManaIds.MANA)) {
+                tags.add(MMCR.id("mana_ports"));
+                tags.add(MMCR.id("mana_" + family.ioType().getSerializedName() + "_ports"));
+            }
         });
         kind.modDependencies().forEach(dependency -> tags.add(MMCR.id(dependency + "_ports")));
         return new PortTagSet(List.copyOf(tags), !kind.modDependencies().isEmpty());

@@ -27,6 +27,6 @@ public interface JeiIngredientAdapter {
     Optional<IRecipeTransferHandler<?, ?>> transferHandler();
 
     default Component transferError(RecipeIoEntry entry) {
-        return Component.translatable("jei.mmcr.transfer.unsupported", entry.typeId());
+        return Component.translatable("jei.mmcr.transfer.unsupported", entry.typeId().toString());
     }
 }

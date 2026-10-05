@@ -2275,6 +2275,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (portId.startsWith("fluid_output_hatch")) return Component.translatable("message.mmcr.port_requirement.fluid_output");
         if (portId.startsWith("energy_input_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_input");
         if (portId.startsWith("energy_output_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_output");
+        if (portId.equals("mana_input_pool")) return Component.translatable("message.mmcr.port_requirement.mana_input");
+        if (portId.equals("mana_output_pool")) return Component.translatable("message.mmcr.port_requirement.mana_output");
         if (portId.equals("factory_controller")) return Component.translatable("message.mmcr.port_requirement.factory_controller");
         return Component.literal(portId);
     }

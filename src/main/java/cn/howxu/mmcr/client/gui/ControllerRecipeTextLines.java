@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.compat.botania.ManaOutput;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
@@ -11,8 +12,10 @@ import cn.howxu.mmcr.util.SaturatingLong;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -101,6 +104,7 @@ final class ControllerRecipeTextLines {
     private static boolean isRenderable(MachineOutput output, long amount) {
         if (amount <= 0L) return false;
         if (output instanceof SourceOutput) return true;
+        if (output instanceof ManaOutput) return true;
         if (output instanceof MachineOutput.ItemOutput item) return !item.stack().isEmpty();
         if (output instanceof MachineOutput.FluidOutput fluid) return !fluid.stack().isEmpty();
         if (output instanceof LoadedChemicalOutput chemical) {
@@ -111,6 +115,12 @@ final class ControllerRecipeTextLines {
 
     private static ControllerTextLine line(MachineOutput output, long amount) {
         ControllerTextLine.Icon icon = icon(output, amount);
+        if (output instanceof ManaOutput) {
+            return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.mana",
+                    ReadableNumber.format(amount)), MachineControllerScreen.STATUS_LABEL_COLOR,
+                    icon, List.of(Component.translatable("gui.mmcr.mana.exact", ReadableNumber.formatExact(amount))),
+                    OUTPUT_INDENT);
+        }
         if (output instanceof SourceOutput) {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.source",
                     ReadableNumber.format(amount)), MachineControllerScreen.STATUS_LABEL_COLOR,
@@ -151,6 +161,10 @@ final class ControllerRecipeTextLines {
     }
 
     private static ControllerTextLine.Icon icon(MachineOutput output, long amount) {
+        if (output instanceof ManaOutput) {
+            return new ControllerTextLine.ItemIcon(new ItemStack(BuiltInRegistries.ITEM.get(
+                    ResourceLocation.parse("botania:creative_pool"))));
+        }
         if (output instanceof SourceOutput) {
             return new ControllerTextLine.SourceIcon();
         }

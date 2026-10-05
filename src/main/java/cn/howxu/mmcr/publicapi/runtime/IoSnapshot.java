@@ -32,6 +32,8 @@ public interface IoSnapshot {
     long energyInput();
     long sourceInput();
     long sourceOutputCapacity();
+    long manaInput();
+    long manaOutputCapacity();
     long itemAmount(Ingredient ingredient);
     long fluidAmount(FluidIngredient ingredient);
     long itemOutputCapacity(ItemStack stack);

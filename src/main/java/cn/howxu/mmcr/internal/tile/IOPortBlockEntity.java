@@ -13,12 +13,14 @@ import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
+import cn.howxu.mmcr.api.compat.botania.ManaViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
@@ -130,6 +132,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             IEnergyStorage energyStorage = CapabilityFactories.energyStorage(capability);
             ChemicalViewFacet chemical = capability.facet(ChemicalViewFacet.class).orElse(null);
             SourceViewFacet source = capability.facet(SourceViewFacet.class).orElse(null);
+            ManaViewFacet mana = capability.facet(ManaViewFacet.class).orElse(null);
             Object resource = chemical == null
                     ? valueStorage == null && energyStorage == null ? null : capability.type()
                     : chemical.chemicalId().orElse(null);
@@ -157,6 +160,12 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 resources.clear();
                 resources.add(resource);
                 amount = source.amount();
+                slots.add(new SlotAvailability(resource, amount));
+            } else if (mana != null) {
+                resource = BotaniaManaIds.MANA;
+                resources.clear();
+                resources.add(resource);
+                amount = mana.amount();
                 slots.add(new SlotAvailability(resource, amount));
             } else {
                 IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);

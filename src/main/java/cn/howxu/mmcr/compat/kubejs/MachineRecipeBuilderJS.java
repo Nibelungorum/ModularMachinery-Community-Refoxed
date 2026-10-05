@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
@@ -163,6 +165,14 @@ public class MachineRecipeBuilderJS {
 
     public MachineRecipeBuilderJS inputSource(long amount) {
         return custom(ArsSourceIds.SOURCE.toString(), IOType.INPUT, SourceRecipeDeclarations.inputPayload(amount));
+    }
+
+    public MachineRecipeBuilderJS inputMana(long amount) {
+        return custom(BotaniaManaIds.MANA.toString(), IOType.INPUT, ManaRecipeDeclarations.inputPayload(amount));
+    }
+
+    public MachineRecipeBuilderJS outputMana(long amount) {
+        return custom(BotaniaManaIds.MANA.toString(), IOType.OUTPUT, ManaRecipeDeclarations.outputPayload(amount));
     }
 
     public MachineRecipeBuilderJS outputSource(long amount) {

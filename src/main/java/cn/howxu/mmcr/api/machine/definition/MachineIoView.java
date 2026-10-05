@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine.definition;
 
+import cn.howxu.mmcr.api.compat.botania.ManaViewFacet;
+
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
@@ -199,6 +201,22 @@ public final class MachineIoView {
 
     public long sourceInput() {
         return sourceValue(IOType.INPUT, false);
+    }
+
+    public long manaInput() { return manaValue(IOType.INPUT, false); }
+
+    public long manaOutputCapacity() { return manaValue(IOType.OUTPUT, true); }
+
+    private long manaValue(IOType direction, boolean freeCapacity) {
+        long total = 0L;
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (MachineCapability capability : capabilities(direction)) {
+            ManaViewFacet mana = capability.facet(ManaViewFacet.class).orElse(null);
+            if (mana == null || !seen.add(mana.queryIdentity())) continue;
+            long value = freeCapacity ? Math.max(0L, mana.capacity() - mana.amount()) : Math.max(0L, mana.amount());
+            total = saturatedAdd(total, value);
+        }
+        return total;
     }
 
     public long sourceOutputCapacity() {

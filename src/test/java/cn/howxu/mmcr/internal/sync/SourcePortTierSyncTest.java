@@ -67,9 +67,9 @@ class SourcePortTierSyncTest {
     @Test
     void old_category_wire_ordinals_stay_stable_and_source_is_appended() {
         assertThat(PortTiers.PortCategory.values()).containsExactly(PortTiers.PortCategory.ITEM,
-                PortTiers.PortCategory.FLUID, PortTiers.PortCategory.ENERGY, PortTiers.PortCategory.SOURCE);
+                PortTiers.PortCategory.FLUID, PortTiers.PortCategory.ENERGY, PortTiers.PortCategory.SOURCE, PortTiers.PortCategory.MANA);
         assertThat(PortTierLimits.PortCategory.values()).containsExactly(PortTierLimits.PortCategory.ITEM,
-                PortTierLimits.PortCategory.FLUID, PortTierLimits.PortCategory.ENERGY, PortTierLimits.PortCategory.SOURCE);
+                PortTierLimits.PortCategory.FLUID, PortTierLimits.PortCategory.ENERGY, PortTierLimits.PortCategory.SOURCE, PortTierLimits.PortCategory.MANA);
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         try {
             for (var category : PortTierRequirementSpec.PortCategory.values()) buffer.writeEnum(category);
@@ -77,6 +77,7 @@ class SourcePortTierSyncTest {
             assertThat(buffer.readVarInt()).isEqualTo(1);
             assertThat(buffer.readVarInt()).isEqualTo(2);
             assertThat(buffer.readVarInt()).isEqualTo(3);
+            assertThat(buffer.readVarInt()).isEqualTo(4);
         } finally {
             buffer.release();
         }

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -49,6 +50,8 @@ public final class LootTableGen extends LootTableProvider {
         Map<Path, String> conditions = Map.of(
                 paths.json(MMCR.id("blocks/" + ArsSourceIds.INPUT)), "ars_nouveau",
                 paths.json(MMCR.id("blocks/" + ArsSourceIds.OUTPUT)), "ars_nouveau",
+                paths.json(MMCR.id("blocks/" + BotaniaManaIds.INPUT)), "botania",
+                paths.json(MMCR.id("blocks/" + BotaniaManaIds.OUTPUT)), "botania",
                 paths.json(MMCR.id("blocks/" + FluxNetworksIds.INPUT)), FluxNetworksIds.MOD_ID,
                 paths.json(MMCR.id("blocks/" + FluxNetworksIds.OUTPUT)), FluxNetworksIds.MOD_ID);
         Path mirrorTable = paths.json(MMCR.id("blocks/eaep_me_mirror_pattern_interface"));

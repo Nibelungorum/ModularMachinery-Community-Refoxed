@@ -56,5 +56,6 @@ runs {
 
     data {
         arguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        arguments.addAll '--existing-mod', 'botania'
     }
 }
