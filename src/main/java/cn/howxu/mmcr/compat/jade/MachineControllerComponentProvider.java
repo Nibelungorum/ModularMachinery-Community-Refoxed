@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jade;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.gui.RecipePoolDisplayName;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -22,7 +21,7 @@ import java.util.List;
 public enum MachineControllerComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
-    static final ResourceLocation UID = MMCR.id("machine_controller");
+    static final ResourceLocation UID = MachineControllerDataProvider.UID;
 
     @Override
     public ResourceLocation getUid() {

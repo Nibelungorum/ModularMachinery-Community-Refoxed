@@ -3,6 +3,8 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
@@ -10,6 +12,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
+import cn.howxu.mmcr.internal.sync.ClientRuntimeSnapshotBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.IRecipeManager;
@@ -69,10 +72,15 @@ class JeiRuntimeReloaderTest {
     void clearRuntime() {
         JeiRuntimeReloader.clearRuntimeForTesting();
         RecipeRegistry.clearForTesting();
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
     }
 
     @BeforeEach
     void useDirectClientExecutor() {
+        MachineRegistry.clearForTesting();
+        MachineStructureRegistry.clearForTesting();
+        ClientRuntimeSnapshotBridge.resetForConnection();
         JeiRuntimeReloader.setClientExecutorForTesting(Runnable::run);
     }
 
@@ -82,6 +90,106 @@ class JeiRuntimeReloaderTest {
 
         assertThatCode(() -> JeiRuntimeReloader.reloadIfAvailable(RuntimeContentSnapshot.empty()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void snapshotReceivedBeforeJeiStartsIsReplayedWhenRuntimeBecomesAvailable() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        ResourceLocation machineId = MMCR.id("test_machine_name");
+        RuntimeContentSnapshot early = snapshotWithRecipe(machineId, MMCR.id("early_synced_recipe"));
+        RuntimeContentSnapshot latest = withVersion(snapshotWithRecipe(machineId, MMCR.id("latest_synced_recipe")), 2L);
+
+        JeiRuntimeReloader.reloadIfAvailable(early);
+        JeiRuntimeReloader.reloadIfAvailable(latest);
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
+        new JeiPlugin().onRuntimeAvailable(runtime(manager));
+
+        assertThat(manager.addedRecipeIds()).containsExactly(MMCR.id("latest_synced_recipe"));
+    }
+
+    @Test
+    void runtimeSyncAddsUpdatesAndRemovesStructuresWithoutClientServerScripts() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        ResourceLocation machineId = MMCR.id("server_only_structure");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        JeiRuntimeReloader.captureInitialStructures(List.of());
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+        RuntimeContentSnapshot first = snapshotWithRecipe(machineId, MMCR.id("server_only_recipe"));
+
+        assertThat(first.applyClient()).isTrue();
+        JeiRuntimeReloader.reloadIfAvailable(first);
+
+        assertThat(manager.addedStructures).singleElement().satisfies(display -> {
+            assertThat(display.machine().registryName()).isEqualTo(machineId);
+            assertThat(display.machine().pattern()).isEqualTo(first.structures().get(machineId).pattern());
+        });
+        MachineStructureDisplay oldDisplay = manager.addedStructures.getFirst();
+        MachineStructureDefinition replacement = new MachineStructureDefinition(machineId,
+                new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
+                PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+        RuntimeContentSnapshot updated = new RuntimeContentSnapshot(Map.of(machineId, replacement),
+                first.recipes(), Map.of(), Map.of(), first.machineRecipePools(), 2L);
+        manager.clearRecordedCalls();
+
+        assertThat(updated.applyClient()).isTrue();
+        JeiRuntimeReloader.reloadIfAvailable(updated);
+
+        assertThat(manager.hiddenStructures).containsExactly(oldDisplay);
+        assertThat(manager.addedStructures).singleElement().satisfies(display ->
+                assertThat(display.machine().pattern()).isEqualTo(replacement.pattern()));
+        MachineStructureDisplay updatedDisplay = manager.addedStructures.getFirst();
+        manager.clearRecordedCalls();
+        RuntimeContentSnapshot removed = withVersion(RuntimeContentSnapshot.empty(), 3L);
+
+        assertThat(removed.applyClient()).isTrue();
+        JeiRuntimeReloader.reloadIfAvailable(removed);
+
+        assertThat(manager.hiddenStructures).containsExactly(updatedDisplay);
+        assertThat(manager.addedStructures).isEmpty();
+    }
+
+    @Test
+    void firstStructureRefreshHidesTheDisplaysRegisteredDuringJeiStartup() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        ResourceLocation machineId = MMCR.id("initial_structure");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+        RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("initial_structure_recipe"));
+        snapshot.applyClient();
+        MachineStructureDisplay initial = MachineStructureDisplay.from(MachineRegistry.getMachine(machineId));
+        JeiRuntimeReloader.captureInitialStructures(List.of(initial));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshot);
+
+        assertThat(manager.hiddenStructures).containsExactly(initial);
+        assertThat(manager.addedStructures).singleElement();
+    }
+
+    @Test
+    void disconnectDiscardsQueuedRefreshAndAllowsLowerVersionOnNextServer() {
+        ResourceLocation machineId = MMCR.id("test_machine_name");
+        FakeRecipeManager previous = new FakeRecipeManager();
+        FakeRecipeManager next = new FakeRecipeManager();
+        List<Runnable> queued = new ArrayList<>();
+        JeiRuntimeReloader.setClientExecutorForTesting(queued::add);
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(previous));
+        JeiRuntimeReloader.reloadIfAvailable(withVersion(
+                snapshotWithRecipe(machineId, MMCR.id("old_server_recipe")), 90L));
+
+        new JeiPlugin().onRuntimeUnavailable();
+        JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, MMCR.id("new_server_recipe")));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(next));
+        queued.forEach(Runnable::run);
+
+        assertThat(previous.addedRecipeIds()).isEmpty();
+        assertThat(next.addedRecipeIds()).containsExactly(MMCR.id("new_server_recipe"));
+    }
+
+    private static RuntimeContentSnapshot withVersion(RuntimeContentSnapshot snapshot, long version) {
+        return new RuntimeContentSnapshot(snapshot.structures(), snapshot.recipes(), snapshot.controllerSpecs(),
+                snapshot.appearances(), snapshot.machineRecipePools(), version);
     }
 
     @Test
@@ -277,6 +385,8 @@ class JeiRuntimeReloaderTest {
     }
 
     private static final class FakeRecipeManager {
+        private final List<MachineStructureDisplay> addedStructures = new ArrayList<>();
+        private final List<MachineStructureDisplay> hiddenStructures = new ArrayList<>();
         private final List<RecipeType<?>> addedTypes = new ArrayList<>();
         private final List<ResourceLocation> addedRecipeIds = new ArrayList<>();
         private final List<RecipeType<?>> hiddenTypes = new ArrayList<>();
@@ -291,6 +401,18 @@ class JeiRuntimeReloaderTest {
                     JeiRuntimeReloaderTest.class.getClassLoader(),
                     new Class<?>[]{IRecipeManager.class},
                     (proxy, method, args) -> {
+                        if (args != null && args.length == 2 && args[0] == JeiMachineRecipeTypes.STRUCTURE) {
+                            Collection<?> displays = (Collection<?>) args[1];
+                            switch (method.getName()) {
+                                case "addRecipes" -> displays.stream().map(MachineStructureDisplay.class::cast)
+                                        .forEach(addedStructures::add);
+                                case "hideRecipes" -> displays.stream().map(MachineStructureDisplay.class::cast)
+                                        .forEach(hiddenStructures::add);
+                                case "unhideRecipes" -> { }
+                                default -> throw new UnsupportedOperationException(method.getName());
+                            }
+                            return null;
+                        }
                         if (method.getName().equals("addRecipes")) {
                             if (failNextAdd.compareAndSet(true, false)) {
                                 throw new IllegalStateException("synthetic JEI reload failure");
@@ -361,6 +483,8 @@ class JeiRuntimeReloaderTest {
         }
 
         void clearRecordedCalls() {
+            addedStructures.clear();
+            hiddenStructures.clear();
             addedTypes.clear();
             addedRecipeIds.clear();
             hiddenTypes.clear();

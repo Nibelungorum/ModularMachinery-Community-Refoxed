@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -14,9 +15,11 @@ import snownee.jade.api.IServerDataProvider;
 public enum RecipeOutputDataProvider implements IServerDataProvider<BlockAccessor> {
     INSTANCE;
 
+    static final ResourceLocation UID = MMCR.id("recipe_output");
+
     @Override
     public ResourceLocation getUid() {
-        return RecipeOutputComponentProvider.UID;
+        return UID;
     }
 
     @Override

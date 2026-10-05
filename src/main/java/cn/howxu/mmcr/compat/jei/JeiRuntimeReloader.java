@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import mezz.jei.api.runtime.IJeiRuntime;
@@ -8,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,6 +27,8 @@ public final class JeiRuntimeReloader {
 
     private static final Set<ResourceLocation> REGISTERED_RECIPE_POOL_CATEGORIES = ConcurrentHashMap.newKeySet();
     private static volatile Map<ResourceLocation, List<MachineRecipeDisplay>> visibleDisplaysByPool = Map.of();
+    private static volatile List<MachineStructureDisplay> visibleStructures = List.of();
+    private static volatile RuntimeContentSnapshot latestSnapshot;
     private static volatile boolean categoriesCaptured;
     private static volatile IJeiRuntime runtime;
     private static volatile long lastReloadedVersion = Long.MIN_VALUE;
@@ -44,19 +48,27 @@ public final class JeiRuntimeReloader {
         visibleDisplaysByPool = copyDisplays(displaysByPool);
     }
 
+    static void captureInitialStructures(List<MachineStructureDisplay> structures) {
+        visibleStructures = List.copyOf(structures);
+    }
+
     public static void setRuntime(IJeiRuntime runtime) {
         JeiRuntimeReloader.runtime = runtime;
         lastReloadedVersion = Long.MIN_VALUE;
         scheduledReloadVersion = Long.MIN_VALUE;
+        if (runtime == null) {
+            latestSnapshot = null;
+            visibleDisplaysByPool = Map.of();
+            visibleStructures = List.of();
+            REGISTERED_RECIPE_POOL_CATEGORIES.clear();
+            categoriesCaptured = false;
+        } else if (latestSnapshot != null) {
+            reloadIfAvailable(latestSnapshot);
+        }
     }
 
     public static void clearRuntimeForTesting() {
-        runtime = null;
-        visibleDisplaysByPool = Map.of();
-        REGISTERED_RECIPE_POOL_CATEGORIES.clear();
-        categoriesCaptured = false;
-        lastReloadedVersion = Long.MIN_VALUE;
-        scheduledReloadVersion = Long.MIN_VALUE;
+        setRuntime(null);
         clientExecutor = JeiRuntimeReloader::executeOnClient;
     }
 
@@ -65,12 +77,14 @@ public final class JeiRuntimeReloader {
     }
 
     public static void reloadIfAvailable(RuntimeContentSnapshot snapshot) {
-        IJeiRuntime current = runtime;
-        if (current == null) return;
         if (snapshot.contentVersion() == lastReloadedVersion
                 || snapshot.contentVersion() == scheduledReloadVersion) return;
+        latestSnapshot = snapshot;
+        IJeiRuntime current = runtime;
+        if (current == null) return;
         scheduledReloadVersion = snapshot.contentVersion();
         Runnable reload = () -> {
+            if (current != runtime || latestSnapshot != snapshot) return;
             try {
                 Map<ResourceLocation, List<MachineRecipeDisplay>> displaysByPool = MachineRecipeDisplays.byPool(snapshot);
                 Map<ResourceLocation, List<MachineRecipeDisplay>> previousVisible = visibleDisplaysByPool;
@@ -92,6 +106,18 @@ public final class JeiRuntimeReloader {
                     updatedVisible.put(poolId, displays);
                 }
                 visibleDisplaysByPool = Map.copyOf(updatedVisible);
+                List<MachineStructureDisplay> structures = MachineRegistry.getAll().values().stream()
+                        .sorted(Comparator.comparing(machine -> machine.registryName()))
+                        .map(MachineStructureDisplay::from).toList();
+                var recipeManager = current.getRecipeManager();
+                if (!visibleStructures.isEmpty()) {
+                    recipeManager.hideRecipes(JeiMachineRecipeTypes.STRUCTURE, visibleStructures);
+                }
+                if (!structures.isEmpty()) {
+                    recipeManager.unhideRecipes(JeiMachineRecipeTypes.STRUCTURE, structures);
+                    recipeManager.addRecipes(JeiMachineRecipeTypes.STRUCTURE, structures);
+                }
+                visibleStructures = structures;
                 lastReloadedVersion = snapshot.contentVersion();
             } finally {
                 scheduledReloadVersion = Long.MIN_VALUE;

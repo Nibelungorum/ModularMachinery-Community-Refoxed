@@ -82,10 +82,17 @@ public final class JeiPlugin implements IModPlugin {
     }
 
     @Override
+    public void onRuntimeUnavailable() {
+        JeiRuntimeReloader.setRuntime(null);
+    }
+
+    @Override
     public void registerRecipes(IRecipeRegistration registration) {
-        registration.addRecipes(JeiMachineRecipeTypes.STRUCTURE, MachineRegistry.getAll().values().stream()
+        List<MachineStructureDisplay> structures = MachineRegistry.getAll().values().stream()
                 .map(MachineStructureDisplay::from)
-                .toList());
+                .toList();
+        JeiRuntimeReloader.captureInitialStructures(structures);
+        registration.addRecipes(JeiMachineRecipeTypes.STRUCTURE, structures);
         var displaysByPool = MachineRecipeDisplays.byPool();
         Set<ResourceLocation> poolIds = machineIdsByPool().keySet();
         Map<ResourceLocation, List<MachineRecipeDisplay>> registeredDisplays = displaysByPool.entrySet().stream()

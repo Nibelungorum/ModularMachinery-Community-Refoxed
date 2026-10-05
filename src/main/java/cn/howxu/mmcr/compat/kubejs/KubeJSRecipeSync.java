@@ -4,8 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
-import cn.howxu.mmcr.internal.sync.JeiRuntimeReloadBridge;
-import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
@@ -47,8 +45,7 @@ public final class KubeJSRecipeSync {
                 }
             }
         }
-        RuntimeContentSnapshot snapshot = RuntimeContentCoordinator.replaceKubeJSRecipesAndSnapshot(
+        RuntimeContentCoordinator.replaceKubeJSRecipesAndSnapshot(
                 filterRecipesWithRegisteredPools(recipes));
-        JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
     }
 }

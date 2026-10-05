@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jade;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
@@ -42,7 +41,7 @@ import java.util.Optional;
 public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
-    public static final ResourceLocation UID = MMCR.id("recipe_output");
+    public static final ResourceLocation UID = RecipeOutputDataProvider.UID;
 
     @Override
     public ResourceLocation getUid() {

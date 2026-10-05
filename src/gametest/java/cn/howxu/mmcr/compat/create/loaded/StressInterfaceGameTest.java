@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.compat.create.StressFacet;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
@@ -681,7 +682,7 @@ public final class StressInterfaceGameTest {
                 new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(kind.id()).get()),
                 new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
                 new BlockPos(0, -1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))),
-                MachineRegistry.getMachine(baseId).controller());
+                MachineControllerSpec.defaultsFor(id));
         if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
         MachineControllerBlockEntity controller = helper.getBlockEntity(CONTROLLER);
         controller.setMachine(machine);
@@ -721,7 +722,7 @@ public final class StressInterfaceGameTest {
         ResourceLocation id = MMCR.id("create_stress_fixture_" + ports[0].getBlockPos().subtract(origin).asLong()
                 + "_" + ports.length + "_" + ports[0].getBlockState().getValue(RotatedPillarKineticBlock.AXIS).getSerializedName());
         DynamicMachine machine = new DynamicMachine(id, "machine.mmcr_test.create_stress_fixture", new BlockArray(pattern),
-                MachineRegistry.getMachine(baseId).controller());
+                MachineControllerSpec.defaultsFor(id));
         if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
         MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
         controller.setMachine(machine);
