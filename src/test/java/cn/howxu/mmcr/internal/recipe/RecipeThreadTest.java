@@ -386,13 +386,13 @@ class RecipeThreadTest {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         installCoordinator(level, coordinator);
         try {
-            input.nativeEnergyStorage().setAmount(1_000L);
+            input.energyStorage().setAmount(1_000L);
             FactoryRecipeThread lane = attachedBaseLane(controller);
             MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("worker_workset_invalidation"), controller.currentRecipePoolId(),
                     20, List.of(new EnergyRequirement(20L)), List.of());
             assertThat(lane.runtime().start(recipe, 1L).isCrafting())
                     .as("workset recipe start failure: %s", lane.runtime().failure()).isTrue();
-            long before = input.nativeEnergyStorage().getAmountAsLong();
+            long before = input.energyStorage().getAmountAsLong();
             lane.tick();
             Field tokenField = RecipeThread.class.getDeclaredField("pendingTickToken");
             tokenField.setAccessible(true);
@@ -427,17 +427,17 @@ class RecipeThreadTest {
                     captured.stateVersion(), catalogVersion, result)).isEqualTo(false);
 
             assertThat(lane.runtime().tickCount()).isZero();
-            assertThat(input.nativeEnergyStorage().getAmountAsLong()).isEqualTo(before);
+            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(before);
             assertThat(lane.tickPendingForTesting()).isEqualTo(replacementTick);
 
             if (!replacementTick) lane.tick();
             SharedIoEvents.completeLevelTick(level);
             assertThat(lane.runtime().tickCount()).isEqualTo(1);
-            assertThat(input.nativeEnergyStorage().getAmountAsLong()).isEqualTo(before - 20L);
+            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(before - 20L);
             assertThat(lane.tickPendingForTesting()).isFalse();
             SharedIoEvents.completeLevelTick(level);
             assertThat(lane.runtime().tickCount()).isEqualTo(1);
-            assertThat(input.nativeEnergyStorage().getAmountAsLong()).isEqualTo(before - 20L);
+            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(before - 20L);
         } finally {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);

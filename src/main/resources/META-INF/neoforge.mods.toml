@@ -60,7 +60,7 @@ side="BOTH"
 modId="kubejs"
 type="optional"
 versionRange="[26.1.2-8.0.4,)"
-ordering="BEFORE"
+ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
