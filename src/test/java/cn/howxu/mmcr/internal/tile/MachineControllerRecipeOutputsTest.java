@@ -16,7 +16,9 @@ import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -410,6 +412,47 @@ class MachineControllerRecipeOutputsTest {
         assertThat(active.effectiveExecutionRevision()).isEqualTo(revision);
         assertThat(controllerRuntime.snapshot()).isSameAs(working);
         assertThat(working.crafting()).isEqualTo(first.crafting());
+    }
+
+    @Test
+    void factoryThreadSnapshotRefreshesForSameIdRecipeReplacementWithoutScalarChanges() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"),
+                RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0)));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("factory_same_id_presentation"), MMCR.id("test_cube"),
+                20, List.of(), List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 3), 1F)),
+                List.of(), 0, 1, false, false, false, Set.of());
+        factory.tick(List.of(recipe), 1, 0L);
+        assertThat(factory.activeRuntimes()).as("Factory lane search result: %s", factory.threadSnapshots()).hasSize(1);
+        CraftingRuntime lane = factory.activeRuntimes().getFirst();
+        FactorySnapshot before = factory.snapshot();
+        MachineRecipe replacement = MachineRecipe.fromCanonical(recipe.id(), recipe.recipePoolId(),
+                20, List.of(), List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 5), 1F)),
+                List.of(), 0, 1, false, false, false, Set.of());
+
+        lane.invalidate();
+        assertThat(lane.start(replacement, 1L).isCrafting()).isTrue();
+        factory.markLaneRuntimeChanged(lane);
+        FactorySnapshot after = factory.snapshot();
+
+        assertThat(lane.recipe()).isSameAs(replacement).isNotSameAs(recipe);
+        assertThat(after.lanes().getFirst()).isSameAs(before.lanes().getFirst());
+        FactoryRuntime.ThreadSnapshot oldThread = before.presentationLanes().getFirst();
+        FactoryRuntime.ThreadSnapshot newThread = after.presentationLanes().getFirst();
+        assertThat(newThread).isNotSameAs(oldThread);
+        assertThat(newThread.recipeId()).isEqualTo(oldThread.recipeId());
+        assertThat(newThread.presentation()).isNotSameAs(oldThread.presentation());
+        assertThat(newThread.presentation().outputs()).extracting(MachineOutputAmount::amount).containsExactly(5L);
+        assertThat(((MachineOutput.ItemOutput) newThread.presentation().outputs().getFirst().output()).stack().getItem())
+                .isEqualTo(Items.GOLD_INGOT);
+        assertThat(oldThread.presentation().outputs()).extracting(MachineOutputAmount::amount).containsExactly(3L);
+        assertThat(((MachineOutput.ItemOutput) oldThread.presentation().outputs().getFirst().output()).stack().getItem())
+                .isEqualTo(Items.DIAMOND);
+        ((MachineOutput.ItemOutput) newThread.presentation().outputs().getFirst().output()).stack().setCount(64);
+        assertThat(factory.threadSnapshots().getFirst()).isSameAs(newThread);
+        assertThat(newThread.presentation().outputs()).extracting(MachineOutputAmount::amount).containsExactly(5L);
     }
 
     @Test

@@ -82,6 +82,7 @@ public final class FactoryRuntime {
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
     private @Nullable FactorySnapshot cachedSnapshot;
     private final Map<FactoryRecipeThread, ControllerRecipePresentation> lanePresentationCaches = new IdentityHashMap<>();
+    private final Map<FactoryRecipeThread, ThreadSnapshot> laneThreadSnapshots = new IdentityHashMap<>();
     private int presentationBuildCountForTesting;
     private final Set<FactoryRecipeThread> readyLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, AsyncSearchRequest> pendingAsyncSearches = new IdentityHashMap<>();
@@ -648,9 +649,21 @@ public final class FactoryRuntime {
 
     private ThreadSnapshot threadSnapshot(int index, FactoryRecipeThread lane) {
         CraftingRuntime runtime = lane.runtime();
-        return new ThreadSnapshot(index, lane.laneId(), lane.isBaseThread(), lane.isCoreThread(), runtime.active(),
-                runtime.recipeIdText(), runtime.tickCount(), runtime.totalTick(), runtime.active() ? runtime.parallelism() : 1,
-                runtime.failure(), presentationFor(lane));
+        ControllerRecipePresentation presentation = presentationFor(lane);
+        String recipeId = runtime.recipeIdText();
+        long parallelism = runtime.active() ? runtime.parallelism() : 1;
+        ThreadSnapshot previous = laneThreadSnapshots.get(lane);
+        if (previous != null && previous.index() == index && previous.laneId().equals(lane.laneId())
+                && previous.baseThread() == lane.isBaseThread() && previous.coreThread() == lane.isCoreThread()
+                && previous.active() == runtime.active() && previous.recipeId().equals(recipeId)
+                && previous.tick() == runtime.tickCount() && previous.totalTick() == runtime.totalTick()
+                && previous.parallelism() == parallelism && Objects.equals(previous.failure(), runtime.failure())
+                && previous.presentation() == presentation) return previous;
+        ThreadSnapshot next = new ThreadSnapshot(index, lane.laneId(), lane.isBaseThread(), lane.isCoreThread(),
+                runtime.active(), recipeId, runtime.tickCount(), runtime.totalTick(), parallelism,
+                runtime.failure(), presentation);
+        laneThreadSnapshots.put(lane, next);
+        return next;
     }
 
     private List<ThreadSnapshot> completeThreadSnapshots(List<ThreadSnapshot> snapshots) {
@@ -1198,6 +1211,7 @@ public final class FactoryRuntime {
     private void removeLaneState(FactoryRecipeThread lane) {
         startReservations.remove(lane);
         lanePresentationCaches.remove(lane);
+        laneThreadSnapshots.remove(lane);
     }
 
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {

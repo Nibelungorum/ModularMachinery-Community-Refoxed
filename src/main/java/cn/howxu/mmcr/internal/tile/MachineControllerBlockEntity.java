@@ -174,6 +174,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final Map<ServerLevel, Map<ChunkPos, Set<MachineControllerBlockEntity>>> FORMED_CONTROLLER_INDEX = new ConcurrentHashMap<>();
     private static final Set<MachineControllerBlockEntity> ACTIVE_STRUCTURE_SCANS = ConcurrentHashMap.newKeySet();
     private static final Map<ServerLevel, Set<MachineControllerBlockEntity>> ASYNC_RUNTIME_STATE_SYNC_QUEUE = new ConcurrentHashMap<>();
+    private static final Set<ServerLevel> ASYNC_RUNTIME_STATE_BATCH_LEVELS = ConcurrentHashMap.newKeySet();
     private static final String STRUCTURE_SCAN_LANE = "structure-scan";
     private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
@@ -614,13 +615,28 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (!runtime.factoryRuntime().contains(recipeRuntime)) return;
         runtime.factoryRuntime().markLaneRuntimeChanged(recipeRuntime);
-        if (level instanceof ServerLevel serverLevel && MachineAsyncCoordinator.get(serverLevel).isCompletingFence()) {
+        if (level instanceof ServerLevel serverLevel
+                && (MachineAsyncCoordinator.get(serverLevel).isCompletingFence()
+                || ASYNC_RUNTIME_STATE_BATCH_LEVELS.contains(serverLevel))) {
             ASYNC_RUNTIME_STATE_SYNC_QUEUE.computeIfAbsent(serverLevel, ignored -> ConcurrentHashMap.newKeySet()).add(this);
             return;
         }
         runtime.factoryRuntime().recomputeFailure();
         syncRuntimeStateIfChanged();
         markRuntimePersistenceChanged();
+    }
+
+    /** Coalesces factory publication while lane state and epochs remain immediately live. */
+    public static void runWithBatchedAsyncRuntimeState(ServerLevel level, Runnable work) {
+        boolean owner = ASYNC_RUNTIME_STATE_BATCH_LEVELS.add(level);
+        try {
+            work.run();
+        } finally {
+            if (owner) {
+                ASYNC_RUNTIME_STATE_BATCH_LEVELS.remove(level);
+                flushQueuedAsyncRuntimeState(level);
+            }
+        }
     }
 
     public static void flushQueuedAsyncRuntimeState(ServerLevel level) {
@@ -1083,6 +1099,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public static void clearFormedControllerIndex(ServerLevel level) {
         ASYNC_RUNTIME_STATE_SYNC_QUEUE.remove(level);
+        ASYNC_RUNTIME_STATE_BATCH_LEVELS.remove(level);
         Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX.remove(level);
         if (byChunk == null) return;
         for (Set<MachineControllerBlockEntity> controllers : byChunk.values()) {

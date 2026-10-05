@@ -24,6 +24,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.machine.MachineRole;
@@ -186,6 +188,263 @@ class CraftingRuntimeTest {
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
         assertThat(runtime.failure().details()).containsEntry("reason", "recipe_pool");
+    }
+
+    @Test
+    void versions_current_reads_live_module_connection_without_republishing() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        ComponentRuntime components = controller.componentRuntime();
+        Identifier hostId = MMCR.id("runtime_validation_host");
+        components.replaceModuleConnectionState(ModuleConnectionStatus.connected(hostId), 1);
+        CraftingRuntime runtime = new CraftingRuntime(controller, components);
+        MachineRecipe recipe = recipe("runtime_live_module_validation", 20, List.of());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        ControllerRuntimeSnapshot published = controller.currentRuntimeSnapshot();
+        long capabilityVersion = components.capabilityVersion();
+        long structureVersion = controller.currentStructureSnapshot().version();
+        assertThat(runtime.versionsCurrent()).isTrue();
+
+        components.replaceModuleConnectionState(ModuleConnectionStatus.disconnected(), 1);
+
+        assertThat(components.capabilityVersion()).isEqualTo(capabilityVersion);
+        assertThat(controller.currentStructureSnapshot().version()).isEqualTo(structureVersion);
+        assertThat(published.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())).isTrue();
+        assertThat(runtime.versionsCurrent()).isFalse();
+        components.replaceModuleConnectionState(ModuleConnectionStatus.connected(hostId), 1);
+        assertThat(runtime.versionsCurrent()).isTrue();
+    }
+
+    @Test
+    void versions_current_detects_live_capability_and_structure_replacement() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_live_version_validation", 20, List.of());
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+
+        controller.componentRuntime().replaceComponents(List.of());
+
+        assertThat(runtime.versionsCurrent()).isFalse();
+        runtime.tick();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+
+        controller.setMachine(new DynamicMachine(MMCR.id("test_cube"), "replacement", new BlockArray(Map.of())));
+
+        assertThat(runtime.versionsCurrent()).isFalse();
+        runtime.tick();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+    }
+
+    @Test
+    void versions_current_detects_pool_selection_and_same_id_registration_removal() {
+        Identifier machineId = MMCR.id("runtime_live_pool_validation");
+        Identifier firstPool = MMCR.id("runtime_live_pool_first");
+        Identifier secondPool = MMCR.id("runtime_live_pool_second");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        MachineDefinitions.replace(MachineRegistration.builder(machineId)
+                .recipePoolIds(List.of(firstPool, secondPool)).build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        controller.setMachine(new DynamicMachine(machineId, "pool validation", new BlockArray(Map.of())));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe first = RecipeTestSupport.create(MMCR.id("runtime_live_first_recipe"), firstPool,
+                20, List.of(), List.of());
+        MachineRecipe second = RecipeTestSupport.create(MMCR.id("runtime_live_second_recipe"), secondPool,
+                20, List.of(), List.of());
+        assertThat(runtime.start(first, 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+
+        assertThat(controller.selectRecipePool(secondPool)).isTrue();
+        assertThat(runtime.versionsCurrent()).isFalse();
+        runtime.tick();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.start(second, 1).isCrafting()).isTrue();
+        MachineDefinitions.replace(MachineRegistration.builder(machineId)
+                .recipePoolIds(List.of(firstPool, secondPool)).build());
+        assertThat(runtime.versionsCurrent()).isTrue();
+
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+
+        assertThat(runtime.versionsCurrent()).isFalse();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+        runtime.tick();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+    }
+
+    @Test
+    void snapshots_reuse_unchanged_payload_and_keep_status_copies_isolated() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        CraftingStateSnapshot idle = runtime.snapshot();
+        int builds = runtime.snapshotBuildCountForTesting();
+        assertThat(runtime.snapshot()).isSameAs(idle);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+        CraftingRuntime other = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(other.snapshot()).isNotSameAs(idle);
+
+        MachineRecipe recipe = recipe("runtime_snapshot_status", 20, List.of());
+        CraftingStatus liveStatus = runtime.start(recipe, 1);
+        assertThat(liveStatus.isCrafting()).isTrue();
+        CraftingStateSnapshot started = runtime.snapshot();
+        assertThat(started).isNotSameAs(idle);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        String originalMessage = started.status().getUnlocMessage();
+        started.status().overrideStatusMessage("test.changed.returned.copy");
+        assertThat(started.status().getUnlocMessage()).isEqualTo(originalMessage);
+        assertThat(runtime.snapshot()).isSameAs(started);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+        liveStatus.overrideStatusMessage(originalMessage);
+        assertThat(runtime.snapshot()).isSameAs(started);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+
+        liveStatus.overrideStatusMessage("test.changed.live.status");
+        CraftingStateSnapshot changedMessage = runtime.snapshot();
+        assertThat(changedMessage).isNotSameAs(started);
+        assertThat(changedMessage.status().getUnlocMessage()).isEqualTo("test.changed.live.status");
+        assertThat(started.status().getUnlocMessage()).isEqualTo(originalMessage);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        assertThat(runtime.snapshot()).isSameAs(changedMessage);
+
+        runtime.pause();
+        runtime.start(recipe, 1).overrideStatusMessage(changedMessage.status().getUnlocMessage());
+        CraftingStateSnapshot paused = runtime.snapshot();
+        assertThat(paused.status().isPaused()).isTrue();
+        assertThat(paused.status().getUnlocMessage()).isEqualTo(changedMessage.status().getUnlocMessage());
+        assertThat(changedMessage.status().isPaused()).isFalse();
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.resume();
+        CraftingStateSnapshot resumed = runtime.snapshot();
+        assertThat(resumed).isNotSameAs(started);
+        assertThat(resumed.status().getUnlocMessage()).isEqualTo(originalMessage);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        assertThat(runtime.snapshot()).isSameAs(resumed);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+    }
+
+    @Test
+    void snapshots_track_each_live_progress_and_parallelism_field() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_snapshot_progress", 20, List.of());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        CraftingStateSnapshot started = runtime.snapshot();
+        int builds = runtime.snapshotBuildCountForTesting();
+
+        runtime.activeRecipe().setTick(1);
+        CraftingStateSnapshot progressed = runtime.snapshot();
+        assertThat(progressed.tick()).isEqualTo(1);
+        assertThat(started.tick()).isZero();
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.activeRecipe().setTotalTick(30);
+        CraftingStateSnapshot durationChanged = runtime.snapshot();
+        assertThat(durationChanged.totalTick()).isEqualTo(30);
+        assertThat(progressed.totalTick()).isEqualTo(20);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.activeRecipe().setMaxParallelism(4);
+        CraftingStateSnapshot limitChanged = runtime.snapshot();
+        assertThat(limitChanged.maxParallelism()).isEqualTo(4L);
+        assertThat(limitChanged.parallelism()).isEqualTo(durationChanged.parallelism());
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.activeRecipe().setParallelism(2);
+        CraftingStateSnapshot parallelismChanged = runtime.snapshot();
+        assertThat(parallelismChanged.parallelism()).isEqualTo(2L);
+        assertThat(limitChanged.parallelism()).isEqualTo(1L);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        assertThat(runtime.snapshot()).isSameAs(parallelismChanged);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+    }
+
+    @Test
+    void snapshots_track_recipe_identity_and_finish_without_changing_previous_payloads() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe first = recipe("runtime_snapshot_first", 1, List.of());
+        MachineRecipe second = recipe("runtime_snapshot_second", 1, List.of());
+        assertThat(runtime.start(first, 1).isCrafting()).isTrue();
+        CraftingStateSnapshot started = runtime.snapshot();
+        int builds = runtime.snapshotBuildCountForTesting();
+
+        runtime.invalidate();
+        assertThat(runtime.start(second, 1).isCrafting()).isTrue();
+        CraftingStateSnapshot replaced = runtime.snapshot();
+        assertThat(replaced.recipeId()).isEqualTo(second.id());
+        assertThat(started.recipeId()).isEqualTo(first.id());
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.tick();
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        CraftingStateSnapshot finished = runtime.snapshot();
+        assertThat(finished.recipeId()).isNull();
+        assertThat(finished.status().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        assertThat(replaced.status().isCrafting()).isTrue();
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        assertThat(runtime.snapshot()).isSameAs(finished);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+    }
+
+    @Test
+    void snapshots_track_each_restored_version_and_reuse_normalized_unset_versions() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("runtime_snapshot_versions", 20, List.of()), 1).isCrafting()).isTrue();
+        ActiveMachineRecipe active = runtime.activeRecipe();
+        runtime.restore(active, null, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE);
+        CraftingStateSnapshot unset = runtime.snapshot();
+        int builds = runtime.snapshotBuildCountForTesting();
+
+        runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(runtime.snapshot()).isSameAs(unset);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+        runtime.restore(active, null, 1L, 0L, 0L, Long.MIN_VALUE);
+        CraftingStateSnapshot structureChanged = runtime.snapshot();
+        assertThat(structureChanged.structureVersion()).isEqualTo(1L);
+        assertThat(unset.structureVersion()).isZero();
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.restore(active, null, 1L, 2L, 0L, Long.MIN_VALUE);
+        CraftingStateSnapshot capabilityChanged = runtime.snapshot();
+        assertThat(capabilityChanged.capabilityVersion()).isEqualTo(2L);
+        assertThat(structureChanged.capabilityVersion()).isZero();
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        runtime.restore(active, null, 1L, 2L, 3L, Long.MIN_VALUE);
+        CraftingStateSnapshot modifierChanged = runtime.snapshot();
+        assertThat(modifierChanged.modifierVersion()).isEqualTo(3L);
+        assertThat(capabilityChanged.modifierVersion()).isZero();
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        assertThat(runtime.snapshot()).isSameAs(modifierChanged);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+    }
+
+    @Test
+    void snapshots_track_failure_details_even_when_the_status_message_is_unchanged() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.recordSearchFailure(null);
+        CraftingStateSnapshot first = runtime.snapshot();
+        int builds = runtime.snapshotBuildCountForTesting();
+        ExecutionStatus changedFailure = ExecutionStatus.blocked(MMCR.id("changed_search_failure"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.RECIPE_SEARCH, MMCR.id("test"), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("reason", "changed")));
+
+        runtime.recordSearchFailure(changedFailure);
+
+        CraftingStateSnapshot changed = runtime.snapshot();
+        assertThat(changed.status().getUnlocMessage()).isEqualTo(first.status().getUnlocMessage());
+        assertThat(changed.failure()).isSameAs(changedFailure);
+        assertThat(first.failure()).isNotEqualTo(changedFailure);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+        assertThat(runtime.snapshot()).isSameAs(changed);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(builds);
+        runtime.invalidate();
+        CraftingStateSnapshot cleared = runtime.snapshot();
+        assertThat(cleared.failure()).isNull();
+        assertThat(first.failure()).isNotNull();
+        assertThat(changed.failure()).isSameAs(changedFailure);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
     }
 
     @Test

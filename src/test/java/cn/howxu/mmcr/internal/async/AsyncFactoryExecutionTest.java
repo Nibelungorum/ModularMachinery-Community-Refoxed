@@ -23,6 +23,8 @@ import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -83,6 +85,7 @@ class AsyncFactoryExecutionTest {
         MachineAsyncCoordinator.discard(level);
         SharedIoCoordinator.discard(level);
         StructureClaimRegistry.discard(level);
+        MachineControllerBlockEntity.clearFormedControllerIndex(level);
     }
 
     @Test
@@ -113,6 +116,51 @@ class AsyncFactoryExecutionTest {
                 .filteredOn(lane -> lane.active())
                 .extracting(lane -> lane.tick())
                 .containsExactly(1, 0);
+    }
+
+    @Test
+    void real_level_post_with_an_older_pending_batch_commits_four_attached_lanes_and_publishes_once() throws Exception {
+        MachineControllerBlockEntity controller = factoryController(4);
+        var workMode = MachineControllerBlockEntity.class.getDeclaredField("activeWorkMode");
+        workMode.setAccessible(true);
+        workMode.set(controller, MachineWorkMode.SYNC);
+        FactoryRuntime factory = factoryRuntime(controller);
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(4);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("older_batch_factory_publication"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 4);
+        RecipeRegistry.registerStatic(recipe);
+        factory.tick(List.of(recipe), 1, 0L);
+        List<CraftingRuntime> lanes = factory.activeRuntimes();
+        assertThat(lanes).hasSize(4);
+        assertThat(lanes).extracting(CraftingRuntime::tickCount).containsExactly(0, 0, 0, 0);
+        RuntimeTestFixtures.republish(controller);
+        var published = controller.runtimeSnapshot();
+
+        workMode.set(controller, MachineWorkMode.ASYNC);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        assertThat(async.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(9999, 0, 0), -1L),
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> { }), null,
+                MachineAsyncCoordinator.TaskHooks.defaults())).isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
+        var laneField = FactoryRuntime.class.getDeclaredField("lanes");
+        laneField.setAccessible(true);
+        for (Object lane : (List<?>) laneField.get(factory)) ((FactoryRecipeThread) lane).tick();
+        var runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
+        var publicationCount = MachineControllerRuntime.class.getDeclaredMethod("snapshotBuildCountForTesting");
+        publicationCount.setAccessible(true);
+        int before = (int) publicationCount.invoke(runtime);
+
+        // The older Deferred batch keeps the newer lanes' grants between the two real fences.
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(lanes).extracting(CraftingRuntime::tickCount).containsExactly(1, 1, 1, 1);
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(1, 1, 1, 1);
+        assertThat((int) publicationCount.invoke(runtime)).isEqualTo(before + 1);
+        assertThat(published.factory().presentationLanes())
+                .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(0, 0, 0, 0);
     }
 
     @Test

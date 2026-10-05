@@ -93,6 +93,9 @@ public final class CraftingRuntime {
     private @Nullable ActiveMachineRecipe cachedPresentationRecipe;
     private long presentationEpoch;
     private int snapshotBuildCountForTesting;
+    private @Nullable CraftingStateSnapshot cachedStateSnapshot;
+    private @Nullable CraftingStatus.Status cachedSnapshotStatus;
+    private @Nullable String cachedSnapshotStatusMessage;
     private @Nullable Identifier cachedRecipeId;
     private String cachedRecipeIdText = "";
     private long cachedPresentationEpoch = Long.MIN_VALUE;
@@ -146,7 +149,7 @@ public final class CraftingRuntime {
         if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved
                 || pendingPatternStart != null) return null;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(recipe, runtime)
+        if (!recipeBelongsToMachine(recipe)
                 || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
@@ -317,7 +320,7 @@ public final class CraftingRuntime {
     public @Nullable RecipeStartContext.ExecutionSnapshot prepareAsyncStart(MachineRecipe recipe, long requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved) return null;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(recipe, runtime)
+        if (!recipeBelongsToMachine(recipe)
                 || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
@@ -356,7 +359,7 @@ public final class CraftingRuntime {
         if (active() || patternStartReserved) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(recipe, runtime)) {
+        if (!recipeBelongsToMachine(recipe)) {
             return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START,
                     Map.of("reason", "recipe_pool")));
         }
@@ -781,13 +784,29 @@ public final class CraftingRuntime {
     }
 
     public CraftingStateSnapshot snapshot() {
+        CraftingStateSnapshot previous = cachedStateSnapshot;
+        Identifier recipeId = activeRecipe == null ? null : activeRecipe.getRecipe().id();
+        long structure = structureVersion == Long.MIN_VALUE ? 0L : structureVersion;
+        long capability = capabilityVersion == Long.MIN_VALUE ? 0L : capabilityVersion;
+        long modifier = modifierVersion == Long.MIN_VALUE ? 0L : modifierVersion;
+        CraftingStatus.Status currentStatus = status.getStatus();
+        String statusMessage = status.getUnlocMessage();
+        if (previous != null && Objects.equals(previous.recipeId(), recipeId)
+                && cachedSnapshotStatus == currentStatus
+                && Objects.equals(cachedSnapshotStatusMessage, statusMessage)
+                && Objects.equals(previous.failure(), failure)
+                && previous.structureVersion() == structure
+                && previous.capabilityVersion() == capability
+                && previous.modifierVersion() == modifier
+                && previous.tick() == tickCount() && previous.totalTick() == totalTick()
+                && previous.parallelism() == parallelism()
+                && previous.maxParallelism() == maxParallelism()) return previous;
         snapshotBuildCountForTesting++;
-        ActiveMachineRecipe recipe = activeRecipe;
-        return new CraftingStateSnapshot(activeRecipe == null ? null : activeRecipe.getRecipe().id(), status, failure,
-                structureVersion == Long.MIN_VALUE ? 0L : structureVersion,
-                capabilityVersion == Long.MIN_VALUE ? 0L : capabilityVersion,
-                modifierVersion == Long.MIN_VALUE ? 0L : modifierVersion,
-                tickCount(), totalTick(), parallelism(), recipe == null ? 1 : recipe.getMaxParallelism());
+        cachedStateSnapshot = new CraftingStateSnapshot(recipeId, status, failure,
+                structure, capability, modifier, tickCount(), totalTick(), parallelism(), maxParallelism());
+        cachedSnapshotStatus = currentStatus;
+        cachedSnapshotStatusMessage = statusMessage;
+        return cachedStateSnapshot;
     }
 
     int snapshotBuildCountForTesting() {
@@ -893,11 +912,11 @@ public final class CraftingRuntime {
         if (!active()) return true;
         StructureSnapshot structure = controller.currentStructureSnapshot();
         ComponentRuntime components = controller.componentRuntime();
+        MachineRecipe recipe = activeRecipe.getRecipe();
         return structureVersion == structure.version()
                 && capabilityVersion == components.capabilityVersion()
-                && recipeBelongsToMachine(activeRecipe.getRecipe(), controller.currentRuntimeSnapshot())
-                && controller.currentRuntimeSnapshot().moduleConnectionStatus()
-                .canRunRecipe(activeRecipe.getRecipe().requiredHostIds());
+                && recipeBelongsToMachine(recipe)
+                && components.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds());
     }
 
     public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
@@ -936,7 +955,7 @@ public final class CraftingRuntime {
             return;
         }
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(restored.getRecipe(), runtime)) {
+        if (!recipeBelongsToMachine(restored.getRecipe())) {
             failLoad();
             return;
         }
@@ -1001,7 +1020,7 @@ public final class CraftingRuntime {
     public void rebindCurrentVersions() {
         if (!active()) return;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(activeRecipe.getRecipe(), runtime)) {
+        if (!recipeBelongsToMachine(activeRecipe.getRecipe())) {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
             return;
         }
@@ -1523,7 +1542,7 @@ public final class CraftingRuntime {
         return behavior instanceof RecipeBehavior recipeBehavior ? recipeBehavior : null;
     }
 
-    private boolean recipeBelongsToMachine(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
+    private boolean recipeBelongsToMachine(MachineRecipe recipe) {
         Identifier recipePoolId = controller.currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
