@@ -19,6 +19,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -167,6 +169,176 @@ class FactoryRuntimeTest {
         runtime.tick(List.of(recipe), 1, level.getGameTime());
 
         assertThat(runtime.asyncSearchScansForTesting()).isEqualTo(searchScans);
+    }
+
+    @Test
+    void validating_an_attached_lane_does_not_rebuild_four_lane_factory_state() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        MachineControllerBlockEntity controller = asyncFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        FactoryRuntime runtime = controllerFactoryRuntime(controller);
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(4);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_light_validation"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 4);
+        runtime.tick(List.of(recipe), 1, 0L);
+        assertThat(runtime.activeRuntimes()).hasSize(4);
+        FactorySnapshot before = runtime.snapshot();
+        CraftingRuntime lane = runtime.activeRuntimes().getFirst();
+        lane.activeRecipe().setTick(lane.tickCount() + 1);
+        runtime.markLaneRuntimeChanged(lane);
+        int builds = runtime.laneSnapshotBuildCountForTesting();
+
+        assertThat(lane.versionsCurrent()).isTrue();
+
+        assertThat(runtime.laneSnapshotBuildCountForTesting()).isEqualTo(builds);
+        assertThat(before.lanes()).allSatisfy(state -> assertThat(state.tick()).isZero());
+    }
+
+    @Test
+    void advancing_one_attached_lane_reuses_the_other_three_crafting_and_thread_snapshots() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        MachineControllerBlockEntity controller = asyncFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        FactoryRuntime runtime = controllerFactoryRuntime(controller);
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(4);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_one_lane_snapshot"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 4);
+        runtime.tick(List.of(recipe), 1, 0L);
+        assertThat(runtime.activeRuntimes()).hasSize(4);
+        FactorySnapshot before = runtime.snapshot();
+        int builds = runtime.laneSnapshotBuildCountForTesting();
+        long epoch = runtime.stateEpoch();
+        CraftingRuntime lane = runtime.activeRuntimes().getFirst();
+        lane.activeRecipe().setTick(lane.tickCount() + 1);
+        runtime.markLaneRuntimeChanged(lane);
+
+        assertThat(runtime.stateEpoch()).isGreaterThan(epoch);
+        FactorySnapshot after = runtime.snapshot();
+
+        assertThat(after).isNotSameAs(before).isSameAs(runtime.snapshot());
+        assertThat(after.lanes()).hasSize(4).isUnmodifiable();
+        assertThat(after.presentationLanes()).hasSize(4).isUnmodifiable();
+        assertThat(after.lanes().getFirst()).isNotSameAs(before.lanes().getFirst());
+        assertThat(after.presentationLanes().getFirst()).isNotSameAs(before.presentationLanes().getFirst());
+        assertThat(after.lanes().getFirst().tick()).isEqualTo(1);
+        assertThat(after.presentationLanes().getFirst().tick()).isEqualTo(1);
+        for (int index = 1; index < 4; index++) {
+            assertThat(after.lanes().get(index)).isSameAs(before.lanes().get(index));
+            assertThat(after.presentationLanes().get(index)).isSameAs(before.presentationLanes().get(index));
+        }
+        List<FactoryRuntime.ThreadSnapshot> threads = runtime.threadSnapshots();
+        for (int index = 0; index < 4; index++) {
+            assertThat(threads.get(index)).isSameAs(after.presentationLanes().get(index));
+        }
+        assertThat(runtime.laneSnapshotBuildCountForTesting() - builds).isEqualTo(1);
+        assertThat(before.lanes()).allSatisfy(state -> assertThat(state.tick()).isZero());
+        assertThat(before.presentationLanes()).allSatisfy(thread -> assertThat(thread.tick()).isZero());
+    }
+
+    @Test
+    void many_lane_snapshots_collect_state_once_and_keep_previous_progress_on_pause_and_finish() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(16);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("many_lane_snapshot"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 16);
+        runtime.tick(List.of(recipe), 1, 0L);
+        int builds = runtime.laneSnapshotBuildCountForTesting();
+        FactorySnapshot started = runtime.snapshot();
+        assertThat(started.lanes()).hasSize(16);
+        assertThat(runtime.laneSnapshotBuildCountForTesting() - builds).isEqualTo(runtime.laneCount());
+        assertThat(runtime.snapshot()).isSameAs(started);
+        runtime.threadSnapshots();
+        assertThat(runtime.laneSnapshotBuildCountForTesting() - builds).isEqualTo(runtime.laneCount());
+
+        runtime.tick(List.of(recipe), 1, 1L);
+        FactorySnapshot progressed = runtime.snapshot();
+        assertThat(progressed.lanes()).allSatisfy(lane -> assertThat(lane.tick()).isGreaterThan(0));
+        assertThat(started.lanes()).allSatisfy(lane -> assertThat(lane.tick()).isZero());
+        for (int index = 0; index < progressed.lanes().size(); index++) {
+            assertThat(progressed.presentationLanes().get(index).tick()).isEqualTo(progressed.lanes().get(index).tick());
+            assertThat(progressed.presentationLanes().get(index).recipeId()).isEqualTo(recipe.id().toString());
+        }
+
+        runtime.pause();
+        FactorySnapshot paused = runtime.snapshot();
+        assertThat(paused.paused()).isTrue();
+        assertThat(paused.lanes()).allSatisfy(lane -> assertThat(lane.status().isPaused()).isTrue());
+        assertThat(progressed.lanes()).allSatisfy(lane -> assertThat(lane.status().isPaused()).isFalse());
+        for (int index = 0; index < paused.lanes().size(); index++) {
+            assertThat(paused.lanes().get(index)).isNotSameAs(progressed.lanes().get(index));
+            assertThat(paused.presentationLanes().get(index)).isSameAs(progressed.presentationLanes().get(index));
+        }
+        String pausedMessage = paused.lanes().getFirst().status().getUnlocMessage();
+        paused.lanes().getFirst().status().overrideStatusMessage("mmcr.test.consumer_mutation");
+        assertThat(runtime.snapshot()).isSameAs(paused);
+        assertThat(paused.lanes().getFirst().status().getUnlocMessage()).isEqualTo(pausedMessage);
+        runtime.resume();
+        FactorySnapshot resumed = runtime.snapshot();
+        assertThat(resumed.paused()).isFalse();
+        assertThat(resumed.lanes()).allSatisfy(lane -> assertThat(lane.status().isPaused()).isFalse());
+        assertThat(paused.lanes()).allSatisfy(lane -> assertThat(lane.status().isPaused()).isTrue());
+        for (int index = 0; index < resumed.lanes().size(); index++) {
+            assertThat(resumed.lanes().get(index)).isNotSameAs(paused.lanes().get(index));
+            assertThat(resumed.presentationLanes().get(index)).isSameAs(paused.presentationLanes().get(index));
+        }
+        List<CraftingRuntime> active = runtime.activeRuntimes();
+        for (CraftingRuntime lane : active) {
+            for (int step = 0; step < 20; step++) lane.tick();
+            assertThat(lane.finish().isFailure()).isFalse();
+            runtime.markLaneRuntimeChanged(lane);
+        }
+        FactorySnapshot finished = runtime.snapshot();
+        assertThat(finished.active()).isFalse();
+        assertThat(finished.presentationLanes()).allSatisfy(lane -> assertThat(lane.active()).isFalse());
+        assertThat(paused.active()).isTrue();
+        runtime.tick(List.of(recipe), 1, 2L);
+        FactorySnapshot restarted = runtime.snapshot();
+        assertThat(restarted.lanes()).hasSize(16).allSatisfy(lane -> assertThat(lane.tick()).isZero());
+        assertThat(restarted.presentationLanes()).allSatisfy(lane -> assertThat(lane.active()).isTrue());
+        for (int index = 0; index < restarted.presentationLanes().size(); index++) {
+            assertThat(restarted.presentationLanes().get(index)).isNotSameAs(finished.presentationLanes().get(index));
+        }
+        assertThat(finished.presentationLanes()).allSatisfy(lane -> assertThat(lane.active()).isFalse());
+    }
+
+    @Test
+    void lane_failure_and_effective_output_revision_refresh_presentation_without_mutating_old_snapshot() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.tick(List.of(recipe("factory_revision_snapshot", 20)), 1, 0L);
+        FactorySnapshot before = runtime.snapshot();
+        CraftingRuntime lane = runtime.activeRuntimes().getFirst();
+        lane.activeRecipe().setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(
+                20, List.of(), List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F,
+                DataComponentPredicateSet.EMPTY))));
+        runtime.markLaneRuntimeChanged(lane);
+
+        int builds = runtime.laneSnapshotBuildCountForTesting();
+        FactorySnapshot outputs = runtime.snapshot();
+        assertThat(outputs.lanes().getFirst()).isSameAs(before.lanes().getFirst());
+        assertThat(runtime.laneSnapshotBuildCountForTesting()).isEqualTo(builds);
+        assertThat(outputs.presentationLanes().getFirst()).isNotSameAs(before.presentationLanes().getFirst());
+        assertThat(outputs.presentationLanes().getFirst().presentation().outputs()).hasSize(1);
+        assertThat(before.presentationLanes().getFirst().presentation().outputs()).isEmpty();
+
+        lane.recordSearchFailure(null);
+        runtime.markLaneRuntimeChanged(lane);
+        FactorySnapshot revised = runtime.snapshot();
+        assertThat(revised.failure()).isNotNull();
+        assertThat(revised.lanes().getFirst().failure()).isEqualTo(revised.failure());
+        assertThat(revised.presentationLanes().getFirst().failure()).isEqualTo(revised.failure());
+        assertThat(revised.presentationLanes().getFirst().presentation().outputs()).hasSize(1);
+        assertThat(revised.lanes().getFirst()).isNotSameAs(outputs.lanes().getFirst());
+        assertThat(revised.presentationLanes().getFirst()).isNotSameAs(outputs.presentationLanes().getFirst());
+        assertThat(outputs.failure()).isNull();
+        assertThat(before.failure()).isNull();
+        assertThat(before.presentationLanes().getFirst().presentation().outputs()).isEmpty();
+        assertThat(before.lanes().getFirst().failure()).isNull();
     }
 
     @Test
@@ -388,6 +560,78 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void clearing_and_rebuilding_lanes_drops_cached_thread_snapshots() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        MachineRecipe recipe = recipe("factory_snapshot_clear", 20);
+        runtime.tick(List.of(recipe), 1, 0L);
+        FactorySnapshot before = runtime.snapshot();
+        Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(runtime);
+        List<FactoryRecipeThread> previousLanes = List.copyOf(cache.keySet());
+        assertThat(cache).hasSize(2);
+
+        runtime.clear();
+
+        assertThat(cache).isEmpty();
+        assertThat(runtime.snapshot().lanes()).isEmpty();
+        runtime.ensureBaseLane(controller);
+        runtime.tick(List.of(recipe), 1, 1L);
+        FactorySnapshot rebuilt = runtime.snapshot();
+        assertThat(cache).hasSize(2);
+        assertThat(cache.keySet()).doesNotContainAnyElementsOf(previousLanes);
+        assertThat(rebuilt.presentationLanes().getFirst().laneId()).isEqualTo(before.presentationLanes().getFirst().laneId());
+        assertThat(rebuilt.presentationLanes().getFirst()).isNotSameAs(before.presentationLanes().getFirst());
+        assertThat(before.presentationLanes()).allSatisfy(lane -> assertThat(lane.active()).isTrue());
+    }
+
+    @Test
+    void reordering_and_removing_core_lanes_updates_indexes_and_drops_removed_cache_entries() {
+        ResourceLocation machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(machineId);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.setLaneLimit(3);
+        FactoryThreadSpec first = new FactoryThreadSpec("first", List.of());
+        FactoryThreadSpec second = new FactoryThreadSpec("second", List.of());
+        DynamicMachine machine = new DynamicMachine(machineId, "factory snapshot order", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 3,
+                List.of(first, second), List.of());
+        runtime.syncCoreLanes(controller, machine, List.of());
+        FactorySnapshot before = runtime.snapshot();
+        Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(runtime);
+        FactoryRecipeThread firstLane = cache.keySet().stream()
+                .filter(lane -> lane.laneId().equals("core-first")).findFirst().orElseThrow();
+        FactoryRecipeThread secondLane = cache.keySet().stream()
+                .filter(lane -> lane.laneId().equals("core-second")).findFirst().orElseThrow();
+        DynamicMachine reordered = new DynamicMachine(machineId, "factory snapshot order", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 3,
+                List.of(second, first), List.of());
+
+        runtime.syncCoreLanes(controller, reordered, List.of());
+        FactorySnapshot after = runtime.snapshot();
+
+        assertThat(cache).hasSize(3).containsKeys(firstLane, secondLane);
+        assertThat(after.presentationLanes().getFirst()).isSameAs(before.presentationLanes().getFirst());
+        assertThat(after.presentationLanes().get(1).laneId()).isEqualTo("core-second");
+        assertThat(after.presentationLanes().get(1).index()).isEqualTo(1);
+        assertThat(after.presentationLanes().get(1)).isNotSameAs(before.presentationLanes().get(2));
+        assertThat(after.presentationLanes().get(1).presentation()).isSameAs(before.presentationLanes().get(2).presentation());
+        assertThat(after.presentationLanes().get(2).laneId()).isEqualTo("core-first");
+        assertThat(after.presentationLanes().get(2).index()).isEqualTo(2);
+        assertThat(after.presentationLanes().get(2)).isNotSameAs(before.presentationLanes().get(1));
+        assertThat(before.presentationLanes().get(1).index()).isEqualTo(1);
+        assertThat(before.presentationLanes().get(2).index()).isEqualTo(2);
+
+        runtime.syncCoreLanes(controller, null, List.of());
+
+        assertThat(cache).hasSize(1).doesNotContainKeys(firstLane, secondLane);
+        assertThat(runtime.snapshot().presentationLanes().getFirst()).isSameAs(before.presentationLanes().getFirst());
+    }
+
+    @Test
     void lowering_lane_limit_keeps_active_lanes_until_they_finish() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
@@ -396,18 +640,24 @@ class FactoryRuntimeTest {
         MachineRecipe recipe = recipe("factory_remove", 2);
         runtime.tick(List.of(recipe), 1);
         CraftingRuntime removed = runtime.activeRuntimes().getLast();
+        runtime.snapshot();
+        Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(runtime);
+        FactoryRecipeThread removedLane = cache.keySet().stream()
+                .filter(lane -> lane.runtime() == removed).findFirst().orElseThrow();
 
         runtime.setLaneLimit(1);
 
         assertThat(runtime.activeLaneCount()).isEqualTo(2);
         assertThat(runtime.contains(removed)).isTrue();
         assertThat(removed.active()).isTrue();
+        assertThat(cache).containsKey(removedLane);
 
         runtime.tick(List.of(recipe), 1, 1L);
         runtime.tick(List.of(recipe), 1, 2L);
 
         assertThat(runtime.laneCount()).isEqualTo(1);
         assertThat(runtime.contains(removed)).isFalse();
+        assertThat(cache).doesNotContainKey(removedLane);
     }
 
     @Test
@@ -434,10 +684,15 @@ class FactoryRuntimeTest {
 
         runtime.tick(List.of(recipe("factory_idle_cleanup", 1)), 1);
         assertThat(runtime.laneCount()).isEqualTo(2);
+        runtime.snapshot();
+        Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(runtime);
+        FactoryRecipeThread removedLane = cache.keySet().stream()
+                .filter(lane -> !lane.isBaseThread()).findFirst().orElseThrow();
         for (int tick = 1; tick <= 201; tick++) runtime.tick(List.of(), 1, tick);
 
         assertThat(runtime.laneCount()).isEqualTo(1);
         assertThat(runtime.activeLaneCount()).isZero();
+        assertThat(cache).hasSize(1).doesNotContainKey(removedLane);
     }
 
     @Test
@@ -680,16 +935,26 @@ class FactoryRuntimeTest {
         saved.setLaneLimit(2);
         saved.tick(List.of(recipe), 2);
         saved.pause();
+        FactorySnapshot before = saved.snapshot();
 
         CompoundTag output = new CompoundTag();
         saved.save(output, EMPTY_LOOKUP);
         FactoryRuntime restored = new FactoryRuntime();
+        restored.ensureBaseLane(controller);
+        restored.snapshot();
+        Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(restored);
+        FactoryRecipeThread previousBase = cache.keySet().iterator().next();
         restored.load(output, controller, EMPTY_LOOKUP);
 
+        assertThat(cache).isEmpty();
         assertThat(restored.laneLimit()).isEqualTo(2);
         assertThat(restored.isPaused()).isTrue();
         assertThat(restored.laneCount()).isEqualTo(2);
-        assertThat(restored.snapshot().presentationLanes()).hasSize(2);
+        FactorySnapshot loaded = restored.snapshot();
+        assertThat(loaded.presentationLanes()).hasSize(2);
+        assertThat(loaded.presentationLanes().getFirst().laneId()).isEqualTo(before.presentationLanes().getFirst().laneId());
+        assertThat(loaded.presentationLanes().getFirst()).isNotSameAs(before.presentationLanes().getFirst());
+        assertThat(cache).hasSize(2).doesNotContainKey(previousBase);
     }
 
     @Test
@@ -1739,6 +2004,17 @@ class FactoryRuntimeTest {
 
     private static FactoryRuntime controllerFactoryRuntime(MachineControllerBlockEntity controller) {
         return controllerRuntime(controller).factoryRuntime();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> laneThreadSnapshots(FactoryRuntime runtime) {
+        try {
+            var field = FactoryRuntime.class.getDeclaredField("laneThreadSnapshots");
+            field.setAccessible(true);
+            return (Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot>) field.get(runtime);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to access factory lane snapshot cache", exception);
+        }
     }
 
     private static MachineControllerRuntime controllerRuntime(MachineControllerBlockEntity controller) {

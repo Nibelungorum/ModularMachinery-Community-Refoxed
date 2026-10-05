@@ -591,12 +591,7 @@ public abstract class RecipeThread {
                     if (!enqueued) failAsyncTick(token, lifecycleEpoch);
                     return enqueued;
                 },
-                () -> {
-                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
-                            && validateCurrentRuntime(token, domain);
-                      if (!valid) clearPendingTick();
-                      return valid;
-                },
+                () -> validateAsyncTickRequest(token, domain, lifecycleEpoch, structureVersion, stateVersion, catalogVersion),
                   () -> controller.currentStructureSnapshot().version(),
                   () -> controller.componentRuntime().stateVersion(),
                    catalogVersion,
@@ -650,11 +645,9 @@ public abstract class RecipeThread {
                     return true;
                  },
                  () -> {
-                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
-                            && validateCurrentRuntime(token, domain);
-                    boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
+                    boolean valid = validateAsyncTickRequest(token, domain, lifecycleEpoch,
+                            structureVersion, snapshot.stateVersion(), catalogVersion);
                     if (!valid) {
-                        clearPendingTick();
                         MachineAsyncCoordinator.get(level).resume(key);
                     }
                     return valid;
@@ -861,10 +854,9 @@ public abstract class RecipeThread {
                     asyncTickCommitted = runtime.commitAsyncTick(intent);
                     return true;
                 }, () -> {
-                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
-                            && validateCurrentRuntime(token, domain);
+                    boolean valid = validateAsyncTickRequest(token, domain, lifecycleEpoch,
+                            snapshot.structure().version(), snapshot.stateVersion(), catalogVersion);
                     if (!valid) {
-                        clearPendingTick();
                         MachineAsyncCoordinator.get(level).resume(key);
                     }
                     return valid;
@@ -892,16 +884,27 @@ public abstract class RecipeThread {
                     MachineAsyncCoordinator.get(level).complete(key);
                     return true;
                 }, () -> {
-                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
-                            && validateCurrentRuntime(token, domain);
+                    boolean valid = validateAsyncTickRequest(token, domain, lifecycleEpoch,
+                            structureVersion, stateVersion, catalogVersion);
                     if (!valid) {
-                        clearPendingTick();
                         MachineAsyncCoordinator.get(level).complete(key);
                     }
                     return valid;
                 }, () -> controller.currentStructureSnapshot().version(),
                 () -> controller.componentRuntime().stateVersion(), catalogVersion, this::currentCatalogVersion,
                 () -> MachineAsyncCoordinator.get(level).complete(key)));
+    }
+
+    private boolean validateAsyncTickRequest(long token, StructureClaimRegistry.ResourceDomain domain,
+                                            long lifecycleEpoch, long structureVersion, long stateVersion,
+                                            long catalogVersion) {
+        boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
+                && validateCurrentRuntime(token, domain)
+                && catalogVersion == currentCatalogVersion()
+                && structureVersion == controller.currentStructureSnapshot().version()
+                && stateVersion == controller.componentRuntime().stateVersion();
+        if (!valid) failAsyncTick(token, lifecycleEpoch);
+        return valid;
     }
 
     private boolean validateCurrentRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {

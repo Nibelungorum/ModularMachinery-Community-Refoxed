@@ -12,6 +12,11 @@ import java.util.function.Function;
 public interface AsyncContinuation {
     Yield advance(AsyncExecutionContext context);
 
+    /** Opts in only when advancing yields pure state transitions without worker-only computation. */
+    default boolean canAdvanceOnMainThread() {
+        return false;
+    }
+
     sealed interface Yield permits Yield.Complete, Yield.MainThread, Yield.MainThreadBatch {
         record Complete() implements Yield {
         }

@@ -83,6 +83,7 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -131,6 +132,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -149,6 +151,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Final controller structure and preview behavior tests.
@@ -157,6 +160,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MachineControllerBlockEntityTest {
     private final List<ControllerScreenTextRegistry.Registration> textRegistrations = new ArrayList<>();
+    private final List<ServerLevel> runtimeStateBatchLevels = new ArrayList<>();
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -179,6 +183,8 @@ class MachineControllerBlockEntityTest {
     void closeTextRegistration() {
         textRegistrations.forEach(ControllerScreenTextRegistry.Registration::unregister);
         textRegistrations.clear();
+        runtimeStateBatchLevels.forEach(level -> SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level)));
+        runtimeStateBatchLevels.clear();
     }
 
     @Test
@@ -974,6 +980,165 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.persistenceChangedCalls).isZero();
         runtime.endUpdateBatch();
         assertThat(controller.persistenceChangedCalls).isEqualTo(1);
+    }
+
+    @Test
+    void level_post_batch_publishes_four_attached_lanes_once_with_immediately_live_epochs() throws Exception {
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("batched_factory_publication"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        FactoryRuntime factory = runtime.factoryRuntime();
+        List<CraftingRuntime> lanes = factory.activeRuntimes();
+        ControllerRuntimeSnapshot published = controller.runtimeSnapshot();
+        int publications = runtime.snapshotBuildCountForTesting();
+        ServerLevel level = (ServerLevel) controller.getLevel();
+
+        MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+            for (int index = 0; index < lanes.size(); index++) {
+                CraftingRuntime lane = lanes.get(index);
+                long epoch = factory.stateEpoch();
+                lane.activeRecipe().setTick(1);
+                controller.syncRecipeRuntimeFailure(lane);
+
+                assertThat(factory.stateEpoch()).isGreaterThan(epoch);
+                assertThat(lane.versionsCurrent()).isTrue();
+                assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes().get(index).tick())
+                        .isEqualTo(1);
+                assertThat(controller.runtimeSnapshot()).isSameAs(published);
+                assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
+            }
+        });
+
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(1, 1, 1, 1);
+        assertThat(published.factory().presentationLanes())
+                .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(0, 0, 0, 0);
+        assertThat(published.factory().lanes()).extracting(state -> state.tick()).containsExactly(0, 0, 0, 0);
+    }
+
+    @Test
+    void attached_factory_lane_publishes_immediately_outside_level_post_scope_in_every_work_mode() throws Exception {
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("unbatched_factory_publication"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        CraftingRuntime lane = runtime.factoryRuntime().activeRuntimes().getFirst();
+        Field workMode = MachineControllerBlockEntity.class.getDeclaredField("activeWorkMode");
+        workMode.setAccessible(true);
+
+        for (MachineWorkMode mode : MachineWorkMode.values()) {
+            workMode.set(controller, mode);
+            int publications = runtime.snapshotBuildCountForTesting();
+            int tick = lane.tickCount() + 1;
+            lane.activeRecipe().setTick(tick);
+            controller.syncRecipeRuntimeFailure(lane);
+
+            assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(tick);
+            assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        }
+    }
+
+    @Test
+    void nested_level_post_scopes_only_publish_when_the_owner_exits() throws Exception {
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("nested_factory_publication"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        List<CraftingRuntime> lanes = runtime.factoryRuntime().activeRuntimes();
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ControllerRuntimeSnapshot published = controller.runtimeSnapshot();
+        int publications = runtime.snapshotBuildCountForTesting();
+
+        MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+            lanes.getFirst().activeRecipe().setTick(1);
+            controller.syncRecipeRuntimeFailure(lanes.getFirst());
+            MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+                lanes.get(1).activeRecipe().setTick(1);
+                controller.syncRecipeRuntimeFailure(lanes.get(1));
+            });
+            assertThat(controller.runtimeSnapshot()).isSameAs(published);
+            assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
+        });
+
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(1, 1, 0, 0);
+    }
+
+    @Test
+    void level_post_factory_scope_preserves_normal_crafting_publication() throws Exception {
+        ResourceLocation machineId = MMCR.id("normal_crafting_in_factory_scope");
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        CraftingRuntime normal = runtime.craftingRuntime();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_crafting_scope_recipe"), machineId, 20,
+                List.of(), List.of());
+        assertThat(normal.start(recipe, 1).isCrafting()).isTrue();
+        controller.syncRecipeRuntimeFailure(normal);
+        int publications = runtime.snapshotBuildCountForTesting();
+
+        MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState((ServerLevel) controller.getLevel(), () -> {
+            normal.activeRecipe().setTick(1);
+            controller.syncRecipeRuntimeFailure(normal);
+            assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
+            assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        });
+
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+    }
+
+    @Test
+    void failed_level_post_scope_flushes_committed_state_and_can_be_reused() throws Exception {
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("failed_factory_publication"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        CraftingRuntime lane = runtime.factoryRuntime().activeRuntimes().getFirst();
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        int publications = runtime.snapshotBuildCountForTesting();
+        IllegalStateException failure = new IllegalStateException("failed commit window");
+
+        assertThatThrownBy(() -> MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+            lane.activeRecipe().setTick(1);
+            controller.syncRecipeRuntimeFailure(lane);
+            throw failure;
+        })).isSameAs(failure);
+
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(1);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+            lane.activeRecipe().setTick(2);
+            controller.syncRecipeRuntimeFailure(lane);
+            assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(1);
+        });
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 2);
+        lane.activeRecipe().setTick(3);
+        controller.syncRecipeRuntimeFailure(lane);
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(3);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 3);
+    }
+
+    @Test
+    void level_unload_clears_queued_publication_and_scope_ownership() throws Exception {
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("unloaded_factory_publication"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        CraftingRuntime lane = runtime.factoryRuntime().activeRuntimes().getFirst();
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ControllerRuntimeSnapshot published = controller.runtimeSnapshot();
+        int publications = runtime.snapshotBuildCountForTesting();
+
+        MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+            lane.activeRecipe().setTick(1);
+            controller.syncRecipeRuntimeFailure(lane);
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
+            assertThat(controller.runtimeSnapshot()).isSameAs(published);
+            assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
+
+            MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+                lane.activeRecipe().setTick(2);
+                controller.syncRecipeRuntimeFailure(lane);
+                assertThat(controller.runtimeSnapshot()).isSameAs(published);
+            });
+            assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(2);
+            assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        });
+
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
     }
 
     @Test
@@ -1973,6 +2138,51 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void live_pool_and_catalog_queries_in_a_batch_do_not_derive_factory_lane_snapshots() throws Exception {
+        ResourceLocation machineId = MMCR.id("lightweight_pool_query");
+        ResourceLocation firstPool = MMCR.id("lightweight_pool_first");
+        ResourceLocation secondPool = MMCR.id("lightweight_pool_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+        MachineControllerRuntime runtime = controllerRuntime(controller);
+        runtime.factoryRuntime().ensureBaseLane(controller);
+        var counter = runtime.factoryRuntime().getClass().getDeclaredMethod("laneSnapshotBuildCountForTesting");
+        counter.setAccessible(true);
+        var oldSnapshot = controller.runtimeSnapshot();
+        runtime.beginUpdateBatch();
+        try {
+            runtime.factoryRuntime().setLaneLimit(16);
+            int before = (int) counter.invoke(runtime.factoryRuntime());
+            assertThat(controller.supportedRecipePoolIds()).containsExactly(firstPool, secondPool);
+            assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+            long catalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
+            MachineRecipe reloaded = RecipeTestSupport.create(MMCR.id("lightweight_pool_reload_recipe"), firstPool,
+                    20, List.of(), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(reloaded.id(), reloaded));
+            assertThat(RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version()).isNotEqualTo(catalogVersion);
+            var oldCatalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
+            MachineRecipe replacementRecipe = RecipeTestSupport.create(reloaded.id(), firstPool, 30, List.of(), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(replacementRecipe.id(), replacementRecipe));
+            var newCatalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
+            assertThat(newCatalog.version()).isNotEqualTo(oldCatalog.version());
+            assertThat(newCatalog.recipes()).containsExactly(replacementRecipe);
+            assertThat(oldCatalog.recipes()).containsExactly(reloaded);
+            assertThat((int) counter.invoke(runtime.factoryRuntime())).isEqualTo(before);
+            assertThat(controller.runtimeSnapshot()).isSameAs(oldSnapshot);
+
+            Machine replacement = new DynamicMachine(machineId, "replacement recipe pool machine", new BlockArray(Map.of()));
+            controller.setMachine(replacement);
+            MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(secondPool)).build());
+            before = (int) counter.invoke(runtime.factoryRuntime());
+            assertThat(controller.currentStructureSnapshot().configuredMachine()).isSameAs(replacement);
+            assertThat(controller.supportedRecipePoolIds()).containsExactly(secondPool);
+            assertThat(controller.currentRecipePoolId()).isEqualTo(secondPool);
+            assertThat((int) counter.invoke(runtime.factoryRuntime())).isEqualTo(before);
+        } finally {
+            runtime.endUpdateBatch();
+        }
+    }
+
+    @Test
     void removed_current_recipe_pool_discards_active_work_when_falling_back() {
         ResourceLocation machineId = MMCR.id("controller_recipe_pool_removed_active");
         ResourceLocation firstPool = MMCR.id("controller_recipe_pool_removed_active_first");
@@ -2532,6 +2742,24 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
         controller.componentRuntime().replaceComponents(List.of(
                 new ProcessingComponent(null, scheduler, schedulerPos, BlockPos.ZERO, (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        return controller;
+    }
+
+    private MachineControllerBlockEntity runtimeStateBatchFactory(ResourceLocation machineId) throws Exception {
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        MachineControllerBlockEntity controller = factoryTextController(machineId);
+        runtimeStateBatchLevels.add((ServerLevel) controller.getLevel());
+        Field workMode = MachineControllerBlockEntity.class.getDeclaredField("activeWorkMode");
+        workMode.setAccessible(true);
+        workMode.set(controller, MachineWorkMode.SYNC);
+        FactoryRuntime factory = runtimeOf(controller).factoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(4);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id(machineId.getPath() + "_recipe"), machineId, 20,
+                List.of(), List.of(), List.of(), 0, 4);
+        factory.tick(List.of(recipe), 1, 0L);
+        assertThat(factory.activeRuntimes()).hasSize(4);
         RuntimeTestFixtures.republish(controller);
         return controller;
     }

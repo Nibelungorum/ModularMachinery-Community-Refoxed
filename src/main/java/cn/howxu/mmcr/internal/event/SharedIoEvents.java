@@ -36,10 +36,11 @@ public final class SharedIoEvents {
         long gameTime = level.getGameTime();
         sharedIo.beginLevelTick(gameTime);
         async.beginLevelTick(gameTime);
-        async.completeTick(() -> sharedIo.resolve(level));
-        sharedIo.resolve(level);
-        async.completeTick(() -> sharedIo.resolve(level));
-        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
+        MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
+            async.completeTick(() -> sharedIo.resolve(level));
+            sharedIo.resolve(level);
+            async.completeTick(() -> sharedIo.resolve(level));
+        });
         if (level.getServer() != null) NetworkInterfaceBindingCoordinator.heartbeat(level);
     }
 

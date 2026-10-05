@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import net.minecraft.core.BlockPos;
@@ -20,6 +21,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -195,7 +197,7 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
-    void complete_tick_defers_a_worker_continuation_yielded_by_its_main_step_to_the_next_fence() {
+    void complete_tick_consumes_an_immediately_ready_worker_yield_with_remaining_budget() {
         List<String> phases = new CopyOnWriteArrayList<>();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
 
@@ -208,7 +210,7 @@ class MachineAsyncCoordinatorTest {
                                 })));
 
         coordinator.completeTick();
-        assertThat(phases).containsExactly("first-main");
+        assertThat(phases).containsExactly("first-main", "second-main", "complete");
 
         coordinator.completeTick();
 
@@ -228,7 +230,7 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
-    void complete_tick_does_not_run_a_later_tick() {
+    void complete_tick_uses_remaining_budget_for_a_later_ready_tick() {
         List<String> phases = new CopyOnWriteArrayList<>();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
 
@@ -241,7 +243,7 @@ class MachineAsyncCoordinatorTest {
 
         coordinator.completeTick();
 
-        assertThat(phases).containsExactly("current");
+        assertThat(phases).containsExactly("current", "later");
     }
 
     private static AsyncContinuation continuationChain(int remaining, AtomicInteger completedSteps) {
@@ -327,7 +329,7 @@ class MachineAsyncCoordinatorTest {
                 AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
                         result -> context -> AsyncContinuation.Yield.complete()));
 
-        Thread pump = new Thread(coordinator::pumpMainThreadSteps);
+        Thread pump = new Thread(coordinator::completeTick);
         pump.start();
         assertThat(dequeued.await(1, TimeUnit.SECONDS)).isTrue();
 
@@ -552,6 +554,596 @@ class MachineAsyncCoordinatorTest {
         coordinator.completeTick(() -> sharedIo.resolve(domain));
 
         assertThat(committed).hasValue(1);
+    }
+
+    @Test
+    void worker_publication_during_a_fence_can_use_remaining_budget() throws InterruptedException {
+        ManualExecutor executor = new ManualExecutor();
+        CountDownLatch dequeued = new CountDownLatch(1);
+        CountDownLatch published = new CountDownLatch(1);
+        AtomicBoolean first = new AtomicBoolean(true);
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, () -> {
+            if (first.getAndSet(false)) {
+                dequeued.countDown();
+                await(published);
+            }
+        });
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("first")),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("published")),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+        executor.runNext();
+        Thread worker = new Thread(() -> {
+            try {
+                await(dequeued);
+                executor.runNext();
+            } finally {
+                published.countDown();
+            }
+        });
+        worker.start();
+        try {
+            coordinator.completeTick();
+            assertThat(phases).containsExactly("first", "published");
+            assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+            coordinator.completeTick();
+            assertThat(phases).containsExactly("first", "published");
+            assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+        } finally {
+            dequeued.countDown();
+            worker.join(1_000L);
+        }
+        assertThat(worker.isAlive()).isFalse();
+    }
+
+    @Test
+    void newer_batch_created_by_a_callback_is_outside_the_ready_batch_boundary() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.Deferred(
+                        MainThreadStep.Kind.BEFORE_START, () -> { }), result -> context ->
+                        AsyncContinuation.Yield.complete()));
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> {
+                    phases.add("existing");
+                    coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 9L),
+                            new MainThreadStep.TestStep(() -> phases.add("created")), null,
+                            MachineAsyncCoordinator.TaskHooks.defaults());
+                }), null, MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("existing");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("existing", "created");
+    }
+
+    @Test
+    void cross_batch_callback_keeps_the_existing_per_batch_capture_point() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.Deferred(
+                        MainThreadStep.Kind.BEFORE_START, () -> { }), result -> context ->
+                        AsyncContinuation.Yield.complete()));
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> {
+                    phases.add("callback");
+                    coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(3, 0, 0), 9L),
+                            new MainThreadStep.TestStep(() -> phases.add("appended")), null,
+                            MachineAsyncCoordinator.TaskHooks.defaults());
+                }), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 9L),
+                new MainThreadStep.TestStep(() -> phases.add("already-ready")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+
+        assertThat(phases).containsExactly("callback", "already-ready", "appended");
+    }
+
+    @Test
+    void newer_batch_rotation_preserves_budget_and_defers_its_yielded_continuation() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 1);
+        List<String> phases = new ArrayList<>();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> { }), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.completeTick();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("a-first")),
+                        result -> context -> AsyncContinuation.Yield.mainThread(
+                                new MainThreadStep.TestStep(() -> phases.add("a-second")),
+                                next -> last -> AsyncContinuation.Yield.complete())));
+        executor.runNext();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 9L),
+                new MainThreadStep.TestStep(() -> phases.add("b")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("a-first");
+        executor.runNext();
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("a-first", "b");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("a-first", "b", "a-second");
+    }
+
+    @Test
+    void pending_batch_resume_during_arbitration_keeps_the_earliest_batch_fence() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThreadBatch(List.of(
+                        new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> phases.add("pending")),
+                        new MainThreadStep.TestStep(() -> phases.add("after-resume"))),
+                results -> context -> {
+                    assertThat(results).hasSize(2);
+                    phases.add("complete");
+                    return AsyncContinuation.Yield.complete();
+                }));
+
+        coordinator.completeTick(() -> {
+            coordinator.resume(key);
+            return 1;
+        });
+        assertThat(phases).containsExactly("pending");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("pending", "after-resume", "complete");
+        coordinator.completeTick();
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+    }
+
+    @Test
+    void cancelled_queue_entries_consume_the_captured_budget_without_stale_ready_work() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        List<String> phases = new ArrayList<>();
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        var cancelled = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        var active = new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L);
+        coordinator.submitMainThread(cancelled, new MainThreadStep.TestStep(() -> phases.add("cancelled")),
+                null, new MachineAsyncCoordinator.TaskHooks(() -> true, (key, outcome) -> outcomes.add(outcome)));
+        coordinator.submitMainThread(active, new MainThreadStep.TestStep(() -> phases.add("active")),
+                null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.cancel(cancelled);
+
+        coordinator.completeTick();
+        assertThat(phases).isEmpty();
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Cancelled.class);
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("active");
+        coordinator.completeTick();
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+        assertThat(outcomes).hasSize(1);
+        coordinator.submitMainThread(active, new MainThreadStep.TestStep(() -> phases.add("resubmitted")),
+                null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("active", "resubmitted");
+    }
+
+    @Test
+    void termination_callback_can_publish_a_new_task_after_the_captured_main_steps() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        List<String> phases = new ArrayList<>();
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        coordinator.submitMainThread(key, new MainThreadStep.TestStep(() -> phases.add("terminated")),
+                null, new MachineAsyncCoordinator.TaskHooks(() -> true, (finished, outcome) -> {
+                    coordinator.submitMainThread(key, new MainThreadStep.TestStep(() -> phases.add("replacement")),
+                            null, MachineAsyncCoordinator.TaskHooks.defaults());
+                }));
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("terminated");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("terminated", "replacement");
+        coordinator.completeTick();
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+    }
+
+    @Test
+    void unbounded_pump_drain_leaves_no_phantom_count_for_the_next_fence() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        List<String> phases = new ArrayList<>();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                new MainThreadStep.TestStep(() -> phases.add("drained")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.pumpMainThreadSteps();
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> phases.add("newer")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+
+        coordinator.completeTick();
+
+        assertThat(phases).containsExactly("drained", "newer");
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+    }
+
+    @Test
+    void safe_start_and_finish_stages_share_a_fence_but_each_consume_budget() {
+        for (MainThreadStep.Kind kind : List.of(MainThreadStep.Kind.BEFORE_START, MainThreadStep.Kind.BEFORE_FINISH)) {
+            ManualExecutor executor = new ManualExecutor();
+            MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 3, false);
+            List<Class<?>> stages = new ArrayList<>();
+            var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+            coordinator.submit(key, kind == MainThreadStep.Kind.BEFORE_START
+                    ? AsyncCraftingExecution.start("base", 1L) : AsyncCraftingExecution.finish("base", 1L),
+                    (taskKey, step) -> {
+                        stages.add(step.getClass());
+                        return step.execute();
+                    });
+            executor.runNext();
+            coordinator.beginLevelTick(7L);
+
+            coordinator.completeTick();
+
+            assertThat(stages).containsExactly(MainThreadStep.Lifecycle.class, MainThreadStep.ScreenTextFlush.class,
+                    MainThreadStep.SharedIoRequest.class);
+            assertThat(executor.pendingTaskCount()).isZero();
+            AtomicBoolean peer = new AtomicBoolean();
+            coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L),
+                    new MainThreadStep.TestStep(() -> peer.set(true)), null, MachineAsyncCoordinator.TaskHooks.defaults());
+            coordinator.beginLevelTick(7L);
+            coordinator.completeTick();
+            assertThat(peer).isFalse();
+            coordinator.beginLevelTick(8L);
+            coordinator.completeTick();
+            assertThat(peer).isTrue();
+        }
+    }
+
+    @Test
+    void safe_stages_wait_when_budget_is_exhausted_without_an_extra_worker_hop() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 2, false);
+        List<Class<?>> stages = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                AsyncCraftingExecution.finish("base", 1L), (key, step) -> {
+                    stages.add(step.getClass());
+                    return step.execute();
+                });
+        executor.runNext();
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        coordinator.completeTick();
+        assertThat(stages).containsExactly(MainThreadStep.Lifecycle.class, MainThreadStep.ScreenTextFlush.class);
+        assertThat(executor.pendingTaskCount()).isZero();
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(stages).containsExactly(MainThreadStep.Lifecycle.class, MainThreadStep.ScreenTextFlush.class,
+                MainThreadStep.SharedIoRequest.class);
+    }
+
+    @Test
+    void default_continuation_stays_on_the_worker_after_a_main_result() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 4, false);
+        AtomicBoolean advanced = new AtomicBoolean();
+        AsyncContinuation continuation = ignored -> {
+            advanced.set(true);
+            return AsyncContinuation.Yield.complete();
+        };
+        assertThat(continuation.canAdvanceOnMainThread()).isFalse();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> continuation));
+        executor.runNext();
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        assertThat(advanced).isFalse();
+        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+        executor.runNext();
+        coordinator.completeTick();
+        assertThat(advanced).isTrue();
+    }
+
+    @Test
+    void old_worker_tail_does_not_block_newer_ready_work_after_using_one_step() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 2, false);
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("old")),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+        executor.runNext();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> phases.add("new")), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("old", "new");
+        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> phases.add("exhausted")), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("old", "new");
+        coordinator.beginLevelTick(9L);
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("old", "new", "exhausted");
+    }
+
+    @Test
+    void visited_newer_waiting_worker_is_readmitted_with_remaining_budget() {
+        AtomicBoolean saturated = new AtomicBoolean(true);
+        Queue<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            if (saturated.get()) throw new RejectedExecutionException("saturated");
+            workers.add(command);
+        }, 1, false);
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> { }), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        AtomicBoolean committed = new AtomicBoolean();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+        saturated.set(false);
+        coordinator.completeTick();
+        assertThat(workers).isEmpty(); // No ready-batch scan at zero remaining budget.
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(workers).hasSize(1);
+        workers.remove().run();
+        coordinator.completeTick();
+        assertThat(committed).isTrue();
+    }
+
+    @Test
+    void infinite_safe_yields_are_budget_bounded_and_append_behind_ready_peers() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 4, false);
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), safeLoop(phases));
+        executor.runNext();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L),
+                new MainThreadStep.TestStep(() -> phases.add("peer")), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("loop", "peer", "loop", "loop");
+        assertThat(executor.pendingTaskCount()).isZero();
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(phases).hasSize(8);
+        coordinator.cancel(BlockPos.ZERO);
+        coordinator.beginLevelTick(9L);
+        coordinator.completeTick();
+        assertThat(phases).hasSize(8);
+    }
+
+    @Test
+    void deferred_safe_resume_is_charged_and_cannot_repeat_the_pending_business_step() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 2, false);
+        List<String> phases = new ArrayList<>();
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> phases.add("pending")),
+                result -> safeLoop(phases)));
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick(() -> {
+            coordinator.resume(key);
+            coordinator.resume(key);
+            return 1;
+        });
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("pending");
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("pending", "loop", "loop");
+        coordinator.cancel(key);
+        coordinator.resume(key);
+        coordinator.beginLevelTick(9L);
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("pending", "loop", "loop");
+    }
+
+    @Test
+    void validation_after_a_callback_prevents_safe_forwarding_of_a_stale_epoch() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 4);
+        AtomicBoolean current = new AtomicBoolean(true);
+        List<String> phases = new ArrayList<>();
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> current.set(false)),
+                        result -> safeLoop(phases)), null, new MachineAsyncCoordinator.TaskHooks(current::get,
+                (key, outcome) -> outcomes.add(outcome)));
+        coordinator.completeTick();
+        assertThat(phases).isEmpty();
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Cancelled.class);
+    }
+
+    @Test
+    void cancellation_by_the_resume_factory_prevents_even_pure_forwarded_advancement() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 4);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L, MachineWorkMode.SEMI_SYNC);
+        AtomicInteger advances = new AtomicInteger();
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        AsyncContinuation safe = new AsyncContinuation() {
+            @Override public boolean canAdvanceOnMainThread() { return true; }
+            @Override public Yield advance(AsyncExecutionContext context) {
+                assertThat(context.workMode()).isEqualTo(MachineWorkMode.SEMI_SYNC);
+                advances.incrementAndGet();
+                return Yield.complete();
+            }
+        };
+        coordinator.submitDetailed(key, ignored -> AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success,
+                result -> {
+                    coordinator.cancel(key);
+                    return safe;
+                }), null, new MachineAsyncCoordinator.TaskHooks(() -> true, (taskKey, outcome) -> outcomes.add(outcome)));
+        coordinator.completeTick();
+        assertThat(advances).hasValue(0);
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Cancelled.class);
+    }
+
+    @Test
+    void a_safe_forwarding_exception_terminates_once_without_escaping_the_fence() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 4);
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        AsyncContinuation failing = new AsyncContinuation() {
+            @Override public boolean canAdvanceOnMainThread() { return true; }
+            @Override public Yield advance(AsyncExecutionContext context) { throw new IllegalStateException("forward failure"); }
+        };
+        coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> failing), null,
+                new MachineAsyncCoordinator.TaskHooks(() -> true, (key, outcome) -> outcomes.add(outcome)));
+        assertThatCode(coordinator::completeTick).doesNotThrowAnyException();
+        coordinator.completeTick();
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Failed.class);
+    }
+
+    @Test
+    void old_safe_loop_and_deferred_work_share_bounded_rounds_with_newer_ready_peers() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 4, false);
+        List<String> phases = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), safeLoop(phases));
+        executor.runNext();
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L),
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> phases.add("deferred")),
+                null, MachineAsyncCoordinator.TaskHooks.defaults());
+        for (long gameTime = 8L; gameTime <= 10L; gameTime++) {
+            String peer = "peer-" + gameTime;
+            coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), gameTime),
+                    new MainThreadStep.TestStep(() -> phases.add(peer)), null, MachineAsyncCoordinator.TaskHooks.defaults());
+            coordinator.beginLevelTick(gameTime);
+            int before = phases.size();
+            coordinator.completeTick();
+            assertThat(phases.subList(before, phases.size())).hasSize(4).contains(peer);
+            coordinator.completeTick();
+            assertThat(phases).hasSize(before + 4);
+        }
+        assertThat(phases.subList(0, 4)).containsExactly("loop", "deferred", "peer-8", "loop");
+        assertThat(executor.pendingTaskCount()).isZero();
+    }
+
+    @Test
+    void worker_admission_captures_its_entry_tail_once_and_keeps_a_ready_peer_runnable() {
+        AtomicBoolean rejecting = new AtomicBoolean(true);
+        AtomicBoolean appendTail = new AtomicBoolean(true);
+        AtomicReference<MachineAsyncCoordinator> owner = new AtomicReference<>();
+        Queue<Runnable> workers = new ArrayDeque<>();
+        List<String> phases = new ArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            if (rejecting.get()) throw new RejectedExecutionException("saturated");
+            workers.add(command);
+            if (appendTail.getAndSet(false)) {
+                rejecting.set(true);
+                owner.get().submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(3, 0, 0), 8L), ignored -> {
+                    phases.add("tail-worker");
+                    return AsyncContinuation.Yield.complete();
+                });
+                rejecting.set(false);
+            }
+        }, 2, false);
+        owner.set(coordinator);
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> { }), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L), ignored -> {
+            phases.add("head-worker");
+            return AsyncContinuation.Yield.complete();
+        });
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> phases.add("ready-peer")), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        rejecting.set(false);
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(workers).hasSize(1);
+        assertThat(phases).containsExactly("ready-peer");
+        workers.remove().run();
+        coordinator.beginLevelTick(9L);
+        coordinator.completeTick();
+        assertThat(workers).hasSize(1);
+        workers.remove().run();
+        assertThat(phases).containsExactly("ready-peer", "head-worker", "tail-worker");
+    }
+
+    @Test
+    void cancelled_and_stale_worker_polls_count_toward_the_entry_capture() {
+        AtomicReference<MachineAsyncCoordinator> owner = new AtomicReference<>();
+        AtomicInteger tailValidations = new AtomicInteger();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            throw new RejectedExecutionException("saturated");
+        }, 2, false);
+        owner.set(coordinator);
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START, () -> { }), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        var cancelled = new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L);
+        coordinator.submit(cancelled, ignored -> AsyncContinuation.Yield.complete());
+        coordinator.cancel(cancelled);
+        coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 8L),
+                ignored -> AsyncContinuation.Yield.complete(), null, new MachineAsyncCoordinator.TaskHooks(() -> {
+                    owner.get().submitDetailed(new MachineAsyncCoordinator.TaskKey(new BlockPos(3, 0, 0), 8L),
+                            ignored -> AsyncContinuation.Yield.complete(), null,
+                            new MachineAsyncCoordinator.TaskHooks(() -> {
+                                tailValidations.incrementAndGet();
+                                return false;
+                            }, (key, outcome) -> { }));
+                    return false;
+                }, (key, outcome) -> { }));
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(tailValidations).hasValue(0);
+        coordinator.beginLevelTick(9L);
+        coordinator.completeTick();
+        assertThat(tailValidations).hasValue(1);
+    }
+
+    @Test
+    void zero_main_budget_preserves_bounded_oldest_worker_admission_without_business_execution() {
+        AtomicBoolean rejecting = new AtomicBoolean(true);
+        Queue<Runnable> workers = new ArrayDeque<>();
+        List<String> phases = new ArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            if (rejecting.get()) throw new RejectedExecutionException("saturated");
+            workers.add(command);
+        }, 1, false);
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored -> {
+            phases.add("old-worker");
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("old-main")),
+                    result -> context -> AsyncContinuation.Yield.complete());
+        });
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L),
+                new MainThreadStep.TestStep(() -> phases.add("charged")), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 8L), ignored -> {
+            phases.add("new-worker");
+            return AsyncContinuation.Yield.complete();
+        });
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(3, 0, 0), 8L),
+                new MainThreadStep.TestStep(() -> phases.add("new-main")), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        rejecting.set(false);
+        coordinator.beginLevelTick(7L);
+        coordinator.completeTick();
+        assertThat(workers).hasSize(1);
+        workers.remove().run();
+        coordinator.completeTick();
+        assertThat(workers).isEmpty();
+        assertThat(phases).containsExactly("charged", "old-worker");
+        coordinator.beginLevelTick(8L);
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("charged", "old-worker", "old-main");
+    }
+
+    private static AsyncContinuation safeLoop(List<String> phases) {
+        return new AsyncContinuation() {
+            @Override public boolean canAdvanceOnMainThread() { return true; }
+            @Override public Yield advance(AsyncExecutionContext context) {
+                return Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("loop")), result -> this);
+            }
+        };
     }
 
     private static void await(CountDownLatch latch) {

@@ -12,7 +12,6 @@ import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
-import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -80,7 +79,8 @@ public final class FactoryRuntime {
     private int cachedActiveLaneCount;
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
     private @Nullable FactorySnapshot cachedSnapshot;
-    private final Map<FactoryRecipeThread, LanePresentationCache> lanePresentationCaches = new IdentityHashMap<>();
+    private final Map<FactoryRecipeThread, ControllerRecipePresentation> lanePresentationCaches = new IdentityHashMap<>();
+    private final Map<FactoryRecipeThread, ThreadSnapshot> laneThreadSnapshots = new IdentityHashMap<>();
     private int presentationBuildCountForTesting;
     private final Set<FactoryRecipeThread> readyLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, AsyncSearchRequest> pendingAsyncSearches = new IdentityHashMap<>();
@@ -664,12 +664,31 @@ public final class FactoryRuntime {
         List<ThreadSnapshot> snapshots = new ArrayList<>(laneLimit);
         for (int index = 0; index < lanes.size(); index++) {
             FactoryRecipeThread lane = lanes.get(index);
-            CraftingStateSnapshot state = lane.runtime().snapshot();
-            snapshots.add(new ThreadSnapshot(index, lane.laneId(), lane.isBaseThread(), lane.isCoreThread(), lane.runtime().active(),
-                    state.recipeId() == null ? "" : state.recipeId().toString(), lane.runtime().tickCount(),
-                    lane.runtime().totalTick(), lane.runtime().active() ? lane.runtime().parallelism() : 1,
-                    state.failure(), presentationFor(lane)));
+            snapshots.add(threadSnapshot(index, lane));
         }
+        return completeThreadSnapshots(snapshots);
+    }
+
+    private ThreadSnapshot threadSnapshot(int index, FactoryRecipeThread lane) {
+        CraftingRuntime runtime = lane.runtime();
+        ControllerRecipePresentation presentation = presentationFor(lane);
+        String recipeId = runtime.recipeIdText();
+        long parallelism = runtime.active() ? runtime.parallelism() : 1;
+        ThreadSnapshot previous = laneThreadSnapshots.get(lane);
+        if (previous != null && previous.index() == index && previous.laneId().equals(lane.laneId())
+                && previous.baseThread() == lane.isBaseThread() && previous.coreThread() == lane.isCoreThread()
+                && previous.active() == runtime.active() && previous.recipeId().equals(recipeId)
+                && previous.tick() == runtime.tickCount() && previous.totalTick() == runtime.totalTick()
+                && previous.parallelism() == parallelism && Objects.equals(previous.failure(), runtime.failure())
+                && previous.presentation() == presentation) return previous;
+        ThreadSnapshot next = new ThreadSnapshot(index, lane.laneId(), lane.isBaseThread(), lane.isCoreThread(),
+                runtime.active(), recipeId, runtime.tickCount(), runtime.totalTick(), parallelism,
+                runtime.failure(), presentation);
+        laneThreadSnapshots.put(lane, next);
+        return next;
+    }
+
+    private List<ThreadSnapshot> completeThreadSnapshots(List<ThreadSnapshot> snapshots) {
         while (snapshots.size() < laneLimit) {
             int index = snapshots.size();
             snapshots.add(new ThreadSnapshot(index, "idle-" + index, false, false, false,
@@ -680,6 +699,12 @@ public final class FactoryRuntime {
 
     int presentationBuildCountForTesting() {
         return presentationBuildCountForTesting;
+    }
+
+    int laneSnapshotBuildCountForTesting() {
+        int count = 0;
+        for (FactoryRecipeThread lane : lanes) count += lane.runtime().snapshotBuildCountForTesting();
+        return count;
     }
 
     public Map<String, ControllerScreenTextSnapshot> screenTextSnapshots() {
@@ -694,12 +719,17 @@ public final class FactoryRuntime {
     public FactorySnapshot snapshot() {
         recomputeFailureIfDirty();
         if (cachedSnapshot != null && cachedSnapshotEpoch == factoryStateEpoch) return cachedSnapshot;
-        List<CraftingStateSnapshot> laneSnapshots = lanes.stream()
-                .map(FactoryRecipeThread::runtime)
-                .map(CraftingRuntime::snapshot)
-                .filter(state -> state.recipeId() != null || state.failure() != null)
-                .toList();
-        int activeCount = activeLaneCount();
+        List<CraftingStateSnapshot> laneSnapshots = new ArrayList<>(lanes.size());
+        List<ThreadSnapshot> presentationSnapshots = new ArrayList<>(laneLimit);
+        int activeCount = 0;
+        for (int index = 0; index < lanes.size(); index++) {
+            FactoryRecipeThread lane = lanes.get(index);
+            CraftingStateSnapshot state = lane.runtime().snapshot();
+            if (state.recipeId() != null || state.failure() != null) laneSnapshots.add(state);
+            if (lane.runtime().active()) activeCount++;
+            presentationSnapshots.add(threadSnapshot(index, lane));
+        }
+        cachedActiveLaneCount = activeCount;
         int matchedStage = 0;
         int stageCount = 1;
         if (controller != null) {
@@ -714,7 +744,7 @@ public final class FactoryRuntime {
             }
         }
         cachedSnapshot = new FactorySnapshot(false, activeCount > 0, laneSnapshots, laneLimit,
-                activeCount, Math.max(1L, perThreadParallelLimit), paused, threadSnapshots(), "", 0, failure,
+                activeCount, Math.max(1L, perThreadParallelLimit), paused, completeThreadSnapshots(presentationSnapshots), "", 0, failure,
                 List.of(), matchedStage, stageCount);
         cachedSnapshotEpoch = factoryStateEpoch;
         return cachedSnapshot;
@@ -1204,6 +1234,7 @@ public final class FactoryRuntime {
     private void removeLaneState(FactoryRecipeThread lane) {
         startReservations.remove(lane);
         lanePresentationCaches.remove(lane);
+        laneThreadSnapshots.remove(lane);
     }
 
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {
@@ -1249,20 +1280,9 @@ public final class FactoryRuntime {
     }
 
     private ControllerRecipePresentation presentationFor(FactoryRecipeThread lane) {
-        CraftingRuntime runtime = lane.runtime();
-        ActiveMachineRecipe recipe = runtime.activeRecipe();
-        long parallelism = runtime.active() ? runtime.parallelism() : 0L;
-        LanePresentationCache cached = lanePresentationCaches.get(lane);
-        if (cached != null && cached.recipe == recipe && cached.parallelism == parallelism) return cached.presentation;
-
-        ControllerRecipePresentation presentation = ControllerRecipePresentation.from(runtime);
-        lanePresentationCaches.put(lane, new LanePresentationCache(recipe, parallelism, presentation));
-        presentationBuildCountForTesting++;
+        ControllerRecipePresentation presentation = lane.runtime().recipePresentation();
+        if (lanePresentationCaches.put(lane, presentation) != presentation) presentationBuildCountForTesting++;
         return presentation;
-    }
-
-    private record LanePresentationCache(@Nullable ActiveMachineRecipe recipe, long parallelism,
-                                         ControllerRecipePresentation presentation) {
     }
 
     private @Nullable PatternLane reservePatternStart(FactoryRecipeThread lane, MachineRecipe recipe,
@@ -1283,7 +1303,7 @@ public final class FactoryRuntime {
     }
 
     private LaneObservation observe(FactoryRecipeThread lane) {
-        return new LaneObservation(lane.runtime().snapshot(), lane.getStatus(), lane.isStartPending(),
+        return new LaneObservation(lane.runtime().observation(), lane.getStatus(), lane.isStartPending(),
                 lane.getPendingStartRecipe());
     }
 
@@ -1293,7 +1313,7 @@ public final class FactoryRuntime {
                 initialEpoch != factoryStateEpoch);
     }
 
-    private record LaneObservation(CraftingStateSnapshot runtime, RecipeThread.Status status,
+    private record LaneObservation(CraftingRuntime.StateObservation runtime, RecipeThread.Status status,
                                    boolean startPending, @Nullable MachineRecipe pendingRecipe) {
     }
 
