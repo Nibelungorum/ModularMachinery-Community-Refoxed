@@ -56,6 +56,11 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
     }
 
     @Override
+    public boolean canAdvanceOnMainThread() {
+        return sharedIoRequest != null || planned;
+    }
+
+    @Override
     public AsyncContinuation.Yield advance(AsyncExecutionContext context) {
         if (sharedIoRequest != null) {
             if (!lifecycleYielded) {

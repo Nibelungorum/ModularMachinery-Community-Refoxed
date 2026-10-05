@@ -14,6 +14,9 @@ import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -47,6 +50,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -168,10 +173,6 @@ class AsyncCraftingExecutionTest {
 
         thread.tick();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
-        assertThat(coordinator.awaitPendingMainStepForTesting(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-        coordinator.completeTick();
-        assertThat(coordinator.awaitPendingMainStepForTesting(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-        coordinator.completeTick();
         assertThat(coordinator.awaitPendingMainStepForTesting(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         coordinator.completeTick(() -> sharedIo.resolve(level));
@@ -299,6 +300,46 @@ class AsyncCraftingExecutionTest {
         assertThat(network.planThread()).isSameAs(Thread.currentThread());
         assertThat(network.commitThread()).isSameAs(Thread.currentThread());
         assertThat(thread.runtime().active()).isTrue();
+    }
+
+    @Test
+    void initial_prepared_plan_returned_by_a_main_result_is_still_computed_only_by_the_worker() {
+        Queue<Runnable> workers = new ArrayDeque<>();
+        Identifier capabilityId = MMCR.id("forwarding_worker_affinity");
+        var prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(new AsyncRequirementPlanner.Requirement(0, 1L,
+                List.of(new AsyncCapabilityRequest.Scalar(capabilityId, 1L, 1L, false)))),
+                List.of(new AsyncRequirementPlanner.Capability(new AsyncCapabilityPlanner.Scalar(capabilityId),
+                        new AsyncCapabilitySnapshot.Scalar(capabilityId, 10L, 10L, 10L))), List.of());
+        AsyncCraftingExecution execution = AsyncCraftingExecution.plan(prepared, "base", 1L);
+        assertThat(execution.canAdvanceOnMainThread()).isFalse();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers::add);
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L), ignored ->
+                AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> execution));
+        workers.remove().run();
+        coordinator.completeTick();
+        assertThat(execution.workerPlannedOperationCount()).isZero();
+        assertThat(execution.canAdvanceOnMainThread()).isFalse();
+        assertThat(workers).hasSize(1);
+        workers.remove().run();
+        assertThat(execution.canAdvanceOnMainThread()).isTrue();
+        assertThat(execution.workerPlannedOperationCount()).isEqualTo(1);
+        coordinator.completeTick();
+        assertThat(execution.workerPlannedOperationCount()).isEqualTo(1);
+    }
+
+    @Test
+    void false_start_lifecycle_short_circuits_flush_and_shared_io_even_with_remaining_budget() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        AtomicInteger steps = new AtomicInteger();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L), AsyncCraftingExecution.start("base", 1L),
+                (key, step) -> {
+                    assertThat(step).isInstanceOf(MainThreadStep.Lifecycle.class);
+                    steps.incrementAndGet();
+                    return MainThreadStep.Result.value(false);
+                });
+        coordinator.completeTick();
+        assertThat(steps).hasValue(1);
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
     }
 
     @Test

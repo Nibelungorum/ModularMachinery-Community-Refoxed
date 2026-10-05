@@ -9,9 +9,11 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -103,6 +105,10 @@ public final class MachineAsyncCoordinator {
         return new MachineAsyncCoordinator(executor, null, mainStepBudget, true);
     }
 
+    static MachineAsyncCoordinator forTesting(Executor executor, int mainStepBudget, boolean autoResetBudgetForTesting) {
+        return new MachineAsyncCoordinator(executor, null, mainStepBudget, autoResetBudgetForTesting);
+    }
+
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
         return submitDetailed(key, continuation, null) == SubmissionResult.ACCEPTED;
     }
@@ -128,6 +134,7 @@ public final class MachineAsyncCoordinator {
         if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
         if (!schedule(batch, task, continuation)) {
             batch.waitingWorkers.add(new WorkerSegment(task, continuation));
+            readyBatches.add(batch);
         }
         return SubmissionResult.ACCEPTED;
     }
@@ -179,11 +186,12 @@ public final class MachineAsyncCoordinator {
             admitWaitingWorkers(batch);
             int completedSteps = pumpReadyMainThreadSteps(batch, remainingMainSteps);
             remainingMainSteps -= completedSteps;
+            boolean continueEarliest = !batch.pendingMainSteps.isEmpty();
             drainTerminations(batch);
-            if (resolveSharedIo.getAsInt() > 0) signalProgress();
-            if (remainingMainSteps > 0 && (completedSteps == 0 || !batch.deferredMainSteps.isEmpty())) {
-                remainingMainSteps -= pumpNewerMainThreadSteps(batch.gameTime, remainingMainSteps);
+            if (remainingMainSteps > 0) {
+                remainingMainSteps -= pumpNewerMainThreadSteps(batch, remainingMainSteps, continueEarliest);
             }
+            if (resolveSharedIo.getAsInt() > 0) signalProgress();
             drainAllTerminations();
             if (afterTerminationDrainForTesting != null) afterTerminationDrainForTesting.run();
             batches.computeIfPresent(batch.gameTime, (gameTime, current) ->
@@ -320,7 +328,8 @@ public final class MachineAsyncCoordinator {
     }
 
     private void admitWaitingWorkers(TickBatch batch) {
-        while (true) {
+        int waitingCount = batch.waitingWorkers.size();
+        for (int index = 0; index < waitingCount; index++) {
             WorkerSegment segment = batch.waitingWorkers.peek();
             if (segment == null) return;
             if (segment.task.terminationRequested.get()) {
@@ -370,11 +379,11 @@ public final class MachineAsyncCoordinator {
         while ((pending = batch.pendingMainSteps.poll()) != null) executePendingMainStep(batch, pending);
     }
 
-    /** Processes only work ready when this level-end fence began. */
+    /** One FIFO round; newly yielded stages can run after other captured batches get their turn. */
     private int pumpReadyMainThreadSteps(TickBatch batch, int budget) {
         int readySteps = Math.min(batch.pendingMainSteps.size(), budget);
         int completedSteps = 0;
-        for (int index = 0; index < readySteps; index++) {
+        while (completedSteps < readySteps) {
             PendingMainStep pending = batch.pendingMainSteps.poll();
             if (pending == null) break;
             executePendingMainStep(batch, pending);
@@ -383,16 +392,29 @@ public final class MachineAsyncCoordinator {
         return completedSteps;
     }
 
-    private int pumpNewerMainThreadSteps(long gameTime, int budget) {
+    private int pumpNewerMainThreadSteps(TickBatch earliest, int budget, boolean continueEarliest) {
         int completed = 0;
+        List<TickBatch> roundBatches = new ArrayList<>();
+        if (continueEarliest) roundBatches.add(earliest);
+        Set<TickBatch> visited = new HashSet<>();
         int readyCount = readyBatches.size();
         for (int index = 0; index < readyCount && completed < budget; index++) {
             TickBatch batch = readyBatches.poll();
             if (batch == null) break;
-            if (batch.gameTime <= gameTime || batch.pendingMainSteps.isEmpty()) continue;
+            if (batch.gameTime <= earliest.gameTime || !visited.add(batch)) continue;
+            roundBatches.add(batch);
+            admitWaitingWorkers(batch);
             completed += pumpReadyMainThreadSteps(batch, budget - completed);
-            if (!batch.pendingMainSteps.isEmpty()) readyBatches.add(batch);
+            if (!batch.pendingMainSteps.isEmpty() || !batch.waitingWorkers.isEmpty()) readyBatches.add(batch);
             nextBatchOffset++;
+        }
+        while (completed < budget) {
+            int beforeRound = completed;
+            for (TickBatch batch : roundBatches) {
+                if (completed == budget) break;
+                completed += pumpReadyMainThreadSteps(batch, budget - completed);
+            }
+            if (completed == beforeRound) break;
         }
         return completed;
     }
@@ -430,14 +452,21 @@ public final class MachineAsyncCoordinator {
             requestTermination(batch, pending.task, new TaskOutcome.Succeeded());
             return;
         }
-        AsyncContinuation continuation;
-        try {
-            continuation = pending.resume.apply(List.copyOf(pending.results));
-        } catch (Throwable throwable) {
-            fail(batch, pending.task, throwable);
-            return;
+        synchronized (pending.task) {
+            if (!taskActive(batch, pending.task)) return;
+            try {
+                AsyncContinuation continuation = pending.resume.apply(List.copyOf(pending.results));
+                if (continuation.canAdvanceOnMainThread()) {
+                    if (!taskActive(batch, pending.task)) return;
+                    handleYield(batch, pending.task, continuation.advance(new AsyncExecutionContext(pending.task.key)));
+                } else if (!schedule(batch, pending.task, continuation)) {
+                    batch.waitingWorkers.add(new WorkerSegment(pending.task, continuation));
+                    readyBatches.add(batch);
+                }
+            } catch (Throwable throwable) {
+                fail(batch, pending.task, throwable);
+            }
         }
-        if (!schedule(batch, pending.task, continuation)) batch.waitingWorkers.add(new WorkerSegment(pending.task, continuation));
     }
 
     private void fail(TickBatch batch, Task task, Throwable throwable) {
@@ -581,7 +610,7 @@ public final class MachineAsyncCoordinator {
         private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
         private final ReadyQueue<PendingMainStep> pendingMainSteps = new ReadyQueue<>();
         private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
-        private final ConcurrentLinkedQueue<WorkerSegment> waitingWorkers = new ConcurrentLinkedQueue<>();
+        private final ReadyQueue<WorkerSegment> waitingWorkers = new ReadyQueue<>();
         private final ConcurrentLinkedQueue<PendingTermination> pendingTerminations = new ConcurrentLinkedQueue<>();
         private final AtomicInteger runningWorkers = new AtomicInteger();
 
@@ -605,6 +634,10 @@ public final class MachineAsyncCoordinator {
 
         private synchronized @Nullable T poll() {
             return entries.pollFirst();
+        }
+
+        private synchronized @Nullable T peek() {
+            return entries.peekFirst();
         }
 
         private synchronized int size() {

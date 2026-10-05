@@ -194,6 +194,55 @@ class MachineWorkModeIntegrationTest {
     }
 
     @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void attached_base_start_uses_one_production_level_post_without_worker_phase_round_trips(MachineWorkMode mode)
+            throws Exception {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        List<String> phases = new ArrayList<>();
+        Thread serverThread = Thread.currentThread();
+        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .beforeStart(context -> {
+                    assertThat(Thread.currentThread()).isSameAs(serverThread);
+                    phases.add("before-start");
+                }).build()));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        Field workMode = MachineControllerBlockEntity.class.getDeclaredField("activeWorkMode");
+        workMode.setAccessible(true);
+        workMode.set(controller, mode);
+        Queue<Runnable> workers = new java.util.ArrayDeque<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers::add, 3, false);
+        Field coordinators = MachineAsyncCoordinator.class.getDeclaredField("COORDINATORS");
+        coordinators.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<ServerLevel, MachineAsyncCoordinator> installed = (Map<ServerLevel, MachineAsyncCoordinator>) coordinators.get(null);
+        installed.put(level, coordinator);
+        FactoryRecipeThread lane = factoryBaseLane(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("production_forwarded_start"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        assertThat(lane.searchAndStartRecipe(List.of(recipe), 1L, controller.currentStructureSnapshot().version())).isTrue();
+        if (mode == MachineWorkMode.ASYNC) {
+            assertThat(phases).isEmpty();
+            assertThat(workers).hasSize(1);
+            workers.remove().run();
+        }
+
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(lane.runtime().active()).isTrue();
+        assertThat(phases).containsExactly("before-start");
+        if (mode == MachineWorkMode.ASYNC) {
+            // The Pending resume is also charged, so its terminal worker is not dispatched with exhausted quota.
+            assertThat(workers).isEmpty();
+        }
+        SharedIoEvents.completeLevelTick(level);
+        assertThat(phases).containsExactly("before-start");
+        assertThat(lane.runtime().tickCount()).isZero();
+    }
+
+    @ParameterizedTest
     @EnumSource(MachineWorkMode.class)
     void work_modes_produce_the_same_observable_recipe_progress(MachineWorkMode mode) {
         Identifier machineId = MMCR.id("test_cube");

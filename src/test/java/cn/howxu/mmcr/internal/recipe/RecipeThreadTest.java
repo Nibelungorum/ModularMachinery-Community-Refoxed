@@ -30,6 +30,8 @@ import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
@@ -147,7 +149,7 @@ class RecipeThreadTest {
         installCoordinator(level, coordinator);
         try {
             energy.energyStorage().setAmount(1_000L);
-            MachineRecipeThread thread = new MachineRecipeThread(controller);
+            FactoryRecipeThread thread = attachedBaseLane(controller);
             MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("energy_tick_timing"), MMCR.id("test_cube"),
                     20, List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 20L),
                             new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 10L)), List.of());
@@ -183,7 +185,7 @@ class RecipeThreadTest {
             throw new AssertionError("worker-free ticks must not dispatch a worker");
         }));
         try {
-            MachineRecipeThread thread = new MachineRecipeThread(controller);
+            FactoryRecipeThread thread = attachedBaseLane(controller);
             MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("worker_free_tick_timing"), MMCR.id("test_cube"),
                     20, List.of(), List.of());
             assertThat(thread.runtime().start(recipe, 1).isCrafting()).isTrue();
@@ -409,6 +411,17 @@ class RecipeThreadTest {
         previousServer = (MinecraftServer) currentServer.get(null);
         serverInstalled = true;
         currentServer.set(null, server);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static FactoryRecipeThread attachedBaseLane(MachineControllerBlockEntity controller) throws Exception {
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        FactoryRuntime factory = ((MachineControllerRuntime) runtimeField.get(controller)).factoryRuntime();
+        factory.ensureBaseLane(controller);
+        Field lanesField = FactoryRuntime.class.getDeclaredField("lanes");
+        lanesField.setAccessible(true);
+        return ((List<FactoryRecipeThread>) lanesField.get(factory)).getFirst();
     }
 
     private static MachineControllerBlockEntity controllerWithPorts(IOPortBlockEntity... ports) {
