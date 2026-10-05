@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
 import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
+import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
@@ -24,6 +25,7 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -44,6 +46,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Field;
 
@@ -175,6 +179,52 @@ class ContentRegistrationCoordinatorTest {
         ContentRegistrationCoordinator.commitStartup();
 
         assertThat(MachineDefinitions.allRegistrations()).hasSize(machineCount);
+    }
+
+    @Test
+    void repeated_startup_begin_preserves_collected_content() {
+        Identifier machineId = id("repeated_begin_machine");
+        Identifier recipeId = id("repeated_begin_recipe");
+        Identifier modifierId = id("repeated_begin_modifier");
+        StructureRegistration structures = new StructureRegistration(List.of(machineId));
+        structures.registerModifier(modifierId, ModifierDefinition.EMPTY);
+        structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
+                .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
+        ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectMachine(MachineBuilder.machine(machineId).build());
+        ContentRegistrationCoordinator.collectStructures(structures);
+        ContentRegistrationCoordinator.collectRecipes(recipeEvent(
+                MachineRecipeBuilder.recipe(recipeId).recipePool(machineId).duration(1).build()));
+
+        ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.commitStartup();
+
+        assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
+        assertThat(MachineStructureRegistry.startupSnapshot()).containsKey(machineId);
+        assertThat(ModifierRegistry.get(modifierId)).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(recipeId)).isNotNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void kubejs_machine_survives_production_startup_in_either_load_order(boolean kubejsFirst) {
+        Identifier machineId = Identifier.parse("mmcr_kubejs:startup_load_order_machine");
+        PublicApiBootstrap.begin();
+        if (!kubejsFirst) StartupContentRegistration.registerProductionForModStartup();
+        StartupContentRegistration.registerKubeJSStartupMachine(MachineBuilder.machine(machineId).build());
+        StartupContentRegistration.completeKubeJSStartupIfReady();
+        if (kubejsFirst) StartupContentRegistration.registerProductionForModStartup();
+        StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
+        StartupContentRegistration.completeProductionRecipesAfterComponentsBound(NeoForge.EVENT_BUS);
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
+        var declaration = MachineStructureBuilder.structure().fullStructure(stage -> stage.pattern(pattern -> pattern
+                .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))).build(machineId);
+        var structure = MachineDefinitionConverter.toStructureDefinition(declaration, Map.of());
+        assertThatCode(() -> RuntimeContentCoordinator.commitDynamic(Map.of(machineId, structure), Map.of()))
+                .doesNotThrowAnyException();
+        assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
     }
 
     @Test

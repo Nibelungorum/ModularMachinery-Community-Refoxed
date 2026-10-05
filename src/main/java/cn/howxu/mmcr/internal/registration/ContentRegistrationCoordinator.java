@@ -44,7 +44,8 @@ public final class ContentRegistrationCoordinator {
     }
 
     public static synchronized void beginStartup() {
-        if (state == State.COMMITTED) return;
+        // KubeJS plugins can collect declarations before MMCR's construct event begins startup.
+        if (state != State.BEFORE_BEGIN) return;
         MACHINES.clear();
         STRUCTURES.clear();
         RECIPES.clear();
