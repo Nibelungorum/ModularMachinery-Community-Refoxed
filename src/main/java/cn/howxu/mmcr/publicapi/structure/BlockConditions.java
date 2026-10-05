@@ -33,6 +33,9 @@ public final class BlockConditions {
     public static BlockCondition sourceInput() { return BlockAdapters.sourceInput(); }
     public static BlockCondition sourceOutput() { return BlockAdapters.sourceOutput(); }
     public static BlockCondition sourcePorts() { return BlockAdapters.sourcePorts(); }
+    public static BlockCondition manaInput() { return BlockAdapters.manaInput(); }
+    public static BlockCondition manaOutput() { return BlockAdapters.manaOutput(); }
+    public static BlockCondition manaPorts() { return BlockAdapters.manaPorts(); }
     public static BlockCondition chemicalInput() { return BlockAdapters.chemicalInput(); }
     public static BlockCondition chemicalOutput() { return BlockAdapters.chemicalOutput(); }
     public static BlockCondition radioactiveChemicalInput() { return BlockAdapters.radioactiveChemicalInput(); }

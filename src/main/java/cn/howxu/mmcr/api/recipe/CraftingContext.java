@@ -25,6 +25,8 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -40,6 +42,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +110,7 @@ public final class CraftingContext {
 
     public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities(@Nullable Set<ResourceLocation> capabilityIds) {
         List<AsyncRequirementPlanner.Capability> asyncCapabilities = new ArrayList<>();
+        Map<Object, AsyncCapabilitySnapshot> snapshots = new IdentityHashMap<>();
         boolean chemicalFallback = capabilities.stream().anyMatch(capability ->
                 capability.type().id().equals(MekanismRecipeTypes.CHEMICAL)
                         && capability.directions().supports(IOType.INPUT)
@@ -120,7 +124,8 @@ public final class CraftingContext {
             if (energyFallback && capability.type().equals(BuiltinCapabilityDefinitions.ENERGY_TYPE)) continue;
             AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
             if (facet == null) continue;
-            AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
+            AsyncCapabilitySnapshot snapshot = snapshots.computeIfAbsent(facet.planningIdentity(),
+                    ignored -> facet.captureSnapshot());
             AsyncCapabilityPlanner planner = facet.workerPlanner();
             asyncCapabilities.add(new AsyncRequirementPlanner.Capability(planner, snapshot,
                     capability.directions().values()));
@@ -429,6 +434,13 @@ public final class CraftingContext {
             return new AsyncRequirementPlanner.Requirement(index, amount,
                     IOType.valueOf(source.io().name()), List.of(new AsyncCapabilityRequest.Scalar(
                     ArsSourceIds.SOURCE, parallelism, amount, source.io() == RecipeModifier.IOType.OUTPUT)));
+        }
+        if (requirement instanceof ManaRequirement mana) {
+            if (!mana.tags().isEmpty()) return null;
+            long amount = scaled(mana.amount(), parallelism);
+            return new AsyncRequirementPlanner.Requirement(index, amount,
+                    IOType.valueOf(mana.io().name()), List.of(new AsyncCapabilityRequest.Scalar(
+                    BotaniaManaIds.MANA, parallelism, amount, mana.io() == RecipeModifier.IOType.OUTPUT)));
         }
         if (requirement instanceof EnergyRequirement energy && energy.fePerTick() > 0L) {
             return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),

@@ -6,6 +6,11 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauRecipeTypes;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.BotaniaRecipeTypes;
+import cn.howxu.mmcr.compat.botania.ManaOutput;
+import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -572,6 +577,43 @@ class MachineRecipeSchemaTest {
                     recipe.json.getAsJsonArray("outputs").get(0)).getOrThrow()).isEqualTo(new SourceOutput(amount));
             assertThat(builder.requirements).containsExactly(SourceRequirement.input(amount));
             assertThat(builder.customOutputs).containsExactly(new SourceOutput(amount));
+        }
+    }
+
+    @Test
+    void typedAndGenericManaSchemaFunctionsMatchDirectBuilderWithoutLongTruncation() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var outputs = OutputRegistry.openTestScope()) {
+            BotaniaRecipeTypes.register();
+            for (long amount : List.of(3_000_000_000L, Long.MAX_VALUE)) {
+                var typed = new KubeRecipe();
+                typed.json = new JsonObject();
+                var generic = new KubeRecipe();
+                generic.json = new JsonObject();
+                MachineRecipeSchema.SCHEMA.functions.get("inputMana").function().execute(new TestRecipeContext(typed), List.of(amount));
+                MachineRecipeSchema.SCHEMA.functions.get("outputMana").function().execute(new TestRecipeContext(typed), List.of(amount));
+                MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(generic),
+                        List.of(BotaniaManaIds.MANA.toString(), "input", ManaRecipeDeclarations.inputPayload(amount)));
+                MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(generic),
+                        List.of(BotaniaManaIds.MANA.toString(), "output", ManaRecipeDeclarations.outputPayload(amount)));
+                assertThat(typed.json).isEqualTo(generic.json);
+                assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, typed.json.getAsJsonArray("requirements").get(0)).getOrThrow())
+                        .isEqualTo(ManaRequirement.input(amount));
+                assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE, typed.json.getAsJsonArray("outputs").get(0)).getOrThrow())
+                        .isEqualTo(new ManaOutput(amount));
+                var builder = new MachineRecipeBuilderJS("test:mana_schema").inputMana(amount).outputMana(amount);
+                assertThat(builder.requirements).containsExactly(ManaRequirement.input(amount));
+                assertThat(builder.customOutputs).containsExactly(new ManaOutput(amount));
+            }
+            for (String name : List.of("inputMana", "outputMana")) {
+                assertThat(MachineRecipeSchema.SCHEMA.functions.get(name).arguments()).hasSize(1);
+                for (long invalid : List.of(0L, -1L)) {
+                    var recipe = new KubeRecipe();
+                    recipe.json = new JsonObject();
+                    assertThatIllegalArgumentException().isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get(name).function()
+                            .execute(new TestRecipeContext(recipe), List.of(invalid)));
+                }
+            }
         }
     }
 

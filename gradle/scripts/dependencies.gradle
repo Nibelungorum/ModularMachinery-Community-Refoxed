@@ -54,6 +54,10 @@ dependencies {
     implementation "curse.maven:${ars_id}:${ars_version}"
     runtimeOnly "curse.maven:${geckolib_id}:${geckolib_version}"
     runtimeOnly "curse.maven:${curios_id}:${curios_version}"
+    // Botania's optional mana API; preserve the existing JEI and Curios versions.
+    compileOnly("vazkii.botania:botania-neoforge-1.21.1:${botania_version}") { transitive = false }
+    localRuntime("vazkii.botania:botania-neoforge-1.21.1:${botania_version}") { transitive = false }
+    localRuntime "vazkii.patchouli:Patchouli:1.21.1-92-NEOFORGE"
     // create
     implementation "curse.maven:${create_id}:${create_version}"
     // Flux Networks 1.21.1-8.0.0

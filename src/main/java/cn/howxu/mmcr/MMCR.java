@@ -8,6 +8,7 @@ import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridgeBootstrap;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauRecipeTypes;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceFailureReasons;
+import cn.howxu.mmcr.compat.botania.BotaniaBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -46,6 +47,7 @@ public class MMCR {
         SourceFailureReasons.register();
         ArsNouveauRecipeTypes.register();
         ArsNouveauBridgeBootstrap.bootstrap();
+        BotaniaBridgeBootstrap.bootstrap();
         MekanismBridgeBootstrap.bootstrap();
         MekanismRecipeTypes.register();
         PneumaticCraftBridgeBootstrap.bootstrap();

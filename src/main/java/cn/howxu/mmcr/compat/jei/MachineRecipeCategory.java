@@ -3,6 +3,8 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
+import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredient;
+import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientRenderer;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -157,6 +159,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
+        addManaRows(builder, layout);
         addLevelRequirementSlots(builder, layout, recipe, Minecraft.getInstance().font::width);
         addTransferSlots(builder, recipe);
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
@@ -165,11 +168,28 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
         builder.addAnimatedRecipeArrowWidget(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        if (!layout.metadataPages().isEmpty()) {
+            var slots = builder.getRecipeSlots().getSlots().stream()
+                    .filter(slot -> slot.getSlotName().filter(name -> name.startsWith("mmcr_details_")).isPresent())
+                    .toList();
+            var widget = new MachineRecipeMetadataWidget(this, recipe, layout, slots);
+            builder.addSlottedWidget(widget, slots);
+            builder.addGuiEventListener(widget);
+        }
     }
 
     @Override
     public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
+        drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
+        drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
+        drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
+        if (layout.metadataPages().isEmpty()) drawMetadata(recipe, layout, guiGraphics);
+    }
+
+    void drawMetadata(MachineRecipeDisplay recipe, MachineRecipeLayout layout, GuiGraphics guiGraphics) {
         long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
         guiGraphics.pose().pushPose();
         guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
@@ -246,11 +266,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += SMART_INTERFACE_LINE_SPACING;
         }
         guiGraphics.pose().popPose();
-        drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
-        drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
         drawSourceTextLines(layout, guiGraphics);
-        drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
-        drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
         drawRecipeInformation(recipe, layout, guiGraphics);
     }
 
@@ -310,12 +326,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             appendOverflowTooltip(tooltip, recipe, layout.inputs().hiddenEntries(), true);
         } else if (isMouseOver(layout.outputs().overflowSlot(), mouseX, mouseY)) {
             appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
-        } else {
-            if (appendStressTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
-            if (appendAirTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
-            sourceTooltip(layout, mouseX, mouseY)
-                    .or(() -> smartInterfaceTooltip(recipe, layout, mouseX, mouseY)).ifPresent(tooltip::add);
+        } else if (layout.metadataPages().isEmpty()) {
+            metadataTooltip(tooltip, recipe, layout, mouseX, mouseY);
         }
+    }
+
+    void metadataTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                         double mouseX, double mouseY) {
+        if (appendStressTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
+        if (appendAirTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
+        sourceTooltip(layout, mouseX, mouseY)
+                .or(() -> smartInterfaceTooltip(recipe, layout, mouseX, mouseY)).ifPresent(tooltip::add);
     }
 
     @Override
@@ -410,8 +431,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
             Component label = levelLabel(requirement);
             int slotX = levelSlotX(layout.durationTextX(), labelWidth.applyAsInt(label));
-            int slotY = layout.levelRequirementSlotY(recipe, index++);
+            int slotY = layout.levelRequirementSlotY(recipe, index);
             IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY, slotX, slotY);
+            slot.setSlotName("mmcr_details_level_" + index++);
             slot.setStandardSlotBackground();
             slot.setCustomRenderer(VanillaTypes.ITEM_STACK, levelItemRenderer(requirement));
             List<ItemStack> candidates = levelCandidates(requirement);
@@ -508,6 +530,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.RegionPlan region, boolean input) {
         for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
             addEntry(builder, recipe, slot, input);
+        }
+    }
+
+    static void addManaRows(IRecipeLayoutBuilder builder, MachineRecipeLayout layout) {
+        int index = 0;
+        for (var row : layout.manaRows()) {
+            builder.addSlot(row.entry().role(), row.x(), row.y())
+                    .setSlotName("mmcr_details_mana_" + index++)
+                    .setCustomRenderer(ManaJeiIngredient.TYPE, new ManaJeiIngredientRenderer())
+                    .addIngredient(ManaJeiIngredient.TYPE, (ManaJeiIngredient) row.entry().ingredient());
         }
     }
 

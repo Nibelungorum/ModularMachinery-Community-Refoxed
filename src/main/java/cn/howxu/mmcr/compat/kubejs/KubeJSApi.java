@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -194,6 +196,12 @@ public final class KubeJSApi {
     public BlockPredicate anyOfSourceInput() { return KubeJSInterfaceHelpers.anyOfSourceInput(); }
     public BlockPredicate anyOfSourceOutput() { return KubeJSInterfaceHelpers.anyOfSourceOutput(); }
     public BlockPredicate anyOfSourcePorts() { return KubeJSInterfaceHelpers.anyOfSourcePorts(); }
+    public BlockPredicate anyOfManaInput() { return KubeJSInterfaceHelpers.anyOfManaInput(); }
+    public BlockPredicate anyOfManaOutput() { return KubeJSInterfaceHelpers.anyOfManaOutput(); }
+    public BlockPredicate anyOfManaPorts() { return KubeJSInterfaceHelpers.anyOfManaPorts(); }
+    public BlockPredicate anyManaInput() { return anyOfManaInput(); }
+    public BlockPredicate anyManaOutput() { return anyOfManaOutput(); }
+    public BlockPredicate anyManaPorts() { return anyOfManaPorts(); }
     public BlockPredicate anyOfItemPorts() { return KubeJSInterfaceHelpers.anyOfItemPorts(); }
     public BlockPredicate anyOfFluidPorts() { return KubeJSInterfaceHelpers.anyOfFluidPorts(); }
     public BlockPredicate anyOfEnergyPorts() { return KubeJSInterfaceHelpers.anyOfEnergyPorts(); }
@@ -361,6 +369,14 @@ public final class KubeJSApi {
 
     public CustomRecipeIo sourceInput(long amount) {
         return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.INPUT, SourceRecipeDeclarations.inputPayload(amount));
+    }
+
+    public CustomRecipeIo manaInput(long amount) {
+        return customRecipeIo(BotaniaManaIds.MANA.toString(), IOType.INPUT, ManaRecipeDeclarations.inputPayload(amount));
+    }
+
+    public CustomRecipeIo manaOutput(long amount) {
+        return customRecipeIo(BotaniaManaIds.MANA.toString(), IOType.OUTPUT, ManaRecipeDeclarations.outputPayload(amount));
     }
 
     public CustomRecipeIo sourceOutput(long amount) {
@@ -713,6 +729,7 @@ public final class KubeJSApi {
             case "fluid" -> PortTierRequirementSpec.PortCategory.FLUID;
             case "energy" -> PortTierRequirementSpec.PortCategory.ENERGY;
             case "source" -> PortTierRequirementSpec.PortCategory.SOURCE;
+            case "mana" -> PortTierRequirementSpec.PortCategory.MANA;
             default -> throw new IllegalArgumentException("Unknown port category: " + categoryName);
         };
         var io = switch (ioName) {
@@ -720,10 +737,12 @@ public final class KubeJSApi {
             case "output" -> cn.howxu.mmcr.util.IOType.OUTPUT;
             default -> throw new IllegalArgumentException("Unknown port IO: " + ioName);
         };
-        String expectedFamily = category == PortTierRequirementSpec.PortCategory.SOURCE ? "interface"
+        String expectedFamily = category == PortTierRequirementSpec.PortCategory.MANA ? "pool"
+                : category == PortTierRequirementSpec.PortCategory.SOURCE ? "interface"
                 : category == PortTierRequirementSpec.PortCategory.ITEM ? "bus" : "hatch";
         if (!port[2].equals(expectedFamily)) throw new IllegalArgumentException("Invalid port family: " + parts[0]);
         String[] tiers = category == PortTierRequirementSpec.PortCategory.SOURCE
+                || category == PortTierRequirementSpec.PortCategory.MANA
                 ? new String[] {"normal"}
                 : category == PortTierRequirementSpec.PortCategory.FLUID
                 ? new String[] {"tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "vacuum"}

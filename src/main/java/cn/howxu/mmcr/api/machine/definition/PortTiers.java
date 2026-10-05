@@ -39,7 +39,8 @@ public record PortTiers(List<Requirement> requirements) {
         ITEM,
         FLUID,
         ENERGY,
-        SOURCE
+        SOURCE,
+        MANA
     }
 
     public enum ItemTier {
@@ -114,7 +115,7 @@ public record PortTiers(List<Requirement> requirements) {
                 case ITEM -> minTier < ItemTier.values().length ? ItemTier.values()[minTier].id() : null;
                 case FLUID -> minTier < FluidTier.values().length ? FluidTier.values()[minTier].id() : null;
                 case ENERGY -> minTier < EnergyTier.values().length ? EnergyTier.values()[minTier].id() : null;
-                case SOURCE -> minTier == 0 ? "normal" : null;
+                case SOURCE, MANA -> minTier == 0 ? "normal" : null;
             };
             if (!minTierId.equals(expectedTierId)) {
                 throw new IllegalArgumentException("minTier and minTierId do not match");
@@ -145,6 +146,10 @@ public record PortTiers(List<Requirement> requirements) {
         public Builder anySourceInput() { return add(PortCategory.SOURCE, IOType.INPUT, 0, "normal"); }
 
         public Builder anySourceOutput() { return add(PortCategory.SOURCE, IOType.OUTPUT, 0, "normal"); }
+
+        public Builder anyManaInput() { return add(PortCategory.MANA, IOType.INPUT, 0, "normal"); }
+
+        public Builder anyManaOutput() { return add(PortCategory.MANA, IOType.OUTPUT, 0, "normal"); }
 
         public Builder minItemInput(ItemTier size) {
             return add(PortCategory.ITEM, IOType.INPUT, size.ordinal(), size.id());

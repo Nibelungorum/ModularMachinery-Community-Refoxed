@@ -2,6 +2,8 @@ package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.botania.BotaniaBridge;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
@@ -225,6 +227,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         createStressInterfaceRecipes();
         arsSourceInterfaceRecipes();
         pneumaticAirInterfaceRecipes();
+        botaniaManaPoolRecipes();
         mekanismPortsRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
@@ -713,6 +716,22 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('A', ModBlocks.BASIC_CASING.get())
                 .define('B', tube)
                 .save(whenLoaded(PneumaticIds.MOD_ID));
+    }
+
+    private void botaniaManaPoolRecipes() {
+        if (!BotaniaBridge.get().available()) return;
+        if (!ModItems.ITEMS.containsKey(BotaniaManaIds.INPUT)
+                || !ModItems.ITEMS.containsKey(BotaniaManaIds.OUTPUT)) return;
+        ItemLike pool = externalItem("botania", "mana_pool");
+        for (String id : List.of(BotaniaManaIds.INPUT, BotaniaManaIds.OUTPUT)) {
+            ShapedRecipeBuilder.shaped(RecipeCategory.MISC, ModItems.ITEMS.get(id).get(), 1)
+                    .pattern(" M ").pattern("RPR").pattern(" R ")
+                    .define('M', ModItems.MODULARIUM.get())
+                    .define('P', pool)
+                    .define('R', id.equals(BotaniaManaIds.INPUT) ? Items.REDSTONE : Items.GOLD_INGOT)
+                    .unlockedBy("has_mana_pool", has(pool))
+                    .save(whenLoaded("botania"));
+        }
     }
 
     private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {

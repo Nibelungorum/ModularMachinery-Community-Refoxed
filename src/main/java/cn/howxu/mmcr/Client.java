@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
+import cn.howxu.mmcr.compat.botania.BotaniaBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworksClient;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
@@ -56,6 +57,7 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -77,6 +79,7 @@ public class Client {
         modBus.addListener(Client::registerModelLoaders);
         modBus.addListener(Client::registerMachineRenderers);
         modBus.addListener(Client::registerCreateVisuals);
+        modBus.addListener(Client::registerBotaniaClientCapabilities);
         if (ModList.get().isLoaded(FluxNetworksIds.MOD_ID)) {
             modBus.addListener(FluxNetworksClient::registerBlockColors);
             modBus.addListener(FluxNetworksClient::registerItemColors);
@@ -183,6 +186,7 @@ public class Client {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void registerMachineRenderers(EntityRenderersEvent.RegisterRenderers event) {
         invokeCreateClientRegistration("registerRenderers", EntityRenderersEvent.RegisterRenderers.class, event);
+        invokeBotaniaClientRegistration("registerRenderers", EntityRenderersEvent.RegisterRenderers.class, event);
         RegisterControllerRenderersEvent registrations = new RegisterControllerRenderersEvent(
                 ModBlockEntities.controllerMachineIds());
         NeoForge.EVENT_BUS.post(registrations);
@@ -198,6 +202,20 @@ public class Client {
 
     private static void registerCreateVisuals(FMLClientSetupEvent event) {
         invokeCreateClientRegistration("registerVisuals", FMLClientSetupEvent.class, event);
+    }
+
+    private static void registerBotaniaClientCapabilities(RegisterCapabilitiesEvent event) {
+        invokeBotaniaClientRegistration("registerCapabilities", RegisterCapabilitiesEvent.class, event);
+    }
+
+    private static void invokeBotaniaClientRegistration(String method, Class<?> eventType, Object event) {
+        if (!BotaniaBridge.get().available()) return;
+        try {
+            Class.forName("cn.howxu.mmcr.compat.botania.client.BotaniaClientRegistration")
+                    .getMethod(method, eventType).invoke(null, event);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unable to register Botania client rendering", exception);
+        }
     }
 
     private static void invokeCreateClientRegistration(String method, Class<?> eventType, Object event) {

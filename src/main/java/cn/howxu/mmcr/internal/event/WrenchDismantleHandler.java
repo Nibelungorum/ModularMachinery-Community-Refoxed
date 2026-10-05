@@ -1,10 +1,13 @@
 package cn.howxu.mmcr.internal.event;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -44,6 +47,13 @@ public final class WrenchDismantleHandler {
 
         Block block = event.getLevel().getBlockState(event.getPos()).getBlock();
         if (!ModBlocks.BLOCKS.values().stream().anyMatch(holder -> holder.isBound() && holder.get() == block)) return;
+
+        ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem());
+        // Preserve native wand useOn on modular mana pools without canceling the interaction.
+        if ((blockId.equals(MMCR.id(BotaniaManaIds.INPUT)) || blockId.equals(MMCR.id(BotaniaManaIds.OUTPUT)))
+                && itemId.getNamespace().equals("botania")
+                && (itemId.getPath().equals("wand_of_the_forest") || itemId.getPath().equals("wand_of_the_elven_forest"))) return;
 
         MekanismBridge mekanism = MekanismBridge.get();
         if (mekanism.available() && mekanism.isNonEmptyRadioactiveChemicalPort(event.getLevel().getBlockEntity(event.getPos()))) {

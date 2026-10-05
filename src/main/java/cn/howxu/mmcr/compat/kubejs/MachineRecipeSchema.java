@@ -14,6 +14,8 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
@@ -155,6 +157,30 @@ public final class MachineRecipeSchema {
                             if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
                                  appendRequirement(cx.recipe(), RecipeIoValidation.decodeRequirement(custom));
                              } else appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("inputMana", List.of(NumberComponent.POSITIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance()); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(BotaniaManaIds.MANA, IOType.INPUT,
+                                    ManaRecipeDeclarations.inputPayload(((Number) args.getFirst()).longValue()));
+                            appendRequirement(cx.recipe(), RecipeIoValidation.decodeRequirement(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("outputMana", List.of(NumberComponent.POSITIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance()); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(BotaniaManaIds.MANA, IOType.OUTPUT,
+                                    ManaRecipeDeclarations.outputPayload(((Number) args.getFirst()).longValue()));
+                            appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
                         }
                     }))
             .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID.instance()),

@@ -83,7 +83,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             RecipeIoEntry ioEntry = new RecipeIoEntry(entry.role(), entry.typeId(), entry.ingredient(), entry.count(), entry.chance());
             Component error = JeiIngredientAdapterRegistry.get(entry.typeId())
                     .map(adapter -> adapter.transferError(ioEntry))
-                    .orElseGet(() -> Component.translatable("jei.mmcr.transfer.unsupported", entry.typeId()));
+                    .orElseGet(() -> Component.translatable("jei.mmcr.transfer.unsupported", entry.typeId().toString()));
             return helper.createUserErrorWithTooltip(error);
         }
         List<JeiDisplayEntry> transferEntries = inputs.stream().filter(JeiDisplayEntry::transferable).toList();

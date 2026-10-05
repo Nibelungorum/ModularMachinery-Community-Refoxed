@@ -24,6 +24,12 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfSourceInput() { return convert(InterfacePredicates.anyOfSourceInput()); }
     public static BlockPredicate anyOfSourceOutput() { return convert(InterfacePredicates.anyOfSourceOutput()); }
     public static BlockPredicate anyOfSourcePorts() { return convert(InterfacePredicates.anyOfSourcePorts()); }
+    public static BlockPredicate anyOfManaInput() { return convert(InterfacePredicates.anyOfManaInput()); }
+    public static BlockPredicate anyOfManaOutput() { return convert(InterfacePredicates.anyOfManaOutput()); }
+    public static BlockPredicate anyOfManaPorts() { return convert(InterfacePredicates.anyOfManaPorts()); }
+    public static BlockPredicate anyManaInput() { return anyOfManaInput(); }
+    public static BlockPredicate anyManaOutput() { return anyOfManaOutput(); }
+    public static BlockPredicate anyManaPorts() { return anyOfManaPorts(); }
     public static BlockPredicate anyOfItemPorts() { return convert(InterfacePredicates.anyOfItemPorts()); }
     public static BlockPredicate anyOfFluidPorts() { return convert(InterfacePredicates.anyOfFluidPorts()); }
     public static BlockPredicate anyOfEnergyPorts() { return convert(InterfacePredicates.anyOfEnergyPorts()); }

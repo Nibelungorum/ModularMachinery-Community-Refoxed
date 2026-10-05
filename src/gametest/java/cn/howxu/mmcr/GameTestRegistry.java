@@ -6,6 +6,8 @@ import cn.howxu.mmcr.compat.appmek.AppMekPatternGameTest;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceRecipeGameTest;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceTransportGameTest;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.botania.BotaniaManaRecipeGameTest;
+import cn.howxu.mmcr.compat.botania.BotaniaManaTransportGameTest;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksDeviceGameTest;
@@ -385,6 +387,24 @@ public final class GameTestRegistry {
             register(event, "pneumatic_air_condition_output_recovery", 20,
                     helper -> new PneumaticRecipeGameTest().pressureOnlyFallbackAndFullOutputRecovery(helper));
         }
+        if (ModList.get().isLoaded("botania")) {
+            BotaniaManaTransportGameTest transport = new BotaniaManaTransportGameTest();
+            register(event, "botania_mana_capabilities_wand_persistence", 20, transport::capabilitiesWandAndPersistence);
+            register(event, "botania_mana_update_tag_assignment", 20, transport::updateTagOverwritesRealManaAndPreservesAppearance);
+            register(event, "botania_mana_native_spreader_burst", 20, transport::nativeSpreaderPullAndBurstCollision);
+            register(event, "botania_mana_native_spark_lifecycle", 20, transport::nativeSparkDirectionsAndLifecycle);
+            register(event, "botania_mana_dropped_item_permissions", 20, transport::droppedItemsPermissionsAndBoundaries);
+            register(event, "botania_mana_local_ticker_items", 20, transport::localTickerDoesNotInfuseOrDoubleTransfer);
+            register(event, "botania_mana_dispersive_spark", 20, transport::dispersiveSparkUsesOnlyOutputMana);
+            BotaniaManaRecipeGameTest recipes = new BotaniaManaRecipeGameTest();
+            register(event, "botania_mana_recipe_multi_pool_parallel", 20, recipes::multiplePoolsLowerParallelismAndConsumeOnlyAtStart);
+            register(event, "botania_mana_recipe_item_input_wakeup", 20, recipes::droppedTabletWakesBlockedInputSearch);
+            register(event, "botania_mana_recipe_output_capacity_retry", 20, recipes::outputCapacityRetriesAfterNativeItemDrain);
+            register(event, "botania_mana_recipe_active_controller_restore", 20, recipes::activeControllerSaveRestoreKeepsConsumedMana);
+            register(event, "botania_mana_recipe_tags_real_query", 20, recipes::taggedQueriesAndPlanningUseRealPoolStorage);
+            register(event, "botania_mana_recipe_stale_async_commit", 20, recipes::staleAsyncPlansRevalidateAfterNativeAndRecipeChanges);
+            register(event, "example_botania_mana_scripts_execute", 20, new ExampleScriptGameTest()::botaniaManaExamplesExecute);
+        }
         if (FluxNetworksBridge.get().available()) {
             register(event, "fluxnetworks_device_menu", 100,
                     helper -> new FluxNetworksDeviceGameTest().nativeMenuAndCapabilities(helper));
@@ -420,6 +440,7 @@ public final class GameTestRegistry {
 
     public static void registerMachineDefinitions(RegisterMachineDefinitionsEvent event) {
         registerMachineDefinitions(RegistrationAdapters.core(event));
+        if (ModList.get().isLoaded("botania")) BotaniaManaRecipeGameTest.registerMachines(event);
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
@@ -481,6 +502,7 @@ public final class GameTestRegistry {
 
     public static void registerMachineStructures(RegisterMachineStructuresEvent event) {
         registerMachineStructures(RegistrationAdapters.core(event));
+        if (ModList.get().isLoaded("botania")) BotaniaManaRecipeGameTest.registerStructures(event);
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
@@ -655,6 +677,7 @@ public final class GameTestRegistry {
 
     public static void registerRecipes(RegisterMachineRecipesEvent event) {
         registerRecipes(RegistrationAdapters.core(event));
+        if (ModList.get().isLoaded("botania")) BotaniaManaRecipeGameTest.registerRecipes(event);
     }
 
     public static void registerRecipes(MachineRecipeRegistration event) {

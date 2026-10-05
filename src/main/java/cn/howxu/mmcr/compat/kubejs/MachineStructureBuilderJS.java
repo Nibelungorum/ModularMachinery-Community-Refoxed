@@ -263,6 +263,12 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
     public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
     public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate anyOfManaInput() { return KubeJSInterfaceHelpers.anyOfManaInput(); }
+    public BlockPredicate anyOfManaOutput() { return KubeJSInterfaceHelpers.anyOfManaOutput(); }
+    public BlockPredicate anyOfManaPorts() { return KubeJSInterfaceHelpers.anyOfManaPorts(); }
+    public BlockPredicate anyManaInput() { return anyOfManaInput(); }
+    public BlockPredicate anyManaOutput() { return anyOfManaOutput(); }
+    public BlockPredicate anyManaPorts() { return anyOfManaPorts(); }
     public BlockPredicate anyOfItemPorts() { return KubeJSInterfaceHelpers.anyOfItemPorts(); }
     public BlockPredicate anyOfFluidPorts() { return KubeJSInterfaceHelpers.anyOfFluidPorts(); }
     public BlockPredicate anyOfEnergyPorts() { return KubeJSInterfaceHelpers.anyOfEnergyPorts(); }

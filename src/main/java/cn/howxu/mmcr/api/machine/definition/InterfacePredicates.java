@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
@@ -114,6 +115,18 @@ public final class InterfacePredicates {
     public static BlockPredicate anyOfSourcePorts() { return combine(anyOfSourceInput(), anyOfSourceOutput()); }
 
     public static BlockPredicate anySourcePorts() { return anyOfSourcePorts(); }
+
+    public static BlockPredicate anyOfManaInput() { return anyOfPorts(BotaniaManaIds.MANA, IOType.INPUT); }
+
+    public static BlockPredicate anyManaInput() { return anyOfManaInput(); }
+
+    public static BlockPredicate anyOfManaOutput() { return anyOfPorts(BotaniaManaIds.MANA, IOType.OUTPUT); }
+
+    public static BlockPredicate anyManaOutput() { return anyOfManaOutput(); }
+
+    public static BlockPredicate anyOfManaPorts() { return combine(anyOfManaInput(), anyOfManaOutput()); }
+
+    public static BlockPredicate anyManaPorts() { return anyOfManaPorts(); }
 
     public static BlockPredicate anyChemicalInput() {
         return anyOfChemicalInput();
@@ -243,6 +256,8 @@ public final class InterfacePredicates {
         addIfPresent(predicates, anyOfAirOutput());
         addIfPresent(predicates, anyOfSourceInput());
         addIfPresent(predicates, anyOfSourceOutput());
+        addIfPresent(predicates, anyOfManaInput());
+        addIfPresent(predicates, anyOfManaOutput());
         return BlockPredicate.any(predicates.toArray(BlockPredicate[]::new));
     }
 
