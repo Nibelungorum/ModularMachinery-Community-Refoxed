@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jade;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
@@ -35,7 +34,7 @@ import java.util.Optional;
 public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
-    public static final Identifier UID = MMCR.id("recipe_output");
+    public static final Identifier UID = RecipeOutputDataProvider.UID;
 
     @Override
     public Identifier getUid() {

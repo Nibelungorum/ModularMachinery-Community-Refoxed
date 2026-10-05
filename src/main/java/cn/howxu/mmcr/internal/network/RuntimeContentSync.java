@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.function.BiConsumer;
@@ -25,6 +26,14 @@ public final class RuntimeContentSync {
 
     public static RuntimeContentSnapshot createSnapshot() {
         return RuntimeContentCoordinator.createSnapshot();
+    }
+
+    public static void onDatapackSync(OnDatapackSyncEvent event) {
+        if (event.getPlayer() != null) {
+            sendTo(event.getPlayer());
+        } else {
+            sendToAll(event.getPlayerList().getServer());
+        }
     }
 
     public static void sendTo(ServerPlayer player) {

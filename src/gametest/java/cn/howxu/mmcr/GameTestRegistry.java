@@ -56,6 +56,8 @@ public final class GameTestRegistry {
         });
         register(event, "recipe_amount_codec_limits", 20,
                 helper -> new RecipeAmountCodecGameTest().long_recipe_output_amounts_are_capped_at_native_stack_limits(helper));
+        register(event, "runtime_content_final_datapack_sync", 20,
+                RuntimeContentSyncGameTest::finalDatapackSyncIncludesLateRecipes);
         register(event, "item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().outputResolvesPlainJsonEnchantments(helper));
         register(event, "async_item_output_enchantment_components", 20,

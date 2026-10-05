@@ -49,6 +49,7 @@ import net.neoforged.bus.api.Event;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
+import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -118,7 +119,7 @@ class ModEventRegistrationTest {
                 ChunkEvent.Load.class, ChunkWatchEvent.Sent.class, ChunkWatchEvent.UnWatch.class,
                 LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
                 ServerAboutToStartEvent.class, ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
-                AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
+                AddServerReloadListenersEvent.class, OnDatapackSyncEvent.class,
                 PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class);
 
         modBus.fireAll();
@@ -131,7 +132,7 @@ class ModEventRegistrationTest {
                         ChunkWatchEvent.Sent.class, ChunkWatchEvent.UnWatch.class,
                         LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
                         ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
-                        AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
+                        AddServerReloadListenersEvent.class, OnDatapackSyncEvent.class,
                         PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class));
     }
 
@@ -302,7 +303,7 @@ class ModEventRegistrationTest {
                 recording(invoked, ServerStoppedEvent.class),
                 recording(invoked, DefaultDataComponentsBoundEvent.class),
                 recording(invoked, AddServerReloadListenersEvent.class),
-                recording(invoked, PlayerEvent.PlayerLoggedInEvent.class),
+                recording(invoked, OnDatapackSyncEvent.class),
                 recording(invoked, PlayerEvent.PlayerChangedDimensionEvent.class),
                 recording(invoked, RegisterCommandsEvent.class));
     }

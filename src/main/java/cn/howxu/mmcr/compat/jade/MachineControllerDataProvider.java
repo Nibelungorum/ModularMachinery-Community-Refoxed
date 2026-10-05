@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -18,11 +19,12 @@ import snownee.jade.api.IServerDataProvider;
 public enum MachineControllerDataProvider implements IServerDataProvider<BlockAccessor> {
     INSTANCE;
 
+    static final Identifier UID = MMCR.id("machine_controller");
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     @Override
     public Identifier getUid() {
-        return MachineControllerComponentProvider.UID;
+        return UID;
     }
 
     @Deprecated // many have been no longer used

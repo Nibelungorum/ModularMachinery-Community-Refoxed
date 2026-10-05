@@ -52,6 +52,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.DefaultDataComponentsBoundEvent;
+import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -117,7 +118,7 @@ public final class ModEventRegistration {
         gameBus.add(ServerStoppedEvent.class, handlers.serverStopped());
         gameBus.add(DefaultDataComponentsBoundEvent.class, handlers.defaultDataComponentsBound());
         gameBus.add(AddServerReloadListenersEvent.class, handlers.reloadListeners());
-        gameBus.add(PlayerEvent.PlayerLoggedInEvent.class, handlers.playerLoggedIn());
+        gameBus.add(OnDatapackSyncEvent.class, handlers.datapackSync());
         gameBus.add(PlayerEvent.PlayerChangedDimensionEvent.class, handlers.playerChangedDimension());
         gameBus.add(RegisterCommandsEvent.class, handlers.commands());
     }
@@ -227,7 +228,7 @@ public final class ModEventRegistration {
             Consumer<ServerStoppedEvent> serverStopped,
             Consumer<DefaultDataComponentsBoundEvent> defaultDataComponentsBound,
             Consumer<AddServerReloadListenersEvent> reloadListeners,
-            Consumer<PlayerEvent.PlayerLoggedInEvent> playerLoggedIn,
+            Consumer<OnDatapackSyncEvent> datapackSync,
             Consumer<PlayerEvent.PlayerChangedDimensionEvent> playerChangedDimension,
             Consumer<RegisterCommandsEvent> commands) {
         static EventHandlers production() {
@@ -254,7 +255,7 @@ public final class ModEventRegistration {
                     },
                     ModEventRegistration::onDefaultDataComponentsBound,
                     MachineRecipeDataReloadListener::register,
-                    event -> syncPlayer(event.getEntity()),
+                    RuntimeContentSync::onDatapackSync,
                     event -> syncPlayer(event.getEntity()),
                     ModEventRegistration::registerCommands);
         }
