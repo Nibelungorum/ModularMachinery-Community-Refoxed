@@ -586,7 +586,8 @@ public abstract class RecipeThread {
                 () -> {
                     boolean enqueued = SharedIoCoordinator.get(level).enqueueTickWork(level, domain, taskKey,
                             preparedPlan, intent -> commitTickWorksetIntent(token, domain, lifecycleEpoch,
-                                    catalogVersion, intent), () -> failAsyncTick(token, lifecycleEpoch));
+                                    structureVersion, stateVersion, catalogVersion, intent),
+                            () -> failAsyncTick(token, lifecycleEpoch));
                     if (!enqueued) failAsyncTick(token, lifecycleEpoch);
                     return enqueued;
                 },
@@ -599,14 +600,11 @@ public abstract class RecipeThread {
           ));
     }
 
-    private void commitTickWorksetIntent(long token, StructureClaimRegistry.ResourceDomain domain,
-                                         long lifecycleEpoch, long catalogVersion,
-                                         AsyncRequirementPlanner.PlanResult intent) {
-        if (lifecycleEpoch != controller.lifecycleEpoch() || !validateCurrentRuntime(token, domain)
-                || catalogVersion != currentCatalogVersion()) {
-            clearPendingTick();
-            return;
-        }
+    private boolean commitTickWorksetIntent(long token, StructureClaimRegistry.ResourceDomain domain,
+                                            long lifecycleEpoch, long structureVersion, long stateVersion,
+                                            long catalogVersion, AsyncRequirementPlanner.PlanResult intent) {
+        if (!validateAsyncTickRequest(token, domain, lifecycleEpoch, structureVersion, stateVersion,
+                catalogVersion)) return false;
         boolean committed = runtime.commitAsyncTick(intent);
         if (committed && runtime.completeAsyncTickAfterInputs()) {
             runtime.completeAsyncTickAfterRecipe();
@@ -614,6 +612,7 @@ public abstract class RecipeThread {
             runtime.discardAsyncTickPreparation();
         }
         finishAsyncTick();
+        return committed;
     }
 
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {

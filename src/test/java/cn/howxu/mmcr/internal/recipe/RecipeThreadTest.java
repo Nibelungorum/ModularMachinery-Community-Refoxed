@@ -68,10 +68,12 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -360,6 +362,87 @@ class RecipeThreadTest {
             }
         } finally {
             MekanismBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void late_worker_workset_does_not_clear_a_replacement_tick(MachineWorkMode mode) throws Exception {
+        assertWorkerWorksetInvalidation(mode, true);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void worker_workset_rechecks_state_version_after_planning_and_can_retry(MachineWorkMode mode) throws Exception {
+        assertWorkerWorksetInvalidation(mode, false);
+    }
+
+    private void assertWorkerWorksetInvalidation(MachineWorkMode mode, boolean replacementTick) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        EnergyInputHatchBlockEntity input = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = controllerWithPorts(input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        installCoordinator(level, coordinator);
+        try {
+            input.nativeEnergyStorage().setAmount(1_000L);
+            FactoryRecipeThread lane = attachedBaseLane(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("worker_workset_invalidation"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(20L)), List.of());
+            assertThat(lane.runtime().start(recipe, 1L).isCrafting())
+                    .as("workset recipe start failure: %s", lane.runtime().failure()).isTrue();
+            long before = input.nativeEnergyStorage().getAmountAsLong();
+            lane.tick();
+            Field tokenField = RecipeThread.class.getDeclaredField("pendingTickToken");
+            tokenField.setAccessible(true);
+            long oldToken = tokenField.getLong(lane);
+            var captured = controller.currentRuntimeSnapshot();
+            var domain = controller.resourceDomain();
+            long lifecycleEpoch = controller.lifecycleEpoch();
+            long catalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
+            Method commit = RecipeThread.class.getDeclaredMethod("commitTickWorksetIntent", long.class,
+                    StructureClaimRegistry.ResourceDomain.class, long.class, long.class, long.class, long.class,
+                    AsyncRequirementPlanner.PlanResult.class);
+            commit.setAccessible(true);
+            var result = new AsyncRequirementPlanner.PlanResult(List.of(), List.of(0));
+
+            // Deliver the captured workset result only after its lane has changed.
+            RuntimeTestFixtures.advanceGameTime(level);
+            if (replacementTick) {
+                lane.cancelAsyncState();
+                lane.tick();
+                assertThat(lane.tickPendingForTesting()).isTrue();
+                assertThat(tokenField.getLong(lane)).isNotEqualTo(oldToken);
+            } else {
+                long capabilityVersion = controller.componentRuntime().capabilityVersion();
+                long structureVersion = controller.currentStructureSnapshot().version();
+                assertThat(controller.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(99, 0, 0))))
+                        .isTrue();
+                assertThat(controller.componentRuntime().capabilityVersion()).isEqualTo(capabilityVersion);
+                assertThat(controller.currentStructureSnapshot().version()).isEqualTo(structureVersion);
+                assertThat(lane.runtime().versionsCurrent()).isTrue();
+            }
+            assertThat(commit.invoke(lane, oldToken, domain, lifecycleEpoch, captured.structure().version(),
+                    captured.stateVersion(), catalogVersion, result)).isEqualTo(false);
+
+            assertThat(lane.runtime().tickCount()).isZero();
+            assertThat(input.nativeEnergyStorage().getAmountAsLong()).isEqualTo(before);
+            assertThat(lane.tickPendingForTesting()).isEqualTo(replacementTick);
+
+            if (!replacementTick) lane.tick();
+            SharedIoEvents.completeLevelTick(level);
+            assertThat(lane.runtime().tickCount()).isEqualTo(1);
+            assertThat(input.nativeEnergyStorage().getAmountAsLong()).isEqualTo(before - 20L);
+            assertThat(lane.tickPendingForTesting()).isFalse();
+            SharedIoEvents.completeLevelTick(level);
+            assertThat(lane.runtime().tickCount()).isEqualTo(1);
+            assertThat(input.nativeEnergyStorage().getAmountAsLong()).isEqualTo(before - 20L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+            MachineControllerBlockEntity.clearFormedControllerIndex(level);
         }
     }
 

@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,7 +50,7 @@ public final class MachineAsyncCoordinator {
     private final int mainStepBudget;
     private final boolean autoResetBudgetForTesting;
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
-    private final ReadyQueue<TickBatch> readyBatches = new ReadyQueue<>();
+    private final ReadyBatchQueue readyBatches = new ReadyBatchQueue();
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
     private final Object progressMonitor = new Object();
@@ -397,9 +398,10 @@ public final class MachineAsyncCoordinator {
         List<TickBatch> roundBatches = new ArrayList<>();
         if (continueEarliest) roundBatches.add(earliest);
         Set<TickBatch> visited = new HashSet<>();
+        long readyBoundary = readyBatches.captureBoundary();
         int readyCount = readyBatches.size();
         for (int index = 0; index < readyCount && completed < budget; index++) {
-            TickBatch batch = readyBatches.poll();
+            TickBatch batch = readyBatches.poll(readyBoundary);
             if (batch == null) break;
             if (batch.gameTime <= earliest.gameTime || !visited.add(batch)) continue;
             roundBatches.add(batch);
@@ -515,6 +517,11 @@ public final class MachineAsyncCoordinator {
         batch.tasks.remove(task.key, task);
         batch.deferredMainSteps.remove(task.key);
         mainStepExecutors.remove(task.key);
+        batches.computeIfPresent(batch.gameTime, (gameTime, current) -> {
+            if (current != batch || !batch.tasks.isEmpty()) return current;
+            readyBatches.retire(batch);
+            return null;
+        });
     }
 
     private void cancelAll() {
@@ -525,6 +532,7 @@ public final class MachineAsyncCoordinator {
             drainTerminations(batch);
         }
         batches.clear();
+        readyBatches.clear();
         tasks.clear();
         mainStepExecutors.clear();
     }
@@ -613,11 +621,50 @@ public final class MachineAsyncCoordinator {
         private final ReadyQueue<WorkerSegment> waitingWorkers = new ReadyQueue<>();
         private final ConcurrentLinkedQueue<PendingTermination> pendingTerminations = new ConcurrentLinkedQueue<>();
         private final AtomicInteger runningWorkers = new AtomicInteger();
+        private boolean retired;
+        private long readySequence;
 
         private TickBatch(long gameTime) {
             this.gameTime = gameTime;
         }
 
+    }
+
+    /**
+     * Keeps one FIFO registration per live batch with O(1) retirement, independent of the step budget.
+     * The sequence boundary excludes callback publications even when captured batches retire mid-round.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ReadyBatchQueue {
+        private final LinkedHashSet<TickBatch> entries = new LinkedHashSet<>();
+        private long sequence;
+
+        private synchronized void add(TickBatch batch) {
+            if (!batch.retired && entries.add(batch)) batch.readySequence = ++sequence;
+        }
+
+        private synchronized long captureBoundary() {
+            return sequence;
+        }
+
+        private synchronized @Nullable TickBatch poll(long boundary) {
+            if (entries.isEmpty() || entries.getFirst().readySequence > boundary) return null;
+            return entries.removeFirst();
+        }
+
+        private synchronized int size() {
+            return entries.size();
+        }
+
+        private synchronized void retire(TickBatch batch) {
+            batch.retired = true;
+            entries.remove(batch);
+        }
+
+        private synchronized void clear() {
+            entries.clear();
+        }
     }
 
     /**

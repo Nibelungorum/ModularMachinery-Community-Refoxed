@@ -1137,6 +1137,99 @@ class MachineAsyncCoordinatorTest {
         assertThat(phases).containsExactly("charged", "old-worker", "old-main");
     }
 
+    @Test
+    void fully_used_budgets_retire_ready_registrations_each_game_time() throws Exception {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1, false);
+        AtomicInteger commits = new AtomicInteger();
+        for (long gameTime = 0L; gameTime < 128L; gameTime++) {
+            coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, gameTime),
+                    new MainThreadStep.TestStep(commits::incrementAndGet), null,
+                    MachineAsyncCoordinator.TaskHooks.defaults());
+            coordinator.beginLevelTick(gameTime);
+            coordinator.completeTick();
+
+            assertThat(commits).hasValue((int) gameTime + 1);
+            assertThat(readyBatchCount(coordinator)).isZero();
+        }
+    }
+
+    @Test
+    void repeated_publications_register_one_batch_and_retire_newer_batches_behind_an_old_worker() throws Exception {
+        ManualExecutor workers = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers, 2, false);
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, -1L),
+                ignored -> AsyncContinuation.Yield.complete());
+        AtomicInteger commits = new AtomicInteger();
+        for (long gameTime = 0L; gameTime < 128L; gameTime++) {
+            for (int lane = 0; lane < 2; lane++) {
+                coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(lane + 1, 0, 0), gameTime),
+                        new MainThreadStep.TestStep(commits::incrementAndGet), null,
+                        MachineAsyncCoordinator.TaskHooks.defaults());
+            }
+            assertThat(readyBatchCount(coordinator)).isEqualTo(1);
+            coordinator.beginLevelTick(gameTime);
+            coordinator.completeTick();
+            assertThat(commits).hasValue(((int) gameTime + 1) * 2);
+            assertThat(readyBatchCount(coordinator)).isZero();
+        }
+        workers.runNext();
+        coordinator.completeTick();
+        assertThat(workers.pendingTaskCount()).isZero();
+    }
+
+    @Test
+    void retiring_a_captured_peer_does_not_admit_a_callback_created_batch_into_the_round() {
+        ManualExecutor workers = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers, 4, false);
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 0L),
+                ignored -> AsyncContinuation.Yield.complete());
+        List<String> phases = new ArrayList<>();
+        var cancelled = new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 2L);
+        coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 1L),
+                new MainThreadStep.TestStep(() -> {
+                    phases.add("first");
+                    coordinator.cancel(cancelled);
+                    coordinator.pumpMainThreadSteps();
+                    coordinator.submitMainThread(new MachineAsyncCoordinator.TaskKey(new BlockPos(3, 0, 0), 3L),
+                            new MainThreadStep.TestStep(() -> phases.add("callback")), null,
+                            MachineAsyncCoordinator.TaskHooks.defaults());
+                }), null, MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.submitMainThread(cancelled, new MainThreadStep.TestStep(() -> phases.add("cancelled")), null,
+                MachineAsyncCoordinator.TaskHooks.defaults());
+        coordinator.beginLevelTick(3L);
+        coordinator.completeTick();
+
+        assertThat(phases).containsExactly("first");
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("first", "callback");
+    }
+
+    @Test
+    void a_worker_yield_after_its_batch_retires_cannot_republish_a_ready_registration() throws Exception {
+        ManualExecutor workers = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers, 1, false);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L);
+        coordinator.submit(key, ignored -> {
+            coordinator.cancel(key);
+            coordinator.completeTick();
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> { }),
+                    result -> context -> AsyncContinuation.Yield.complete());
+        });
+        coordinator.beginLevelTick(1L);
+        workers.runNext();
+        assertThat(readyBatchCount(coordinator)).isZero();
+        assertThat(coordinator.hasPendingMainStepForTesting()).isFalse();
+    }
+
+    private static int readyBatchCount(MachineAsyncCoordinator coordinator) throws Exception {
+        var field = MachineAsyncCoordinator.class.getDeclaredField("readyBatches");
+        field.setAccessible(true);
+        Object queue = field.get(coordinator);
+        var size = queue.getClass().getDeclaredMethod("size");
+        size.setAccessible(true);
+        return (int) size.invoke(queue);
+    }
+
     private static AsyncContinuation safeLoop(List<String> phases) {
         return new AsyncContinuation() {
             @Override public boolean canAdvanceOnMainThread() { return true; }

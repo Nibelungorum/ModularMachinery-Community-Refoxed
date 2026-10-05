@@ -31,6 +31,7 @@ import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 import java.util.function.LongUnaryOperator;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 
 /**
  * Resolves shared multiblock IO requests once at the end of each server-level tick.
@@ -87,7 +88,7 @@ public final class SharedIoCoordinator {
     public boolean enqueueTickWork(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                                    MachineAsyncCoordinator.TaskKey laneTaskKey,
                                    AsyncRequirementPlanner.PreparedPlan preparedPlan,
-                                   Consumer<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
+                                   Predicate<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
         if (level == null || domain == null || laneTaskKey == null || preparedPlan == null
                 || committer == null || discard == null) return false;
         DomainKey key = new DomainKey(domain.id(), domain.generation());
@@ -432,7 +433,7 @@ public final class SharedIoCoordinator {
             TickWorkEntry entry = workset.entries().get(index);
             AsyncRequirementPlanner.PlanResult intent = intents.get(index);
             try {
-                entry.commit(intent);
+                if (!entry.commit(intent)) continue;
                 for (AsyncRequirementPlanner.PlannedOperation operation : intent.operations()) {
                     AsyncCapabilitySnapshot identity = entry.preparedPlan().capabilities()
                             .get(operation.capabilityIndex()).snapshot();
@@ -488,13 +489,13 @@ public final class SharedIoCoordinator {
         private final ServerLevel level;
         private final MachineAsyncCoordinator.TaskKey laneTaskKey;
         private AsyncRequirementPlanner.PreparedPlan preparedPlan;
-        private final Consumer<AsyncRequirementPlanner.PlanResult> committer;
+        private final Predicate<AsyncRequirementPlanner.PlanResult> committer;
         private final Runnable discard;
         private final AtomicBoolean terminal = new AtomicBoolean();
 
         private TickWorkEntry(ServerLevel level, MachineAsyncCoordinator.TaskKey laneTaskKey,
                               AsyncRequirementPlanner.PreparedPlan preparedPlan,
-                              Consumer<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
+                              Predicate<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
             this.level = level;
             this.laneTaskKey = laneTaskKey;
             this.preparedPlan = preparedPlan;
@@ -516,10 +517,11 @@ public final class SharedIoCoordinator {
                     preparedPlan.initialMainThreadRequirements());
         }
 
-        private synchronized void commit(AsyncRequirementPlanner.PlanResult intent) {
-            if (terminal.get()) return;
-            committer.accept(intent);
+        private synchronized boolean commit(AsyncRequirementPlanner.PlanResult intent) {
+            if (terminal.get()) return false;
+            boolean committed = committer.test(intent);
             terminal.set(true);
+            return committed;
         }
 
         private synchronized void failCommit() {
@@ -568,7 +570,11 @@ public final class SharedIoCoordinator {
         AsyncRequirementPlanner.PreparedPlan plan = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
         List<TickWorkEntry> entries = new ArrayList<>(committers.size());
         for (int index = 0; index < committers.size(); index++) {
-            entries.add(new TickWorkEntry(null, key, plan, committers.get(index), discards.get(index)));
+            Consumer<AsyncRequirementPlanner.PlanResult> committer = committers.get(index);
+            entries.add(new TickWorkEntry(null, key, plan, intent -> {
+                committer.accept(intent);
+                return true;
+            }, discards.get(index)));
         }
         TickWorkset workset = new TickWorkset(worksetId, domainKey, key, List.copyOf(entries));
         submitTickWorkset(coordinator, workset,
@@ -593,7 +599,10 @@ public final class SharedIoCoordinator {
         DomainKey domainKey = new DomainKey(domain.id(), domain.generation());
         domains.computeIfAbsent(domainKey, ignored -> new DomainBucket());
         pendingTickWork.computeIfAbsent(domainKey, ignored -> new ArrayDeque<>())
-                .add(new TickWorkEntry(null, laneTaskKey, plan, committer, discard));
+                .add(new TickWorkEntry(null, laneTaskKey, plan, intent -> {
+                    committer.accept(intent);
+                    return true;
+                }, discard));
     }
 
     void submitPendingTickWorksetForTesting(StructureClaimRegistry.ResourceDomain domain,

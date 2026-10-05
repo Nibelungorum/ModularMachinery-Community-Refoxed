@@ -360,9 +360,9 @@ class SharedIoCoordinatorTest {
                 List.of(), List.of(), List.of());
 
         coordinator.enqueueTickWork(level, domain,
-                new MachineAsyncCoordinator.TaskKey(A, 1L), plan, ignored -> { }, discarded::incrementAndGet);
+                new MachineAsyncCoordinator.TaskKey(A, 1L), plan, ignored -> true, discarded::incrementAndGet);
         coordinator.enqueueTickWork(level, domain,
-                new MachineAsyncCoordinator.TaskKey(B, 1L), plan, ignored -> { }, () -> { });
+                new MachineAsyncCoordinator.TaskKey(B, 1L), plan, ignored -> true, () -> { });
 
         coordinator.cancel(A);
 
@@ -503,6 +503,39 @@ class SharedIoCoordinatorTest {
         assertThat(committed.get(0).operations()).hasSize(1);
         assertThat(committed.get(1).operations()).isEmpty();
         assertThat(committed.get(1).mainThreadRequirements()).containsExactly(0);
+    }
+
+    @Test
+    void rejected_workset_result_does_not_rebase_the_next_batch_as_if_resources_were_consumed() throws Exception {
+        var capabilityId = MMCR.id("energy");
+        AsyncCapabilitySnapshot snapshot = new AsyncCapabilitySnapshot.Scalar(capabilityId, 10L, 10L, 10L);
+        AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
+                new AsyncCapabilityPlanner.Scalar(capabilityId), snapshot, Set.of(IOType.INPUT));
+        AsyncRequirementPlanner.Requirement requirement = new AsyncRequirementPlanner.Requirement(0, 6L,
+                IOType.INPUT, List.of(new AsyncCapabilityRequest.Scalar(capabilityId, 1L, 6L, false)));
+        AsyncRequirementPlanner.PreparedPlan plan = new AsyncRequirementPlanner.PreparedPlan(
+                List.of(requirement), List.of(capability), List.of());
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator(8, 1);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.forTesting(Runnable::run);
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        var key = new MachineAsyncCoordinator.TaskKey(A, 1L);
+        List<AsyncRequirementPlanner.PlanResult> committed = new ArrayList<>();
+        sharedIo.enqueueTickWork(allocate(ServerLevel.class), domain, key, plan, intent -> {
+            assertThat(intent.operations()).hasSize(1);
+            return false;
+        }, () -> { });
+        sharedIo.enqueueTickWorkForTesting(domain, key, plan, committed::add, () -> { });
+
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        async.completeUntilIdleForTesting(() -> 0);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        async.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(committed).singleElement().satisfies(intent -> {
+            assertThat(intent.operations()).hasSize(1);
+            assertThat(intent.mainThreadRequirements()).isEmpty();
+        });
+        assertThat(sharedIo.submittedTickWorkCountForTesting()).isZero();
     }
 
     @Test
