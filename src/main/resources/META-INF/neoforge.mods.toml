@@ -61,27 +61,6 @@ ordering="NONE"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
-modId="jei"
-type="optional"
-versionRange="[19.57.0.446,)"
-ordering="AFTER"
-side="BOTH"
-
-[[dependencies.${mod_id}]]
-modId="kubejs"
-type="optional"
-versionRange="[2101.7.2-build.351,)"
-ordering="BEFORE"
-side="BOTH"
-
-[[dependencies.${mod_id}]]
-modId="jade"
-type="optional"
-versionRange="[15.10.1+neoforge,)"
-ordering="AFTER"
-side="BOTH"
-
-[[dependencies.${mod_id}]]
 modId="ae2"
 type="optional"
 versionRange="[19.2.15,)"
@@ -121,7 +100,7 @@ modId="athena"
 type="optional"
 versionRange="[4.0.2,)"
 ordering="AFTER"
-side="BOTH"
+side="CLIENT"
 
 [[dependencies.${mod_id}]]
 modId="appmek"
