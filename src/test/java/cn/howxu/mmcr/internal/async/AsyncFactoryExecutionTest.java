@@ -68,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Queue;
 import java.util.Set;
 
@@ -587,6 +588,45 @@ class AsyncFactoryExecutionTest {
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(2);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void staggered_factory_searches_do_not_count_started_lanes_twice(boolean delayFirstSearch) throws Exception {
+        MachineControllerBlockEntity controller = factoryController(3);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("staggered_factory_searches"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 3);
+        RecipeRegistry.registerStatic(recipe);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        Deque<Runnable> workers = new ArrayDeque<>();
+        installCoordinator(MachineAsyncCoordinator.forTesting(workers::add));
+
+        controller.serverTick();
+        completeQueuedAsyncLevelTick(level, workers);
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.serverTick();
+        Runnable secondSearch = workers.removeLast();
+        Runnable delayedSearch = secondSearch;
+        if (delayFirstSearch) {
+            delayedSearch = workers.removeLast();
+            workers.addLast(secondSearch);
+        }
+        completeQueuedAsyncLevelTick(level, workers);
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(FactoryRuntime.ThreadSnapshot::active)
+                .extracting(FactoryRuntime.ThreadSnapshot::laneId)
+                .containsExactly("base", delayFirstSearch ? "factory-1" : "factory-0");
+
+        delayedSearch.run();
+        completeQueuedAsyncLevelTick(level, workers);
+
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(FactoryRuntime.ThreadSnapshot::active)
+                .extracting(FactoryRuntime.ThreadSnapshot::laneId)
+                .containsExactly("base", "factory-0", "factory-1");
+        assertThat(factoryRuntime(controller).activeRecipeCountFor(recipe.id())).isEqualTo(3);
+    }
+
     @Test
     void async_factory_does_not_create_speculative_lanes_when_no_recipe_can_start() {
         MachineControllerBlockEntity controller = factoryController(8);
@@ -803,6 +843,25 @@ class AsyncFactoryExecutionTest {
         async.beginLevelTick(gameTime);
         sharedIo.resolve(level);
         async.completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
+    }
+
+    private static void completeQueuedAsyncLevelTick(ServerLevel level, Queue<Runnable> workers) {
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        long gameTime = level.getGameTime();
+        sharedIo.beginLevelTick(gameTime);
+        async.beginLevelTick(gameTime);
+        int operations = 0;
+        do {
+            assertThat(++operations).as("Queued async fences must finish").isLessThan(100);
+            while (!workers.isEmpty()) {
+                assertThat(++operations).as("Queued async workers must finish").isLessThan(100);
+                workers.remove().run();
+            }
+            sharedIo.resolve(level);
+            async.completeTick(() -> sharedIo.resolve(level));
+        } while (!workers.isEmpty() || async.hasPendingMainStepForTesting());
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 

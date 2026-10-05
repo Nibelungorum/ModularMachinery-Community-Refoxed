@@ -1128,7 +1128,7 @@ public final class FactoryRuntime {
 
     private Map<ResourceLocation, Integer> activeRecipeCounts() {
         startReservations.entrySet().removeIf(entry -> !lanes.contains(entry.getKey())
-                || (!entry.getKey().isStartPending() && !entry.getKey().runtime().active()));
+                || !entry.getKey().isStartPending() || entry.getKey().runtime().active());
         Map<ResourceLocation, Integer> counts = new LinkedHashMap<>();
         for (ResourceLocation recipeId : startReservations.values()) counts.merge(recipeId, 1, Integer::sum);
         for (FactoryRecipeThread lane : lanes) {
