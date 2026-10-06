@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
 import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.BusBuilder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -413,6 +415,50 @@ class ContentRegistrationCoordinatorTest {
         assertThat(MachineDefinitions.getRegistration(machine)).isNotNull();
         assertThat(MachineStructureRegistry.startupSnapshot()).containsKey(machine);
         assertThat(RecipeRegistry.getRecipe(recipe)).isNotNull();
+    }
+
+    @Test
+    void production_startup_dispatches_declarations_when_game_bus_starts_disabled() {
+        var bus = BusBuilder.builder().startShutdown().build();
+        var machineId = id("disabled_game_bus_machine");
+        var recipeId = id("disabled_game_bus_recipe");
+        var phases = new ArrayList<String>();
+        var definitions = new AtomicReference<RegisterMachineDefinitionsEvent>();
+        var structures = new AtomicReference<RegisterMachineStructuresEvent>();
+        var recipes = new AtomicReference<RegisterMachineRecipesEvent>();
+        bus.addListener(RegisterMachineDefinitionsEvent.class, event -> {
+            phases.add("definitions");
+            event.registerMachine(machineId, draft -> { });
+            definitions.set(event);
+        });
+        bus.addListener(RegisterMachineStructuresEvent.class, event -> {
+            phases.add("structures");
+            assertThat(ModBlocks.BLOCKS).containsKey(machineId.getPath() + "_controller");
+            event.registerStructure(machineId, draft -> draft.fullStructure(stage -> stage.pattern(pattern -> pattern
+                    .layer("F").where('F', BlockConditions.block(Blocks.FURNACE)).controller('F'))));
+            structures.set(event);
+        });
+        bus.addListener(RegisterMachineRecipesEvent.class, event -> {
+            phases.add("recipes");
+            event.registerRecipe(recipeId, draft -> draft.recipePool(machineId).duration(1));
+            recipes.set(event);
+        });
+
+        StartupContentRegistration.registerProductionForModStartup(bus);
+        StartupContentRegistration.completeProductionForModStartup(bus);
+        StartupContentRegistration.completeProductionRecipesAfterComponentsBound(bus);
+
+        assertThat(phases).containsExactly("definitions", "structures", "recipes");
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
+        assertThat(MachineStructureRegistry.startupSnapshot()).containsKey(machineId);
+        assertThat(RecipeRegistry.getRecipe(recipeId)).isNotNull();
+        assertThatThrownBy(() -> definitions.get().registerMachine(id("disabled_bus_late_machine"), draft -> { }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> structures.get().registerStructure(machineId, draft -> { }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> recipes.get().registerRecipe(id("disabled_bus_late_recipe"), draft -> { }))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

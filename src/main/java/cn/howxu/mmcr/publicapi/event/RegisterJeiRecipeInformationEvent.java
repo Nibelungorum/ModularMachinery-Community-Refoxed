@@ -7,7 +7,7 @@ import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 
-/** Client event posted on NeoForge.EVENT_BUS to add localized recipe/category information.
+/** Client event posted on NeoForge.EVENT_BUS during JEI category registration to add localized information.
  * Component arguments are snapshotted at registration; reading entries cannot mutate frozen metadata.
  * @author howxu <dev@howxu.cn>
  */

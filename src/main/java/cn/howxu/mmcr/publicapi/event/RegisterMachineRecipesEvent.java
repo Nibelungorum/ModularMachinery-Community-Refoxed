@@ -9,12 +9,11 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
-import net.neoforged.fml.event.IModBusEvent;
 
 /** Static recipe event posted on NeoForge.EVENT_BUS after item components are bound.
  * @author howxu <dev@howxu.cn>
  */
-public final class RegisterMachineRecipesEvent extends Event implements IModBusEvent {
+public final class RegisterMachineRecipesEvent extends Event {
     private final RecipeRegistrar registrar;
     public RegisterMachineRecipesEvent() { this(RegistrationAdapters.recipes()); }
     public RegisterMachineRecipesEvent(RecipeRegistrar registrar) {

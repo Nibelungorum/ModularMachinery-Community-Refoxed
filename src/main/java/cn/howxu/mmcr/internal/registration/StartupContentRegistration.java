@@ -50,6 +50,9 @@ public final class StartupContentRegistration {
 
     public static void registerProductionForModStartup(IEventBus eventBus) {
         if (startupPhase == StartupPhase.COLLECTING || startupPhase == StartupPhase.COMMITTED) return;
+        // NeoForge 1.21.1 starts the game bus disabled until mod loading finishes.
+        // Startup declarations and client renderer registration need it during loading.
+        eventBus.start();
         startupPhase = StartupPhase.COLLECTING;
         structureCollectionDeferred = false;
         productionStructuresInitialized = false;

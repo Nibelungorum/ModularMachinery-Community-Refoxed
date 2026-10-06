@@ -27,6 +27,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLConstructModEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import org.slf4j.Logger;
@@ -61,9 +62,9 @@ public class MMCR {
         PublicApiBootstrap.freeze();
         ModEventRegistration.register(modBus, modContainer);
         modBus.addListener((FMLConstructModEvent event) ->
-                StartupContentRegistration.registerProductionForModStartup(modBus));
+                StartupContentRegistration.registerProductionForModStartup(NeoForge.EVENT_BUS));
         modBus.addListener((FMLCommonSetupEvent event) ->
-                StartupContentRegistration.completeProductionForModStartup(modBus));
+                StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS));
     }
 
     public static ResourceLocation id(String path) {

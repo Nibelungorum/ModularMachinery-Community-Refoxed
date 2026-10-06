@@ -9,12 +9,11 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
-import net.neoforged.fml.event.IModBusEvent;
 
 /** Startup definition event posted on NeoForge.EVENT_BUS, before controller registration.
  * @author howxu <dev@howxu.cn>
  */
-public final class RegisterMachineDefinitionsEvent extends Event implements IModBusEvent {
+public final class RegisterMachineDefinitionsEvent extends Event {
     private final MachineRegistrar registrar;
     public RegisterMachineDefinitionsEvent() { this(RegistrationAdapters.definitions()); }
     public RegisterMachineDefinitionsEvent(MachineRegistrar registrar) {

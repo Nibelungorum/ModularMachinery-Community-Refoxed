@@ -9,7 +9,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
 import net.neoforged.bus.api.Event;
 
-/** Client event posted on NeoForge.EVENT_BUS to add category workstations.
+/** Client event posted on NeoForge.EVENT_BUS during JEI catalyst registration to add category workstations.
  * @author howxu <dev@howxu.cn>
  */
 public final class RegisterJeiWorkstationsEvent extends Event {

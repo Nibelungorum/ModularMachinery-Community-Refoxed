@@ -15,12 +15,11 @@ import java.util.function.Consumer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.Event;
-import net.neoforged.fml.event.IModBusEvent;
 
 /** Structure registration event posted on NeoForge.EVENT_BUS after controllers exist.
  * @author howxu <dev@howxu.cn>
  */
-public final class RegisterMachineStructuresEvent extends Event implements IModBusEvent {
+public final class RegisterMachineStructuresEvent extends Event {
     private final StructureRegistrar registrar;
     public RegisterMachineStructuresEvent(Collection<ResourceLocation> machineIds) {
         this(RegistrationAdapters.structures(machineIds));
