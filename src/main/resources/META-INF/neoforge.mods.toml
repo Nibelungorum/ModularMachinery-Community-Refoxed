@@ -119,7 +119,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="botania"
 type="optional"
-versionRange="*"
+versionRange="[456-SNAPSHOT,)"
 ordering="AFTER"
 side="BOTH"
 
