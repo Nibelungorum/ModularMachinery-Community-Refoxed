@@ -42,6 +42,7 @@ import net.minecraft.server.packs.repository.PackSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -176,7 +177,7 @@ public class Client {
     private static void registerMachineRenderers(EntityRenderersEvent.RegisterRenderers event) {
         RegisterControllerRenderersEvent registrations = new RegisterControllerRenderersEvent(
                 ModBlockEntities.controllerMachineIds());
-        NeoForge.EVENT_BUS.post(registrations);
+        ModLoader.postEvent(registrations);
         ClientRegistrationAdapters.freeze(registrations);
         ClientRegistrationAdapters.coreRenderers(registrations).forEach((machineId, renderer) -> {
             BlockEntityRendererProvider provider =

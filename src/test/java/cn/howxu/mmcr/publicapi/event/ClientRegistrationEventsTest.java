@@ -1,13 +1,26 @@
 package cn.howxu.mmcr.publicapi.event;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.Client;
+import cn.howxu.mmcr.client.renderer.MachineControllerRendererDispatcher;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.publicapi.client.jei.RecipeInformation;
 import cn.howxu.mmcr.publicapi.client.jei.Workstation;
 import cn.howxu.mmcr.publicapi.client.render.ControllerRenderer;
+import cn.howxu.mmcr.publicapi.client.render.ControllerRenderContext;
 import cn.howxu.mmcr.publicapi.registration.RegistrationException;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import com.mojang.blaze3d.vertex.PoseStack;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Set;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -15,6 +28,18 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.bus.api.BusBuilder;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.CrashReportCallables;
+import net.neoforged.fml.ISystemReportExtender;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.event.IModBusEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforgespi.language.IModInfo;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +52,85 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ClientRegistrationEventsTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
+
+    @Test
+    void native_renderer_registration_reaches_all_mod_buses_before_game_bus_start_and_freezes_before_ber_install() throws Exception {
+        var firstId = MMCR.id("test_cube");
+        var secondId = MMCR.id("iron_compressor");
+        ControllerRenderer renderer = new ControllerRenderer() {
+            public void render(ControllerRenderContext context, PoseStack poses,
+                               SubmitNodeCollector nodes, CameraRenderState camera) { }
+            public boolean shouldRenderOffScreen() { return true; }
+        };
+        var firstMod = rendererMod("renderer_addon_one");
+        var secondMod = rendererMod("renderer_addon_two");
+        var received = new ArrayList<RegisterControllerRenderersEvent>();
+        firstMod.getEventBus().addListener(RegisterControllerRenderersEvent.class, event -> {
+            received.add(event);
+            event.register(firstId, renderer);
+        });
+        secondMod.getEventBus().addListener(RegisterControllerRenderersEvent.class, event -> {
+            received.add(event);
+            event.register(secondId, renderer);
+        });
+        var providers = new LinkedHashMap<BlockEntityType<?>, BlockEntityRendererProvider<?, ?>>();
+        var nativeEvent = new EntityRenderersEvent.RegisterRenderers() {
+            @Override
+            public <T extends BlockEntity, S extends BlockEntityRenderState> void registerBlockEntityRenderer(
+                    BlockEntityType<? extends T> type, BlockEntityRendererProvider<T, S> provider) {
+                assertThat(received).hasSize(2);
+                assertThatThrownBy(() -> received.getFirst().register(firstId, renderer))
+                        .isInstanceOf(RegistrationException.class).hasMessageContaining("frozen");
+                providers.put(type, provider);
+            }
+        };
+        var instance = ModList.class.getDeclaredField("INSTANCE");
+        instance.setAccessible(true);
+        var previousMods = instance.get(null);
+        var shutdown = NeoForge.EVENT_BUS.getClass().getDeclaredField("shutdown");
+        shutdown.setAccessible(true);
+        var previousShutdown = shutdown.getBoolean(NeoForge.EVENT_BUS);
+        var crashCallablesField = CrashReportCallables.class.getDeclaredField("crashCallables");
+        crashCallablesField.setAccessible(true);
+        var crashCallables = (List<?>) crashCallablesField.get(null);
+        var previousCallables = CrashReportCallables.allCrashCallables();
+        var fixtureCallables = new ArrayList<ISystemReportExtender>();
+        try {
+            var mods = ModList.of(List.of(), List.of());
+            fixtureCallables.addAll(CrashReportCallables.allCrashCallables());
+            fixtureCallables.removeAll(previousCallables);
+            var setLoadedMods = ModList.class.getDeclaredMethod("setLoadedMods", List.class);
+            setLoadedMods.setAccessible(true);
+            setLoadedMods.invoke(mods, List.of(firstMod, secondMod));
+            shutdown.setBoolean(NeoForge.EVENT_BUS, true);
+            var register = Client.class.getDeclaredMethod("registerMachineRenderers", EntityRenderersEvent.RegisterRenderers.class);
+            register.setAccessible(true);
+            register.invoke(null, nativeEvent);
+            assertThat(received).hasSize(2);
+            assertThat(received.getFirst()).isSameAs(received.getLast());
+            assertThat(received.getFirst().renderers()).containsOnlyKeys(firstId, secondId);
+            assertThat(providers).containsOnlyKeys(ModBlockEntities.controllerFor(firstId).get(),
+                    ModBlockEntities.controllerFor(secondId).get());
+            for (var provider : providers.values()) {
+                var dispatcher = provider.create(null);
+                assertThat(dispatcher).isInstanceOf(MachineControllerRendererDispatcher.class);
+                assertThat(dispatcher.shouldRenderOffScreen()).isTrue();
+            }
+        } finally {
+            shutdown.setBoolean(NeoForge.EVENT_BUS, previousShutdown);
+            instance.set(null, previousMods);
+            crashCallables.removeAll(fixtureCallables);
+        }
+    }
+
+    private static ModContainer rendererMod(String modId) {
+        var info = (IModInfo) Proxy.newProxyInstance(IModInfo.class.getClassLoader(), new Class<?>[]{IModInfo.class},
+                (proxy, method, args) -> method.getName().equals("getModId") ? modId : null);
+        return new ModContainer(info) {
+            private final IEventBus bus = BusBuilder.builder().markerType(IModBusEvent.class).allowPerPhasePost().build();
+            @Override public IEventBus getEventBus() { return bus; }
+        };
+    }
 
     @Test
     void renderer_registration_rejects_unknown_duplicate_and_late_contributions() {
