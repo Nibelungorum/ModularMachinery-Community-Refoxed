@@ -109,7 +109,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IDrawable icon;
     private final IDrawable slotBackground;
     private final IDrawable sourceSlotBackground;
-    private final IDrawable stressIcon;
+    private final @Nullable IDrawable stressIcon;
     private final @Nullable IDrawable airIcon;
     private final @Nullable IDrawable manaIcon;
     private final IGuiHelper guiHelper;
@@ -123,8 +123,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         this.sourceSlotBackground = guiHelper.drawableBuilder(
                 MMCR.id("textures/gui/ars_nouveau/jei_source_slot.png"), 0, 0, 18, 18)
                 .setTextureSize(18, 18).build();
-        this.stressIcon = guiHelper.createDrawableItemLike(
-                BuiltInRegistries.ITEM.get(ResourceLocation.parse("create:cogwheel")));
+        ResourceLocation cogwheel = ResourceLocation.parse("create:cogwheel");
+        this.stressIcon = BuiltInRegistries.ITEM.containsKey(cogwheel)
+                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(cogwheel))
+                : null;
         this.airIcon = BuiltInRegistries.ITEM.containsKey(PneumaticIds.ADVANCED_PRESSURE_TUBE)
                 ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(PneumaticIds.ADVANCED_PRESSURE_TUBE))
                 : null;
@@ -283,13 +285,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     private void drawStressLine(Component label, GuiGraphics guiGraphics, int x, int y) {
         var font = Minecraft.getInstance().font;
-        float iconScale = (float) font.lineHeight / stressIcon.getHeight();
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(x, y, 0F);
-        guiGraphics.pose().scale(iconScale, iconScale, 1F);
-        stressIcon.draw(guiGraphics, 0, 0);
-        guiGraphics.pose().popPose();
-        guiGraphics.drawString(font, label, x + (int) (stressIcon.getWidth() * iconScale) + 2, y, 0xFF404040, false);
+        if (stressIcon != null) {
+            float iconScale = (float) font.lineHeight / stressIcon.getHeight();
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(x, y, 0F);
+            guiGraphics.pose().scale(iconScale, iconScale, 1F);
+            stressIcon.draw(guiGraphics, 0, 0);
+            guiGraphics.pose().popPose();
+            x += (int) (stressIcon.getWidth() * iconScale) + 2;
+        }
+        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
     }
 
     private void drawAirLine(Component label, GuiGraphics guiGraphics, int x, int y) {

@@ -409,13 +409,15 @@ class PneumaticAirDisplayTest {
     }
 
     @Test
-    void missing_pressure_tube_does_not_create_a_default_air_item_icon() {
+    void missing_optional_mods_do_not_prevent_recipe_category_registration() {
         assertThat(BuiltInRegistries.ITEM.containsKey(PneumaticIds.ADVANCED_PRESSURE_TUBE)).isFalse();
+        assertThat(BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse("create:cogwheel"))).isFalse();
         List<ItemLike> icons = new ArrayList<>();
-        new MachineRecipeCategory(guiHelper(icons), ID, ResourceLocation.parse("mmcr:test_cube"));
+        var category = new MachineRecipeCategory(guiHelper(icons), ID, ResourceLocation.parse("mmcr:test_cube"));
 
-        // The optional mana icon is valid; missing air must not add a default item icon.
-        assertThat(icons).hasSize(2 + (BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL) ? 1 : 0));
+        assertThat(category.getRecipeType()).isEqualTo(JeiMachineRecipeTypes.forPool(ID));
+        assertThat(category.getIcon()).isNotNull();
+        assertThat(icons).hasSize(1 + (BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL) ? 1 : 0));
         assertThat(display(builder().inputAir(0, 4F).build()).airInputs()).singleElement()
                 .satisfies(air -> assertTranslation(air.label(true), "air_condition", "4"));
     }
@@ -502,6 +504,9 @@ class PneumaticAirDisplayTest {
         return (IGuiHelper) Proxy.newProxyInstance(PneumaticAirDisplayTest.class.getClassLoader(),
                 new Class<?>[]{IGuiHelper.class}, (proxy, method, arguments) -> {
                     if (method.getName().equals("createDrawableItemLike")) {
+                        if (new ItemStack((ItemLike) arguments[0]).isEmpty()) {
+                            throw new IllegalArgumentException("JEI cannot create an icon from an empty item");
+                        }
                         icons.add((ItemLike) arguments[0]);
                         return drawable;
                     }
