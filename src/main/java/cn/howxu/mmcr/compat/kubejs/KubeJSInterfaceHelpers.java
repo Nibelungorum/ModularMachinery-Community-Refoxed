@@ -24,6 +24,9 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfSourceInput() { return convert(InterfacePredicates.anyOfSourceInput()); }
     public static BlockPredicate anyOfSourceOutput() { return convert(InterfacePredicates.anyOfSourceOutput()); }
     public static BlockPredicate anyOfSourcePorts() { return convert(InterfacePredicates.anyOfSourcePorts()); }
+    public static BlockPredicate anySourceInput() { return anyOfSourceInput(); }
+    public static BlockPredicate anySourceOutput() { return anyOfSourceOutput(); }
+    public static BlockPredicate anySourcePorts() { return anyOfSourcePorts(); }
     public static BlockPredicate anyOfManaInput() { return convert(InterfacePredicates.anyOfManaInput()); }
     public static BlockPredicate anyOfManaOutput() { return convert(InterfacePredicates.anyOfManaOutput()); }
     public static BlockPredicate anyOfManaPorts() { return convert(InterfacePredicates.anyOfManaPorts()); }
@@ -68,7 +71,7 @@ public final class KubeJSInterfaceHelpers {
     }
 
     /**
-     * Matches every built-in port (item/fluid/energy, plus chemical/heat when Mekanism is loaded).
+     * Matches every registered built-in and available compatibility port family.
      *
      * @author howxu <dev@howxu.cn>
      */
@@ -146,6 +149,11 @@ public final class KubeJSInterfaceHelpers {
     public static PortTierRequirementSpec energyOutputTier(String id) {
         return PortTierRequirementSpec.from(InterfaceTiers.energyOutput(id));
     }
+
+    public static PortTierRequirementSpec sourceInputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.sourceInput(id)); }
+    public static PortTierRequirementSpec sourceOutputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.sourceOutput(id)); }
+    public static PortTierRequirementSpec manaInputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.manaInput(id)); }
+    public static PortTierRequirementSpec manaOutputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.manaOutput(id)); }
 
     private static BlockPredicate convert(cn.howxu.mmcr.api.machine.definition.BlockPredicate predicate) {
         if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();

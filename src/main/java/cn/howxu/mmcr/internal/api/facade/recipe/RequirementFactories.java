@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.publicapi.recipe.ItemInputSpec;
 import cn.howxu.mmcr.publicapi.recipe.ItemOutputSpec;
@@ -27,6 +29,8 @@ import static cn.howxu.mmcr.internal.api.facade.recipe.ModifierAdapters.io;
 /** Constructor delegation without merging strict and lenient overloads. @author howxu <dev@howxu.cn> */
 public final class RequirementFactories {
     private RequirementFactories() {}
+    public static SourceRequirementSpec source(IoDirection direction, long amount, List<String> tags) { return (SourceRequirementSpec) wrap(new SourceRequirement(io(direction), amount, tags)); }
+    public static ManaRequirementSpec mana(IoDirection direction, long amount, List<String> tags) { return (ManaRequirementSpec) wrap(new ManaRequirement(io(direction), amount, tags)); }
     public static AirRequirementSpec airInput(long airPerTick, float minPressure, List<String> tags) { return (AirRequirementSpec) wrap(AirRequirement.input(airPerTick, minPressure, tags)); }
     public static AirRequirementSpec airOutput(long airPerTick, List<String> tags) { return (AirRequirementSpec) wrap(AirRequirement.output(airPerTick, tags)); }
     public static StressRequirementSpec stressInput(double stress, double minRpm, List<String> tags) { return (StressRequirementSpec) wrap(StressRequirement.input(stress, minRpm, tags)); }

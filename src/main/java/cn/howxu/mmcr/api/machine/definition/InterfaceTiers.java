@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine.definition;
 
 import cn.howxu.mmcr.util.IOType;
 import java.util.Objects;
-/** Small factories for independent item, fluid, and energy port tiers.
+/** Small factories for independent port tiers.
  * @author howxu <dev@howxu.cn>
  */
 public final class InterfaceTiers {
@@ -84,6 +84,22 @@ public final class InterfaceTiers {
 
     public static PortTiers energyOutput(String id) { return energyOutput(find(id, PortTiers.EnergyTier.values())); }
 
+    public static PortTiers sourceInput() { return PortTiers.builder().anySourceInput().build(); }
+
+    public static PortTiers sourceInput(String id) { requireNormal(id); return sourceInput(); }
+
+    public static PortTiers sourceOutput() { return PortTiers.builder().anySourceOutput().build(); }
+
+    public static PortTiers sourceOutput(String id) { requireNormal(id); return sourceOutput(); }
+
+    public static PortTiers manaInput() { return PortTiers.builder().anyManaInput().build(); }
+
+    public static PortTiers manaInput(String id) { requireNormal(id); return manaInput(); }
+
+    public static PortTiers manaOutput() { return PortTiers.builder().anyManaOutput().build(); }
+
+    public static PortTiers manaOutput(String id) { requireNormal(id); return manaOutput(); }
+
     public static PortTiers combine(PortTiers... declarations) {
         return PortTiers.combine(declarations);
     }
@@ -92,5 +108,9 @@ public final class InterfaceTiers {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("tier id blank");
         for (T value : values) if (value.name().equalsIgnoreCase(id)) return value;
         throw new IllegalArgumentException("Unknown tier id: " + id);
+    }
+
+    private static void requireNormal(String id) {
+        if (!"normal".equalsIgnoreCase(id)) throw new IllegalArgumentException("Unknown tier id: " + id);
     }
 }

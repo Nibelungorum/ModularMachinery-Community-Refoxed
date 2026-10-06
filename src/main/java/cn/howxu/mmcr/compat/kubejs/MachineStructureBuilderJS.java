@@ -250,6 +250,10 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public PortTierRequirementSpec fluidOutputTier(String id) { return KubeJSInterfaceHelpers.fluidOutputTier(id); }
     public PortTierRequirementSpec energyInputTier(String id) { return KubeJSInterfaceHelpers.energyInputTier(id); }
     public PortTierRequirementSpec energyOutputTier(String id) { return KubeJSInterfaceHelpers.energyOutputTier(id); }
+    public PortTierRequirementSpec sourceInputTier(String id) { return KubeJSInterfaceHelpers.sourceInputTier(id); }
+    public PortTierRequirementSpec sourceOutputTier(String id) { return KubeJSInterfaceHelpers.sourceOutputTier(id); }
+    public PortTierRequirementSpec manaInputTier(String id) { return KubeJSInterfaceHelpers.manaInputTier(id); }
+    public PortTierRequirementSpec manaOutputTier(String id) { return KubeJSInterfaceHelpers.manaOutputTier(id); }
 
     public MachineStructureBuilderJS dynamicPattern(DynamicPatternSpec pattern) {
         dynamicPatterns.add(Objects.requireNonNull(pattern, "pattern"));
@@ -263,6 +267,24 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
     public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
     public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate anyOfSourceInput() { return KubeJSInterfaceHelpers.anyOfSourceInput(); }
+    public BlockPredicate anyOfSourceOutput() { return KubeJSInterfaceHelpers.anyOfSourceOutput(); }
+    public BlockPredicate anyOfSourcePorts() { return KubeJSInterfaceHelpers.anyOfSourcePorts(); }
+    public BlockPredicate anySourceInput() { return anyOfSourceInput(); }
+    public BlockPredicate anySourceOutput() { return anyOfSourceOutput(); }
+    public BlockPredicate anySourcePorts() { return anyOfSourcePorts(); }
+    public BlockPredicate anyOfStressInput() { return KubeJSInterfaceHelpers.anyOfStressInput(); }
+    public BlockPredicate anyOfStressOutput() { return KubeJSInterfaceHelpers.anyOfStressOutput(); }
+    public BlockPredicate anyOfStressPorts() { return KubeJSInterfaceHelpers.anyOfStressPorts(); }
+    public BlockPredicate anyStressInput() { return anyOfStressInput(); }
+    public BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
+    public BlockPredicate anyStressPorts() { return anyOfStressPorts(); }
+    public BlockPredicate anyOfAirInput() { return KubeJSInterfaceHelpers.anyOfAirInput(); }
+    public BlockPredicate anyOfAirOutput() { return KubeJSInterfaceHelpers.anyOfAirOutput(); }
+    public BlockPredicate anyOfAirPorts() { return KubeJSInterfaceHelpers.anyOfAirPorts(); }
+    public BlockPredicate anyAirInput() { return anyOfAirInput(); }
+    public BlockPredicate anyAirOutput() { return anyOfAirOutput(); }
+    public BlockPredicate anyAirPorts() { return anyOfAirPorts(); }
     public BlockPredicate anyOfManaInput() { return KubeJSInterfaceHelpers.anyOfManaInput(); }
     public BlockPredicate anyOfManaOutput() { return KubeJSInterfaceHelpers.anyOfManaOutput(); }
     public BlockPredicate anyOfManaPorts() { return KubeJSInterfaceHelpers.anyOfManaPorts(); }

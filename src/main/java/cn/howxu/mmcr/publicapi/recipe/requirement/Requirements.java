@@ -17,6 +17,14 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
  * @author howxu <dev@howxu.cn> */
 public final class Requirements {
     private Requirements() {}
+    public static SourceRequirementSpec sourceInput(long amount) { return sourceInput(amount, List.of()); }
+    public static SourceRequirementSpec sourceInput(long amount, List<String> tags) { return RequirementFactories.source(IoDirection.INPUT, amount, tags); }
+    public static SourceRequirementSpec sourceOutput(long amount) { return sourceOutput(amount, List.of()); }
+    public static SourceRequirementSpec sourceOutput(long amount, List<String> tags) { return RequirementFactories.source(IoDirection.OUTPUT, amount, tags); }
+    public static ManaRequirementSpec manaInput(long amount) { return manaInput(amount, List.of()); }
+    public static ManaRequirementSpec manaInput(long amount, List<String> tags) { return RequirementFactories.mana(IoDirection.INPUT, amount, tags); }
+    public static ManaRequirementSpec manaOutput(long amount) { return manaOutput(amount, List.of()); }
+    public static ManaRequirementSpec manaOutput(long amount, List<String> tags) { return RequirementFactories.mana(IoDirection.OUTPUT, amount, tags); }
     public static AirRequirementSpec airInput(long airPerTick, float minPressure) { return airInput(airPerTick, minPressure, List.of()); }
     public static AirRequirementSpec airInput(long airPerTick, float minPressure, List<String> tags) { return RequirementFactories.airInput(airPerTick, minPressure, tags); }
     public static AirRequirementSpec airOutput(long airPerTick) { return airOutput(airPerTick, List.of()); }

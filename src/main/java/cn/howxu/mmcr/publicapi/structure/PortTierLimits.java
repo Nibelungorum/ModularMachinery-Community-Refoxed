@@ -60,6 +60,14 @@ public interface PortTierLimits {
     static PortTierLimits energyInput(EnergyTier tier) { return TierAdapters.energyInput(tier); }
     static PortTierLimits energyOutput(String id) { return TierAdapters.energyOutput(id); }
     static PortTierLimits energyOutput(EnergyTier tier) { return TierAdapters.energyOutput(tier); }
+    static PortTierLimits sourceInput() { return TierAdapters.sourceInput(); }
+    static PortTierLimits sourceInput(String id) { return TierAdapters.sourceInput(id); }
+    static PortTierLimits sourceOutput() { return TierAdapters.sourceOutput(); }
+    static PortTierLimits sourceOutput(String id) { return TierAdapters.sourceOutput(id); }
+    static PortTierLimits manaInput() { return TierAdapters.manaInput(); }
+    static PortTierLimits manaInput(String id) { return TierAdapters.manaInput(id); }
+    static PortTierLimits manaOutput() { return TierAdapters.manaOutput(); }
+    static PortTierLimits manaOutput(String id) { return TierAdapters.manaOutput(id); }
     List<RequirementView> requirements();
 
     /** Factory-owned tier requirement view.

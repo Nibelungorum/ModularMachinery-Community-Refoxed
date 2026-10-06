@@ -41,6 +41,10 @@ final class RecipeDraftFacade implements RecipeDraft {
     public RecipeDraft inputStress(double stress, double minRpm, List<String> tags) { delegate.inputStress(stress, minRpm, tags); return this; }
     public RecipeDraft outputStress(double stress, double rpm) { delegate.outputStress(stress, rpm); return this; }
     public RecipeDraft outputStress(double stress, double rpm, List<String> tags) { delegate.outputStress(stress, rpm, tags); return this; }
+    public RecipeDraft inputSource(long amount) { delegate.inputSource(amount); return this; }
+    public RecipeDraft outputSource(long amount) { delegate.outputSource(amount); return this; }
+    public RecipeDraft inputMana(long amount) { delegate.inputMana(amount); return this; }
+    public RecipeDraft outputMana(long amount) { delegate.outputMana(amount); return this; }
     public RecipeDraft inputEnergy(long rate) { delegate.inputEnergy(rate); return this; }
     public RecipeDraft outputEnergy(long rate) { delegate.outputEnergy(rate); return this; }
     public RecipeDraft iFEt(long rate) { delegate.iFEt(rate); return this; }

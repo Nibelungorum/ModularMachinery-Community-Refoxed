@@ -27,6 +27,8 @@ public interface RecipeDraft {
     RecipeDraft outputAir(long airPerTick); RecipeDraft outputAir(long airPerTick, List<String> tags);
     RecipeDraft inputStress(double stress, double minRpm); RecipeDraft inputStress(double stress, double minRpm, List<String> tags);
     RecipeDraft outputStress(double stress, double rpm); RecipeDraft outputStress(double stress, double rpm, List<String> tags);
+    RecipeDraft inputSource(long amount); RecipeDraft outputSource(long amount);
+    RecipeDraft inputMana(long amount); RecipeDraft outputMana(long amount);
     RecipeDraft inputEnergy(long fePerTick); RecipeDraft outputEnergy(long fePerTick); RecipeDraft iFEt(long fePerTick); RecipeDraft oFEt(long fePerTick);
     RecipeDraft outputItem(Item item, int count); RecipeDraft outputItem(ItemStack stack); RecipeDraft outputItem(ItemStack stack, ComponentConstraints components);
     RecipeDraft outputChance(ItemStack stack, float chance); RecipeDraft outputChance(ItemStack stack, float chance, ComponentConstraints components);

@@ -120,12 +120,17 @@ public final class TypedFixture implements MachineDefinitionProvider {
         event.registerModifier(MODIFIER, bundle); event.registerModifierItem(new ItemStack(Items.DIAMOND), MODIFIER);
         BlockCondition ports = BlockConditions.any(BlockConditions.itemPorts(), BlockConditions.fluidPorts(),
                 BlockConditions.energyPorts(), BlockConditions.chemicalPorts(), BlockConditions.heatPorts(),
+                BlockConditions.sourceInput(), BlockConditions.sourceOutput(), BlockConditions.sourcePorts(),
+                BlockConditions.manaInput(), BlockConditions.manaOutput(), BlockConditions.manaPorts(),
+                BlockConditions.stressInput(), BlockConditions.stressOutput(), BlockConditions.stressPorts(),
                 BlockConditions.airInput(), BlockConditions.airOutput(), BlockConditions.airPorts(),
                 BlockConditions.radioactiveChemicalPorts(), BlockConditions.upgradeBus(), BlockConditions.parallelControllers(),
                 BlockConditions.factoryController(), BlockConditions.smartInterface(), BlockConditions.dataStorage(),
                 BlockConditions.networkInterface(), BlockConditions.coupler());
         PortTierLimits tiers = PortTierLimits.combine(PortTierLimits.itemInput(PortTierLimits.ItemTier.NORMAL),
                 PortTierLimits.fluidOutput(PortTierLimits.FluidTier.NORMAL),
+                PortTierLimits.sourceInput(), PortTierLimits.sourceOutput("normal"),
+                PortTierLimits.manaInput("normal"), PortTierLimits.manaOutput(),
                 PortTierLimits.energy(PortTierLimits.EnergyTier.NORMAL, IoDirection.INPUT));
         PatternSpec pattern = Structures.pattern().layer("CIP", "XML").controller('C')
                 .where('I', BlockConditions.itemInput()).where('P', ports)
@@ -218,6 +223,24 @@ public final class TypedFixture implements MachineDefinitionProvider {
         event.registerRecipe(recipe);
         event.registerRecipe(id("second_recipe"), (RecipeDraft options) -> options.recipePool(POOL).inputItem(Items.IRON_INGOT, 1)
                 .outputItem(Items.GOLD_INGOT, 1).levelRequirement(LEVEL_TYPE, LEVEL).stageRequirement(1));
+    }
+
+    public static RecipeSpec compatibilityRecipe() {
+        SourceRequirementSpec source = Requirements.sourceInput(3_000_000_000L, List.of("source"));
+        ManaRequirementSpec mana = Requirements.manaOutput(3_000_000_000L, List.of("mana"));
+        long sourceAmount = ((SourceRequirementSpec) source.copy()).amount();
+        long manaAmount = ((ManaRequirementSpec) mana.copy()).amount();
+        return Recipes.recipe(id("compatibility_recipe")).recipePool(POOL)
+                .inputSource(sourceAmount).outputSource(sourceAmount).inputMana(manaAmount).outputMana(manaAmount)
+                .requirement(source).requirement(mana)
+                .requirement(Requirements.sourceOutput(sourceAmount, List.of("source")))
+                .requirement(Requirements.manaInput(manaAmount, List.of("mana")))
+                .custom(CreateIo.stressInput(8, 32, List.of("drive")))
+                .custom(CreateIo.stressOutput(16, -64, List.of("generator")))
+                .custom(PneumaticCraftIo.airInput(40, 4, List.of("air")))
+                .custom(PneumaticCraftIo.airOutput(80, List.of("exhaust")))
+                .custom(ArsNouveauIo.sourceInput(sourceAmount)).custom(ArsNouveauIo.sourceOutput(sourceAmount))
+                .custom(BotaniaIo.manaInput(manaAmount)).custom(BotaniaIo.manaOutput(manaAmount)).build();
     }
 
     private static void beforeStart(RecipeStartContext context) {

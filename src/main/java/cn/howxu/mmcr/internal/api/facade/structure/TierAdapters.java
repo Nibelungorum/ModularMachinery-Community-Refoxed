@@ -53,6 +53,14 @@ public final class TierAdapters {
     public static PortTierLimits energyInput(PortTierLimits.EnergyTier tier) { return wrap(InterfaceTiers.energyInput(toCore(tier))); }
     public static PortTierLimits energyOutput(String id) { return wrap(InterfaceTiers.energyOutput(id)); }
     public static PortTierLimits energyOutput(PortTierLimits.EnergyTier tier) { return wrap(InterfaceTiers.energyOutput(toCore(tier))); }
+    public static PortTierLimits sourceInput() { return wrap(InterfaceTiers.sourceInput()); }
+    public static PortTierLimits sourceInput(String id) { return wrap(InterfaceTiers.sourceInput(id)); }
+    public static PortTierLimits sourceOutput() { return wrap(InterfaceTiers.sourceOutput()); }
+    public static PortTierLimits sourceOutput(String id) { return wrap(InterfaceTiers.sourceOutput(id)); }
+    public static PortTierLimits manaInput() { return wrap(InterfaceTiers.manaInput()); }
+    public static PortTierLimits manaInput(String id) { return wrap(InterfaceTiers.manaInput(id)); }
+    public static PortTierLimits manaOutput() { return wrap(InterfaceTiers.manaOutput()); }
+    public static PortTierLimits manaOutput(String id) { return wrap(InterfaceTiers.manaOutput(id)); }
 
     private static IOType toCore(IoDirection io) {
         return switch (io) {

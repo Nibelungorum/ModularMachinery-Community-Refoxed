@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.publicapi.recipe.component.ComponentConstraints;
 import cn.howxu.mmcr.publicapi.recipe.requirement.*;
@@ -34,6 +36,8 @@ public final class RequirementAdapters {
             case SmartInterfaceRequirement v -> new SmartView(v);
             case StressRequirement v -> new StressView(v);
             case AirRequirement v -> new AirView(v);
+            case SourceRequirement v -> new SourceView(v);
+            case ManaRequirement v -> new ManaView(v);
             default -> new View(value);
         };
     }
@@ -88,6 +92,20 @@ public final class RequirementAdapters {
         public double stress() { return ((StressRequirement) delegate).stress(); }
         public double minRpm() { return ((StressRequirement) delegate).minRpm(); }
         public double rpm() { return ((StressRequirement) delegate).rpm(); }
+    }
+    /** Typed source view retaining the canonical requirement.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class SourceView extends View implements SourceRequirementSpec {
+        SourceView(SourceRequirement value) { super(value); }
+        public long amount() { return ((SourceRequirement) delegate).amount(); }
+    }
+    /** Typed mana view retaining the canonical requirement.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ManaView extends View implements ManaRequirementSpec {
+        ManaView(ManaRequirement value) { super(value); }
+        public long amount() { return ((ManaRequirement) delegate).amount(); }
     }
     private static final class LevelView extends View implements LevelRequirementSpec {
         LevelView(LevelRequirement value) { super(value); }

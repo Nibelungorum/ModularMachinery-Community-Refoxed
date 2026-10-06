@@ -11,8 +11,10 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -196,6 +198,9 @@ public final class KubeJSApi {
     public BlockPredicate anyOfSourceInput() { return KubeJSInterfaceHelpers.anyOfSourceInput(); }
     public BlockPredicate anyOfSourceOutput() { return KubeJSInterfaceHelpers.anyOfSourceOutput(); }
     public BlockPredicate anyOfSourcePorts() { return KubeJSInterfaceHelpers.anyOfSourcePorts(); }
+    public BlockPredicate anySourceInput() { return anyOfSourceInput(); }
+    public BlockPredicate anySourceOutput() { return anyOfSourceOutput(); }
+    public BlockPredicate anySourcePorts() { return anyOfSourcePorts(); }
     public BlockPredicate anyOfManaInput() { return KubeJSInterfaceHelpers.anyOfManaInput(); }
     public BlockPredicate anyOfManaOutput() { return KubeJSInterfaceHelpers.anyOfManaOutput(); }
     public BlockPredicate anyOfManaPorts() { return KubeJSInterfaceHelpers.anyOfManaPorts(); }
@@ -228,6 +233,11 @@ public final class KubeJSApi {
     public BlockPredicate dataStorage() { return KubeJSInterfaceHelpers.dataStorage(); }
     public BlockPredicate factoryController() { return KubeJSInterfaceHelpers.factoryController(); }
     public BlockPredicate networkInterface() { return KubeJSInterfaceHelpers.networkInterface(); }
+
+    public PortTierRequirementSpec sourceInputTier(String id) { return KubeJSInterfaceHelpers.sourceInputTier(id); }
+    public PortTierRequirementSpec sourceOutputTier(String id) { return KubeJSInterfaceHelpers.sourceOutputTier(id); }
+    public PortTierRequirementSpec manaInputTier(String id) { return KubeJSInterfaceHelpers.manaInputTier(id); }
+    public PortTierRequirementSpec manaOutputTier(String id) { return KubeJSInterfaceHelpers.manaOutputTier(id); }
 
     public BlockPredicate ports() { return KubeJSInterfaceHelpers.ports(); }
 
@@ -382,6 +392,15 @@ public final class KubeJSApi {
     public CustomRecipeIo sourceOutput(long amount) {
         return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount));
     }
+
+    public SourceRequirement sourceInputRequirement(long amount) { return sourceInputRequirement(amount, List.of()); }
+    public SourceRequirement sourceInputRequirement(long amount, List<String> tags) { return new SourceRequirement(IOType.INPUT, amount, tags); }
+    public SourceRequirement sourceOutputRequirement(long amount) { return sourceOutputRequirement(amount, List.of()); }
+    public SourceRequirement sourceOutputRequirement(long amount, List<String> tags) { return new SourceRequirement(IOType.OUTPUT, amount, tags); }
+    public ManaRequirement manaInputRequirement(long amount) { return manaInputRequirement(amount, List.of()); }
+    public ManaRequirement manaInputRequirement(long amount, List<String> tags) { return new ManaRequirement(IOType.INPUT, amount, tags); }
+    public ManaRequirement manaOutputRequirement(long amount) { return manaOutputRequirement(amount, List.of()); }
+    public ManaRequirement manaOutputRequirement(long amount, List<String> tags) { return new ManaRequirement(IOType.OUTPUT, amount, tags); }
 
     public EnergyRequirement energyRequirement(IOType io, long fePerTick) {
         return new EnergyRequirement(io, fePerTick);
