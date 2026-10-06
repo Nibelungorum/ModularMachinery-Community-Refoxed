@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.runtime.JadeTextSupport;
@@ -23,6 +24,8 @@ public final class JadePlugin implements IWailaPlugin {
             "cn.howxu.mmcr.compat.appliedflux.loaded.jade.AppliedFluxJadeRegistration";
     private static final String SOURCE_REGISTRATION =
             "cn.howxu.mmcr.compat.ars_nouveau.loaded.jade.SourceJadeRegistration";
+    private static final String PNEUMATIC_REGISTRATION =
+            "cn.howxu.mmcr.compat.pneumaticcraft.loaded.jade.PneumaticJadeRegistration";
 
     @Override
     public void register(IWailaCommonRegistration registration) {
@@ -35,6 +38,8 @@ public final class JadePlugin implements IWailaPlugin {
                 IWailaCommonRegistration.class, registration);
         if (ArsNouveauBridge.get().available()) register(SOURCE_REGISTRATION, "registerCommon",
                 IWailaCommonRegistration.class, registration);
+        if (PneumaticCraftBridge.get().available()) register(PNEUMATIC_REGISTRATION, "registerCommon",
+                IWailaCommonRegistration.class, registration);
     }
 
     @Override
@@ -45,6 +50,8 @@ public final class JadePlugin implements IWailaPlugin {
         if (AE2Bridge.get().available()) register(AE2_REGISTRATION, "registerClient",
                 IWailaClientRegistration.class, registration);
         if (ArsNouveauBridge.get().available()) register(SOURCE_REGISTRATION, "registerClient",
+                IWailaClientRegistration.class, registration);
+        if (PneumaticCraftBridge.get().available()) register(PNEUMATIC_REGISTRATION, "registerClient",
                 IWailaClientRegistration.class, registration);
     }
 

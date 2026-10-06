@@ -10,6 +10,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class BotaniaManaIds {
     public static final ResourceLocation MANA = ResourceLocation.fromNamespaceAndPath("botania", "mana");
+    public static final ResourceLocation CREATIVE_POOL = ResourceLocation.fromNamespaceAndPath("botania", "creative_mana_pool");
     public static final CapabilityType TYPE = new CapabilityType(MANA);
     public static final String INPUT = "botania_mana_input_pool";
     public static final String OUTPUT = "botania_mana_output_pool";

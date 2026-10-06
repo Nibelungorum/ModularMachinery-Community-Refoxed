@@ -20,12 +20,8 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.Rarity;
@@ -113,39 +109,25 @@ class ControllerRecipeTextLinesTest {
     }
 
     @Test
-    void manaOutputUsesCompactLongTotalAndExactTooltipWithAnItemIcon() {
-        ResourceLocation iconId = ResourceLocation.parse("botania:creative_pool");
-        MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        if (!items.containsKey(iconId)) {
-            items.unfreeze();
-            try { Registry.register(items, iconId, new Item(new Item.Properties())); }
-            finally { items.freeze(); }
-        }
+    void manaOutputsAreHiddenWithoutAHeadingOrIconAndMixedItemOutputsRemainVisible() {
         try (var outputScope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(ManaOutput.TYPE);
             var presentation = new ControllerRecipePresentation(List.of(
                     new MachineOutputAmount(new ManaOutput(10_000L), Long.MAX_VALUE)), 0L, 0L, 0D);
-            ControllerTextLine line = ControllerRecipeTextLines.create(presentation).getLast();
-            assertThat(line.text()).isEqualTo(Component.translatable("gui.mmcr.controller.recipe_output.mana",
-                    ReadableNumber.format(Long.MAX_VALUE)));
-            assertThat(line.tooltip()).containsExactly(Component.translatable("gui.mmcr.mana.exact",
-                    "9,223,372,036,854,775,807"));
-            assertThat(line.icon()).isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class, icon -> {
-                assertThat(BuiltInRegistries.ITEM.getKey(icon.stack().getItem())).isEqualTo(iconId);
-                assertThat(icon.stack().getCount()).isEqualTo(1);
-                icon.stack().setCount(64);
-            });
-            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation).orElseThrow())
-                    .isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class, icon -> {
-                        assertThat(BuiltInRegistries.ITEM.getKey(icon.stack().getItem())).isEqualTo(iconId);
-                        assertThat(icon.stack().getCount()).isEqualTo(1);
-                    });
+            assertThat(ControllerRecipeTextLines.create(presentation)).isEmpty();
+            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation)).isEmpty();
             MachineRecipe recipe = new MachineRecipe(MMCR.id("mana_recipe_text"), MMCR.id("test_cube"), 20,
                     List.of(), List.of(new ManaOutput(3_000_000_001L)),
                     List.of(), 0, 1, false, false, false, Set.of());
-            assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L)).singleElement().satisfies(output ->
-                    assertThat(output.tooltip()).containsExactly(Component.translatable(
-                            "gui.mmcr.mana.exact", "9,000,000,003")));
+            assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L)).isEmpty();
+            var mixed = new ControllerRecipePresentation(List.of(
+                    presentation.outputs().getFirst(),
+                    new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND), 1F), 7L)),
+                    0L, 0L, 0D);
+            assertThat(ControllerRecipeTextLines.create(mixed)).hasSize(2);
+            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(mixed).orElseThrow())
+                    .isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class,
+                            icon -> assertThat(icon.stack().is(Items.DIAMOND)).isTrue());
         }
     }
 

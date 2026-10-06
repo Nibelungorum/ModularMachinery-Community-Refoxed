@@ -1,16 +1,14 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.compat.botania.ManaOutput;
 import cn.howxu.mmcr.test.TestBootstrap;
-import net.minecraft.core.MappedRegistry;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import snownee.jade.api.BlockAccessor;
@@ -23,24 +21,17 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Verifies the transported recipe total and decorative icon without querying pool inventory.
+/** Verifies mana stays hidden in Jade while other recipe outputs remain visible.
  * @author howxu <dev@howxu.cn>
  */
 class BotaniaControllerOutputPresentationTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        ResourceLocation id = ResourceLocation.parse("botania:creative_pool");
-        MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
-        if (!items.containsKey(id)) {
-            items.unfreeze();
-            try { Registry.register(items, id, new Item(new Item.Properties())); }
-            finally { items.freeze(); }
-        }
     }
 
     @Test
-    void controllerJadeUsesOnlyServerRecipeOutputAndPreservesExactLongManaWithCreativePoolIcon() {
+    void controllerJadeHidesManaWithoutAnEmptyHeadingAndKeepsMixedItemOutputs() {
         try (var scope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(ManaOutput.TYPE);
             CompoundTag data = new CompoundTag();
@@ -61,13 +52,16 @@ class BotaniaControllerOutputPresentationTest {
                         return null;
                     });
             RecipeOutputComponentProvider.INSTANCE.appendTooltip(tooltip, accessor, null);
-            assertThat(text).containsExactly(Component.translatable("jade.mmcr.machine_controller.recipe_output"),
-                    Component.translatable("gui.mmcr.mana.exact", "9,223,372,036,854,775,807"));
+            assertThat(text).isEmpty();
+            assertThat(elements).isEmpty();
+            RecipeOutputCodec.write(data, List.of(
+                    new MachineOutputAmount(new ManaOutput(10_000), Long.MAX_VALUE),
+                    new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND), 1F), 7L)));
+            RecipeOutputComponentProvider.INSTANCE.appendTooltip(tooltip, accessor, null);
+            assertThat(text).hasSize(2);
+            assertThat(text.getFirst()).isEqualTo(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
             assertThat(elements.stream().filter(ItemStackElement.class::isInstance).map(ItemStackElement.class::cast).toList())
-                    .singleElement().satisfies(icon -> {
-                        assertThat(BuiltInRegistries.ITEM.getKey(icon.getItem().getItem())).isEqualTo(ResourceLocation.parse("botania:creative_pool"));
-                        assertThat(icon.getItem().getCount()).isEqualTo(1);
-                    });
+                    .singleElement().satisfies(icon -> assertThat(icon.getItem().getItem()).isEqualTo(Items.DIAMOND));
             text.clear();
             elements.clear();
             RecipeOutputCodec.write(data, List.of());

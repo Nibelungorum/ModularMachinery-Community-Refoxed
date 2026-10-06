@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJadeElement;
-import cn.howxu.mmcr.compat.botania.ManaOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.util.ReadableNumber;
 import mekanism.api.MekanismAPI;
@@ -13,7 +12,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.ComponentUtils;
@@ -69,13 +67,11 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
             else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
             else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
             else if (owned instanceof SourceOutput) renderSource(tooltip, amount);
-            else if (owned instanceof ManaOutput) renderMana(tooltip, amount);
         }
     }
 
     private static boolean isRenderable(MachineOutput output, long amount) {
         if (output instanceof SourceOutput) return amount > 0L;
-        if (output instanceof ManaOutput) return amount > 0L;
         if (output instanceof MachineOutput.ItemOutput item) {
             return !item.stack().isEmpty() && amount > 0L;
         }
@@ -109,14 +105,6 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 count,
                 name);
         tooltip.append(text);
-    }
-
-    private static void renderMana(ITooltip tooltip, long amount) {
-        IElementHelper elements = IElementHelper.get();
-        tooltip.add(elements.smallItem(new ItemStack(BuiltInRegistries.ITEM.get(
-                ResourceLocation.parse("botania:creative_pool")))));
-        tooltip.append(elements.spacer(2, 0));
-        tooltip.append(Component.translatable("gui.mmcr.mana.exact", ReadableNumber.formatExact(amount)));
     }
 
     private static void renderSource(ITooltip tooltip, long amount) {

@@ -1,8 +1,12 @@
 package cn.howxu.mmcr.compat.pneumaticcraft;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import java.util.List;
+import net.minecraft.world.inventory.MenuType;
 import net.neoforged.bus.api.IEventBus;
+
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 /** Optional integration entry point with neutral signatures only.
  * @author howxu <dev@howxu.cn>
@@ -19,5 +23,8 @@ public interface PneumaticCraftBridge {
     }
 
     default void registerPorts(IEventBus modBus) {
+    }
+
+    default void registerMenus(BiConsumer<String, Supplier<? extends MenuType<?>>> registrar) {
     }
 }

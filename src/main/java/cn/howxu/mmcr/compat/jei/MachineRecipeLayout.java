@@ -44,7 +44,6 @@ public record MachineRecipeLayout(
     private static final int SLOT_START_Y = 8;
     private static final int TEXT_OFFSET_Y = 4;
     static final int TEXT_LINE_SPACING = 10;
-    private static final int MANA_ROW_SPACING = 18;
     static final int PAGE_FOOTER_HEIGHT = 12;
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
@@ -67,9 +66,8 @@ public record MachineRecipeLayout(
         List<MetadataPage> pages = availableRows < 1
                 ? metadataPages(metadataRows, metadataY, viewportHeight - PAGE_FOOTER_HEIGHT - 2) : List.of();
         List<TextPlan> sourceLines = sourceTextLines(entries, metadataY);
-        List<ManaRowPlan> manaRows = manaRows(entries, metadataY, sourceLines.size());
-        int durationY = metadataY + sourceLines.size() * TEXT_LINE_SPACING
-                + manaRows.size() * MANA_ROW_SPACING;
+        int durationY = metadataY + sourceLines.size() * TEXT_LINE_SPACING;
+        List<ManaRowPlan> manaRows = manaRows(entries, durationY + TEXT_LINE_SPACING * metadataLineCount(display));
         return new MachineRecipeLayout(
                 WIDTH,
                 categoryHeight(guiScale),
@@ -81,7 +79,7 @@ public record MachineRecipeLayout(
                 metadataY,
                 viewportHeight,
                 8,
-                durationY + TEXT_LINE_SPACING * metadataLineCount(display),
+                durationY + TEXT_LINE_SPACING * (metadataLineCount(display) + manaRows.size()),
                 durationY,
                 transferButtonXForGuiScale(guiScale),
                 transferButtonYForGuiScale(guiScale)
@@ -126,8 +124,8 @@ public record MachineRecipeLayout(
     private static List<Integer> metadataRowHeights(MachineRecipeDisplay display, List<JeiDisplayEntry> entries) {
         List<Integer> heights = new ArrayList<>();
         entries.stream().filter(MachineRecipeLayout::isSourceText).forEach(entry -> heights.add(TEXT_LINE_SPACING));
-        entries.stream().filter(MachineRecipeLayout::isMana).forEach(entry -> heights.add(MANA_ROW_SPACING));
         for (int index = 0; index < metadataLineCount(display); index++) heights.add(TEXT_LINE_SPACING);
+        entries.stream().filter(MachineRecipeLayout::isMana).forEach(entry -> heights.add(TEXT_LINE_SPACING));
         if (!display.requiredHostIds().isEmpty()) heights.add(TEXT_LINE_SPACING);
         int levels = display.recipe().levelRequirements().size();
         for (int index = 0; index < levels; index++) {
@@ -154,13 +152,13 @@ public record MachineRecipeLayout(
         return List.copyOf(pages);
     }
 
-    private static List<ManaRowPlan> manaRows(List<JeiDisplayEntry> entries, int metadataY, int sourceRows) {
+    private static List<ManaRowPlan> manaRows(List<JeiDisplayEntry> entries, int startY) {
         List<ManaRowPlan> lines = new ArrayList<>();
-        int y = metadataY + sourceRows * TEXT_LINE_SPACING;
+        int y = startY;
         for (JeiDisplayEntry entry : entries.stream().filter(MachineRecipeLayout::isMana)
                 .sorted(Comparator.comparingInt(entry -> entry.role() == RecipeIngredientRole.INPUT ? 0 : 1)).toList()) {
-            lines.add(new ManaRowPlan(entry, 8, y, 122, 16));
-            y += MANA_ROW_SPACING;
+            lines.add(new ManaRowPlan(entry, 8, y, CATEGORY_WIDTH - 16, TEXT_LINE_SPACING));
+            y += TEXT_LINE_SPACING;
         }
         return List.copyOf(lines);
     }
@@ -282,7 +280,7 @@ public record MachineRecipeLayout(
 
     public int levelRequirementSlotY(MachineRecipeDisplay display, int index) {
         int metadataY = display.requiredHostIds().isEmpty()
-                ? durationTextY + TEXT_LINE_SPACING * metadataLineCount(display)
+                ? hostRequirementTextY
                 : hostRequirementTextY + TEXT_LINE_SPACING;
         return metadataY + SLOT_SIZE * index;
     }
@@ -304,8 +302,7 @@ public record MachineRecipeLayout(
         if (levelCount > 0) {
             return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE + TEXT_LINE_SPACING;
         }
-        return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display)
-                + (display.requiredHostIds().isEmpty() ? 0 : 1));
+        return hostRequirementTextY + TEXT_LINE_SPACING * (display.requiredHostIds().isEmpty() ? 0 : 1);
     }
 
     public int lastMetadataTextY(MachineRecipeDisplay display) {
@@ -321,8 +318,7 @@ public record MachineRecipeLayout(
         if (levelCount > 0) {
             return levelRequirementSlotY(display, levelCount - 1);
         }
-        return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display) - 1
-                + (display.requiredHostIds().isEmpty() ? 0 : 1));
+        return hostRequirementTextY + TEXT_LINE_SPACING * (display.requiredHostIds().isEmpty() ? -1 : 0);
     }
 
     public int informationTextY(MachineRecipeDisplay display) {
@@ -356,13 +352,10 @@ public record MachineRecipeLayout(
     /** Logical, whole-row page of the bounded recipe details widget. @author howxu <dev@howxu.cn> */
     public record MetadataPage(int startY, int endY) {}
 
-    /** A native mana bar row whose hit area matches its JEI custom renderer.
+    /** Drawing bounds for a plain mana icon-and-text row, not an interactive JEI slot.
      * @author howxu <dev@howxu.cn>
      */
     public record ManaRowPlan(JeiDisplayEntry entry, int x, int y, int width, int height) {
-        public boolean contains(double mouseX, double mouseY) {
-            return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
-        }
     }
 
     /**

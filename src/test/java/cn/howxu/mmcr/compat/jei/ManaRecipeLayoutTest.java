@@ -19,16 +19,18 @@ import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.botania.BotaniaRecipeTypes;
 import cn.howxu.mmcr.compat.botania.ManaRequirement;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredient;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientRenderer;
+import cn.howxu.mmcr.compat.botania.client.ManaJeiDisplay;
+import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
 import cn.howxu.mmcr.test.TestBootstrap;
+import mezz.jei.api.IModPlugin;
+import mezz.jei.api.helpers.IColorHelper;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.ingredients.IIngredientHelper;
+import mezz.jei.api.ingredients.subtypes.ISubtypeManager;
 import mezz.jei.api.runtime.IIngredientManager;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferError;
@@ -37,7 +39,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,7 +62,18 @@ class ManaRecipeLayoutTest {
     @BeforeAll static void bootstrap() throws Exception { TestBootstrap.bootstrap(); }
 
     @Test
-    void manaOnlyRowsKeepRolesExactAmountsAndFullBarHoverOutsideTheGridAtEveryScale() {
+    void pluginDoesNotRegisterManaMetadataAsAnIngredient() throws Exception {
+        Class<?> registrationClass = Class.forName("mezz.jei.library.load.registration.IngredientManagerBuilder");
+        Object registration = registrationClass.getConstructor(ISubtypeManager.class, IColorHelper.class)
+                .newInstance(null, null);
+        registrationClass.getMethod("registerIngredients", IModPlugin.class).invoke(registration, new JeiPlugin());
+        IIngredientManager manager = (IIngredientManager) registrationClass.getMethod("build").invoke(registration);
+        assertThat(manager.getIngredientTypeChecked(SourceJeiIngredient.class)).contains(SourceJeiIngredient.TYPE);
+        assertThat(manager.getIngredientTypeChecked(ManaJeiDisplay.class)).isEmpty();
+    }
+
+    @Test
+    void manaIconTextRowsFollowDurationAndKeepRolesExactAmountsOutsideTheGridAtEveryScale() {
         try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
             BotaniaRecipeTypes.register();
             for (var declarations : List.of(List.<MachineRequirement>of(ManaRequirement.input(3_000_000_000L)),
@@ -80,12 +92,9 @@ class ManaRecipeLayoutTest {
                                     .sorted().toList());
                     assertRowsFit(layout, display, scale);
                     for (var row : layout.manaRows()) {
-                        assertThat(row.contains(row.x(), row.y())).isTrue();
-                        assertThat(row.contains(row.x() + 121.99, row.y() + 15.99)).isTrue();
-                        assertThat(row.contains(row.x() + 122, row.y() + 5)).isFalse();
-                        assertThat(row.contains(row.x() + 20, row.y() + 16)).isFalse();
-                        assertThat(row.contains(row.x() - 0.01, row.y())).isFalse();
-                        var mana = (ManaJeiIngredient) row.entry().ingredient();
+                        var mana = (ManaJeiDisplay) row.entry().ingredient();
+                        assertThat(row.entry().ingredientType()).isNull();
+                        assertThat(row.entry().renderer()).isNull();
                         assertThat(mana.amount()).isEqualTo(mana.input() ? 3_000_000_000L : Long.MAX_VALUE);
                         assertThat(row.entry().transferable()).isFalse();
                     }
@@ -151,12 +160,13 @@ class ManaRecipeLayoutTest {
             for (int scale = 1; scale <= 4; scale++) {
                 var old = MachineRecipeLayout.forDisplay(before, scale);
                 var layout = MachineRecipeLayout.forDisplay(after, scale);
-                assertThat(layout.durationTextY()).isEqualTo(old.durationTextY() + 36);
-                assertThat(layout.hostRequirementTextY()).isEqualTo(old.hostRequirementTextY() + 36);
-                assertThat(layout.levelRequirementSlotY(after, 0)).isEqualTo(old.levelRequirementSlotY(before, 0) + 36);
-                assertThat(layout.stageRequirementTextY(after)).isEqualTo(old.stageRequirementTextY(before) + 36);
-                assertThat(layout.smartInterfaceTextY(after)).isEqualTo(old.smartInterfaceTextY(before) + 36);
-                assertThat(layout.informationTextY(after)).isEqualTo(old.informationTextY(before) + 36);
+                assertThat(layout.durationTextY()).isEqualTo(old.durationTextY());
+                int manaHeight = layout.manaRows().stream().mapToInt(MachineRecipeLayout.ManaRowPlan::height).sum();
+                assertThat(layout.hostRequirementTextY()).isEqualTo(old.hostRequirementTextY() + manaHeight);
+                assertThat(layout.levelRequirementSlotY(after, 0)).isEqualTo(old.levelRequirementSlotY(before, 0) + manaHeight);
+                assertThat(layout.stageRequirementTextY(after)).isEqualTo(old.stageRequirementTextY(before) + manaHeight);
+                assertThat(layout.smartInterfaceTextY(after)).isEqualTo(old.smartInterfaceTextY(before) + manaHeight);
+                assertThat(layout.informationTextY(after)).isEqualTo(old.informationTextY(before) + manaHeight);
                 assertRowsFit(layout, after, scale);
             }
         }
@@ -186,43 +196,39 @@ class ManaRecipeLayoutTest {
     }
 
     @Test
-    void realSlotRegistrationUsesRoleAndFullRendererWithoutBackgroundOverlayOrItemTransferIcon() {
+    void manaMetadataHasNoTooltipsRecipeSlotsOrSlotHoverHighlightsAcrossPages() throws Exception {
         try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
             BotaniaRecipeTypes.register();
-            var layout = MachineRecipeLayout.forDisplay(display(List.of(ManaRequirement.input(10_000),
-                    ManaRequirement.output(3_000_000_000L)), Set.of()), 4);
-            List<Object[]> slots = new ArrayList<>();
-            List<Object[]> ingredients = new ArrayList<>();
-            List<ManaJeiIngredientRenderer> renderers = new ArrayList<>();
-            IRecipeSlotBuilder slot = (IRecipeSlotBuilder) Proxy.newProxyInstance(getClass().getClassLoader(),
-                    new Class<?>[]{IRecipeSlotBuilder.class}, (proxy, method, arguments) -> {
-                        switch (method.getName()) {
-                            case "setCustomRenderer" -> {
-                                assertThat(arguments[0]).isSameAs(ManaJeiIngredient.TYPE);
-                                renderers.add((ManaJeiIngredientRenderer) arguments[1]);
-                            }
-                            case "addIngredient" -> ingredients.add(arguments);
-                            case "setSlotName" -> { }
-                            default -> throw new AssertionError("Unexpected mana slot customization: " + method.getName());
-                        }
-                        return proxy;
-                    });
+            List<MachineRequirement> declarations = new ArrayList<>();
+            for (int index = 0; index < 40; index++) {
+                declarations.add(index % 2 == 0 ? ManaRequirement.input(3_000_000_000L + index)
+                        : ManaRequirement.output(Long.MAX_VALUE - index));
+            }
+            var display = display(declarations, Set.of());
+            var layout = MachineRecipeLayout.forDisplay(display, 4);
             IRecipeLayoutBuilder builder = (IRecipeLayoutBuilder) Proxy.newProxyInstance(getClass().getClassLoader(),
                     new Class<?>[]{IRecipeLayoutBuilder.class}, (proxy, method, arguments) -> {
-                        assertThat(method.getName()).isEqualTo("addSlot");
-                        slots.add(arguments);
-                        return slot;
+                        assertThat(method.getName()).isEqualTo("moveRecipeTransferButton");
+                        return null;
                     });
-            MachineRecipeCategory.addManaRows(builder, layout);
-            assertThat(slots).hasSize(2);
-            assertThat(ingredients).hasSize(2);
-            for (int index = 0; index < slots.size(); index++) {
-                var row = layout.manaRows().get(index);
-                assertThat(slots.get(index)).containsExactly(row.entry().role(), row.x(), row.y());
-                assertThat(ingredients.get(index)).containsExactly(ManaJeiIngredient.TYPE, row.entry().ingredient());
-                assertThat(renderers.get(index).getWidth()).isEqualTo(row.width());
-                assertThat(renderers.get(index).getHeight()).isEqualTo(row.height());
+            var category = CombinedAirManaRecipeLayoutTest.category();
+            category.setRecipe(builder, display, layout, text -> 20);
+            var slots = actualDetailSlots(layout, display);
+            assertThat(slots).isEmpty();
+            var widget = new MachineRecipeMetadataWidget(category, display, layout, slots);
+            List<Component> tips = new ArrayList<>();
+            var tooltip = CombinedAirManaRecipeLayoutTest.tooltip(tips);
+            for (var page : layout.metadataPages()) {
+                for (var row : layout.manaRows()) {
+                    if (row.y() < page.startY() || row.y() + row.height() > page.endY()) continue;
+                    double y = row.y() - page.startY() + 1;
+                    assertThat(widget.getSlotUnderMouse(row.x(), y)).isEmpty();
+                    widget.getTooltip(tooltip, row.x(), y);
+                    assertThat(tips).isEmpty();
+                }
+                widget.mouseScrolled(20, 20, 0, -1);
             }
+            assertThat(tips).isEmpty();
         }
     }
 
@@ -276,7 +282,7 @@ class ManaRecipeLayoutTest {
                     assertThat(layout.outputs().slots()).singleElement().satisfies(slot ->
                             assertThat(slot.entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE));
                     var slots = actualDetailSlots(layout, display);
-                    assertThat(slots).hasSize(count + 1);
+                    assertThat(slots).hasSize(1);
                     if (layout.metadataPages().isEmpty()) {
                         assertRowsFit(layout, display, scale);
                         assertActualSlotsFit(slots, layout, display, scale);
@@ -303,15 +309,6 @@ class ManaRecipeLayoutTest {
                                     .extracting(result -> result.slot()).isSameAs(slot);
                             assertThat(slot.isMouseOver(rect.getX() + rect.getWidth(), rect.getY())).isFalse();
                             assertThat(slot.isMouseOver(rect.getX(), rect.getY() + rect.getHeight())).isFalse();
-                            if (slot.getRole() != RecipeIngredientRole.RENDER_ONLY) {
-                                var ingredient = slot.getAllIngredients().findFirst().orElseThrow()
-                                        .getIngredient(ManaJeiIngredient.TYPE).orElseThrow();
-                                assertThat(ingredient.amount()).isBetween(3_000_000_000L, 3_000_000_000L + count - 1);
-                                assertThat(slot.getRole()).isEqualTo(ingredient.input()
-                                        ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT);
-                                assertThat(new ManaJeiIngredientRenderer().getTooltip(ingredient, TooltipFlag.NORMAL))
-                                        .containsExactly(ingredient.tooltip());
-                            }
                         }
                         assertThat(widget.getSlotUnderMouse(20, layout.metadataViewportHeight() - 1)).isEmpty();
                         widget.mouseScrolled(20, 20, 0, -1);
@@ -343,7 +340,6 @@ class ManaRecipeLayoutTest {
         var manager = (IIngredientManager) Proxy.newProxyInstance(ManaRecipeLayoutTest.class.getClassLoader(),
                 new Class<?>[]{IIngredientManager.class}, (proxy, method, arguments) -> {
                     if (!method.getName().equals("getIngredientHelper")) throw new AssertionError(method.getName());
-                    if (arguments[0] == ManaJeiIngredient.TYPE) return new ManaJeiIngredientHelper();
                     return Proxy.newProxyInstance(ManaRecipeLayoutTest.class.getClassLoader(), new Class<?>[]{IIngredientHelper.class},
                             (helper, helperMethod, values) -> {
                                 if (helperMethod.getName().equals("isValidIngredient")) return true;
@@ -374,7 +370,6 @@ class ManaRecipeLayoutTest {
                                 return slotMethod.invoke(actual, values);
                             });
                 });
-        MachineRecipeCategory.addManaRows(builder, layout);
         MachineRecipeCategory.addLevelRequirementSlots(builder, layout, display, label -> 20);
         List<IRecipeSlotDrawable> slots = new ArrayList<>();
         for (var slot : builders) {
@@ -406,12 +401,14 @@ class ManaRecipeLayoutTest {
             assertThat(source.y()).isGreaterThanOrEqualTo(previousBottom);
             previousBottom = source.y() + 10;
         }
+        assertThat(layout.durationTextY()).isGreaterThanOrEqualTo(previousBottom);
+        previousBottom = layout.durationTextY() + MachineRecipeLayout.TEXT_LINE_SPACING;
         for (var row : layout.manaRows()) {
             assertThat(row.y()).isGreaterThanOrEqualTo(previousBottom);
             assertThat(row.x() + row.width()).isLessThanOrEqualTo(MachineRecipeLayout.CATEGORY_WIDTH);
             previousBottom = row.y() + row.height();
         }
-        assertThat(layout.durationTextY()).isGreaterThanOrEqualTo(previousBottom);
+        assertThat(layout.hostRequirementTextY()).isGreaterThanOrEqualTo(previousBottom);
         int categoryHeight = switch (scale) { case 1 -> 300; case 2 -> 280; case 3 -> 220; default -> 150; };
         assertThat(layout.durationTextY() + 10).isLessThanOrEqualTo(categoryHeight);
         assertThat(layout.informationTextY(display)).isGreaterThan(layout.durationTextY());

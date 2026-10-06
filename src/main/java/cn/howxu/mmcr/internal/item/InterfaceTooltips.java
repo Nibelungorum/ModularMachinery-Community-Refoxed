@@ -40,9 +40,7 @@ public final class InterfaceTooltips {
                         Component.translatable("tooltip.mmcr.fluxnetworks.configure"));
             }
             if (PneumaticIds.INPUT.equals(kind.id()) || PneumaticIds.OUTPUT.equals(kind.id())) {
-                return List.of(Component.translatable(PneumaticIds.INPUT.equals(kind.id())
-                                ? "tooltip.mmcr.pneumaticcraft.input" : "tooltip.mmcr.pneumaticcraft.output"),
-                        Component.translatable("tooltip.mmcr.pneumaticcraft.volume", 10_000),
+                return List.of(Component.translatable("tooltip.mmcr.pneumaticcraft.volume", 10_000),
                         Component.translatable("tooltip.mmcr.pneumaticcraft.safe_pressure", 20),
                         Component.translatable("tooltip.mmcr.pneumaticcraft.equalization"));
             }

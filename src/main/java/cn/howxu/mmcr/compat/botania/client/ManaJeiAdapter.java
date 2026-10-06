@@ -8,19 +8,20 @@ import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
 
-/** Neutral non-transferable adapter for both mana directions.
+/** Non-transferable metadata adapter; mana never becomes a JEI ingredient slot.
  * @author howxu <dev@howxu.cn>
  */
 public final class ManaJeiAdapter implements JeiIngredientAdapter {
     @Override public ResourceLocation typeId() { return BotaniaManaIds.MANA; }
-    @Override public IIngredientType<?> ingredientType() { return ManaJeiIngredient.TYPE; }
+    @Override public @Nullable IIngredientType<?> ingredientType() { return null; }
 
     @Override
     public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
-        var mana = new ManaJeiIngredient(entry.amount(), entry.role() == RecipeIngredientRole.INPUT);
+        var mana = new ManaJeiDisplay(entry.amount(), entry.role() == RecipeIngredientRole.INPUT);
         return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(), mana,
                 (int) Math.min(entry.amount(), Integer.MAX_VALUE), 1F, null, false));
     }

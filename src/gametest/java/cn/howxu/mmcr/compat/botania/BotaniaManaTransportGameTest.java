@@ -9,6 +9,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -32,6 +33,7 @@ import vazkii.botania.api.mana.ManaReceiver;
 import vazkii.botania.api.mana.spark.ManaSparkAttachable;
 import vazkii.botania.api.mana.spark.ManaSparkHelper;
 import vazkii.botania.common.block.block_entity.mana.ManaPoolBlockEntity;
+import vazkii.botania.common.block.BotaniaBlocks;
 import vazkii.botania.common.block.block_entity.mana.ManaSpreaderBlockEntity;
 import vazkii.botania.common.component.BotaniaDataComponents;
 import vazkii.botania.common.entity.ManaBurstEntity;
@@ -46,6 +48,10 @@ import java.util.List;
 /** Real Botania transport, item, wand and persistence paths. @author howxu <dev@howxu.cn> */
 public final class BotaniaManaTransportGameTest {
     public void capabilitiesWandAndPersistence(GameTestHelper helper) {
+        helper.assertTrue(BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL)
+                        && BuiltInRegistries.ITEM.get(BotaniaManaIds.CREATIVE_POOL) != Items.AIR
+                        && BuiltInRegistries.ITEM.get(BotaniaManaIds.CREATIVE_POOL) == BotaniaBlocks.CREATIVE_MANA_POOL.asItem(),
+                "The JEI mana icon resolves the registered native creative mana pool, never AIR");
         ServerPlayer player = BotaniaManaGameTestFixtures.wandPlayer(helper);
         for (IOType io : List.of(IOType.INPUT, IOType.OUTPUT)) {
             BlockPos pos = new BlockPos(io == IOType.INPUT ? 1 : 3, 1, 1);

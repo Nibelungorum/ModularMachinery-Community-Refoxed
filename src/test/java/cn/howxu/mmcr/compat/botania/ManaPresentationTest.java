@@ -5,24 +5,17 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.botania.client.ManaJeiAdapter;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredient;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientHelper;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientRenderer;
+import cn.howxu.mmcr.compat.botania.client.ManaJeiDisplay;
 import cn.howxu.mmcr.compat.jei.JeiIngredientAdapterRegistry;
 import cn.howxu.mmcr.compat.jei.MachineRecipeDisplay;
 import cn.howxu.mmcr.compat.jei.RecipeIoEntry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.ReadableNumber;
-import com.google.gson.JsonParser;
-import com.mojang.serialization.JsonOps;
-import com.mojang.serialization.Codec;
-import mezz.jei.api.ingredients.subtypes.UidContext;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.locale.Language;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.TooltipFlag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -44,45 +37,34 @@ class ManaPresentationTest {
     @BeforeAll static void bootstrap() throws Exception { TestBootstrap.bootstrap(); }
 
     @Test
-    void adapterAndHelperRetainExactLongIdentityDirectionAndNonTransferableSemantics() {
+    void adapterRetainsExactLongMetadataAndDirectionWithoutJeiIngredientsOrTransfer() {
         var adapter = new ManaJeiAdapter();
-        var helper = new ManaJeiIngredientHelper();
-        var renderer = new ManaJeiIngredientRenderer();
         assertThat(adapter.transferHandler()).isEmpty();
+        assertThat(adapter.ingredientType()).isNull();
         for (long amount : List.of(1L, 3_000_000_000L, Long.MAX_VALUE)) {
             for (boolean input : List.of(true, false)) {
                 var requirement = input ? ManaRequirement.input(amount) : ManaRequirement.output(amount);
                 var role = input ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT;
                 var entry = adapter.display(new RecipeIoEntry(role, BotaniaManaIds.MANA, requirement, amount, 1F)).orElseThrow();
-                var ingredient = (ManaJeiIngredient) entry.ingredient();
-                assertThat(ingredient).isEqualTo(new ManaJeiIngredient(amount, input));
-                assertThat(entry.ingredientType()).isSameAs(ManaJeiIngredient.TYPE);
+                var mana = (ManaJeiDisplay) entry.ingredient();
+                assertThat(mana).isEqualTo(new ManaJeiDisplay(amount, input));
+                assertThat(entry.ingredientType()).isNull();
+                assertThat(entry.isTextOnly()).isTrue();
+                assertThat(entry.renderer()).isNull();
                 assertThat(entry.role()).isEqualTo(role);
                 assertThat(entry.transferable()).isFalse();
                 assertThat(entry.count()).isEqualTo((int) Math.min(amount, Integer.MAX_VALUE));
-                assertThat(helper.getAmount(ingredient)).isEqualTo(amount);
-                assertThat(helper.getUid(ingredient, UidContext.Ingredient)).isEqualTo(BotaniaManaIds.MANA);
-                assertThat(helper.getResourceLocation(ingredient)).isEqualTo(BotaniaManaIds.MANA);
-                assertThat(helper.copyIngredient(ingredient)).isSameAs(ingredient);
-                assertThat(helper.copyWithAmount(ingredient, 7)).isEqualTo(new ManaJeiIngredient(7, input));
-                assertThat(helper.normalizeIngredient(ingredient)).isEqualTo(new ManaJeiIngredient(1, input));
-                assertThat(ingredient.tooltip()).isEqualTo(Component.translatable(input
+                assertThat(mana.label()).isEqualTo(Component.translatable(input
                         ? "jei.mmcr.machine_recipe.mana_input" : "jei.mmcr.machine_recipe.mana_output",
-                        ReadableNumber.formatExact(amount)));
-                assertThat(renderer.getTooltip(ingredient, TooltipFlag.NORMAL)).containsExactly(ingredient.tooltip());
-                var encoded = ManaJeiIngredient.CODEC.encodeStart(JsonOps.INSTANCE, ingredient).getOrThrow();
-                assertThat(encoded.getAsJsonObject().get("amount").getAsLong()).isEqualTo(amount);
-                assertThat(ManaJeiIngredient.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow()).isEqualTo(ingredient);
+                        ReadableNumber.format(amount)));
             }
         }
     }
 
     @Test
-    void rejectsNonpositiveAmountsInBothDirectAndSerializedDeclarations() {
+    void rejectsNonpositiveMetadataAmounts() {
         for (long invalid : List.of(0L, -1L, Long.MIN_VALUE)) {
-            assertThatThrownBy(() -> new ManaJeiIngredient(invalid, true)).isInstanceOf(IllegalArgumentException.class);
-            assertThat(ManaJeiIngredient.CODEC.parse(JsonOps.INSTANCE,
-                    JsonParser.parseString("{\"amount\":" + invalid + "}")).error()).isPresent();
+            assertThatThrownBy(() -> new ManaJeiDisplay(invalid, true)).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -96,12 +78,12 @@ class ManaPresentationTest {
             assertThat(JeiIngredientAdapterRegistry.get(BotaniaManaIds.MANA).orElseThrow()).isInstanceOf(ManaJeiAdapter.class);
             var entries = MachineRecipeDisplay.from(recipe).entries();
             assertThat(entries).extracting(entry -> entry.ingredient()).containsExactly(
-                    new ManaJeiIngredient(3_000_000_000L, true), new ManaJeiIngredient(Long.MAX_VALUE, false));
+                    new ManaJeiDisplay(3_000_000_000L, true), new ManaJeiDisplay(Long.MAX_VALUE, false));
         }
     }
 
     @Test
-    void bothLanguagesGiveDirectionAwareTooltipsWithUnclampedExactTotals() throws Exception {
+    void bothLanguagesGiveDirectionAwareLabelsWithoutPoolCapacityClamping() throws Exception {
         Language previous = Language.getInstance();
         try {
             for (String language : List.of("en_us", "zh_cn")) {
@@ -119,10 +101,11 @@ class ManaPresentationTest {
                 assertThat(Component.translatable("jei.mmcr.machine_recipe.details_page", 1, 2).getString())
                         .isEqualTo(language.equals("en_us") ? "< Details 1/2 >" : "< 详情 1/2 >");
                 for (boolean input : List.of(true, false)) {
-                    var ingredient = new ManaJeiIngredient(3_000_000_000L, input);
+                    var ingredient = new ManaJeiDisplay(3_000_000_000L, input);
                     String key = input ? "jei.mmcr.machine_recipe.mana_input" : "jei.mmcr.machine_recipe.mana_output";
-                    assertThat(ingredient.tooltip().getString()).contains("3,000,000,000")
-                            .isEqualTo(translations.get(key).replace("%s", "3,000,000,000"));
+                    assertThat(ingredient.label().getString())
+                            .isEqualTo(translations.get(key).replace("%s", ReadableNumber.format(ingredient.amount())))
+                            .doesNotContain("3,000,000,000");
                 }
             }
         } finally {
@@ -131,26 +114,16 @@ class ManaPresentationTest {
     }
 
     @Test
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    void ingredientHelperAndRendererInitializeWithNativeBotaniaActivelyForbidden() throws Exception {
+    void metadataAndAdapterInitializeWithNativeBotaniaActivelyForbidden() throws Exception {
         var loader = new NeutralIngredientLoader(getClass().getClassLoader());
-        Class<?> ingredientClass = loader.loadClass(ManaJeiIngredient.class.getName());
+        Class<?> ingredientClass = loader.loadClass(ManaJeiDisplay.class.getName());
         Object ingredient = ingredientClass.getConstructor(long.class, boolean.class).newInstance(3_000_000_000L, true);
-        assertThat(ingredientClass.getField("TYPE").get(null)).isNotNull();
-        Codec codec = (Codec) ingredientClass.getField("CODEC").get(null);
-        Object encoded = codec.encodeStart(JsonOps.INSTANCE, ingredient).getOrThrow();
-        assertThat(ingredientClass.getMethod("amount").invoke(codec.parse(JsonOps.INSTANCE, encoded).getOrThrow()))
+        assertThat(ingredientClass.getMethod("amount").invoke(ingredient))
                 .isEqualTo(3_000_000_000L);
-        Class<?> helperClass = loader.loadClass(ManaJeiIngredientHelper.class.getName());
-        Object helper = helperClass.getConstructor().newInstance();
-        assertThat(helperClass.getMethod("getAmount", ingredientClass).invoke(helper, ingredient)).isEqualTo(3_000_000_000L);
-        assertThat(helperClass.getMethod("normalizeIngredient", ingredientClass).invoke(helper, ingredient)).isNotNull();
-        Class<?> rendererClass = loader.loadClass(ManaJeiIngredientRenderer.class.getName());
-        Object renderer = rendererClass.getConstructor().newInstance();
-        assertThat(rendererClass.getMethod("getWidth").invoke(renderer)).isEqualTo(122);
-        assertThat(rendererClass.getMethod("getHeight").invoke(renderer)).isEqualTo(16);
-        assertThat(rendererClass.getMethod("getTooltip", ingredientClass, TooltipFlag.class)
-                .invoke(renderer, ingredient, TooltipFlag.NORMAL)).isInstanceOf(List.class);
+        assertThat(ingredientClass.getMethod("label").invoke(ingredient)).isInstanceOf(Component.class);
+        Class<?> adapterClass = loader.loadClass(ManaJeiAdapter.class.getName());
+        Object adapter = adapterClass.getConstructor().newInstance();
+        assertThat(adapterClass.getMethod("ingredientType").invoke(adapter)).isNull();
         assertThat(loader.forbiddenLoads).isEmpty();
     }
 

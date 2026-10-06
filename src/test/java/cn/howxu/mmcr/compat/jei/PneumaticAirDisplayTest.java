@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeTypes;
@@ -413,8 +414,8 @@ class PneumaticAirDisplayTest {
         List<ItemLike> icons = new ArrayList<>();
         new MachineRecipeCategory(guiHelper(icons), ID, ResourceLocation.parse("mmcr:test_cube"));
 
-        // Controller and existing stress icon only: air does not resolve to the registry's default item.
-        assertThat(icons).hasSize(2);
+        // The optional mana icon is valid; missing air must not add a default item icon.
+        assertThat(icons).hasSize(2 + (BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL) ? 1 : 0));
         assertThat(display(builder().inputAir(0, 4F).build()).airInputs()).singleElement()
                 .satisfies(air -> assertTranslation(air.label(true), "air_condition", "4"));
     }

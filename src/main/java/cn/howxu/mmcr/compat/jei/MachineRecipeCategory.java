@@ -3,8 +3,8 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredient;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientRenderer;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.botania.client.ManaJeiDisplay;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -111,6 +111,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IDrawable sourceSlotBackground;
     private final IDrawable stressIcon;
     private final @Nullable IDrawable airIcon;
+    private final @Nullable IDrawable manaIcon;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
@@ -126,6 +127,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 BuiltInRegistries.ITEM.get(ResourceLocation.parse("create:cogwheel")));
         this.airIcon = BuiltInRegistries.ITEM.containsKey(PneumaticIds.ADVANCED_PRESSURE_TUBE)
                 ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(PneumaticIds.ADVANCED_PRESSURE_TUBE))
+                : null;
+        this.manaIcon = BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL)
+                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(BotaniaManaIds.CREATIVE_POOL))
                 : null;
     }
 
@@ -156,11 +160,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        setRecipe(builder, recipe, MachineRecipeLayout.forDisplay(recipe), Minecraft.getInstance().font::width);
+    }
+
+    void setRecipe(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                   ToIntFunction<Component> textWidth) {
         addRegion(builder, recipe, layout.inputs(), true);
         addRegion(builder, recipe, layout.outputs(), false);
-        addManaRows(builder, layout);
-        addLevelRequirementSlots(builder, layout, recipe, Minecraft.getInstance().font::width);
+        addLevelRequirementSlots(builder, layout, recipe, textWidth);
         addTransferSlots(builder, recipe);
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
@@ -241,6 +248,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
+        for (var row : layout.manaRows()) {
+            drawManaLine(((ManaJeiDisplay) row.entry().ingredient()).label(), guiGraphics,
+                    textX, (int) (row.y() / TEXT_SCALE));
+        }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
         if (!hostRequirement.getString().isEmpty()) {
             y = layout.hostRequirementTextY();
@@ -291,6 +302,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             airIcon.draw(guiGraphics, 0, 0);
             guiGraphics.pose().popPose();
             x += (int) (airIcon.getWidth() * iconScale) + 2;
+        }
+        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
+    }
+
+    private void drawManaLine(Component label, GuiGraphics guiGraphics, int x, int y) {
+        var font = Minecraft.getInstance().font;
+        if (manaIcon != null) {
+            float iconScale = (float) font.lineHeight / manaIcon.getHeight();
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(x, y, 0F);
+            guiGraphics.pose().scale(iconScale, iconScale, 1F);
+            manaIcon.draw(guiGraphics, 0, 0);
+            guiGraphics.pose().popPose();
+            x += (int) (manaIcon.getWidth() * iconScale) + 2;
         }
         guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
     }
@@ -530,16 +555,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.RegionPlan region, boolean input) {
         for (MachineRecipeLayout.SlotPlan slot : region.slots()) {
             addEntry(builder, recipe, slot, input);
-        }
-    }
-
-    static void addManaRows(IRecipeLayoutBuilder builder, MachineRecipeLayout layout) {
-        int index = 0;
-        for (var row : layout.manaRows()) {
-            builder.addSlot(row.entry().role(), row.x(), row.y())
-                    .setSlotName("mmcr_details_mana_" + index++)
-                    .setCustomRenderer(ManaJeiIngredient.TYPE, new ManaJeiIngredientRenderer())
-                    .addIngredient(ManaJeiIngredient.TYPE, (ManaJeiIngredient) row.entry().ingredient());
         }
     }
 

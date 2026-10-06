@@ -68,8 +68,11 @@ class CombinedAirManaRecipeLayoutTest {
                 assertThat(layout.inputs().hiddenEntries()).allSatisfy(entry ->
                         assertThat(entry.displayEntry().typeId()).isNotIn(BotaniaManaIds.MANA, PneumaticIds.AIR));
                 assertThat(layout.manaRows().getFirst().y()).isGreaterThan(layout.inputs().overflowSlot().y() + 18);
-                assertThat(layout.durationTextY()).isEqualTo(layout.manaRows().getLast().y() + 18);
-                assertThat(layout.hostRequirementTextY()).isEqualTo(layout.airTextY(display) + 30);
+                assertThat(layout.manaRows().getFirst().y()).isEqualTo(layout.airTextY(display) + 30);
+                assertThat(layout.manaRows()).allSatisfy(row ->
+                        assertThat(row.y()).isGreaterThan(layout.durationTextY()));
+                assertThat(layout.hostRequirementTextY()).isEqualTo(
+                        layout.manaRows().getLast().y() + layout.manaRows().getLast().height());
                 assertThat(layout.stageRequirementTextY(display)).isEqualTo(layout.hostRequirementTextY() + 10);
                 assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.stageRequirementTextY(display) + 10);
                 assertThat(layout.informationTextY(display)).isLessThanOrEqualTo(layout.height());
@@ -101,6 +104,8 @@ class CombinedAirManaRecipeLayoutTest {
             for (int scale = 1; scale <= 5; scale++) {
                 var layout = MachineRecipeLayout.forDisplay(display, scale);
                 assertThat(layout.metadataPages()).hasSizeGreaterThan(1);
+                assertThat(layout.manaRows()).allSatisfy(row ->
+                        assertThat(row.y()).isGreaterThan(layout.durationTextY()));
                 assertThat(layout.manaRows()).allSatisfy(row -> assertThat(layout.metadataPages().stream()
                         .filter(page -> row.y() >= page.startY() && row.y() + row.height() <= page.endY()).count())
                         .isEqualTo(1L));
@@ -144,7 +149,7 @@ class CombinedAirManaRecipeLayoutTest {
         return lines;
     }
 
-    private static ITooltipBuilder tooltip(List<Component> lines) {
+    static ITooltipBuilder tooltip(List<Component> lines) {
         return (ITooltipBuilder) Proxy.newProxyInstance(CombinedAirManaRecipeLayoutTest.class.getClassLoader(),
                 new Class<?>[]{ITooltipBuilder.class}, (proxy, method, arguments) -> {
                     if (method.getName().equals("addAll")) {
@@ -156,7 +161,7 @@ class CombinedAirManaRecipeLayoutTest {
                 });
     }
 
-    private static MachineRecipeCategory category() {
+    static MachineRecipeCategory category() {
         IDrawableStatic drawable = (IDrawableStatic) Proxy.newProxyInstance(CombinedAirManaRecipeLayoutTest.class.getClassLoader(),
                 new Class<?>[]{IDrawableStatic.class}, (proxy, method, arguments) ->
                         method.getReturnType() == int.class ? 16 : null);

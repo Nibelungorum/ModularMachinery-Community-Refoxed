@@ -4,9 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredientHelper;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredientRenderer;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredient;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientHelper;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiIngredientRenderer;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.publicapi.event.RegisterJeiRecipeInformationEvent;
@@ -56,8 +53,6 @@ public final class JeiPlugin implements IModPlugin {
     public void registerIngredients(IModIngredientRegistration registration) {
         registration.register(SourceJeiIngredient.TYPE, List.of(), new SourceJeiIngredientHelper(),
                 new SourceJeiIngredientRenderer(), SourceJeiIngredient.CODEC);
-        registration.register(ManaJeiIngredient.TYPE, List.of(), new ManaJeiIngredientHelper(),
-                new ManaJeiIngredientRenderer(), ManaJeiIngredient.CODEC);
     }
 
     @Override

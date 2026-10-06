@@ -6,6 +6,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.botania.BotaniaBridge;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworksClient;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
@@ -153,6 +154,10 @@ public class Client {
         if (ArsNouveauBridge.get().available()) {
             registerOptionalMenuScreen(event, ModUIs.SOURCE_PORT,
                     "cn.howxu.mmcr.client.gui.SourceHatchScreen");
+        }
+        if (PneumaticCraftBridge.get().available()) {
+            registerOptionalMenuScreen(event, ModUIs.AIR_PORT,
+                    "cn.howxu.mmcr.compat.pneumaticcraft.client.AirPortScreen");
         }
     }
 
