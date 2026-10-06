@@ -296,7 +296,6 @@ class PneumaticAirDataGenTest {
                     var lines = InterfaceTooltips.tooltipLines(fixtureBlock(kind)).stream()
                             .map(component -> (TranslatableContents) component.getContents()).toList();
                     assertThat(lines.stream().map(TranslatableContents::getKey).toList()).containsExactly(
-                            "tooltip.mmcr.pneumaticcraft." + kind.ioType().getSerializedName(),
                             "tooltip.mmcr.pneumaticcraft.volume", "tooltip.mmcr.pneumaticcraft.safe_pressure",
                             "tooltip.mmcr.pneumaticcraft.equalization");
                     for (var line : lines) {
@@ -304,8 +303,8 @@ class PneumaticAirDataGenTest {
                         assertThat(format).isNotBlank();
                         assertThat(String.format(Locale.ROOT, format, line.getArgs())).doesNotContain("%s");
                     }
-                    assertThat(lines.get(1).getArgs()).containsExactly(10_000);
-                    assertThat(lines.get(2).getArgs()).containsExactly(20);
+                    assertThat(lines.get(0).getArgs()).containsExactly(10_000);
+                    assertThat(lines.get(1).getArgs()).containsExactly(20);
                 }
             }
         }

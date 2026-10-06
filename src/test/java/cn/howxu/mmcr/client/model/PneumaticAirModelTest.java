@@ -100,9 +100,9 @@ class PneumaticAirModelTest {
                 assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
                 assertThat(description.baseTextureSource()).isEqualTo(MachineAppearanceSpec.defaults().formedPortTextureSource());
                 assertThat(description.overlayFaces()).isEqualTo(EnumSet.allOf(Direction.class));
-                assertThat(description.overlayTextures()).containsExactly(MMCR.id("block/overlay/base/energy"),
+                assertThat(description.overlayTextures()).containsExactly(MMCR.id("block/overlay/base/pnc/air"),
                         MMCR.id("block/overlay/direction/" + kind.ioType().getSerializedName()),
-                        MMCR.id("block/overlay/type/energy"), MMCR.id("block/overlay/tier/big"));
+                        MMCR.id("block/overlay/tier/normal"));
                 for (var texture : description.overlayTextures()) {
                     try (var resource = getClass().getResourceAsStream("/assets/" + texture.getNamespace()
                             + "/textures/" + texture.getPath() + ".png")) {
