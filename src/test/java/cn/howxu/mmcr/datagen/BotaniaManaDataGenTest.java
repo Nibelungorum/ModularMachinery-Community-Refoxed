@@ -222,8 +222,11 @@ class BotaniaManaDataGenTest {
             Map<ResourceLocation, TagBuilder> tags = (Map<ResourceLocation, TagBuilder>) builders.get(provider);
             for (IOType io : List.of(IOType.INPUT, IOType.OUTPUT)) {
                 ResourceLocation id = MMCR.id(io == IOType.INPUT ? BotaniaManaIds.INPUT : BotaniaManaIds.OUTPUT);
-                for (String tag : List.of("ports", "mana_ports", "botania_ports", "mana_" + io.getSerializedName() + "_ports")) {
-                    assertThat(tags.get(MMCR.id(tag)).build().stream().filter(entry -> entry.getId().equals(id)).toList())
+                for (ResourceLocation tag : List.of(MMCR.id("ports"), MMCR.id("mana_ports"), MMCR.id("botania_ports"),
+                        MMCR.id("mana_" + io.getSerializedName() + "_ports"),
+                        ResourceLocation.fromNamespaceAndPath("botania", "mana_pools"),
+                        ResourceLocation.fromNamespaceAndPath("botania", "all_mana_pools"))) {
+                    assertThat(tags.get(tag).build().stream().filter(entry -> entry.getId().equals(id)).toList())
                             .singleElement().satisfies(entry -> {
                                 assertThat(entry.isRequired()).isFalse();
                                 assertThat(entry.isTag()).isFalse();

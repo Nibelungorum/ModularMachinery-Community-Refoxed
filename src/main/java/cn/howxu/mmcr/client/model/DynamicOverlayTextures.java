@@ -35,9 +35,8 @@ public final class DynamicOverlayTextures {
         if (FluxNetworkOverlay.isPort(kind)) {
             return FluxNetworkOverlay.textures(kind);
         }
-        if (PneumaticIds.INPUT.equals(kind.id()) || PneumaticIds.OUTPUT.equals(kind.id())) {
-            return ImmutableList.of(baseOverlay("energy"), directionOverlay(kind.ioType()),
-                    typeOverlay("energy"), tierOverlay("big"));
+        if (PneumaticIds.isPneumaticPorts(kind.id())) {
+            return ImmutableList.of(baseOverlay("pnc/air"), directionOverlay(kind.ioType()), tierOverlay("normal"));
         }
         // for ae2
         ResourceLocation compatibilityOverlay = compatibilityOverlay(kind.id());

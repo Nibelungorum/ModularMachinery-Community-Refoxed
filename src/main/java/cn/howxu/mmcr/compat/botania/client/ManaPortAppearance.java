@@ -1,28 +1,20 @@
 package cn.howxu.mmcr.compat.botania.client;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.client.model.generators.BlockStateProvider;
 
-import java.util.Map;
-
-/** Central resource entry for the native pool shape and liquid.
+/** Central resource entry for the fixed pool models and mana liquid.
  * @author howxu <dev@howxu.cn>
  */
 public final class ManaPortAppearance {
     private ManaPortAppearance() {}
 
-    public static ResourceLocation model() {
-        return ResourceLocation.parse("botania:block/mana_pool");
-    }
-
-    public static ResourceLocation itemModel() { return model(); }
-
-    public static Map<String, ResourceLocation> wallTextures() {
-        return Map.of("bottom", ResourceLocation.parse("botania:block/mana_pool_bottom"),
-                "inside", ResourceLocation.parse("botania:block/mana_pool_inside"),
-                "side", ResourceLocation.parse("botania:block/mana_pool_side"),
-                "top", ResourceLocation.parse("botania:block/mana_pool_top"));
+    public static ResourceLocation model(IOType ioType) {
+        return MMCR.id("block/mana_pool_" + ioType.getSerializedName());
     }
 
     public static ResourceLocation manaTexture() {
@@ -30,9 +22,7 @@ public final class ManaPortAppearance {
     }
 
     public static void generateModels(BlockStateProvider provider, Block block, String name) {
-        var model = provider.models().withExistingParent(name,
-                model().withPath("block/shapes/mana_pool"));
-        wallTextures().forEach(model::texture);
-        provider.simpleBlockWithItem(block, model);
+        IOType ioType = BotaniaManaIds.INPUT.equals(name) ? IOType.INPUT : IOType.OUTPUT;
+        provider.simpleBlockWithItem(block, provider.models().getExistingFile(model(ioType)));
     }
 }

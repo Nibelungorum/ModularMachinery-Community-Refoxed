@@ -11,6 +11,7 @@ import vazkii.botania.api.block.WandHUD;
 import vazkii.botania.client.core.helper.RenderHelper;
 import vazkii.botania.client.gui.HUDHandler;
 import vazkii.botania.common.item.BotaniaItems;
+import vazkii.botania.common.item.ManaTabletItem;
 
 /** Native wand HUD with real inventory and a fixed item-transfer direction.
  * @author howxu <dev@howxu.cn>
@@ -36,7 +37,9 @@ public final class ManaWandHud implements WandHUD {
         try {
             RenderHelper.drawTexturedModalRect(gui, HUDHandler.manaBar, centerX - 11, centerY + 30,
                     pool.isOutputtingPower() ? 22 : 0, 38, 22, 15);
-            gui.renderItem(new ItemStack(BotaniaItems.MANA_TABLET), centerX - 31, centerY + 30);
+            ItemStack tablet = new ItemStack(BotaniaItems.MANA_TABLET);
+            ManaTabletItem.setStackCreative(tablet);
+            gui.renderItem(tablet, centerX - 31, centerY + 30);
             gui.renderItem(poolStack, centerX + 15, centerY + 30);
         } finally {
             RenderSystem.setShaderColor(1F, 1F, 1F, 1F);

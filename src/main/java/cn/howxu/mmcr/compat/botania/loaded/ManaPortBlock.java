@@ -3,15 +3,11 @@ package cn.howxu.mmcr.compat.botania.loaded;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.MachinePort;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.LinkedAppearanceBlockEntity;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
@@ -27,7 +23,6 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.EntityCollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import org.jetbrains.annotations.Nullable;
 import vazkii.botania.common.entity.ManaBurstEntity;
 
 import java.util.function.Supplier;
@@ -83,17 +78,6 @@ public final class ManaPortBlock extends Block implements EntityBlock, MachinePo
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                                Player player, InteractionHand hand, BlockHitResult hit) {
         return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
-    }
-
-    @Override
-    public BlockState getAppearance(BlockState state, BlockAndTintGetter level, BlockPos pos, Direction side,
-                                    @Nullable BlockState sourceState, @Nullable BlockPos sourcePos) {
-        if (!(level.getBlockEntity(pos) instanceof LinkedAppearanceBlockEntity port)
-                || port.linkedControllerPositions().isEmpty() || port.appearanceSource().overrideTexture() != null) {
-            return state;
-        }
-        BlockState appearance = BuiltInRegistries.BLOCK.get(port.appearanceSource().blockId()).defaultBlockState();
-        return Block.isShapeFullBlock(appearance.getShape(level, pos)) ? appearance : state;
     }
 
     @Override

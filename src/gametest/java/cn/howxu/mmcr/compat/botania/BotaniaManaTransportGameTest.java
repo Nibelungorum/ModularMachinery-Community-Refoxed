@@ -38,6 +38,7 @@ import vazkii.botania.common.entity.ManaBurstEntity;
 import vazkii.botania.common.entity.ManaSparkEntity;
 import vazkii.botania.common.item.BotaniaItems;
 import vazkii.botania.common.item.ManaTabletItem;
+import vazkii.botania.common.lib.BotaniaTags;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +50,13 @@ public final class BotaniaManaTransportGameTest {
         for (IOType io : List.of(IOType.INPUT, IOType.OUTPUT)) {
             BlockPos pos = new BlockPos(io == IOType.INPUT ? 1 : 3, 1, 1);
             ManaPortBlockEntity port = BotaniaManaGameTestFixtures.port(helper, pos, io);
+            helper.assertTrue(port.getBlockState().is(BotaniaTags.Blocks.MANA_POOLS)
+                            && port.getBlockState().is(BotaniaTags.Blocks.ALL_MANA_POOLS),
+                    io + " pool resolves the native ordinary and all-pool block tags");
+            ItemStack poolStack = new ItemStack(port.getBlockState().getBlock());
+            helper.assertTrue(poolStack.is(BotaniaTags.Items.MANA_POOLS)
+                            && poolStack.is(BotaniaTags.Items.ALL_MANA_POOLS),
+                    io + " pool item resolves the native ordinary and all-pool item tags");
             port.storage().setAmount(12_345);
             ManaReceiver handler = ManaReceiver.LOOKUP.find(helper.getLevel(), helper.absolutePos(pos), null);
             helper.assertTrue(handler == port.externalHandler(), "Null side exposes the stable native pool host");
@@ -123,7 +131,7 @@ public final class BotaniaManaTransportGameTest {
             port.linkControllerAppearanceSource(linkedController,
                     new MachineAppearanceSpec.TextureSource(ResourceLocation.withDefaultNamespace("stone"), null));
             helper.assertTrue(port.getBlockState().getAppearance(helper.getLevel(), port.getBlockPos(), Direction.UP,
-                            null, null).is(Blocks.STONE), "Independent pool resolves the linked casing appearance");
+                            null, null).equals(port.getBlockState()), "Linked casing never replaces the fixed pool appearance");
             CompoundTag saved = port.saveWithFullMetadata(helper.getLevel().registryAccess());
             CompoundTag update = port.getUpdateTag(helper.getLevel().registryAccess());
             helper.assertTrue(update.getCompound("mana").getInt("amount") == 12_345,
@@ -135,7 +143,7 @@ public final class BotaniaManaTransportGameTest {
             restored.loadWithComponents(saved, helper.getLevel().registryAccess());
             helper.assertTrue(restored.linkedControllerPositions().contains(linkedController)
                             && restored.getBlockState().getAppearance(helper.getLevel(), restored.getBlockPos(), Direction.UP,
-                            null, null).is(Blocks.STONE), "Saving/restoring mana also preserves the linked appearance lifecycle");
+                            null, null).equals(restored.getBlockState()), "Saving/restoring retains controller links and the fixed pool appearance");
             ManaViewFacet facet = restored.capabilitySnapshot().capabilities().getFirst()
                     .facet(ManaViewFacet.class).orElseThrow();
             helper.assertTrue(restored.storage().amount() == 12_345 && facet.amount() == 12_345
@@ -188,6 +196,9 @@ public final class BotaniaManaTransportGameTest {
             target.linkControllerAppearanceSource(helper.absolutePos(new BlockPos(4, 1, 3)),
                     new MachineAppearanceSpec.TextureSource(ResourceLocation.withDefaultNamespace("dirt"),
                             ResourceLocation.withDefaultNamespace("block/dirt")));
+            helper.assertTrue(target.getBlockState().getAppearance(helper.getLevel(), target.getBlockPos(), Direction.UP,
+                            null, null).equals(target.getBlockState()),
+                    io + " explicit controller texture override never replaces the fixed pool appearance");
             var fixedKind = target.kind();
             var snapshot = target.capabilitySnapshot();
             ManaViewFacet facet = snapshot.capabilities().getFirst().facet(ManaViewFacet.class).orElseThrow();
@@ -220,8 +231,8 @@ public final class BotaniaManaTransportGameTest {
                             && modelData.get(MachineModelDataKeys.PORT_BASE_TEXTURE) == null,
                     io + " update publishes linked appearance ModelData and clears the stale texture override");
             helper.assertTrue(target.getBlockState().getAppearance(helper.getLevel(), target.getBlockPos(), Direction.UP,
-                            null, null).is(Blocks.STONE),
-                    io + " synchronized appearance still resolves through the independent pool block");
+                            null, null).equals(target.getBlockState()),
+                    io + " synchronized controller links keep the pool appearance fixed");
         }
         helper.succeed();
     }

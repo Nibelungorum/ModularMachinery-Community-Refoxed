@@ -28,6 +28,8 @@ record PortTagSet(List<ResourceLocation> tags, boolean optionalEntries) {
             if (family.familyId().equals(BotaniaManaIds.MANA)) {
                 tags.add(MMCR.id("mana_ports"));
                 tags.add(MMCR.id("mana_" + family.ioType().getSerializedName() + "_ports"));
+                tags.add(ResourceLocation.fromNamespaceAndPath("botania", "mana_pools"));
+                tags.add(ResourceLocation.fromNamespaceAndPath("botania", "all_mana_pools"));
             }
         });
         kind.modDependencies().forEach(dependency -> tags.add(MMCR.id(dependency + "_ports")));
