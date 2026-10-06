@@ -1,7 +1,7 @@
 ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        recipe_pool: 'mmcr:artificial_star_video',
+        recipe_pool: 'kubejs:artificial_star_video',
         tick_time: 300,
         requirements: [
             {
