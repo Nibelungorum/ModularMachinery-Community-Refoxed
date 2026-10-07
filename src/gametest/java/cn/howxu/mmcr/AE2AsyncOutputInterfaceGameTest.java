@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -36,7 +37,6 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -103,10 +103,10 @@ public class AE2AsyncOutputInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Async output interface does not expose ME_STORAGE externally");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(ModCapabilities.ITEM_BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Async output interface does not expose an external item handler");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(ModCapabilities.FLUID_BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Async output interface does not expose an external fluid handler");
 

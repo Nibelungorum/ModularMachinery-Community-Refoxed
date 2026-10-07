@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -35,7 +36,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -125,10 +125,10 @@ public class AE2StockingInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose ME_STORAGE");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(ModCapabilities.ITEM_BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose an external item handler");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(ModCapabilities.FLUID_BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose an external fluid handler");
 

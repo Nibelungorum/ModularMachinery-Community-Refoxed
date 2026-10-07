@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
@@ -48,7 +49,6 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -125,10 +125,10 @@ public class AE2OutputInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Output interface does not expose ME_STORAGE externally");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(ModCapabilities.ITEM_BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) != null,
                     "Output interface exposes an external item handler");
-            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+            helper.assertTrue(helper.getLevel().getCapability(ModCapabilities.FLUID_BLOCK,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) != null,
                     "Output interface exposes an external fluid handler");
 
@@ -227,7 +227,7 @@ public class AE2OutputInterfaceGameTest {
                     "Output cache preserves all 576 iron units across a save/load cycle while over-capacity");
 
             ResourceHandler<ItemResource> externalItems = helper.getLevel().getCapability(
-                    Capabilities.Item.BLOCK, helper.absolutePos(portPos),
+                    ModCapabilities.ITEM_BLOCK, helper.absolutePos(portPos),
                     helper.getLevel().getBlockState(helper.absolutePos(portPos)), port, Direction.NORTH);
             helper.assertTrue(externalItems != null,
                     "External item handler is available while the output cache is occupied");

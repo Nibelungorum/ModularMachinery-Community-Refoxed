@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import net.neoforged.bus.api.BusBuilder;
 import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -219,6 +220,7 @@ class ContentRegistrationCoordinatorTest {
 
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
         assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
+        assertThat(MachineDefinitions.getRegistration(id("artificial_star"))).isNotNull();
         var declaration = MachineStructureBuilder.structure().fullStructure(stage -> stage.pattern(pattern -> pattern
                 .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))).build(machineId);
         var structure = MachineDefinitionConverter.toStructureDefinition(declaration, Map.of());
@@ -434,15 +436,56 @@ class ContentRegistrationCoordinatorTest {
         assertThat(StartupContentRegistration.startupPhaseForTesting()).isEqualTo("NOT_STARTED");
     }
 
-    @Test
-    void kubejs_completion_after_register_attachment_still_commits_startup() {
-        ContentRegistrationCoordinator.beginStartup();
-        StartupContentRegistration.markCollectingForTesting();
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void kubejs_completion_after_register_attachment_waits_for_all_production_content(boolean recipesFirst) {
+        Identifier machineId = Identifier.parse("mmcr_kubejs:early_completion_machine");
+        PublicApiBootstrap.begin();
         StartupContentRegistration.markRegistersAttached();
+        StartupContentRegistration.registerKubeJSStartupMachine(MachineBuilder.machine(machineId).build());
 
         StartupContentRegistration.completeKubeJSStartupIfReady();
 
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isFalse();
+        assertThat(MachineDefinitions.isRegistryPhaseOpen()).isTrue();
+        StartupContentRegistration.registerProductionForModStartup();
+        if (recipesFirst) {
+            StartupContentRegistration.completeProductionRecipesAfterComponentsBound();
+        } else {
+            StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
+        }
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isFalse();
+        if (recipesFirst) {
+            StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
+        } else {
+            StartupContentRegistration.completeProductionRecipesAfterComponentsBound();
+        }
+
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
+        assertThat(MachineDefinitions.getRegistration(id("artificial_star"))).isNotNull();
+        assertThat(MachineDefinitions.isRegistryPhaseOpen()).isFalse();
+        StartupContentRegistration.completeKubeJSStartupIfReady();
+        assertThat(MachineDefinitions.getRegistration(id("artificial_star"))).isNotNull();
+    }
+
+    @Test
+    void kubejs_completion_during_definition_collection_does_not_commit_an_incomplete_snapshot() {
+        Identifier machineId = id("definition_completion_window_machine");
+        var eventBus = BusBuilder.builder().build();
+        eventBus.addListener(RegisterMachineDefinitionsEvent.class, event -> {
+            StartupContentRegistration.completeKubeJSStartupIfReady();
+            assertThat(ContentRegistrationCoordinator.isCommitted()).isFalse();
+            event.registerMachine(machineId, draft -> { });
+        });
+
+        StartupContentRegistration.registerProductionForModStartup(eventBus);
+        StartupContentRegistration.completeProductionForModStartup(eventBus);
+        StartupContentRegistration.completeProductionRecipesAfterComponentsBound(eventBus);
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
+        assertThat(MachineDefinitions.getRegistration(id("artificial_star"))).isNotNull();
     }
 
     @Test
