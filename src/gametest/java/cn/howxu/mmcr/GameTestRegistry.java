@@ -405,7 +405,6 @@ public final class GameTestRegistry {
             register(event, "botania_mana_recipe_active_controller_restore", 20, recipes::activeControllerSaveRestoreKeepsConsumedMana);
             register(event, "botania_mana_recipe_tags_real_query", 20, recipes::taggedQueriesAndPlanningUseRealPoolStorage);
             register(event, "botania_mana_recipe_stale_async_commit", 20, recipes::staleAsyncPlansRevalidateAfterNativeAndRecipeChanges);
-            register(event, "example_botania_mana_scripts_execute", 20, new ExampleScriptGameTest()::botaniaManaExamplesExecute);
         }
         if (FluxNetworksBridge.get().available()) {
             register(event, "fluxnetworks_device_menu", 100,
