@@ -34,6 +34,7 @@ import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
@@ -90,6 +91,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IRecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable slotBackground;
+    private final @Nullable IDrawable heatIcon;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, Identifier poolId, Identifier iconMachineId) {
@@ -98,6 +100,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         this.recipeType = JeiMachineRecipeTypes.forPool(poolId);
         this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(iconMachineId).get());
         this.slotBackground = guiHelper.getSlotDrawable();
+        Identifier superheatingElement = Identifier.parse("mekanism:superheating_element");
+        this.heatIcon = BuiltInRegistries.ITEM.containsKey(superheatingElement)
+                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.getValue(superheatingElement))
+                : null;
     }
 
     @Override
@@ -176,15 +182,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += TEXT_LINE_SPACING;
         }
         if (recipe.minimumTemperature().isPresent()) {
-            guiGraphics.text(Minecraft.getInstance().font,
-                    MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            drawHeatLine(MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
+                    guiGraphics, textX, (int) (y / TEXT_SCALE));
             y += TEXT_LINE_SPACING;
         }
         if (recipe.outputHeat().isPresent()) {
-            guiGraphics.text(Minecraft.getInstance().font,
-                    MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            drawHeatLine(MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
+                    guiGraphics, textX, (int) (y / TEXT_SCALE));
             y += TEXT_LINE_SPACING;
         }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
@@ -217,6 +221,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
         drawRecipeInformation(recipe, layout, guiGraphics);
+    }
+
+    private void drawHeatLine(Component label, GuiGraphicsExtractor guiGraphics, int x, int y) {
+        var font = Minecraft.getInstance().font;
+        if (heatIcon != null) {
+            float iconScale = (float) font.lineHeight / heatIcon.getHeight();
+            guiGraphics.pose().pushMatrix();
+            guiGraphics.pose().translate(x, y);
+            guiGraphics.pose().scale(iconScale, iconScale);
+            heatIcon.draw(guiGraphics, 0, 0);
+            guiGraphics.pose().popMatrix();
+            x += (int) (heatIcon.getWidth() * iconScale) + 2;
+        }
+        guiGraphics.text(font, label, x, y, 0xFF404040, false);
     }
 
     private void drawRecipeInformation(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
