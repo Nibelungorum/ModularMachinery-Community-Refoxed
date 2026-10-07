@@ -129,7 +129,7 @@ public record MachineRecipeLayout(
         if (!display.requiredHostIds().isEmpty()) heights.add(TEXT_LINE_SPACING);
         int levels = display.recipe().levelRequirements().size();
         for (int index = 0; index < levels; index++) {
-            heights.add(SLOT_SIZE + (index == levels - 1 ? TEXT_LINE_SPACING : 0));
+            heights.add(SLOT_SIZE);
         }
         display.recipe().stageRequirements().forEach(entry -> heights.add(TEXT_LINE_SPACING));
         display.smartInterfaceInputs().forEach(entry -> heights.add(TEXT_LINE_SPACING));
@@ -300,7 +300,7 @@ public record MachineRecipeLayout(
     public int stageRequirementTextY(MachineRecipeDisplay display) {
         int levelCount = display.recipe().levelRequirements().size();
         if (levelCount > 0) {
-            return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE + TEXT_LINE_SPACING;
+            return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE;
         }
         return hostRequirementTextY + TEXT_LINE_SPACING * (display.requiredHostIds().isEmpty() ? 0 : 1);
     }

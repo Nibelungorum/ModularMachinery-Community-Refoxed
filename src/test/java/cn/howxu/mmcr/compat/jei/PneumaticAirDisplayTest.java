@@ -229,7 +229,7 @@ class PneumaticAirDisplayTest {
             assertThat(after.hostRequirementTextY()).isEqualTo(before.hostRequirementTextY() + 4 * spacing);
             assertThat(after.levelRequirementSlotY(mixed, 0)).isEqualTo(after.hostRequirementTextY() + spacing);
             assertThat(after.levelRequirementSlotY(mixed, 0)).isEqualTo(before.levelRequirementSlotY(baseline, 0) + 4 * spacing);
-            assertThat(after.stageRequirementTextY(mixed)).isEqualTo(after.levelRequirementSlotY(mixed, 0) + 18 + spacing);
+            assertThat(after.stageRequirementTextY(mixed)).isEqualTo(after.levelRequirementSlotY(mixed, 0) + 18);
             assertThat(after.stageRequirementTextY(mixed)).isEqualTo(before.stageRequirementTextY(baseline) + 4 * spacing);
             assertThat(after.smartInterfaceTextY(mixed)).isEqualTo(after.stageRequirementTextY(mixed) + spacing);
             assertThat(after.smartInterfaceTextY(mixed)).isEqualTo(before.smartInterfaceTextY(baseline) + 4 * spacing);
@@ -336,7 +336,7 @@ class PneumaticAirDisplayTest {
                 assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(138, 8));
                 assertThat(layout.inputs().hiddenEntries()).hasSize(13);
                 assertThat(layout.outputs().hiddenEntries()).hasSize(13);
-                assertThat(layout.lastMetadataTextY(display) + MachineRecipeLayout.TEXT_LINE_SPACING).isEqualTo(148);
+                assertThat(layout.lastMetadataTextY(display) + MachineRecipeLayout.TEXT_LINE_SPACING).isEqualTo(138);
             } else {
                 assertThat(layout.inputs().slots()).hasSize(15);
                 assertThat(layout.outputs().slots()).hasSize(15);
