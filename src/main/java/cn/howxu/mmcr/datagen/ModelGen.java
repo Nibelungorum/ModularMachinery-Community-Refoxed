@@ -41,6 +41,7 @@ public final class ModelGen extends BlockStateProvider {
                         simpleBlockWithItem(block.get(), model);
                     }
                 }, (item, name) -> itemModels().basicItem(item.get()));
+        itemModels().withExistingParent("basic_casing", MMCR.id("block/basic_casing"));
     }
 
     static List<GeneratedModel> collectRegisteredModels() {
@@ -49,6 +50,7 @@ public final class ModelGen extends BlockStateProvider {
                     models.add(new GeneratedModel(GeneratedModel.Kind.BLOCKSTATE, name));
                     models.add(new GeneratedModel(GeneratedModel.Kind.ITEM, name));
                 }, (item, name) -> models.add(new GeneratedModel(GeneratedModel.Kind.ITEM, name)));
+        models.add(new GeneratedModel(GeneratedModel.Kind.ITEM, "basic_casing"));
         return models;
     }
 
@@ -60,6 +62,7 @@ public final class ModelGen extends BlockStateProvider {
 
     static List<String> collectKnownItemNames() {
         List<String> names = new ArrayList<>(collectKnownBlockNames());
+        names.add("basic_casing");
         names.add("multiblock_detector");
         names.add("terminal");
         names.add("key_card");
@@ -94,7 +97,7 @@ public final class ModelGen extends BlockStateProvider {
 
     private static boolean shouldGenerateBlockModels(String name, Supplier<? extends Block> block) {
         if (isManaPort(name) || isCreateStressPort(name)) return true;
-        return !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
+        return !"basic_casing".equals(name) && !isIoPort(name) && !isParallelController(name) && !"factory_controller".equals(name)
                 && !"smart_interface".equals(name) && !"module_bridge".equals(name)
                 && !(block.get() instanceof MachineControllerBlock)
                 && !(block.get() instanceof DataStorageBlock)

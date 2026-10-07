@@ -1,0 +1,15 @@
+{
+    "variants": {
+        "": {
+            "model": "mmcr:block/basic_casing"
+        }
+    },
+    "athena:loader": "athena:ctm",
+    "ctm_textures": {
+        "center": "mmcr:block/ctm/basic_casing/center",
+        "empty": "mmcr:block/ctm/basic_casing/empty",
+        "horizontal": "mmcr:block/ctm/basic_casing/horizontal",
+        "particle": "mmcr:block/ctm/basic_casing/particle",
+        "vertical": "mmcr:block/ctm/basic_casing/vertical"
+    }
+}
