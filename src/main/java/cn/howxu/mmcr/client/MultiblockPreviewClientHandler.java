@@ -9,7 +9,6 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCompiler;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewGpuMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewCompileInput;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
@@ -281,28 +280,19 @@ public final class MultiblockPreviewClientHandler {
             }
         }
 
-        RenderSystem.getModelViewStack().pushMatrix();
-        try {
-            RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
-            RenderSystem.getModelViewStack().translate((float) -camera.x, (float) -camera.y, (float) -camera.z);
-            RenderSystem.applyModelViewMatrix();
-            RenderLevelStageEvent.Stage stage = event.getStage();
-            if (stage == RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) {
-                mesh.draw(RenderType.solid());
-            } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_MIPPED_BLOCKS_BLOCKS) {
-                mesh.draw(RenderType.cutoutMipped());
-            } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
-                mesh.draw(RenderType.cutout());
-            } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
-                mesh.resort(RenderType.translucent(), camera);
-                mesh.draw(RenderType.translucent());
-            } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
-                mesh.resort(RenderType.tripwire(), camera);
-                mesh.draw(RenderType.tripwire());
-            }
-        } finally {
-            RenderSystem.getModelViewStack().popMatrix();
-            RenderSystem.applyModelViewMatrix();
+        RenderLevelStageEvent.Stage stage = event.getStage();
+        if (stage == RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) {
+            mesh.draw(RenderType.solid(), event.getModelViewMatrix(), camera);
+        } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_MIPPED_BLOCKS_BLOCKS) {
+            mesh.draw(RenderType.cutoutMipped(), event.getModelViewMatrix(), camera);
+        } else if (stage == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
+            mesh.draw(RenderType.cutout(), event.getModelViewMatrix(), camera);
+        } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
+            mesh.resort(RenderType.translucent(), camera);
+            mesh.draw(RenderType.translucent(), event.getModelViewMatrix(), camera);
+        } else if (stage == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
+            mesh.resort(RenderType.tripwire(), camera);
+            mesh.draw(RenderType.tripwire(), event.getModelViewMatrix(), camera);
         }
     }
 

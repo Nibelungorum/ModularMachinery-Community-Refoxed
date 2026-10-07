@@ -4,7 +4,10 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -47,19 +50,26 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         }
     }
 
-    public void draw(RenderType layer) {
+    public void draw(RenderType layer, Matrix4f modelView, Vec3 camera) {
         RenderSystem.assertOnRenderThread();
         VertexBuffer buffer = layers.get(layer);
         if (buffer == null) return;
         layer.setupRenderState();
+        ShaderInstance shader = RenderSystem.getShader();
         try {
             buffer.bind();
-            buffer.drawWithShader(RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
-                    RenderSystem.getShader());
+            if (shader.CHUNK_OFFSET != null) shader.CHUNK_OFFSET.set(cameraRelativeOffset(camera));
+            buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
         } finally {
+            if (shader.CHUNK_OFFSET != null) shader.CHUNK_OFFSET.set(0.0F, 0.0F, 0.0F);
             VertexBuffer.unbind();
             layer.clearRenderState();
         }
+    }
+
+    static Vector3f cameraRelativeOffset(Vec3 camera) {
+        // Block shaders compute fog from Position + ChunkOffset, before ModelViewMat.
+        return new Vector3f((float) -camera.x, (float) -camera.y, (float) -camera.z);
     }
 
     public void resort(RenderType layer, Vec3 camera) {
