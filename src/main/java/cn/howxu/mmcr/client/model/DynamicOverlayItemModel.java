@@ -32,7 +32,6 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3fc;
 
 import java.util.EnumSet;
-import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -81,7 +80,12 @@ public final class DynamicOverlayItemModel implements ItemModel {
         layer.setExtents(baseModel.extents());
         layer.setLocalTransform(transformation);
         layer.setParticleMaterial(material(description.overlayTextures().getFirst()));
-        layer.prepareQuadList().addAll(quads.build().getAll());
+        QuadCollection overlayQuads = quads.build();
+        layer.prepareQuadList().addAll(overlayQuads.getAll());
+        if (baseModel.quads().hasMaterialFlag(BakedQuad.FLAG_ANIMATED)
+                || overlayQuads.hasMaterialFlag(BakedQuad.FLAG_ANIMATED)) {
+            renderState.setAnimated();
+        }
     }
 
     private BaseModel baseModel(Identifier modelId, DynamicOverlayBakedModel.FaceTextures baseTextures) {
@@ -92,8 +96,8 @@ public final class DynamicOverlayItemModel implements ItemModel {
             DynamicOverlayModelLoader.addFace(quads, direction, material(baseTextures.forFace(direction)), 0.0f, true);
         }
         var renderProperties = ModelRenderProperties.fromResolvedModel(modelBaker, model, textures);
-        List<BakedQuad> builtQuads = quads.build().getAll();
-        return new BaseModel(builtQuads, () -> CuboidItemModelWrapper.computeExtents(builtQuads), renderProperties);
+        QuadCollection builtQuads = quads.build();
+        return new BaseModel(builtQuads, () -> CuboidItemModelWrapper.computeExtents(builtQuads.getAll()), renderProperties);
     }
 
     private Material.Baked material(Identifier texture) {
@@ -164,14 +168,14 @@ public final class DynamicOverlayItemModel implements ItemModel {
     }
 
     private record BaseModel(
-            List<BakedQuad> quads,
+            QuadCollection quads,
             Supplier<Vector3fc[]> extents,
             ModelRenderProperties renderProperties) {
         void applyToLayer(ItemStackRenderState.LayerRenderState layer, ItemDisplayContext context, Matrix4fc transformation) {
             layer.setExtents(extents);
             layer.setLocalTransform(transformation);
             renderProperties.applyToLayer(layer, context);
-            layer.prepareQuadList().addAll(quads);
+            layer.prepareQuadList().addAll(quads.getAll());
         }
     }
 
