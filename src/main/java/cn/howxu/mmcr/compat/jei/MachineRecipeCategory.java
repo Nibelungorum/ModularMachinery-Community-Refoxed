@@ -112,6 +112,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final @Nullable IDrawable stressIcon;
     private final @Nullable IDrawable airIcon;
     private final @Nullable IDrawable manaIcon;
+    private final @Nullable IDrawable heatIcon;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
@@ -132,6 +133,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 : null;
         this.manaIcon = BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL)
                 ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(BotaniaManaIds.CREATIVE_POOL))
+                : null;
+        ResourceLocation superheatingElement = ResourceLocation.parse("mekanism:superheating_element");
+        this.heatIcon = BuiltInRegistries.ITEM.containsKey(superheatingElement)
+                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(superheatingElement))
                 : null;
     }
 
@@ -239,15 +244,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += TEXT_LINE_SPACING;
         }
         if (recipe.minimumTemperature().isPresent()) {
-            guiGraphics.drawString(Minecraft.getInstance().font,
-                    MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            drawHeatLine(MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
+                    guiGraphics, textX, (int) (y / TEXT_SCALE));
             y += TEXT_LINE_SPACING;
         }
         if (recipe.outputHeat().isPresent()) {
-            guiGraphics.drawString(Minecraft.getInstance().font,
-                    MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            drawHeatLine(MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
+                    guiGraphics, textX, (int) (y / TEXT_SCALE));
             y += TEXT_LINE_SPACING;
         }
         for (var row : layout.manaRows()) {
@@ -321,6 +324,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             manaIcon.draw(guiGraphics, 0, 0);
             guiGraphics.pose().popPose();
             x += (int) (manaIcon.getWidth() * iconScale) + 2;
+        }
+        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
+    }
+
+    private void drawHeatLine(Component label, GuiGraphics guiGraphics, int x, int y) {
+        var font = Minecraft.getInstance().font;
+        if (heatIcon != null) {
+            float iconScale = (float) font.lineHeight / heatIcon.getHeight();
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(x, y, 0F);
+            guiGraphics.pose().scale(iconScale, iconScale, 1F);
+            heatIcon.draw(guiGraphics, 0, 0);
+            guiGraphics.pose().popPose();
+            x += (int) (heatIcon.getWidth() * iconScale) + 2;
         }
         guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
     }

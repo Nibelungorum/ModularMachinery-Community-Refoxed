@@ -412,6 +412,7 @@ class PneumaticAirDisplayTest {
     void missing_optional_mods_do_not_prevent_recipe_category_registration() {
         assertThat(BuiltInRegistries.ITEM.containsKey(PneumaticIds.ADVANCED_PRESSURE_TUBE)).isFalse();
         assertThat(BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse("create:cogwheel"))).isFalse();
+        assertThat(BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse("mekanism:superheating_element"))).isFalse();
         List<ItemLike> icons = new ArrayList<>();
         var category = new MachineRecipeCategory(guiHelper(icons), ID, ResourceLocation.parse("mmcr:test_cube"));
 
