@@ -10,7 +10,6 @@ import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshKey;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewGpuMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewCompileInput;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
@@ -311,19 +310,12 @@ public final class MultiblockPreviewClientHandler {
             }
         }
 
-        RenderSystem.getModelViewStack().pushMatrix();
-        try {
-            RenderSystem.getModelViewStack().set(event.getModelViewMatrix());
-            RenderSystem.getModelViewStack().translate((float) -camera.x, (float) -camera.y, (float) -camera.z);
-            if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
-                mesh.draw(ChunkSectionLayer.SOLID);
-                mesh.draw(ChunkSectionLayer.CUTOUT);
-            } else {
-                mesh.resortTranslucent(camera);
-                mesh.draw(ChunkSectionLayer.TRANSLUCENT);
-            }
-        } finally {
-            RenderSystem.getModelViewStack().popMatrix();
+        if (event instanceof RenderLevelStageEvent.AfterOpaqueBlocks) {
+            mesh.draw(ChunkSectionLayer.SOLID, event.getModelViewMatrix(), camera);
+            mesh.draw(ChunkSectionLayer.CUTOUT, event.getModelViewMatrix(), camera);
+        } else {
+            mesh.resortTranslucent(camera);
+            mesh.draw(ChunkSectionLayer.TRANSLUCENT, event.getModelViewMatrix(), camera);
         }
     }
 

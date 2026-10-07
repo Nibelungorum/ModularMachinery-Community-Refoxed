@@ -14,11 +14,13 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
@@ -41,7 +43,6 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
             ChunkSectionLayer.CUTOUT, RenderTypes.cutoutMovingBlock(),
             ChunkSectionLayer.TRANSLUCENT, RenderTypes.translucentMovingBlock());
     private static final Vector4f WHITE = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
-    private static final Vector3f ZERO = new Vector3f();
     private static final Matrix4f IDENTITY = new Matrix4f();
 
     private final Map<ChunkSectionLayer, Layer> layers;
@@ -68,17 +69,24 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
         }
     }
 
-    public void draw(ChunkSectionLayer layer) {
+    public void draw(ChunkSectionLayer layer, Matrix4fc modelView, Vec3 camera) {
         RenderSystem.assertOnRenderThread();
         Layer gpuLayer = layers.get(layer);
         RenderType renderType = RENDER_TYPES.get(layer);
-        if (gpuLayer != null && renderType != null) drawLayer(renderType, gpuLayer);
+        if (gpuLayer != null && renderType != null) drawLayer(renderType, gpuLayer, modelView, camera);
     }
 
-    private static void drawLayer(RenderType renderType, Layer layer) {
+    static DynamicUniforms.Transform cameraRelativeTransform(Matrix4fc modelView, Vec3 camera) {
+        // block.vsh computes fog distance from Position + ModelOffset, before ModelViewMat.
+        // Keep camera translation here so both fog and projection use camera-relative positions.
+        return new DynamicUniforms.Transform(new Matrix4f(modelView), WHITE,
+                new Vector3f((float) -camera.x, (float) -camera.y, (float) -camera.z), IDENTITY);
+    }
+
+    private static void drawLayer(RenderType renderType, Layer layer, Matrix4fc modelView, Vec3 camera) {
         Minecraft minecraft = Minecraft.getInstance();
-        GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().writeTransform(
-                RenderSystem.getModelViewMatrix(), WHITE, ZERO, IDENTITY);
+        GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().writeTransforms(
+                cameraRelativeTransform(modelView, camera))[0];
         RenderTarget target = renderType.outputTarget().getRenderTarget();
         GpuTextureView color = RenderSystem.outputColorTextureOverride != null
                 ? RenderSystem.outputColorTextureOverride : target.getColorTextureView();
