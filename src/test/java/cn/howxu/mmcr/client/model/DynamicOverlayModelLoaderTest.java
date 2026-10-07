@@ -8,7 +8,15 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.common.collect.ImmutableList;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.metadata.animation.FrameSize;
+import net.minecraft.client.resources.model.ModelBaker;
+import net.minecraft.client.resources.model.sprite.Material;
+import net.minecraft.client.resources.model.sprite.MaterialBaker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -17,8 +25,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.model.data.ModelData;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +42,40 @@ class DynamicOverlayModelLoaderTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @ParameterizedTest
+    @EnumSource(DynamicOverlayBakedModel.Kind.class)
+    void destruction_particle_material_loads_a_bundled_texture(DynamicOverlayBakedModel.Kind kind) {
+        List<TextureAtlasSprite> sprites = new ArrayList<>();
+        try {
+            MaterialBaker materials = (MaterialBaker) Proxy.newProxyInstance(getClass().getClassLoader(),
+                    new Class<?>[]{MaterialBaker.class}, (proxy, method, args) -> {
+                        Material material = (Material) args[0];
+                        var id = material.sprite();
+                        try (var resource = getClass().getResourceAsStream(
+                                "/assets/" + id.getNamespace() + "/textures/" + id.getPath() + ".png")) {
+                            assertThat(resource).as("Bundled particle texture %s", id).isNotNull();
+                            NativeImage image = NativeImage.read(resource);
+                            var contents = new SpriteContents(id, new FrameSize(image.getWidth(), image.getHeight()), image);
+                            var sprite = new TextureAtlasSprite(TextureAtlas.LOCATION_BLOCKS, contents,
+                                    image.getWidth(), image.getHeight(), 0, 0, 0) {};
+                            sprites.add(sprite);
+                            return new Material.Baked(sprite, material.forceTranslucent());
+                        }
+                    });
+            ModelBaker baker = (ModelBaker) Proxy.newProxyInstance(getClass().getClassLoader(),
+                    new Class<?>[]{ModelBaker.class}, (proxy, method, args) -> {
+                        if (method.getName().equals("materials")) return materials;
+                        throw new UnsupportedOperationException(method.getName());
+                    });
+
+            var model = new DynamicOverlayModelLoader.Unbaked(kind).bake(baker);
+
+            assertThat(model.particleMaterial().sprite()).isSameAs(sprites.getFirst());
+        } finally {
+            sprites.forEach(TextureAtlasSprite::close);
+        }
     }
 
     @Test
