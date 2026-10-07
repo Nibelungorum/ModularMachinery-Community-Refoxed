@@ -199,7 +199,7 @@ public record MachineRecipeLayout(
     public int stageRequirementTextY(MachineRecipeDisplay display) {
         int levelCount = display.recipe().levelRequirements().size();
         if (levelCount > 0) {
-            return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE + TEXT_LINE_SPACING;
+            return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE;
         }
         return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display)
                 + (display.requiredHostIds().isEmpty() ? 0 : 1));
