@@ -38,7 +38,10 @@ import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.Map;
 import java.util.HashMap;
@@ -64,6 +67,33 @@ class DynamicOverlayModelLoaderTest {
                 (proxy, method, args) -> method.getName().equals("getTransforms") ? ItemTransforms.NO_TRANSFORMS : null);
         return new DynamicOverlayModelLoader.Unbaked(kind, itemBlockId).bake(context, null,
                 material -> sprites.computeIfAbsent(material.texture(), TestSprite::new), null, ItemOverrides.EMPTY);
+    }
+
+    @ParameterizedTest
+    @EnumSource(DynamicOverlayBakedModel.Kind.class)
+    void destruction_particle_material_loads_the_bundled_ctm_texture(DynamicOverlayBakedModel.Kind kind) {
+        IGeometryBakingContext context = (IGeometryBakingContext) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{IGeometryBakingContext.class},
+                (proxy, method, args) -> method.getName().equals("getTransforms") ? ItemTransforms.NO_TRANSFORMS : null);
+        BakedModel model = new DynamicOverlayModelLoader.Unbaked(kind, null).bake(context, null, material -> {
+            ResourceLocation id = material.texture();
+            assertThat(id).isEqualTo(MMCR.id("block/ctm/basic_casing/particle"));
+            try (var resource = getClass().getResourceAsStream(
+                    "/assets/" + id.getNamespace() + "/textures/" + id.getPath() + ".png")) {
+                assertThat(resource).as("Bundled particle texture %s", id).isNotNull();
+                NativeImage image = NativeImage.read(resource);
+                var contents = new SpriteContents(id, new FrameSize(image.getWidth(), image.getHeight()),
+                        image, ResourceMetadata.EMPTY);
+                var sprite = new TextureAtlasSprite(TextureAtlas.LOCATION_BLOCKS, contents,
+                        image.getWidth(), image.getHeight(), 0, 0) {};
+                sprites.put(id, sprite);
+                return sprite;
+            } catch (IOException exception) {
+                throw new AssertionError("Unable to load particle texture " + id, exception);
+            }
+        }, null, ItemOverrides.EMPTY);
+
+        assertThat(model.getParticleIcon()).isSameAs(sprites.get(MMCR.id("block/ctm/basic_casing/particle")));
     }
 
     @Test
@@ -124,7 +154,7 @@ class DynamicOverlayModelLoaderTest {
         assertThat(passes.get(1).getRenderTypes(ItemStack.EMPTY, false))
                 .containsExactly(NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get());
         assertThat(passes.get(0).getQuads(null, null, random)).hasSize(6)
-                .allSatisfy(quad -> assertThat(quad.getSprite().contents().name()).isEqualTo(MMCR.id("block/basic_casing")));
+                .allSatisfy(quad -> assertThat(quad.getSprite().contents().name()).isEqualTo(MMCR.id("block/ctm/basic_casing/particle")));
         assertThat(passes.get(1).getQuads(null, null, random)).hasSize(2)
                 .allSatisfy(DynamicOverlayModelLoaderTest::assertUvInsideSprite);
     }

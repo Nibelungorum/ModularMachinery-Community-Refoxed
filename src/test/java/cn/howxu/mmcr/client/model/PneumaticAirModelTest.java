@@ -135,7 +135,7 @@ class PneumaticAirModelTest {
             assertThat(port.getModelData().get(MachineModelDataKeys.PORT_TEXTURE_SOURCE)).isEqualTo(formedSource);
             var formed = DynamicOverlayBakedModel.portTextures(null,
                     port.getModelData().get(MachineModelDataKeys.PORT_TEXTURE_SOURCE), overlays);
-            assertThat(unformed.base()).isEqualTo(DynamicOverlayBakedModel.FaceTextures.uniform(MMCR.id("block/basic_casing")));
+            assertThat(unformed.base()).isEqualTo(DynamicOverlayBakedModel.FaceTextures.uniform(MMCR.id("block/ctm/basic_casing/particle")));
             assertThat(formed.base()).isEqualTo(DynamicOverlayBakedModel.FaceTextures.uniform(casingTexture));
             assertThat(formed.overlays()).isEqualTo(unformed.overlays())
                     .contains(MMCR.id("block/overlay/direction/" + kind.ioType().getSerializedName()));

@@ -65,7 +65,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
     public static final DynamicOverlayModelLoader CONTROLLER = new DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind.CONTROLLER);
     public static final DynamicOverlayModelLoader PORT = new DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind.PORT);
 
-    private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/basic_casing");
+    private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/ctm/basic_casing/particle");
     private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
     private static final ModelProperty<Boolean> EASTER_EGG_ACTIVE = new ModelProperty<>();
     static final float OVERLAY_GROW = 0.0005f;

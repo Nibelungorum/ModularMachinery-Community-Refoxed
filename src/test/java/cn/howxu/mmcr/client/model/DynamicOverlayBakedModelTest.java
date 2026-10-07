@@ -32,7 +32,7 @@ class DynamicOverlayBakedModelTest {
     void incomplete_appearance_faces_use_uniform_fallback() {
         var faces = DynamicOverlayBakedModel.completeOrFallback(Map.of(Direction.NORTH, MMCR.id("block/north")));
 
-        assertThat(faces).isEqualTo(DynamicOverlayBakedModel.FaceTextures.uniform(MMCR.id("block/basic_casing")));
+        assertThat(faces).isEqualTo(DynamicOverlayBakedModel.FaceTextures.uniform(MMCR.id("block/ctm/basic_casing/particle")));
     }
 
     @Test
