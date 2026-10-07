@@ -193,7 +193,9 @@ public final class StartupContentRegistration {
 
     public static void completeKubeJSStartupIfReady() {
         if (ContentRegistrationCoordinator.isCommitted()) return;
-        if (startupPhase == StartupPhase.COLLECTING || startupPhase == StartupPhase.REGISTERS_ATTACHED) {
+        // Register attachment and COLLECTING precede the completed Java definition snapshot.
+        // An early KubeJS notification is handled by the later production completion phases.
+        if (pendingProductionDefinitions != null) {
             completeKubeJSStartup();
         }
     }
