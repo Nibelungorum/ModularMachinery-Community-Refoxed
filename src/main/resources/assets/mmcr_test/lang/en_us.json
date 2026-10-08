@@ -14,6 +14,7 @@
     "block.mmcr.network_center_machine_controller": "Network Center Machine Controller",
     "block.mmcr.pure_tick_machine_controller": "Pure Tick Machine Controller",
     "block.mmcr.recipe_ticker_controller": "Recipe Ticker Controller",
+    "block.mmcr.jei_recipe_machine_controller": "JEI Recipe Machine Controller",
 
     "item.mmcr.alloy_furnace_controller": "Alloy Furnace Controller",
     "item.mmcr.blast_furnace_controller": "Blast Furnace Controller",
@@ -30,6 +31,7 @@
     "item.mmcr.network_center_machine_controller": "Network Center Machine Controller",
     "item.mmcr.pure_tick_machine_controller": "Pure Tick Machine Controller",
     "item.mmcr.recipe_ticker_controller": "Recipe Ticker Controller",
+    "item.mmcr.jei_recipe_machine_controller": "JEI Recipe Machine Controller",
 
     "machine.mmcr.alloy_furnace": "Alloy Furnace",
     "machine.mmcr.blast_furnace": "Blast Furnace",
@@ -46,6 +48,7 @@
     "machine.mmcr.network_center_machine": "Network Center Machine",
     "machine.mmcr.pure_tick_machine": "Pure Tick Machine",
     "machine.mmcr.recipe_ticker": "Recipe Ticker",
+    "machine.mmcr.jei_recipe_machine": "JEI Recipe Machine",
 
     "level.mmcr.thermal_smelting_coil": "Coil",
 
@@ -78,6 +81,7 @@
     "recipe_pool.mmcr.space_3": "Long Name Pool For Test 3",
     "recipe_pool.mmcr.monster_farm": "Monster Farm",
     "recipe_pool.mmcr.recipe_ticker": "Recipe Ticker",
+    "recipe_pool.mmcr.jei_recipe_machine": "JEI Recipe Matrix",
 
     "jei.mmcr_test.blast_furnace.info_1": "Recipe Pool Information 1",
     "jei.mmcr_test.blast_furnace.info_2": "Recipe Pool Information 2: %s",

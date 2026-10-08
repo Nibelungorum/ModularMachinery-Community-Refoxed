@@ -14,6 +14,7 @@
     "block.mmcr.network_center_machine_controller": "网络中枢机器控制器",
     "block.mmcr.pure_tick_machine_controller": "纯Tick机器控制器",
     "block.mmcr.recipe_ticker_controller": "配方Tick机器控制器",
+    "block.mmcr.jei_recipe_machine_controller": "JEI 配方机器控制器",
 
     "item.mmcr.alloy_furnace_controller": "合金炉控制器",
     "item.mmcr.blast_furnace_controller": "高炉控制器",
@@ -30,6 +31,7 @@
     "item.mmcr.network_center_machine_controller": "网络中枢机器控制器",
     "item.mmcr.pure_tick_machine_controller": "纯Tick机器控制器",
     "item.mmcr.recipe_ticker_controller": "配方Tick机器控制器",
+    "item.mmcr.jei_recipe_machine_controller": "JEI 配方机器控制器",
 
     "machine.mmcr.alloy_furnace": "合金炉",
     "machine.mmcr.blast_furnace": "高炉",
@@ -46,6 +48,7 @@
     "machine.mmcr.network_center_machine": "网络中枢",
     "machine.mmcr.pure_tick_machine": "纯Tick机器",
     "machine.mmcr.recipe_ticker": "配方Tick机器",
+    "machine.mmcr.jei_recipe_machine": "JEI 配方机器",
 
     "level.mmcr.thermal_smelting_coil": "线圈",
 
@@ -78,6 +81,7 @@
     "recipe_pool.mmcr.space_3": "超长名称配方池渲染测试 3",
     "recipe_pool.mmcr.monster_farm": "怪物农场",
     "recipe_pool.mmcr.recipe_ticker": "配方Tick测试",
+    "recipe_pool.mmcr.jei_recipe_machine": "JEI 配方矩阵",
 
     "jei.mmcr_test.blast_furnace.info_1": "配方池示例信息1",
     "jei.mmcr_test.blast_furnace.info_2": "配方池示例信息2: %s",

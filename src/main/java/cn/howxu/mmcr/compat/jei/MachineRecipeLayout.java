@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.jei;
 
 import net.minecraft.client.Minecraft;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.compat.jei.RecipeSlotLayout.Arrow;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.neoforge.NeoForgeTypes;
@@ -21,6 +24,7 @@ public record MachineRecipeLayout(
         int height,
         RegionPlan inputs,
         RegionPlan outputs,
+        @Nullable Arrow arrow,
         int durationTextX,
         int hostRequirementTextY,
         int durationTextY,
@@ -31,10 +35,7 @@ public record MachineRecipeLayout(
     public static final int WIDTH = 150;
     public static final int HEIGHT = 150;
 
-    private static final int COLUMNS = 3;
     private static final int SLOT_SIZE = 18;
-    private static final int SLOT_START_Y = 8;
-    private static final int TEXT_OFFSET_Y = 4;
     static final int TEXT_LINE_SPACING = 10;
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display) {
@@ -42,17 +43,15 @@ public record MachineRecipeLayout(
     }
 
     public static MachineRecipeLayout forDisplay(MachineRecipeDisplay display, int guiScale) {
-        return new MachineRecipeLayout(
-                WIDTH,
-                HEIGHT,
-                region(display.entries(), RecipeIngredientRole.INPUT, 12, false, guiScale),
-                region(display.entries(), RecipeIngredientRole.OUTPUT, 102, true, guiScale),
-                8,
-                hostRequirementTextY(display, guiScale),
-                durationTextY(display, guiScale),
-                transferButtonXForGuiScale(guiScale),
-                transferButtonYForGuiScale(guiScale)
-        );
+        List<JeiDisplayEntry> displayEntries = display.entries();
+        List<EntryPlan> inputEntries = entries(displayEntries, RecipeIngredientRole.INPUT);
+        List<EntryPlan> outputEntries = entries(displayEntries, RecipeIngredientRole.OUTPUT);
+        RecipeSlotLayout slots = RecipeSlotLayout.forCounts(inputEntries.size(), outputEntries.size());
+        int metadataY = slots.bottom() + 4;
+        return new MachineRecipeLayout(WIDTH, HEIGHT,
+                bind(inputEntries, slots.inputs()), bind(outputEntries, slots.outputs()), slots.arrow(),
+                8, metadataY + TEXT_LINE_SPACING * metadataLineCount(display), metadataY,
+                transferButtonXForGuiScale(guiScale), transferButtonYForGuiScale(guiScale));
     }
 
     private static int transferButtonXForGuiScale(int guiScale) {
@@ -72,47 +71,12 @@ public record MachineRecipeLayout(
             default -> 135;
         };
     }
-    private static int rows(int guiScale) {
-        return switch (guiScale) {
-            case 1 -> 14;
-            case 2 -> 11;
-            case 3 -> 8;
-            default -> 5;
-        };
-    }
-
-    private static int maxVisible(int guiScale) {
-        return COLUMNS * rows(guiScale);
-    }
-
-    private static int hostRequirementTextY(MachineRecipeDisplay display, int guiScale) {
-        return durationTextY(display, guiScale) + TEXT_LINE_SPACING * metadataLineCount(display);
-    }
-
-    private static int durationTextY(MachineRecipeDisplay display, int guiScale) {
-        return baseMetadataTextY(display, guiScale);
-    }
-
-    private static int baseMetadataTextY(MachineRecipeDisplay display, int guiScale) {
-        int inputRows = visibleRows(entryCount(display, RecipeIngredientRole.INPUT), guiScale);
-        int outputRows = visibleRows(entryCount(display, RecipeIngredientRole.OUTPUT), guiScale);
-        int rowCount = Math.max(1, Math.max(inputRows, outputRows));
-        return SLOT_START_Y + rowCount * SLOT_SIZE + TEXT_OFFSET_Y;
-    }
-
-    private static int visibleRows(int entryCount, int guiScale) {
-        return Math.min(rows(guiScale), (entryCount + COLUMNS - 1) / COLUMNS);
-    }
-
-    private static int entryCount(MachineRecipeDisplay display, RecipeIngredientRole role) {
-        return (int) display.entries().stream().filter(entry -> entry.role() == role).count();
-    }
-
-    private static RegionPlan region(List<JeiDisplayEntry> displayEntries, RecipeIngredientRole role,
-                                     int startX, boolean rightAlign, int guiScale) {
+    private static List<EntryPlan> entries(List<JeiDisplayEntry> displayEntries, RecipeIngredientRole role) {
         List<EntryPlan> entries = new ArrayList<>();
         int itemIndex = 0;
         int fluidIndex = 0;
+        int customItemIndex = 0;
+        int customFluidIndex = 0;
         int chemicalIndex = 0;
         int textIndex = 0;
         for (JeiDisplayEntry entry : displayEntries.stream()
@@ -120,9 +84,11 @@ public record MachineRecipeLayout(
                 .sorted(Comparator.comparingInt(MachineRecipeLayout::kindOrder))
                 .toList()) {
             if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
-                entries.add(new EntryPlan(Kind.ITEM, itemIndex++, entry));
+                entries.add(new EntryPlan(Kind.ITEM,
+                        entry.typeId().equals(ItemRequirement.TYPE.id()) ? itemIndex++ : customItemIndex++, entry));
             } else if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
-                entries.add(new EntryPlan(Kind.FLUID, fluidIndex++, entry));
+                entries.add(new EntryPlan(Kind.FLUID,
+                        entry.typeId().equals(FluidRequirement.TYPE.id()) ? fluidIndex++ : customFluidIndex++, entry));
             } else if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) {
                 entries.add(new EntryPlan(Kind.CHEMICAL, chemicalIndex++, entry));
             } else if (!entry.isTextOnly()) {
@@ -132,29 +98,21 @@ public record MachineRecipeLayout(
             }
         }
 
-        int maxVisible = maxVisible(guiScale);
-        boolean overflowing = entries.size() > maxVisible;
-        int visibleCount = Math.min(entries.size(), overflowing ? maxVisible - 1 : maxVisible);
-        List<SlotPlan> slots = new ArrayList<>(visibleCount);
-        for (int cell = 0; cell < visibleCount; cell++) {
-            EntryPlan entry = entries.get(cell);
-            int column = cell % COLUMNS;
-            int row = cell / COLUMNS;
-            if (rightAlign && !(overflowing && row == (maxVisible - 1) / COLUMNS)) {
-                int entriesInRow = Math.min(COLUMNS, visibleCount - row * COLUMNS);
-                column += COLUMNS - entriesInRow;
-            }
-            slots.add(new SlotPlan(entry, startX + column * SLOT_SIZE, SLOT_START_Y + row * SLOT_SIZE));
-        }
-        List<EntryPlan> hiddenEntries = overflowing
-                ? entries.subList(maxVisible - 1, entries.size())
-                : List.of();
-        OverflowSlotPlan overflowSlot = overflowing ? overflowSlot(startX, rightAlign, maxVisible) : null;
-        return new RegionPlan(List.copyOf(slots), overflowSlot, List.copyOf(hiddenEntries));
+        return List.copyOf(entries);
     }
 
-    static RegionPlan regionForEntries(List<JeiDisplayEntry> entries, RecipeIngredientRole role, int guiScale) {
-        return region(entries, role, 12, false, guiScale);
+    private static RegionPlan bind(List<EntryPlan> entries, List<RecipeSlotLayout.Position> positions) {
+        List<SlotPlan> slots = new ArrayList<>(entries.size());
+        for (int index = 0; index < entries.size(); index++) {
+            RecipeSlotLayout.Position position = positions.get(index);
+            slots.add(new SlotPlan(entries.get(index), position.x(), position.y()));
+        }
+        return new RegionPlan(List.copyOf(slots));
+    }
+
+    static RegionPlan regionForEntries(List<JeiDisplayEntry> displayEntries, RecipeIngredientRole role, int guiScale) {
+        List<EntryPlan> entries = entries(displayEntries, role);
+        return bind(entries, RecipeSlotLayout.forCounts(entries.size(), 0).inputs());
     }
 
     private static int kindOrder(JeiDisplayEntry entry) {
@@ -162,23 +120,6 @@ public record MachineRecipeLayout(
         if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) return 1;
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 2;
         return 3;
-    }
-
-    private static OverflowSlotPlan overflowSlot(int startX, boolean rightAlign, int maxVisible) {
-        int column = (maxVisible - 1) % COLUMNS;
-        int row = (maxVisible - 1) / COLUMNS;
-        if (rightAlign) {
-            column += COLUMNS - Math.min(COLUMNS, maxVisible - row * COLUMNS);
-        }
-        return new OverflowSlotPlan(startX + column * SLOT_SIZE, SLOT_START_Y + row * SLOT_SIZE);
-    }
-
-    public boolean hasInputOverflow() {
-        return !inputs.hiddenEntries().isEmpty();
-    }
-
-    public boolean hasOutputOverflow() {
-        return !outputs.hiddenEntries().isEmpty();
     }
 
     public int levelRequirementY(MachineRecipeDisplay display, int index) {
@@ -248,7 +189,5 @@ public record MachineRecipeLayout(
 
     public record SlotPlan(EntryPlan entry, int x, int y) {}
 
-    public record OverflowSlotPlan(int x, int y) {}
-
-    public record RegionPlan(List<SlotPlan> slots, @Nullable OverflowSlotPlan overflowSlot, List<EntryPlan> hiddenEntries) {}
+    public record RegionPlan(List<SlotPlan> slots) {}
 }
