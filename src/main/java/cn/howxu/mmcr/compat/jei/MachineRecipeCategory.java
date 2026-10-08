@@ -18,7 +18,6 @@ import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
-import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.ReadableNumber;
@@ -72,7 +71,6 @@ import java.util.stream.Collectors;
 public final class MachineRecipeCategory implements IRecipeCategory<MachineRecipeDisplay> {
 
     private static final int FLUID_SLOT_CAPACITY = 1000;
-    private static final int OVERFLOW_TEXT_OFFSET_X = 5;
     private static final float TEXT_SCALE = 0.85F;
     private static final int TEXT_LINE_SPACING = MachineRecipeLayout.TEXT_LINE_SPACING;
     private static final float SMART_INTERFACE_TEXT_SCALE = 0.85F;
@@ -80,8 +78,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static final int JEI_SLOT_SIZE = 16;
     private static final int LEVEL_LABEL_SLOT_GAP = 2;
     private static final int LEVEL_ITEM_CYCLE_TICKS = 60;
-    static final int RECIPE_ARROW_X = 72;
-    static final int RECIPE_ARROW_Y = 8;
     static final int ITEM_OVERLAY_X = 0;
     static final int ITEM_OVERLAY_Y = 0;
     static final float ITEM_OVERLAY_SCALE = 0.6F;
@@ -107,7 +103,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final Component title;
     private final RecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
-    private final IDrawable slotBackground;
     private final IDrawable sourceSlotBackground;
     private final @Nullable IDrawable stressIcon;
     private final @Nullable IDrawable airIcon;
@@ -120,7 +115,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         this.title = Component.translatable(poolId.toLanguageKey("recipe_pool"));
         this.recipeType = JeiMachineRecipeTypes.forPool(poolId);
         this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(iconMachineId).get());
-        this.slotBackground = guiHelper.getSlotDrawable();
         this.sourceSlotBackground = guiHelper.drawableBuilder(
                 MMCR.id("textures/gui/ars_nouveau/jei_source_slot.png"), 0, 0, 18, 18)
                 .setTextureSize(18, 18).build();
@@ -181,8 +175,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
-        builder.addAnimatedRecipeArrowWidget(200).setPosition(RECIPE_ARROW_X, RECIPE_ARROW_Y);
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
+        if (layout.arrow() != null) {
+            addRecipeArrow(builder, guiHelper, layout.arrow());
+        }
         if (!layout.metadataPages().isEmpty()) {
             var slots = builder.getRecipeSlots().getSlots().stream()
                     .filter(slot -> slot.getSlotName().filter(name -> name.startsWith("mmcr_details_")).isPresent())
@@ -193,13 +189,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
+    static void addRecipeArrow(IRecipeExtrasBuilder builder, IGuiHelper guiHelper, RecipeSlotLayout.Arrow arrow) {
+        boolean vertical = arrow.height() > arrow.width();
+        IDrawable drawable = new RecipeArrowDrawable(guiHelper.createAnimatedRecipeArrow(200), vertical);
+        builder.addDrawable(drawable, arrow.x(), arrow.y());
+    }
+
     @Override
     public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
         drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
-        drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
-        drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
         if (layout.metadataPages().isEmpty()) drawMetadata(recipe, layout, guiGraphics);
     }
 
@@ -369,11 +369,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     @Override
     public void getTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        if (isMouseOver(layout.inputs().overflowSlot(), mouseX, mouseY)) {
-            appendOverflowTooltip(tooltip, recipe, layout.inputs().hiddenEntries(), true);
-        } else if (isMouseOver(layout.outputs().overflowSlot(), mouseX, mouseY)) {
-            appendOverflowTooltip(tooltip, recipe, layout.outputs().hiddenEntries(), false);
-        } else if (layout.metadataPages().isEmpty()) {
+        if (layout.metadataPages().isEmpty()) {
             metadataTooltip(tooltip, recipe, layout, mouseX, mouseY);
         }
     }
@@ -402,26 +398,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     static String outputOverlayText(float chance) {
         return chance < 1F ? Math.round(chance * 100F) + "%" : "";
-    }
-
-    static Component overflowEntry(int amount, Component displayName) {
-        return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", ReadableNumber.format(amount), displayName);
-    }
-
-    static Component overflowFluidEntry(int amount, Component displayName) {
-        return Component.translatable("jei.mmcr.machine_recipe.overflow_fluid", ReadableNumber.format(amount), displayName);
-    }
-
-    static Component overflowChemicalEntry(long amount, Component displayName) {
-        return Component.translatable("jei.mmcr.machine_recipe.overflow_chemical", chemicalTooltipQuantity(amount), displayName);
-    }
-
-    static Component outputStackName(ItemStack stack) {
-        Component hoverName = stack.getHoverName();
-        if (!hoverName.getString().isEmpty()) {
-            return hoverName;
-        }
-        return Component.translatable(stack.getItem().getDescriptionId());
     }
 
     static Component levelLabel(LevelRequirement requirement) {
@@ -899,69 +875,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .toPlainString() + "B";
     }
 
-    private static void appendOverflowTooltip(ITooltipBuilder tooltip,
-            MachineRecipeDisplay recipe, List<MachineRecipeLayout.EntryPlan> hiddenEntries, boolean input) {
-        tooltip.add(Component.translatable(input
-                ? "jei.mmcr.machine_recipe.input_overflow"
-                : "jei.mmcr.machine_recipe.output_overflow"));
-        for (MachineRecipeLayout.EntryPlan entry : hiddenEntries) {
-            if (entry.kind() == MachineRecipeLayout.Kind.ITEM) {
-                if (input) {
-                    MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
-                    Component displayName = item.stacks().stream()
-                            .findFirst()
-                            .map(ItemStack::getHoverName)
-                            .orElse(Component.empty());
-                    tooltip.add(overflowEntry(item.count(), displayName));
-                } else {
-                    MachineRecipeDisplay.ItemOutputDisplay output = recipe.itemOutputs().get(entry.index());
-                    ItemStack stack = output.stack();
-                    tooltip.add(overflowEntry(stack.getCount(), outputStackName(stack)));
-                }
-            } else if (entry.kind() == MachineRecipeLayout.Kind.FLUID) {
-                if (input) {
-                    int amount = recipe.fluidInputs().get(entry.index()).amount();
-                    Component displayName = entry.displayEntry() != null
-                            && entry.displayEntry().ingredient() instanceof FluidStack fluid
-                            && !fluid.isEmpty()
-                            ? fluid.copyWithAmount(amount).getHoverName()
-                            : Component.empty();
-                    tooltip.add(overflowFluidEntry(amount, displayName));
-                } else {
-                    var fluidStack = recipe.fluidOutputs().get(entry.index()).stack();
-                    tooltip.add(overflowFluidEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
-                }
-            } else if (entry.kind() == MachineRecipeLayout.Kind.CHEMICAL && entry.displayEntry() != null) {
-                tooltip.add(overflowChemicalEntry(entry.displayEntry().count(), chemicalDisplayName(entry.displayEntry().ingredient())));
-            } else if (entry.displayEntry() != null && entry.displayEntry().ingredient() instanceof SourceJeiIngredient source) {
-                tooltip.add(source.tooltip());
-            } else if (entry.displayEntry() != null) {
-                Object ingredient = entry.displayEntry().ingredient();
-                Component name = ingredient instanceof Component component
-                        ? component
-                        : Component.literal(String.valueOf(ingredient));
-                tooltip.add(overflowEntry(entry.displayEntry().count(), name));
-            }
-        }
-    }
-
-    private static Component chemicalDisplayName(Object ingredient) {
-        ChemicalStack stack = ingredient instanceof ChemicalStack chemical ? chemical
-                : ingredient instanceof List<?> ingredients
-                        ? ingredients.stream().filter(ChemicalStack.class::isInstance).map(ChemicalStack.class::cast)
-                                .findFirst().orElse(ChemicalStack.EMPTY)
-                        : ChemicalStack.EMPTY;
-        return stack.isEmpty() ? Component.empty() : stack.getChemical().getTextComponent();
-    }
-
-    private static void drawOverflowSlot(@Nullable OverflowSlotPlan slot,
-            GuiGraphics guiGraphics, IDrawable slotBackground) {
-        if (slot != null) {
-            slotBackground.draw(guiGraphics, slot.x() - 1, slot.y() - 1);
-            guiGraphics.drawString(Minecraft.getInstance().font, "...", slot.x() + OVERFLOW_TEXT_OFFSET_X, slot.y() + 4, 0xFF404040, false);
-        }
-    }
-
     private static void appendInputTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay.ItemInputDisplay item) {
         String quantity = itemTooltipQuantity(item.count());
         if (!quantity.isEmpty()) {
@@ -1013,10 +926,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
                     Math.round(consumeChance * 100F) + "%"));
         }
-    }
-
-    private static boolean isMouseOver(@Nullable OverflowSlotPlan slot, double mouseX, double mouseY) {
-        return slot != null && mouseX >= slot.x() && mouseX < slot.x() + 16 && mouseY >= slot.y() && mouseY < slot.y() + 16;
     }
 
     private boolean appendStressTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, MachineRecipeLayout layout,

@@ -39,6 +39,7 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.IntStream;
 import java.util.Locale;
 import java.util.Map;
 
@@ -83,8 +84,7 @@ class PneumaticAirDisplayTest {
             var layout = MachineRecipeLayout.forDisplay(display, scale);
             assertThat(layout.inputs().slots()).isEmpty();
             assertThat(layout.outputs().slots()).isEmpty();
-            assertThat(layout.hasInputOverflow()).isFalse();
-            assertThat(layout.hasOutputOverflow()).isFalse();
+            assertThat(layout.arrow()).isNull();
             int followingY = layout.airTextY(display) + 4 * MachineRecipeLayout.TEXT_LINE_SPACING;
             assertThat(layout.levelRequirementSlotY(display, 0)).isEqualTo(followingY);
             assertThat(layout.stageRequirementTextY(display)).isEqualTo(followingY);
@@ -243,7 +243,7 @@ class PneumaticAirDisplayTest {
     }
 
     @Test
-    void air_reserves_host_height_and_moves_hidden_ingredients_to_existing_overflow_at_scale_four_and_five() {
+    void air_reserves_host_height_without_hiding_ingredients_at_scale_four_and_five() {
         var baselineBuilder = builder().inputEnergy(40).outputEnergy(80)
                 .requiredHost(ResourceLocation.parse("test:air_display_host"));
         var airBuilder = builder().inputEnergy(40).outputEnergy(80).inputAir(40, 4F).outputAir(80)
@@ -258,21 +258,18 @@ class PneumaticAirDisplayTest {
             var before = MachineRecipeLayout.forDisplay(baseline, scale);
             var after = MachineRecipeLayout.forDisplay(air, scale);
             assertThat(before.inputs().slots()).hasSize(15);
-            assertThat(before.hasInputOverflow()).isFalse();
-            assertThat(before.durationTextY()).isEqualTo(102);
-            assertThat(before.hostRequirementTextY()).isEqualTo(132);
+            assertThat(before.durationTextY()).isEqualTo(48);
+            assertThat(before.hostRequirementTextY()).isEqualTo(78);
             assertMandatoryRowsInside(before, baseline);
 
-            assertThat(after.inputs().slots()).hasSize(11);
-            assertThat(after.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(48, 62));
-            assertThat(after.inputs().hiddenEntries()).extracting(MachineRecipeLayout.EntryPlan::index)
-                    .containsExactly(11, 12, 13, 14);
-            assertThat(after.inputs().hiddenEntries()).extracting(entry -> entry.displayEntry().count())
-                    .containsExactly(12, 13, 14, 15);
-            assertThat(after.durationTextY()).isEqualTo(84);
-            assertThat(after.hostRequirementTextY()).isEqualTo(134);
-            assertThat(after.hasInputOverflow()).isTrue();
-            assertThat(after.hasOutputOverflow()).isFalse();
+            assertThat(after.inputs().slots()).hasSize(15);
+            assertThat(after.inputs().slots()).extracting(MachineRecipeLayout.SlotPlan::x, MachineRecipeLayout.SlotPlan::y)
+                    .containsExactlyElementsOf(before.inputs().slots().stream()
+                            .map(slot -> tuple(slot.x(), slot.y())).toList());
+            assertThat(after.inputs().slots()).extracting(slot -> slot.entry().displayEntry().count())
+                    .containsExactlyElementsOf(IntStream.rangeClosed(1, 15).boxed().toList());
+            assertThat(after.durationTextY()).isEqualTo(48);
+            assertThat(after.hostRequirementTextY()).isEqualTo(98);
             assertMandatoryRowsInside(after, air);
             assertThat(tooltipAt(air, after, after.durationTextX(), after.airTextY(air)).getFirst())
                     .isEqualTo(air.airInputs().getFirst().tooltip(true).getFirst());
@@ -280,7 +277,7 @@ class PneumaticAirDisplayTest {
     }
 
     @Test
-    void recipes_without_air_keep_existing_grid_limits_and_coordinates_at_every_scale() {
+    void recipes_without_air_keep_every_slot_and_place_metadata_after_the_grid_at_every_scale() {
         var builder = builder().inputEnergy(40).outputEnergy(80)
                 .requiredHost(ResourceLocation.parse("test:air_display_host"));
         for (int index = 0; index < 50; index++) {
@@ -288,15 +285,15 @@ class PneumaticAirDisplayTest {
         }
         var display = display(builder.build());
         for (int scale = 1; scale <= 5; scale++) {
-            int rows = switch (scale) { case 1 -> 14; case 2 -> 11; case 3 -> 8; default -> 5; };
             var layout = MachineRecipeLayout.forDisplay(display, scale);
-            assertThat(layout.durationTextY()).isEqualTo(12 + 18 * rows);
+            assertThat(layout.durationTextY()).isEqualTo(290);
             assertThat(layout.hostRequirementTextY()).isEqualTo(layout.durationTextY() + 30);
             for (var region : List.of(layout.inputs(), layout.outputs())) {
-                assertThat(region.slots()).hasSize(3 * rows - 1);
-                assertThat(region.hiddenEntries()).hasSize(50 - (3 * rows - 1));
-                assertThat(region.overflowSlot().y()).isEqualTo(8 + 18 * (rows - 1));
+                assertThat(region.slots()).hasSize(50);
+                assertThat(region.slots()).allSatisfy(slot ->
+                        assertThat(slot.y() + 18).isLessThan(layout.durationTextY()));
             }
+            assertMandatoryRowsInside(layout, display);
         }
     }
 
@@ -324,64 +321,46 @@ class PneumaticAirDisplayTest {
         var display = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(builder.build(), snapshot));
         for (int scale = 1; scale <= 5; scale++) {
             var layout = MachineRecipeLayout.forDisplay(display, scale);
-            assertThat(layout.height()).isEqualTo(switch (scale) {
+            assertThat(layout.height()).isGreaterThanOrEqualTo(switch (scale) {
                 case 1 -> 300; case 2 -> 280; case 3 -> 220; default -> 150;
             });
             assertMandatoryRowsInside(layout, display);
-            if (scale >= 4) {
-                assertThat(layout.durationTextY()).isEqualTo(30);
-                assertThat(layout.inputs().slots()).hasSize(2);
-                assertThat(layout.outputs().slots()).hasSize(2);
-                assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(48, 8));
-                assertThat(layout.outputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(138, 8));
-                assertThat(layout.inputs().hiddenEntries()).hasSize(13);
-                assertThat(layout.outputs().hiddenEntries()).hasSize(13);
-                assertThat(layout.lastMetadataTextY(display) + MachineRecipeLayout.TEXT_LINE_SPACING).isEqualTo(138);
-            } else {
-                assertThat(layout.inputs().slots()).hasSize(15);
-                assertThat(layout.outputs().slots()).hasSize(15);
-                assertThat(layout.hasInputOverflow()).isFalse();
-                assertThat(layout.hasOutputOverflow()).isFalse();
-                assertThat(layout.durationTextY()).isEqualTo(102);
-            }
+            assertThat(layout.inputs().slots()).hasSize(15);
+            assertThat(layout.outputs().slots()).hasSize(15);
+            assertThat(layout.durationTextY()).isEqualTo(110);
+            assertThat(layout.metadataPages()).isEmpty();
         }
     }
 
     @Test
-    void eight_air_rows_use_the_minimum_ingredient_row_and_fit_exactly_at_scale_four_and_five() {
+    void eight_air_rows_fit_below_all_fifty_ingredients_at_every_scale() {
         var builder = builder().inputEnergy(40).outputEnergy(80)
                 .requiredHost(ResourceLocation.parse("test:air_display_host"));
         for (int index = 0; index < 4; index++) builder.inputAir(40 + index, 4F).outputAir(80 + index);
         for (int index = 0; index < 50; index++) builder.inputItem(Items.IRON_INGOT, 1);
         var display = display(builder.build());
         for (int scale = 1; scale <= 5; scale++) {
-            int rows = switch (scale) { case 1 -> 9; case 2 -> 8; case 3 -> 4; default -> 1; };
             var layout = MachineRecipeLayout.forDisplay(display, scale);
-            assertThat(layout.inputs().slots()).hasSize(3 * rows - 1);
-            assertThat(layout.inputs().hiddenEntries()).hasSize(50 - (3 * rows - 1));
-            assertThat(layout.inputs().overflowSlot())
-                    .isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(48, 8 + 18 * (rows - 1)));
-            assertThat(layout.durationTextY()).isEqualTo(12 + 18 * rows);
+            assertThat(layout.inputs().slots()).hasSize(50);
+            assertThat(layout.durationTextY()).isEqualTo(138);
             assertMandatoryRowsInside(layout, display);
-            if (scale >= 4) {
-                assertThat(layout.hostRequirementTextY() + MachineRecipeLayout.TEXT_LINE_SPACING).isEqualTo(layout.height());
-                assertThat(layout.informationLineCapacity(display, layout.height())).isZero();
-            }
+            assertThat(layout.metadataPages()).isEmpty();
         }
     }
 
     @Test
-    void metadata_larger_than_category_keeps_a_usable_overflow_row_without_negative_slot_capacity() {
+    void metadata_larger_than_category_uses_whole_row_pages_without_hiding_ingredients() {
         var builder = builder();
         for (int index = 0; index < 20; index++) builder.inputAir(40 + index, 4F);
         for (int index = 0; index < 15; index++) builder.inputItem(Items.IRON_INGOT, 1);
         var display = display(builder.build());
         for (int scale : List.of(4, 5)) {
             var layout = MachineRecipeLayout.forDisplay(display, scale);
-            assertThat(layout.inputs().slots()).hasSize(2);
-            assertThat(layout.inputs().hiddenEntries()).hasSize(13);
-            assertThat(layout.inputs().overflowSlot()).isEqualTo(new MachineRecipeLayout.OverflowSlotPlan(48, 8));
-            assertThat(layout.durationTextY()).isEqualTo(30);
+            assertThat(layout.inputs().slots()).hasSize(15);
+            assertThat(layout.durationTextY()).isEqualTo(48);
+            assertThat(layout.metadataPages()).hasSizeGreaterThan(1);
+            assertThat(layout.metadataPages().getFirst().startY()).isEqualTo(layout.durationTextY());
+            assertThat(layout.metadataPages().getLast().endY()).isEqualTo(layout.informationTextY(display));
             assertThat(layout.informationLineCapacity(display, layout.height())).isZero();
         }
     }
@@ -463,25 +442,21 @@ class PneumaticAirDisplayTest {
     private static void assertMandatoryRowsInside(MachineRecipeLayout layout, MachineRecipeDisplay display) {
         int spacing = MachineRecipeLayout.TEXT_LINE_SPACING;
         assertThat(layout.durationTextY()).isGreaterThanOrEqualTo(30);
-        assertThat(layout.durationTextY() + spacing).isLessThanOrEqualTo(layout.height());
-        assertThat(layout.airTextY(display) + spacing * (display.airInputs().size() + display.airOutputs().size()))
-                .isLessThanOrEqualTo(layout.height());
+        int detailsEnd = layout.airTextY(display) + spacing * (display.airInputs().size() + display.airOutputs().size());
         if (!display.requiredHostIds().isEmpty()) {
-            assertThat(layout.hostRequirementTextY() + spacing).isLessThanOrEqualTo(layout.height());
+            assertThat(layout.hostRequirementTextY()).isGreaterThanOrEqualTo(detailsEnd);
+            detailsEnd = layout.hostRequirementTextY() + spacing;
         }
         for (int index = 0; index < display.recipe().levelRequirements().size(); index++) {
-            assertThat(layout.levelRequirementSlotY(display, index) + 18).isLessThanOrEqualTo(layout.height());
+            assertThat(layout.levelRequirementSlotY(display, index)).isGreaterThanOrEqualTo(detailsEnd);
+            detailsEnd = layout.levelRequirementSlotY(display, index) + 18;
         }
-        assertThat(layout.stageRequirementTextY(display) + spacing * display.recipe().stageRequirements().size())
-                .isLessThanOrEqualTo(layout.height());
+        assertThat(layout.stageRequirementTextY(display)).isGreaterThanOrEqualTo(detailsEnd);
         assertThat(layout.smartInterfaceTextY(display)
                 + spacing * (display.smartInterfaceInputs().size() + display.smartInterfaceOutputs().size()))
-                .isLessThanOrEqualTo(layout.height());
+                .isEqualTo(layout.informationTextY(display));
         for (var region : List.of(layout.inputs(), layout.outputs())) {
             assertThat(region.slots()).allSatisfy(slot -> assertThat(slot.y() + 18).isLessThan(layout.durationTextY()));
-            if (region.overflowSlot() != null) {
-                assertThat(region.overflowSlot().y() + 18).isLessThan(layout.durationTextY());
-            }
         }
     }
 

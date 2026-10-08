@@ -61,13 +61,11 @@ class CombinedAirManaRecipeLayoutTest {
                 var layout = MachineRecipeLayout.forDisplay(display, scale);
                 assertThat(layout.metadataPages()).isEmpty();
                 assertThat(layout.manaRows()).hasSize(2);
-                assertThat(layout.inputs().slots().size() + layout.inputs().hiddenEntries().size()).isEqualTo(50);
+                assertThat(layout.inputs().slots()).hasSize(50);
                 assertThat(layout.outputs().slots()).isEmpty();
                 assertThat(layout.inputs().slots()).allSatisfy(slot ->
                         assertThat(slot.entry().displayEntry().typeId()).isNotIn(BotaniaManaIds.MANA, PneumaticIds.AIR));
-                assertThat(layout.inputs().hiddenEntries()).allSatisfy(entry ->
-                        assertThat(entry.displayEntry().typeId()).isNotIn(BotaniaManaIds.MANA, PneumaticIds.AIR));
-                assertThat(layout.manaRows().getFirst().y()).isGreaterThan(layout.inputs().overflowSlot().y() + 18);
+                assertThat(layout.manaRows().getFirst().y()).isGreaterThan(layout.inputs().slots().getLast().y() + 18);
                 assertThat(layout.manaRows().getFirst().y()).isEqualTo(layout.airTextY(display) + 30);
                 assertThat(layout.manaRows()).allSatisfy(row ->
                         assertThat(row.y()).isGreaterThan(layout.durationTextY()));
@@ -75,7 +73,7 @@ class CombinedAirManaRecipeLayoutTest {
                         layout.manaRows().getLast().y() + layout.manaRows().getLast().height());
                 assertThat(layout.stageRequirementTextY(display)).isEqualTo(layout.hostRequirementTextY() + 10);
                 assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.stageRequirementTextY(display) + 10);
-                assertThat(layout.informationTextY(display)).isLessThanOrEqualTo(layout.height());
+                assertThat(layout.informationTextY(display)).isGreaterThan(layout.smartInterfaceTextY(display));
                 var lines = new ArrayList<Component>();
                 var tooltip = tooltip(lines);
                 int y = layout.airTextY(display);

@@ -34,7 +34,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Exercises native Source slots, priority, overflow and exact translated tooltips.
+ * Exercises native Source slots, priority and exact translated tooltips.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -69,7 +69,7 @@ class SourceRecipeLayoutTest {
     }
 
     @Test
-    void mixedItemGridsAndOverflowKeepSourceFirstAtEveryGuiScale() {
+    void mixedItemGridsKeepEveryEntryAndSourceFirstAtEveryGuiScale() {
         try (var requirements = RequirementHandlerRegistry.openTestScope();
              var outputs = OutputRegistry.openTestScope()) {
             ArsNouveauRecipeTypes.register();
@@ -89,17 +89,9 @@ class SourceRecipeLayoutTest {
                         assertThat(region.slots().getFirst().entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE);
                         assertThat(region.slots().subList(1, region.slots().size()))
                                 .allSatisfy(slot -> assertThat(slot.entry().kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
-                        assertThat(region.hiddenEntries().size() + region.slots().size()).isEqualTo(itemCount + 1);
-                        assertThat(region.overflowSlot() != null).isEqualTo(itemCount == 50);
+                        assertThat(region.slots()).hasSize(itemCount + 1);
                     }
-                    assertThat(layout.inputs().hiddenEntries()).allSatisfy(entry -> assertThat(entry.kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
-                    assertThat(layout.outputs().hiddenEntries()).allSatisfy(entry -> assertThat(entry.kind()).isEqualTo(MachineRecipeLayout.Kind.ITEM));
-                    assertRowsAreSeparate(layout, display, switch (scale) {
-                        case 1 -> 300;
-                        case 2 -> 280;
-                        case 3 -> 220;
-                        default -> 150;
-                    });
+                    assertRowsAreSeparate(layout, display, layout.height());
                 }
             }
         }
@@ -144,16 +136,12 @@ class SourceRecipeLayoutTest {
     private static void assertRowsAreSeparate(MachineRecipeLayout layout, MachineRecipeDisplay display, int categoryHeight) {
         int gridBottom = Stream.concat(layout.inputs().slots().stream(), layout.outputs().slots().stream())
                 .mapToInt(slot -> slot.y() + 18).max().orElse(26);
-        for (var region : List.of(layout.inputs(), layout.outputs())) {
-            if (region.overflowSlot() != null) gridBottom = Math.max(gridBottom, region.overflowSlot().y() + 18);
-        }
         int previousBottom = gridBottom;
         for (MachineRecipeLayout.TextPlan line : layout.sourceTextLines()) {
             assertThat(line.y()).isGreaterThanOrEqualTo(previousBottom);
             previousBottom = line.y() + MachineRecipeLayout.TEXT_LINE_SPACING;
         }
         assertThat(layout.durationTextY()).isGreaterThanOrEqualTo(previousBottom);
-        assertThat(layout.durationTextY() + MachineRecipeLayout.TEXT_LINE_SPACING).isLessThanOrEqualTo(categoryHeight);
         assertThat(layout.informationTextY(display)).isGreaterThan(layout.durationTextY());
     }
 

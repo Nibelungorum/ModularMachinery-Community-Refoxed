@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
+import com.mojang.blaze3d.platform.Window;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.neoforge.NeoForgeTypes;
@@ -38,6 +39,10 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import net.minecraft.core.Holder;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.resources.language.LanguageManager;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.chat.Component;
@@ -60,6 +65,8 @@ import sun.misc.Unsafe;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.LinkedHashSet;
@@ -68,6 +75,8 @@ import java.util.Set;
 import java.util.ArrayList;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.util.function.Supplier;
 import net.minecraft.network.chat.FormattedText;
 
 import com.google.gson.JsonObject;
@@ -574,6 +583,152 @@ class MachineRecipeDisplayTest {
         assertTranslatableTooltip(outputTooltip, "jei.mmcr.machine_recipe.output_chance", "25%");
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4})
+    void setRecipeRegistersEveryVerticalSlotAndActualOffscreenTransfers(int guiScale) throws Exception {
+        DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
+                DataComponents.REPAIR_COST, ComponentPredicate.exact(new Dynamic<>(JsonOps.INSTANCE, new JsonPrimitive(3)))));
+        FluidStack fluidOutput = new FluidStack(Fluids.LAVA, 1_234);
+        fluidOutput.set(DataComponents.CUSTOM_NAME, Component.literal("Fluid output"));
+        List<MachineRequirement> requirements = new ArrayList<>(List.of(
+                new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 7, ItemStack.EMPTY,
+                        1F, components, 0.25F),
+                new FluidRequirement(IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250,
+                        FluidStack.EMPTY, 1F, List.of(), 0.5F),
+                new FluidRequirement(IOType.OUTPUT, FluidIngredient.of(Fluids.LAVA), 1_234,
+                        fluidOutput, 0.5F, List.of(), 1F)));
+        for (int index = 0; index < 63; index++) {
+            ItemStack output = new ItemStack(Items.GOLD_INGOT, index + 2);
+            output.set(DataComponents.CUSTOM_NAME, Component.literal("Output " + index));
+            requirements.add(new ItemRequirement(IOType.OUTPUT, null, 0, output, 0.25F, List.of()));
+        }
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
+                MMCR.id("vertical_category_registration"), MMCR.id("blast_furnace"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), requirements));
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, guiScale);
+        assertThat(layout.arrow().height()).isGreaterThan(layout.arrow().width());
+        assertThat(layout.inputs().slots()).hasSize(2);
+        assertThat(layout.outputs().slots()).hasSize(64);
+        List<MachineRecipeLayout.SlotPlan> plans = new ArrayList<>(layout.inputs().slots());
+        plans.addAll(layout.outputs().slots());
+        List<SlotCapture> slots = new ArrayList<>();
+
+        Unsafe unsafe = unsafe();
+        Minecraft minecraft = minecraftFixture(unsafe, guiScale);
+        Field instance = Minecraft.class.getDeclaredField("instance");
+        instance.setAccessible(true);
+        Object previous = instance.get(null);
+        try {
+            instance.set(null, minecraft);
+            // setRecipe does not use the category's icon, registry type, or GUI helper.
+            MachineRecipeCategory category = (MachineRecipeCategory) unsafe.allocateInstance(MachineRecipeCategory.class);
+            category.setRecipe(recipeLayoutBuilder(() -> {
+                SlotCapture capture = new SlotCapture();
+                slots.add(capture);
+                return capture;
+            }), display, null);
+        } finally {
+            instance.set(null, previous);
+        }
+
+        assertThat(slots).hasSize(plans.size() * 2);
+        List<SlotCapture> visible = slots.stream().filter(slot -> slot.role == RecipeIngredientRole.RENDER_ONLY).toList();
+        List<SlotCapture> transfers = slots.stream().filter(slot -> slot.role != RecipeIngredientRole.RENDER_ONLY).toList();
+        assertThat(visible).hasSize(plans.size());
+        for (int index = 0; index < plans.size(); index++) {
+            SlotCapture slot = visible.get(index);
+            assertThat(slot.x).isEqualTo(plans.get(index).x());
+            assertThat(slot.y).isEqualTo(plans.get(index).y());
+            assertThat(slot.standardBackground).isTrue();
+            assertThat(slot.tooltips).hasSize(1);
+            String chance = index == 0 || index == 2 ? "50%" : "25%";
+            String quantity = switch (index) {
+                case 0 -> "0.25B";
+                case 1 -> "7";
+                case 2 -> "1.23B";
+                default -> Integer.toString(index - 1);
+            };
+            assertThat(slot.overlays).singleElement().satisfies(arguments -> {
+                assertThat(arguments[0]).isInstanceOf(JeiSlotOverlayDrawable.class)
+                        .extracting("chanceText", "quantityText").containsExactly(chance, quantity);
+                assertThat(arguments[1]).isEqualTo(0);
+                assertThat(arguments[2]).isEqualTo(0);
+            });
+        }
+        assertThat(visible.get(0).added).singleElement().satisfies(arguments ->
+                assertThat(arguments).containsExactly(Fluids.WATER, 1_000L, DataComponentPatch.EMPTY));
+        assertThat(visible.get(0).renderers).singleElement().satisfies(arguments -> {
+            assertThat(arguments[0]).isSameAs(NeoForgeTypes.FLUID_STACK);
+            assertThat(arguments[1]).isNotNull();
+        });
+        assertThat(visible.get(1).itemStacks).singleElement().satisfies(stacks ->
+                assertThat(stacks).singleElement().satisfies(stack -> {
+                    assertThat(stack.getItem()).isSameAs(Items.IRON_INGOT);
+                    assertThat(stack.getCount()).isEqualTo(1);
+                    assertThat(stack.get(DataComponents.REPAIR_COST)).isEqualTo(3);
+                }));
+        assertThat(visible.get(2).added).singleElement().satisfies(arguments ->
+                assertThat(arguments).containsExactly(Fluids.LAVA, 1_000L, fluidOutput.getComponentsPatch()));
+        assertThat(visible.get(2).renderers).singleElement().satisfies(arguments -> {
+            assertThat(arguments[0]).isSameAs(NeoForgeTypes.FLUID_STACK);
+            assertThat(arguments[1]).isNotNull();
+        });
+        assertTranslatableTooltip(tooltipLines(visible.get(0).tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.fluid_amount", "0.25B");
+        assertTranslatableTooltip(tooltipLines(visible.get(0).tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.consume_chance", "50%");
+        assertTranslatableTooltip(tooltipLines(visible.get(1).tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.item_count", "7");
+        assertTranslatableTooltip(tooltipLines(visible.get(1).tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.consume_chance", "25%");
+        assertTranslatableTooltip(tooltipLines(visible.get(2).tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.fluid_amount", "1.234B");
+        assertTranslatableTooltip(tooltipLines(visible.get(2).tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.output_chance", "50%");
+
+        assertThat(transfers).hasSize(plans.size());
+        assertThat(transfers).allSatisfy(slot -> {
+            assertThat(slot.x).isEqualTo(-1000);
+            assertThat(slot.y).isEqualTo(-1000);
+            assertThat(slot.standardBackground).isFalse();
+            assertThat(slot.overlays).isEmpty();
+            assertThat(slot.renderers).isEmpty();
+            assertThat(slot.tooltips).isEmpty();
+        });
+        assertThat(transfers.subList(0, 2)).extracting(slot -> slot.role).containsOnly(RecipeIngredientRole.INPUT);
+        assertThat(transfers.subList(2, transfers.size())).extracting(slot -> slot.role).containsOnly(RecipeIngredientRole.OUTPUT);
+        assertThat(transfers.get(0).added).singleElement().satisfies(arguments ->
+                assertThat(arguments).containsExactly(Fluids.WATER, 250L));
+        assertThat(transfers.get(1).itemStacks).singleElement().satisfies(stacks ->
+                assertThat(stacks).singleElement().satisfies(stack -> {
+                    assertThat(stack.getItem()).isSameAs(Items.IRON_INGOT);
+                    assertThat(stack.getCount()).isEqualTo(7);
+                    assertThat(stack.get(DataComponents.REPAIR_COST)).isEqualTo(3);
+                }));
+        assertThat(transfers.get(2).added).singleElement().satisfies(arguments ->
+                assertThat(arguments).containsExactly(Fluids.LAVA, 1_234L, fluidOutput.getComponentsPatch()));
+        for (int index = 0; index < display.itemOutputs().size(); index++) {
+            ItemStack source = display.itemOutputs().get(index).stack();
+            SlotCapture visibleItem = visible.get(index + 3);
+            assertThat(visibleItem.added).singleElement().satisfies(arguments -> {
+                ItemStack stack = (ItemStack) arguments[0];
+                assertThat(stack.getItem()).isSameAs(source.getItem());
+                assertThat(stack.getCount()).isEqualTo(1);
+                assertThat(stack.getComponentsPatch()).isEqualTo(source.getComponentsPatch());
+            });
+            assertTranslatableTooltip(tooltipLines(visibleItem.tooltips.getFirst()),
+                    "jei.mmcr.machine_recipe.item_count", Integer.toString(source.getCount()));
+            assertTranslatableTooltip(tooltipLines(visibleItem.tooltips.getFirst()),
+                    "jei.mmcr.machine_recipe.output_chance", "25%");
+            assertThat(transfers.get(index + 3).added).singleElement().satisfies(arguments -> {
+                ItemStack stack = (ItemStack) arguments[0];
+                assertThat(stack.getItem()).isSameAs(source.getItem());
+                assertThat(stack.getCount()).isEqualTo(source.getCount());
+                assertThat(stack.getComponentsPatch()).isEqualTo(source.getComponentsPatch());
+            });
+        }
+    }
+
     @Test
     void itemInputSlotTooltipDescribesCountAndConsumeChance() throws Exception {
         MachineRecipe recipe = RecipeTestSupport.create(
@@ -647,6 +802,48 @@ class MachineRecipeDisplayTest {
             assertThat(arguments[0]).isSameAs(VanillaTypes.ITEM_STACK);
             assertThat(arguments[1]).isSameAs(ingredient);
         });
+    }
+
+    @Test
+    void customNativeIngredientTypesDoNotShiftBuiltinSlotIndexes() throws Exception {
+        MachineRequirement item = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                new ItemStack(Items.GOLD_INGOT, 3), 0.25F, List.of());
+        MachineRequirement fluid = new FluidRequirement(RecipeModifier.IOType.OUTPUT,
+                FluidIngredient.of(Fluids.WATER), 1_234, new FluidStack(Fluids.WATER, 1_234), 0.5F, List.of(), 1F);
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
+                MMCR.id("custom_native_type_before_builtin"), MMCR.id("test_machine_name"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(item, fluid)));
+        List<JeiDisplayEntry> builtinEntries = display.entries();
+        JeiDisplayEntry builtinItem = builtinEntries.stream()
+                .filter(entry -> entry.typeId().equals(ItemRequirement.TYPE.id())).findFirst().orElseThrow();
+        JeiDisplayEntry builtinFluid = builtinEntries.stream()
+                .filter(entry -> entry.typeId().equals(FluidRequirement.TYPE.id())).findFirst().orElseThrow();
+        JeiDisplayEntry customItem = new JeiDisplayEntry(RecipeIngredientRole.OUTPUT, MMCR.id("custom_item_before_builtin"),
+                VanillaTypes.ITEM_STACK, new ItemStack(Items.IRON_INGOT), 1, 1F, null, false);
+        JeiDisplayEntry customFluid = new JeiDisplayEntry(RecipeIngredientRole.OUTPUT, MMCR.id("custom_fluid_before_builtin"),
+                NeoForgeTypes.FLUID_STACK, new FluidStack(Fluids.LAVA, 1), 1, 1F, null, false);
+
+        MachineRecipeLayout.RegionPlan layout = MachineRecipeLayout.regionForEntries(
+                List.of(customItem, builtinItem, customFluid, builtinFluid), RecipeIngredientRole.OUTPUT, 4);
+
+        assertThat(layout.slots()).extracting(slot -> slot.entry().displayEntry())
+                .containsExactly(customFluid, builtinFluid, customItem, builtinItem);
+        assertThat(layout.slots().get(1).entry().displayEntry()).isSameAs(builtinFluid);
+        assertThat(layout.slots().get(3).entry().displayEntry()).isSameAs(builtinItem);
+        assertThat(layout.slots().get(1).entry().index()).isZero();
+        assertThat(layout.slots().get(3).entry().index()).isZero();
+        SlotCapture fluidCapture = new SlotCapture();
+        invokeAddEntry(recipeLayoutBuilder(fluidCapture), display, layout.slots().get(1).entry(), false);
+        assertTranslatableTooltip(tooltipLines(fluidCapture.tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.fluid_amount", "1.234B");
+        assertTranslatableTooltip(tooltipLines(fluidCapture.tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.output_chance", "50%");
+        SlotCapture itemCapture = new SlotCapture();
+        invokeAddEntry(recipeLayoutBuilder(itemCapture), display, layout.slots().get(3).entry(), false);
+        assertTranslatableTooltip(tooltipLines(itemCapture.tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.item_count", "3");
+        assertTranslatableTooltip(tooltipLines(itemCapture.tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.output_chance", "25%");
     }
 
     @Test
@@ -822,7 +1019,7 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
-    void layoutPlacesFluidsBeforeItemsAndCapsOverflow() {
+    void layoutPlacesFluidsBeforeItemsAndKeepsEveryEntry() {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("jei_layout"),
                 MMCR.id("blast_furnace"),
@@ -861,17 +1058,11 @@ class MachineRecipeDisplayTest {
         assertThat(MachineRecipeLayout.forDisplay(display, 4).inputs().slots())
                 .extracting(slot -> slot.entry().kind())
                 .startsWith(MachineRecipeLayout.Kind.FLUID, MachineRecipeLayout.Kind.FLUID);
-        MachineRecipeLayout overflowLayout = MachineRecipeLayout.forDisplay(overflow, 4);
-        assertThat(overflowLayout.inputs().slots()).hasSize(14);
-        assertThat(overflowLayout.inputs().overflowSlot()).isNotNull();
-        assertThat(overflowLayout.inputs().hiddenEntries()).hasSize(19);
-    }
-
-    @Test
-    void outputOverflowNameFallsBackToItemDescriptionWhenHoverNameIsEmpty() {
-        ItemStack stack = new ItemStack(Holder.direct(Items.IRON_NUGGET), 3);
-
-        assertThat(MachineRecipeCategory.outputStackName(stack).getString()).isNotEmpty();
+        MachineRecipeLayout fullLayout = MachineRecipeLayout.forDisplay(overflow, 4);
+        assertThat(fullLayout.inputs().slots()).hasSize(33);
+        assertThat(fullLayout.inputs().slots().getLast().x()).isEqualTo(75);
+        assertThat(fullLayout.inputs().slots().getLast().y()).isEqualTo(80);
+        assertThat(fullLayout.arrow()).isNull();
     }
 
     @Test
@@ -932,20 +1123,6 @@ class MachineRecipeDisplayTest {
 
         assertThat(display.outputHeat()).isEmpty();
         assertThat(display.minimumTemperature()).hasValue(300D);
-    }
-
-    @Test
-    void overflowTooltipsLabelChemicalEntriesByType() throws Exception {
-        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
-                MMCR.id("jei_typed_overflow"), MMCR.id("test_machine_name"), 20, List.of(), List.of()));
-        JeiDisplayEntry chemical = new JeiDisplayEntry(RecipeIngredientRole.INPUT, MekanismRecipeTypes.CHEMICAL,
-                MekanismJEI.TYPE_CHEMICAL, ChemicalStack.EMPTY, 1_000, 1F, null, false);
-
-        List<Component> lines = overflowTooltip(display, List.of(
-                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.CHEMICAL, 0, chemical)));
-
-        assertThat(((TranslatableContents) lines.get(1).getContents()).getKey())
-                .isEqualTo("jei.mmcr.machine_recipe.overflow_chemical");
     }
 
     @Test
@@ -1062,16 +1239,49 @@ class MachineRecipeDisplayTest {
     }
 
     private static IRecipeLayoutBuilder recipeLayoutBuilder(SlotCapture capture) {
+        return recipeLayoutBuilder(() -> capture);
+    }
+
+    private static IRecipeLayoutBuilder recipeLayoutBuilder(Supplier<SlotCapture> captures) {
         return (IRecipeLayoutBuilder) Proxy.newProxyInstance(
                 MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{IRecipeLayoutBuilder.class},
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("addSlot")
                             || method.getName().equals("addInputSlot")
                             || method.getName().equals("addOutputSlot")) {
+                        SlotCapture capture = captures.get();
+                        boolean explicitRole = method.getName().equals("addSlot");
+                        capture.role = explicitRole ? (RecipeIngredientRole) arguments[0]
+                                : method.getName().equals("addInputSlot") ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT;
+                        capture.x = ((Number) arguments[explicitRole ? 1 : 0]).intValue();
+                        capture.y = ((Number) arguments[explicitRole ? 2 : 1]).intValue();
                         return recipeSlotBuilder(capture);
                     }
                     return null;
                 });
+    }
+
+    private static Minecraft minecraftFixture(Unsafe unsafe, int guiScale) throws Exception {
+        Minecraft minecraft = (Minecraft) unsafe.allocateInstance(Minecraft.class);
+        Window window = (Window) unsafe.allocateInstance(Window.class);
+        window.setGuiScale(guiScale);
+        Field windowField = Minecraft.class.getDeclaredField("window");
+        windowField.setAccessible(true);
+        windowField.set(minecraft, window);
+        Field languageManagerField = Minecraft.class.getDeclaredField("languageManager");
+        languageManagerField.setAccessible(true);
+        languageManagerField.set(minecraft, new LanguageManager("en_us", language -> {}));
+        // No level requirement calls font.width; setRecipe only needs a non-null method-reference receiver.
+        Field fontField = Minecraft.class.getDeclaredField("font");
+        fontField.setAccessible(true);
+        fontField.set(minecraft, unsafe.allocateInstance(Font.class));
+        return minecraft;
+    }
+
+    private static Unsafe unsafe() throws Exception {
+        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (Unsafe) field.get(null);
     }
 
     private static void invokeAddEntry(IRecipeLayoutBuilder builder, MachineRecipeDisplay display,
@@ -1094,11 +1304,18 @@ class MachineRecipeDisplayTest {
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("addItemStacks")) {
                         capture.itemStacks.add((List<ItemStack>) arguments[0]);
-                    } else if (method.getName().equals("add") || method.getName().equals("addIngredient")
+                    } else if (method.getName().equals("add") || method.getName().equals("addItemStack")
+                            || method.getName().equals("addIngredient")
                             || method.getName().equals("addFluidStack")) {
                         capture.added.add(arguments.clone());
                     } else if (method.getName().equals("addRichTooltipCallback")) {
                         capture.tooltips.add((IRecipeSlotRichTooltipCallback) arguments[0]);
+                    } else if (method.getName().equals("setStandardSlotBackground")) {
+                        capture.standardBackground = true;
+                    } else if (method.getName().equals("setCustomRenderer")) {
+                        capture.renderers.add(arguments.clone());
+                    } else if (method.getName().equals("setOverlay")) {
+                        capture.overlays.add(arguments.clone());
                     }
                     return method.getReturnType().isAssignableFrom(
                             IRecipeSlotBuilder.class) ? proxy : null;
@@ -1120,24 +1337,6 @@ class MachineRecipeDisplayTest {
         return lines;
     }
 
-    private static List<Component> overflowTooltip(MachineRecipeDisplay display,
-            List<MachineRecipeLayout.EntryPlan> hiddenEntries) throws Exception {
-        List<Component> lines = new ArrayList<>();
-        ITooltipBuilder tooltip = (ITooltipBuilder) Proxy.newProxyInstance(
-                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{ITooltipBuilder.class},
-                (proxy, method, arguments) -> {
-                    if (method.getName().equals("add") && arguments.length == 1 && arguments[0] instanceof Component component) {
-                        lines.add(component);
-                    }
-                    return null;
-                });
-        Method method = MachineRecipeCategory.class.getDeclaredMethod("appendOverflowTooltip", ITooltipBuilder.class,
-                MachineRecipeDisplay.class, List.class, boolean.class);
-        method.setAccessible(true);
-        method.invoke(null, tooltip, display, hiddenEntries, true);
-        return lines;
-    }
-
     private static void assertTranslatableTooltip(List<FormattedText> lines, String key, String argument) {
         assertThat(lines).anySatisfy(line -> {
             assertThat(line).isInstanceOf(Component.class);
@@ -1150,8 +1349,14 @@ class MachineRecipeDisplayTest {
     }
 
     private static final class SlotCapture {
+        private RecipeIngredientRole role;
+        private int x;
+        private int y;
+        private boolean standardBackground;
         private final List<List<ItemStack>> itemStacks = new ArrayList<>();
         private final List<Object[]> added = new ArrayList<>();
         private final List<IRecipeSlotRichTooltipCallback> tooltips = new ArrayList<>();
+        private final List<Object[]> renderers = new ArrayList<>();
+        private final List<Object[]> overlays = new ArrayList<>();
     }
 }

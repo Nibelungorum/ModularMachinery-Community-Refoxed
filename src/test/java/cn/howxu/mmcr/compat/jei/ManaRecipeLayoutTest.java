@@ -104,7 +104,7 @@ class ManaRecipeLayoutTest {
     }
 
     @Test
-    void mixedSourceAndOverflowGridsReserveManaSpaceWithoutCountingManaAsGridOrHiddenEntries() {
+    void mixedSourceGridsReserveManaSpaceWithoutCountingManaAsGridEntries() {
         try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
             BotaniaRecipeTypes.register();
             ArsNouveauRecipeTypes.register();
@@ -125,12 +125,10 @@ class ManaRecipeLayoutTest {
                     assertThat(layout.inputs().slots().getFirst().entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE);
                     assertThat(layout.outputs().slots()).singleElement().satisfies(slot ->
                             assertThat(slot.entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE));
-                    assertThat(layout.inputs().slots().size() + layout.inputs().hiddenEntries().size()).isEqualTo(itemCount + 1);
+                    assertThat(layout.inputs().slots()).hasSize(itemCount + 1);
                     for (var region : List.of(layout.inputs(), layout.outputs())) {
                         assertThat(region.slots()).allSatisfy(slot ->
                                 assertThat(slot.entry().displayEntry().typeId()).isNotEqualTo(BotaniaManaIds.MANA));
-                        assertThat(region.hiddenEntries()).allSatisfy(entry ->
-                                assertThat(entry.displayEntry().typeId()).isNotEqualTo(BotaniaManaIds.MANA));
                     }
                     assertRowsFit(layout, display, scale);
                 }
@@ -246,9 +244,9 @@ class ManaRecipeLayoutTest {
             for (int scale = 1; scale <= 4; scale++) {
                 var layout = MachineRecipeLayout.forDisplay(display, scale);
                 assertThat(layout.metadataPages()).isEmpty();
-                assertThat(layout.inputs().slots().size() + layout.inputs().hiddenEntries().size()).isEqualTo(12);
+                assertThat(layout.inputs().slots()).hasSize(12);
                 assertRowsFit(layout, display, scale);
-                assertThat(layout.informationTextY(display)).isLessThanOrEqualTo(MachineRecipeLayout.categoryHeight(scale));
+                assertThat(layout.informationTextY(display)).isLessThanOrEqualTo(layout.height());
                 assertThat(layout.stageRequirementTextY(display)).isGreaterThanOrEqualTo(layout.levelRequirementSlotY(display, 0) + 18);
                 assertThat(layout.smartInterfaceTextY(display)).isGreaterThanOrEqualTo(layout.stageRequirementTextY(display) + 10);
                 assertActualSlotsFit(actualDetailSlots(layout, display), layout, display, scale);
@@ -278,7 +276,7 @@ class ManaRecipeLayoutTest {
                     var layout = MachineRecipeLayout.forDisplay(display, scale);
                     assertThat(layout.manaRows()).hasSize(count);
                     assertThat(layout.inputs().slots().getFirst().entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE);
-                    assertThat(layout.inputs().slots().size() + layout.inputs().hiddenEntries().size()).isEqualTo(13);
+                    assertThat(layout.inputs().slots()).hasSize(13);
                     assertThat(layout.outputs().slots()).singleElement().satisfies(slot ->
                             assertThat(slot.entry().displayEntry().typeId()).isEqualTo(ArsSourceIds.SOURCE));
                     var slots = actualDetailSlots(layout, display);
@@ -302,7 +300,7 @@ class ManaRecipeLayoutTest {
                             visited.add(slot);
                             assertThat(rect.getY()).isGreaterThanOrEqualTo(1);
                             assertThat(widget.getPosition().y() + rect.getY() + rect.getHeight())
-                                    .isLessThanOrEqualTo(MachineRecipeLayout.categoryHeight(scale));
+                                    .isLessThanOrEqualTo(layout.height());
                             assertThat(rect.getX() + rect.getWidth()).isLessThanOrEqualTo(MachineRecipeLayout.CATEGORY_WIDTH);
                             assertThat(widget.getSlotUnderMouse(rect.getX() + rect.getWidth() - 0.01,
                                     rect.getY() + rect.getHeight() - 0.01)).isPresent().get()
@@ -384,19 +382,16 @@ class ManaRecipeLayoutTest {
                                            MachineRecipeDisplay display, int scale) {
         for (var slot : slots) {
             var rect = slot.getRect();
-            assertThat(rect.getY() + rect.getHeight()).isLessThanOrEqualTo(MachineRecipeLayout.categoryHeight(scale));
+            assertThat(rect.getY() + rect.getHeight()).isLessThanOrEqualTo(layout.height());
             assertThat(slot.isMouseOver(rect.getX() + rect.getWidth() - 0.01, rect.getY() + rect.getHeight() - 0.01)).isTrue();
             assertThat(slot.isMouseOver(rect.getX() + rect.getWidth(), rect.getY())).isFalse();
         }
-        assertThat(layout.lastMetadataTextY(display) + 10).isLessThanOrEqualTo(MachineRecipeLayout.categoryHeight(scale));
+        assertThat(layout.lastMetadataTextY(display) + 10).isLessThanOrEqualTo(layout.height());
     }
 
     private static void assertRowsFit(MachineRecipeLayout layout, MachineRecipeDisplay display, int scale) {
         int previousBottom = Stream.concat(layout.inputs().slots().stream(), layout.outputs().slots().stream())
                 .mapToInt(slot -> slot.y() + 18).max().orElse(26);
-        for (var region : List.of(layout.inputs(), layout.outputs())) {
-            if (region.overflowSlot() != null) previousBottom = Math.max(previousBottom, region.overflowSlot().y() + 18);
-        }
         for (var source : layout.sourceTextLines()) {
             assertThat(source.y()).isGreaterThanOrEqualTo(previousBottom);
             previousBottom = source.y() + 10;
@@ -409,13 +404,7 @@ class ManaRecipeLayoutTest {
             previousBottom = row.y() + row.height();
         }
         assertThat(layout.hostRequirementTextY()).isGreaterThanOrEqualTo(previousBottom);
-        int categoryHeight = switch (scale) { case 1 -> 300; case 2 -> 280; case 3 -> 220; default -> 150; };
-        assertThat(layout.durationTextY() + 10).isLessThanOrEqualTo(categoryHeight);
         assertThat(layout.informationTextY(display)).isGreaterThan(layout.durationTextY());
-        assertThat(layout.lastMetadataTextY(display) + 10).isLessThanOrEqualTo(categoryHeight);
-        for (int index = 0; index < display.recipe().levelRequirements().size(); index++) {
-            assertThat(layout.levelRequirementSlotY(display, index) + 18).isLessThanOrEqualTo(categoryHeight);
-        }
     }
 
     private static MachineRecipeDisplay display(List<MachineRequirement> requirements, Set<ResourceLocation> hosts) {
